@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  experimental: {
+    // Disable Turbopack persistence to avoid SST filesystem writes
+    turbopackFileSystemCacheForDev: false,
+    turbopackFileSystemCacheForBuild: false,
+  },
 };
 
 export default nextConfig;
