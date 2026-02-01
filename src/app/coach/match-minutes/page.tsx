@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -59,9 +61,7 @@ export default function CoachMatchMinutesPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((r) =>
-      r.full_name.toLowerCase().includes(q)
-    );
+    return rows.filter((r) => r.full_name.toLowerCase().includes(q));
   }, [rows, query]);
 
   function updateMinutes(playerId: string, matchDate: string | null, minutes: number) {
@@ -191,11 +191,7 @@ export default function CoachMatchMinutesPage() {
                           max={130}
                           value={r.minutes_played}
                           onChange={(e) =>
-                            updateMinutes(
-                              r.player_id,
-                              r.last_match_date,
-                              Number(e.target.value)
-                            )
+                            updateMinutes(r.player_id, r.last_match_date, Number(e.target.value))
                           }
                           disabled={!r.last_match_date || r.is_dnp || saving}
                         />
@@ -204,11 +200,7 @@ export default function CoachMatchMinutesPage() {
                         <Checkbox
                           checked={r.is_dnp}
                           onCheckedChange={(v) =>
-                            updateDnp(
-                              r.player_id,
-                              r.last_match_date,
-                              Boolean(v)
-                            )
+                            updateDnp(r.player_id, r.last_match_date, Boolean(v))
                           }
                           disabled={!r.last_match_date || saving}
                         />
