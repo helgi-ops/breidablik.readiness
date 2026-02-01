@@ -1,13 +1,10 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function AuthRedirectPage() {
+export default function RedirectInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get("next") || "";
@@ -27,17 +24,9 @@ export default function AuthRedirectPage() {
 
       if (!mounted) return;
 
-      if (userErr) {
-        setError(userErr.message);
-        return;
-      }
+      if (userErr) return setError(userErr.message);
+      if (!user) return router.replace("/login");
 
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      // ✅ Mikilvægt: profiles.id = auth.users.id (hjá þér)
       const { data: profile, error: profErr } = await supabase
         .from("profiles")
         .select("role")
@@ -46,42 +35,22 @@ export default function AuthRedirectPage() {
 
       if (!mounted) return;
 
-      if (profErr) {
-        setError(profErr.message);
-        return;
-      }
+      if (profErr) return setError(profErr.message);
 
       const role = (profile?.role ?? "").toLowerCase();
 
-      // Ef þú sendir next með query, leyfum við það,
-      // EN tryggjum að það passi við role.
       if (next) {
-        if (role === "coach" && next.startsWith("/coach")) {
-          router.replace(next);
-          return;
-        }
-        if (role === "player" && next.startsWith("/player")) {
-          router.replace(next);
-          return;
-        }
-        // ef next er "vitlaust" miðað við role -> ignore
+        if (role === "coach" && next.startsWith("/coach")) return router.replace(next);
+        if (role === "player" && next.startsWith("/player")) return router.replace(next);
       }
 
-      if (role === "coach") {
-        router.replace("/coach");
-        return;
-      }
-
-      if (role === "player") {
-        router.replace("/player/checkin");
-        return;
-      }
+      if (role === "coach") return router.replace("/coach");
+      if (role === "player") return router.replace("/player/checkin");
 
       setError("Óþekkt role í profiles. Á að vera coach eða player.");
     }
 
     go();
-
     return () => {
       mounted = false;
     };
