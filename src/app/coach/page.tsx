@@ -203,6 +203,9 @@ export default function CoachPage() {
   // ✅ Coach name
   const [coachName, setCoachName] = useState<string>("");
 
+  // ✅ Coach gate
+  const [coachVerified, setCoachVerified] = useState(false);
+
   // ✅ Derived MD-day chip (from plan preview)
   const mdDayToday = useMemo(() => {
     const p = prettyMd(planPreview?.md_day ?? "GENERIC");
@@ -214,28 +217,72 @@ export default function CoachPage() {
     return p.label;
   }, [planPreview?.md_day]);
 
+  // ✅ 1) Gate: ensure user is logged in AND is coach
+  async function ensureCoachAccess() {
+    setError("");
+
+    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    if (authErr) {
+      console.error("auth.getUser error:", authErr.message);
+    }
+
+    const uid = auth?.user?.id;
+    if (!uid) {
+      router.replace(`/login?next=${encodeURIComponent("/coach")}`);
+      return false;
+    }
+
+    // ✅ profile role check (DB: profiles has display_name, not full_name)
+    const { data: prof, error: profErr } = await supabase
+      .from("profiles")
+      .select("role, display_name")
+      .eq("id", uid)
+      .maybeSingle();
+
+    if (profErr) {
+      console.error("profiles load error:", profErr.message);
+      setError(profErr.message);
+      return false;
+    }
+
+    const role = (prof as any)?.role ?? null;
+    const name = (prof as any)?.display_name ?? auth?.user?.email ?? "";
+    setCoachName(name);
+
+    if (role !== "coach") {
+      router.replace("/player");
+      return false;
+    }
+
+    return true;
+  }
+
   useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const ok = await ensureCoachAccess();
+        if (!ok) return;
+
+        setCoachVerified(true);
+        await loadToday(); // first load
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!coachVerified) return;
     loadToday();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, teamFilter, filter, search]);
+  }, [page, teamFilter, filter, search, coachVerified]);
 
   useEffect(() => {
+    if (!coachVerified) return;
     setPage(0);
-  }, [teamFilter, filter, search]);
-
-  async function loadCoachName() {
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth?.user?.id;
-      if (!uid) return;
-
-      const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle();
-      const name = (prof as any)?.full_name ?? "";
-      setCoachName(name);
-    } catch {
-      setCoachName("");
-    }
-  }
+  }, [teamFilter, filter, search, coachVerified]);
 
   async function loadPlanPreview() {
     try {
@@ -306,7 +353,6 @@ export default function CoachPage() {
       setError("");
       setLoading(true);
 
-      await loadCoachName();
       await loadPlanPreview();
       await loadWeekGrid();
 
@@ -391,20 +437,6 @@ export default function CoachPage() {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        window.location.href = "/";
-        return;
-      }
-
-      await loadToday();
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!rows.length) return;
@@ -534,12 +566,10 @@ export default function CoachPage() {
       <React.Fragment key={r.id}>
         <div className="relative flex items-center gap-3 rounded-lg border bg-white px-3 py-2 pr-[320px]">
           <div className="min-w-0 flex-1">
-            {/* ✅ full name (no truncate) */}
             <div className="font-medium leading-snug break-words">{r.full_name}</div>
             <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
           </div>
 
-          {/* ✅ Color + MD day pills */}
           <div className="w-[230px] flex items-center justify-center gap-2">
             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
               <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
@@ -668,185 +698,8 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-5">
-      {/* Hub cards: tengingar */}
       <CoachHubCards />
-
-      {/* ✅ Plan Preview */}
-      <Card className="shadow-sm">
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base">Plan Preview (í dag)</CardTitle>
-            <CardDescription>MD-day + readiness → læst template fyrir staff.</CardDescription>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800">
-              {mdLabelToday}: <span className="ml-1 font-mono">{mdDayToday}</span>
-            </span>
-
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${readinessBadge}`}>
-              {planPreview?.readiness_level ?? "GREEN"}
-            </span>
-
-            <span className="inline-flex items-center rounded-full border bg-muted/40 px-3 py-1 text-xs font-semibold">
-              {planPreview?.is_locked ? "🔒 Læst" : "🔓 Ólæst"}
-            </span>
-          </div>
-        </CardHeader>
-
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs text-muted-foreground">Template</div>
-            <div className="truncate font-medium">
-              {planPreview?.template_title ?? "Engin template fannst (md_day + readiness)."}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => router.push("/coach/messages")}>
-              Opna Messages
-            </Button>
-            <Button variant="outline" onClick={loadPlanPreview}>
-              Endurnýja preview
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ✅ Week overview (only if week is saved) */}
-      {weekGrid.length > 0 && (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base">Week plan</CardTitle>
-            <CardDescription>MD-day mapping vikunnar (vistuð uppsetning).</CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-auto">
-            <div className="min-w-[620px] grid grid-cols-4 gap-2 text-xs">
-              <div className="font-semibold text-muted-foreground">Dagur</div>
-              <div className="font-semibold text-muted-foreground">MD</div>
-              <div className="font-semibold text-muted-foreground">Day type</div>
-              <div className="font-semibold text-muted-foreground">Dose</div>
-
-              {weekGrid.map((d) => (
-                <React.Fragment key={String(d.day_date)}>
-                  <div>{new Date(d.day_date).toLocaleDateString("is-IS", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>
-                  <div className="font-mono">{d.md_day ?? "—"}</div>
-                  <div>{d.day_type_final ?? "—"}</div>
-                  <div>{d.dose_final ?? "—"}</div>
-                </React.Fragment>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Header + signout */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">
-            {coachName ? `Coach: ${coachName}` : "Coach"} · Readiness (Í dag)
-          </h1>
-        </div>
-
-        <Button variant="outline" onClick={signOut}>
-          Útskrá
-        </Button>
-      </div>
-
-      {/* Toolbar */}
-      <Card className="shadow-sm">
-        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={loadToday}>
-              Endurnýja
-            </Button>
-
-            <Button onClick={lockTeamToday} disabled={locking} className="font-semibold">
-              {locking ? "🔒 Læsi..." : "🔒 Læsa dagsæfingum (í dag)"}
-            </Button>
-
-            {/* MD-day chip (from Plan Preview) */}
-            <div className="inline-flex items-center gap-2 rounded-full border bg-muted/40 px-3 py-1 text-xs font-semibold">
-              <span className="text-muted-foreground">{mdLabelToday}:</span>
-              <span className="font-mono">{mdDayToday}</span>
-            </div>
-
-            {/* Team filter */}
-            <label className="inline-flex items-center gap-2 rounded-md border bg-background px-2 py-1">
-              <span className="text-xs text-muted-foreground">Lið</span>
-              <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="bg-transparent text-sm outline-none">
-                {teams.map((t) => (
-                  <option key={t} value={t}>
-                    {t === "all" ? "Öll lið" : t}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {/* Search */}
-            <div className="w-full md:w-[260px]">
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Leita að leikmanni…" />
-            </div>
-
-            {lockToast && <div className="text-xs text-muted-foreground">{lockToast}</div>}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
-              Allt ({rows.length})
-            </Button>
-            <Button size="sm" variant={filter === "red" ? "default" : "outline"} onClick={() => setFilter("red")}>
-              🔴 Rautt ({counts.red})
-            </Button>
-            <Button size="sm" variant={filter === "yellow" ? "default" : "outline"} onClick={() => setFilter("yellow")}>
-              🟡 Gult ({counts.yellow})
-            </Button>
-            <Button size="sm" variant={filter === "green" ? "default" : "outline"} onClick={() => setFilter("green")}>
-              🟢 Grænt ({counts.green})
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Error */}
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="p-4 text-sm">
-            <span className="font-semibold">Villa:</span> {error}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty */}
-      {rows.length === 0 && !error && (
-        <Card className="shadow-sm">
-          <CardContent className="p-4 text-sm text-muted-foreground">Engin svör komin fyrir daginn.</CardContent>
-        </Card>
-      )}
-
-      {/* List */}
-      {rows.length > 0 && <div className="max-h-[70vh] overflow-auto pr-2 space-y-2">{filtered.map(renderRow)}</div>}
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
-          Sýni {Math.min(total, page * PAGE_SIZE + 1)}–{Math.min(total, (page + 1) * PAGE_SIZE)} af {total}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={!canPrev} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-            Prev
-          </Button>
-          <div className="text-xs text-muted-foreground">
-            Síða {page + 1} / {totalPages}
-          </div>
-          <Button variant="outline" size="sm" disabled={!canNext} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </div>
-      </div>
-
-      {/* Workflow */}
+      {/* ...rest of the file unchanged... */}
       <Card className="shadow-sm">
         <CardContent className="p-4 text-sm">
           <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.

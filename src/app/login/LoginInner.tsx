@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -10,8 +10,26 @@ export default function LoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const next = sp.get("next") || "/player/checkin"; // eða "/coach" ef þú vilt defaulta í coach
+  const next = sp.get("next") || "/player/checkin"; // default fyrir players, coach fer samt rétt í gegnum redirect
   const [mode, setMode] = useState<Mode>("signin");
+
+  // ✅ Ef Supabase sendir password reset link á /login#access_token=...
+  // þá flytjum við notandann yfir á /reset-password með sama hash.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const hash = window.location.hash || "";
+    if (!hash) return;
+
+    // oftast er type=recovery, en stundum er bara "recovery" í hash
+    const isRecovery =
+      hash.includes("access_token=") &&
+      (hash.includes("type=recovery") || hash.includes("recovery"));
+
+    if (isRecovery) {
+      router.replace(`/reset-password${hash}`);
+    }
+  }, [router]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +53,9 @@ export default function LoginInner() {
         });
         if (error) throw error;
 
-        router.replace(next);
+        // ✅ ALLTAF fara í role-redirect (coach/player)
+        const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
+        router.replace(target);
         router.refresh();
         return;
       }
@@ -60,7 +80,9 @@ export default function LoginInner() {
         if (!data.session) {
           setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu.");
         } else {
-          router.replace(next);
+          // ✅ ef session kemur strax, fara í role-redirect
+          const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
+          router.replace(target);
           router.refresh();
         }
         return;
@@ -164,13 +186,7 @@ export default function LoginInner() {
             cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading
-            ? "Vinn..."
-            : mode === "signin"
-            ? "Skrá inn"
-            : mode === "signup"
-            ? "Búa til aðgang"
-            : "Senda endurstillingu"}
+          {loading ? "Vinn..." : mode === "signin" ? "Skrá inn" : mode === "signup" ? "Búa til aðgang" : "Senda endurstillingu"}
         </button>
       </form>
 

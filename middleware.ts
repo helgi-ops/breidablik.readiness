@@ -3,11 +3,16 @@ import { NextResponse, type NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // Protected routes
+  // ✅ Leyfa reset-password flæðið (Supabase sendir access_token í URL hash)
+  if (pathname.startsWith("/reset-password")) {
+    return NextResponse.next();
+  }
+
+  // Protected routes (auth redirect líka, því hún þarf session)
   const isProtected =
     pathname.startsWith("/player") ||
     pathname.startsWith("/coach") ||
-    pathname.startsWith("/checkin");
+    pathname.startsWith("/auth/redirect");
 
   if (!isProtected) return NextResponse.next();
 
@@ -15,7 +20,7 @@ export function middleware(req: NextRequest) {
   const hasSbCookie = req.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.value);
   if (hasSbCookie) return NextResponse.next();
 
-  // Build login URL robustly
+  // Redirect to login with next
   const nextParam = encodeURIComponent(pathname + search);
   const loginUrl = new URL(`/login?next=${nextParam}`, req.url);
 
@@ -23,5 +28,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/player/:path*", "/coach/:path*", "/checkin/:path*"],
+  matcher: ["/player/:path*", "/coach/:path*", "/auth/redirect", "/reset-password"],
 };
