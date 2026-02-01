@@ -197,6 +197,12 @@ export default function CoachPage() {
   // ✅ Plan Preview state
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
 
+  // ✅ Week grid mapping
+  const [weekGrid, setWeekGrid] = useState<any[]>([]);
+
+  // ✅ Coach name
+  const [coachName, setCoachName] = useState<string>("");
+
   // ✅ Derived MD-day chip (from plan preview)
   const mdDayToday = useMemo(() => {
     const p = prettyMd(planPreview?.md_day ?? "GENERIC");
@@ -217,15 +223,25 @@ export default function CoachPage() {
     setPage(0);
   }, [teamFilter, filter, search]);
 
+  async function loadCoachName() {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) return;
+
+      const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle();
+      const name = (prof as any)?.full_name ?? "";
+      setCoachName(name);
+    } catch {
+      setCoachName("");
+    }
+  }
+
   async function loadPlanPreview() {
     try {
-      const { data, error } = await supabase
-        .from("v_coach_plan_preview_today")
-        .select("*")
-        .maybeSingle();
+      const { data, error } = await supabase.from("v_coach_plan_preview_today").select("*").maybeSingle();
 
       if (error) {
-        // ekki stoppa dashboard - bara logga
         console.error("Plan preview error:", error.message);
         setPlanPreview(null);
         return;
@@ -238,13 +254,61 @@ export default function CoachPage() {
     }
   }
 
+  async function loadWeekGrid() {
+    try {
+      // 1) finna coach team_id
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) return;
+
+      const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+      const teamId = (prof as any)?.team_id;
+      if (!teamId) return;
+
+      // 2) active week_setup (nýjasta)
+      const { data: ws } = await supabase
+        .from("week_setups")
+        .select("id")
+        .eq("team_id", teamId)
+        .order("week_start", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const weekSetupId = (ws as any)?.id;
+      if (!weekSetupId) {
+        setWeekGrid([]);
+        return;
+      }
+
+      // 3) sækja mapping
+      const { data: grid, error } = await supabase
+        .from("v_week_plan_grid")
+        .select("day_date, md_day, day_type_final, dose_final")
+        .eq("week_setup_id", weekSetupId)
+        .order("day_date", { ascending: true });
+
+      if (error) {
+        console.error("Week grid error:", error.message);
+        setWeekGrid([]);
+        return;
+      }
+
+      setWeekGrid((grid as any[]) ?? []);
+    } catch (e) {
+      console.error("Week grid error (catch):", e);
+      setWeekGrid([]);
+    }
+  }
+
   async function loadToday() {
     try {
       setError("");
       setLoading(true);
 
-      // ✅ pull plan preview (md_day + readiness + template title)
+      await loadCoachName();
       await loadPlanPreview();
+      await loadWeekGrid();
 
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
@@ -294,7 +358,6 @@ export default function CoachPage() {
 
         const reason = r.computed_auto_reason ?? null;
 
-        // ✅ attach md_day from plan preview (team/day)
         return { ...r, id, flag_status: finalFlag, color, auto_reason: reason, md_day: mdDayToday };
       });
 
@@ -471,7 +534,8 @@ export default function CoachPage() {
       <React.Fragment key={r.id}>
         <div className="relative flex items-center gap-3 rounded-lg border bg-white px-3 py-2 pr-[320px]">
           <div className="min-w-0 flex-1">
-            <div className="font-medium truncate">{r.full_name}</div>
+            {/* ✅ full name (no truncate) */}
+            <div className="font-medium leading-snug break-words">{r.full_name}</div>
             <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
           </div>
 
@@ -649,13 +713,39 @@ export default function CoachPage() {
         </CardContent>
       </Card>
 
+      {/* ✅ Week overview (only if week is saved) */}
+      {weekGrid.length > 0 && (
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Week plan</CardTitle>
+            <CardDescription>MD-day mapping vikunnar (vistuð uppsetning).</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-auto">
+            <div className="min-w-[620px] grid grid-cols-4 gap-2 text-xs">
+              <div className="font-semibold text-muted-foreground">Dagur</div>
+              <div className="font-semibold text-muted-foreground">MD</div>
+              <div className="font-semibold text-muted-foreground">Day type</div>
+              <div className="font-semibold text-muted-foreground">Dose</div>
+
+              {weekGrid.map((d) => (
+                <React.Fragment key={String(d.day_date)}>
+                  <div>{new Date(d.day_date).toLocaleDateString("is-IS", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>
+                  <div className="font-mono">{d.md_day ?? "—"}</div>
+                  <div>{d.day_type_final ?? "—"}</div>
+                  <div>{d.dose_final ?? "—"}</div>
+                </React.Fragment>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header + signout */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Readiness Dashboard (Í dag)</h1>
-          <p className="text-sm text-muted-foreground">
-            Gögn koma frá <span className="font-medium">v_coach_readiness_today_v4</span> (today-only).
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {coachName ? `Coach: ${coachName}` : "Coach"} · Readiness (Í dag)
+          </h1>
         </div>
 
         <Button variant="outline" onClick={signOut}>
