@@ -4,7 +4,9 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+
+
 
 import {
   Card,
@@ -59,6 +61,8 @@ export default function CoachMatchMinutesPage() {
     load();
   }, []);
 
+    const supabase = useMemo(() => getSupabaseClient(), []);
+    
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
