@@ -19,37 +19,43 @@ type PlayerRow = {
   team: string | null;
 };
 
-type MetricsRow = {
-  readiness: number | null;
-  sleep: number | null;
-  soreness: number | null;
-  total_score: number | null;
-  created_at: string | null;
-} | null;
+type MetricsRow =
+  | {
+      readiness: number | null;
+      sleep: number | null;
+      soreness: number | null;
+      total_score: number | null;
+      created_at: string | null;
+    }
+  | null;
 
-type GenericMsg = {
-  title?: string | null;
-  message: string;
-  why?: string | null;
-} | null;
+type GenericMsg =
+  | {
+      title?: string | null;
+      message: string;
+      why?: string | null;
+    }
+  | null;
 
 /**
  * ✅ Plan row from LOCKED view
  * Þetta er eina sem player UI á að nota til að birta æfinguna.
  */
-type LockedPlanRow = {
-  player_id: string;
-  entry_date: string; // date
-  readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED
-  md_day: string; // MD-4 / MD-3 / ... eða GENERIC
+type LockedPlanRow =
+  | {
+      player_id: string;
+      entry_date: string; // date
+      readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED
+      md_day: string; // MD-4 / MD-3 / ... eða GENERIC
 
-  plan_title: string | null;
-  plan_description: string | null;
-  plan_structure: any; // jsonb array
+      plan_title: string | null;
+      plan_description: string | null;
+      plan_structure: any; // jsonb array
 
-  locked_at: string | null;
-  is_locked: boolean;
-} | null;
+      locked_at: string | null;
+      is_locked: boolean;
+    }
+  | null;
 
 function todayISO() {
   const d = new Date();
@@ -201,10 +207,11 @@ export default function PlayerPage() {
       setPlayerMeta((pm as any) ?? null);
 
       // ✅ 1) Plan from LOCKED view (snapshot-first)
-      // Ath: view-ið er today-only, en við filterum samt á player_id til að vera skýrt.
       const { data: planRow, error: planErr } = await supabase
         .from("v_player_microdose_plan_today_locked")
-        .select("player_id,entry_date,readiness_level,md_day,plan_title,plan_description,plan_structure,locked_at,is_locked")
+        .select(
+          "player_id,entry_date,readiness_level,md_day,plan_title,plan_description,plan_structure,locked_at,is_locked"
+        )
         .eq("player_id", prof.player_id)
         .maybeSingle();
 
@@ -235,7 +242,9 @@ export default function PlayerPage() {
 
   // ====== Flag: frá plan.readiness_level (ekki daily_workout)
   const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
-  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]);
+
+  // ✅ UI “source of truth” — skýrt týpað
+  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
 
   // ====== Generic message layer (valfrjálst)
   useEffect(() => {
@@ -249,7 +258,7 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, flag]);
 
-  // Message: ef plan til -> plan_title/desc segja “hvað á að gera”, en við höfum samt coach-style message fallback
+  // ✅ Message: override frá DB ef til, annars `flagUi(...).playerMessage`
   const message = useMemo(() => {
     // þú getur líka valið að sýna plan_title sem “message”
     return genericMsg?.message || ui.playerMessage;
@@ -356,7 +365,7 @@ export default function PlayerPage() {
     );
   }
 
-  // ✅ Ef ekkert plan finnst fyrir today -> þetta er nýi “engin dagsæfing” state-inn
+  // ✅ Ef ekkert plan finnst fyrir today
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
@@ -399,7 +408,9 @@ export default function PlayerPage() {
                 <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-sm font-semibold text-zinc-900">
                   🔒 LÆST
                   <span className="text-xs font-medium text-zinc-500">
-                    {plan.locked_at ? new Date(plan.locked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                    {plan.locked_at
+                      ? new Date(plan.locked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : ""}
                   </span>
                 </div>
               ) : (
