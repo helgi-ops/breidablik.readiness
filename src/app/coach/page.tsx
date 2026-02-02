@@ -451,15 +451,17 @@ export default function CoachPage() {
     return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "is"))];
   }, [rows]);
 
+  // ✅ FIX: counts should use r.color (fallback final_color)
   const counts = useMemo(() => {
     const acc: Record<FinalColor, number> = { red: 0, yellow: 0, green: 0 };
     for (const r of rows) {
-      const c = r.final_color as FinalColor | null | undefined;
-      if (c) acc[c] = (acc[c] ?? 0) + 1;
+      const c = (String((r as any).color ?? (r as any).final_color ?? "").toLowerCase() as FinalColor) || null;
+      if (c === "red" || c === "yellow" || c === "green") acc[c] += 1;
     }
     return acc;
   }, [rows]);
 
+  // Ath: þú ert að filtera í SQL, þannig er "filtered = rows" ok
   const filtered = useMemo(() => rows, [rows]);
 
   async function signOut() {
@@ -564,60 +566,68 @@ export default function CoachPage() {
 
     return (
       <React.Fragment key={r.id}>
-        <div className="relative flex items-center gap-3 rounded-lg border bg-white px-3 py-2 pr-[320px]">
-          <div className="min-w-0 flex-1">
-            <div className="font-medium leading-snug break-words">{r.full_name}</div>
-            <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
-          </div>
-
-          <div className="w-[230px] flex items-center justify-center gap-2">
-            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
-              <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
-              {cm.label}
-            </span>
-
-            <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800">
-              {r.md_day ?? mdDayToday}
-            </span>
-          </div>
-
-          <div className="w-[90px] flex items-center justify-center">
-            <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-sm font-semibold tabular-nums text-gray-800">
-              {r.total_score ?? "—"}
-            </span>
-          </div>
-
-          <div className="sticky right-2 ml-auto flex items-center gap-2 bg-white/90 backdrop-blur px-2 py-1 rounded-md">
-            <div className="w-[180px] text-sm text-gray-700">
-              <span className="reason-text">{computedReason}</span>
+        {/* ✅ FIX: new pro layout (no pr-[320px], no break-words name) */}
+        <div className="rounded-lg border bg-white px-3 py-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.4fr)_auto_auto_1fr_auto] md:items-center">
+            {/* Name */}
+            <div className="min-w-0">
+              <div className="font-medium leading-snug truncate">{r.full_name}</div>
+              <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
             </div>
 
-            <div className="w-[90px]">
+            {/* Badges */}
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
+                {cm.label}
+              </span>
+
+              <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800">
+                {r.md_day ?? mdDayToday}
+              </span>
+            </div>
+
+            {/* Score */}
+            <div className="flex items-center justify-start md:justify-center">
+              <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-sm font-semibold tabular-nums text-gray-800">
+                {r.total_score ?? "—"}
+              </span>
+            </div>
+
+            {/* Reason */}
+            <div className="min-w-0 text-sm text-gray-700">
+              <span className="block truncate" title={computedReason ?? ""}>
+                {computedReason || "—"}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 justify-end">
               <button
                 onClick={async () => {
                   await saveOverride(r);
                 }}
                 disabled={isLocked || isSaving}
-                className="w-full rounded-md border px-2 py-1 text-sm disabled:opacity-50"
+                className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
               >
                 {isLocked ? "LOCKED" : isSaving ? "Saving..." : "Save"}
               </button>
-              {isSaved && <div className="text-[11px] text-green-700 mt-0.5">Saved ✓</div>}
-            </div>
 
-            <button
-              type="button"
-              className="w-10 h-9 rounded-md border text-gray-600 hover:bg-gray-50"
-              aria-label="Sýna nánar"
-              onClick={() => setExpandedPlayerId((prev) => (prev === pid ? null : pid))}
-            >
-              {isOpen ? "▴" : "▾"}
-            </button>
+              <button
+                type="button"
+                className="h-10 w-10 rounded-md border text-gray-600 hover:bg-gray-50"
+                aria-label="Sýna nánar"
+                onClick={() => setExpandedPlayerId((prev) => (prev === pid ? null : pid))}
+              >
+                {isOpen ? "▴" : "▾"}
+              </button>
+            </div>
           </div>
         </div>
 
         {isOpen && (
-          <div className="-mt-1 rounded-b-lg border border-t-0 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+          // ✅ FIX: clean expanded box (no -mt-1, no border-t-0)
+          <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <div>
                 📊 Readiness: <span className="font-medium tabular-nums">{r.readiness ?? "—"}</span>
@@ -699,7 +709,75 @@ export default function CoachPage() {
   return (
     <div className="space-y-5">
       <CoachHubCards />
-      {/* ...rest of the file unchanged... */}
+
+      {/* ✅ Readiness Today dashboard */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Readiness Today</CardTitle>
+          <CardDescription>
+            Coach: <span className="font-medium">{coachName || "—"}</span> · MD-day:{" "}
+            <span className="font-medium">{mdDayToday}</span>
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
+                All
+              </Button>
+              <Button variant={filter === "red" ? "default" : "outline"} onClick={() => setFilter("red")}>
+                Red ({counts.red})
+              </Button>
+              <Button variant={filter === "yellow" ? "default" : "outline"} onClick={() => setFilter("yellow")}>
+                Yellow ({counts.yellow})
+              </Button>
+              <Button variant={filter === "green" ? "default" : "outline"} onClick={() => setFilter("green")}>
+                Green ({counts.green})
+              </Button>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                placeholder="Leita að leikmanni…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-[220px]"
+              />
+              <Button variant="outline" onClick={() => loadToday()} disabled={loading}>
+                {loading ? "Hleð..." : "Refresh"}
+              </Button>
+            </div>
+          </div>
+
+          {error ? <div className="text-sm text-red-600">{error}</div> : null}
+
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Hleð gögnum…</div>
+          ) : rows.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Engin readiness gögn í dag.</div>
+          ) : (
+            <div className="space-y-2">{filtered.map((r) => renderRow(r))}</div>
+          )}
+
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-xs text-muted-foreground">
+                Page {page + 1} / {totalPages} · Total {total}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={!canPrev} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                  Prev
+                </Button>
+                <Button variant="outline" disabled={!canNext} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <Card className="shadow-sm">
         <CardContent className="p-4 text-sm">
           <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.
