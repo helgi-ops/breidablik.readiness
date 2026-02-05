@@ -4,14 +4,25 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL;
+
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || // recommended for server writes
+    process.env.SUPABASE_SERVICE_ROLE ||     // fallback naming
+    process.env.SUPABASE_ANON_KEY ||         // last-resort server key (not ideal)
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    throw new Error("Supabase env vars missing at runtime");
+    throw new Error(
+      `Supabase env vars missing at runtime. url=${Boolean(url)} key=${Boolean(key)}`
+    );
   }
 
-  return createClient(url, key);
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
 }
 
 function toISODate(d: Date) {
@@ -41,23 +52,58 @@ function computePlannedLoad(systemKey: string, dayType: string, intensityTarget:
   }
 }
 
+// Hjálpar: tekur day_index hvort sem "1" eða 1 og day_type í uppercase
+function normalizeOverrides(days: any[] | undefined) {
+  const map = new Map<number, any>();
+  for (const d of days ?? []) {
+    const idxRaw = d?.day_index;
+    const idx =
+      typeof idxRaw === "number"
+        ? idxRaw
+        : typeof idxRaw === "string"
+          ? parseInt(idxRaw, 10)
+          : NaN;
+
+    if (!Number.isFinite(idx)) continue;
+
+    const day_type =
+      typeof d?.day_type === "string" ? d.day_type.toUpperCase() : d?.day_type;
+
+    map.set(idx, { ...d, day_index: idx, day_type });
+  }
+  return map;
+}
+
 export async function POST(req: Request) {
-  const supabase = getSupabase();
+  let supabase;
+  try {
+    supabase = getSupabase();
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message ?? "Supabase env vars missing at runtime" },
+      { status: 500 }
+    );
+  }
 
   const body = await req.json();
-  const {
+  const { team_id, week_start, system_key, intensity_target, notes, days } = body;
+
+  if (!team_id || !week_start || !system_key || intensity_target == null) {
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  // Debug: sjá hvað UI er að senda inn
+  console.log("[week-setup/apply] payload", {
     team_id,
     week_start,
     system_key,
     intensity_target,
-    notes,
-    days,
-  } = body;
+    notes: notes ?? null,
+    days_count: Array.isArray(days) ? days.length : 0,
+    days_sample: Array.isArray(days) ? days.slice(0, 3) : null,
+  });
 
-  if (!team_id || !week_start || !system_key || !intensity_target) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
+  // 1) Upsert week_setups (ok)
   const { error: setupErr } = await supabase
     .from("week_setups")
     .upsert(
@@ -75,25 +121,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: setupErr.message }, { status: 500 });
   }
 
+  // 2) Build 7 rows og OVERWRITE-a með upsert (team_id,day_date)
   const start = new Date(week_start + "T00:00:00Z");
+  const overrides = normalizeOverrides(days);
 
   const planRows = Array.from({ length: 7 }).map((_, i) => {
     const day_index = i + 1;
     const day_date = toISODate(addDays(start, i));
-    const override = days?.find((d: any) => d.day_index === day_index);
+    const override = overrides.get(day_index);
+
+    const finalDayType =
+      (override?.day_type as string | undefined) ??
+      (day_index === 7 ? "OFF" : "TRAIN");
+
+    const planned_load = computePlannedLoad(system_key, finalDayType, intensity_target);
 
     return {
       team_id,
       week_start,
       day_date,
       day_index,
-      day_type: override?.day_type ?? (day_index === 7 ? "OFF" : "TRAIN"),
+      day_type: finalDayType,
       focus: override?.focus ?? null,
-      planned_load: computePlannedLoad(system_key, override?.day_type ?? "TRAIN", intensity_target),
+      planned_load,
       system_key,
       notes: override?.notes ?? null,
+
+      // Ef week_plans hefur day_intent dálk, þá færðu intents inn líka.
+      // Ef þú færð villu "column day_intent does not exist", kommentaðu næstu línu út.
+      day_intent: override?.day_intent ?? null,
     };
   });
+
+  console.log("[week-setup/apply] planRows", planRows);
 
   const { error: planErr } = await supabase
     .from("week_plans")

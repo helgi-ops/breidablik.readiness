@@ -9,7 +9,7 @@ type ProfileRow = {
   display_name: string | null;
   player_id: string | null;
   role: string | null;
-  team_id?: string | null; // ✅ til að ná í team message ef þú ert með team_id í profiles
+  team_id?: string | null;
 };
 
 type PlayerRow = {
@@ -38,15 +38,15 @@ type GenericMsg =
   | null;
 
 /**
- * ✅ Plan row from LOCKED view
- * Þetta er eina sem player UI á að nota til að birta æfinguna.
+ * Plan row from LOCKED view (snapshot-first).
+ * Player UI á helst að nota þetta, en við munum "patcha" ef view-ið skilar GENERIC/mismatch.
  */
 type LockedPlanRow =
   | {
       player_id: string;
       entry_date: string; // date
-      readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED
-      md_day: string; // MD-4 / MD-3 / ... eða GENERIC
+      readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED / UNKNOWN
+      md_day: string; // MD-4 / MD-3 / MD-2 / MD-1 / GENERIC
 
       plan_title: string | null;
       plan_description: string | null;
@@ -54,6 +54,24 @@ type LockedPlanRow =
 
       locked_at: string | null;
       is_locked: boolean;
+    }
+  | null;
+
+type DecisionRow =
+  | {
+      planned_focus: string | null; // e.g. "POLISH / CALM"
+      final_planned_day_type: string | null; // TRAIN / RECOVERY / OFF / FULL ...
+      readiness_flag: string | null; // GREEN / YELLOW / RED / UNKNOWN
+    }
+  | null;
+
+type TemplateRow =
+  | {
+      md_day: string;
+      readiness_level: string;
+      title: string | null;
+      description: string | null;
+      structure: any;
     }
   | null;
 
@@ -82,7 +100,50 @@ function readinessToFlag(level: string | null | undefined): Flag {
   const l = (level ?? "").toUpperCase();
   if (l === "RED") return "RED";
   if (l === "YELLOW") return "YELLOW";
-  // GREEN_PLUS + GREEN -> GREEN
+  return "GREEN";
+}
+
+function norm(x: string | null | undefined) {
+  return (x ?? "").trim().toUpperCase();
+}
+
+/**
+ * ✅ Þetta er "mappingið" sem leysir vandann hjá þér strax:
+ * - OFF -> MD-1 (og við þvingum readiness_level -> RED svo "MD-1 Off" vinnur)
+ * - RECOVERY -> MD-2 (og þvingum readiness -> RED svo "MD-2 Recovery" vinnur)
+ * - POLISH/CALM -> MD-2
+ * - NEURAL/VELOCITY -> MD-3
+ * - FORCE -> MD-4
+ * - annars -> GENERIC
+ */
+function decideTemplateMdDay(decision: DecisionRow): string {
+  const dayType = norm(decision?.final_planned_day_type);
+  const focus = norm(decision?.planned_focus);
+
+  if (dayType === "OFF") return "MD-1";
+  if (dayType === "RECOVERY") return "MD-2";
+
+  if (focus === "POLISH / CALM") return "MD-2";
+  if (focus === "NEURAL / VELOCITY") return "MD-3";
+  if (focus === "FORCE") return "MD-4";
+
+  return "GENERIC";
+}
+
+/**
+ * ✅ Readiness key fyrir template lookup.
+ * - OFF / RECOVERY: þvingum RED (því template-ið er "Off" / "Recovery" óháð readiness)
+ * - annars: notum readiness_flag (fallback GREEN)
+ * - GREEN_PLUS má líka vera til í templates (þú ert með GENERIC GREEN_PLUS)
+ */
+function decideTemplateReadiness(decision: DecisionRow): string {
+  const dayType = norm(decision?.final_planned_day_type);
+  if (dayType === "OFF") return "RED";
+  if (dayType === "RECOVERY") return "RED";
+
+  const rf = norm(decision?.readiness_flag);
+  if (rf === "RED" || rf === "YELLOW" || rf === "GREEN" || rf === "GREEN_PLUS") return rf;
+
   return "GREEN";
 }
 
@@ -105,11 +166,13 @@ export default function PlayerPage() {
   const [plan, setPlan] = useState<LockedPlanRow>(null);
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
+  // Decision (debug + template patch)
+  const [decision, setDecision] = useState<DecisionRow>(null);
+
   // Optional: generic messages per flag
   const [genericMsg, setGenericMsg] = useState<GenericMsg>(null);
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
-    // team-specific
     if (teamId) {
       const { data: teamMsg } = await supabase
         .from("player_flag_messages")
@@ -123,7 +186,6 @@ export default function PlayerPage() {
       if (teamMsg?.message) return teamMsg as any;
     }
 
-    // global fallback
     const { data: globalMsg } = await supabase
       .from("player_flag_messages")
       .select("title, message, why")
@@ -146,6 +208,7 @@ export default function PlayerPage() {
       setMetrics(null);
       setGenericMsg(null);
       setPlayerMeta(null);
+      setDecision(null);
 
       // Auth
       const { data: auth, error: aErr } = await supabase.auth.getUser();
@@ -206,13 +269,27 @@ export default function PlayerPage() {
       if (pmErr) console.error("players meta error:", pmErr.message);
       setPlayerMeta((pm as any) ?? null);
 
-      // ✅ 1) Plan from LOCKED view (snapshot-first)
+      // ✅ A) Decision row (source of truth fyrir "hvaða dagur er í planinu")
+      const { data: drow, error: dErr } = await supabase
+        .from("v_player_daily_decision_v3")
+        .select("planned_focus, final_planned_day_type, readiness_flag")
+        .eq("player_id", prof.player_id)
+        .eq("day_date", today)
+        .maybeSingle();
+
+      if (dErr) console.error("decision error:", dErr.message);
+      setDecision((drow as any) ?? null);
+
+      // ✅ B) Plan from LOCKED view (snapshot-first)
       const { data: planRow, error: planErr } = await supabase
         .from("v_player_microdose_plan_today_locked")
         .select(
           "player_id,entry_date,readiness_level,md_day,plan_title,plan_description,plan_structure,locked_at,is_locked"
         )
         .eq("player_id", prof.player_id)
+        .eq("entry_date", today)
+        .order("locked_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (planErr) {
@@ -221,7 +298,45 @@ export default function PlayerPage() {
         return;
       }
 
-      setPlan((planRow as any) ?? null);
+      let nextPlan: LockedPlanRow = (planRow as any) ?? null;
+
+      // ✅ C) Patch: ef view skilar GENERIC / eða md_day passar ekki við decision,
+      // þá sækjum við rétt template úr microdose_templates og override-um title/desc/structure/md_day.
+      try {
+        const mdKey = decideTemplateMdDay((drow as any) ?? null);
+        const rKey = decideTemplateReadiness((drow as any) ?? null);
+
+        const currentMd = norm(nextPlan?.md_day);
+        const shouldPatch =
+          !!nextPlan &&
+          (currentMd === "GENERIC" || (mdKey !== "GENERIC" && currentMd !== norm(mdKey)));
+
+        if (shouldPatch && mdKey) {
+          const { data: trow, error: tErr } = await supabase
+            .from("microdose_templates")
+            .select("md_day, readiness_level, title, description, structure")
+            .eq("md_day", mdKey)
+            .eq("readiness_level", rKey)
+            .maybeSingle();
+
+          if (tErr) {
+            console.error("template fetch error:", tErr.message);
+          } else if (nextPlan && (trow?.title || (trow as any)?.description || (trow as any)?.structure)) {
+  nextPlan = {
+    ...(nextPlan as any),
+    md_day: mdKey,
+    plan_title: trow?.title ?? nextPlan?.plan_title ?? null,
+    plan_description: (trow as any)?.description ?? nextPlan?.plan_description ?? null,
+    plan_structure: (trow as any)?.structure ?? nextPlan?.plan_structure ?? null,
+  };
+}
+
+        }
+      } catch (e: any) {
+        console.error("patch error:", e?.message ?? e);
+      }
+
+      setPlan(nextPlan);
 
       // 2) Metrics (optional) - today
       const { data: mrow, error: mErr } = await supabase
@@ -240,13 +355,12 @@ export default function PlayerPage() {
     run();
   }, [supabase]);
 
-  // ====== Flag: frá plan.readiness_level (ekki daily_workout)
+  // ====== Flag: frá plan.readiness_level
   const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
 
-  // ✅ UI “source of truth” — skýrt týpað
   const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
 
-  // ====== Generic message layer (valfrjálst)
+  // ====== Generic message layer
   useEffect(() => {
     const run = async () => {
       if (!profile) return;
@@ -258,14 +372,11 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, flag]);
 
-  // ✅ Message: override frá DB ef til, annars `flagUi(...).playerMessage`
   const message = useMemo(() => {
-    // þú getur líka valið að sýna plan_title sem “message”
     return genericMsg?.message || ui.playerMessage;
   }, [genericMsg, ui.playerMessage]);
 
   const why = useMemo(() => {
-    // why er “reglur/af hverju”; plan_description er “hvað á að gera”
     return genericMsg?.why || ui.why;
   }, [genericMsg, ui.why]);
 
@@ -347,7 +458,8 @@ export default function PlayerPage() {
                 <option value="">— Veldu —</option>
                 {players.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name ?? "Ónefndur"} {p.position ? `(${p.position})` : ""} {p.team ? `· ${p.team}` : ""}
+                    {p.full_name ?? "Ónefndur"} {p.position ? `(${p.position})` : ""}{" "}
+                    {p.team ? `· ${p.team}` : ""}
                   </option>
                 ))}
               </select>
@@ -365,7 +477,7 @@ export default function PlayerPage() {
     );
   }
 
-  // ✅ Ef ekkert plan finnst fyrir today
+  // Ef ekkert plan finnst fyrir today
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
@@ -387,6 +499,16 @@ export default function PlayerPage() {
   const team = playerMeta?.team ?? "";
 
   const showStructure = isArray(plan.plan_structure) && plan.plan_structure.length > 0;
+
+  
+ // Debug string (hjálpar þér að sjá hvað er að gerast) — NO HOOKS
+const debugLine =
+  `today=${todayISO()} | ` +
+  `decision_focus=${decision?.planned_focus ?? "-"} | ` +
+  `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
+  `plan_md=${plan?.md_day ?? "-"} | ` +
+  `plan_title=${plan?.plan_title ?? "-"}`;
+
 
   // ================= MAIN =================
   return (
@@ -426,11 +548,14 @@ export default function PlayerPage() {
             </div>
           </div>
 
+          {/* Debug (þú getur comment-að þessu út þegar þetta er komið) */}
+          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+
           {/* Header stats */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Dagsetning" value={plan.entry_date} />
             <Stat label="Readiness" value={plan.readiness_level} />
-            <Stat label="MD" value={plan.md_day} />
+            <Stat label="MD / Focus" value={decision?.planned_focus ?? plan.md_day} />
             <Stat label="Check-in" value={metrics ? "Skráð" : "Vantar"} />
           </div>
 

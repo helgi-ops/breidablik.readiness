@@ -58,7 +58,7 @@ type Row = {
   locked_at: string | null;
   locked_by?: string | null;
 
-  // ✅ MD-day (team/day) – kemur úr Plan Preview view
+  // ✅ MD-day (team/day) – kemur úr Plan Preview / Week Grid
   md_day?: string | null;
 
   final_color: FinalColor;
@@ -206,16 +206,27 @@ export default function CoachPage() {
   // ✅ Coach gate
   const [coachVerified, setCoachVerified] = useState(false);
 
-  // ✅ Derived MD-day chip (from plan preview)
+  // ✅ TODAY
+  const today = useMemo(() => todayISO(), []);
+
+  // ✅ WeekGrid row for today (SOURCE OF TRUTH for md_day)
+  const weekToday = useMemo(() => {
+    const t = todayISO();
+    const row = (weekGrid ?? []).find((x: any) => String(x.day_date) === t) ?? null;
+    return row;
+  }, [weekGrid]);
+
+  // ✅ Derived MD-day chip
+  // IMPORTANT: use weekGrid first, planPreview only as fallback
   const mdDayToday = useMemo(() => {
-    const p = prettyMd(planPreview?.md_day ?? "GENERIC");
-    return p.md;
-  }, [planPreview?.md_day]);
+    const src = weekToday?.md_day ?? planPreview?.md_day ?? "GENERIC";
+    return prettyMd(src).md;
+  }, [weekToday?.md_day, planPreview?.md_day]);
 
   const mdLabelToday = useMemo(() => {
-    const p = prettyMd(planPreview?.md_day ?? "GENERIC");
-    return p.label;
-  }, [planPreview?.md_day]);
+    const src = weekToday?.md_day ?? planPreview?.md_day ?? "GENERIC";
+    return prettyMd(src).label;
+  }, [weekToday?.md_day, planPreview?.md_day]);
 
   // ✅ 1) Gate: ensure user is logged in AND is coach
   async function ensureCoachAccess() {
@@ -250,7 +261,7 @@ export default function CoachPage() {
     setCoachName(name);
 
     if (role !== "coach") {
-      router.replace("/player");
+      router.replace(`/login?next=${encodeURIComponent("/coach")}`);
       return false;
     }
 
@@ -328,7 +339,7 @@ export default function CoachPage() {
         return;
       }
 
-      // 3) sækja mapping
+      // 3) sækja mapping (FINAL)
       const { data: grid, error } = await supabase
         .from("v_week_plan_grid")
         .select("day_date, md_day, day_type_final, dose_final")
@@ -353,6 +364,7 @@ export default function CoachPage() {
       setError("");
       setLoading(true);
 
+      // load context first
       await loadPlanPreview();
       await loadWeekGrid();
 
@@ -360,9 +372,10 @@ export default function CoachPage() {
       const to = from + PAGE_SIZE - 1;
 
       let q = supabase
-        .from("v_coach_readiness_today_v4")
+        .from("v_coach_readiness_today_v5")
         .select("*", { count: "exact" })
-        .order("color", { ascending: false })
+        // ✅ betra en stafróf: red(1) -> green+(4)
+        .order("color_rank", { ascending: true })
         .order("total_score", { ascending: true })
         .range(from, to);
 
@@ -381,30 +394,38 @@ export default function CoachPage() {
 
       const raw = (data ?? []) as Row[];
 
+      // ✅ FIX: primary litur kemur úr v5 `color`, ekki computed_auto_flag
       const list = raw.map((r) => {
         const id = (r.readiness_entry_id as string) || String(r.player_id);
 
-        const finalFlag = ((r as any).final_flag ?? r.computed_auto_flag ?? null) as FlagStatus | null;
-        const finalColor = ((r as any).final_color ?? null) as "red" | "yellow" | "green" | null;
+        // PRIMARY color frá view (v5) — 'red' | 'yellow' | 'green'
+        const statusColor = (String((r as any).color ?? "").toLowerCase() as FinalColor) || null;
 
         const color: Color | null =
-          finalColor === "red"
+          statusColor === "red"
             ? "red"
-            : finalColor === "yellow"
+            : statusColor === "yellow"
             ? "yellow"
-            : finalColor === "green"
-            ? "green"
-            : finalFlag === "RED"
-            ? "red"
-            : finalFlag === "YELLOW"
-            ? "yellow"
-            : finalFlag === "GREEN"
+            : statusColor === "green"
             ? "green"
             : null;
 
+        // Primary readiness flag (ekki warning)
+        const rl = String((r as any).readiness_level ?? "").toUpperCase();
+        const readinessFlag: FlagStatus | null =
+          rl === "RED" ? "RED" : rl === "YELLOW" ? "YELLOW" : rl === "GREEN" || rl === "GREEN_PLUS" ? "GREEN" : null;
+
         const reason = r.computed_auto_reason ?? null;
 
-        return { ...r, id, flag_status: finalFlag, color, auto_reason: reason, md_day: mdDayToday };
+        return {
+          ...r,
+          id,
+          flag_status: readinessFlag,
+          color,
+          auto_reason: reason,
+          // ✅ ALWAYS show same md_day as Week setup (team/day)
+          md_day: mdDayToday,
+        };
       });
 
       list.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "is"));
@@ -531,7 +552,9 @@ export default function CoachPage() {
 
     const entryId = r.readiness_entry_id ?? r.id;
 
-    let q = supabase.from("readiness_entries").update({ training_action: action, coach_message: message.length ? message : null });
+    let q = supabase
+      .from("readiness_entries")
+      .update({ training_action: action, coach_message: message.length ? message : null });
 
     if (entryId) q = q.eq("id", entryId);
     else q = q.eq("player_id", playerId).eq("entry_date", r.entry_date);
@@ -558,15 +581,17 @@ export default function CoachPage() {
 
     const cm = colorMeta(r.color);
     const isOpen = expandedPlayerId === pid;
-    const autoFlag = (r.flag_status ? flagLabel(r.flag_status as FlagStatus) : null) as string | null;
+
+    // ✅ FIX: Auto-flag á að sýna computed_auto_flag (warning), ekki flag_status (primary)
+    const autoFlag = r.computed_auto_flag ? flagLabel(r.computed_auto_flag as FlagStatus) : null;
+
     const playerNote = (r.notes ?? "").trim() || null;
     const computedReason = r.computed_auto_reason ?? null;
 
-    const coachMsg = typeof r.coach_message === "string" && r.coach_message.trim().length ? r.coach_message : null;
+    const coachMsg = r.coach_message && r.coach_message.trim().length ? r.coach_message : null;
 
     return (
       <React.Fragment key={r.id}>
-        {/* ✅ FIX: new pro layout (no pr-[320px], no break-words name) */}
         <div className="rounded-lg border bg-white px-3 py-2">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.4fr)_auto_auto_1fr_auto] md:items-center">
             {/* Name */}
@@ -577,7 +602,9 @@ export default function CoachPage() {
 
             {/* Badges */}
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
+              <span
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}
+              >
                 <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
                 {cm.label}
               </span>
@@ -626,7 +653,6 @@ export default function CoachPage() {
         </div>
 
         {isOpen && (
-          // ✅ FIX: clean expanded box (no -mt-1, no border-t-0)
           <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <div>
@@ -652,7 +678,9 @@ export default function CoachPage() {
                 <div>
                   🔒 Læst:{" "}
                   <span className="font-medium">
-                    {r.locked_at ? new Date(r.locked_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                    {r.locked_at
+                      ? new Date(r.locked_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })
+                      : "—"}
                   </span>
                 </div>
               )}
@@ -710,7 +738,6 @@ export default function CoachPage() {
     <div className="space-y-5">
       <CoachHubCards />
 
-      {/* ✅ Readiness Today dashboard */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Readiness Today</CardTitle>

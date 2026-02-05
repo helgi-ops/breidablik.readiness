@@ -4,7 +4,6 @@ import * as React from "react";
 import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 
-
 // shadcn/ui
 import {
   Card,
@@ -93,8 +92,13 @@ export default function PlayerCheckinPage() {
   const [soreness, setSoreness] = React.useState<number | null>(null); // 1–5
   const [notes, setNotes] = React.useState("");
 
+  // IMPORTANT: playerId þarf að vera players.id (FK í readiness_entries)
   const [playerId, setPlayerId] = React.useState<string | null>(null);
   const [playerName, setPlayerName] = React.useState<string | null>(null);
+
+  // ✅ DEBUG: geymum result svo þú getur séð þetta líka í UI ef þarf (valfrjálst)
+  const [debugWeekData, setDebugWeekData] = React.useState<any[] | null>(null);
+  const [debugWeekError, setDebugWeekError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -119,8 +123,8 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // Finna leikmann út frá players.user_id
-      const { data: playerRow, error: playerErr } = await supabase
+      // ✅ 1) Reyna að finna players row
+      let { data: playerRow, error: playerErr } = await supabase
         .from("players")
         .select("id, full_name")
         .eq("user_id", user.id)
@@ -134,12 +138,43 @@ export default function PlayerCheckinPage() {
         return;
       }
 
+      // ✅ 2) Ef enginn leikmaður: búa til via RPC (ensure)
+      // ATH: þetta krefst að þú hafir búið til RPC í Supabase: public.ensure_player_for_user()
+      if (!playerRow?.id) {
+        const { error: ensureErr } = await supabase.rpc("ensure_player_for_user");
+        if (cancelled) return;
+
+        if (ensureErr) {
+          setLoading(false);
+          setError(`Gat ekki tengt notanda við leikmann: ${ensureErr.message}`);
+          return;
+        }
+
+        // ✅ 3) Re-fetch players row eftir ensure
+        const res2 = await supabase
+          .from("players")
+          .select("id, full_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (res2.error) {
+          setLoading(false);
+          setError(res2.error.message);
+          return;
+        }
+
+        playerRow = res2.data ?? null;
+      }
+
       if (!playerRow?.id) {
         setLoading(false);
-        setError("Notandi er ekki tengdur leikmanni.");
+        setError("Notandi er ekki tengdur leikmanni (players).");
         return;
       }
 
+      // ✅ playerId = players.id -> FK OK í readiness_entries
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
       setLoading(false);
@@ -152,6 +187,36 @@ export default function PlayerCheckinPage() {
     };
   }, []);
 
+  // ✅ DEBUG: Sækja vikugögn úr v_player_daily_decision_v3
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadWeek() {
+      if (!playerId) return;
+
+      const { data, error } = await supabase
+        .from("v_player_daily_decision_v3")
+        .select("*")
+        .eq("player_id", playerId)
+        .gte("day_date", "2026-02-02")
+        .lte("day_date", "2026-02-08")
+        .order("day_date", { ascending: true });
+
+      if (cancelled) return;
+
+      console.log("PLAYER WEEK DATA", data, error);
+
+      setDebugWeekData((data as any[]) ?? null);
+      setDebugWeekError(error?.message ?? null);
+    }
+
+    loadWeek();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playerId]);
+
   const canGoNext = React.useMemo(() => {
     if (step === 1) return readiness !== null;
     if (step === 2) return sleep !== null;
@@ -162,7 +227,6 @@ export default function PlayerCheckinPage() {
   const submit = async () => {
     if (!playerId) return;
 
-    // require core fields
     if (readiness === null || sleep === null || soreness === null) {
       setError("Vinsamlegast fylltu út readiness, svefn og eymsli áður en þú sendir.");
       return;
@@ -175,7 +239,7 @@ export default function PlayerCheckinPage() {
       const entry_date = new Date().toISOString().slice(0, 10);
 
       const payload = {
-        player_id: playerId,
+        player_id: playerId, // ✅ players.id -> FK constraint OK
         entry_date,
         readiness,
         sleep,
@@ -243,7 +307,7 @@ export default function PlayerCheckinPage() {
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Daglegt check-in</h1>
-          
+
           <Badge variant="outline" className="rounded-full">
             {playerName ? playerName : "Leikmaður"}
           </Badge>
@@ -251,6 +315,13 @@ export default function PlayerCheckinPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           30 sek. — skýr merki = betri ákvörðun fyrir daginn.
         </p>
+
+        <div className="mt-2 text-xs text-muted-foreground">
+          <div>debug week rows: {debugWeekData ? debugWeekData.length : 0}</div>
+          {debugWeekError ? (
+            <div className="text-destructive">debug error: {debugWeekError}</div>
+          ) : null}
+        </div>
       </div>
 
       <Card className="rounded-2xl">
@@ -376,7 +447,6 @@ export default function PlayerCheckinPage() {
           <Separator />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Skref {step}/4</span>
-        
           </div>
         </CardContent>
 

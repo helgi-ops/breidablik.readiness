@@ -1,27 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Mode = "signin" | "signup" | "reset";
 
+type TeamRow = { id: string; name: string };
+
 export default function LoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const next = sp.get("next") || "/player/checkin"; // default fyrir players, coach fer samt rétt í gegnum redirect
+  const next = sp.get("next") || "/player";
+
+  // ✅ team id úr querystring ef þú vilt: /login?team=<uuid>
+  const teamFromQuery = sp.get("team") || "";
+
   const [mode, setMode] = useState<Mode>("signin");
 
-  // ✅ Ef Supabase sendir password reset link á /login#access_token=...
-  // þá flytjum við notandann yfir á /reset-password með sama hash.
+  // ✅ Password recovery redirect
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const hash = window.location.hash || "";
     if (!hash) return;
 
-    // oftast er type=recovery, en stundum er bara "recovery" í hash
     const isRecovery =
       hash.includes("access_token=") &&
       (hash.includes("type=recovery") || hash.includes("recovery"));
@@ -35,9 +39,46 @@ export default function LoginInner() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
 
+  // ✅ Team dropdown
+  const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [teamId, setTeamId] = useState<string>(teamFromQuery);
+
+  // Ef querystring breytist (sjaldan), halda sync
+  useEffect(() => {
+    if (teamFromQuery && teamFromQuery !== teamId) setTeamId(teamFromQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamFromQuery]);
+
+  // Sækja teams bara þegar þú ert í signup-mode (til að spara)
+  useEffect(() => {
+    let alive = true;
+
+    async function loadTeams() {
+      if (mode !== "signup") return;
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id,name")
+        .order("name");
+
+      if (!alive) return;
+      if (!error && data) setTeams(data as TeamRow[]);
+    }
+
+    loadTeams();
+    return () => {
+      alive = false;
+    };
+  }, [mode]);
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const canSignup = useMemo(() => {
+    // í signup-mode: krefjast liðs (þú getur slakað á þessu ef þú vilt)
+    if (mode !== "signup") return true;
+    return Boolean(fullName.trim()) && Boolean(email.trim()) && Boolean(password) && Boolean(teamId);
+  }, [mode, fullName, email, password, teamId]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,13 +88,9 @@ export default function LoginInner() {
 
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        // ✅ ALLTAF fara í role-redirect (coach/player)
         const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
         router.replace(target);
         router.refresh();
@@ -61,13 +98,19 @@ export default function LoginInner() {
       }
 
       if (mode === "signup") {
+        if (!teamId) {
+          setErr("Veldu lið áður en þú býrð til aðgang.");
+          return;
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               full_name: fullName,
-              role: "player",
+              role: "PLAYER",
+              team_id: teamId, // ✅ þetta er lykillinn
             },
             emailRedirectTo:
               typeof window !== "undefined"
@@ -80,7 +123,6 @@ export default function LoginInner() {
         if (!data.session) {
           setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu.");
         } else {
-          // ✅ ef session kemur strax, fara í role-redirect
           const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
           router.replace(target);
           router.refresh();
@@ -91,9 +133,7 @@ export default function LoginInner() {
       if (mode === "reset") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo:
-            typeof window !== "undefined"
-              ? `${window.location.origin}/reset-password`
-              : undefined,
+            typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
         });
         if (error) throw error;
 
@@ -121,17 +161,39 @@ export default function LoginInner() {
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
         {mode === "signup" && (
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Fullt nafn</span>
-            <input
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Fullt nafn"
-              style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            />
-          </label>
+          <>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Fullt nafn</span>
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Fullt nafn"
+                style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Lið</span>
+              <select
+                required
+                value={teamId}
+                onChange={(e) => setTeamId(e.target.value)}
+                style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+              >
+                <option value="">Veldu lið…</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <small style={{ opacity: 0.7 }}>
+                Ef listinn er tómur þá er líklega RLS að loka á teams fyrir óinnskráða.
+              </small>
+            </label>
+          </>
         )}
 
         <label style={{ display: "grid", gap: 6 }}>
@@ -175,7 +237,7 @@ export default function LoginInner() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !canSignup}
           style={{
             padding: 12,
             borderRadius: 10,
@@ -184,6 +246,7 @@ export default function LoginInner() {
             color: "white",
             fontWeight: 700,
             cursor: loading ? "not-allowed" : "pointer",
+            opacity: loading || !canSignup ? 0.7 : 1,
           }}
         >
           {loading ? "Vinn..." : mode === "signin" ? "Skrá inn" : mode === "signup" ? "Búa til aðgang" : "Senda endurstillingu"}
