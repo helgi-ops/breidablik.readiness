@@ -5,14 +5,103 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Mode = "signin" | "signup" | "reset";
-
 type TeamRow = { id: string; name: string };
+
+function utcYYYYMMDD(d = new Date()) {
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+}
+
+function extractCheckinDone(row: any): boolean {
+  if (!row) return false;
+
+  // Algeng boolean nöfn (mismunandi útgáfur af viewum)
+  const boolDone =
+    row.checkin_done ??
+    row.did_checkin ??
+    row.checked_in ??
+    row.is_checked_in ??
+    row.has_checkin ??
+    row.done ??
+    null;
+
+  if (typeof boolDone === "boolean") return boolDone;
+
+  // Ef enginn boolean reitur: infer-a út frá því að metrics/score eru til
+  const hasAnyMetric =
+    row.total_score != null ||
+    row.readiness != null ||
+    row.sleep != null ||
+    row.soreness != null ||
+    row.stress != null ||
+    row.fatigue != null;
+
+  return Boolean(hasAnyMetric);
+}
+
+/**
+ * Reglan:
+ * - ef EKKI búinn með check-in í dag -> /player/checkin
+ * - ef búinn -> /player
+ *
+ * Lykilatriði:
+ * - nota UTC dagsetningu (view oft reiknað í UTC)
+ * - nota profiles.player_id ef viewið er tengt við players.id
+ */
+async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id;
+  if (!userId) return "/player/checkin";
+
+  const today = utcYYYYMMDD();
+
+  // 1) Ná í profile til að fá player_id (ef til)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, role, player_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  // Ef þetta er ekki PLAYER þá látum við ekki þessa reglu stjórna (en safe)
+  const role = (profile as any)?.role ?? null;
+  if (role && role !== "PLAYER") {
+    // coach/admin etc. -> fer ekki í checkin flow
+    return "/player";
+  }
+
+  const playerIdFromProfile = (profile as any)?.player_id as string | null;
+
+  // Við prófum í þessari röð:
+  // A) viewið notar players.id -> profile.player_id
+  // B) viewið notar auth uid -> userId
+  const candidatePlayerIds = [
+    playerIdFromProfile,
+    userId,
+  ].filter(Boolean) as string[];
+
+  for (const pid of candidatePlayerIds) {
+    const { data, error } = await supabase
+      .from("v_player_daily_decision_v3")
+      .select("*")
+      .eq("player_id", pid)
+      .eq("day_date", today)
+      .maybeSingle();
+
+    if (!error) {
+      const done = extractCheckinDone(data);
+      return done ? "/player" : "/player/checkin";
+    }
+  }
+
+  // Ef viewið skilar ekki línu (eða mismatch), þá defaultum við í checkin (öruggt)
+  return "/player/checkin";
+}
 
 export default function LoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const next = sp.get("next") || "/player";
+  // ✅ default: fara í checkin-flow (svo við “uppfærum” í /player ef búið)
+  const next = sp.get("next") || "/player/checkin";
 
   // ✅ team id úr querystring ef þú vilt: /login?team=<uuid>
   const teamFromQuery = sp.get("team") || "";
@@ -75,9 +164,13 @@ export default function LoginInner() {
   const [err, setErr] = useState<string | null>(null);
 
   const canSignup = useMemo(() => {
-    // í signup-mode: krefjast liðs (þú getur slakað á þessu ef þú vilt)
     if (mode !== "signup") return true;
-    return Boolean(fullName.trim()) && Boolean(email.trim()) && Boolean(password) && Boolean(teamId);
+    return (
+      Boolean(fullName.trim()) &&
+      Boolean(email.trim()) &&
+      Boolean(password) &&
+      Boolean(teamId)
+    );
   }, [mode, fullName, email, password, teamId]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -88,10 +181,21 @@ export default function LoginInner() {
 
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
 
-        const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
+        // ✅ NÝTT: reikna checkin status og velja rétt landing
+        const landingPath = await getPlayerLandingPath();
+
+        const nextIsPlayerFlow =
+          next === "/player" || next === "/player/checkin";
+
+        const finalNext = nextIsPlayerFlow ? landingPath : next;
+
+        const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
         router.replace(target);
         router.refresh();
         return;
@@ -110,20 +214,32 @@ export default function LoginInner() {
             data: {
               full_name: fullName,
               role: "PLAYER",
-              team_id: teamId, // ✅ þetta er lykillinn
+              team_id: teamId,
             },
             emailRedirectTo:
               typeof window !== "undefined"
-                ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
+                ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+                    next
+                  )}`
                 : undefined,
           },
         });
         if (error) throw error;
 
         if (!data.session) {
-          setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu.");
+          setMsg(
+            "Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu."
+          );
         } else {
-          const target = `/auth/redirect?next=${encodeURIComponent(next)}`;
+          // Ef session kemur strax: sama landing logic
+          const landingPath = await getPlayerLandingPath();
+
+          const nextIsPlayerFlow =
+            next === "/player" || next === "/player/checkin";
+
+          const finalNext = nextIsPlayerFlow ? landingPath : next;
+
+          const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
           router.replace(target);
           router.refresh();
         }
@@ -133,11 +249,15 @@ export default function LoginInner() {
       if (mode === "reset") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo:
-            typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
+            typeof window !== "undefined"
+              ? `${window.location.origin}/reset-password`
+              : undefined,
         });
         if (error) throw error;
 
-        setMsg("Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð.");
+        setMsg(
+          "Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð."
+        );
         return;
       }
     } catch (e: any) {
@@ -150,7 +270,11 @@ export default function LoginInner() {
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
-        {mode === "signin" ? "Innskráning" : mode === "signup" ? "Nýskráning" : "Endurstilla lykilorð"}
+        {mode === "signin"
+          ? "Innskráning"
+          : mode === "signup"
+          ? "Nýskráning"
+          : "Endurstilla lykilorð"}
       </h1>
 
       <p style={{ opacity: 0.8, marginBottom: 16 }}>
@@ -170,7 +294,11 @@ export default function LoginInner() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Fullt nafn"
-                style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                }}
               />
             </label>
 
@@ -180,7 +308,11 @@ export default function LoginInner() {
                 required
                 value={teamId}
                 onChange={(e) => setTeamId(e.target.value)}
-                style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                }}
               >
                 <option value="">Veldu lið…</option>
                 {teams.map((t) => (
@@ -225,12 +357,26 @@ export default function LoginInner() {
         )}
 
         {err && (
-          <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 10, borderRadius: 8 }}>
+          <div
+            style={{
+              background: "#ffecec",
+              border: "1px solid #ffb3b3",
+              padding: 10,
+              borderRadius: 8,
+            }}
+          >
             {err}
           </div>
         )}
         {msg && (
-          <div style={{ background: "#eef7ff", border: "1px solid #b3d9ff", padding: 10, borderRadius: 8 }}>
+          <div
+            style={{
+              background: "#eef7ff",
+              border: "1px solid #b3d9ff",
+              padding: 10,
+              borderRadius: 8,
+            }}
+          >
             {msg}
           </div>
         )}
@@ -249,7 +395,13 @@ export default function LoginInner() {
             opacity: loading || !canSignup ? 0.7 : 1,
           }}
         >
-          {loading ? "Vinn..." : mode === "signin" ? "Skrá inn" : mode === "signup" ? "Búa til aðgang" : "Senda endurstillingu"}
+          {loading
+            ? "Vinn..."
+            : mode === "signin"
+            ? "Skrá inn"
+            : mode === "signup"
+            ? "Búa til aðgang"
+            : "Senda endurstillingu"}
         </button>
       </form>
 
@@ -261,7 +413,12 @@ export default function LoginInner() {
               setErr(null);
               setMsg(null);
             }}
-            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
+            style={{
+              background: "transparent",
+              border: "none",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
           >
             Ég á aðgang → Innskráning
           </button>
@@ -274,7 +431,12 @@ export default function LoginInner() {
               setErr(null);
               setMsg(null);
             }}
-            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
+            style={{
+              background: "transparent",
+              border: "none",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
           >
             Nýr notandi → Búa til aðgang
           </button>
@@ -288,7 +450,12 @@ export default function LoginInner() {
               setMsg(null);
               setPassword("");
             }}
-            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
+            style={{
+              background: "transparent",
+              border: "none",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
           >
             Gleymt lykilorð?
           </button>

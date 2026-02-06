@@ -73,6 +73,9 @@ type Row = {
   coach_locked?: boolean | null;
   coach_locked_at?: string | null;
   is_time_locked?: boolean | null;
+
+  // optional helper column from view (if exists)
+  color_rank?: number | null;
 };
 
 type AuditRow = {
@@ -392,7 +395,8 @@ export default function CoachPage() {
         return;
       }
 
-      const raw = (data ?? []) as Row[];
+      // ✅ FIX: TypeScript “rauða” villan — cast í 2 skrefum
+      const raw: Row[] = ((data ?? []) as unknown) as Row[];
 
       // ✅ FIX: primary litur kemur úr v5 `color`, ekki computed_auto_flag
       const list = raw.map((r) => {

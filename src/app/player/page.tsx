@@ -38,15 +38,17 @@ type GenericMsg =
   | null;
 
 /**
- * Plan row from LOCKED view (snapshot-first).
- * Player UI á helst að nota þetta, en við munum "patcha" ef view-ið skilar GENERIC/mismatch.
+ * Plan row from our NEW canonical view (snapshot-first + template override).
+ * Source of truth: v_player_today_microdose_locked
  */
 type LockedPlanRow =
   | {
       player_id: string;
       entry_date: string; // date
       readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED / UNKNOWN
-      md_day: string; // MD-4 / MD-3 / MD-2 / MD-1 / GENERIC
+      md_day: string; // MD-4 / MD-3 / MD-2 / MD-1 / MD+1 / GENERIC
+
+      training_system: string; // FORCE / NEURAL_VELOCITY / POLISH_CALM / ACTIVATION_PRIMER
 
       plan_title: string | null;
       plan_description: string | null;
@@ -65,13 +67,20 @@ type DecisionRow =
     }
   | null;
 
-type TemplateRow =
+/**
+ * ✅ Session row from v_player_session_today
+ * ATH: planned_day_type er EKKI til í view-inu hjá þér -> NOTAUM EKKI.
+ * ATH: system_key er EKKI til í view-inu hjá þér -> NOTAUM EKKI.
+ */
+type PlayerSessionTodayRow =
   | {
-      md_day: string;
-      readiness_level: string;
-      title: string | null;
-      description: string | null;
-      structure: any;
+      player_id: string;
+      team_id: string | null;
+      day_date: string; // date
+      planned_focus: string | null; // "POLISH / CALM" o.s.frv.
+      readiness_flag: string | null; // GREEN/YELLOW/RED/UNKNOWN
+      session_type: string | null; // t.d. POLISH_CALM / ACTIVATION_PRIMER
+      md_day_resolved: string | null; // t.d. MD-2
     }
   | null;
 
@@ -96,54 +105,30 @@ function isArray(x: any): x is any[] {
   return Array.isArray(x);
 }
 
-function readinessToFlag(level: string | null | undefined): Flag {
-  const l = (level ?? "").toUpperCase();
-  if (l === "RED") return "RED";
-  if (l === "YELLOW") return "YELLOW";
-  return "GREEN";
-}
-
 function norm(x: string | null | undefined) {
   return (x ?? "").trim().toUpperCase();
 }
 
 /**
- * ✅ Þetta er "mappingið" sem leysir vandann hjá þér strax:
- * - OFF -> MD-1 (og við þvingum readiness_level -> RED svo "MD-1 Off" vinnur)
- * - RECOVERY -> MD-2 (og þvingum readiness -> RED svo "MD-2 Recovery" vinnur)
- * - POLISH/CALM -> MD-2
- * - NEURAL/VELOCITY -> MD-3
- * - FORCE -> MD-4
- * - annars -> GENERIC
+ * System -> flag mapping (for UI color/message).
+ * NOTE: We keep it simple:
+ * - POLISH/CALM, ACTIVATION/PRIMER => GREEN
+ * - FORCE, NEURAL/VELOCITY => GREEN (still "good") but you can change later
+ * Readiness overrides system if present (since it’s user state).
  */
-function decideTemplateMdDay(decision: DecisionRow): string {
-  const dayType = norm(decision?.final_planned_day_type);
-  const focus = norm(decision?.planned_focus);
-
-  if (dayType === "OFF") return "MD-1";
-  if (dayType === "RECOVERY") return "MD-2";
-
-  if (focus === "POLISH / CALM") return "MD-2";
-  if (focus === "NEURAL / VELOCITY") return "MD-3";
-  if (focus === "FORCE") return "MD-4";
-
-  return "GENERIC";
+function systemToFlag(system: string | null | undefined): Flag {
+  const s = norm(system);
+  if (s === "POLISH_CALM") return "GREEN";
+  if (s === "ACTIVATION_PRIMER") return "GREEN";
+  if (s === "NEURAL_VELOCITY") return "GREEN";
+  if (s === "FORCE") return "GREEN";
+  return "GREEN";
 }
 
-/**
- * ✅ Readiness key fyrir template lookup.
- * - OFF / RECOVERY: þvingum RED (því template-ið er "Off" / "Recovery" óháð readiness)
- * - annars: notum readiness_flag (fallback GREEN)
- * - GREEN_PLUS má líka vera til í templates (þú ert með GENERIC GREEN_PLUS)
- */
-function decideTemplateReadiness(decision: DecisionRow): string {
-  const dayType = norm(decision?.final_planned_day_type);
-  if (dayType === "OFF") return "RED";
-  if (dayType === "RECOVERY") return "RED";
-
-  const rf = norm(decision?.readiness_flag);
-  if (rf === "RED" || rf === "YELLOW" || rf === "GREEN" || rf === "GREEN_PLUS") return rf;
-
+function readinessToFlag(level: string | null | undefined): Flag {
+  const l = norm(level);
+  if (l === "RED") return "RED";
+  if (l === "YELLOW") return "YELLOW";
   return "GREEN";
 }
 
@@ -166,8 +151,11 @@ export default function PlayerPage() {
   const [plan, setPlan] = useState<LockedPlanRow>(null);
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
-  // Decision (debug + template patch)
+  // Decision (optional debug/context)
   const [decision, setDecision] = useState<DecisionRow>(null);
+
+  // ✅ Session (optional - useful for “Session type”)
+  const [session, setSession] = useState<PlayerSessionTodayRow>(null);
 
   // Optional: generic messages per flag
   const [genericMsg, setGenericMsg] = useState<GenericMsg>(null);
@@ -209,6 +197,7 @@ export default function PlayerPage() {
       setGenericMsg(null);
       setPlayerMeta(null);
       setDecision(null);
+      setSession(null);
 
       // Auth
       const { data: auth, error: aErr } = await supabase.auth.getUser();
@@ -224,7 +213,7 @@ export default function PlayerPage() {
         return;
       }
 
-      // Profile (include team_id if exists)
+      // Profile
       const { data: prof, error: pErr } = await supabase
         .from("profiles")
         .select("id, display_name, player_id, role, team_id")
@@ -269,7 +258,7 @@ export default function PlayerPage() {
       if (pmErr) console.error("players meta error:", pmErr.message);
       setPlayerMeta((pm as any) ?? null);
 
-      // ✅ A) Decision row (source of truth fyrir "hvaða dagur er í planinu")
+      // Decision row (optional debug)
       const { data: drow, error: dErr } = await supabase
         .from("v_player_daily_decision_v3")
         .select("planned_focus, final_planned_day_type, readiness_flag")
@@ -280,16 +269,30 @@ export default function PlayerPage() {
       if (dErr) console.error("decision error:", dErr.message);
       setDecision((drow as any) ?? null);
 
-      // ✅ B) Plan from LOCKED view (snapshot-first)
-      const { data: planRow, error: planErr } = await supabase
-        .from("v_player_microdose_plan_today_locked")
+      // ✅ Session row (system_key removed)
+      const { data: srow, error: sErr } = await supabase
+        .from("v_player_session_today")
         .select(
-          "player_id,entry_date,readiness_level,md_day,plan_title,plan_description,plan_structure,locked_at,is_locked"
+          "player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved"
+        )
+        .eq("player_id", prof.player_id)
+        .eq("day_date", today)
+        .maybeSingle();
+
+      if (sErr) {
+        // Ekki brjóta síðuna ef session view er ekki tilbúið
+        console.error("v_player_session_today error:", sErr.message);
+      }
+      setSession((srow as any) ?? null);
+
+      // ✅ Plan from canonical view (NO order/limit needed)
+      const { data: planRow, error: planErr } = await supabase
+        .from("v_player_today_microdose_locked")
+        .select(
+          "player_id,entry_date,readiness_level,md_day,training_system,plan_title,plan_description,plan_structure,locked_at,is_locked"
         )
         .eq("player_id", prof.player_id)
         .eq("entry_date", today)
-        .order("locked_at", { ascending: false })
-        .limit(1)
         .maybeSingle();
 
       if (planErr) {
@@ -298,47 +301,9 @@ export default function PlayerPage() {
         return;
       }
 
-      let nextPlan: LockedPlanRow = (planRow as any) ?? null;
+      setPlan((planRow as any) ?? null);
 
-      // ✅ C) Patch: ef view skilar GENERIC / eða md_day passar ekki við decision,
-      // þá sækjum við rétt template úr microdose_templates og override-um title/desc/structure/md_day.
-      try {
-        const mdKey = decideTemplateMdDay((drow as any) ?? null);
-        const rKey = decideTemplateReadiness((drow as any) ?? null);
-
-        const currentMd = norm(nextPlan?.md_day);
-        const shouldPatch =
-          !!nextPlan &&
-          (currentMd === "GENERIC" || (mdKey !== "GENERIC" && currentMd !== norm(mdKey)));
-
-        if (shouldPatch && mdKey) {
-          const { data: trow, error: tErr } = await supabase
-            .from("microdose_templates")
-            .select("md_day, readiness_level, title, description, structure")
-            .eq("md_day", mdKey)
-            .eq("readiness_level", rKey)
-            .maybeSingle();
-
-          if (tErr) {
-            console.error("template fetch error:", tErr.message);
-          } else if (nextPlan && (trow?.title || (trow as any)?.description || (trow as any)?.structure)) {
-  nextPlan = {
-    ...(nextPlan as any),
-    md_day: mdKey,
-    plan_title: trow?.title ?? nextPlan?.plan_title ?? null,
-    plan_description: (trow as any)?.description ?? nextPlan?.plan_description ?? null,
-    plan_structure: (trow as any)?.structure ?? nextPlan?.plan_structure ?? null,
-  };
-}
-
-        }
-      } catch (e: any) {
-        console.error("patch error:", e?.message ?? e);
-      }
-
-      setPlan(nextPlan);
-
-      // 2) Metrics (optional) - today
+      // Metrics (optional)
       const { data: mrow, error: mErr } = await supabase
         .from("readiness_entries")
         .select("readiness, sleep, soreness, total_score, created_at")
@@ -355,10 +320,17 @@ export default function PlayerPage() {
     run();
   }, [supabase]);
 
-  // ====== Flag: frá plan.readiness_level
-  const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
+  // ====== Flag for UI (readiness first, fallback to system)
+  const flag: Flag = useMemo(() => {
+    const byReadiness = readinessToFlag(plan?.readiness_level);
+    if (!plan?.readiness_level) return systemToFlag(plan?.training_system);
+    return byReadiness;
+  }, [plan?.readiness_level, plan?.training_system]);
 
-  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
+  const ui = useMemo(
+    () => flagUi(normalizeFlag(flag)),
+    [flag]
+  ) as ReturnType<typeof flagUi>;
 
   // ====== Generic message layer
   useEffect(() => {
@@ -441,14 +413,21 @@ export default function PlayerPage() {
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-xs font-medium text-zinc-500">Player · Setup</div>
-            <div className="mt-2 text-xl font-semibold text-zinc-900">Tengja notanda við leikmann</div>
+            <div className="text-xs font-medium text-zinc-500">
+              Player · Setup
+            </div>
+            <div className="mt-2 text-xl font-semibold text-zinc-900">
+              Tengja notanda við leikmann
+            </div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta er til að þú getir prófað player-síðuna. Seinna getum við gert auto-link.
+              Þetta er til að þú getir prófað player-síðuna. Seinna getum við
+              gert auto-link.
             </div>
 
             <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
-              <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Veldu leikmann</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Veldu leikmann
+              </label>
 
               <select
                 className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
@@ -458,7 +437,8 @@ export default function PlayerPage() {
                 <option value="">— Veldu —</option>
                 {players.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name ?? "Ónefndur"} {p.position ? `(${p.position})` : ""}{" "}
+                    {p.full_name ?? "Ónefndur"}{" "}
+                    {p.position ? `(${p.position})` : ""}{" "}
                     {p.team ? `· ${p.team}` : ""}
                   </option>
                 ))}
@@ -477,16 +457,19 @@ export default function PlayerPage() {
     );
   }
 
-  // Ef ekkert plan finnst fyrir today
+  // ✅ Empty-state: No locked plan yet (healthy state)
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-base font-semibold">Engin dagsæfing í dag</div>
+            <div className="text-base font-semibold">
+              Engin æfing hefur verið læst enn í dag
+            </div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta gerist ef <b>week-setup</b> vantar fyrir liðið í dag eða ef template vantar fyrir{" "}
-              <code>(md_day, readiness_level)</code>.
+              Þetta er eðlilegt ef þú ert ekki búinn að checka inn eða ef
+              dagsplan er ekki “locked” enn. Prófaðu að fara í{" "}
+              <b>/player/checkin</b> og skrá þig.
             </div>
           </div>
         </div>
@@ -498,27 +481,31 @@ export default function PlayerPage() {
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const showStructure = isArray(plan.plan_structure) && plan.plan_structure.length > 0;
+  const showStructure =
+    isArray(plan.plan_structure) && plan.plan_structure.length > 0;
 
-  
- // Debug string (hjálpar þér að sjá hvað er að gerast) — NO HOOKS
-const debugLine =
-  `today=${todayISO()} | ` +
-  `decision_focus=${decision?.planned_focus ?? "-"} | ` +
-  `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
-  `plan_md=${plan?.md_day ?? "-"} | ` +
-  `plan_title=${plan?.plan_title ?? "-"}`;
+  // Debug string (NO hooks)
+  const debugLine =
+    `today=${todayISO()} | ` +
+    `decision_focus=${decision?.planned_focus ?? "-"} | ` +
+    `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
+    `md_day=${plan.md_day ?? "-"} | ` +
+    `session_type=${session?.session_type ?? "-"} | ` +
+    `system=${plan.training_system ?? "-"} | ` +
+    `title=${plan.plan_title ?? "-"}`;
 
-
-  // ================= MAIN =================
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className={`rounded-2xl border bg-white p-6 shadow-sm ${ui.panel}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-medium text-zinc-500">Player · Dagsæfing</div>
-              <div className="mt-2 text-xl font-semibold text-zinc-900">{name}</div>
+              <div className="text-xs font-medium text-zinc-500">
+                Player · Dagsæfing
+              </div>
+              <div className="mt-2 text-xl font-semibold text-zinc-900">
+                {name}
+              </div>
               <div className="mt-1 text-sm text-zinc-600">
                 {position}
                 {team ? ` · ${team}` : ""}
@@ -531,7 +518,10 @@ const debugLine =
                   🔒 LÆST
                   <span className="text-xs font-medium text-zinc-500">
                     {plan.locked_at
-                      ? new Date(plan.locked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      ? new Date(plan.locked_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
                       : ""}
                   </span>
                 </div>
@@ -541,48 +531,68 @@ const debugLine =
                 </div>
               )}
 
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}>
+              <div
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}
+              >
                 <span className={`h-2 w-2 rounded-full ${ui.dot}`} />
                 {ui.label}
               </div>
             </div>
           </div>
 
-          {/* Debug (þú getur comment-að þessu út þegar þetta er komið) */}
-          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+          {/* Debug (comment out later) */}
+          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">
+            {debugLine}
+          </div>
 
           {/* Header stats */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Dagsetning" value={plan.entry_date} />
             <Stat label="Readiness" value={plan.readiness_level} />
-            <Stat label="MD / Focus" value={decision?.planned_focus ?? plan.md_day} />
-            <Stat label="Check-in" value={metrics ? "Skráð" : "Vantar"} />
+            <Stat label="Kerfi" value={plan.training_system} />
+            <Stat label="Session type" value={session?.session_type ?? "—"} />
           </div>
 
           {/* Message */}
           <div className="mt-6">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Skilaboð til þín</div>
-            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">{message}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Skilaboð til þín
+            </div>
+            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">
+              {message}
+            </div>
           </div>
 
           {/* Why */}
           <div className="mt-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Af hverju?</div>
-            <div className="mt-2 rounded-xl border bg-white p-4 text-sm text-zinc-700">{why}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Af hverju?
+            </div>
+            <div className="mt-2 rounded-xl border bg-white p-4 text-sm text-zinc-700">
+              {why}
+            </div>
           </div>
 
           {/* Plan card */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
-                <div className="mt-2 text-lg font-semibold text-zinc-900">{plan.plan_title ?? "Microdose plan"}</div>
-                <div className="mt-1 text-sm text-zinc-600">{plan.plan_description ?? "—"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Æfing dagsins
+                </div>
+                <div className="mt-2 text-lg font-semibold text-zinc-900">
+                  {plan.plan_title ?? "Microdose plan"}
+                </div>
+                <div className="mt-1 text-sm text-zinc-600">
+                  {plan.plan_description ?? "—"}
+                </div>
               </div>
 
               <div className="text-right">
                 <div className="text-xs font-medium text-zinc-500">Staða</div>
-                <div className="mt-1 text-sm font-semibold text-zinc-900">{plan.is_locked ? "Læst" : "Ólæst"}</div>
+                <div className="mt-1 text-sm font-semibold text-zinc-900">
+                  {plan.is_locked ? "Læst" : "Ólæst"}
+                </div>
               </div>
             </div>
 
@@ -590,7 +600,9 @@ const debugLine =
               <div className="mt-4 space-y-3">
                 {plan.plan_structure.map((b: any, idx: number) => (
                   <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
-                    <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
+                    <div className="text-sm font-semibold text-zinc-900">
+                      {b?.block ?? `Block ${idx + 1}`}
+                    </div>
 
                     {isArray(b?.items) && b.items.length > 0 ? (
                       <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
@@ -599,13 +611,17 @@ const debugLine =
                         ))}
                       </ul>
                     ) : (
-                      <div className="mt-2 text-sm text-zinc-600">Engin atriði skilgreind.</div>
+                      <div className="mt-2 text-sm text-zinc-600">
+                        Engin atriði skilgreind.
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-4 text-sm text-zinc-600">Engin “structure” skilgreind (template vantar eða er tóm).</div>
+              <div className="mt-4 text-sm text-zinc-600">
+                Engin “structure” skilgreind (template vantar eða er tóm).
+              </div>
             )}
           </div>
 
@@ -613,7 +629,9 @@ const debugLine =
           <details className="mt-6 rounded-xl border bg-white">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
               Mælingar dagsins{" "}
-              <span className="ml-2 text-xs font-medium text-zinc-500">(Readiness · Svefn · Stífleiki)</span>
+              <span className="ml-2 text-xs font-medium text-zinc-500">
+                (Readiness · Svefn · Stífleiki)
+              </span>
             </summary>
 
             <div className="px-4 pb-4">
@@ -626,7 +644,10 @@ const debugLine =
               <div className="mt-3 text-xs text-zinc-500">
                 Skráð:{" "}
                 {metrics?.created_at
-                  ? new Date(metrics.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  ? new Date(metrics.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
                   : "—"}
               </div>
             </div>
