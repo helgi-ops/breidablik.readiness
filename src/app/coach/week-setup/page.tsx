@@ -147,7 +147,8 @@ export default function WeekSetupPage() {
 
   const visibleMatches = useMemo(() => {
     if (weekType === "ONE_MATCH") return [matches[0] ?? DEFAULT_MATCHES[0]];
-    if (weekType === "TWO_MATCHES") return [matches[0] ?? DEFAULT_MATCHES[0], matches[1] ?? DEFAULT_MATCHES[1]];
+    if (weekType === "TWO_MATCHES")
+      return [matches[0] ?? DEFAULT_MATCHES[0], matches[1] ?? DEFAULT_MATCHES[1]];
     return [];
   }, [weekType, matches]);
 
@@ -329,12 +330,20 @@ export default function WeekSetupPage() {
             home_away: (m.home_away || "H") as "H" | "A",
           }));
 
+    // ✅ ALDREI null í no_match_intents (DB column er NOT NULL)
+    const safeNoMatchIntents: NoMatchIntent[] =
+      Array.isArray(noMatchIntents) && noMatchIntents.length === 7
+        ? noMatchIntents
+        : getDefaultNoMatchIntents();
+
+    const noMatchForDb = weekType === "NO_MATCH" ? safeNoMatchIntents : [];
+
     const { error } = await supabase.rpc("save_week_setup", {
       p_team_id: tid,
       p_week_start_date: weekStart,
       p_week_type: weekType,
       p_matches: trimmed, // jsonb
-      p_no_match_intents: weekType === "NO_MATCH" ? noMatchIntents : null, // jsonb
+      p_no_match_intents: noMatchForDb, // ✅ [] þegar ONE_MATCH/TWO_MATCHES
     });
 
     if (error) {
@@ -402,17 +411,46 @@ export default function WeekSetupPage() {
         const delta = diffDays(day_date, next);
         const mdMinus = Math.abs(delta);
 
-        if (mdMinus >= 4) return { day_index, day_type: "TRAIN" as DayType, focus: preMatchMicrodoseFocus(mdMinus), notes: `Upcoming match: ${next}` };
-        if (mdMinus === 3) return { day_index, day_type: "TRAIN" as DayType, focus: "MD-3 NEURAL / VELOCITY", notes: `Upcoming match: ${next}` };
-        if (mdMinus === 2) return { day_index, day_type: "RECOVERY" as DayType, focus: "MD-2 POLISH / CALM", notes: `Upcoming match: ${next}` };
-        if (mdMinus === 1) return { day_index, day_type: "RECOVERY" as DayType, focus: "MD-1 ACTIVATION", notes: `Upcoming match: ${next}` };
+        if (mdMinus >= 4)
+          return {
+            day_index,
+            day_type: "TRAIN" as DayType,
+            focus: preMatchMicrodoseFocus(mdMinus),
+            notes: `Upcoming match: ${next}`,
+          };
+        if (mdMinus === 3)
+          return {
+            day_index,
+            day_type: "TRAIN" as DayType,
+            focus: "MD-3 NEURAL / VELOCITY",
+            notes: `Upcoming match: ${next}`,
+          };
+        if (mdMinus === 2)
+          return {
+            day_index,
+            day_type: "RECOVERY" as DayType,
+            focus: "MD-2 POLISH / CALM",
+            notes: `Upcoming match: ${next}`,
+          };
+        if (mdMinus === 1)
+          return {
+            day_index,
+            day_type: "RECOVERY" as DayType,
+            focus: "MD-1 ACTIVATION",
+            notes: `Upcoming match: ${next}`,
+          };
       }
 
       const prev = prevMatchDate(day_date);
       if (prev) {
         const deltaPlus = diffDays(day_date, prev);
         if (deltaPlus >= 1 && day_index !== 7) {
-          return { day_index, day_type: "RECOVERY" as DayType, focus: postMatchFocus(deltaPlus), notes: `Previous match: ${prev}` };
+          return {
+            day_index,
+            day_type: "RECOVERY" as DayType,
+            focus: postMatchFocus(deltaPlus),
+            notes: `Previous match: ${prev}`,
+          };
         }
       }
 
@@ -584,13 +622,28 @@ export default function WeekSetupPage() {
           <div className="grid gap-2">
             <Label>Vikugerð</Label>
             <div className="flex gap-2 flex-wrap">
-              <Button type="button" variant={weekType === "NO_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("NO_MATCH")} disabled={loading || saving || applying}>
+              <Button
+                type="button"
+                variant={weekType === "NO_MATCH" ? "default" : "outline"}
+                onClick={() => applyWeekType("NO_MATCH")}
+                disabled={loading || saving || applying}
+              >
                 Enginn leikur
               </Button>
-              <Button type="button" variant={weekType === "ONE_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("ONE_MATCH")} disabled={loading || saving || applying}>
+              <Button
+                type="button"
+                variant={weekType === "ONE_MATCH" ? "default" : "outline"}
+                onClick={() => applyWeekType("ONE_MATCH")}
+                disabled={loading || saving || applying}
+              >
                 1 leikur
               </Button>
-              <Button type="button" variant={weekType === "TWO_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("TWO_MATCHES")} disabled={loading || saving || applying}>
+              <Button
+                type="button"
+                variant={weekType === "TWO_MATCHES" ? "default" : "outline"}
+                onClick={() => applyWeekType("TWO_MATCHES")}
+                disabled={loading || saving || applying}
+              >
                 2 leikir
               </Button>
             </div>
@@ -606,7 +659,15 @@ export default function WeekSetupPage() {
               </div>
               <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
             </div>
-            <input className="w-full" type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))} />
+            <input
+              className="w-full"
+              type="range"
+              min={1}
+              max={10}
+              step={1}
+              value={intensityTarget}
+              onChange={(e) => setIntensityTarget(Number(e.target.value))}
+            />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -621,16 +682,27 @@ export default function WeekSetupPage() {
       <Card className="mb-4">
         <CardHeader>
           <CardTitle className="text-base">Skref 2 — Uppsetning</CardTitle>
-          <CardDescription>{weekType === "NO_MATCH" ? "Enginn leikur: veldu æfingainnihald per dag." : "Leikur/leikir: settu inn dagsetningar (kerfið sér um MD röðun)."}</CardDescription>
+          <CardDescription>
+            {weekType === "NO_MATCH"
+              ? "Enginn leikur: veldu æfingainnihald per dag."
+              : "Leikur/leikir: settu inn dagsetningar (kerfið sér um MD röðun)."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           {weekType !== "NO_MATCH" ? (
             <div className="grid gap-3">
               {visibleMatches.map((m, idx) => (
-                <div key={idx} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center">
+                <div
+                  key={idx}
+                  className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center"
+                >
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">Match</Label>
-                    <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`M${idx + 1}`} />
+                    <Input
+                      value={m.match_id}
+                      onChange={(e) => setMatch(idx, { match_id: e.target.value })}
+                      placeholder={`M${idx + 1}`}
+                    />
                   </div>
 
                   <div className="grid gap-1">
@@ -640,12 +712,20 @@ export default function WeekSetupPage() {
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">Kickoff (optional)</Label>
-                    <Input value={m.kickoff_time ?? ""} onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })} placeholder="19:15" />
+                    <Input
+                      value={m.kickoff_time ?? ""}
+                      onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })}
+                      placeholder="19:15"
+                    />
                   </div>
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">H/A</Label>
-                    <select className="h-10 rounded-md border bg-background px-3 text-sm" value={m.home_away ?? "H"} onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}>
+                    <select
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                      value={m.home_away ?? "H"}
+                      onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}
+                    >
                       <option value="H">Home</option>
                       <option value="A">Away</option>
                     </select>
@@ -657,7 +737,12 @@ export default function WeekSetupPage() {
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">Manual vika (mán → sun)</div>
-                <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())}
+                  disabled={loading || saving || applying}
+                >
                   Reset í default
                 </Button>
               </div>

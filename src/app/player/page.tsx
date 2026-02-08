@@ -82,6 +82,26 @@ type VariantRow = {
   structure: any;
 };
 
+// ============================
+// ✅ Post-training types (DB)
+// ============================
+type PostTrainingRuleRow = {
+  id: string;
+  priority: number;
+  is_active: boolean;
+  when_clause: any; // jsonb
+  then_clause: any; // jsonb
+};
+
+type PostTrainingTemplateRow = {
+  id: string;
+  title: string;
+  duration_min: number;
+  tags: string[];
+  structure: any; // jsonb
+  is_active: boolean;
+};
+
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -123,6 +143,84 @@ function readinessToFlag(level: string | null | undefined): Flag {
   return "GREEN";
 }
 
+// =======================================
+// ✅ Post-training rule evaluation (client)
+// =======================================
+type SessionLoad = "LOW" | "MODERATE" | "HIGH" | null;
+
+type PostTrainingContext = {
+  mdDay: string | null;
+  sessionLoad: SessionLoad;
+  sprintExposure: boolean;
+  matchLike: boolean;
+};
+
+function matchesWhenClause(ctx: PostTrainingContext, whenClause: any): boolean {
+  if (!whenClause || typeof whenClause !== "object") return false;
+
+  // md_day_in: ["MD-4","MD-3"]
+  if (Array.isArray(whenClause.md_day_in)) {
+    if (!ctx.mdDay) return false;
+    return whenClause.md_day_in.includes(ctx.mdDay);
+  }
+
+  // or: [...]
+  if (Array.isArray(whenClause.or)) {
+    return whenClause.or.some((cond: any) => matchesWhenClause(ctx, cond));
+  }
+
+  // session_load: "HIGH"
+  if (typeof whenClause.session_load === "string") {
+    return ctx.sessionLoad === whenClause.session_load;
+  }
+
+  // sprint_exposure: true
+  if (typeof whenClause.sprint_exposure === "boolean") {
+    return ctx.sprintExposure === whenClause.sprint_exposure;
+  }
+
+  // match_like: true
+  if (typeof whenClause.match_like === "boolean") {
+    return ctx.matchLike === whenClause.match_like;
+  }
+
+  return false;
+}
+
+function evaluatePostTrainingTemplateIds(
+  ctx: PostTrainingContext,
+  rules: PostTrainingRuleRow[],
+  alwaysInclude: string[] = ["daily_neural_reset"]
+): string[] {
+  const out: string[] = [...alwaysInclude];
+
+  const sorted = [...rules].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  for (const r of sorted) {
+    if (!r?.is_active) continue;
+    if (!matchesWhenClause(ctx, r.when_clause)) continue;
+
+    const append: string[] = Array.isArray(r?.then_clause?.append) ? r.then_clause.append : [];
+    for (const id of append) {
+      if (!out.includes(id)) out.push(id);
+    }
+  }
+
+  return out;
+}
+
+// =======================================
+// ✅ Session type heuristics (best effort)
+// =======================================
+function inferMatchLike(sessionTypeRaw: string | null | undefined) {
+  const s = norm(sessionTypeRaw);
+  return s.includes("MATCH") || s.includes("LEIKUR") || s.includes("GAME");
+}
+
+function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
+  const s = norm(sessionTypeRaw);
+  return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
+}
+
 export default function PlayerPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
@@ -150,6 +248,10 @@ export default function PlayerPage() {
 
   // ✅ preselect lock (variant_id) for today
   const [lockedVariantId, setLockedVariantId] = useState<string>("");
+
+  // ✅ post-training UI state
+  const [postTraining, setPostTraining] = useState<PostTrainingTemplateRow[]>([]);
+  const [postTrainingErr, setPostTrainingErr] = useState<string>("");
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
     if (teamId) {
@@ -297,6 +399,51 @@ export default function PlayerPage() {
     }
   }
 
+  // ============================================
+  // ✅ Post-training loader (client-side Supabase)
+  // ============================================
+  async function loadPostTrainingRecommendations(ctx: PostTrainingContext) {
+    try {
+      setPostTrainingErr("");
+
+      // 1) Rules
+      const { data: rules, error: rErr } = await supabase
+        .from("post_training_rules")
+        .select("id, priority, is_active, when_clause, then_clause")
+        .eq("is_active", true);
+
+      if (rErr) throw rErr;
+
+      const ruleRows = ((rules as any) ?? []) as PostTrainingRuleRow[];
+
+      // 2) Decide IDs
+      const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows, ["daily_neural_reset"]);
+      if (!ids.length) {
+        setPostTraining([]);
+        return;
+      }
+
+      // 3) Templates
+      const { data: tmpls, error: tErr } = await supabase
+        .from("post_training_templates")
+        .select("id, title, duration_min, tags, structure, is_active")
+        .in("id", ids)
+        .eq("is_active", true);
+
+      if (tErr) throw tErr;
+
+      const list = ((tmpls as any) ?? []) as PostTrainingTemplateRow[];
+      const map = new Map(list.map((t) => [t.id, t]));
+      const ordered = ids.map((id) => map.get(id)).filter(Boolean) as PostTrainingTemplateRow[];
+
+      setPostTraining(ordered);
+    } catch (e: any) {
+      console.error("post-training load error:", e?.message ?? e);
+      setPostTrainingErr(e?.message ?? "Villa við að sækja post-training tillögur.");
+      setPostTraining([]);
+    }
+  }
+
   // ====== Initial load ======
   useEffect(() => {
     const run = async () => {
@@ -312,6 +459,8 @@ export default function PlayerPage() {
       setVariantOptions([]);
       setSelectedVariantId("");
       setLockedVariantId("");
+      setPostTraining([]);
+      setPostTrainingErr("");
 
       const { data: auth, error: aErr } = await supabase.auth.getUser();
       if (aErr) {
@@ -470,6 +619,29 @@ export default function PlayerPage() {
   );
   const why = useMemo(() => genericMsg?.why || ui.why, [genericMsg, ui.why]);
 
+  // ✅ Load post-training when plan/session is ready (md_day + session_type heuristics)
+  useEffect(() => {
+    const run = async () => {
+      if (!plan) return;
+
+      const mdDay = norm(plan.md_day || session?.md_day_resolved || null);
+      const sprintExposure = inferSprintExposure(session?.session_type ?? null);
+      const matchLike = inferMatchLike(session?.session_type ?? null);
+
+      const ctx: PostTrainingContext = {
+        mdDay: mdDay || null,
+        sessionLoad: null,
+        sprintExposure,
+        matchLike,
+      };
+
+      await loadPostTrainingRecommendations(ctx);
+    };
+
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.md_day, session?.session_type, session?.md_day_resolved]);
+
   async function linkPlayer() {
     try {
       setError("");
@@ -601,7 +773,6 @@ export default function PlayerPage() {
     `title=${plan.plan_title ?? "-"} | ` +
     `locked_variant_id=${lockedVariantId || "-"}`;
 
-  // ✅ SHOW ALWAYS if variants exist; selecting depends on lock
   const showVariantChooser = variantOptions.length > 0;
   const canChooseVariant = !plan.is_locked;
 
@@ -658,9 +829,41 @@ export default function PlayerPage() {
             <Stat label="Session type" value={session?.session_type ?? "—"} />
           </div>
 
+          {/* ✅ FÆRT UPP: MÆLINGAR DAGSINS (fyrir ofan skilaboð) */}
+          <details className="mt-6 rounded-xl border bg-white">
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
+              Mælingar dagsins{" "}
+              <span className="ml-2 text-xs font-medium text-zinc-500">
+                (Readiness · Svefn · Stífleiki)
+              </span>
+            </summary>
+
+            <div className="px-4 pb-4">
+              <div className="grid grid-cols-3 gap-3">
+                <Stat label="Readiness" value={metrics?.readiness ?? "—"} />
+                <Stat label="Svefn" value={metrics?.sleep ?? "—"} />
+                <Stat label="Stífleiki" value={metrics?.soreness ?? "—"} />
+              </div>
+
+              <div className="mt-3 text-xs text-zinc-500">
+                Skráð:{" "}
+                {metrics?.created_at
+                  ? new Date(metrics.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "—"}
+              </div>
+            </div>
+          </details>
+
           <div className="mt-6">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Skilaboð til þín</div>
-            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">{message}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Skilaboð til þín
+            </div>
+            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">
+              {message}
+            </div>
           </div>
 
           <div className="mt-4">
@@ -675,7 +878,9 @@ export default function PlayerPage() {
               </div>
               <div className="mt-2 text-sm text-zinc-600">
                 Þú sérð uppsetningu áður en þú velur.
-                {plan.is_locked ? " (Læst – ekki hægt að breyta í dag.)" : " Þegar þú velur, birtist æfingin hér fyrir neðan."}
+                {plan.is_locked
+                  ? " (Læst – ekki hægt að breyta í dag.)"
+                  : " Þegar þú velur, birtist æfingin hér fyrir neðan."}
               </div>
 
               <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -736,7 +941,6 @@ export default function PlayerPage() {
                         </div>
                       )}
 
-                      {/* ✅ lock-aware button (read-only when locked) */}
                       <button
                         disabled={savingVariant || !canChooseVariant}
                         onClick={() => {
@@ -747,15 +951,17 @@ export default function PlayerPage() {
                           isSelected
                             ? "bg-zinc-900 text-white"
                             : "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50"
-                        } ${(savingVariant || !canChooseVariant) ? "opacity-60" : ""}`}
+                        } ${savingVariant || !canChooseVariant ? "opacity-60" : ""}`}
                       >
                         {plan.is_locked
-                          ? (isSelected ? "Valin (læst)" : "Læst – ekki hægt að breyta")
+                          ? isSelected
+                            ? "Valin (læst)"
+                            : "Læst – ekki hægt að breyta"
                           : savingVariant
-                            ? "Vistar…"
-                            : isSelected
-                              ? "Valin uppsetning"
-                              : "Velja þessa uppsetningu"}
+                          ? "Vistar…"
+                          : isSelected
+                          ? "Valin uppsetning"
+                          : "Velja þessa uppsetningu"}
                       </button>
                     </div>
                   );
@@ -767,7 +973,9 @@ export default function PlayerPage() {
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Æfing dagsins
+                </div>
                 <div className="mt-2 text-lg font-semibold text-zinc-900">
                   {plan.plan_title ?? selectedVariant?.title ?? "Microdose plan"}
                 </div>
@@ -788,7 +996,9 @@ export default function PlayerPage() {
               <div className="mt-4 space-y-3">
                 {plan.plan_structure.map((b: any, idx: number) => (
                   <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
-                    <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
+                    <div className="text-sm font-semibold text-zinc-900">
+                      {b?.block ?? `Block ${idx + 1}`}
+                    </div>
 
                     {isArray(b?.items) && b.items.length > 0 ? (
                       <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
@@ -809,30 +1019,81 @@ export default function PlayerPage() {
             )}
           </div>
 
-          <details className="mt-6 rounded-xl border bg-white">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
-              Mælingar dagsins{" "}
-              <span className="ml-2 text-xs font-medium text-zinc-500">(Readiness · Svefn · Stífleiki)</span>
-            </summary>
-
-            <div className="px-4 pb-4">
-              <div className="grid grid-cols-3 gap-3">
-                <Stat label="Readiness" value={metrics?.readiness ?? "—"} />
-                <Stat label="Svefn" value={metrics?.sleep ?? "—"} />
-                <Stat label="Stífleiki" value={metrics?.soreness ?? "—"} />
+          {/* ===================================================== */}
+          {/* ✅ POST-TRAINING: Tendon health + Neural reset (bottom) */}
+          {/* ===================================================== */}
+          <div className="mt-6 rounded-xl border bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Eftir æfingu – mælt með
+                </div>
+                <div className="mt-1 text-sm text-zinc-600">
+                  5–10 mínútur til að styðja sinar og taugakerfi (VST) eftir hverja æfingu.
+                </div>
               </div>
-
-              <div className="mt-3 text-xs text-zinc-500">
-                Skráð:{" "}
-                {metrics?.created_at
-                  ? new Date(metrics.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "—"}
+              <div className="text-right text-xs text-zinc-500">
+                {postTraining.length ? `${postTraining.length} rútína` : ""}
               </div>
             </div>
-          </details>
+
+            {postTrainingErr ? (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {postTrainingErr}
+              </div>
+            ) : null}
+
+            {!postTrainingErr && postTraining.length === 0 ? (
+              <div className="mt-3 text-sm text-zinc-600">
+                Engar tillögur fundust (athuga DB seed).
+              </div>
+            ) : null}
+
+            {postTraining.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {postTraining.map((t) => (
+                  <div key={t.id} className="rounded-xl border bg-zinc-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
+                        <div className="mt-1 text-xs text-zinc-600">⏱ {t.duration_min} mín</div>
+                      </div>
+                    </div>
+
+                    {isArray(t?.structure?.steps) && t.structure.steps.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {t.structure.steps.map((s: any, idx: number) => (
+                          <div key={idx} className="rounded-lg border bg-white p-2">
+                            <div className="text-sm font-medium text-zinc-900">
+                              {idx + 1}. {s?.title ?? "Step"}
+                            </div>
+
+                            <div className="mt-1 text-xs text-zinc-600">
+                              {s?.time_sec ? `${s.time_sec}s` : ""}
+                              {s?.sets ? ` • ${s.sets} sett` : ""}
+                              {s?.hold_sec ? ` • hold ${s.hold_sec}s` : ""}
+                              {s?.rest_sec ? ` • hvíld ${s.rest_sec}s` : ""}
+                              {s?.intensity ? ` • ${s.intensity}` : ""}
+                            </div>
+
+                            {Array.isArray(s?.cues) && s.cues.length > 0 ? (
+                              <ul className="mt-2 list-disc pl-5 text-xs text-zinc-600">
+                                {s.cues.slice(0, 3).map((c: string, i: number) => (
+                                  <li key={i}>{c}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-sm text-zinc-600">Engin steps skilgreind.</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
