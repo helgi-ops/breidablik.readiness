@@ -364,10 +364,10 @@ export default function PlayerCheckinPage() {
                 value={readiness}
                 onChange={setReadiness}
                 options={[
-                  { v: 2, label: "Lágt", hint: "Þreyta / stress" },
+                  { v: 2, label: "Lágt", hint: "Þreyta / Mikið orkuleysi" },
                   { v: 4, label: "Frekar lágt", hint: "Smá orkuleysi" },
-                  { v: 6, label: "Miðlungs", hint: "Allt í lagi" },
-                  { v: 8, label: "Gott", hint: "Til í að æfa" },
+                  { v: 6, label: "Miðlungs", hint: "Allt í lagi/Þokkaleg/ur " },
+                  { v: 8, label: "Gott", hint: "Ferskur" },
                   { v: 10, label: "Frábært", hint: "Mjög ferskur" },
                 ]}
               />

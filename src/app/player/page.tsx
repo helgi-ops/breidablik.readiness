@@ -37,23 +37,16 @@ type GenericMsg =
     }
   | null;
 
-/**
- * Plan row from our NEW canonical view (snapshot-first + template override).
- * Source of truth: v_player_today_microdose_locked
- */
 type LockedPlanRow =
   | {
       player_id: string;
       entry_date: string; // date
       readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED / UNKNOWN
       md_day: string; // MD-4 / MD-3 / MD-2 / MD-1 / MD+1 / GENERIC
-
       training_system: string; // FORCE / NEURAL_VELOCITY / POLISH_CALM / ACTIVATION_PRIMER
-
       plan_title: string | null;
       plan_description: string | null;
       plan_structure: any; // jsonb array
-
       locked_at: string | null;
       is_locked: boolean;
     }
@@ -61,28 +54,33 @@ type LockedPlanRow =
 
 type DecisionRow =
   | {
-      planned_focus: string | null; // e.g. "POLISH / CALM"
-      final_planned_day_type: string | null; // TRAIN / RECOVERY / OFF / FULL ...
-      readiness_flag: string | null; // GREEN / YELLOW / RED / UNKNOWN
+      planned_focus: string | null;
+      final_planned_day_type: string | null;
+      readiness_flag: string | null;
     }
   | null;
 
-/**
- * ✅ Session row from v_player_session_today
- * ATH: planned_day_type er EKKI til í view-inu hjá þér -> NOTAUM EKKI.
- * ATH: system_key er EKKI til í view-inu hjá þér -> NOTAUM EKKI.
- */
 type PlayerSessionTodayRow =
   | {
       player_id: string;
       team_id: string | null;
       day_date: string; // date
-      planned_focus: string | null; // "POLISH / CALM" o.s.frv.
-      readiness_flag: string | null; // GREEN/YELLOW/RED/UNKNOWN
-      session_type: string | null; // t.d. POLISH_CALM / ACTIVATION_PRIMER
-      md_day_resolved: string | null; // t.d. MD-2
+      planned_focus: string | null;
+      readiness_flag: string | null;
+      session_type: string | null;
+      md_day_resolved: string | null;
     }
   | null;
+
+type VariantRow = {
+  id: string;
+  md_day: string;
+  readiness_level: string;
+  variant: string; // A/B/C
+  title: string | null;
+  description: string | null;
+  structure: any;
+};
 
 function todayISO() {
   const d = new Date();
@@ -109,13 +107,6 @@ function norm(x: string | null | undefined) {
   return (x ?? "").trim().toUpperCase();
 }
 
-/**
- * System -> flag mapping (for UI color/message).
- * NOTE: We keep it simple:
- * - POLISH/CALM, ACTIVATION/PRIMER => GREEN
- * - FORCE, NEURAL/VELOCITY => GREEN (still "good") but you can change later
- * Readiness overrides system if present (since it’s user state).
- */
 function systemToFlag(system: string | null | undefined): Flag {
   const s = norm(system);
   if (s === "POLISH_CALM") return "GREEN";
@@ -140,25 +131,25 @@ export default function PlayerPage() {
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
-  // Link UI (ef profile.player_id vantar)
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
 
-  // Player meta
   const [playerMeta, setPlayerMeta] = useState<PlayerRow | null>(null);
 
-  // Plan + metrics
   const [plan, setPlan] = useState<LockedPlanRow>(null);
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
-  // Decision (optional debug/context)
   const [decision, setDecision] = useState<DecisionRow>(null);
-
-  // ✅ Session (optional - useful for “Session type”)
   const [session, setSession] = useState<PlayerSessionTodayRow>(null);
 
-  // Optional: generic messages per flag
   const [genericMsg, setGenericMsg] = useState<GenericMsg>(null);
+
+  const [variantOptions, setVariantOptions] = useState<VariantRow[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("");
+  const [savingVariant, setSavingVariant] = useState<boolean>(false);
+
+  // ✅ preselect lock (variant_id) for today
+  const [lockedVariantId, setLockedVariantId] = useState<string>("");
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
     if (teamId) {
@@ -186,6 +177,126 @@ export default function PlayerPage() {
     return (globalMsg as any) ?? null;
   }
 
+  async function reloadPlan(playerId: string, day: string) {
+    const { data: planRow, error: planErr } = await supabase
+      .from("v_player_today_microdose_locked")
+      .select(
+        "player_id,entry_date,readiness_level,md_day,training_system,plan_title,plan_description,plan_structure,locked_at,is_locked"
+      )
+      .eq("player_id", playerId)
+      .eq("entry_date", day)
+      .maybeSingle();
+
+    if (planErr) throw planErr;
+    setPlan((planRow as any) ?? null);
+  }
+
+  // ✅ fetch variant_id from locks to preselect A/B/C
+  async function loadLockedVariantId(playerId: string, day: string) {
+    const { data: lockRow, error: lErr } = await supabase
+      .from("player_microdose_plan_locks")
+      .select("variant_id")
+      .eq("player_id", playerId)
+      .eq("entry_date", day)
+      .maybeSingle();
+
+    if (lErr) {
+      console.error("loadLockedVariantId error:", lErr.message);
+      setLockedVariantId("");
+      return;
+    }
+
+    const vid = (lockRow as any)?.variant_id ?? "";
+    setLockedVariantId(vid || "");
+  }
+
+  async function loadVariantsForToday(playerId: string, mdDay: string, readinessLevel: string) {
+    const { data: opts, error: oErr } = await supabase
+      .from("microdose_template_variants")
+      .select("id, md_day, readiness_level, variant, title, description, structure")
+      .eq("md_day", mdDay)
+      .eq("readiness_level", readinessLevel)
+      .order("variant", { ascending: true })
+      .limit(3);
+
+    if (oErr) throw oErr;
+
+    const options = ((opts as any) ?? []) as VariantRow[];
+    setVariantOptions(options);
+
+    // ✅ 1) Prefer locked variant_id (true preselect)
+    if (lockedVariantId) {
+      const found = options.find((x) => x.id === lockedVariantId);
+      if (found) {
+        setSelectedVariantId(found.id);
+        return;
+      }
+    }
+
+    // 2) Best-effort by title (fallback)
+    const currentTitle = (plan?.plan_title ?? "").trim();
+    const matchByTitle =
+      currentTitle && options.find((x) => (x.title ?? "").trim() === currentTitle);
+
+    if (matchByTitle) {
+      setSelectedVariantId(matchByTitle.id);
+      return;
+    }
+
+    // 3) fallback A
+    const a = options.find((x) => norm(x.variant) === "A");
+    if (a) setSelectedVariantId(a.id);
+    else if (options[0]?.id) setSelectedVariantId(options[0].id);
+  }
+
+  async function chooseVariant(v: VariantRow) {
+    if (!profile?.player_id) return;
+    const playerId = profile.player_id;
+    const day = todayISO();
+
+    try {
+      setSavingVariant(true);
+      setError("");
+
+      const mdDay = plan?.md_day ?? v.md_day;
+      const readinessLevel = plan?.readiness_level ?? v.readiness_level;
+
+      if (!mdDay || !readinessLevel)
+        throw new Error("Vantar md_day eða readiness_level til að vista val.");
+      if (!v.structure) throw new Error("Valin uppsetning vantar structure (plan_structure).");
+
+      const teamId = session?.team_id ?? (profile as any)?.team_id ?? null;
+
+      const payload: any = {
+        player_id: playerId,
+        entry_date: day,
+        team_id: teamId,
+        md_day: mdDay,
+        readiness_level: readinessLevel,
+        plan_title: v.title ?? null,
+        plan_description: v.description ?? null,
+        plan_structure: v.structure,
+        variant_id: v.id,
+        source: "player_choice",
+      };
+
+      const { error: upErr } = await supabase
+        .from("player_microdose_plan_locks")
+        .upsert(payload, { onConflict: "player_id,entry_date" });
+
+      if (upErr) throw upErr;
+
+      setLockedVariantId(v.id);
+      setSelectedVariantId(v.id);
+
+      await reloadPlan(playerId, day);
+    } catch (e: any) {
+      setError(e?.message ?? "Óþekkt villa við að velja uppsetningu.");
+    } finally {
+      setSavingVariant(false);
+    }
+  }
+
   // ====== Initial load ======
   useEffect(() => {
     const run = async () => {
@@ -198,8 +309,10 @@ export default function PlayerPage() {
       setPlayerMeta(null);
       setDecision(null);
       setSession(null);
+      setVariantOptions([]);
+      setSelectedVariantId("");
+      setLockedVariantId("");
 
-      // Auth
       const { data: auth, error: aErr } = await supabase.auth.getUser();
       if (aErr) {
         setError(aErr.message);
@@ -213,7 +326,6 @@ export default function PlayerPage() {
         return;
       }
 
-      // Profile
       const { data: prof, error: pErr } = await supabase
         .from("profiles")
         .select("id, display_name, player_id, role, team_id")
@@ -228,7 +340,6 @@ export default function PlayerPage() {
 
       setProfile((prof as any) ?? null);
 
-      // Link UI
       if (!prof?.player_id) {
         const { data: list, error: lErr } = await supabase
           .from("players")
@@ -248,7 +359,6 @@ export default function PlayerPage() {
 
       const today = todayISO();
 
-      // Player meta
       const { data: pm, error: pmErr } = await supabase
         .from("players")
         .select("id, full_name, position, team")
@@ -258,7 +368,6 @@ export default function PlayerPage() {
       if (pmErr) console.error("players meta error:", pmErr.message);
       setPlayerMeta((pm as any) ?? null);
 
-      // Decision row (optional debug)
       const { data: drow, error: dErr } = await supabase
         .from("v_player_daily_decision_v3")
         .select("planned_focus, final_planned_day_type, readiness_flag")
@@ -269,7 +378,6 @@ export default function PlayerPage() {
       if (dErr) console.error("decision error:", dErr.message);
       setDecision((drow as any) ?? null);
 
-      // ✅ Session row (system_key removed)
       const { data: srow, error: sErr } = await supabase
         .from("v_player_session_today")
         .select(
@@ -279,13 +387,9 @@ export default function PlayerPage() {
         .eq("day_date", today)
         .maybeSingle();
 
-      if (sErr) {
-        // Ekki brjóta síðuna ef session view er ekki tilbúið
-        console.error("v_player_session_today error:", sErr.message);
-      }
+      if (sErr) console.error("v_player_session_today error:", sErr.message);
       setSession((srow as any) ?? null);
 
-      // ✅ Plan from canonical view (NO order/limit needed)
       const { data: planRow, error: planErr } = await supabase
         .from("v_player_today_microdose_locked")
         .select(
@@ -300,10 +404,11 @@ export default function PlayerPage() {
         setLoading(false);
         return;
       }
-
       setPlan((planRow as any) ?? null);
 
-      // Metrics (optional)
+      // ✅ load preselect source from lock table
+      await loadLockedVariantId(prof.player_id, today);
+
       const { data: mrow, error: mErr } = await supabase
         .from("readiness_entries")
         .select("readiness, sleep, soreness, total_score, created_at")
@@ -320,19 +425,34 @@ export default function PlayerPage() {
     run();
   }, [supabase]);
 
-  // ====== Flag for UI (readiness first, fallback to system)
+  // ✅ Load variants once we have plan AND lockedVariantId loaded
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (!profile?.player_id) return;
+        if (!plan?.md_day || !plan?.readiness_level) return;
+
+        const mdDay = norm(plan.md_day);
+        const rl = norm(plan.readiness_level);
+        if (!mdDay || !rl) return;
+
+        await loadVariantsForToday(profile.player_id, mdDay, rl);
+      } catch (e: any) {
+        console.error("variants load error:", e?.message ?? e);
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.player_id, plan?.md_day, plan?.readiness_level, lockedVariantId]);
+
   const flag: Flag = useMemo(() => {
     const byReadiness = readinessToFlag(plan?.readiness_level);
     if (!plan?.readiness_level) return systemToFlag(plan?.training_system);
     return byReadiness;
   }, [plan?.readiness_level, plan?.training_system]);
 
-  const ui = useMemo(
-    () => flagUi(normalizeFlag(flag)),
-    [flag]
-  ) as ReturnType<typeof flagUi>;
+  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
 
-  // ====== Generic message layer
   useEffect(() => {
     const run = async () => {
       if (!profile) return;
@@ -344,13 +464,11 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, flag]);
 
-  const message = useMemo(() => {
-    return genericMsg?.message || ui.playerMessage;
-  }, [genericMsg, ui.playerMessage]);
-
-  const why = useMemo(() => {
-    return genericMsg?.why || ui.why;
-  }, [genericMsg, ui.why]);
+  const message = useMemo(
+    () => genericMsg?.message || ui.playerMessage,
+    [genericMsg, ui.playerMessage]
+  );
+  const why = useMemo(() => genericMsg?.why || ui.why, [genericMsg, ui.why]);
 
   async function linkPlayer() {
     try {
@@ -407,21 +525,17 @@ export default function PlayerPage() {
     );
   }
 
-  // Link UI
   if (profile && !profile.player_id) {
     return (
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-xs font-medium text-zinc-500">
-              Player · Setup
-            </div>
+            <div className="text-xs font-medium text-zinc-500">Player · Setup</div>
             <div className="mt-2 text-xl font-semibold text-zinc-900">
               Tengja notanda við leikmann
             </div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta er til að þú getir prófað player-síðuna. Seinna getum við
-              gert auto-link.
+              Þetta er til að þú getir prófað player-síðuna. Seinna getum við gert auto-link.
             </div>
 
             <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
@@ -437,8 +551,7 @@ export default function PlayerPage() {
                 <option value="">— Veldu —</option>
                 {players.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name ?? "Ónefndur"}{" "}
-                    {p.position ? `(${p.position})` : ""}{" "}
+                    {p.full_name ?? "Ónefndur"} {p.position ? `(${p.position})` : ""}{" "}
                     {p.team ? `· ${p.team}` : ""}
                   </option>
                 ))}
@@ -457,19 +570,14 @@ export default function PlayerPage() {
     );
   }
 
-  // ✅ Empty-state: No locked plan yet (healthy state)
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-base font-semibold">
-              Engin æfing hefur verið læst enn í dag
-            </div>
+            <div className="text-base font-semibold">Engin æfing hefur verið læst enn í dag</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta er eðlilegt ef þú ert ekki búinn að checka inn eða ef
-              dagsplan er ekki “locked” enn. Prófaðu að fara í{" "}
-              <b>/player/checkin</b> og skrá þig.
+              Prófaðu að fara í <b>/player/checkin</b> og skrá þig.
             </div>
           </div>
         </div>
@@ -481,10 +589,8 @@ export default function PlayerPage() {
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const showStructure =
-    isArray(plan.plan_structure) && plan.plan_structure.length > 0;
+  const showStructure = isArray(plan.plan_structure) && plan.plan_structure.length > 0;
 
-  // Debug string (NO hooks)
   const debugLine =
     `today=${todayISO()} | ` +
     `decision_focus=${decision?.planned_focus ?? "-"} | ` +
@@ -492,7 +598,14 @@ export default function PlayerPage() {
     `md_day=${plan.md_day ?? "-"} | ` +
     `session_type=${session?.session_type ?? "-"} | ` +
     `system=${plan.training_system ?? "-"} | ` +
-    `title=${plan.plan_title ?? "-"}`;
+    `title=${plan.plan_title ?? "-"} | ` +
+    `locked_variant_id=${lockedVariantId || "-"}`;
+
+  // ✅ SHOW ALWAYS if variants exist; selecting depends on lock
+  const showVariantChooser = variantOptions.length > 0;
+  const canChooseVariant = !plan.is_locked;
+
+  const selectedVariant = variantOptions.find((x) => x.id === selectedVariantId) ?? null;
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -500,12 +613,8 @@ export default function PlayerPage() {
         <div className={`rounded-2xl border bg-white p-6 shadow-sm ${ui.panel}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-medium text-zinc-500">
-                Player · Dagsæfing
-              </div>
-              <div className="mt-2 text-xl font-semibold text-zinc-900">
-                {name}
-              </div>
+              <div className="text-xs font-medium text-zinc-500">Player · Dagsæfing</div>
+              <div className="mt-2 text-xl font-semibold text-zinc-900">{name}</div>
               <div className="mt-1 text-sm text-zinc-600">
                 {position}
                 {team ? ` · ${team}` : ""}
@@ -540,12 +649,8 @@ export default function PlayerPage() {
             </div>
           </div>
 
-          {/* Debug (comment out later) */}
-          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">
-            {debugLine}
-          </div>
+          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
 
-          {/* Header stats */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Dagsetning" value={plan.entry_date} />
             <Stat label="Readiness" value={plan.readiness_level} />
@@ -553,38 +658,121 @@ export default function PlayerPage() {
             <Stat label="Session type" value={session?.session_type ?? "—"} />
           </div>
 
-          {/* Message */}
           <div className="mt-6">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Skilaboð til þín
-            </div>
-            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">
-              {message}
-            </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Skilaboð til þín</div>
+            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">{message}</div>
           </div>
 
-          {/* Why */}
           <div className="mt-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Af hverju?
-            </div>
-            <div className="mt-2 rounded-xl border bg-white p-4 text-sm text-zinc-700">
-              {why}
-            </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Af hverju?</div>
+            <div className="mt-2 rounded-xl border bg-white p-4 text-sm text-zinc-700">{why}</div>
           </div>
 
-          {/* Plan card */}
+          {showVariantChooser ? (
+            <div className="mt-6 rounded-xl border bg-white p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Veldu uppsetningu (A / B / C)
+              </div>
+              <div className="mt-2 text-sm text-zinc-600">
+                Þú sérð uppsetningu áður en þú velur.
+                {plan.is_locked ? " (Læst – ekki hægt að breyta í dag.)" : " Þegar þú velur, birtist æfingin hér fyrir neðan."}
+              </div>
+
+              <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
+                {variantOptions.map((v) => {
+                  const isSelected = v.id === selectedVariantId;
+                  return (
+                    <div
+                      key={v.id}
+                      className={`min-w-[320px] snap-start rounded-2xl border p-4 ${
+                        isSelected ? "border-zinc-900" : "border-zinc-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Variant {v.variant}
+                          </div>
+                          <div className="mt-2 text-base font-semibold text-zinc-900">
+                            {v.title ?? "Microdose variant"}
+                          </div>
+                          <div className="mt-1 text-sm text-zinc-600">{v.description ?? "—"}</div>
+                        </div>
+                        {isSelected ? (
+                          <div className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white">
+                            Valin
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {isArray(v.structure) && v.structure.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {v.structure.slice(0, 2).map((b: any, bi: number) => (
+                            <div key={bi} className="rounded-xl border bg-zinc-50 p-3">
+                              <div className="text-sm font-semibold text-zinc-900">
+                                {b?.block ?? `Block ${bi + 1}`}
+                              </div>
+                              {isArray(b?.items) && b.items.length > 0 ? (
+                                <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
+                                  {b.items.slice(0, 4).map((it: any, ii: number) => (
+                                    <li key={ii}>{String(it)}</li>
+                                  ))}
+                                  {b.items.length > 4 ? (
+                                    <li className="list-none text-xs text-zinc-500">…meira</li>
+                                  ) : null}
+                                </ul>
+                              ) : (
+                                <div className="mt-2 text-sm text-zinc-600">Engin atriði.</div>
+                              )}
+                            </div>
+                          ))}
+                          {v.structure.length > 2 ? (
+                            <div className="text-xs text-zinc-500">…fleiri blokkir</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
+                          Engin structure skilgreind fyrir þessa uppsetningu.
+                        </div>
+                      )}
+
+                      {/* ✅ lock-aware button (read-only when locked) */}
+                      <button
+                        disabled={savingVariant || !canChooseVariant}
+                        onClick={() => {
+                          if (!canChooseVariant) return;
+                          chooseVariant(v);
+                        }}
+                        className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold ${
+                          isSelected
+                            ? "bg-zinc-900 text-white"
+                            : "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50"
+                        } ${(savingVariant || !canChooseVariant) ? "opacity-60" : ""}`}
+                      >
+                        {plan.is_locked
+                          ? (isSelected ? "Valin (læst)" : "Læst – ekki hægt að breyta")
+                          : savingVariant
+                            ? "Vistar…"
+                            : isSelected
+                              ? "Valin uppsetning"
+                              : "Velja þessa uppsetningu"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Æfing dagsins
-                </div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
                 <div className="mt-2 text-lg font-semibold text-zinc-900">
-                  {plan.plan_title ?? "Microdose plan"}
+                  {plan.plan_title ?? selectedVariant?.title ?? "Microdose plan"}
                 </div>
                 <div className="mt-1 text-sm text-zinc-600">
-                  {plan.plan_description ?? "—"}
+                  {plan.plan_description ?? selectedVariant?.description ?? "—"}
                 </div>
               </div>
 
@@ -600,9 +788,7 @@ export default function PlayerPage() {
               <div className="mt-4 space-y-3">
                 {plan.plan_structure.map((b: any, idx: number) => (
                   <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
-                    <div className="text-sm font-semibold text-zinc-900">
-                      {b?.block ?? `Block ${idx + 1}`}
-                    </div>
+                    <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
 
                     {isArray(b?.items) && b.items.length > 0 ? (
                       <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
@@ -611,9 +797,7 @@ export default function PlayerPage() {
                         ))}
                       </ul>
                     ) : (
-                      <div className="mt-2 text-sm text-zinc-600">
-                        Engin atriði skilgreind.
-                      </div>
+                      <div className="mt-2 text-sm text-zinc-600">Engin atriði skilgreind.</div>
                     )}
                   </div>
                 ))}
@@ -625,13 +809,10 @@ export default function PlayerPage() {
             )}
           </div>
 
-          {/* Metrics */}
           <details className="mt-6 rounded-xl border bg-white">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
               Mælingar dagsins{" "}
-              <span className="ml-2 text-xs font-medium text-zinc-500">
-                (Readiness · Svefn · Stífleiki)
-              </span>
+              <span className="ml-2 text-xs font-medium text-zinc-500">(Readiness · Svefn · Stífleiki)</span>
             </summary>
 
             <div className="px-4 pb-4">

@@ -58,12 +58,13 @@ type Row = {
   locked_at: string | null;
   locked_by?: string | null;
 
-  // ✅ MD-day (team/day) – kemur úr Plan Preview / Week Grid
+  // ✅ MD-day (team/day)
   md_day?: string | null;
 
-  final_color: FinalColor;
-  final_reason: string | null;
-  final_flag: FinalFlag;
+  // ✅ final fields (from v*_final view or computed client-side fallback)
+  final_color?: FinalColor | null;
+  final_reason?: string | null;
+  final_flag?: FinalFlag | null;
 
   // backwards compat
   color?: any;
@@ -74,7 +75,6 @@ type Row = {
   coach_locked_at?: string | null;
   is_time_locked?: boolean | null;
 
-  // optional helper column from view (if exists)
   color_rank?: number | null;
 };
 
@@ -128,9 +128,41 @@ function prettyMd(md: string | null | undefined) {
   return { md: v, label: v };
 }
 
+/**
+ * ✅ Fallback rule (client-side):
+ * Downgrade one step if soreness >= 4
+ * GREEN -> YELLOW, YELLOW -> RED, RED stays RED
+ */
+function applySorenessDowngrade(input: {
+  flag: FinalFlag | null;
+  color: FinalColor | null;
+  reason: string | null;
+  soreness: number | null;
+}) {
+  const soreness = input.soreness ?? 0;
+
+  if (soreness < 4 || !input.flag || !input.color) {
+    return {
+      final_flag: input.flag,
+      final_color: input.color,
+      final_reason: input.reason,
+    };
+  }
+
+  const final_flag: FinalFlag = input.flag === "GREEN" ? "YELLOW" : input.flag === "YELLOW" ? "RED" : "RED";
+  const final_color: FinalColor = input.color === "green" ? "yellow" : input.color === "yellow" ? "red" : "red";
+
+  const final_reason =
+    input.flag === "GREEN"
+      ? "YELLOW: High soreness. Adjust load."
+      : "RED: High soreness. Recovery/very light day.";
+
+  return { final_flag, final_color, final_reason };
+}
+
 function CoachHubCards() {
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-4">
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Messages</CardTitle>
@@ -166,6 +198,21 @@ function CoachHubCards() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* ✅ NEW: TV View card */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">TV view</CardTitle>
+          <CardDescription>Sýnir 4 uppsetningar á skjá (fyrir sal/sjónvarp).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild className="w-full">
+            <Link href="/coach/display?refresh=15" target="_blank" rel="noreferrer">
+              Opna TV view
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -193,52 +240,32 @@ export default function CoachPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
 
-  // ✅ Lock button state
   const [locking, setLocking] = useState(false);
   const [lockToast, setLockToast] = useState<string>("");
 
-  // ✅ Plan Preview state
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
-
-  // ✅ Week grid mapping
   const [weekGrid, setWeekGrid] = useState<any[]>([]);
-
-  // ✅ Coach name
   const [coachName, setCoachName] = useState<string>("");
-
-  // ✅ Coach gate
   const [coachVerified, setCoachVerified] = useState(false);
 
-  // ✅ TODAY
   const today = useMemo(() => todayISO(), []);
 
-  // ✅ WeekGrid row for today (SOURCE OF TRUTH for md_day)
   const weekToday = useMemo(() => {
     const t = todayISO();
     const row = (weekGrid ?? []).find((x: any) => String(x.day_date) === t) ?? null;
     return row;
   }, [weekGrid]);
 
-  // ✅ Derived MD-day chip
-  // IMPORTANT: use weekGrid first, planPreview only as fallback
   const mdDayToday = useMemo(() => {
     const src = weekToday?.md_day ?? planPreview?.md_day ?? "GENERIC";
     return prettyMd(src).md;
   }, [weekToday?.md_day, planPreview?.md_day]);
 
-  const mdLabelToday = useMemo(() => {
-    const src = weekToday?.md_day ?? planPreview?.md_day ?? "GENERIC";
-    return prettyMd(src).label;
-  }, [weekToday?.md_day, planPreview?.md_day]);
-
-  // ✅ 1) Gate: ensure user is logged in AND is coach
   async function ensureCoachAccess() {
     setError("");
 
     const { data: auth, error: authErr } = await supabase.auth.getUser();
-    if (authErr) {
-      console.error("auth.getUser error:", authErr.message);
-    }
+    if (authErr) console.error("auth.getUser error:", authErr.message);
 
     const uid = auth?.user?.id;
     if (!uid) {
@@ -246,7 +273,6 @@ export default function CoachPage() {
       return false;
     }
 
-    // ✅ profile role check (DB: profiles has display_name, not full_name)
     const { data: prof, error: profErr } = await supabase
       .from("profiles")
       .select("role, display_name")
@@ -279,7 +305,7 @@ export default function CoachPage() {
         if (!ok) return;
 
         setCoachVerified(true);
-        await loadToday(); // first load
+        await loadToday();
       } finally {
         setLoading(false);
       }
@@ -301,13 +327,11 @@ export default function CoachPage() {
   async function loadPlanPreview() {
     try {
       const { data, error } = await supabase.from("v_coach_plan_preview_today").select("*").maybeSingle();
-
       if (error) {
         console.error("Plan preview error:", error.message);
         setPlanPreview(null);
         return;
       }
-
       setPlanPreview((data as any) ?? null);
     } catch (e) {
       console.error("Plan preview error (catch):", e);
@@ -317,7 +341,6 @@ export default function CoachPage() {
 
   async function loadWeekGrid() {
     try {
-      // 1) finna coach team_id
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id;
       if (!uid) return;
@@ -326,7 +349,6 @@ export default function CoachPage() {
       const teamId = (prof as any)?.team_id;
       if (!teamId) return;
 
-      // 2) active week_setup (nýjasta)
       const { data: ws } = await supabase
         .from("week_setups")
         .select("id")
@@ -342,7 +364,6 @@ export default function CoachPage() {
         return;
       }
 
-      // 3) sækja mapping (FINAL)
       const { data: grid, error } = await supabase
         .from("v_week_plan_grid")
         .select("day_date, md_day, day_type_final, dose_final")
@@ -367,23 +388,23 @@ export default function CoachPage() {
       setError("");
       setLoading(true);
 
-      // load context first
       await loadPlanPreview();
       await loadWeekGrid();
 
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      // ✅ Quick fix (no SQL changes needed):
+      // Use v4_final view but DO NOT order by color_rank (might not exist yet).
       let q = supabase
-        .from("v_coach_readiness_today_v5")
+        .from("v_coach_readiness_today_v4_final")
         .select("*", { count: "exact" })
-        // ✅ betra en stafróf: red(1) -> green+(4)
-        .order("color_rank", { ascending: true })
         .order("total_score", { ascending: true })
+        .order("full_name", { ascending: true })
         .range(from, to);
 
       if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
-      if (filter !== "all") q = q.eq("color", filter);
+      if (filter !== "all") q = q.eq("final_color", filter);
       if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
 
       const { data, error, count } = await q;
@@ -395,44 +416,55 @@ export default function CoachPage() {
         return;
       }
 
-      // ✅ FIX: TypeScript “rauða” villan — cast í 2 skrefum
       const raw: Row[] = ((data ?? []) as unknown) as Row[];
 
-      // ✅ FIX: primary litur kemur úr v5 `color`, ekki computed_auto_flag
       const list = raw.map((r) => {
         const id = (r.readiness_entry_id as string) || String(r.player_id);
 
-        // PRIMARY color frá view (v5) — 'red' | 'yellow' | 'green'
-        const statusColor = (String((r as any).color ?? "").toLowerCase() as FinalColor) || null;
+        // base (supports both v4_final + any older views)
+        const baseColor =
+          (String((r as any).final_color ?? (r as any).color ?? (r as any).auto_color ?? "").toLowerCase() as FinalColor) ||
+          null;
 
-        const color: Color | null =
-          statusColor === "red"
-            ? "red"
-            : statusColor === "yellow"
-            ? "yellow"
-            : statusColor === "green"
-            ? "green"
-            : null;
+        const baseFlag =
+          (String((r as any).final_flag ?? (r as any).computed_auto_flag ?? "").toUpperCase() as FinalFlag) || null;
 
-        // Primary readiness flag (ekki warning)
-        const rl = String((r as any).readiness_level ?? "").toUpperCase();
+        const baseReason = ((r as any).final_reason ?? (r as any).computed_auto_reason ?? null) as string | null;
+
+        // fallback downgrade (if view doesn't already apply it)
+        const downgraded = applySorenessDowngrade({
+          flag: baseFlag,
+          color: baseColor,
+          reason: baseReason,
+          soreness: r.soreness ?? null,
+        });
+
+        const finalColor = (downgraded.final_color ?? baseColor ?? "green") as FinalColor;
+        const finalFlag = (downgraded.final_flag ?? baseFlag ?? "GREEN") as FinalFlag;
+        const finalReason = downgraded.final_reason ?? baseReason ?? null;
+
+        const uiColor: Color | null =
+          finalColor === "red" ? "red" : finalColor === "yellow" ? "yellow" : finalColor === "green" ? "green" : null;
+
         const readinessFlag: FlagStatus | null =
-          rl === "RED" ? "RED" : rl === "YELLOW" ? "YELLOW" : rl === "GREEN" || rl === "GREEN_PLUS" ? "GREEN" : null;
-
-        const reason = r.computed_auto_reason ?? null;
+          finalFlag === "RED" ? "RED" : finalFlag === "YELLOW" ? "YELLOW" : finalFlag === "GREEN" ? "GREEN" : null;
 
         return {
           ...r,
           id,
+
+          // ✅ final fields (used by UI)
+          final_color: finalColor,
+          final_flag: finalFlag,
+          final_reason: finalReason,
+
+          // ✅ backwards-compat fields used elsewhere in this file
           flag_status: readinessFlag,
-          color,
-          auto_reason: reason,
-          // ✅ ALWAYS show same md_day as Week setup (team/day)
+          color: uiColor,
+          auto_reason: finalReason,
           md_day: mdDayToday,
         };
       });
-
-      list.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "is"));
 
       setRows(list);
       setTotal(count ?? 0);
@@ -463,87 +495,16 @@ export default function CoachPage() {
     }
   }
 
-  useEffect(() => {
-    if (!rows.length) return;
-    if (expandedPlayerId) return;
-    const firstRed = rows.find((x) => x.color === "red");
-    if (firstRed) setExpandedPlayerId(String(firstRed.player_id));
-  }, [rows, expandedPlayerId]);
-
-  const teams = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) if (r.team) set.add(r.team);
-    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "is"))];
-  }, [rows]);
-
-  // ✅ FIX: counts should use r.color (fallback final_color)
   const counts = useMemo(() => {
     const acc: Record<FinalColor, number> = { red: 0, yellow: 0, green: 0 };
     for (const r of rows) {
-      const c = (String((r as any).color ?? (r as any).final_color ?? "").toLowerCase() as FinalColor) || null;
+      const c = (String((r as any).final_color ?? (r as any).color ?? "").toLowerCase() as FinalColor) || null;
       if (c === "red" || c === "yellow" || c === "green") acc[c] += 1;
     }
     return acc;
   }, [rows]);
 
-  // Ath: þú ert að filtera í SQL, þannig er "filtered = rows" ok
   const filtered = useMemo(() => rows, [rows]);
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    window.location.href = "/";
-  }
-
-  async function lockTeamToday() {
-    try {
-      setError("");
-      setLockToast("");
-      setLocking(true);
-
-      const day = todayISO();
-      const { data, error } = await supabase.rpc("lock_team_microdose_plans", { p_day: day });
-
-      if (error) {
-        setError(error.message);
-        return;
-      }
-
-      const n = Number(data ?? 0);
-
-      if (n === 0) {
-        setLockToast("Enginn var læstur. Athugaðu að coach sé með team_id og að leikmenn séu tengdir þessu liði.");
-      } else {
-        setLockToast(`✅ Læst dagsæfingum fyrir ${n} leikmenn (${day}).`);
-      }
-
-      await loadToday();
-    } catch (e: any) {
-      setError(e?.message ?? "Unknown error");
-    } finally {
-      setLocking(false);
-    }
-  }
-
-  async function loadHistory(readinessEntryId: string) {
-    setHistoryLoading((p) => ({ ...p, [readinessEntryId]: true }));
-    setError("");
-
-    const { data, error } = await supabase
-      .from("readiness_entry_audit")
-      .select("*")
-      .eq("readiness_entry_id", readinessEntryId)
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    if (error) {
-      setError(error.message);
-      setHistoryLoading((p) => ({ ...p, [readinessEntryId]: false }));
-      return;
-    }
-
-    setHistory((p) => ({ ...p, [readinessEntryId]: (data as AuditRow[]) ?? [] }));
-    setHistoryLoading((p) => ({ ...p, [readinessEntryId]: false }));
-  }
 
   async function saveOverride(r: Row) {
     const playerId = String(r.player_id);
@@ -579,18 +540,23 @@ export default function CoachPage() {
   const renderRow = (r: Row) => {
     const pid = String(r.player_id);
     const isSaving = !!saving[pid];
-    const isSaved = !!saved[pid];
-
     const isLocked = !!r.is_locked || !!r.coach_locked || !!r.is_time_locked;
 
-    const cm = colorMeta(r.color);
+    // ✅ use final_color for pill
+    const cm = colorMeta(r.final_color ?? (r as any).color);
     const isOpen = expandedPlayerId === pid;
 
-    // ✅ FIX: Auto-flag á að sýna computed_auto_flag (warning), ekki flag_status (primary)
-    const autoFlag = r.computed_auto_flag ? flagLabel(r.computed_auto_flag as FlagStatus) : null;
+    // ✅ use final_flag in details (autoFlag label)
+    const autoFlag = r.final_flag
+      ? flagLabel(r.final_flag as FlagStatus)
+      : r.computed_auto_flag
+      ? flagLabel(r.computed_auto_flag as FlagStatus)
+      : null;
 
     const playerNote = (r.notes ?? "").trim() || null;
-    const computedReason = r.computed_auto_reason ?? null;
+
+    // ✅ show final_reason
+    const computedReason = (r.final_reason ?? r.computed_auto_reason) ?? null;
 
     const coachMsg = r.coach_message && r.coach_message.trim().length ? r.coach_message : null;
 
@@ -598,17 +564,13 @@ export default function CoachPage() {
       <React.Fragment key={r.id}>
         <div className="rounded-lg border bg-white px-3 py-2">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.4fr)_auto_auto_1fr_auto] md:items-center">
-            {/* Name */}
             <div className="min-w-0">
               <div className="font-medium leading-snug truncate">{r.full_name}</div>
               <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
             </div>
 
-            {/* Badges */}
             <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}
-              >
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
                 <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
                 {cm.label}
               </span>
@@ -618,21 +580,18 @@ export default function CoachPage() {
               </span>
             </div>
 
-            {/* Score */}
             <div className="flex items-center justify-start md:justify-center">
               <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-sm font-semibold tabular-nums text-gray-800">
                 {r.total_score ?? "—"}
               </span>
             </div>
 
-            {/* Reason */}
             <div className="min-w-0 text-sm text-gray-700">
               <span className="block truncate" title={computedReason ?? ""}>
                 {computedReason || "—"}
               </span>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center gap-2 justify-end">
               <button
                 onClick={async () => {
@@ -677,17 +636,6 @@ export default function CoachPage() {
                   {new Date(r.created_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
-
-              {r.is_locked && (
-                <div>
-                  🔒 Læst:{" "}
-                  <span className="font-medium">
-                    {r.locked_at
-                      ? new Date(r.locked_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })
-                      : "—"}
-                  </span>
-                </div>
-              )}
             </div>
 
             {(autoFlag || playerNote || computedReason || coachMsg) && (
@@ -697,19 +645,16 @@ export default function CoachPage() {
                     <span className="font-medium">Auto-flag:</span> {autoFlag}
                   </div>
                 )}
-
                 {playerNote && (
                   <div className="text-sm text-gray-600">
                     <span className="font-medium text-gray-700">Player note:</span> {playerNote}
                   </div>
                 )}
-
                 {computedReason && (
                   <div className="text-sm text-gray-600">
                     <span className="font-medium text-gray-700">Auto-reason:</span> {computedReason}
                   </div>
                 )}
-
                 {coachMsg && (
                   <div className="text-sm">
                     <span className="font-medium">Coach message:</span> {coachMsg}
@@ -727,16 +672,7 @@ export default function CoachPage() {
   const canPrev = page > 0;
   const canNext = page < totalPages - 1;
 
-  if (loading) {
-    return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
-  }
-
-  const readinessBadge = (() => {
-    const r = (planPreview?.readiness_level ?? "GREEN").toUpperCase();
-    if (r === "RED") return "bg-red-600 text-white";
-    if (r === "YELLOW") return "bg-yellow-500 text-black";
-    return "bg-green-600 text-white";
-  })();
+  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
 
   return (
     <div className="space-y-5">
@@ -768,13 +704,14 @@ export default function CoachPage() {
               </Button>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Input
                 placeholder="Leita að leikmanni…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-[220px]"
               />
+
               <Button variant="outline" onClick={() => loadToday()} disabled={loading}>
                 {loading ? "Hleð..." : "Refresh"}
               </Button>
