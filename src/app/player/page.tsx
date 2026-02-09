@@ -127,7 +127,13 @@ function norm(x: string | null | undefined) {
   return (x ?? "").trim().toUpperCase();
 }
 
+function isStaffRole(role: string | null | undefined) {
+  const r = norm(role);
+  return r === "COACH" || r === "ADMIN" || r === "STAFF";
+}
+
 function systemToFlag(system: string | null | undefined): Flag {
+  // Currently all systems map to GREEN; keep for future differentiation.
   const s = norm(system);
   if (s === "POLISH_CALM") return "GREEN";
   if (s === "ACTIVATION_PRIMER") return "GREEN";
@@ -141,6 +147,35 @@ function readinessToFlag(level: string | null | undefined): Flag {
   if (l === "RED") return "RED";
   if (l === "YELLOW") return "YELLOW";
   return "GREEN";
+}
+
+type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
+
+function inferDecisionType(decision: DecisionRow, plan: LockedPlanRow): DecisionType {
+  const dt = norm(decision?.final_planned_day_type);
+  // Best effort mapping
+  if (dt.includes("OFF") || dt.includes("REST") || dt.includes("RECOVER")) return "RECOVERY";
+  if (dt.includes("REDUCED") || dt.includes("LIGHT") || dt.includes("MOD")) return "REDUCED";
+  // If the plan exists and is locked, we treat it as FULL unless explicitly reduced/recovery
+  return "FULL";
+}
+
+function decisionToText(d: DecisionType) {
+  if (d === "FULL") return "FULL";
+  if (d === "REDUCED") return "REDUCED";
+  return "RECOVERY";
+}
+
+function decisionSubtitle(d: DecisionType) {
+  if (d === "FULL") return "Framkvæmdu æfinguna eins og hún er sett upp.";
+  if (d === "REDUCED") return "Framkvæmdu aðeins það sem er hér fyrir neðan (engin viðbót).";
+  return "Endurheimt í dag. Fylgdu leiðbeiningunum hér fyrir neðan.";
+}
+
+function mdContextLabel(mdDay: string | null | undefined) {
+  const md = norm(mdDay);
+  if (!md) return "—";
+  return md;
 }
 
 // =======================================
@@ -158,28 +193,23 @@ type PostTrainingContext = {
 function matchesWhenClause(ctx: PostTrainingContext, whenClause: any): boolean {
   if (!whenClause || typeof whenClause !== "object") return false;
 
-  // md_day_in: ["MD-4","MD-3"]
   if (Array.isArray(whenClause.md_day_in)) {
     if (!ctx.mdDay) return false;
     return whenClause.md_day_in.includes(ctx.mdDay);
   }
 
-  // or: [...]
   if (Array.isArray(whenClause.or)) {
     return whenClause.or.some((cond: any) => matchesWhenClause(ctx, cond));
   }
 
-  // session_load: "HIGH"
   if (typeof whenClause.session_load === "string") {
     return ctx.sessionLoad === whenClause.session_load;
   }
 
-  // sprint_exposure: true
   if (typeof whenClause.sprint_exposure === "boolean") {
     return ctx.sprintExposure === whenClause.sprint_exposure;
   }
 
-  // match_like: true
   if (typeof whenClause.match_like === "boolean") {
     return ctx.matchLike === whenClause.match_like;
   }
@@ -252,6 +282,8 @@ export default function PlayerPage() {
   // ✅ post-training UI state
   const [postTraining, setPostTraining] = useState<PostTrainingTemplateRow[]>([]);
   const [postTrainingErr, setPostTrainingErr] = useState<string>("");
+
+  const staffMode = useMemo(() => isStaffRole(profile?.role), [profile?.role]);
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
     if (teamId) {
@@ -326,7 +358,7 @@ export default function PlayerPage() {
     const options = ((opts as any) ?? []) as VariantRow[];
     setVariantOptions(options);
 
-    // ✅ 1) Prefer locked variant_id (true preselect)
+    // ✅ Prefer locked variant_id
     if (lockedVariantId) {
       const found = options.find((x) => x.id === lockedVariantId);
       if (found) {
@@ -335,24 +367,18 @@ export default function PlayerPage() {
       }
     }
 
-    // 2) Best-effort by title (fallback)
-    const currentTitle = (plan?.plan_title ?? "").trim();
-    const matchByTitle =
-      currentTitle && options.find((x) => (x.title ?? "").trim() === currentTitle);
-
-    if (matchByTitle) {
-      setSelectedVariantId(matchByTitle.id);
-      return;
-    }
-
-    // 3) fallback A
+    // fallback A
     const a = options.find((x) => norm(x.variant) === "A");
     if (a) setSelectedVariantId(a.id);
     else if (options[0]?.id) setSelectedVariantId(options[0].id);
   }
 
-  async function chooseVariant(v: VariantRow) {
+  // ⚠️ IMPORTANT: In Stage-4, players do NOT choose variants.
+  // This function is kept ONLY for staff override/testing.
+  async function chooseVariantStaffOnly(v: VariantRow) {
     if (!profile?.player_id) return;
+    if (!staffMode) return;
+
     const playerId = profile.player_id;
     const day = todayISO();
 
@@ -363,8 +389,7 @@ export default function PlayerPage() {
       const mdDay = plan?.md_day ?? v.md_day;
       const readinessLevel = plan?.readiness_level ?? v.readiness_level;
 
-      if (!mdDay || !readinessLevel)
-        throw new Error("Vantar md_day eða readiness_level til að vista val.");
+      if (!mdDay || !readinessLevel) throw new Error("Vantar md_day eða readiness_level til að vista.");
       if (!v.structure) throw new Error("Valin uppsetning vantar structure (plan_structure).");
 
       const teamId = session?.team_id ?? (profile as any)?.team_id ?? null;
@@ -379,7 +404,7 @@ export default function PlayerPage() {
         plan_description: v.description ?? null,
         plan_structure: v.structure,
         variant_id: v.id,
-        source: "player_choice",
+        source: "staff_override",
       };
 
       const { error: upErr } = await supabase
@@ -406,7 +431,6 @@ export default function PlayerPage() {
     try {
       setPostTrainingErr("");
 
-      // 1) Rules
       const { data: rules, error: rErr } = await supabase
         .from("post_training_rules")
         .select("id, priority, is_active, when_clause, then_clause")
@@ -416,14 +440,12 @@ export default function PlayerPage() {
 
       const ruleRows = ((rules as any) ?? []) as PostTrainingRuleRow[];
 
-      // 2) Decide IDs
       const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows, ["daily_neural_reset"]);
       if (!ids.length) {
         setPostTraining([]);
         return;
       }
 
-      // 3) Templates
       const { data: tmpls, error: tErr } = await supabase
         .from("post_training_templates")
         .select("id, title, duration_min, tags, structure, is_active")
@@ -529,9 +551,7 @@ export default function PlayerPage() {
 
       const { data: srow, error: sErr } = await supabase
         .from("v_player_session_today")
-        .select(
-          "player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved"
-        )
+        .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
         .eq("player_id", prof.player_id)
         .eq("day_date", today)
         .maybeSingle();
@@ -703,11 +723,9 @@ export default function PlayerPage() {
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <div className="text-xs font-medium text-zinc-500">Player · Setup</div>
-            <div className="mt-2 text-xl font-semibold text-zinc-900">
-              Tengja notanda við leikmann
-            </div>
+            <div className="mt-2 text-xl font-semibold text-zinc-900">Tengja notanda við leikmann</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta er til að þú getir prófað player-síðuna. Seinna getum við gert auto-link.
+              Þetta er til að prófa player-síðuna. Seinna má auto-linka þetta.
             </div>
 
             <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
@@ -747,9 +765,9 @@ export default function PlayerPage() {
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-base font-semibold">Engin æfing hefur verið læst enn í dag</div>
+            <div className="text-base font-semibold">Engin dagsákvörðun/æfing er komin í dag</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Prófaðu að fara í <b>/player/checkin</b> og skrá þig.
+              Farðu í <b>/player/checkin</b> til að klára check-in.
             </div>
           </div>
         </div>
@@ -763,6 +781,10 @@ export default function PlayerPage() {
 
   const showStructure = isArray(plan.plan_structure) && plan.plan_structure.length > 0;
 
+  const decisionType = inferDecisionType(decision, plan);
+  const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
+
+  // Debug only for staff (collapsed)
   const debugLine =
     `today=${todayISO()} | ` +
     `decision_focus=${decision?.planned_focus ?? "-"} | ` +
@@ -773,18 +795,17 @@ export default function PlayerPage() {
     `title=${plan.plan_title ?? "-"} | ` +
     `locked_variant_id=${lockedVariantId || "-"}`;
 
-  const showVariantChooser = variantOptions.length > 0;
-  const canChooseVariant = !plan.is_locked;
-
-  const selectedVariant = variantOptions.find((x) => x.id === selectedVariantId) ?? null;
+  const showVariantChooserForStaff = staffMode && variantOptions.length > 0;
+  const canChooseVariantStaff = staffMode && !plan.is_locked;
 
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className={`rounded-2xl border bg-white p-6 shadow-sm ${ui.panel}`}>
+          {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-medium text-zinc-500">Player · Dagsæfing</div>
+              <div className="text-xs font-medium text-zinc-500">Player · Dagsákvörðun</div>
               <div className="mt-2 text-xl font-semibold text-zinc-900">{name}</div>
               <div className="mt-1 text-sm text-zinc-600">
                 {position}
@@ -793,6 +814,7 @@ export default function PlayerPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Lock badge */}
               {plan.is_locked ? (
                 <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-sm font-semibold text-zinc-900">
                   🔒 LÆST
@@ -811,31 +833,48 @@ export default function PlayerPage() {
                 </div>
               )}
 
-              <div
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}
-              >
+              {/* Stage-4 primary pill = decision (NOT readiness) */}
+              <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
+                <span className="h-2 w-2 rounded-full bg-zinc-900" />
+                {decisionToText(decisionType)}
+              </div>
+
+              {/* Optional small context pill */}
+              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}>
                 <span className={`h-2 w-2 rounded-full ${ui.dot}`} />
-                {ui.label}
+                {mdLabel}
               </div>
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+          {/* Decision card (top priority) */}
+          <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Í dag</div>
+            <div className="mt-2 text-lg font-semibold text-zinc-900">
+              Ákvörðun: {decisionToText(decisionType)}
+            </div>
+            <div className="mt-1 text-sm text-zinc-700">{decisionSubtitle(decisionType)}</div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Dagsetning" value={plan.entry_date} />
-            <Stat label="Readiness" value={plan.readiness_level} />
-            <Stat label="Kerfi" value={plan.training_system} />
-            <Stat label="Session type" value={session?.session_type ?? "—"} />
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label="Dagsetning" value={plan.entry_date} />
+              <Stat label="MD context" value={mdLabel} />
+              <Stat label="Session type" value={session?.session_type ?? "—"} />
+              <Stat label="Staða" value={plan.is_locked ? "Læst" : "Ólæst"} />
+            </div>
+
+            <div className="mt-3 rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Decision basis
+              </div>
+              <div className="mt-1 text-sm text-zinc-700">{why}</div>
+            </div>
           </div>
 
-          {/* ✅ FÆRT UPP: MÆLINGAR DAGSINS (fyrir ofan skilaboð) */}
+          {/* Measurements (collapsed) */}
           <details className="mt-6 rounded-xl border bg-white">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
               Mælingar dagsins{" "}
-              <span className="ml-2 text-xs font-medium text-zinc-500">
-                (Readiness · Svefn · Stífleiki)
-              </span>
+              <span className="ml-2 text-xs font-medium text-zinc-500">(aðeins til upplýsinga)</span>
             </summary>
 
             <div className="px-4 pb-4">
@@ -848,39 +887,46 @@ export default function PlayerPage() {
               <div className="mt-3 text-xs text-zinc-500">
                 Skráð:{" "}
                 {metrics?.created_at
-                  ? new Date(metrics.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
+                  ? new Date(metrics.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                   : "—"}
+              </div>
+
+              {/* Keep internal classification out of the main UI (Stage-4 rule) */}
+              <div className="mt-3 text-xs text-zinc-500">
+                Flokkun (internal): {plan.readiness_level ?? "—"} · Kerfi: {plan.training_system ?? "—"}
               </div>
             </div>
           </details>
 
+          {/* Player message (execution language) */}
           <div className="mt-6">
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Skilaboð til þín
+              Framkvæmd
             </div>
             <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">
               {message}
+              <div className="mt-3 rounded-lg border bg-white p-3 text-sm text-zinc-800">
+                <div className="font-semibold">Regla</div>
+                <div className="mt-1">
+                  Engin viðbótarvinna er nauðsynleg í dag. Framkvæmdu aðeins það sem stendur hér fyrir neðan.
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="mt-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Af hverju?</div>
-            <div className="mt-2 rounded-xl border bg-white p-4 text-sm text-zinc-700">{why}</div>
-          </div>
-
-          {showVariantChooser ? (
+          {/* Staff-only: variant override (kept out of player flow) */}
+          {showVariantChooserForStaff ? (
             <div className="mt-6 rounded-xl border bg-white p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Veldu uppsetningu (A / B / C)
-              </div>
-              <div className="mt-2 text-sm text-zinc-600">
-                Þú sérð uppsetningu áður en þú velur.
-                {plan.is_locked
-                  ? " (Læst – ekki hægt að breyta í dag.)"
-                  : " Þegar þú velur, birtist æfingin hér fyrir neðan."}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Staff override (A/B/C)
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-600">
+                    Þetta er aðeins fyrir staff/test. Leikmenn eiga ekki að velja variant í Stage-4.
+                    {plan.is_locked ? " (Læst – ekki hægt að breyta í dag.)" : ""}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -937,21 +983,21 @@ export default function PlayerPage() {
                         </div>
                       ) : (
                         <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
-                          Engin structure skilgreind fyrir þessa uppsetningu.
+                          Engin structure skilgreind.
                         </div>
                       )}
 
                       <button
-                        disabled={savingVariant || !canChooseVariant}
+                        disabled={savingVariant || !canChooseVariantStaff}
                         onClick={() => {
-                          if (!canChooseVariant) return;
-                          chooseVariant(v);
+                          if (!canChooseVariantStaff) return;
+                          chooseVariantStaffOnly(v);
                         }}
                         className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold ${
                           isSelected
                             ? "bg-zinc-900 text-white"
                             : "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50"
-                        } ${savingVariant || !canChooseVariant ? "opacity-60" : ""}`}
+                        } ${savingVariant || !canChooseVariantStaff ? "opacity-60" : ""}`}
                       >
                         {plan.is_locked
                           ? isSelected
@@ -961,7 +1007,7 @@ export default function PlayerPage() {
                           ? "Vistar…"
                           : isSelected
                           ? "Valin uppsetning"
-                          : "Velja þessa uppsetningu"}
+                          : "Velja (staff)"}
                       </button>
                     </div>
                   );
@@ -970,18 +1016,17 @@ export default function PlayerPage() {
             </div>
           ) : null}
 
+          {/* Execution session (rename from "Æfing dagsins") */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Æfing dagsins
+                  Session to execute
                 </div>
                 <div className="mt-2 text-lg font-semibold text-zinc-900">
-                  {plan.plan_title ?? selectedVariant?.title ?? "Microdose plan"}
+                  {plan.plan_title ?? "Dagsæfing"}
                 </div>
-                <div className="mt-1 text-sm text-zinc-600">
-                  {plan.plan_description ?? selectedVariant?.description ?? "—"}
-                </div>
+                <div className="mt-1 text-sm text-zinc-600">{plan.plan_description ?? "—"}</div>
               </div>
 
               <div className="text-right">
@@ -1013,15 +1058,16 @@ export default function PlayerPage() {
                 ))}
               </div>
             ) : (
-              <div className="mt-4 text-sm text-zinc-600">
-                Engin “structure” skilgreind (template vantar eða er tóm).
-              </div>
+              <div className="mt-4 text-sm text-zinc-600">Engin “structure” skilgreind.</div>
             )}
+
+            <div className="mt-4 rounded-lg border bg-white p-3 text-sm text-zinc-800">
+              <div className="font-semibold">Rules</div>
+              <div className="mt-1">Stoppaðu snemma ef þarf. Markmið: líða betur eftir en fyrir.</div>
+            </div>
           </div>
 
-          {/* ===================================================== */}
-          {/* ✅ POST-TRAINING: Tendon health + Neural reset (bottom) */}
-          {/* ===================================================== */}
+          {/* Post-training */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1029,7 +1075,7 @@ export default function PlayerPage() {
                   Eftir æfingu – mælt með
                 </div>
                 <div className="mt-1 text-sm text-zinc-600">
-                  5–10 mínútur til að styðja sinar og taugakerfi (VST) eftir hverja æfingu.
+                  5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu.
                 </div>
               </div>
               <div className="text-right text-xs text-zinc-500">
@@ -1044,9 +1090,7 @@ export default function PlayerPage() {
             ) : null}
 
             {!postTrainingErr && postTraining.length === 0 ? (
-              <div className="mt-3 text-sm text-zinc-600">
-                Engar tillögur fundust (athuga DB seed).
-              </div>
+              <div className="mt-3 text-sm text-zinc-600">Engar tillögur fundust.</div>
             ) : null}
 
             {postTraining.length > 0 ? (
@@ -1094,6 +1138,18 @@ export default function PlayerPage() {
               </div>
             ) : null}
           </div>
+
+          {/* Staff-only debug */}
+          {staffMode ? (
+            <details className="mt-6 rounded-xl border bg-white">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
+                Tæknilegar upplýsingar (staff)
+              </summary>
+              <div className="px-4 pb-4">
+                <div className="rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+              </div>
+            </details>
+          ) : null}
         </div>
       </div>
     </div>

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { createClient } from "@supabase/supabase-js";
-import Image from "next/image";
 
 // shadcn/ui
 import {
@@ -20,7 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 // Supabase client (client-side)
-// ATH: Ef þú ert með eigin helper (t.d. src/lib/supabaseClient), notaðu hann í staðinn.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -79,6 +77,10 @@ function StepDot({ active }: { active: boolean }) {
   );
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function PlayerCheckinPage() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -95,10 +97,6 @@ export default function PlayerCheckinPage() {
   // IMPORTANT: playerId þarf að vera players.id (FK í readiness_entries)
   const [playerId, setPlayerId] = React.useState<string | null>(null);
   const [playerName, setPlayerName] = React.useState<string | null>(null);
-
-  // ✅ DEBUG: geymum result svo þú getur séð þetta líka í UI ef þarf (valfrjálst)
-  const [debugWeekData, setDebugWeekData] = React.useState<any[] | null>(null);
-  const [debugWeekError, setDebugWeekError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -123,7 +121,7 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // ✅ 1) Reyna að finna players row
+      // 1) Find player
       let { data: playerRow, error: playerErr } = await supabase
         .from("players")
         .select("id, full_name")
@@ -138,8 +136,7 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // ✅ 2) Ef enginn leikmaður: búa til via RPC (ensure)
-      // ATH: þetta krefst að þú hafir búið til RPC í Supabase: public.ensure_player_for_user()
+      // 2) Ensure player exists
       if (!playerRow?.id) {
         const { error: ensureErr } = await supabase.rpc("ensure_player_for_user");
         if (cancelled) return;
@@ -150,7 +147,6 @@ export default function PlayerCheckinPage() {
           return;
         }
 
-        // ✅ 3) Re-fetch players row eftir ensure
         const res2 = await supabase
           .from("players")
           .select("id, full_name")
@@ -174,9 +170,9 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // ✅ playerId = players.id -> FK OK í readiness_entries
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
+
       setLoading(false);
     };
 
@@ -186,36 +182,6 @@ export default function PlayerCheckinPage() {
       cancelled = true;
     };
   }, []);
-
-  // ✅ DEBUG: Sækja vikugögn úr v_player_daily_decision_v3
-  React.useEffect(() => {
-    let cancelled = false;
-
-    async function loadWeek() {
-      if (!playerId) return;
-
-      const { data, error } = await supabase
-        .from("v_player_daily_decision_v3")
-        .select("*")
-        .eq("player_id", playerId)
-        .gte("day_date", "2026-02-02")
-        .lte("day_date", "2026-02-08")
-        .order("day_date", { ascending: true });
-
-      if (cancelled) return;
-
-      console.log("PLAYER WEEK DATA", data, error);
-
-      setDebugWeekData((data as any[]) ?? null);
-      setDebugWeekError(error?.message ?? null);
-    }
-
-    loadWeek();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playerId]);
 
   const canGoNext = React.useMemo(() => {
     if (step === 1) return readiness !== null;
@@ -236,10 +202,17 @@ export default function PlayerCheckinPage() {
     setSaving(true);
 
     try {
-      const entry_date = new Date().toISOString().slice(0, 10);
+      const entry_date = todayISO();
 
+      // ✅ ONLY responsibility of this page:
+      // Insert readiness_entries.
+      // DB trigger will:
+      // - compute readiness_level
+      // - resolve md_day
+      // - auto-rotate A/B/C
+      // - upsert player_microdose_plan_locks
       const payload = {
-        player_id: playerId, // ✅ players.id -> FK constraint OK
+        player_id: playerId,
         entry_date,
         readiness,
         sleep,
@@ -275,16 +248,18 @@ export default function PlayerCheckinPage() {
           <CardHeader>
             <CardTitle className="text-xl">Check-in móttekið ✅</CardTitle>
             <CardDescription>
-              Takk{playerName ? `, ${playerName}` : ""}! Þetta hjálpar þjálfarateyminu að stilla
-              dagskrána.
+              Takk{playerName ? `, ${playerName}` : ""}! Dagsæfing er nú uppfærð og læst sjálfvirkt
+              (A/B/C roterar milli leikmanna).
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary">Readiness: {readiness ?? "-"}</Badge>
               <Badge variant="secondary">Svefn: {sleep ?? "-"}</Badge>
               <Badge variant="secondary">Eymsli: {soreness ?? "-"}</Badge>
             </div>
+
             {notes ? (
               <div className="rounded-xl border bg-muted/30 p-3 text-sm">
                 <div className="mb-1 text-xs font-semibold text-muted-foreground">Athugasemd</div>
@@ -292,6 +267,7 @@ export default function PlayerCheckinPage() {
               </div>
             ) : null}
           </CardContent>
+
           <CardFooter>
             <Button className="w-full rounded-xl" onClick={() => (window.location.href = "/player")}>
               Fara á leikmannasíðu
@@ -313,15 +289,8 @@ export default function PlayerCheckinPage() {
           </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          30 sek. — skýr merki = betri ákvörðun fyrir daginn.
+          30 sek. — skýr merki = betri ákvörðun og læst dagsæfing.
         </p>
-
-        <div className="mt-2 text-xs text-muted-foreground">
-          <div>debug week rows: {debugWeekData ? debugWeekData.length : 0}</div>
-          {debugWeekError ? (
-            <div className="text-destructive">debug error: {debugWeekError}</div>
-          ) : null}
-        </div>
       </div>
 
       <Card className="rounded-2xl">
@@ -371,9 +340,7 @@ export default function PlayerCheckinPage() {
                   { v: 10, label: "Frábært", hint: "Mjög ferskur" },
                 ]}
               />
-              <div className="text-xs text-muted-foreground">
-                Ef þú vilt nákvæmara: þú getur hugsað 1–10,.
-              </div>
+              <div className="text-xs text-muted-foreground">Ef þú vilt nákvæmara: hugsaðu 1–10.</div>
             </div>
           ) : null}
 
