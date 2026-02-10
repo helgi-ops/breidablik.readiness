@@ -32,6 +32,7 @@ type NoMatchIntent =
   | "POLISH_CALM"
   | "ACTIVATION"
   | "RECOVERY"
+  | "GAME"
   | "OFF";
 
 type WeekRow = {
@@ -50,6 +51,7 @@ const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
   { value: "POLISH_CALM", label: "Polish / Calm" },
   { value: "ACTIVATION", label: "Activation" },
   { value: "RECOVERY", label: "Recovery" },
+  { value: "GAME", label: "Game" }, // ✅ NEW
   { value: "OFF", label: "Off" },
 ];
 
@@ -107,6 +109,7 @@ function coerceWeekType(v: any): WeekType {
 
 function intentToDayType(i: NoMatchIntent): DayType {
   if (i === "OFF") return "OFF";
+  if (i === "GAME") return "GAME"; // ✅ NEW
   if (i === "RECOVERY") return "RECOVERY";
   return "TRAIN";
 }
@@ -118,6 +121,7 @@ function intentToFocusLabel(i: NoMatchIntent): string {
   if (i === "POLISH_CALM") return "POLISH / CALM";
   if (i === "ACTIVATION") return "ACTIVATION";
   if (i === "RECOVERY") return "RECOVERY";
+  if (i === "GAME") return "GAME"; // ✅ NEW
   return "OFF";
 }
 
@@ -133,6 +137,9 @@ export default function WeekSetupPage() {
   const [weekStart, setWeekStart] = useState<string>(() => isoMondayOf(new Date()));
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
+
+  // ✅ PRESEASON fix: manual override jafnvel þó 1–2 leikir
+  const [manualOverride, setManualOverride] = useState<boolean>(true);
 
   const [intensityTarget, setIntensityTarget] = useState<number>(6);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -151,6 +158,11 @@ export default function WeekSetupPage() {
       return [matches[0] ?? DEFAULT_MATCHES[0], matches[1] ?? DEFAULT_MATCHES[1]];
     return [];
   }, [weekType, matches]);
+
+  // ✅ Manual-week behavior rule:
+  // - NO_MATCH: alltaf manual
+  // - ONE/TWO: manual ef manualOverride er ON
+  const isManualWeek = useMemo(() => weekType === "NO_MATCH" || manualOverride, [weekType, manualOverride]);
 
   // 1) LOAD TEAM ID (robust)
   useEffect(() => {
@@ -243,11 +255,10 @@ export default function WeekSetupPage() {
         const wt = coerceWeekType((row as any).week_type);
         setWeekType(wt);
 
-        if (wt === "NO_MATCH") {
-          const arr = (data as any)?.no_match_intents;
-          if (Array.isArray(arr) && arr.length === 7) setNoMatchIntents(arr as NoMatchIntent[]);
-          else setNoMatchIntents(getDefaultNoMatchIntents());
-        }
+        // ✅ alltaf hlaða no_match_intents ef til (því við viljum manual override líka á match vikum)
+        const arr = (data as any)?.no_match_intents;
+        if (Array.isArray(arr) && arr.length === 7) setNoMatchIntents(arr as NoMatchIntent[]);
+        else setNoMatchIntents(getDefaultNoMatchIntents());
 
         const safeMatches = row.matches?.length > 0 ? row.matches : DEFAULT_MATCHES;
         const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
@@ -301,7 +312,7 @@ export default function WeekSetupPage() {
       return [first, second];
     });
 
-    if (next === "NO_MATCH" && (!noMatchIntents || noMatchIntents.length !== 7)) {
+    if (!noMatchIntents || noMatchIntents.length !== 7) {
       setNoMatchIntents(getDefaultNoMatchIntents());
     }
 
@@ -331,19 +342,18 @@ export default function WeekSetupPage() {
           }));
 
     // ✅ ALDREI null í no_match_intents (DB column er NOT NULL)
+    // ✅ Vista alltaf, líka á match vikum (til að manual override virki í preseason)
     const safeNoMatchIntents: NoMatchIntent[] =
       Array.isArray(noMatchIntents) && noMatchIntents.length === 7
         ? noMatchIntents
         : getDefaultNoMatchIntents();
-
-    const noMatchForDb = weekType === "NO_MATCH" ? safeNoMatchIntents : [];
 
     const { error } = await supabase.rpc("save_week_setup", {
       p_team_id: tid,
       p_week_start_date: weekStart,
       p_week_type: weekType,
       p_matches: trimmed, // jsonb
-      p_no_match_intents: noMatchForDb, // ✅ [] þegar ONE_MATCH/TWO_MATCHES
+      p_no_match_intents: safeNoMatchIntents, // ✅ alltaf 7 stök
     });
 
     if (error) {
@@ -466,14 +476,16 @@ export default function WeekSetupPage() {
         day_index,
         day_type: intentToDayType(intent),
         focus: intentToFocusLabel(intent),
-        notes: "No match week (manual)",
+        notes: "Manual week (coach)",
       };
     });
   }, [noMatchIntents]);
 
   const previewDays = useMemo(() => {
-    return weekType === "NO_MATCH" ? manualNoMatchDayEdits : autoMdDayEdits;
-  }, [weekType, manualNoMatchDayEdits, autoMdDayEdits]);
+    // ✅ PRESEASON / manual override: alltaf manual preview
+    if (isManualWeek) return manualNoMatchDayEdits;
+    return autoMdDayEdits;
+  }, [isManualWeek, manualNoMatchDayEdits, autoMdDayEdits]);
 
   async function handleApplyPlan() {
     setApplying(true);
@@ -487,7 +499,8 @@ export default function WeekSetupPage() {
       return;
     }
 
-    if (weekType !== "NO_MATCH") {
+    // ✅ Ef manual override er OFF og þetta er match vika → validate match dates
+    if (!isManualWeek && weekType !== "NO_MATCH") {
       const m1 = (visibleMatches[0]?.date || "").trim();
       if (!m1) {
         setError("Veldu match date fyrir M1.");
@@ -518,10 +531,7 @@ export default function WeekSetupPage() {
         week_start: weekStart,
         system_key: "MICRODOSING_PLAYBOOK",
         intensity_target: intensityTarget,
-        notes:
-          weekType === "NO_MATCH"
-            ? `WeekType=NO_MATCH · Manual week (coach)`
-            : `WeekType=${weekType} · Microdosing playbook`,
+        notes: isManualWeek ? `Manual override ON · WeekType=${weekType}` : `Auto MD ON · WeekType=${weekType}`,
         days: previewDays,
       }),
     });
@@ -595,14 +605,8 @@ export default function WeekSetupPage() {
           {(!teamId || teamId.trim().length === 0) && (
             <div className="grid gap-2">
               <Label>Team ID (uuid)</Label>
-              <Input
-                placeholder="Paste team_id (uuid) here"
-                value={teamId ?? ""}
-                onChange={(e) => setTeamId(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.
-              </p>
+              <Input placeholder="Paste team_id (uuid) here" value={teamId ?? ""} onChange={(e) => setTeamId(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.</p>
             </div>
           )}
 
@@ -622,29 +626,37 @@ export default function WeekSetupPage() {
           <div className="grid gap-2">
             <Label>Vikugerð</Label>
             <div className="flex gap-2 flex-wrap">
-              <Button
-                type="button"
-                variant={weekType === "NO_MATCH" ? "default" : "outline"}
-                onClick={() => applyWeekType("NO_MATCH")}
-                disabled={loading || saving || applying}
-              >
+              <Button type="button" variant={weekType === "NO_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("NO_MATCH")} disabled={loading || saving || applying}>
                 Enginn leikur
               </Button>
-              <Button
-                type="button"
-                variant={weekType === "ONE_MATCH" ? "default" : "outline"}
-                onClick={() => applyWeekType("ONE_MATCH")}
-                disabled={loading || saving || applying}
-              >
+              <Button type="button" variant={weekType === "ONE_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("ONE_MATCH")} disabled={loading || saving || applying}>
                 1 leikur
               </Button>
+              <Button type="button" variant={weekType === "TWO_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("TWO_MATCHES")} disabled={loading || saving || applying}>
+                2 leikir
+              </Button>
+            </div>
+          </div>
+
+          {/* Manual override toggle */}
+          <div className="grid gap-2">
+            <Label>Preseason / Manual override</Label>
+            <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <div>
+                <div className="text-sm font-medium">Leyfa handvirka vikugerð (eins og NO_MATCH)</div>
+                <div className="text-xs text-muted-foreground">Gott í preseason: þú stýrir dag-til-dags áherslum þó það séu 1–2 leikir.</div>
+              </div>
               <Button
                 type="button"
-                variant={weekType === "TWO_MATCHES" ? "default" : "outline"}
-                onClick={() => applyWeekType("TWO_MATCHES")}
+                variant={manualOverride ? "default" : "outline"}
+                onClick={() => {
+                  setManualOverride((v) => !v);
+                  setOk(null);
+                  setError(null);
+                }}
                 disabled={loading || saving || applying}
               >
-                2 leikir
+                {manualOverride ? "ON" : "OFF"}
               </Button>
             </div>
           </div>
@@ -659,15 +671,7 @@ export default function WeekSetupPage() {
               </div>
               <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
             </div>
-            <input
-              className="w-full"
-              type="range"
-              min={1}
-              max={10}
-              step={1}
-              value={intensityTarget}
-              onChange={(e) => setIntensityTarget(Number(e.target.value))}
-            />
+            <input className="w-full" type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))} />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -683,26 +687,17 @@ export default function WeekSetupPage() {
         <CardHeader>
           <CardTitle className="text-base">Skref 2 — Uppsetning</CardTitle>
           <CardDescription>
-            {weekType === "NO_MATCH"
-              ? "Enginn leikur: veldu æfingainnihald per dag."
-              : "Leikur/leikir: settu inn dagsetningar (kerfið sér um MD röðun)."}
+            {isManualWeek ? "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir)." : "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun)."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {weekType !== "NO_MATCH" ? (
+          {weekType !== "NO_MATCH" && (
             <div className="grid gap-3">
               {visibleMatches.map((m, idx) => (
-                <div
-                  key={idx}
-                  className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center"
-                >
+                <div key={idx} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center">
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">Match</Label>
-                    <Input
-                      value={m.match_id}
-                      onChange={(e) => setMatch(idx, { match_id: e.target.value })}
-                      placeholder={`M${idx + 1}`}
-                    />
+                    <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`M${idx + 1}`} />
                   </div>
 
                   <div className="grid gap-1">
@@ -712,20 +707,12 @@ export default function WeekSetupPage() {
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">Kickoff (optional)</Label>
-                    <Input
-                      value={m.kickoff_time ?? ""}
-                      onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })}
-                      placeholder="19:15"
-                    />
+                    <Input value={m.kickoff_time ?? ""} onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })} placeholder="19:15" />
                   </div>
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">H/A</Label>
-                    <select
-                      className="h-10 rounded-md border bg-background px-3 text-sm"
-                      value={m.home_away ?? "H"}
-                      onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}
-                    >
+                    <select className="h-10 rounded-md border bg-background px-3 text-sm" value={m.home_away ?? "H"} onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}>
                       <option value="H">Home</option>
                       <option value="A">Away</option>
                     </select>
@@ -733,16 +720,13 @@ export default function WeekSetupPage() {
                 </div>
               ))}
             </div>
-          ) : (
+          )}
+
+          {isManualWeek && (
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">Manual vika (mán → sun)</div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())}
-                  disabled={loading || saving || applying}
-                >
+                <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
                   Reset í default
                 </Button>
               </div>
@@ -791,6 +775,12 @@ export default function WeekSetupPage() {
             </div>
           )}
 
+          {!isManualWeek && weekType !== "NO_MATCH" && (
+            <div className="rounded-xl border p-3 text-sm text-muted-foreground">
+              Auto MD er virkt. Ef þú vilt handvirkt eins og preseason: settu <b>Manual override</b> á ON í Skrefi 1.
+            </div>
+          )}
+
           <div className="flex justify-between gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading || saving || applying}>
               ← Til baka
@@ -833,7 +823,7 @@ export default function WeekSetupPage() {
             </Button>
 
             <div className="ml-auto text-xs text-muted-foreground">
-              {weekType === "NO_MATCH" ? "Manual week" : "Auto MD week"} · system_key:{" "}
+              {isManualWeek ? "Manual week" : "Auto MD week"} · system_key:{" "}
               <span className="font-medium text-foreground">MICRODOSING_PLAYBOOK</span>
             </div>
           </div>
