@@ -37,10 +37,9 @@ type GenericMsg =
     }
   | null;
 
-// ✅ Stage-4 decision view row (v_player_today_microdose_decision)
+// ✅ Stage-4 decision row (normalized for UI)
 type Stage4PlanRow =
   | {
-      // ✅ IMPORTANT: used to fetch override audit
       decision_id: string | null;
 
       team_id: string | null;
@@ -50,12 +49,12 @@ type Stage4PlanRow =
       readiness_level: string | null; // GREEN / GREEN_PLUS / YELLOW / RED
       chosen_variant_id: string | null;
       locked: boolean | null;
-      source: string | null; // SYSTEM / COACH_OVERRIDE
+      source: string | null; // SYSTEM / COACH_OVERRIDE / RESOLVED_VIEW
       confidence: number | null;
       why: string | null;
       inputs: any; // jsonb
 
-      // joined from microdose_template_variants
+      // joined from microdose_template_variants (or fetched as fallback)
       variant: string | null; // A/B/C
       title: string | null;
       description: string | null;
@@ -67,6 +66,7 @@ type DecisionRow =
   | {
       planned_focus: string | null;
       final_planned_day_type: string | null;
+      recommended_day_type: string | null; // ✅ NEW
       readiness_flag: string | null;
     }
   | null;
@@ -126,13 +126,15 @@ type MicrodoseOverrideRow = {
   id: string;
   decision_id: string;
   coach_profile_id: string | null;
-  overrode_to_readiness_level: string | null; // GREEN / GREEN_PLUS / YELLOW / RED
-  override_to_variant_id: string | null; // uuid (variant id)
+  overrode_to_readiness_level: string | null;
+  override_to_variant_id: string | null;
   reason_code: string | null;
   reason_test: string | null;
-  risk_level: string | null; // LOW/MOD/HIGH (or similar)
+  risk_level: string | null;
   created_at: string;
 };
+
+type VariantOption = { id: string; variant: string; title: string | null; description: string | null };
 
 // ✅ Dedupe helper (top-level; safe for hooks rules)
 function dedupeFixModulesByTag(input: FixModule[] | null | undefined): FixModule[] {
@@ -148,6 +150,7 @@ function dedupeFixModulesByTag(input: FixModule[] | null | undefined): FixModule
 }
 
 function todayISO() {
+  // local date (not UTC)
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -186,10 +189,11 @@ function readinessToFlag(level: string | null | undefined): Flag {
 
 type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
 
+// ✅ NOW prefers recommended_day_type (what v_player_daily_decision_v3 computes)
 function inferDecisionType(decision: DecisionRow, _plan: Stage4PlanRow): DecisionType {
-  const dt = norm(decision?.final_planned_day_type);
+  const dt = norm(decision?.recommended_day_type || decision?.final_planned_day_type);
   if (dt.includes("OFF") || dt.includes("REST") || dt.includes("RECOVER")) return "RECOVERY";
-  if (dt.includes("REDUCED") || dt.includes("LIGHT") || dt.includes("MOD")) return "REDUCED";
+  if (dt.includes("MOD") || dt.includes("REDUCED") || dt.includes("LIGHT")) return "REDUCED";
   return "FULL";
 }
 
@@ -284,8 +288,6 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
   return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
 }
 
-type VariantOption = { id: string; variant: string; title: string | null; description: string | null };
-
 export default function PlayerPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
@@ -301,6 +303,9 @@ export default function PlayerPage() {
 
   // ✅ Stage-4 plan
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
+
+  // ✅ whether we are showing "latest available" (fallback), not necessarily today's
+  const [planIsFallback, setPlanIsFallback] = useState(false);
 
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
@@ -371,7 +376,7 @@ export default function PlayerPage() {
         .order("created_at", { ascending: false })
         .limit(5);
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
 
       setOverrideAudit(((data as any) ?? []) as MicrodoseOverrideRow[]);
     } catch (e: any) {
@@ -381,24 +386,169 @@ export default function PlayerPage() {
     }
   }
 
-  async function reloadPlan(playerId: string, day: string) {
-    const { data: planRow, error: planErr } = await supabase
-      .from("v_player_today_microdose_decision")
-      .select(
-        "decision_id,team_id,player_id,entry_date,md_day,readiness_level,chosen_variant_id,locked,source,confidence,why,inputs,variant,title,description,structure"
-      )
+  // ✅ Stage-4 plan loader:
+  // ✅ FINAL plan MUST come from v_player_today_microdose_resolved
+  //    (it resolves md_day + picks template based on readiness_flag / planned_focus / final_planned_day_type)
+  async function fetchStage4Plan(playerId: string, day: string) {
+    // Helper: decision row for EXACT day (gives us id/team_id/etc.)
+    async function fetchDecisionForDay() {
+      const { data, error } = await supabase
+        .from("microdose_decisions")
+        .select("id, team_id, player_id, entry_date, md_day, readiness_level, chosen_variant_id, locked, source, confidence, why, inputs")
+        .eq("player_id", playerId)
+        .eq("entry_date", day)
+        .maybeSingle();
+
+      if (error) {
+        console.error("microdose_decisions (day) error:", error);
+        throw new Error(error.message);
+      }
+      return (data as any) ?? null;
+    }
+
+    // ✅ Helper: RESOLVED plan view for day
+    async function fetchResolvedPlanForDay() {
+      const { data, error } = await supabase
+        .from("v_player_today_microdose_resolved")
+        .select(
+          [
+            "player_id",
+            "entry_date",
+            "md_day_raw",
+            "planned_focus",
+            "final_planned_day_type",
+            "readiness_flag",
+            "md_day_resolved",
+            "training_system",
+            "plan_title",
+            "plan_description",
+            "plan_structure",
+            "locked_at",
+            "is_locked",
+          ].join(",")
+        )
+        .eq("player_id", playerId)
+        .eq("entry_date", day)
+        .maybeSingle();
+
+      if (error) {
+        console.error("v_player_today_microdose_resolved error:", error);
+        throw new Error(error.message);
+      }
+      return (data as any) ?? null;
+    }
+
+    // ---- 1) RESOLVED plan (source of truth for Player page)
+    const resolved = await fetchResolvedPlanForDay();
+
+    // ---- 2) Attach decision row (for decision_id + audit). May be null.
+    const drowExact = await fetchDecisionForDay();
+
+    if (resolved) {
+      setPlanIsFallback(false);
+
+      const merged: any = {
+        decision_id: drowExact?.id ?? null,
+        team_id: drowExact?.team_id ?? null,
+        player_id: resolved.player_id,
+        entry_date: resolved.entry_date,
+
+        // ✅ prefer resolved md-day
+        md_day: resolved.md_day_resolved ?? resolved.md_day_raw ?? null,
+
+        // ✅ readiness_level for UI: use readiness_flag from decision view
+        readiness_level: resolved.readiness_flag ?? drowExact?.readiness_level ?? null,
+
+        chosen_variant_id: drowExact?.chosen_variant_id ?? null,
+        locked: resolved.is_locked ?? drowExact?.locked ?? null,
+        source: drowExact?.source ?? "RESOLVED_VIEW",
+        confidence: drowExact?.confidence ?? null,
+        why: drowExact?.why ?? null,
+        inputs: drowExact?.inputs ?? null,
+
+        variant: null,
+        title: resolved.plan_title ?? null,
+        description: resolved.plan_description ?? null,
+        structure: resolved.plan_structure ?? null,
+      };
+
+      return merged as Stage4PlanRow;
+    }
+
+    // ---- 3) fallback: latest decision (<= day) + fetch variant details
+    const { data: drow, error: dErr } = await supabase
+      .from("microdose_decisions")
+      .select("id, team_id, player_id, entry_date, md_day, readiness_level, chosen_variant_id, locked, source, confidence, why, inputs")
       .eq("player_id", playerId)
-      .eq("entry_date", day)
+      .lte("entry_date", day)
+      .order("entry_date", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (planErr) throw planErr;
+    if (dErr) {
+      console.error("microdose_decisions fallback error:", dErr);
+      throw new Error(dErr.message);
+    }
 
-    setPlan((planRow as any) ?? null);
+    if (!drow?.id) {
+      setPlanIsFallback(false);
+      return null;
+    }
 
-    // refresh audit after reload (staff-only)
-    const did = (planRow as any)?.decision_id ?? null;
-    if (did && staffMode) {
-      await loadOverrideAudit(String(did));
+    const variantId = (drow as any)?.chosen_variant_id ?? null;
+
+    let variantRow: any = null;
+    if (variantId) {
+      const { data: vr, error: vrErr } = await supabase
+        .from("microdose_template_variants")
+        .select("id, variant, title, description, structure")
+        .eq("id", variantId)
+        .maybeSingle();
+
+      if (vrErr) {
+        console.error("microdose_template_variants error:", vrErr);
+        throw new Error(vrErr.message);
+      }
+      variantRow = vr ?? null;
+    }
+
+    setPlanIsFallback((drow as any)?.entry_date !== day);
+
+    const merged: any = {
+      decision_id: (drow as any).id ?? null,
+      team_id: (drow as any).team_id ?? null,
+      player_id: (drow as any).player_id,
+      entry_date: (drow as any).entry_date,
+      md_day: (drow as any).md_day ?? null,
+      readiness_level: (drow as any).readiness_level ?? null,
+      chosen_variant_id: (drow as any).chosen_variant_id ?? null,
+      locked: (drow as any).locked ?? null,
+      source: (drow as any).source ?? null,
+      confidence: (drow as any).confidence ?? null,
+      why: (drow as any).why ?? null,
+      inputs: (drow as any).inputs ?? null,
+
+      variant: variantRow?.variant ?? null,
+      title: variantRow?.title ?? null,
+      description: variantRow?.description ?? null,
+      structure: variantRow?.structure ?? null,
+    };
+
+    return merged as Stage4PlanRow;
+  }
+
+  async function reloadPlan(playerId: string, day: string) {
+    try {
+      const p = await fetchStage4Plan(playerId, day);
+      setPlan((p as any) ?? null);
+
+      const did = (p as any)?.decision_id ?? null;
+      if (did && staffMode) {
+        await loadOverrideAudit(String(did));
+      }
+    } catch (e: any) {
+      console.error("reloadPlan error:", e);
+      setError(e?.message ?? "Villa við að endurhlaða plan.");
     }
   }
 
@@ -411,7 +561,7 @@ export default function PlayerPage() {
         .select("id, priority, is_active, when_clause, then_clause")
         .eq("is_active", true);
 
-      if (rErr) throw rErr;
+      if (rErr) throw new Error(rErr.message);
 
       const ruleRows = ((rules as any) ?? []) as PostTrainingRuleRow[];
 
@@ -427,7 +577,7 @@ export default function PlayerPage() {
         .in("id", ids)
         .eq("is_active", true);
 
-      if (tErr) throw tErr;
+      if (tErr) throw new Error(tErr.message);
 
       const list = ((tmpls as any) ?? []) as PostTrainingTemplateRow[];
       const map = new Map(list.map((t) => [t.id, t]));
@@ -451,7 +601,7 @@ export default function PlayerPage() {
         .eq("player_id", playerId)
         .maybeSingle();
 
-      if (fErr) throw fErr;
+      if (fErr) throw new Error(fErr.message);
 
       setFixRow((data as any) ?? null);
     } catch (e: any) {
@@ -503,7 +653,7 @@ export default function PlayerPage() {
       const json = await res.json();
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Override mistókst.");
 
-      await reloadPlan(profile.player_id, plan.entry_date);
+      await reloadPlan(profile.player_id, todayISO());
 
       setOverrideOpen(false);
       setOverrideReason("");
@@ -514,13 +664,14 @@ export default function PlayerPage() {
     }
   }
 
-  // ====== Initial load ======
+  // ====== Initial load (try/catch + finally) ======
   useEffect(() => {
     const run = async () => {
       setLoading(true);
       setError("");
 
       setPlan(null);
+      setPlanIsFallback(false);
       setMetrics(null);
       setGenericMsg(null);
       setPlayerMeta(null);
@@ -542,128 +693,100 @@ export default function PlayerPage() {
       setOverrideAudit([]);
       setOverrideAuditErr("");
 
-      const { data: auth, error: aErr } = await supabase.auth.getUser();
-      if (aErr) {
-        setError(aErr.message);
-        setLoading(false);
-        return;
-      }
-      const userId = auth?.user?.id;
-      if (!userId) {
-        setError("Ekki innskráður.");
-        setLoading(false);
-        return;
-      }
+      try {
+        const { data: auth, error: aErr } = await supabase.auth.getUser();
+        if (aErr) throw new Error(aErr.message);
 
-      const { data: prof, error: pErr } = await supabase
-        .from("profiles")
-        .select("id, display_name, player_id, role, team_id")
-        .eq("id", userId)
-        .maybeSingle();
+        const userId = auth?.user?.id;
+        if (!userId) throw new Error("Ekki innskráður.");
 
-      if (pErr) {
-        setError(pErr.message);
-        setLoading(false);
-        return;
-      }
+        const { data: prof, error: pErr } = await supabase
+          .from("profiles")
+          .select("id, display_name, player_id, role, team_id")
+          .eq("id", userId)
+          .maybeSingle();
 
-      setProfile((prof as any) ?? null);
+        if (pErr) throw new Error(pErr.message);
 
-      if (!prof?.player_id) {
-        const { data: list, error: lErr } = await supabase
-          .from("players")
-          .select("id, full_name, position, team")
-          .order("full_name", { ascending: true });
+        setProfile((prof as any) ?? null);
 
-        if (lErr) {
-          setError(lErr.message);
-          setLoading(false);
+        if (!prof?.player_id) {
+          const { data: list, error: lErr } = await supabase
+            .from("players")
+            .select("id, full_name, position, team")
+            .order("full_name", { ascending: true });
+
+          if (lErr) throw new Error(lErr.message);
+
+          setPlayers((list as PlayerRow[]) ?? []);
           return;
         }
 
-        setPlayers((list as PlayerRow[]) ?? []);
-        setLoading(false);
-        return;
-      }
+        const today = todayISO();
 
-      const today = todayISO();
+        const { data: pm, error: pmErr } = await supabase
+          .from("players")
+          .select("id, full_name, position, team")
+          .eq("id", prof.player_id)
+          .maybeSingle();
 
-      const { data: pm, error: pmErr } = await supabase
-        .from("players")
-        .select("id, full_name, position, team")
-        .eq("id", prof.player_id)
-        .maybeSingle();
+        if (pmErr) console.error("players meta error:", pmErr.message);
+        setPlayerMeta((pm as any) ?? null);
 
-      if (pmErr) console.error("players meta error:", pmErr.message);
-      setPlayerMeta((pm as any) ?? null);
+        const { data: drow, error: dErr } = await supabase
+          .from("v_player_daily_decision_v3")
+          .select("planned_focus, final_planned_day_type, recommended_day_type, readiness_flag")
+          .eq("player_id", prof.player_id)
+          .eq("day_date", today)
+          .maybeSingle();
 
-      const { data: drow, error: dErr } = await supabase
-        .from("v_player_daily_decision_v3")
-        .select("planned_focus, final_planned_day_type, readiness_flag")
-        .eq("player_id", prof.player_id)
-        .eq("day_date", today)
-        .maybeSingle();
+        if (dErr) console.error("decision error:", dErr.message);
+        setDecision((drow as any) ?? null);
 
-      if (dErr) console.error("decision error:", dErr.message);
-      setDecision((drow as any) ?? null);
+        const { data: srow, error: sErr } = await supabase
+          .from("v_player_session_today")
+          .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
+          .eq("player_id", prof.player_id)
+          .eq("day_date", today)
+          .maybeSingle();
 
-      const { data: srow, error: sErr } = await supabase
-        .from("v_player_session_today")
-        .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
-        .eq("player_id", prof.player_id)
-        .eq("day_date", today)
-        .maybeSingle();
+        if (sErr) console.error("v_player_session_today error:", sErr.message);
+        setSession((srow as any) ?? null);
 
-      if (sErr) console.error("v_player_session_today error:", sErr.message);
-      setSession((srow as any) ?? null);
+        // ✅ Stage-4 plan (RESOLVED view + decision_id merge)
+        const p = await fetchStage4Plan(prof.player_id, today);
+        setPlan((p as any) ?? null);
 
-      // ✅ Stage-4: bindandi ákvörðun/plan úr enforcement view
-      const { data: planRow, error: planErr } = await supabase
-        .from("v_player_today_microdose_decision")
-        .select(
-          "decision_id,team_id,player_id,entry_date,md_day,readiness_level,chosen_variant_id,locked,source,confidence,why,inputs,variant,title,description,structure"
-        )
-        .eq("player_id", prof.player_id)
-        .eq("entry_date", today)
-        .maybeSingle();
-
-      if (planErr) {
-        setError(planErr.message);
-        setLoading(false);
-        return;
-      }
-
-      setPlan((planRow as any) ?? null);
-
-      // ✅ staff-only: load audit overrides
-      if (isStaffRole(prof?.role)) {
-        const did = (planRow as any)?.decision_id ?? null;
-        if (did) {
-          await loadOverrideAudit(String(did));
-        } else {
-          setOverrideAudit([]);
+        // ✅ staff-only: load audit overrides
+        if (isStaffRole(prof?.role)) {
+          const did = (p as any)?.decision_id ?? null;
+          if (did) await loadOverrideAudit(String(did));
+          else setOverrideAudit([]);
         }
+
+        const { data: mrow, error: mErr } = await supabase
+          .from("readiness_entries")
+          .select("readiness, sleep, soreness, total_score, created_at")
+          .eq("player_id", prof.player_id)
+          .eq("entry_date", today)
+          .maybeSingle();
+
+        if (mErr) console.error("readiness_entries metrics error:", mErr.message);
+        setMetrics((mrow as any) ?? null);
+
+        await loadFixModulesForPlayer(prof.player_id);
+      } catch (e: any) {
+        console.error("PlayerPage load error:", e);
+        setError(e?.message ?? "Óþekkt villa.");
+      } finally {
+        setLoading(false);
       }
-
-      const { data: mrow, error: mErr } = await supabase
-        .from("readiness_entries")
-        .select("readiness, sleep, soreness, total_score, created_at")
-        .eq("player_id", prof.player_id)
-        .eq("entry_date", today)
-        .maybeSingle();
-
-      if (mErr) console.error("readiness_entries metrics error:", mErr.message);
-      setMetrics((mrow as any) ?? null);
-
-      await loadFixModulesForPlayer(prof.player_id);
-
-      setLoading(false);
     };
 
     run();
   }, [supabase]);
 
-  // ✅ Load variant options for today (staff only)
+  // ✅ Load variant options (staff only)
   useEffect(() => {
     const run = async () => {
       try {
@@ -678,7 +801,7 @@ export default function PlayerPage() {
           .eq("readiness_level", plan.readiness_level)
           .order("variant", { ascending: true });
 
-        if (error) throw error;
+        if (error) throw new Error(error.message);
 
         const list = (data ?? []) as any[];
         setVariantOptions(list);
@@ -711,11 +834,8 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffMode, plan?.decision_id]);
 
-  const flag: Flag = useMemo(() => {
-    return readinessToFlag(plan?.readiness_level);
-  }, [plan?.readiness_level]);
-
-  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
+  const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
+  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]);
 
   useEffect(() => {
     const run = async () => {
@@ -728,12 +848,8 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, flag]);
 
-  const message = useMemo(() => genericMsg?.message || ui.playerMessage, [genericMsg, ui.playerMessage]);
-
-  // ✅ Notum Stage-4 “why” fyrst; annars generic/ui why
-  const whyText = useMemo(() => {
-    return plan?.why || genericMsg?.why || ui.why;
-  }, [plan?.why, genericMsg?.why, ui.why]);
+  const message = useMemo(() => genericMsg?.message || (ui as any).playerMessage, [genericMsg, ui]);
+  const whyText = useMemo(() => plan?.why || genericMsg?.why || (ui as any).why, [plan?.why, genericMsg?.why, ui]);
 
   useEffect(() => {
     const run = async () => {
@@ -858,9 +974,10 @@ export default function PlayerPage() {
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-base font-semibold">Engin dagsákvörðun/æfing er komin í dag</div>
+            <div className="text-base font-semibold">Engin Stage-4 microdose ákvörðun fannst</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Farðu í <b>/player/checkin</b> til að klára check-in (og vertu viss um að decision-engine hafi verið keyrt).
+              Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum.
+              Farðu í <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
             </div>
           </div>
         </div>
@@ -868,11 +985,13 @@ export default function PlayerPage() {
     );
   }
 
+  const today = todayISO();
   const name = playerMeta?.full_name ?? "Leikmaður";
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const showStructure = isArray(plan.structure) && plan.structure.length > 0;
+  const structureBlocks = Array.isArray(plan?.structure) ? plan.structure : [];
+  const showStructure = structureBlocks.length > 0;
 
   const decisionType = inferDecisionType(decision, plan);
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
@@ -884,9 +1003,11 @@ export default function PlayerPage() {
   const variantLabel = plan.variant ? `Variant ${plan.variant}` : "Variant —";
 
   const debugLine =
-    `today=${todayISO()} | ` +
+    `today=${today} | ` +
+    `plan_entry_date=${plan.entry_date ?? "-"} | ` +
     `decision_focus=${decision?.planned_focus ?? "-"} | ` +
     `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
+    `decision_recommended=${decision?.recommended_day_type ?? "-"} | ` +
     `md_day=${plan.md_day ?? "-"} | ` +
     `session_type=${session?.session_type ?? "-"} | ` +
     `source=${sourceLabel} | ` +
@@ -898,7 +1019,13 @@ export default function PlayerPage() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className={`rounded-2xl border bg-white p-6 shadow-sm ${ui.panel}`}>
+        <div className={`rounded-2xl border bg-white p-6 shadow-sm ${(ui as any).panel}`}>
+          {planIsFallback && plan.entry_date !== today ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Stage-4 ákvörðun fannst ekki fyrir <b>{today}</b>. Sýni síðustu tiltæku ákvörðun: <b>{plan.entry_date}</b>.
+            </div>
+          ) : null}
+
           {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -919,8 +1046,8 @@ export default function PlayerPage() {
                 {decisionToText(decisionType)}
               </div>
 
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}>
-                <span className={`h-2 w-2 rounded-full ${ui.dot}`} />
+              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${(ui as any).pill}`}>
+                <span className={`h-2 w-2 rounded-full ${(ui as any).dot}`} />
                 {mdLabel}
               </div>
 
@@ -1184,7 +1311,7 @@ export default function PlayerPage() {
             </div>
           </div>
 
-          {/* ✅ ÆFING DAGSINS / Execution session */}
+          {/* ✅ ÆFING DAGSINS */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1201,7 +1328,7 @@ export default function PlayerPage() {
 
             {showStructure ? (
               <div className="mt-4 space-y-3">
-                {plan.structure.map((b: any, idx: number) => (
+                {structureBlocks.map((b: any, idx: number) => (
                   <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
                     <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
 
@@ -1227,7 +1354,7 @@ export default function PlayerPage() {
             </div>
           </div>
 
-          {/* ✅ EFTIR ÆFINGU / Post-training */}
+          {/* ✅ EFTIR ÆFINGU */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
