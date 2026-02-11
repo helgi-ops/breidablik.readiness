@@ -103,10 +103,7 @@ const colorUi: Record<ColorKey, { label: string; dot: string; border: string; so
 ========================= */
 
 function normalizeReadiness(s: string | null) {
-  return (s ?? "")
-    .toUpperCase()
-    .trim()
-    .replace(/\s+/g, "_"); // "GREEN PLUS" -> "GREEN_PLUS"
+  return (s ?? "").toUpperCase().trim().replace(/\s+/g, "_");
 }
 
 function mapReadinessToColorKey(readiness: string | null): ColorKey | null {
@@ -226,6 +223,52 @@ export default function DisplayClient() {
     red: [],
   });
 
+  /* =========================
+     DROPDOWNS (DB-driven)
+  ========================= */
+
+  const entryDateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) if (r.entry_date) set.add(r.entry_date);
+    return Array.from(set).sort().reverse(); // newest first
+  }, [rows]);
+
+  const [selectedEntryDate, setSelectedEntryDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedEntryDate && entryDateOptions.length) setSelectedEntryDate(entryDateOptions[0]);
+  }, [entryDateOptions, selectedEntryDate]);
+
+  const mdDayOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (selectedEntryDate && r.entry_date !== selectedEntryDate) continue;
+      if (r.md_day) set.add(r.md_day);
+    }
+    return Array.from(set).sort();
+  }, [rows, selectedEntryDate]);
+
+  const [selectedMdDay, setSelectedMdDay] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedMdDay && mdDayOptions.length) setSelectedMdDay(mdDayOptions[0]);
+    if (selectedMdDay && mdDayOptions.length && !mdDayOptions.includes(selectedMdDay)) {
+      setSelectedMdDay(mdDayOptions[0] ?? null);
+    }
+  }, [mdDayOptions, selectedMdDay]);
+
+  const rowsFiltered = useMemo(() => {
+    return rows.filter((r) => {
+      if (selectedEntryDate && r.entry_date !== selectedEntryDate) return false;
+      if (selectedMdDay && r.md_day !== selectedMdDay) return false;
+      return true;
+    });
+  }, [rows, selectedEntryDate, selectedMdDay]);
+
+  /* =========================
+     URL SYNC
+  ========================= */
+
   useEffect(() => {
     const params = new URLSearchParams(sp.toString());
     params.set("mode", mode);
@@ -269,8 +312,12 @@ export default function DisplayClient() {
     return () => clearInterval(t);
   }, []);
 
+  /* =========================
+     FALLBACK VARIANTS (by selectedMdDay)
+  ========================= */
+
   useEffect(() => {
-    const md = rows.map((r) => r.md_day).find(Boolean) ?? null;
+    const md = selectedMdDay ?? null;
     if (!md) return;
 
     (async () => {
@@ -311,13 +358,13 @@ export default function DisplayClient() {
         // ignore
       }
     })();
-  }, [rows]);
+  }, [selectedMdDay]);
 
   const variantsByColor = useMemo(() => {
     const byColor: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
 
     const buckets = new Map<ColorKey, FinalRow[]>();
-    for (const r of rows) {
+    for (const r of rowsFiltered) {
       const ck = mapReadinessToColorKey(r.readiness_level);
       if (!ck) continue;
       if (!buckets.has(ck)) buckets.set(ck, []);
@@ -351,7 +398,7 @@ export default function DisplayClient() {
     }
 
     return byColor;
-  }, [rows]);
+  }, [rowsFiltered]);
 
   const finalVariantsByColor = useMemo(() => {
     const out: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
@@ -399,12 +446,51 @@ export default function DisplayClient() {
           <div className="text-3xl font-semibold">Æfingar dagsins</div>
           <div className="text-sm text-muted-foreground">
             Highlight: {colorUi[mode].label} • Interval: {intervalSec}s
+            {selectedEntryDate ? ` • Date: ${selectedEntryDate}` : ""}
+            {selectedMdDay ? ` • Day: ${selectedMdDay}` : ""}
             {lastUpdated ? ` • ${lastUpdated.toLocaleTimeString("is-IS")}` : ""}
           </div>
           {err ? <div className="text-sm text-red-600 mt-1">Error: {err}</div> : null}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Native dropdowns (no shadcn Select file needed) */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Date</label>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={selectedEntryDate ?? ""}
+              onChange={(e) => setSelectedEntryDate(e.target.value || null)}
+            >
+              <option value="" disabled>
+                Veldu dagsetningu
+              </option>
+              {entryDateOptions.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">MD</label>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={selectedMdDay ?? ""}
+              onChange={(e) => setSelectedMdDay(e.target.value || null)}
+            >
+              <option value="" disabled>
+                Veldu MD-day
+              </option>
+              {mdDayOptions.map((md) => (
+                <option key={md} value={md}>
+                  {md}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Button onClick={prevMode}>◀</Button>
           <Button onClick={nextMode}>▶</Button>
 

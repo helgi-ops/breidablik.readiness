@@ -37,18 +37,29 @@ type GenericMsg =
     }
   | null;
 
-type LockedPlanRow =
+// ✅ Stage-4 decision view row (v_player_today_microdose_decision)
+type Stage4PlanRow =
   | {
+      // ✅ IMPORTANT: used to fetch override audit
+      decision_id: string | null;
+
+      team_id: string | null;
       player_id: string;
       entry_date: string; // date
-      readiness_level: string; // GREEN / GREEN_PLUS / YELLOW / RED / UNKNOWN
-      md_day: string; // MD-4 / MD-3 / MD-2 / MD-1 / MD+1 / GENERIC
-      training_system: string; // FORCE / NEURAL_VELOCITY / POLISH_CALM / ACTIVATION_PRIMER
-      plan_title: string | null;
-      plan_description: string | null;
-      plan_structure: any; // jsonb array
-      locked_at: string | null;
-      is_locked: boolean;
+      md_day: string | null;
+      readiness_level: string | null; // GREEN / GREEN_PLUS / YELLOW / RED
+      chosen_variant_id: string | null;
+      locked: boolean | null;
+      source: string | null; // SYSTEM / COACH_OVERRIDE
+      confidence: number | null;
+      why: string | null;
+      inputs: any; // jsonb
+
+      // joined from microdose_template_variants
+      variant: string | null; // A/B/C
+      title: string | null;
+      description: string | null;
+      structure: any; // jsonb array
     }
   | null;
 
@@ -71,16 +82,6 @@ type PlayerSessionTodayRow =
       md_day_resolved: string | null;
     }
   | null;
-
-type VariantRow = {
-  id: string;
-  md_day: string;
-  readiness_level: string;
-  variant: string; // A/B/C
-  title: string | null;
-  description: string | null;
-  structure: any;
-};
 
 // ============================
 // ✅ Post-training types (DB)
@@ -116,6 +117,21 @@ type FixRow = {
   checkin_id: string;
   created_at: string;
   fix_modules: FixModule[];
+};
+
+// ============================
+// ✅ Stage-4 audit: overrides
+// ============================
+type MicrodoseOverrideRow = {
+  id: string;
+  decision_id: string;
+  coach_profile_id: string | null;
+  overrode_to_readiness_level: string | null; // GREEN / GREEN_PLUS / YELLOW / RED
+  override_to_variant_id: string | null; // uuid (variant id)
+  reason_code: string | null;
+  reason_test: string | null;
+  risk_level: string | null; // LOW/MOD/HIGH (or similar)
+  created_at: string;
 };
 
 // ✅ Dedupe helper (top-level; safe for hooks rules)
@@ -161,15 +177,6 @@ function isStaffRole(role: string | null | undefined) {
   return r === "COACH" || r === "ADMIN" || r === "STAFF";
 }
 
-function systemToFlag(system: string | null | undefined): Flag {
-  const s = norm(system);
-  if (s === "POLISH_CALM") return "GREEN";
-  if (s === "ACTIVATION_PRIMER") return "GREEN";
-  if (s === "NEURAL_VELOCITY") return "GREEN";
-  if (s === "FORCE") return "GREEN";
-  return "GREEN";
-}
-
 function readinessToFlag(level: string | null | undefined): Flag {
   const l = norm(level);
   if (l === "RED") return "RED";
@@ -179,7 +186,7 @@ function readinessToFlag(level: string | null | undefined): Flag {
 
 type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
 
-function inferDecisionType(decision: DecisionRow, plan: LockedPlanRow): DecisionType {
+function inferDecisionType(decision: DecisionRow, _plan: Stage4PlanRow): DecisionType {
   const dt = norm(decision?.final_planned_day_type);
   if (dt.includes("OFF") || dt.includes("REST") || dt.includes("RECOVER")) return "RECOVERY";
   if (dt.includes("REDUCED") || dt.includes("LIGHT") || dt.includes("MOD")) return "REDUCED";
@@ -277,6 +284,8 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
   return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
 }
 
+type VariantOption = { id: string; variant: string; title: string | null; description: string | null };
+
 export default function PlayerPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
@@ -290,19 +299,15 @@ export default function PlayerPage() {
 
   const [playerMeta, setPlayerMeta] = useState<PlayerRow | null>(null);
 
-  const [plan, setPlan] = useState<LockedPlanRow>(null);
+  // ✅ Stage-4 plan
+  const [plan, setPlan] = useState<Stage4PlanRow>(null);
+
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
   const [session, setSession] = useState<PlayerSessionTodayRow>(null);
 
   const [genericMsg, setGenericMsg] = useState<GenericMsg>(null);
-
-  const [variantOptions, setVariantOptions] = useState<VariantRow[]>([]);
-  const [selectedVariantId, setSelectedVariantId] = useState<string>("");
-  const [savingVariant, setSavingVariant] = useState<boolean>(false);
-
-  const [lockedVariantId, setLockedVariantId] = useState<string>("");
 
   const [postTraining, setPostTraining] = useState<PostTrainingTemplateRow[]>([]);
   const [postTrainingErr, setPostTrainingErr] = useState<string>("");
@@ -311,6 +316,18 @@ export default function PlayerPage() {
   const [fixErr, setFixErr] = useState<string>("");
 
   const staffMode = useMemo(() => isStaffRole(profile?.role), [profile?.role]);
+
+  // ✅ Coach override (Stage-4)
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideVariantId, setOverrideVariantId] = useState("");
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [overrideErr, setOverrideErr] = useState("");
+  const [variantOptions, setVariantOptions] = useState<VariantOption[]>([]);
+
+  // ✅ Stage-4 audit list (last overrides)
+  const [overrideAudit, setOverrideAudit] = useState<MicrodoseOverrideRow[]>([]);
+  const [overrideAuditErr, setOverrideAuditErr] = useState<string>("");
 
   // ✅ MUST be above early returns (Rules of Hooks)
   const fixModules = useMemo(() => dedupeFixModulesByTag(fixRow?.fix_modules), [fixRow?.fix_modules]);
@@ -341,111 +358,47 @@ export default function PlayerPage() {
     return (globalMsg as any) ?? null;
   }
 
+  async function loadOverrideAudit(decisionId: string) {
+    try {
+      setOverrideAuditErr("");
+
+      const { data, error } = await supabase
+        .from("microdose_overrides")
+        .select(
+          "id, decision_id, coach_profile_id, overrode_to_readiness_level, override_to_variant_id, reason_code, reason_test, risk_level, created_at"
+        )
+        .eq("decision_id", decisionId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      setOverrideAudit(((data as any) ?? []) as MicrodoseOverrideRow[]);
+    } catch (e: any) {
+      console.error("override audit load error:", e?.message ?? e);
+      setOverrideAuditErr(e?.message ?? "Villa við að sækja override audit.");
+      setOverrideAudit([]);
+    }
+  }
+
   async function reloadPlan(playerId: string, day: string) {
     const { data: planRow, error: planErr } = await supabase
-      .from("v_player_today_microdose_locked")
+      .from("v_player_today_microdose_decision")
       .select(
-        "player_id,entry_date,readiness_level,md_day,training_system,plan_title,plan_description,plan_structure,locked_at,is_locked"
+        "decision_id,team_id,player_id,entry_date,md_day,readiness_level,chosen_variant_id,locked,source,confidence,why,inputs,variant,title,description,structure"
       )
       .eq("player_id", playerId)
       .eq("entry_date", day)
       .maybeSingle();
 
     if (planErr) throw planErr;
+
     setPlan((planRow as any) ?? null);
-  }
 
-  async function loadLockedVariantId(playerId: string, day: string) {
-    const { data: lockRow, error: lErr } = await supabase
-      .from("player_microdose_plan_locks")
-      .select("variant_id")
-      .eq("player_id", playerId)
-      .eq("entry_date", day)
-      .maybeSingle();
-
-    if (lErr) {
-      console.error("loadLockedVariantId error:", lErr.message);
-      setLockedVariantId("");
-      return;
-    }
-
-    const vid = (lockRow as any)?.variant_id ?? "";
-    setLockedVariantId(vid || "");
-  }
-
-  async function loadVariantsForToday(playerId: string, mdDay: string, readinessLevel: string) {
-    const { data: opts, error: oErr } = await supabase
-      .from("microdose_template_variants")
-      .select("id, md_day, readiness_level, variant, title, description, structure")
-      .eq("md_day", mdDay)
-      .eq("readiness_level", readinessLevel)
-      .order("variant", { ascending: true })
-      .limit(3);
-
-    if (oErr) throw oErr;
-
-    const options = ((opts as any) ?? []) as VariantRow[];
-    setVariantOptions(options);
-
-    if (lockedVariantId) {
-      const found = options.find((x) => x.id === lockedVariantId);
-      if (found) {
-        setSelectedVariantId(found.id);
-        return;
-      }
-    }
-
-    const a = options.find((x) => norm(x.variant) === "A");
-    if (a) setSelectedVariantId(a.id);
-    else if (options[0]?.id) setSelectedVariantId(options[0].id);
-  }
-
-  async function chooseVariantStaffOnly(v: VariantRow) {
-    if (!profile?.player_id) return;
-    if (!staffMode) return;
-
-    const playerId = profile.player_id;
-    const day = todayISO();
-
-    try {
-      setSavingVariant(true);
-      setError("");
-
-      const mdDay = plan?.md_day ?? v.md_day;
-      const readinessLevel = plan?.readiness_level ?? v.readiness_level;
-
-      if (!mdDay || !readinessLevel) throw new Error("Vantar md_day eða readiness_level til að vista.");
-      if (!v.structure) throw new Error("Valin uppsetning vantar structure (plan_structure).");
-
-      const teamId = session?.team_id ?? (profile as any)?.team_id ?? null;
-
-      const payload: any = {
-        player_id: playerId,
-        entry_date: day,
-        team_id: teamId,
-        md_day: mdDay,
-        readiness_level: readinessLevel,
-        plan_title: v.title ?? null,
-        plan_description: v.description ?? null,
-        plan_structure: v.structure,
-        variant_id: v.id,
-        source: "staff_override",
-      };
-
-      const { error: upErr } = await supabase
-        .from("player_microdose_plan_locks")
-        .upsert(payload, { onConflict: "player_id,entry_date" });
-
-      if (upErr) throw upErr;
-
-      setLockedVariantId(v.id);
-      setSelectedVariantId(v.id);
-
-      await reloadPlan(playerId, day);
-    } catch (e: any) {
-      setError(e?.message ?? "Óþekkt villa við að velja uppsetningu.");
-    } finally {
-      setSavingVariant(false);
+    // refresh audit after reload (staff-only)
+    const did = (planRow as any)?.decision_id ?? null;
+    if (did && staffMode) {
+      await loadOverrideAudit(String(did));
     }
   }
 
@@ -508,6 +461,59 @@ export default function PlayerPage() {
     }
   }
 
+  // ✅ Coach override submit (calls Next API route)
+  async function submitOverride() {
+    if (!profile?.player_id) return;
+    if (!plan?.entry_date) return;
+
+    const to_variant_id = overrideVariantId;
+    const reason = overrideReason.trim();
+
+    if (!to_variant_id) {
+      setOverrideErr("Veldu variant.");
+      return;
+    }
+    if (!reason) {
+      setOverrideErr("Skrifaðu ástæðu (stutt).");
+      return;
+    }
+
+    try {
+      setOverrideSaving(true);
+      setOverrideErr("");
+
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) throw new Error("Vantar session token.");
+
+      const res = await fetch("/api/microdose/override", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          player_id: profile.player_id,
+          entry_date: plan.entry_date,
+          to_variant_id,
+          reason,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Override mistókst.");
+
+      await reloadPlan(profile.player_id, plan.entry_date);
+
+      setOverrideOpen(false);
+      setOverrideReason("");
+    } catch (e: any) {
+      setOverrideErr(e?.message ?? "Óþekkt villa.");
+    } finally {
+      setOverrideSaving(false);
+    }
+  }
+
   // ====== Initial load ======
   useEffect(() => {
     const run = async () => {
@@ -520,14 +526,21 @@ export default function PlayerPage() {
       setPlayerMeta(null);
       setDecision(null);
       setSession(null);
-      setVariantOptions([]);
-      setSelectedVariantId("");
-      setLockedVariantId("");
       setPostTraining([]);
       setPostTrainingErr("");
 
       setFixRow(null);
       setFixErr("");
+
+      setOverrideOpen(false);
+      setOverrideReason("");
+      setOverrideVariantId("");
+      setOverrideSaving(false);
+      setOverrideErr("");
+      setVariantOptions([]);
+
+      setOverrideAudit([]);
+      setOverrideAuditErr("");
 
       const { data: auth, error: aErr } = await supabase.auth.getUser();
       if (aErr) {
@@ -604,10 +617,11 @@ export default function PlayerPage() {
       if (sErr) console.error("v_player_session_today error:", sErr.message);
       setSession((srow as any) ?? null);
 
+      // ✅ Stage-4: bindandi ákvörðun/plan úr enforcement view
       const { data: planRow, error: planErr } = await supabase
-        .from("v_player_today_microdose_locked")
+        .from("v_player_today_microdose_decision")
         .select(
-          "player_id,entry_date,readiness_level,md_day,training_system,plan_title,plan_description,plan_structure,locked_at,is_locked"
+          "decision_id,team_id,player_id,entry_date,md_day,readiness_level,chosen_variant_id,locked,source,confidence,why,inputs,variant,title,description,structure"
         )
         .eq("player_id", prof.player_id)
         .eq("entry_date", today)
@@ -618,9 +632,18 @@ export default function PlayerPage() {
         setLoading(false);
         return;
       }
+
       setPlan((planRow as any) ?? null);
 
-      await loadLockedVariantId(prof.player_id, today);
+      // ✅ staff-only: load audit overrides
+      if (isStaffRole(prof?.role)) {
+        const did = (planRow as any)?.decision_id ?? null;
+        if (did) {
+          await loadOverrideAudit(String(did));
+        } else {
+          setOverrideAudit([]);
+        }
+      }
 
       const { data: mrow, error: mErr } = await supabase
         .from("readiness_entries")
@@ -640,30 +663,57 @@ export default function PlayerPage() {
     run();
   }, [supabase]);
 
+  // ✅ Load variant options for today (staff only)
   useEffect(() => {
     const run = async () => {
       try {
+        if (!staffMode) return;
         if (!profile?.player_id) return;
         if (!plan?.md_day || !plan?.readiness_level) return;
 
-        const mdDay = norm(plan.md_day);
-        const rl = norm(plan.readiness_level);
-        if (!mdDay || !rl) return;
+        const { data, error } = await supabase
+          .from("microdose_template_variants")
+          .select("id, variant, title, description")
+          .eq("md_day", plan.md_day)
+          .eq("readiness_level", plan.readiness_level)
+          .order("variant", { ascending: true });
 
-        await loadVariantsForToday(profile.player_id, mdDay, rl);
+        if (error) throw error;
+
+        const list = (data ?? []) as any[];
+        setVariantOptions(list);
+
+        if (!overrideVariantId) {
+          const current = plan.chosen_variant_id ? list.find((x) => x.id === plan.chosen_variant_id) : null;
+          const a = list.find((x) => String(x.variant).toUpperCase() === "A");
+          setOverrideVariantId((current?.id || a?.id || list[0]?.id || "") as string);
+        }
       } catch (e: any) {
-        console.error("variants load error:", e?.message ?? e);
+        console.error("variantOptions load error:", e?.message ?? e);
       }
     };
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.player_id, plan?.md_day, plan?.readiness_level, lockedVariantId]);
+  }, [staffMode, profile?.player_id, plan?.md_day, plan?.readiness_level, plan?.chosen_variant_id]);
+
+  // ✅ Reload audit when decision_id changes (staff only)
+  useEffect(() => {
+    const run = async () => {
+      if (!staffMode) return;
+      const did = plan?.decision_id ?? null;
+      if (!did) {
+        setOverrideAudit([]);
+        return;
+      }
+      await loadOverrideAudit(String(did));
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffMode, plan?.decision_id]);
 
   const flag: Flag = useMemo(() => {
-    const byReadiness = readinessToFlag(plan?.readiness_level);
-    if (!plan?.readiness_level) return systemToFlag(plan?.training_system);
-    return byReadiness;
-  }, [plan?.readiness_level, plan?.training_system]);
+    return readinessToFlag(plan?.readiness_level);
+  }, [plan?.readiness_level]);
 
   const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]) as ReturnType<typeof flagUi>;
 
@@ -679,7 +729,11 @@ export default function PlayerPage() {
   }, [profile?.id, flag]);
 
   const message = useMemo(() => genericMsg?.message || ui.playerMessage, [genericMsg, ui.playerMessage]);
-  const why = useMemo(() => genericMsg?.why || ui.why, [genericMsg, ui.why]);
+
+  // ✅ Notum Stage-4 “why” fyrst; annars generic/ui why
+  const whyText = useMemo(() => {
+    return plan?.why || genericMsg?.why || ui.why;
+  }, [plan?.why, genericMsg?.why, ui.why]);
 
   useEffect(() => {
     const run = async () => {
@@ -806,7 +860,7 @@ export default function PlayerPage() {
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <div className="text-base font-semibold">Engin dagsákvörðun/æfing er komin í dag</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Farðu í <b>/player/checkin</b> til að klára check-in.
+              Farðu í <b>/player/checkin</b> til að klára check-in (og vertu viss um að decision-engine hafi verið keyrt).
             </div>
           </div>
         </div>
@@ -818,10 +872,16 @@ export default function PlayerPage() {
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const showStructure = isArray(plan.plan_structure) && plan.plan_structure.length > 0;
+  const showStructure = isArray(plan.structure) && plan.structure.length > 0;
 
   const decisionType = inferDecisionType(decision, plan);
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
+
+  const lockedBool = !!plan.locked;
+  const lockLabel = lockedBool ? "Læst" : "Ólæst";
+  const sourceLabel = plan.source ? String(plan.source).toUpperCase() : "—";
+  const confidenceLabel = plan.confidence != null ? `${plan.confidence}%` : "—";
+  const variantLabel = plan.variant ? `Variant ${plan.variant}` : "Variant —";
 
   const debugLine =
     `today=${todayISO()} | ` +
@@ -829,12 +889,11 @@ export default function PlayerPage() {
     `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
     `md_day=${plan.md_day ?? "-"} | ` +
     `session_type=${session?.session_type ?? "-"} | ` +
-    `system=${plan.training_system ?? "-"} | ` +
-    `title=${plan.plan_title ?? "-"} | ` +
-    `locked_variant_id=${lockedVariantId || "-"}`;
-
-  const showVariantChooserForStaff = staffMode && variantOptions.length > 0;
-  const canChooseVariantStaff = staffMode && !plan.is_locked;
+    `source=${sourceLabel} | ` +
+    `confidence=${confidenceLabel} | ` +
+    `decision_id=${plan.decision_id ?? "-"} | ` +
+    `chosen_variant_id=${plan.chosen_variant_id ?? "-"} | ` +
+    `variant=${plan.variant ?? "-"}`;
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -851,30 +910,22 @@ export default function PlayerPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {plan.is_locked ? (
-                <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-sm font-semibold text-zinc-900">
-                  🔒 LÆST
-                  <span className="text-xs font-medium text-zinc-500">
-                    {plan.locked_at
-                      ? new Date(plan.locked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                      : ""}
-                  </span>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
-                  ⏳ Ólæst
-                </div>
-              )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-sm font-semibold text-zinc-900">
+                🔒 {lockLabel}
+              </div>
 
               <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
-                <span className="h-2 w-2 rounded-full bg-zinc-900" />
                 {decisionToText(decisionType)}
               </div>
 
               <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${ui.pill}`}>
                 <span className={`h-2 w-2 rounded-full ${ui.dot}`} />
                 {mdLabel}
+              </div>
+
+              <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
+                {variantLabel}
               </div>
             </div>
           </div>
@@ -888,15 +939,161 @@ export default function PlayerPage() {
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat label="Dagsetning" value={plan.entry_date} />
               <Stat label="MD context" value={mdLabel} />
-              <Stat label="Session type" value={session?.session_type ?? "—"} />
-              <Stat label="Staða" value={plan.is_locked ? "Læst" : "Ólæst"} />
+              <Stat label="Source" value={sourceLabel} />
+              <Stat label="Confidence" value={confidenceLabel} />
             </div>
 
             <div className="mt-3 rounded-lg border bg-white p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Decision basis</div>
-              <div className="mt-1 text-sm text-zinc-700">{why}</div>
+              <div className="mt-1 text-sm text-zinc-700">{whyText}</div>
             </div>
           </div>
+
+          {/* ✅ Staff-only: Coach override (Stage-4) */}
+          {staffMode ? (
+            <div className="mt-6 rounded-xl border bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Coach override</div>
+                  <div className="mt-1 text-sm text-zinc-600">
+                    Override uppfærir Stage-4 decision (source=COACH_OVERRIDE) og læsir dagsákvörðun.
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setOverrideErr("");
+                    setOverrideOpen((v) => !v);
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+                >
+                  {overrideOpen ? "Loka" : "Override"}
+                </button>
+              </div>
+
+              {overrideOpen ? (
+                <div className="mt-4 rounded-2xl border bg-zinc-50 p-4">
+                  <div className="text-sm font-semibold text-zinc-900">Veldu variant og ástæðu</div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Variant</div>
+                      <select
+                        className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
+                        value={overrideVariantId}
+                        onChange={(e) => setOverrideVariantId(e.target.value)}
+                      >
+                        {variantOptions.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {String(v.variant).toUpperCase()} — {v.title ?? "Microdose"}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="mt-2 text-xs text-zinc-600">
+                        Núverandi: {plan.variant ? `Variant ${plan.variant}` : "—"} · Source: {sourceLabel} · Locked:{" "}
+                        {lockedBool ? "YES" : "NO"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ástæða</div>
+                      <input
+                        className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
+                        placeholder="t.d. hamstring tightness, travel fatigue, coach decision..."
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                      />
+                      <div className="mt-2 text-xs text-zinc-600">Skráist sem audit + why í decision.</div>
+                    </div>
+                  </div>
+
+                  {overrideErr ? (
+                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{overrideErr}</div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      onClick={() => {
+                        setOverrideOpen(false);
+                        setOverrideErr("");
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-50"
+                    >
+                      Hætta við
+                    </button>
+
+                    <button
+                      disabled={overrideSaving}
+                      onClick={submitOverride}
+                      className={`inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 ${
+                        overrideSaving ? "opacity-60" : ""
+                      }`}
+                    >
+                      {overrideSaving ? "Vistar…" : "Staðfesta override"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* ✅ Stage-4 Audit (Overrides) */}
+          {staffMode ? (
+            <details className="mt-6 rounded-xl border bg-white">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
+                Stage-4 Audit (Overrides)
+                <span className="ml-2 text-xs font-medium text-zinc-500">({overrideAudit.length} síðustu)</span>
+              </summary>
+
+              <div className="px-4 pb-4">
+                {overrideAuditErr ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{overrideAuditErr}</div>
+                ) : null}
+
+                {!overrideAuditErr && overrideAudit.length === 0 ? (
+                  <div className="rounded-lg border bg-zinc-50 p-3 text-sm text-zinc-700">
+                    Engin overrides skráð (fyrir þessa decision_id).
+                  </div>
+                ) : null}
+
+                {overrideAudit.length > 0 ? (
+                  <div className="space-y-3">
+                    {overrideAudit.map((o) => (
+                      <div key={o.id} className="rounded-xl border bg-zinc-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-zinc-900">
+                            Override → {o.overrode_to_readiness_level ?? "—"} · variant_id:{" "}
+                            {o.override_to_variant_id ? o.override_to_variant_id.slice(0, 8) + "…" : "—"}
+                          </div>
+                          <div className="text-xs text-zinc-600">
+                            {o.created_at ? new Date(o.created_at).toLocaleString() : "—"}
+                          </div>
+                        </div>
+
+                        <div className="mt-1 text-xs text-zinc-600">
+                          coach_profile_id: {o.coach_profile_id ?? "—"} · risk_level: {o.risk_level ?? "—"}
+                        </div>
+
+                        <div className="mt-2 grid gap-2 md:grid-cols-2">
+                          <div className="rounded-lg border bg-white p-2">
+                            <div className="text-xs font-semibold text-zinc-500">Reason code</div>
+                            <div className="mt-1 text-sm text-zinc-800">{o.reason_code ?? "—"}</div>
+                          </div>
+                          <div className="rounded-lg border bg-white p-2">
+                            <div className="text-xs font-semibold text-zinc-500">Reason text</div>
+                            <div className="mt-1 text-sm text-zinc-800">{o.reason_test ?? "—"}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 text-xs text-zinc-600">decision_id: {o.decision_id}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
 
           {/* Measurements */}
           <details className="mt-6 rounded-xl border bg-white">
@@ -918,9 +1115,7 @@ export default function PlayerPage() {
                   : "—"}
               </div>
 
-              <div className="mt-3 text-xs text-zinc-500">
-                Flokkun (internal): {plan.readiness_level ?? "—"} · Kerfi: {plan.training_system ?? "—"}
-              </div>
+              <div className="mt-3 text-xs text-zinc-500">Flokkun (internal): {plan.readiness_level ?? "—"}</div>
             </div>
           </details>
 
@@ -944,13 +1139,8 @@ export default function PlayerPage() {
               </div>
             ) : null}
 
-            {/* ✅ UPDATED: grid columns when >1 */}
             {!fixErr && fixModules.length > 0 ? (
-              <div
-                className={`mt-4 grid gap-3 ${
-                  fixModules.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
-                }`}
-              >
+              <div className={`mt-4 grid gap-3 ${fixModules.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
                 {fixModules.map((m) => {
                   const items = m?.structure?.blocks?.[0]?.items ?? [];
                   const duration = m?.structure?.duration_min ?? null;
@@ -994,110 +1184,24 @@ export default function PlayerPage() {
             </div>
           </div>
 
-          {/* Staff-only: variant override */}
-          {showVariantChooserForStaff ? (
-            <div className="mt-6 rounded-xl border bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Staff override (A/B/C)</div>
-                  <div className="mt-1 text-sm text-zinc-600">
-                    Þetta er aðeins fyrir staff/test. Leikmenn eiga ekki að velja variant í Stage-4.
-                    {plan.is_locked ? " (Læst – ekki hægt að breyta í dag.)" : ""}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
-                {variantOptions.map((v) => {
-                  const isSelected = v.id === selectedVariantId;
-                  return (
-                    <div
-                      key={v.id}
-                      className={`min-w-[320px] snap-start rounded-2xl border p-4 ${
-                        isSelected ? "border-zinc-900" : "border-zinc-200"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Variant {v.variant}</div>
-                          <div className="mt-2 text-base font-semibold text-zinc-900">{v.title ?? "Microdose variant"}</div>
-                          <div className="mt-1 text-sm text-zinc-600">{v.description ?? "—"}</div>
-                        </div>
-                        {isSelected ? (
-                          <div className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white">Valin</div>
-                        ) : null}
-                      </div>
-
-                      {isArray(v.structure) && v.structure.length > 0 ? (
-                        <div className="mt-3 space-y-2">
-                          {v.structure.slice(0, 2).map((b: any, bi: number) => (
-                            <div key={bi} className="rounded-xl border bg-zinc-50 p-3">
-                              <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${bi + 1}`}</div>
-                              {isArray(b?.items) && b.items.length > 0 ? (
-                                <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
-                                  {b.items.slice(0, 4).map((it: any, ii: number) => (
-                                    <li key={ii}>{String(it)}</li>
-                                  ))}
-                                  {b.items.length > 4 ? <li className="list-none text-xs text-zinc-500">…meira</li> : null}
-                                </ul>
-                              ) : (
-                                <div className="mt-2 text-sm text-zinc-600">Engin atriði.</div>
-                              )}
-                            </div>
-                          ))}
-                          {v.structure.length > 2 ? <div className="text-xs text-zinc-500">…fleiri blokkir</div> : null}
-                        </div>
-                      ) : (
-                        <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">Engin structure skilgreind.</div>
-                      )}
-
-                      <button
-                        disabled={savingVariant || !canChooseVariantStaff}
-                        onClick={() => {
-                          if (!canChooseVariantStaff) return;
-                          chooseVariantStaffOnly(v);
-                        }}
-                        className={`mt-4 inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold ${
-                          isSelected
-                            ? "bg-zinc-900 text-white"
-                            : "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50"
-                        } ${savingVariant || !canChooseVariantStaff ? "opacity-60" : ""}`}
-                      >
-                        {plan.is_locked
-                          ? isSelected
-                            ? "Valin (læst)"
-                            : "Læst – ekki hægt að breyta"
-                          : savingVariant
-                          ? "Vistar…"
-                          : isSelected
-                          ? "Valin uppsetning"
-                          : "Velja (staff)"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
           {/* ✅ ÆFING DAGSINS / Execution session */}
           <div className="mt-6 rounded-xl border bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
-                <div className="mt-2 text-lg font-semibold text-zinc-900">{plan.plan_title ?? "Dagsæfing"}</div>
-                <div className="mt-1 text-sm text-zinc-600">{plan.plan_description ?? "—"}</div>
+                <div className="mt-2 text-lg font-semibold text-zinc-900">{plan.title ?? "Dagsæfing"}</div>
+                <div className="mt-1 text-sm text-zinc-600">{plan.description ?? "—"}</div>
               </div>
 
               <div className="text-right">
                 <div className="text-xs font-medium text-zinc-500">Staða</div>
-                <div className="mt-1 text-sm font-semibold text-zinc-900">{plan.is_locked ? "Læst" : "Ólæst"}</div>
+                <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel}</div>
               </div>
             </div>
 
             {showStructure ? (
               <div className="mt-4 space-y-3">
-                {plan.plan_structure.map((b: any, idx: number) => (
+                {plan.structure.map((b: any, idx: number) => (
                   <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
                     <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
 
@@ -1141,13 +1245,8 @@ export default function PlayerPage() {
               <div className="mt-3 text-sm text-zinc-600">Engar tillögur fundust.</div>
             ) : null}
 
-            {/* ✅ UPDATED: grid columns when >1 */}
             {postTraining.length > 0 ? (
-              <div
-                className={`mt-4 grid gap-3 ${
-                  postTraining.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
-                }`}
-              >
+              <div className={`mt-4 grid gap-3 ${postTraining.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
                 {postTraining.map((t) => (
                   <div key={t.id} className="rounded-xl border bg-zinc-50 p-3">
                     <div className="flex items-start justify-between gap-3">

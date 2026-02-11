@@ -61,6 +61,10 @@ type Row = {
   // ✅ MD-day (team/day)
   md_day?: string | null;
 
+  // ✅ planned focus (joined from v_player_daily_decision_v3 via v5 view)
+  planned_day_type?: string | null;
+  planned_focus?: string | null;
+
   // ✅ final fields (from v*_final view or computed client-side fallback)
   final_color?: FinalColor | null;
   final_reason?: string | null;
@@ -126,6 +130,13 @@ function prettyMd(md: string | null | undefined) {
   if (U === "MD") return { md: "MD", label: "GAME" };
   if (U === "MD+1") return { md: "MD+1", label: "POST" };
   return { md: v, label: v };
+}
+
+// ✅ Extract "MD-3"/"MD+1"/"MD" from planned_focus when md_day column isn't available
+function mdFromPlannedFocus(focus: string | null | undefined) {
+  const s = String(focus ?? "").toUpperCase();
+  const m = s.match(/\bMD[+-]?\d*\b/); // MD, MD-3, MD+1
+  return m?.[0] ?? null;
 }
 
 /**
@@ -394,10 +405,9 @@ export default function CoachPage() {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // ✅ Quick fix (no SQL changes needed):
-      // Use v4_final view but DO NOT order by color_rank (might not exist yet).
+      // ✅ Stage-4: Use v5 view that joins planned_focus/planned_day_type from v_player_daily_decision_v3
       let q = supabase
-        .from("v_coach_readiness_today_v4_final")
+        .from("v_coach_readiness_today_v5_final")
         .select("*", { count: "exact" })
         .order("total_score", { ascending: true })
         .order("full_name", { ascending: true })
@@ -449,6 +459,10 @@ export default function CoachPage() {
         const readinessFlag: FlagStatus | null =
           finalFlag === "RED" ? "RED" : finalFlag === "YELLOW" ? "YELLOW" : finalFlag === "GREEN" ? "GREEN" : null;
 
+        // derive MD from planned_focus if available (per player), else team-level mdDayToday
+        const plannedFocus = (r as any).planned_focus ?? null;
+        const perPlayerMd = mdFromPlannedFocus(plannedFocus);
+
         return {
           ...r,
           id,
@@ -462,7 +476,9 @@ export default function CoachPage() {
           flag_status: readinessFlag,
           color: uiColor,
           auto_reason: finalReason,
-          md_day: mdDayToday,
+
+          // ✅ per-player MD label (from planned_focus), fallback to team-level
+          md_day: perPlayerMd ?? mdDayToday,
         };
       });
 
@@ -555,8 +571,9 @@ export default function CoachPage() {
 
     const playerNote = (r.notes ?? "").trim() || null;
 
-    // ✅ show final_reason
+    // ✅ show planned_focus first (Stage-4), fallback to final_reason
     const computedReason = (r.final_reason ?? r.computed_auto_reason) ?? null;
+    const plannedFocus = (r as any).planned_focus ?? null;
 
     const coachMsg = r.coach_message && r.coach_message.trim().length ? r.coach_message : null;
 
@@ -587,8 +604,8 @@ export default function CoachPage() {
             </div>
 
             <div className="min-w-0 text-sm text-gray-700">
-              <span className="block truncate" title={computedReason ?? ""}>
-                {computedReason || "—"}
+              <span className="block truncate" title={(plannedFocus ?? computedReason ?? "") as string}>
+                {plannedFocus || computedReason || "—"}
               </span>
             </div>
 
@@ -638,7 +655,7 @@ export default function CoachPage() {
               </div>
             </div>
 
-            {(autoFlag || playerNote || computedReason || coachMsg) && (
+            {(autoFlag || playerNote || plannedFocus || computedReason || coachMsg) && (
               <div className="mt-2 space-y-1 text-gray-700">
                 {autoFlag && (
                   <div className="text-sm">
@@ -648,6 +665,11 @@ export default function CoachPage() {
                 {playerNote && (
                   <div className="text-sm text-gray-600">
                     <span className="font-medium text-gray-700">Player note:</span> {playerNote}
+                  </div>
+                )}
+                {plannedFocus && (
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium text-gray-700">Planned focus:</span> {plannedFocus}
                   </div>
                 )}
                 {computedReason && (
