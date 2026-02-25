@@ -26,6 +26,22 @@ const supabase = createClient(
 
 type Step = 1 | 2 | 3 | 4;
 
+// ✅ Always produce YYYY-MM-DD (UTC) so Postgres DATE will accept it
+function todayIsoDateUTC(): string {
+  const d = new Date();
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// ✅ Validate YYYY-MM-DD quickly (defensive)
+function isIsoDate(s: unknown): s is string {
+  if (typeof s !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  return true;
+}
+
 function PillScale({
   value,
   onChange,
@@ -77,8 +93,25 @@ function StepDot({ active }: { active: boolean }) {
   );
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+function friendlySupabaseError(e: any) {
+  const msg = String(e?.message ?? e ?? "");
+
+  // Duplicate checkin same day
+  if (e?.code === "23505" || msg.toLowerCase().includes("duplicate key")) {
+    return "Þú hefur nú þegar skilað check-in í dag. Ef þarf að breyta, hafðu samband við þjálfara.";
+  }
+
+  // Date parsing
+  if (e?.code === "22007" || msg.toLowerCase().includes("invalid input syntax for type date")) {
+    return "Villa með dagsetningu í vistun. Við sendum alltaf YYYY-MM-DD — ef þetta heldur áfram er líklegt að trigger/fall í DB sé að reyna að setja '' í einhvern DATE dálk.";
+  }
+
+  // RLS / auth
+  if (e?.code === "42501" || msg.toLowerCase().includes("row-level security")) {
+    return "Aðgangsvilla (RLS). Þú hefur ekki heimild til að vista check-in. Hafðu samband við þjálfara.";
+  }
+
+  return msg || "Villa kom upp við að vista check-in.";
 }
 
 export default function PlayerCheckinPage() {
@@ -172,7 +205,6 @@ export default function PlayerCheckinPage() {
 
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
-
       setLoading(false);
     };
 
@@ -202,30 +234,49 @@ export default function PlayerCheckinPage() {
     setSaving(true);
 
     try {
-      const entry_date = todayISO();
+      // ✅ HARD-SET entry_date so DB never receives "".
+      // We also validate format to avoid any weird runtime/cache issues.
+      const entry_date = todayIsoDateUTC();
+      if (!isIsoDate(entry_date)) {
+        throw {
+          code: "22007",
+          message: `invalid input syntax for type date: "${String(entry_date)}" (client guard)`,
+        };
+      }
 
-      // ✅ ONLY responsibility of this page:
-      // Insert readiness_entries.
-      // DB trigger will:
-      // - compute readiness_level
-      // - resolve md_day
-      // - auto-rotate A/B/C
-      // - upsert player_microdose_plan_locks
       const payload = {
         player_id: playerId,
-        entry_date,
+        entry_date, // ✅ explicit date
         readiness,
         sleep,
         soreness,
-        notes: notes?.trim() || null,
+        notes: notes.trim() ? notes.trim() : null,
       };
 
-      const { error: insErr } = await supabase.from("readiness_entries").insert(payload);
-      if (insErr) throw insErr;
+      console.log("CHECKIN payload:", payload);
+
+      // ✅ Ask Supabase to return the inserted row so we know insert truly succeeded
+      const res = await supabase
+        .from("readiness_entries")
+        .insert(payload)
+        .select("id, entry_date")
+        .single();
+
+      if (res.error) {
+        console.error("CHECKIN insert error (raw):", res.error);
+        console.error("CHECKIN insert error (json):", JSON.stringify(res.error, null, 2));
+        throw res.error;
+      }
+
+      // ✅ extra sanity: if no data comes back, treat as failure (shouldn't happen with .single())
+      if (!res.data?.id) {
+        throw { message: "Insert tókst ekki (ekkert svar frá DB)." };
+      }
 
       setSuccess(true);
     } catch (e: any) {
-      setError(e?.message ?? "Villa kom upp við að vista check-in.");
+      console.error("CHECKIN submit error:", e);
+      setError(friendlySupabaseError(e));
     } finally {
       setSaving(false);
     }
@@ -248,8 +299,7 @@ export default function PlayerCheckinPage() {
           <CardHeader>
             <CardTitle className="text-xl">Check-in móttekið ✅</CardTitle>
             <CardDescription>
-              Takk{playerName ? `, ${playerName}` : ""}! Dagsæfing er nú uppfærð og læst sjálfvirkt
-              (A/B/C roterar milli leikmanna).
+              Takk{playerName ? `, ${playerName}` : ""}! Dagsæfing er nú uppfærð og læst sjálfvirkt.
             </CardDescription>
           </CardHeader>
 
@@ -260,10 +310,10 @@ export default function PlayerCheckinPage() {
               <Badge variant="secondary">Eymsli: {soreness ?? "-"}</Badge>
             </div>
 
-            {notes ? (
+            {notes.trim() ? (
               <div className="rounded-xl border bg-muted/30 p-3 text-sm">
                 <div className="mb-1 text-xs font-semibold text-muted-foreground">Athugasemd</div>
-                <div className="whitespace-pre-wrap">{notes}</div>
+                <div className="whitespace-pre-wrap">{notes.trim()}</div>
               </div>
             ) : null}
           </CardContent>
@@ -335,7 +385,7 @@ export default function PlayerCheckinPage() {
                 options={[
                   { v: 2, label: "Lágt", hint: "Þreyta / Mikið orkuleysi" },
                   { v: 4, label: "Frekar lágt", hint: "Smá orkuleysi" },
-                  { v: 6, label: "Miðlungs", hint: "Allt í lagi/Þokkaleg/ur " },
+                  { v: 6, label: "Miðlungs", hint: "Allt í lagi/Þokkaleg/ur" },
                   { v: 8, label: "Gott", hint: "Ferskur" },
                   { v: 10, label: "Frábært", hint: "Mjög ferskur" },
                 ]}
@@ -386,7 +436,7 @@ export default function PlayerCheckinPage() {
                 onChange={setSoreness}
                 options={[
                   { v: 1, label: "Engin", hint: "fersk/ur" },
-                  { v: 2, label: "Lítil", hint: "Finnst aðeins til" },
+                  { v: 2, label: "Lítil", hint: "Finn aðeins til" },
                   { v: 3, label: "Miðlungs", hint: "Áberandi en ekki of mikið" },
                   { v: 4, label: "Mikil", hint: "Frekar erfitt að hreyfa" },
                   { v: 5, label: "Mjög mikil", hint: "Sársauki, get ekki æft" },

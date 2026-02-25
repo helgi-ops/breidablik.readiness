@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,10 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Color = "green_plus" | "green" | "yellow" | "red";
-type FlagStatus = "RED" | "YELLOW" | "GREEN";
 type TrainingAction = "FULL" | "REDUCED" | "RECOVERY";
-type Flag = "GREEN" | "YELLOW" | "RED";
 type FinalColor = "red" | "yellow" | "green";
 type FinalFlag = "RED" | "YELLOW" | "GREEN";
 type Filter = "all" | FinalColor;
@@ -21,6 +19,8 @@ type Filter = "all" | FinalColor;
 type PlanPreview = {
   team_id: string | null;
   md_day: string | null;
+  source?: string | null;
+  confidence?: number | string | null;
   readiness_level: "GREEN" | "YELLOW" | "RED" | null;
   is_locked: boolean | null;
   template_title: string | null;
@@ -29,8 +29,12 @@ type PlanPreview = {
 };
 
 type Row = {
-  readiness_entry_id: string;
-  id?: string;
+  // ✅ MUST be the actual readiness_entries.id (or null)
+  readiness_entry_id: string | null;
+
+  // ✅ Stage4 decision id (source of truth for override)
+  decision_id?: string | null;
+
   entry_date: string;
   created_at: string;
 
@@ -45,73 +49,22 @@ type Row = {
   total_score: number | null;
   notes: string | null;
 
-  computed_auto_flag: string | null;
-  computed_auto_reason: string | null;
-  auto_color: string | null;
-
-  coach_color?: FinalColor | null;
-  coach_reason?: string | null;
-  coach_message: string | null;
-  training_action: TrainingAction | null;
-
-  is_locked: boolean;
-  locked_at: string | null;
-  locked_by?: string | null;
-
-  // ✅ MD-day (team/day)
-  md_day?: string | null;
-
-  // ✅ planned focus (joined from v_player_daily_decision_v3 via v5 view)
   planned_day_type?: string | null;
   planned_focus?: string | null;
 
-  // ✅ final fields (from v*_final view or computed client-side fallback)
+  training_action: TrainingAction | null;
+  coach_message: string | null;
+
+  is_locked: boolean;
+
   final_color?: FinalColor | null;
   final_reason?: string | null;
   final_flag?: FinalFlag | null;
 
-  // backwards compat
-  color?: any;
-  flag_status?: any;
-  flag?: any;
-  auto_reason?: string | null;
-  coach_locked?: boolean | null;
-  coach_locked_at?: string | null;
-  is_time_locked?: boolean | null;
+  md_day?: string | null;
 
-  color_rank?: number | null;
-};
-
-type AuditRow = {
-  id: string;
-  readiness_entry_id: string;
-  actor_user_id: string | null;
-  old_training_action: string | null;
-  new_training_action: string | null;
-  old_coach_message: string | null;
-  new_coach_message: string | null;
-  created_at: string;
-};
-
-function flagLabel(s: FlagStatus | null) {
-  if (!s) return "—";
-  if (s === "RED") return "🔴 RED";
-  if (s === "YELLOW") return "🟡 YELLOW";
-  return "🟢 GREEN";
-}
-
-function getFlag(totalScore: number): Flag {
-  if (totalScore <= 9) return "RED";
-  if (totalScore <= 14) return "YELLOW";
-  return "GREEN";
-}
-
-const colorMeta = (c?: string | null) => {
-  const C = (c || "").toUpperCase();
-  if (C === "RED") return { label: "RED", dot: "bg-red-500", pill: "bg-red-50 text-red-700 border-red-200" };
-  if (C === "YELLOW")
-    return { label: "YELLOW", dot: "bg-yellow-400", pill: "bg-yellow-50 text-yellow-800 border-yellow-200" };
-  return { label: "GREEN", dot: "bg-green-500", pill: "bg-green-50 text-green-700 border-green-200" };
+  // ✅ UI-only
+  ui_key?: string;
 };
 
 function todayISO() {
@@ -122,10 +75,16 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function sanitizeDay(input: string | null | undefined) {
+  const raw = String(input ?? "").trim();
+  const cleaned = raw.replace(/\\/g, "").replace(/"/g, "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+  return todayISO();
+}
+
 function prettyMd(md: string | null | undefined) {
   const v = (md ?? "").trim();
   if (!v) return { md: "GENERIC", label: "Microdose" };
-
   const U = v.toUpperCase();
   if (U === "MD") return { md: "MD", label: "GAME" };
   if (U === "MD+1") return { md: "MD+1", label: "POST" };
@@ -140,9 +99,8 @@ function mdFromPlannedFocus(focus: string | null | undefined) {
 }
 
 /**
- * ✅ Fallback rule (client-side):
+ * ✅ Fallback rule:
  * Downgrade one step if soreness >= 4
- * GREEN -> YELLOW, YELLOW -> RED, RED stays RED
  */
 function applySorenessDowngrade(input: {
   flag: FinalFlag | null;
@@ -170,6 +128,26 @@ function applySorenessDowngrade(input: {
 
   return { final_flag, final_color, final_reason };
 }
+
+// ✅ Display helper for confidence
+function formatConfidence(v: PlanPreview["confidence"]) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "string") return v;
+  if (Number.isFinite(v)) {
+    if (v <= 1) return `${Math.round(v * 100)}%`;
+    if (v <= 100) return `${Math.round(v)}%`;
+    return String(v);
+  }
+  return "—";
+}
+
+const colorMeta = (c?: string | null) => {
+  const C = (c || "").toUpperCase();
+  if (C === "RED") return { label: "RED", dot: "bg-red-500", pill: "bg-red-50 text-red-700 border-red-200" };
+  if (C === "YELLOW")
+    return { label: "YELLOW", dot: "bg-yellow-400", pill: "bg-yellow-50 text-yellow-800 border-yellow-200" };
+  return { label: "GREEN", dot: "bg-green-500", pill: "bg-green-50 text-green-700 border-green-200" };
+};
 
 function CoachHubCards() {
   return (
@@ -210,7 +188,6 @@ function CoachHubCards() {
         </CardContent>
       </Card>
 
-      {/* ✅ NEW: TV View card */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">TV view</CardTitle>
@@ -236,41 +213,35 @@ export default function CoachPage() {
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string>("");
+
   const [draftAction, setDraftAction] = useState<Record<string, TrainingAction>>({});
   const [draftMessage, setDraftMessage] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
-
-  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
-  const [historyLoading, setHistoryLoading] = useState<Record<string, boolean>>({});
-  const [history, setHistory] = useState<Record<string, AuditRow[]>>({});
-
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+
   const PAGE_SIZE = 15;
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
 
-  const [locking, setLocking] = useState(false);
-  const [lockToast, setLockToast] = useState<string>("");
-
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
   const [weekGrid, setWeekGrid] = useState<any[]>([]);
   const [coachName, setCoachName] = useState<string>("");
   const [coachVerified, setCoachVerified] = useState(false);
+  const [mdContextToday, setMdContextToday] = useState<string | null>(null);
+
+  // generate decisions
+  const [genLoading, setGenLoading] = useState(false);
+  const [genToast, setGenToast] = useState<string>("");
 
   const today = useMemo(() => todayISO(), []);
-
-  const weekToday = useMemo(() => {
+  const mdDayToday = useMemo(() => {
     const t = todayISO();
     const row = (weekGrid ?? []).find((x: any) => String(x.day_date) === t) ?? null;
-    return row;
-  }, [weekGrid]);
-
-  const mdDayToday = useMemo(() => {
-    const src = weekToday?.md_day ?? planPreview?.md_day ?? "GENERIC";
+    const src = mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? "GENERIC";
     return prettyMd(src).md;
-  }, [weekToday?.md_day, planPreview?.md_day]);
+  }, [weekGrid, planPreview?.md_day, mdContextToday]);
 
   async function ensureCoachAccess() {
     setError("");
@@ -314,7 +285,6 @@ export default function CoachPage() {
         setLoading(true);
         const ok = await ensureCoachAccess();
         if (!ok) return;
-
         setCoachVerified(true);
         await loadToday();
       } finally {
@@ -394,10 +364,86 @@ export default function CoachPage() {
     }
   }
 
+  async function generateTodayDecisionsForTeam() {
+    try {
+      setGenToast("");
+      setError("");
+      setGenLoading(true);
+
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) throw new Error("Ekki innskráður.");
+
+      const { data: prof, error: pErr } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (pErr) throw new Error(pErr.message);
+
+      const teamId = (prof as any)?.team_id ?? null;
+      if (!teamId) throw new Error("Vantar team_id á profile.");
+
+      const day = todayISO();
+
+      const { data, error } = await supabase.rpc("stage4_generate_today_decisions", {
+        p_team_id: teamId,
+        p_entry_date: day,
+      });
+
+      if (error) throw new Error(error.message);
+
+      const row = Array.isArray(data) ? data[0] : data;
+      const processed = row?.processed ?? "?";
+      const inserted = row?.inserted ?? "?";
+      const updated = row?.updated ?? "?";
+
+      setGenToast(`✅ Decisions generated: processed ${processed} · inserted ${inserted} · updated ${updated}`);
+
+      await loadToday();
+    } catch (e: any) {
+      setGenToast("");
+      setError(e?.message ?? "Generate decisions mistókst.");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
   async function loadToday() {
     try {
       setError("");
       setLoading(true);
+
+      const entryDate =
+        new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+      // Ensure Stage4 rows exist for today's date before reading views
+      await supabase.rpc("stage4_bootstrap_for_date", { p_date: entryDate });
+
+      // Fetch md_day context directly for today (per team) to avoid GENERIC fallback
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth?.user?.id;
+        if (uid) {
+          const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+          const teamId = (prof as any)?.team_id ?? null;
+          if (teamId) {
+            const { data: ctxRow } = await supabase
+              .from("v_training_day_context_team")
+              .select("md_day")
+              .eq("team_id", teamId)
+              .eq("day_date", entryDate)
+              .maybeSingle();
+            setMdContextToday((ctxRow as any)?.md_day ?? null);
+          } else {
+            setMdContextToday(null);
+          }
+        } else {
+          setMdContextToday(null);
+        }
+      } catch {
+        setMdContextToday(null);
+      }
 
       await loadPlanPreview();
       await loadWeekGrid();
@@ -405,9 +451,8 @@ export default function CoachPage() {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // ✅ Stage-4: Use v5 view that joins planned_focus/planned_day_type from v_player_daily_decision_v3
       let q = supabase
-        .from("v_coach_readiness_today_v5_final")
+        .from("v_coach_readiness_today_v6")
         .select("*", { count: "exact" })
         .order("total_score", { ascending: true })
         .order("full_name", { ascending: true })
@@ -426,22 +471,23 @@ export default function CoachPage() {
         return;
       }
 
-      const raw: Row[] = ((data ?? []) as unknown) as Row[];
+      const raw: any[] = (data ?? []) as any[];
 
-      const list = raw.map((r) => {
-        const id = (r.readiness_entry_id as string) || String(r.player_id);
+      const list: Row[] = raw.map((r) => {
+        const playerId = String(r.player_id);
 
-        // base (supports both v4_final + any older views)
+        // ✅ FIX #1: readiness_entry_id MUST NOT use r.id (r.id is likely decision id in this view)
+        const entryId: string | null = (r.readiness_entry_id ?? null) as string | null;
+
+        // ✅ decision_id now reliable from view (stage4_decisions)
+        const decisionId: string | null = (r.decision_id ?? null) as string | null;
+
         const baseColor =
-          (String((r as any).final_color ?? (r as any).color ?? (r as any).auto_color ?? "").toLowerCase() as FinalColor) ||
-          null;
+          (String(r.final_color ?? r.color ?? r.auto_color ?? "").toLowerCase() as FinalColor) || null;
 
-        const baseFlag =
-          (String((r as any).final_flag ?? (r as any).computed_auto_flag ?? "").toUpperCase() as FinalFlag) || null;
+        const baseFlag = (String(r.final_flag ?? r.computed_auto_flag ?? "").toUpperCase() as FinalFlag) || null;
+        const baseReason = (r.final_reason ?? r.computed_auto_reason ?? null) as string | null;
 
-        const baseReason = ((r as any).final_reason ?? (r as any).computed_auto_reason ?? null) as string | null;
-
-        // fallback downgrade (if view doesn't already apply it)
         const downgraded = applySorenessDowngrade({
           flag: baseFlag,
           color: baseColor,
@@ -453,38 +499,50 @@ export default function CoachPage() {
         const finalFlag = (downgraded.final_flag ?? baseFlag ?? "GREEN") as FinalFlag;
         const finalReason = downgraded.final_reason ?? baseReason ?? null;
 
-        const uiColor: Color | null =
-          finalColor === "red" ? "red" : finalColor === "yellow" ? "yellow" : finalColor === "green" ? "green" : null;
-
-        const readinessFlag: FlagStatus | null =
-          finalFlag === "RED" ? "RED" : finalFlag === "YELLOW" ? "YELLOW" : finalFlag === "GREEN" ? "GREEN" : null;
-
-        // derive MD from planned_focus if available (per player), else team-level mdDayToday
-        const plannedFocus = (r as any).planned_focus ?? null;
+        const plannedFocus = r.planned_focus ?? null;
         const perPlayerMd = mdFromPlannedFocus(plannedFocus);
+        const viewMd = (r.md_day ?? (r as any).system_md_context ?? null) as string | null;
 
         return {
-          ...r,
-          id,
+          readiness_entry_id: entryId,
+          decision_id: decisionId,
 
-          // ✅ final fields (used by UI)
+        entry_date: String(r.entry_date ?? todayISO()).trim() || todayISO(),
+          created_at: String(r.created_at),
+
+          player_id: playerId,
+          full_name: String(r.full_name ?? ""),
+          team: r.team ?? null,
+          position: r.position ?? null,
+
+          readiness: r.readiness ?? null,
+          sleep: r.sleep ?? null,
+          soreness: r.soreness ?? null,
+          total_score: r.total_score ?? null,
+          notes: r.notes ?? null,
+
+          planned_focus: plannedFocus,
+          planned_day_type: r.planned_day_type ?? null,
+
+          training_action: (r.training_action ?? null) as TrainingAction | null,
+          coach_message: r.coach_message ?? null,
+
+          is_locked: !!r.is_locked,
+
           final_color: finalColor,
           final_flag: finalFlag,
           final_reason: finalReason,
 
-          // ✅ backwards-compat fields used elsewhere in this file
-          flag_status: readinessFlag,
-          color: uiColor,
-          auto_reason: finalReason,
+          md_day: viewMd ?? perPlayerMd ?? mdDayToday,
 
-          // ✅ per-player MD label (from planned_focus), fallback to team-level
-          md_day: perPlayerMd ?? mdDayToday,
+          ui_key: `${playerId}_${String(r.entry_date)}`,
         };
       });
 
       setRows(list);
       setTotal(count ?? 0);
 
+      // init drafts
       setDraftAction((prev) => {
         const next = { ...prev };
         for (const r of list) {
@@ -514,71 +572,126 @@ export default function CoachPage() {
   const counts = useMemo(() => {
     const acc: Record<FinalColor, number> = { red: 0, yellow: 0, green: 0 };
     for (const r of rows) {
-      const c = (String((r as any).final_color ?? (r as any).color ?? "").toLowerCase() as FinalColor) || null;
+      const c = (String(r.final_color ?? "").toLowerCase() as FinalColor) || null;
       if (c === "red" || c === "yellow" || c === "green") acc[c] += 1;
     }
     return acc;
   }, [rows]);
 
-  const filtered = useMemo(() => rows, [rows]);
-
+  // ✅ Coach override flow: RPC upsert + readiness update + plan lock refresh
   async function saveOverride(r: Row) {
     const playerId = String(r.player_id);
     const action = draftAction[playerId] ?? r.training_action ?? "FULL";
     const message = (draftMessage[playerId] ?? r.coach_message ?? "").trim();
+    // ✅ Safe entry_date (never "")
+    const entryDate =
+      r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
 
     setSaving((p) => ({ ...p, [playerId]: true }));
     setSaved((p) => ({ ...p, [playerId]: false }));
     setError("");
 
-    const entryId = r.readiness_entry_id ?? r.id;
+    try {
+      // 1) Stage4 override via RPC (handles missing rows)
+      const { data: sData, error: sErr } = await supabase.rpc("stage4_set_coach_override", {
+        p_player_id: playerId,
+        p_entry_date: entryDate,
+        p_coach_decision: action,
+        p_coach_note: message.length ? message : null,
+      });
+      if (sErr) throw new Error(`Stage4 RPC failed: ${sErr.message}`);
+      const newId = sData as unknown as string | null;
+      if (!newId) throw new Error("Stage4 RPC skilaði ekki id (óvænt).");
 
-    let q = supabase
-      .from("readiness_entries")
-      .update({ training_action: action, coach_message: message.length ? message : null });
+      // 2) Update readiness_entries only if row exists (best effort)
+      if (r.readiness_entry_id) {
+        const { data: reData, error: reErr } = await supabase
+          .from("readiness_entries")
+          .update({
+            training_action: action,
+            coach_message: message.length ? message : null,
+          })
+          .eq("id", r.readiness_entry_id)
+          .select("id")
+          .limit(1);
 
-    if (entryId) q = q.eq("id", entryId);
-    else q = q.eq("player_id", playerId).eq("entry_date", r.entry_date);
+        if (reErr) {
+          console.warn("readiness_entries update blocked:", reErr.message);
+        } else if (!reData || reData.length === 0) {
+          console.warn("readiness_entries updated 0 rows (RLS or mismatch).");
+        }
+      }
 
-    const { error } = await q;
+      // 3) Refresh player plan lock so the player page reflects the override
+      const { error: lockErr } = await supabase.rpc("coach_override_microdose_plan", {
+        p_player_id: playerId,
+        p_entry_date: entryDate,
+        p_variant_id: null,
+        p_source: `COACH_${action}`,
+      });
+      if (lockErr) {
+        console.warn("coach_override_microdose_plan failed payload:", { playerId, entryDate, action, r });
+        throw new Error(`coach_override_microdose_plan failed: ${lockErr.message}`);
+      }
 
-    if (error) {
-      setError(error.message);
+      setSaved((p) => ({ ...p, [playerId]: true }));
+      await loadToday();
+    } catch (e: any) {
+      setError(e?.message ?? "Save mistókst.");
+    } finally {
       setSaving((p) => ({ ...p, [playerId]: false }));
-      return;
     }
-
-    setSaving((p) => ({ ...p, [playerId]: false }));
-    setSaved((p) => ({ ...p, [playerId]: true }));
-    await loadToday();
   }
+
+  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+
+  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
+
+  const sourceLabel = planPreview?.source ?? "—";
+  const confidenceLabel = formatConfidence(planPreview?.confidence);
+
+  const renderActionPills = (pid: string, _locked: boolean) => {
+    const current = draftAction[pid] ?? "FULL";
+    const pill = (value: TrainingAction, label: string) => {
+      const active = current === value;
+      return (
+        <button
+          key={value}
+          type="button"
+          disabled={false}
+          onClick={() => setDraftAction((p) => ({ ...p, [pid]: value }))}
+          className={[
+            "rounded-full border px-3 py-1 text-xs font-semibold",
+            active ? "bg-black text-white border-black" : "bg-white text-gray-800 hover:bg-gray-50",
+            "",
+          ].join(" ")}
+        >
+          {label}
+        </button>
+      );
+    };
+
+    return (
+      <div className="flex items-center gap-2">
+        {pill("FULL", "FULL")}
+        {pill("REDUCED", "REDUCED")}
+        {pill("RECOVERY", "RECOVERY")}
+      </div>
+    );
+  };
 
   const renderRow = (r: Row) => {
     const pid = String(r.player_id);
     const isSaving = !!saving[pid];
-    const isLocked = !!r.is_locked || !!r.coach_locked || !!r.is_time_locked;
+    const isLocked = !!r.is_locked; // player-lock (coach may still override)
 
-    // ✅ use final_color for pill
-    const cm = colorMeta(r.final_color ?? (r as any).color);
+    const cm = colorMeta(r.final_color ?? "green");
     const isOpen = expandedPlayerId === pid;
 
-    // ✅ use final_flag in details (autoFlag label)
-    const autoFlag = r.final_flag
-      ? flagLabel(r.final_flag as FlagStatus)
-      : r.computed_auto_flag
-      ? flagLabel(r.computed_auto_flag as FlagStatus)
-      : null;
-
-    const playerNote = (r.notes ?? "").trim() || null;
-
-    // ✅ show planned_focus first (Stage-4), fallback to final_reason
-    const computedReason = (r.final_reason ?? r.computed_auto_reason) ?? null;
-    const plannedFocus = (r as any).planned_focus ?? null;
-
-    const coachMsg = r.coach_message && r.coach_message.trim().length ? r.coach_message : null;
-
     return (
-      <React.Fragment key={r.id}>
+      <React.Fragment key={r.ui_key ?? r.decision_id ?? r.readiness_entry_id ?? pid}>
         <div className="rounded-lg border bg-white px-3 py-2">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.4fr)_auto_auto_1fr_auto] md:items-center">
             <div className="min-w-0">
@@ -587,7 +700,9 @@ export default function CoachPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
+              <span
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}
+              >
                 <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
                 {cm.label}
               </span>
@@ -604,20 +719,22 @@ export default function CoachPage() {
             </div>
 
             <div className="min-w-0 text-sm text-gray-700">
-              <span className="block truncate" title={(plannedFocus ?? computedReason ?? "") as string}>
-                {plannedFocus || computedReason || "—"}
+              <span className="block truncate" title={(r.planned_focus ?? r.final_reason ?? "") as string}>
+                {r.planned_focus || r.final_reason || "—"}
               </span>
             </div>
 
             <div className="flex items-center gap-2 justify-end">
+              {renderActionPills(pid, isLocked || isSaving)}
+
               <button
                 onClick={async () => {
                   await saveOverride(r);
                 }}
-                disabled={isLocked || isSaving}
+                disabled={isSaving}
                 className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
               >
-                {isLocked ? "LOCKED" : isSaving ? "Saving..." : "Save"}
+                {isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
               </button>
 
               <button
@@ -633,7 +750,7 @@ export default function CoachPage() {
         </div>
 
         {isOpen && (
-          <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+          <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700 space-y-3">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <div>
                 📊 Readiness: <span className="font-medium tabular-nums">{r.readiness ?? "—"}</span>
@@ -655,46 +772,35 @@ export default function CoachPage() {
               </div>
             </div>
 
-            {(autoFlag || playerNote || plannedFocus || computedReason || coachMsg) && (
-              <div className="mt-2 space-y-1 text-gray-700">
-                {autoFlag && (
-                  <div className="text-sm">
-                    <span className="font-medium">Auto-flag:</span> {autoFlag}
-                  </div>
-                )}
-                {playerNote && (
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-700">Player note:</span> {playerNote}
-                  </div>
-                )}
-                {plannedFocus && (
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-700">Planned focus:</span> {plannedFocus}
-                  </div>
-                )}
-                {computedReason && (
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium text-gray-700">Auto-reason:</span> {computedReason}
-                  </div>
-                )}
-                {coachMsg && (
-                  <div className="text-sm">
-                    <span className="font-medium">Coach message:</span> {coachMsg}
-                  </div>
-                )}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-gray-700">Coach message (override)</div>
+              <textarea
+                className="w-full rounded-md border bg-white p-2 text-sm"
+                rows={2}
+                value={draftMessage[pid] ?? ""}
+                onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
+                disabled={isSaving}
+                placeholder="Skrifaðu coach skilaboð…"
+              />
+              <div className="text-xs text-gray-500">
+                Þetta vistast í <code>stage4_decisions.coach_note</code> (og <code>readiness_entries.coach_message</code>{" "}
+                ef readiness row er til) þegar þú ýtir á Save.
               </div>
-            )}
+            </div>
+
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>
+                Decision id: <span className="font-mono">{r.decision_id ?? "—"}</span>
+              </div>
+              <div>
+                Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span>
+              </div>
+            </div>
           </div>
         )}
       </React.Fragment>
     );
   };
-
-  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
-  const canPrev = page > 0;
-  const canNext = page < totalPages - 1;
-
-  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
 
   return (
     <div className="space-y-5">
@@ -704,8 +810,10 @@ export default function CoachPage() {
         <CardHeader>
           <CardTitle className="text-base">Readiness Today</CardTitle>
           <CardDescription>
-            Coach: <span className="font-medium">{coachName || "—"}</span> · MD-day:{" "}
-            <span className="font-medium">{mdDayToday}</span>
+            Coach: <span className="font-medium">{coachName || "—"}</span> · Date:{" "}
+            <span className="font-medium">{today}</span> · MD-day: <span className="font-medium">{mdDayToday}</span> ·
+            Source: <span className="font-medium">{sourceLabel}</span> · Confidence:{" "}
+            <span className="font-medium">{confidenceLabel}</span>
           </CardDescription>
         </CardHeader>
 
@@ -734,20 +842,23 @@ export default function CoachPage() {
                 className="w-[220px]"
               />
 
-              <Button variant="outline" onClick={() => loadToday()} disabled={loading}>
+              <Button variant="outline" onClick={() => loadToday()} disabled={loading || genLoading}>
                 {loading ? "Hleð..." : "Refresh"}
+              </Button>
+
+              <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
+                {genLoading ? "Generating…" : "Generate Today Decisions"}
               </Button>
             </div>
           </div>
 
           {error ? <div className="text-sm text-red-600">{error}</div> : null}
+          {genToast ? <div className="text-sm text-green-700">{genToast}</div> : null}
 
-          {loading ? (
-            <div className="text-sm text-muted-foreground">Hleð gögnum…</div>
-          ) : rows.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="text-sm text-muted-foreground">Engin readiness gögn í dag.</div>
           ) : (
-            <div className="space-y-2">{filtered.map((r) => renderRow(r))}</div>
+            <div className="space-y-2">{rows.map((r) => renderRow(r))}</div>
           )}
 
           {totalPages > 1 ? (
@@ -770,7 +881,8 @@ export default function CoachPage() {
 
       <Card className="shadow-sm">
         <CardContent className="p-4 text-sm">
-          <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.
+          <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka
+          skammt.
         </CardContent>
       </Card>
     </div>

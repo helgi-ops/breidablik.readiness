@@ -31,36 +31,22 @@ function clampInt(v: any, fallback: number, min: number, max: number) {
 
 type ColorKey = Mode;
 
-type FinalRow = {
-  player_id: string;
-  entry_date: string; // date
-  readiness_level: string | null;
+type TemplateRow = {
   md_day: string | null;
-
-  plan_title: string | null;
-  plan_description: string | null;
-  plan_structure: any | null;
-
-  training_system?: string | null;
-  is_locked?: boolean | null;
-  locked_at?: string | null;
+  readiness_level: string | null; // GREEN / GREEN_PLUS / YELLOW / RED
+  title: string | null;
+  description: string | null;
+  structure: any | null; // jsonb
+  variant: string | null; // A/B/C or null
 };
 
 type VariantCard = {
   label: "A" | "B" | "C";
   md_day: string | null;
+  readiness_level: "GREEN_PLUS" | "GREEN" | "YELLOW" | "RED";
   title: string;
   description: string;
   structure: any;
-};
-
-type TemplateVariantRow = {
-  md_day: string | null;
-  readiness_level: string | null;
-  variant_label: string | null; // A/B/C
-  title: string | null;
-  description: string | null;
-  structure: any | null;
 };
 
 /* =========================
@@ -68,35 +54,23 @@ type TemplateVariantRow = {
 ========================= */
 
 const colorUi: Record<ColorKey, { label: string; dot: string; border: string; softBg: string; text: string }> = {
-  green_plus: {
-    label: "GREEN+",
-    dot: "bg-emerald-500",
-    border: "border-emerald-200",
-    softBg: "bg-emerald-50",
-    text: "text-emerald-800",
-  },
-  green: {
-    label: "GREEN",
-    dot: "bg-green-500",
-    border: "border-green-200",
-    softBg: "bg-green-50",
-    text: "text-green-800",
-  },
-  yellow: {
-    label: "YELLOW",
-    dot: "bg-yellow-400",
-    border: "border-yellow-200",
-    softBg: "bg-yellow-50",
-    text: "text-yellow-900",
-  },
-  red: {
-    label: "RED",
-    dot: "bg-red-500",
-    border: "border-red-200",
-    softBg: "bg-red-50",
-    text: "text-red-800",
-  },
+  green_plus: { label: "GREEN+", dot: "bg-emerald-500", border: "border-emerald-200", softBg: "bg-emerald-50", text: "text-emerald-800" },
+  green: { label: "GREEN", dot: "bg-green-500", border: "border-green-200", softBg: "bg-green-50", text: "text-green-800" },
+  yellow: { label: "YELLOW", dot: "bg-yellow-400", border: "border-yellow-200", softBg: "bg-yellow-50", text: "text-yellow-900" },
+  red: { label: "RED", dot: "bg-red-500", border: "border-red-200", softBg: "bg-red-50", text: "text-red-800" },
 };
+
+/* =========================
+   SYSTEM WARM-UP (Stage 4)
+========================= */
+
+const SYSTEM_WARMUP = [
+  "Glutes x2 — mini-band glute walk 2×10 + hip bridge 2×8",
+  "Split Squat ISO: 5 sek × 3 / hlið (max intent)",
+  "Hamstring ISO: 10 sek × 2",
+  "Adductor ISO: 10 sek × 2 (ef þörf)",
+  "Pallof press: 10/10 + reactive 5×/hlið",
+];
 
 /* =========================
    HELPERS
@@ -125,10 +99,7 @@ function mapReadinessToColorKey(readiness: string | null): ColorKey | null {
 
 function stripLeadingColorEmoji(s: string) {
   const v = (s ?? "").trim();
-  return v
-    .replace(/^[🟢🟡🔴🟩🟨🟥🟦🟧🟪⚫⚪🟣🟤]+/u, "")
-    .replace(/^[•\-\\—]+/u, "")
-    .trim();
+  return v.replace(/^[🟢🟡🔴🟩🟨🟥🟦🟧🟪⚫⚪🟣🟤]+/u, "").replace(/^[•\-\\—]+/u, "").trim();
 }
 
 function normalizeBlocks(struct: any): Array<{ title: string; bullets: string[] }> {
@@ -146,7 +117,7 @@ function normalizeBlocks(struct: any): Array<{ title: string; bullets: string[] 
   if (Array.isArray(struct)) {
     return struct
       .map((b: any) => {
-        const title = String(b.title ?? b.heading ?? b.name ?? "").trim() || "—";
+        const title = String(b.title ?? b.heading ?? b.name ?? b.block ?? "").trim() || "—";
         const bulletsRaw = b.items ?? b.bullets ?? b.lines ?? b.points ?? [];
         const bullets = Array.isArray(bulletsRaw) ? bulletsRaw.map((x: any) => String(x).trim()).filter(Boolean) : [];
         return bullets.length ? { title, bullets } : null;
@@ -155,22 +126,11 @@ function normalizeBlocks(struct: any): Array<{ title: string; bullets: string[] 
   }
 
   if (typeof struct === "string") {
-    const bullets = struct
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const bullets = struct.split("\n").map((x) => x.trim()).filter(Boolean);
     return bullets.length ? [{ title: "Æfing", bullets }] : [];
   }
 
   return [];
-}
-
-function jsonStableKey(x: any) {
-  try {
-    return JSON.stringify(x);
-  } catch {
-    return String(x);
-  }
 }
 
 function variantLabelToABC(v: string | null): "A" | "B" | "C" | null {
@@ -181,11 +141,39 @@ function variantLabelToABC(v: string | null): "A" | "B" | "C" | null {
   return null;
 }
 
-function colorKeyToReadinessLevelForVariants(ck: ColorKey) {
+function colorKeyToReadinessLevelForTemplates(ck: ColorKey): "GREEN_PLUS" | "GREEN" | "YELLOW" | "RED" {
   if (ck === "green_plus") return "GREEN_PLUS";
   if (ck === "green") return "GREEN";
   if (ck === "yellow") return "YELLOW";
   return "RED";
+}
+
+function readinessOrderKey(rl: string) {
+  const r = normalizeReadiness(rl);
+  if (r === "GREEN_PLUS") return 1;
+  if (r === "GREEN") return 2;
+  if (r === "YELLOW") return 3;
+  return 4; // RED last
+}
+
+function mdOrderKey(md: string) {
+  // Keep deterministic order in dropdown
+  // GENERIC, MD, MD-4, MD-3, MD-2, MD-1, MD0, MD+1, MD+2 ...
+  // But if your system uses different strings, this still sorts reasonably.
+  const s = (md ?? "").toUpperCase().trim();
+  if (s === "GENERIC") return -100;
+  if (s === "MD") return -50;
+
+  // Try parse MD-#
+  const m1 = s.match(/^MD-(\d+)$/);
+  if (m1) return -Number(m1[1]); // MD-4 first (more negative)
+
+  if (s === "MD0") return 0;
+
+  const m2 = s.match(/^MD\+(\d+)$/);
+  if (m2) return Number(m2[1]); // MD+1, MD+2...
+
+  return 999;
 }
 
 /* =========================
@@ -204,6 +192,7 @@ export default function DisplayClient() {
   const [autorotate, setAutorotate] = useState(urlAuto);
   const [intervalSec, setIntervalSec] = useState(urlInterval);
 
+  // ✅ rotate within each readiness column (A/B/C if multiple rows exist)
   const [variantIndex, setVariantIndex] = useState<Record<ColorKey, number>>({
     green_plus: 0,
     green: 0,
@@ -215,55 +204,13 @@ export default function DisplayClient() {
   const [err, setErr] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const [rows, setRows] = useState<FinalRow[]>([]);
-  const [fallbackVariants, setFallbackVariants] = useState<Record<ColorKey, VariantCard[]>>({
-    green_plus: [],
-    green: [],
-    yellow: [],
-    red: [],
-  });
+  // ✅ md_day dropdown
+  const [mdDayOptions, setMdDayOptions] = useState<string[]>([]);
+  const [selectedMdDay, setSelectedMdDay] = useState<string | null>(sp.get("md") || null);
+  const [mdTouched, setMdTouched] = useState(false);
 
-  /* =========================
-     DROPDOWNS (DB-driven)
-  ========================= */
-
-  const entryDateOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) if (r.entry_date) set.add(r.entry_date);
-    return Array.from(set).sort().reverse(); // newest first
-  }, [rows]);
-
-  const [selectedEntryDate, setSelectedEntryDate] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedEntryDate && entryDateOptions.length) setSelectedEntryDate(entryDateOptions[0]);
-  }, [entryDateOptions, selectedEntryDate]);
-
-  const mdDayOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) {
-      if (selectedEntryDate && r.entry_date !== selectedEntryDate) continue;
-      if (r.md_day) set.add(r.md_day);
-    }
-    return Array.from(set).sort();
-  }, [rows, selectedEntryDate]);
-
-  const [selectedMdDay, setSelectedMdDay] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedMdDay && mdDayOptions.length) setSelectedMdDay(mdDayOptions[0]);
-    if (selectedMdDay && mdDayOptions.length && !mdDayOptions.includes(selectedMdDay)) {
-      setSelectedMdDay(mdDayOptions[0] ?? null);
-    }
-  }, [mdDayOptions, selectedMdDay]);
-
-  const rowsFiltered = useMemo(() => {
-    return rows.filter((r) => {
-      if (selectedEntryDate && r.entry_date !== selectedEntryDate) return false;
-      if (selectedMdDay && r.md_day !== selectedMdDay) return false;
-      return true;
-    });
-  }, [rows, selectedEntryDate, selectedMdDay]);
+  // ✅ templates fetched for selected md_day
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
 
   /* =========================
      URL SYNC
@@ -274,33 +221,103 @@ export default function DisplayClient() {
     params.set("mode", mode);
     params.set("autorotate", autorotate ? "1" : "0");
     params.set("interval", String(intervalSec));
+    if (selectedMdDay) params.set("md", selectedMdDay);
     router.replace(`/coach/display?${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, autorotate, intervalSec]);
+  }, [mode, autorotate, intervalSec, selectedMdDay]);
 
   useEffect(() => {
     if (!autorotate) return;
-    const t = setInterval(() => {
-      setMode((m) => MODES[(MODES.indexOf(m) + 1) % MODES.length]);
-    }, intervalSec * 1000);
+    const t = setInterval(() => setMode((m) => MODES[(MODES.indexOf(m) + 1) % MODES.length]), intervalSec * 1000);
     return () => clearInterval(t);
   }, [autorotate, intervalSec]);
 
+  // ✅ rotate variants inside each color (A/B/C)
+  useEffect(() => {
+    if (!autorotate) return;
+
+    const t = setInterval(() => {
+      setVariantIndex((prev) => {
+        const next: Record<ColorKey, number> = { ...prev };
+        // len is computed later from finalVariantsByColor, so we keep safe increment here
+        for (const ck of MODES) next[ck] = (prev[ck] + 1) % 99;
+        return next;
+      });
+    }, intervalSec * 1000);
+
+    return () => clearInterval(t);
+  }, [autorotate, intervalSec]);
+
+  /* =========================
+     LOAD MD OPTIONS
+  ========================= */
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("microdose_templates").select("md_day").not("md_day", "is", null);
+        if (error) throw error;
+
+        const set = new Set<string>();
+        for (const r of (data ?? []) as Array<{ md_day: string | null }>) if (r.md_day) set.add(String(r.md_day));
+
+        const list = Array.from(set).sort((a, b) => mdOrderKey(a) - mdOrderKey(b));
+        setMdDayOptions(list);
+
+        // choose default if none selected
+        if (!mdTouched && !selectedMdDay && list.length) {
+          // prefer MD-3 if exists, else first
+          const def = list.includes("MD-3") ? "MD-3" : list[0];
+          setSelectedMdDay(def);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* =========================
+     LOAD TEMPLATES FOR MD
+  ========================= */
+
   async function load() {
     setErr(null);
+    setLoading(true);
+
     try {
+      const md = selectedMdDay ?? (mdDayOptions.includes("MD-3") ? "MD-3" : mdDayOptions[0] ?? null);
+      if (!md) {
+        setTemplates([]);
+        setLastUpdated(new Date());
+        return;
+      }
+
       const { data, error } = await supabase
-        .from("v_player_today_microdose_final")
-        .select(
-          "player_id,entry_date,readiness_level,md_day,plan_title,plan_description,plan_structure,training_system,is_locked,locked_at"
-        );
+        .from("microdose_templates")
+        .select("md_day, readiness_level, title, description, structure, variant")
+        .eq("md_day", md);
 
       if (error) throw error;
 
-      setRows((data ?? []) as FinalRow[]);
+      const rows = (data ?? []) as TemplateRow[];
+
+      // Sort for deterministic selection (readiness then variant)
+      rows.sort((a, b) => {
+        const ra = readinessOrderKey(a.readiness_level ?? "");
+        const rb = readinessOrderKey(b.readiness_level ?? "");
+        if (ra !== rb) return ra - rb;
+
+        const va = (variantLabelToABC(a.variant) ?? "A").charCodeAt(0);
+        const vb = (variantLabelToABC(b.variant) ?? "A").charCodeAt(0);
+        return va - vb;
+      });
+
+      setTemplates(rows);
       setLastUpdated(new Date());
     } catch (e: any) {
       setErr(e?.message ?? "Unknown error");
+      setTemplates([]);
     } finally {
       setLoading(false);
     }
@@ -310,175 +327,109 @@ export default function DisplayClient() {
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, []);
-
-  /* =========================
-     FALLBACK VARIANTS (by selectedMdDay)
-  ========================= */
-
-  useEffect(() => {
-    const md = selectedMdDay ?? null;
-    if (!md) return;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("microdose_template_variants")
-          .select("md_day,readiness_level,variant_label,title,description,structure")
-          .eq("md_day", md);
-
-        if (error) throw error;
-
-        const out: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
-        const list = (data ?? []) as TemplateVariantRow[];
-
-        for (const ck of MODES) {
-          const rl = colorKeyToReadinessLevelForVariants(ck);
-          const rowsForColor = list.filter((x) => normalizeReadiness(x.readiness_level) === rl);
-
-          const byLabel = new Map<"A" | "B" | "C", VariantCard>();
-          for (const r of rowsForColor) {
-            const abc = variantLabelToABC(r.variant_label);
-            if (!abc) continue;
-
-            byLabel.set(abc, {
-              label: abc,
-              md_day: r.md_day ?? md,
-              title: stripLeadingColorEmoji(String(r.title ?? "—")),
-              description: String(r.description ?? ""),
-              structure: r.structure ?? null,
-            });
-          }
-
-          out[ck] = (["A", "B", "C"] as const).map((k) => byLabel.get(k)).filter(Boolean) as VariantCard[];
-        }
-
-        setFallbackVariants(out);
-      } catch {
-        // ignore
-      }
-    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMdDay]);
 
-  const variantsByColor = useMemo(() => {
-    const byColor: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
+  /* =========================
+     BUILD VARIANTS PER COLOR
+  ========================= */
 
-    const buckets = new Map<ColorKey, FinalRow[]>();
-    for (const r of rowsFiltered) {
-      const ck = mapReadinessToColorKey(r.readiness_level);
-      if (!ck) continue;
-      if (!buckets.has(ck)) buckets.set(ck, []);
-      buckets.get(ck)!.push(r);
-    }
+  const variantsByColor = useMemo(() => {
+    const out: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
 
     for (const ck of MODES) {
-      const list = buckets.get(ck) ?? [];
-      const seen = new Set<string>();
-      const picked: FinalRow[] = [];
+      const rl = colorKeyToReadinessLevelForTemplates(ck);
 
-      for (const r of list) {
-        const title = stripLeadingColorEmoji(String(r.plan_title ?? ""));
-        const key = `${title}__${jsonStableKey(r.plan_structure)}`;
-        if (!title || title === "—") continue;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        picked.push(r);
-        if (picked.length >= 3) break;
-      }
+      const rows = templates.filter((t) => normalizeReadiness(t.readiness_level) === rl);
 
-      const labels: Array<"A" | "B" | "C"> = ["A", "B", "C"];
+      // map into A/B/C by variant if present, else by index
+      const byLabel = new Map<"A" | "B" | "C", VariantCard>();
+      const fallbackLabels: Array<"A" | "B" | "C"> = ["A", "B", "C"];
 
-      byColor[ck] = picked.map((r, idx) => ({
-        label: labels[idx] ?? "A",
-        md_day: r.md_day ?? null,
-        title: stripLeadingColorEmoji(String(r.plan_title ?? "—")),
-        description: String(r.plan_description ?? ""),
-        structure: r.plan_structure ?? null,
-      }));
+      rows.forEach((r, idx) => {
+        const abc = variantLabelToABC(r.variant) ?? fallbackLabels[idx] ?? "A";
+        if (byLabel.has(abc)) return; // keep first per label
+        byLabel.set(abc, {
+          label: abc,
+          md_day: r.md_day ?? selectedMdDay ?? null,
+          readiness_level: rl,
+          title: stripLeadingColorEmoji(String(r.title ?? "—")) || "—",
+          description: String(r.description ?? ""),
+          structure: r.structure ?? null,
+        });
+      });
+
+      out[ck] = (["A", "B", "C"] as const).map((k) => byLabel.get(k)).filter(Boolean) as VariantCard[];
     }
 
-    return byColor;
-  }, [rowsFiltered]);
-
-  const finalVariantsByColor = useMemo(() => {
-    const out: Record<ColorKey, VariantCard[]> = { green_plus: [], green: [], yellow: [], red: [] };
-    for (const ck of MODES) out[ck] = (variantsByColor[ck]?.length ? variantsByColor[ck] : fallbackVariants[ck]) ?? [];
     return out;
-  }, [variantsByColor, fallbackVariants]);
+  }, [templates, selectedMdDay]);
 
-  useEffect(() => {
-    if (!autorotate) return;
+  // ✅ choose the currently shown variant per color
+  const currentVariantByColor = useMemo(() => {
+    const out: Record<ColorKey, VariantCard | null> = { green_plus: null, green: null, yellow: null, red: null };
 
-    const t = setInterval(() => {
-      setVariantIndex((prev) => {
-        const next: Record<ColorKey, number> = { ...prev };
-        for (const ck of MODES) {
-          const list = finalVariantsByColor?.[ck] ?? [];
-          if (list.length > 1) next[ck] = (prev[ck] + 1) % list.length;
-          else next[ck] = 0;
-        }
-        return next;
-      });
-    }, intervalSec * 1000);
+    for (const ck of MODES) {
+      const list = variantsByColor[ck] ?? [];
+      if (!list.length) {
+        out[ck] = null;
+        continue;
+      }
+      const idxRaw = variantIndex[ck] ?? 0;
+      const idx = idxRaw % list.length;
+      out[ck] = list[idx];
+    }
 
-    return () => clearInterval(t);
-  }, [autorotate, intervalSec, finalVariantsByColor]);
+    return out;
+  }, [variantsByColor, variantIndex]);
 
+  // keep variantIndex in range when lists change
   useEffect(() => {
     setVariantIndex((prev) => {
       const next: Record<ColorKey, number> = { ...prev };
       for (const ck of MODES) {
-        const len = (finalVariantsByColor?.[ck] ?? []).length;
+        const len = (variantsByColor[ck] ?? []).length;
         if (len <= 1) next[ck] = 0;
-        else if (next[ck] >= len) next[ck] = 0;
+        else next[ck] = (prev[ck] ?? 0) % len;
       }
       return next;
     });
-  }, [finalVariantsByColor]);
+  }, [variantsByColor]);
 
   const prevMode = () => setMode((m) => MODES[(MODES.indexOf(m) - 1 + MODES.length) % MODES.length]);
   const nextMode = () => setMode((m) => MODES[(MODES.indexOf(m) + 1) % MODES.length]);
+
+  const buildId = useMemo(() => {
+    const md = selectedMdDay ?? "—";
+    const ts = lastUpdated ? lastUpdated.toLocaleTimeString("is-IS") : "—";
+    const rows = templates.length;
+    return `Build: TV_TEMPLATES_${md} • Rows: ${rows} • Updated: ${ts}`;
+  }, [selectedMdDay, lastUpdated, templates.length]);
 
   return (
     <div className="min-h-screen w-full bg-background p-6">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <div className="text-3xl font-semibold">Æfingar dagsins</div>
+          <div className="mt-1 text-xs text-muted-foreground">{buildId}</div>
+
           <div className="text-sm text-muted-foreground">
-            Highlight: {colorUi[mode].label} • Interval: {intervalSec}s
-            {selectedEntryDate ? ` • Date: ${selectedEntryDate}` : ""}
-            {selectedMdDay ? ` • Day: ${selectedMdDay}` : ""}
-            {lastUpdated ? ` • ${lastUpdated.toLocaleTimeString("is-IS")}` : ""}
+            Highlight: {colorUi[mode].label} • Interval: {intervalSec}s{selectedMdDay ? ` • MD: ${selectedMdDay}` : ""}
           </div>
+
           {err ? <div className="text-sm text-red-600 mt-1">Error: {err}</div> : null}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Native dropdowns (no shadcn Select file needed) */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Date</label>
-            <select
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-              value={selectedEntryDate ?? ""}
-              onChange={(e) => setSelectedEntryDate(e.target.value || null)}
-            >
-              <option value="" disabled>
-                Veldu dagsetningu
-              </option>
-              {entryDateOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground">MD</label>
             <select
               className="h-9 rounded-md border bg-background px-2 text-sm"
               value={selectedMdDay ?? ""}
-              onChange={(e) => setSelectedMdDay(e.target.value || null)}
+              onChange={(e) => {
+                setSelectedMdDay(e.target.value || null);
+                setMdTouched(true);
+              }}
             >
               <option value="" disabled>
                 Veldu MD-day
@@ -498,9 +449,7 @@ export default function DisplayClient() {
             Auto
           </Button>
 
-          <Button onClick={() => setIntervalSec(intervalSec === 12 ? 8 : intervalSec === 8 ? 15 : 12)}>
-            {intervalSec}s
-          </Button>
+          <Button onClick={() => setIntervalSec(intervalSec === 12 ? 8 : intervalSec === 8 ? 15 : 12)}>{intervalSec}s</Button>
 
           <Button variant="secondary" onClick={load} disabled={loading}>
             Refresh
@@ -515,19 +464,14 @@ export default function DisplayClient() {
           const ui = colorUi[ck];
           const isActive = ck === mode;
 
-          const allVariants = finalVariantsByColor[ck] ?? [];
-          const idx = variantIndex[ck] ?? 0;
-
-          const variants = allVariants.length ? [allVariants[idx % allVariants.length]] : [];
+          const v = currentVariantByColor[ck];
+          const all = variantsByColor[ck] ?? [];
+          const blocks = v ? normalizeBlocks(v.structure) : [];
 
           return (
             <Card
               key={ck}
-              className={[
-                "rounded-2xl border-2 transition",
-                ui.border,
-                isActive ? "ring-2 ring-black/20" : "opacity-95",
-              ].join(" ")}
+              className={["rounded-2xl border-2 transition", ui.border, isActive ? "ring-2 ring-black/20" : "opacity-95"].join(" ")}
             >
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-lg">
@@ -535,12 +479,20 @@ export default function DisplayClient() {
                     <span className={`h-3 w-3 rounded-full ${ui.dot}`} />
                     <span>{ui.label}</span>
                   </span>
-                  <Badge variant="secondary" className="text-xs">
-                    {variants[0]?.md_day ? `MD: ${variants[0].md_day}` : "MD: —"}
-                  </Badge>
+
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedMdDay ? `MD: ${selectedMdDay}` : "MD: —"}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {v ? `Variant ${v.label}` : "Variant —"}
+                    </Badge>
+                  </div>
                 </CardTitle>
 
-                <CardDescription className="text-xs">{loading ? "Loading…" : variants[0]?.description || " "}</CardDescription>
+                <CardDescription className="text-xs">
+                  {loading ? "Loading…" : v?.description || (all.length ? " " : "Engin uppsetning fyrir þennan lit á þessu MD-day.")}
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
@@ -556,47 +508,58 @@ export default function DisplayClient() {
                   </div>
                 )}
 
-                {variants.length === 0 ? (
+                {/* ✅ System warm-up always visible */}
+                <div className={`rounded-xl border ${ui.border} ${ui.softBg} p-3 text-[12.5px] ${ui.text}`}>
+                  <div className="font-semibold">0. System Warm-up (always)</div>
+                  <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                    {SYSTEM_WARMUP.map((x, i) => (
+                      <li key={`${ck}-syswarmup-${i}`} className="leading-tight">
+                        {x}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 text-[11.5px] opacity-80">Samræmi & öryggi — óháð readiness/variantum.</div>
+                </div>
+
+                {!v ? (
                   <div className="text-sm text-muted-foreground">
-                    Engin A/B/C uppsetning fannst fyrir {ui.label}. (Athuga md_day/variant töflu)
+                    Engin template fannst fyrir <b>{ui.label}</b> á <b>{selectedMdDay ?? "—"}</b>.
                   </div>
                 ) : (
-                  variants.map((v) => {
-                    const blocks = normalizeBlocks(v.structure);
-                    return (
-                      <div key={`${ck}-${v.label}`} className="rounded-xl border bg-white p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`h-3 w-3 rounded-full ${ui.dot}`} />
-                              <div className="text-base font-semibold leading-tight truncate">{v.title}</div>
-                            </div>
-                            <div className="text-[12px] text-muted-foreground leading-tight">(Variant {v.label})</div>
-                          </div>
-                          <Badge variant="outline">Variant {v.label}</Badge>
+                  <div className="rounded-xl border bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-3 w-3 rounded-full ${ui.dot}`} />
+                          <div className="text-base font-semibold leading-tight truncate">{stripLeadingColorEmoji(v.title || "—")}</div>
                         </div>
-
-                        <div className="mt-3 space-y-2">
-                          {blocks.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Engin structure blokk fannst.</div>
-                          ) : (
-                            blocks.map((b, idx2) => (
-                              <div key={`${ck}-${v.label}-${idx2}`} className="rounded-xl border bg-white p-2">
-                                <div className="text-[13px] font-semibold leading-tight">{b.title}</div>
-                                <ul className="mt-1 list-disc pl-5 space-y-0.5">
-                                  {b.bullets.map((x, j) => (
-                                    <li key={`${ck}-${v.label}-${idx2}-${j}`} className="text-[12.5px] leading-tight">
-                                      {x}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ))
-                          )}
+                        <div className="text-[12px] text-muted-foreground leading-tight">
+                          ({selectedMdDay ?? "—"} • {ui.label} • Variant {v.label})
                         </div>
                       </div>
-                    );
-                  })
+
+                      {all.length > 1 ? <Badge variant="secondary">{all.length} variants</Badge> : <Badge variant="outline">1 variant</Badge>}
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {blocks.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">Engin structure blokk fannst.</div>
+                      ) : (
+                        blocks.map((b, idx2) => (
+                          <div key={`${ck}-${v.label}-${idx2}`} className="rounded-xl border bg-white p-2">
+                            <div className="text-[13px] font-semibold leading-tight">{b.title}</div>
+                            <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                              {b.bullets.map((x, j) => (
+                                <li key={`${ck}-${v.label}-${idx2}-${j}`} className="text-[12.5px] leading-tight">
+                                  {x}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 
@@ -41,7 +42,6 @@ type GenericMsg =
 type Stage4PlanRow =
   | {
       decision_id: string | null;
-
       team_id: string | null;
       player_id: string;
       entry_date: string; // date
@@ -54,8 +54,11 @@ type Stage4PlanRow =
       why: string | null;
       inputs: any; // jsonb
 
-      // joined from microdose_template_variants (or fetched as fallback)
-      variant: string | null; // A/B/C
+      // ✅ NEW: training system label from resolved view
+      training_system: string | null;
+
+      // plan + optional variant meta (variant should not be shown to players)
+      variant: string | null; // A/B/C (staff/debug only)
       title: string | null;
       description: string | null;
       structure: any; // jsonb array
@@ -66,7 +69,7 @@ type DecisionRow =
   | {
       planned_focus: string | null;
       final_planned_day_type: string | null;
-      recommended_day_type: string | null; // ✅ NEW
+      recommended_day_type: string | null;
       readiness_flag: string | null;
     }
   | null;
@@ -136,21 +139,19 @@ type MicrodoseOverrideRow = {
 
 type VariantOption = { id: string; variant: string; title: string | null; description: string | null };
 
-// ✅ Dedupe helper (top-level; safe for hooks rules)
+// ✅ Dedupe helper
 function dedupeFixModulesByTag(input: FixModule[] | null | undefined): FixModule[] {
   const list = Array.isArray(input) ? input : [];
   const map = new Map<string, FixModule>();
-
   for (const m of list) {
     const tag = (m?.tag ?? "").trim();
     if (!tag) continue;
-    if (!map.has(tag)) map.set(tag, m); // keep first occurrence
+    if (!map.has(tag)) map.set(tag, m);
   }
   return Array.from(map.values());
 }
 
 function todayISO() {
-  // local date (not UTC)
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -158,17 +159,16 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function Stat({ label, value }: { label: string; value: any }) {
-  return (
-    <div className="rounded-xl border bg-white p-3">
-      <div className="text-xs font-medium text-zinc-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-zinc-900">{value}</div>
-    </div>
-  );
-}
-
-function isArray(x: any): x is any[] {
-  return Array.isArray(x);
+/**
+ * ✅ IMPORTANT: never allow "" / "\"\"" / junk to reach Postgres date columns
+ */
+function sanitizeDay(input: string | null | undefined) {
+  const raw0 = String(input ?? "").trim();
+  const noSlashes = raw0.replace(/\\/g, "");
+  const noQuotes = noSlashes.replace(/"/g, "");
+  const cleaned = noQuotes.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+  return todayISO();
 }
 
 function norm(x: string | null | undefined) {
@@ -189,7 +189,6 @@ function readinessToFlag(level: string | null | undefined): Flag {
 
 type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
 
-// ✅ NOW prefers recommended_day_type (what v_player_daily_decision_v3 computes)
 function inferDecisionType(decision: DecisionRow, _plan: Stage4PlanRow): DecisionType {
   const dt = norm(decision?.recommended_day_type || decision?.final_planned_day_type);
   if (dt.includes("OFF") || dt.includes("REST") || dt.includes("RECOVER")) return "RECOVERY";
@@ -197,27 +196,11 @@ function inferDecisionType(decision: DecisionRow, _plan: Stage4PlanRow): Decisio
   return "FULL";
 }
 
-function decisionToText(d: DecisionType) {
-  if (d === "FULL") return "FULL";
-  if (d === "REDUCED") return "REDUCED";
-  return "RECOVERY";
-}
-
-function decisionSubtitle(d: DecisionType) {
-  if (d === "FULL") return "Framkvæmdu æfinguna eins og hún er sett upp.";
-  if (d === "REDUCED") return "Framkvæmdu aðeins það sem er hér fyrir neðan (engin viðbót).";
-  return "Endurheimt í dag. Fylgdu leiðbeiningunum hér fyrir neðan.";
-}
-
 function mdContextLabel(mdDay: string | null | undefined) {
   const md = norm(mdDay);
-  if (!md) return "—";
-  return md;
+  return md ? md : "—";
 }
 
-// =======================================
-// ✅ Post-training rule evaluation (client)
-// =======================================
 type SessionLoad = "LOW" | "MODERATE" | "HIGH" | null;
 
 type PostTrainingContext = {
@@ -239,45 +222,58 @@ function matchesWhenClause(ctx: PostTrainingContext, whenClause: any): boolean {
     return whenClause.or.some((cond: any) => matchesWhenClause(ctx, cond));
   }
 
-  if (typeof whenClause.session_load === "string") {
-    return ctx.sessionLoad === whenClause.session_load;
-  }
-
-  if (typeof whenClause.sprint_exposure === "boolean") {
-    return ctx.sprintExposure === whenClause.sprint_exposure;
-  }
-
-  if (typeof whenClause.match_like === "boolean") {
-    return ctx.matchLike === whenClause.match_like;
-  }
+  if (typeof whenClause.session_load === "string") return ctx.sessionLoad === whenClause.session_load;
+  if (typeof whenClause.sprint_exposure === "boolean") return ctx.sprintExposure === whenClause.sprint_exposure;
+  if (typeof whenClause.match_like === "boolean") return ctx.matchLike === whenClause.match_like;
 
   return false;
+}
+
+// ✅ Rotation pool (endur-notar MD templates) — EKKI tendon
+const DAILY_ROTATION_POOL = ["md1_priming", "md2_maintenance", "md3_speed_reset", "md4_neural_reset"] as const;
+
+function pickDailyFromMdDay(mdDay: string | null): string {
+  const md = String(mdDay ?? "").toUpperCase();
+
+  if (md === "MD-1") return "md1_priming";
+  if (md === "MD-2") return "md2_maintenance";
+  if (md === "MD-3") return "md3_speed_reset";
+  if (md === "MD-4") return "md4_neural_reset";
+
+  // POST / MD+1 / MD+2 mapping (breyttu ef þú vilt)
+  if (md === "POST") return "md4_neural_reset";
+  if (md === "MD+1") return "md2_maintenance";
+  if (md === "MD+2") return "md3_speed_reset";
+
+  return DAILY_ROTATION_POOL[0];
 }
 
 function evaluatePostTrainingTemplateIds(
   ctx: PostTrainingContext,
   rules: PostTrainingRuleRow[],
-  alwaysInclude: string[] = ["daily_neural_reset"]
+  alwaysInclude: string[] = [] // <-- ✅ ekki hardcode daily hér
 ): string[] {
-  const out: string[] = [...alwaysInclude];
+  const out: string[] = [];
+
+  // ✅ Daily rotation (endur-notar md1_/md2_/md3_/md4_)
+  out.push(pickDailyFromMdDay(ctx.mdDay));
+
+  // ✅ Aðrar alwaysInclude (ef þú vilt)
+  for (const id of alwaysInclude) if (!out.includes(id)) out.push(id);
 
   const sorted = [...rules].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
   for (const r of sorted) {
     if (!r?.is_active) continue;
     if (!matchesWhenClause(ctx, r.when_clause)) continue;
 
     const append: string[] = Array.isArray(r?.then_clause?.append) ? r.then_clause.append : [];
-    for (const id of append) {
-      if (!out.includes(id)) out.push(id);
-    }
+    for (const id of append) if (!out.includes(id)) out.push(id);
   }
 
   return out;
 }
 
-// =======================================
-// ✅ Session type heuristics (best effort)
-// =======================================
 function inferMatchLike(sessionTypeRaw: string | null | undefined) {
   const s = norm(sessionTypeRaw);
   return s.includes("MATCH") || s.includes("LEIKUR") || s.includes("GAME");
@@ -288,8 +284,498 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
   return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
 }
 
+/* -------------------------
+   UI helpers
+------------------------- */
+
+function BadgePill({ children, className = "" }: { children: any; className?: string }) {
+  return (
+    <span
+      className={
+        "inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-800 " + className
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-zinc-900">{value}</div>
+    </div>
+  );
+}
+
+function safeStringList(x: any): string[] {
+  if (Array.isArray(x)) return x.map((v) => String(v));
+  return [];
+}
+
+/** =========
+ *  Block accents (NEUTRAL / GRÁTT fyrir player)
+ *  ========= */
+function blockAccent(titleRaw: string) {
+  const t = (titleRaw ?? "").toLowerCase();
+
+  // Halda merkingu (label) en ekki litum
+  let label = "Partur";
+
+  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) label = "Upphitun";
+  else if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) label = "Primer";
+  else if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) label = "Main";
+  else if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) label = "Accessory";
+
+  return {
+    // ✅ Allt neutral / grátt
+    wrap: "border-zinc-200 bg-zinc-50/60",
+    badge: "bg-zinc-50 text-zinc-700 border-zinc-200",
+    dot: "bg-zinc-400",
+    label,
+  };
+}
+
+function renderStructureBlocks(
+  structure: any,
+  opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string }
+) {
+  const blocks = Array.isArray(structure) ? structure : [];
+  if (!blocks.length) return null;
+
+  const headerTitle = String(opts?.headerTitle ?? "").trim();
+  const headerDesc = String(opts?.headerDesc ?? "").trim();
+  const lockLabel = opts?.lockLabel ?? "";
+
+  return (
+    <div className="mt-6">
+      {/* Header (halda GRÆNA punktinum) */}
+      <div className="rounded-2xl border bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
+            <div className="mt-2 flex items-center gap-2">
+              {/* ✅ EKKI taka græna punktinn */}
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <div className="truncate text-base font-semibold text-zinc-900">{headerTitle || "Æfing dagsins"}</div>
+            </div>
+            {headerDesc ? <div className="mt-1 text-sm text-zinc-600">{headerDesc}</div> : null}
+          </div>
+
+          <div className="text-right">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Staða</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel || "—"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Blocks */}
+      <div className="mt-3 space-y-3">
+        {blocks.map((b: any, idx: number) => {
+          const title = String(b?.block ?? `Block ${idx + 1}`);
+          const items = safeStringList(b?.items);
+          const accent = blockAccent(title);
+
+          return (
+            // ✅ Fjarlægjum border-l-4 lit, allt verður grátt
+            <div key={`${title}-${idx}`} className={`rounded-2xl border p-4 ${accent.wrap}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${accent.dot}`} />
+                    <div className="text-sm font-semibold text-zinc-900">{title}</div>
+                  </div>
+                </div>
+
+                <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold ${accent.badge}`}>
+                  {accent.label}
+                </span>
+              </div>
+
+              {items.length ? (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-800">
+                  {items.map((it, i) => (
+                    <li key={i}>{it}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-3 text-sm text-zinc-600">Engin atriði í þessum hluta.</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function renderFixModules(mods: FixModule[]) {
+  return (
+    <div className="mt-6">
+      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ráðlagðar æfingar</div>
+
+      {!mods.length ? (
+        <div className="mt-2 rounded-2xl border bg-white p-4 text-sm text-zinc-600">Engar ráðlagðar æfingar í dag.</div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {mods.map((m, idx) => {
+            const steps = Array.isArray(m?.structure) ? m.structure : [];
+            return (
+              <div key={`${m.tag}-${idx}`} className="rounded-2xl border bg-white p-4">
+                <div className="text-sm font-semibold text-zinc-900">{m.title || m.tag}</div>
+                {!!m.tag && <div className="mt-1 text-xs font-medium text-zinc-500">{m.tag}</div>}
+
+                {!!steps.length ? (
+                  <div className="mt-3 space-y-2">
+                    {steps.map((s: any, i: number) => {
+                      const st = String(s?.title ?? s?.type ?? `Skref ${i + 1}`);
+                      const cues = safeStringList(s?.cues);
+                      return (
+                        <div key={i} className="rounded-xl border bg-zinc-50 p-3">
+                          <div className="text-sm font-semibold text-zinc-900">{st}</div>
+                          {!!cues.length && (
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                              {cues.map((c, ci) => (
+                                <li key={ci}>{c}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-zinc-600">Engin structure gögn.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** =========
+ *  ✅ Post-training accents (ALLT GRÁTT / NEUTRAL)
+ *  ========= */
+function postTrainingAccent(_templateId: string, _tags: string[]) {
+  return {
+    wrap: "border-zinc-200 bg-zinc-50/60",
+    chip: "bg-zinc-50 text-zinc-700 border-zinc-200",
+  };
+}
+
+/** =========
+ *  ✅ Post-training structure parser
+ *  - styður: {sections:[{steps:[...]}]}, {blocks:[{items:[...]}]}, {steps:[...]}, array
+ *  - ✅ NÝTT: ef steps eru string lines -> umbreyta í "exercises" (nafn + instructions)
+ *  ========= */
+type PTExercise = {
+  name: string;
+  instructions: string[];
+  timeSec: number | null;
+};
+
+type PTSection = {
+  title: string | null;
+  exercises: PTExercise[];
+  note?: string | null; // t.d. "Rule: ..."
+};
+
+function toStringList(x: any): string[] {
+  if (Array.isArray(x)) return x.map((v) => String(v));
+  if (typeof x === "string" && x.trim()) return [x.trim()];
+  return [];
+}
+
+function normalizePTExerciseFromObject(s: any, fallbackIndex: number): PTExercise {
+  const title = String(s?.title ?? s?.type ?? s?.name ?? `Skref ${fallbackIndex + 1}`);
+  const cues = toStringList(s?.cues ?? s?.items ?? s?.notes);
+  const timeSecRaw = s?.time_sec != null ? Number(s.time_sec) : null;
+
+  return {
+    name: title,
+    instructions: cues,
+    timeSec: Number.isFinite(timeSecRaw as any) ? (timeSecRaw as number) : null,
+  };
+}
+
+function isRuleLine(line: string) {
+  const t = (line ?? "").trim().toLowerCase();
+  return t.startsWith("rule:") || t.startsWith("regla:") || t.startsWith("ath:") || t.startsWith("note:");
+}
+
+/**
+ * ✅ Parse string-steps (MET style):
+ * - Lína með ":" byrjar nýja æfingu (left = name, right = fyrsta instruction)
+ * - Ef engin ":" og engin current -> setur nýja æfingu með name=line
+ * - Ef engin ":" og current -> line fer í instructions
+ * - "Rule:" fer í section.note (ekki sem æfing)
+ */
+function parseStringStepsToExercises(lines: string[]): { exercises: PTExercise[]; note: string | null } {
+  const exercises: PTExercise[] = [];
+  let note: string | null = null;
+
+  let current: PTExercise | null = null;
+
+  for (const raw of lines) {
+    const line = String(raw ?? "").trim();
+    if (!line) continue;
+
+    if (isRuleLine(line)) {
+      // ✅ safna í note (taka "Rule:" prefix af ef þú vilt)
+      note = note ? `${note} ${line}` : line;
+      continue;
+    }
+
+    // Heuristic: "Hip MET: ..." -> name + instruction
+    const hasColon = line.includes(":");
+    if (hasColon) {
+      const [left0, ...rest] = line.split(":");
+      const left = String(left0 ?? "").trim();
+      const right = rest.join(":").trim();
+
+      current = {
+        name: left || `Æfing ${exercises.length + 1}`,
+        instructions: [],
+        timeSec: null,
+      };
+
+      if (right) current.instructions.push(right);
+
+      exercises.push(current);
+      continue;
+    }
+
+    // No colon:
+    if (!current) {
+      current = { name: line, instructions: [], timeSec: null };
+      exercises.push(current);
+      continue;
+    }
+
+    current.instructions.push(line);
+  }
+
+  return { exercises, note };
+}
+
+function extractPostTrainingSections(structure: any): PTSection[] {
+  if (!structure) return [];
+
+  // ✅ Algengast: { sections: [ { title?, steps: [...] } ] }
+  if (typeof structure === "object" && Array.isArray((structure as any).sections)) {
+    const secs: PTSection[] = (structure as any).sections.map((sec: any, si: number) => {
+      const secTitleRaw = sec?.title ?? sec?.name ?? sec?.block ?? null;
+      const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
+
+      const rawSteps = Array.isArray(sec?.steps) ? sec.steps : [];
+
+      // ✅ Ef þetta er string-listi -> parse í exercises (MET fix)
+      const allStrings = rawSteps.length > 0 && rawSteps.every((x: any) => typeof x === "string");
+      if (allStrings) {
+        const { exercises, note } = parseStringStepsToExercises(rawSteps.map((x: any) => String(x)));
+        return {
+          title: secTitle || ((structure as any).sections.length > 1 ? `Hluti ${si + 1}` : null),
+          exercises,
+          note,
+        };
+      }
+
+      // ✅ Annars: object steps -> map í exercises (name + instructions)
+      const exercises = rawSteps.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
+
+      return {
+        title: secTitle || ((structure as any).sections.length > 1 ? `Hluti ${si + 1}` : null),
+        exercises,
+        note: null,
+      };
+    });
+
+    return secs.filter((s) => s.exercises.length);
+  }
+
+  // ✅ Stundum: { blocks: [ { name/block?, items: [...] } ] }
+  if (typeof structure === "object" && Array.isArray((structure as any).blocks)) {
+    const secs: PTSection[] = (structure as any).blocks.map((b: any, bi: number) => {
+      const secTitleRaw = b?.name ?? b?.title ?? b?.block ?? null;
+      const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
+
+      const raw = Array.isArray(b?.steps) ? b.steps : Array.isArray(b?.items) ? b.items : [];
+
+      const allStrings = raw.length > 0 && raw.every((x: any) => typeof x === "string");
+      if (allStrings) {
+        const { exercises, note } = parseStringStepsToExercises(raw.map((x: any) => String(x)));
+        return {
+          title: secTitle || ((structure as any).blocks.length > 1 ? `Hluti ${bi + 1}` : null),
+          exercises,
+          note,
+        };
+      }
+
+      const exercises = raw.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
+      return {
+        title: secTitle || ((structure as any).blocks.length > 1 ? `Hluti ${bi + 1}` : null),
+        exercises,
+        note: null,
+      };
+    });
+
+    return secs.filter((s) => s.exercises.length);
+  }
+
+  // ✅ Eldra/annað: { steps: [...] }
+  if (typeof structure === "object" && Array.isArray((structure as any).steps)) {
+    const raw = (structure as any).steps;
+
+    const allStrings = raw.length > 0 && raw.every((x: any) => typeof x === "string");
+    if (allStrings) {
+      const { exercises, note } = parseStringStepsToExercises(raw.map((x: any) => String(x)));
+      return exercises.length ? [{ title: null, exercises, note }] : [];
+    }
+
+    const exercises = raw.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
+    return exercises.length ? [{ title: null, exercises, note: null }] : [];
+  }
+
+  // ✅ Ef structure er bein array
+  if (Array.isArray(structure)) {
+    const allStrings = structure.length > 0 && structure.every((x: any) => typeof x === "string");
+    if (allStrings) {
+      const { exercises, note } = parseStringStepsToExercises(structure.map((x: any) => String(x)));
+      return exercises.length ? [{ title: null, exercises, note }] : [];
+    }
+
+    const exercises = structure.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
+    return exercises.length ? [{ title: null, exercises, note: null }] : [];
+  }
+
+  return [];
+}
+
+/** =========
+ *  ✅ Render post-training (ALLT GRÁTT / NEUTRAL)
+ *  ✅ NÝTT: Æfingaheiti númerað, instructions sem plain text (ENGIN bullets / engin numbering)
+ *  ========= */
+function renderPostTraining(templates: PostTrainingTemplateRow[]) {
+  const count = templates.length;
+
+  function isTendonTemplate(t: PostTrainingTemplateRow) {
+    const id = (t?.id ?? "").toLowerCase();
+    const tags = (t?.tags ?? []).map((x) => String(x).toLowerCase());
+    return id.includes("tendon") || tags.includes("tendon_health") || tags.includes("achilles") || tags.includes("patellar");
+  }
+
+  function isDailyMdTemplate(t: PostTrainingTemplateRow) {
+    const id = (t?.id ?? "").toLowerCase();
+    return id.startsWith("md1_") || id.startsWith("md2_") || id.startsWith("md3_") || id.startsWith("md4_");
+  }
+
+  // ✅ Röðun: Tendon fyrst, svo Daily (Neural Priming o.fl.), svo rest
+  const orderedTemplates = [...templates].sort((a, b) => {
+    const ra = isTendonTemplate(a) ? 0 : isDailyMdTemplate(a) ? 1 : 2;
+    const rb = isTendonTemplate(b) ? 0 : isDailyMdTemplate(b) ? 1 : 2;
+    return ra - rb;
+  });
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Eftir æfingu — mælt með</div>
+          <div className="mt-1 text-sm text-zinc-600">5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu.</div>
+        </div>
+        <div className="text-xs font-semibold text-zinc-500">{count ? `${count} rútín${count === 1 ? "a" : "ur"}` : ""}</div>
+      </div>
+
+      {!orderedTemplates.length ? (
+        <div className="mt-2 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">Engar tillögur í dag.</div>
+      ) : (
+        // ✅ Einn dálkur (tendon ofan á neural priming)
+        <div className="mt-3 grid grid-cols-1 gap-3">
+          {orderedTemplates.map((t) => {
+            const accent = postTrainingAccent(t.id, t.tags ?? []);
+            const sections = extractPostTrainingSections(t?.structure);
+            const totalExercises = sections.reduce((acc, s) => acc + s.exercises.length, 0);
+
+            let n = 0;
+
+            return (
+              <div key={t.id} className={`rounded-2xl border p-4 ${accent.wrap}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? `${t.duration_min} mín` : ""}</div>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {(t.tags ?? []).slice(0, 4).map((tag) => (
+                      <span key={tag} className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${accent.chip}`}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {totalExercises ? (
+                  <div className="mt-3 space-y-3">
+                    {sections.map((sec, si) => (
+                      <div key={si} className="space-y-2">
+                        {sec.title ? (
+                          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{sec.title}</div>
+                        ) : null}
+
+                        {/* ✅ Section note (t.d. Rule: ...) */}
+                        {sec.note ? <div className="text-sm text-zinc-600">{sec.note}</div> : null}
+
+                        {sec.exercises.map((ex, i) => {
+                          n += 1;
+                          return (
+                            <div key={`${si}-${i}`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="text-sm font-semibold text-zinc-900">
+                                  {n}. {ex.name}
+                                </div>
+                                {ex.timeSec ? <div className="text-xs font-semibold text-zinc-500">{ex.timeSec}s</div> : null}
+                              </div>
+
+                              {!!ex.instructions.length && (
+                                <div className="mt-2 space-y-1">
+                                  {ex.instructions.map((line, li) => (
+                                    <p key={li} className="text-sm text-zinc-700">
+                                      {line}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-zinc-600">Engin skref í template.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlayerPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
+  const searchParams = useSearchParams();
+
+  // ✅ One source-of-truth day for all queries (supports ?date=YYYY-MM-DD)
+  const day = useMemo(() => {
+    const raw = searchParams?.get("date");
+    return sanitizeDay(raw || null);
+  }, [searchParams]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -301,10 +787,7 @@ export default function PlayerPage() {
 
   const [playerMeta, setPlayerMeta] = useState<PlayerRow | null>(null);
 
-  // ✅ Stage-4 plan
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
-
-  // ✅ whether we are showing "latest available" (fallback), not necessarily today's
   const [planIsFallback, setPlanIsFallback] = useState(false);
 
   const [metrics, setMetrics] = useState<MetricsRow>(null);
@@ -322,20 +805,26 @@ export default function PlayerPage() {
 
   const staffMode = useMemo(() => isStaffRole(profile?.role), [profile?.role]);
 
-  // ✅ Coach override (Stage-4)
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const [overrideReason, setOverrideReason] = useState("");
-  const [overrideVariantId, setOverrideVariantId] = useState("");
-  const [overrideSaving, setOverrideSaving] = useState(false);
-  const [overrideErr, setOverrideErr] = useState("");
-  const [variantOptions, setVariantOptions] = useState<VariantOption[]>([]);
-
-  // ✅ Stage-4 audit list (last overrides)
+  // override state (you can keep this, even if you don’t show UI yet)
   const [overrideAudit, setOverrideAudit] = useState<MicrodoseOverrideRow[]>([]);
   const [overrideAuditErr, setOverrideAuditErr] = useState<string>("");
 
-  // ✅ MUST be above early returns (Rules of Hooks)
   const fixModules = useMemo(() => dedupeFixModulesByTag(fixRow?.fix_modules), [fixRow?.fix_modules]);
+
+  async function ensureStage4Decision(playerId: string, dayInput: string) {
+    const safeDay = sanitizeDay(dayInput);
+    try {
+      const { error } = await supabase.rpc("stage4_ensure_decision", {
+        p_player_id: playerId,
+        p_entry_date: safeDay,
+      });
+
+      // ✅ This must NEVER blank the UI. Only log.
+      if (error) console.error("stage4_ensure_decision failed:", error);
+    } catch (e: any) {
+      console.error("stage4_ensure_decision unexpected error:", e?.message ?? e);
+    }
+  }
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
     if (teamId) {
@@ -386,101 +875,88 @@ export default function PlayerPage() {
     }
   }
 
-  // ✅ Stage-4 plan loader:
-  // ✅ FINAL plan MUST come from v_player_today_microdose_resolved
-  //    (it resolves md_day + picks template based on readiness_flag / planned_focus / final_planned_day_type)
-  async function fetchStage4Plan(playerId: string, day: string) {
-    // Helper: decision row for EXACT day (gives us id/team_id/etc.)
-    async function fetchDecisionForDay() {
-      const { data, error } = await supabase
-        .from("microdose_decisions")
-        .select("id, team_id, player_id, entry_date, md_day, readiness_level, chosen_variant_id, locked, source, confidence, why, inputs")
-        .eq("player_id", playerId)
-        .eq("entry_date", day)
-        .maybeSingle();
+  async function fetchStage4Plan(playerId: string, dayInput: string) {
+    const safeDay = sanitizeDay(dayInput);
 
-      if (error) {
-        console.error("microdose_decisions (day) error:", error);
-        throw new Error(error.message);
-      }
-      return (data as any) ?? null;
+    const { data: resolved, error: rErr } = await supabase
+      .from("v_player_today_microdose_resolved")
+      .select(
+        [
+          "player_id",
+          "entry_date",
+          "md_day_raw",
+          "planned_focus",
+          "final_planned_day_type",
+          "readiness_flag",
+          "md_day_resolved",
+          "readiness_resolved",
+          "training_system",
+
+          "decision_id",
+          "team_id",
+          "chosen_variant_id",
+          "locked",
+          "source",
+          "confidence",
+          "why",
+          "inputs",
+
+          // plan + optional variant meta
+          "variant_id",
+          "variant",
+          "plan_title",
+          "plan_description",
+          "plan_structure",
+
+          // keep for compatibility (do not display to player)
+          "locked_at",
+          "is_locked",
+        ].join(",")
+      )
+      .eq("player_id", playerId)
+      .eq("entry_date", safeDay)
+      .maybeSingle();
+
+    if (rErr) {
+      console.error("v_player_today_microdose_resolved error:", rErr);
+      throw new Error(rErr.message);
     }
-
-    // ✅ Helper: RESOLVED plan view for day
-    async function fetchResolvedPlanForDay() {
-      const { data, error } = await supabase
-        .from("v_player_today_microdose_resolved")
-        .select(
-          [
-            "player_id",
-            "entry_date",
-            "md_day_raw",
-            "planned_focus",
-            "final_planned_day_type",
-            "readiness_flag",
-            "md_day_resolved",
-            "training_system",
-            "plan_title",
-            "plan_description",
-            "plan_structure",
-            "locked_at",
-            "is_locked",
-          ].join(",")
-        )
-        .eq("player_id", playerId)
-        .eq("entry_date", day)
-        .maybeSingle();
-
-      if (error) {
-        console.error("v_player_today_microdose_resolved error:", error);
-        throw new Error(error.message);
-      }
-      return (data as any) ?? null;
-    }
-
-    // ---- 1) RESOLVED plan (source of truth for Player page)
-    const resolved = await fetchResolvedPlanForDay();
-
-    // ---- 2) Attach decision row (for decision_id + audit). May be null.
-    const drowExact = await fetchDecisionForDay();
 
     if (resolved) {
       setPlanIsFallback(false);
 
       const merged: any = {
-        decision_id: drowExact?.id ?? null,
-        team_id: drowExact?.team_id ?? null,
-        player_id: resolved.player_id,
-        entry_date: resolved.entry_date,
+        decision_id: (resolved as any).decision_id ?? null,
+        team_id: (resolved as any).team_id ?? null,
+        player_id: (resolved as any).player_id,
+        entry_date: (resolved as any).entry_date,
+        md_day: (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null,
+        readiness_level: (resolved as any).readiness_resolved ?? (resolved as any).readiness_flag ?? null,
 
-        // ✅ prefer resolved md-day
-        md_day: resolved.md_day_resolved ?? resolved.md_day_raw ?? null,
+        chosen_variant_id: (resolved as any).chosen_variant_id ?? null,
+        locked: (resolved as any).locked ?? (resolved as any).is_locked ?? null,
+        source: (resolved as any).source ?? "RESOLVED_VIEW",
+        confidence: (resolved as any).confidence ?? null,
+        why: (resolved as any).why ?? null,
+        inputs: (resolved as any).inputs ?? null,
 
-        // ✅ readiness_level for UI: use readiness_flag from decision view
-        readiness_level: resolved.readiness_flag ?? drowExact?.readiness_level ?? null,
+        training_system: (resolved as any).training_system ?? null,
 
-        chosen_variant_id: drowExact?.chosen_variant_id ?? null,
-        locked: resolved.is_locked ?? drowExact?.locked ?? null,
-        source: drowExact?.source ?? "RESOLVED_VIEW",
-        confidence: drowExact?.confidence ?? null,
-        why: drowExact?.why ?? null,
-        inputs: drowExact?.inputs ?? null,
-
-        variant: null,
-        title: resolved.plan_title ?? null,
-        description: resolved.plan_description ?? null,
-        structure: resolved.plan_structure ?? null,
+        variant: (resolved as any).variant ?? null,
+        title: (resolved as any).plan_title ?? null,
+        description: (resolved as any).plan_description ?? null,
+        structure: (resolved as any).plan_structure ?? null,
       };
 
       return merged as Stage4PlanRow;
     }
 
-    // ---- 3) fallback: latest decision (<= day) + fetch variant details
+    // fallback (latest <= day)
     const { data: drow, error: dErr } = await supabase
       .from("microdose_decisions")
       .select("id, team_id, player_id, entry_date, md_day, readiness_level, chosen_variant_id, locked, source, confidence, why, inputs")
       .eq("player_id", playerId)
-      .lte("entry_date", day)
+      .lte("entry_date", safeDay)
       .order("entry_date", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -495,24 +971,30 @@ export default function PlayerPage() {
       return null;
     }
 
-    const variantId = (drow as any)?.chosen_variant_id ?? null;
+    // ✅ IMPORTANT: fallback now uses microdose_templates (NOT variants)
+    const teamId = (drow as any)?.team_id ?? null;
+    const mdDay = (drow as any)?.md_day ?? null;
+    const lvl = (drow as any)?.readiness_level ?? null;
 
-    let variantRow: any = null;
-    if (variantId) {
-      const { data: vr, error: vrErr } = await supabase
-        .from("microdose_template_variants")
-        .select("id, variant, title, description, structure")
-        .eq("id", variantId)
+    let templateRow: any = null;
+
+    if (teamId && mdDay && lvl) {
+      const { data: tr, error: trErr } = await supabase
+        .from("microdose_templates")
+        .select("id, title, description, structure")
+        .eq("team_id", teamId)
+        .eq("md_day", mdDay)
+        .eq("readiness_level", lvl)
         .maybeSingle();
 
-      if (vrErr) {
-        console.error("microdose_template_variants error:", vrErr);
-        throw new Error(vrErr.message);
+      if (trErr) {
+        console.error("microdose_templates fallback error:", trErr);
+        throw new Error(trErr.message);
       }
-      variantRow = vr ?? null;
+      templateRow = tr ?? null;
     }
 
-    setPlanIsFallback((drow as any)?.entry_date !== day);
+    setPlanIsFallback((drow as any)?.entry_date !== safeDay);
 
     const merged: any = {
       decision_id: (drow as any).id ?? null,
@@ -528,28 +1010,16 @@ export default function PlayerPage() {
       why: (drow as any).why ?? null,
       inputs: (drow as any).inputs ?? null,
 
-      variant: variantRow?.variant ?? null,
-      title: variantRow?.title ?? null,
-      description: variantRow?.description ?? null,
-      structure: variantRow?.structure ?? null,
+      training_system: null,
+
+      variant: null,
+
+      title: templateRow?.title ?? null,
+      description: templateRow?.description ?? null,
+      structure: templateRow?.structure ?? null,
     };
 
     return merged as Stage4PlanRow;
-  }
-
-  async function reloadPlan(playerId: string, day: string) {
-    try {
-      const p = await fetchStage4Plan(playerId, day);
-      setPlan((p as any) ?? null);
-
-      const did = (p as any)?.decision_id ?? null;
-      if (did && staffMode) {
-        await loadOverrideAudit(String(did));
-      }
-    } catch (e: any) {
-      console.error("reloadPlan error:", e);
-      setError(e?.message ?? "Villa við að endurhlaða plan.");
-    }
   }
 
   async function loadPostTrainingRecommendations(ctx: PostTrainingContext) {
@@ -565,7 +1035,9 @@ export default function PlayerPage() {
 
       const ruleRows = ((rules as any) ?? []) as PostTrainingRuleRow[];
 
-      const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows, ["daily_neural_reset"]);
+      // ✅ IMPORTANT: daily er nú valið inni í evaluatePostTrainingTemplateIds (rotation)
+      const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows);
+
       if (!ids.length) {
         setPostTraining([]);
         return;
@@ -611,60 +1083,6 @@ export default function PlayerPage() {
     }
   }
 
-  // ✅ Coach override submit (calls Next API route)
-  async function submitOverride() {
-    if (!profile?.player_id) return;
-    if (!plan?.entry_date) return;
-
-    const to_variant_id = overrideVariantId;
-    const reason = overrideReason.trim();
-
-    if (!to_variant_id) {
-      setOverrideErr("Veldu variant.");
-      return;
-    }
-    if (!reason) {
-      setOverrideErr("Skrifaðu ástæðu (stutt).");
-      return;
-    }
-
-    try {
-      setOverrideSaving(true);
-      setOverrideErr("");
-
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess?.session?.access_token;
-      if (!token) throw new Error("Vantar session token.");
-
-      const res = await fetch("/api/microdose/override", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          player_id: profile.player_id,
-          entry_date: plan.entry_date,
-          to_variant_id,
-          reason,
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Override mistókst.");
-
-      await reloadPlan(profile.player_id, todayISO());
-
-      setOverrideOpen(false);
-      setOverrideReason("");
-    } catch (e: any) {
-      setOverrideErr(e?.message ?? "Óþekkt villa.");
-    } finally {
-      setOverrideSaving(false);
-    }
-  }
-
-  // ====== Initial load (try/catch + finally) ======
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -679,17 +1097,8 @@ export default function PlayerPage() {
       setSession(null);
       setPostTraining([]);
       setPostTrainingErr("");
-
       setFixRow(null);
       setFixErr("");
-
-      setOverrideOpen(false);
-      setOverrideReason("");
-      setOverrideVariantId("");
-      setOverrideSaving(false);
-      setOverrideErr("");
-      setVariantOptions([]);
-
       setOverrideAudit([]);
       setOverrideAuditErr("");
 
@@ -722,7 +1131,10 @@ export default function PlayerPage() {
           return;
         }
 
-        const today = todayISO();
+        const safeDay = sanitizeDay(day);
+
+        // ✅ try ensure, but never block UI
+        await ensureStage4Decision(prof.player_id, safeDay);
 
         const { data: pm, error: pmErr } = await supabase
           .from("players")
@@ -737,38 +1149,35 @@ export default function PlayerPage() {
           .from("v_player_daily_decision_v3")
           .select("planned_focus, final_planned_day_type, recommended_day_type, readiness_flag")
           .eq("player_id", prof.player_id)
-          .eq("day_date", today)
+          .eq("day_date", safeDay)
           .maybeSingle();
 
         if (dErr) console.error("decision error:", dErr.message);
         setDecision((drow as any) ?? null);
 
         const { data: srow, error: sErr } = await supabase
-          .from("v_player_session_today")
+          .from("v_player_session_today_v2")
           .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
           .eq("player_id", prof.player_id)
-          .eq("day_date", today)
+          .eq("day_date", safeDay)
           .maybeSingle();
 
-        if (sErr) console.error("v_player_session_today error:", sErr.message);
+        if (sErr) console.error("v_player_session_today_v2 error:", sErr.message);
         setSession((srow as any) ?? null);
 
-        // ✅ Stage-4 plan (RESOLVED view + decision_id merge)
-        const p = await fetchStage4Plan(prof.player_id, today);
+        const p = await fetchStage4Plan(prof.player_id, safeDay);
         setPlan((p as any) ?? null);
 
-        // ✅ staff-only: load audit overrides
         if (isStaffRole(prof?.role)) {
           const did = (p as any)?.decision_id ?? null;
           if (did) await loadOverrideAudit(String(did));
-          else setOverrideAudit([]);
         }
 
         const { data: mrow, error: mErr } = await supabase
           .from("readiness_entries")
           .select("readiness, sleep, soreness, total_score, created_at")
           .eq("player_id", prof.player_id)
-          .eq("entry_date", today)
+          .eq("entry_date", safeDay)
           .maybeSingle();
 
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
@@ -784,55 +1193,7 @@ export default function PlayerPage() {
     };
 
     run();
-  }, [supabase]);
-
-  // ✅ Load variant options (staff only)
-  useEffect(() => {
-    const run = async () => {
-      try {
-        if (!staffMode) return;
-        if (!profile?.player_id) return;
-        if (!plan?.md_day || !plan?.readiness_level) return;
-
-        const { data, error } = await supabase
-          .from("microdose_template_variants")
-          .select("id, variant, title, description")
-          .eq("md_day", plan.md_day)
-          .eq("readiness_level", plan.readiness_level)
-          .order("variant", { ascending: true });
-
-        if (error) throw new Error(error.message);
-
-        const list = (data ?? []) as any[];
-        setVariantOptions(list);
-
-        if (!overrideVariantId) {
-          const current = plan.chosen_variant_id ? list.find((x) => x.id === plan.chosen_variant_id) : null;
-          const a = list.find((x) => String(x.variant).toUpperCase() === "A");
-          setOverrideVariantId((current?.id || a?.id || list[0]?.id || "") as string);
-        }
-      } catch (e: any) {
-        console.error("variantOptions load error:", e?.message ?? e);
-      }
-    };
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffMode, profile?.player_id, plan?.md_day, plan?.readiness_level, plan?.chosen_variant_id]);
-
-  // ✅ Reload audit when decision_id changes (staff only)
-  useEffect(() => {
-    const run = async () => {
-      if (!staffMode) return;
-      const did = plan?.decision_id ?? null;
-      if (!did) {
-        setOverrideAudit([]);
-        return;
-      }
-      await loadOverrideAudit(String(did));
-    };
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffMode, plan?.decision_id]);
+  }, [supabase, day]);
 
   const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
   const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]);
@@ -847,9 +1208,6 @@ export default function PlayerPage() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, flag]);
-
-  const message = useMemo(() => genericMsg?.message || (ui as any).playerMessage, [genericMsg, ui]);
-  const whyText = useMemo(() => plan?.why || genericMsg?.why || (ui as any).why, [plan?.why, genericMsg?.why, ui]);
 
   useEffect(() => {
     const run = async () => {
@@ -873,28 +1231,14 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.md_day, session?.session_type, session?.md_day_resolved]);
 
-  useEffect(() => {
-    if (!profile?.player_id) return;
-    loadFixModulesForPlayer(profile.player_id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.player_id]);
-
   async function linkPlayer() {
     try {
       setError("");
       if (!profile?.id) return;
-
-      if (!selectedPlayerId) {
-        setError("Veldu leikmann fyrst.");
-        return;
-      }
+      if (!selectedPlayerId) return setError("Veldu leikmann fyrst.");
 
       const { error: uErr } = await supabase.from("profiles").update({ player_id: selectedPlayerId }).eq("id", profile.id);
-
-      if (uErr) {
-        setError(uErr.message);
-        return;
-      }
+      if (uErr) return setError(uErr.message);
 
       window.location.reload();
     } catch (e: any) {
@@ -969,6 +1313,7 @@ export default function PlayerPage() {
     );
   }
 
+  // ✅ If no plan: show helpful message BUT page still renders
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
@@ -976,449 +1321,147 @@ export default function PlayerPage() {
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <div className="text-base font-semibold">Engin Stage-4 microdose ákvörðun fannst</div>
             <div className="mt-2 text-sm text-zinc-600">
-              Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum.
-              Farðu í <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
+              Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum. Farðu í{" "}
+              <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
             </div>
+
+            <div className="mt-4 text-xs text-zinc-500">date={sanitizeDay(day)}</div>
           </div>
         </div>
       </div>
     );
   }
 
-  const today = todayISO();
+  const today = sanitizeDay(day);
   const name = playerMeta?.full_name ?? "Leikmaður";
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
-
-  const structureBlocks = Array.isArray(plan?.structure) ? plan.structure : [];
-  const showStructure = structureBlocks.length > 0;
 
   const decisionType = inferDecisionType(decision, plan);
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
 
   const lockedBool = !!plan.locked;
   const lockLabel = lockedBool ? "Læst" : "Ólæst";
+
+  const trainingSystemLabel = plan.training_system ? String(plan.training_system) : "—";
+
   const sourceLabel = plan.source ? String(plan.source).toUpperCase() : "—";
-  const confidenceLabel = plan.confidence != null ? `${plan.confidence}%` : "—";
+
+  function formatConfidence(conf: number | null | undefined) {
+    if (conf == null) return "—";
+    if (conf <= 1) return `${Math.round(conf * 100)}%`;
+    return `${Math.round(conf)}%`;
+  }
+
+  const confidenceLabel = formatConfidence(plan.confidence);
+
+  // ✅ Players should not care about variants. Staff can see it in debug.
   const variantLabel = plan.variant ? `Variant ${plan.variant}` : "Variant —";
 
+  const message = genericMsg?.message || (ui as any).playerMessage;
+  const whyText = plan?.why || genericMsg?.why || (ui as any).why;
+
   const debugLine =
-    `today=${today} | ` +
+    `day=${today} | ` +
     `plan_entry_date=${plan.entry_date ?? "-"} | ` +
     `decision_focus=${decision?.planned_focus ?? "-"} | ` +
     `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
     `decision_recommended=${decision?.recommended_day_type ?? "-"} | ` +
     `md_day=${plan.md_day ?? "-"} | ` +
-    `session_type=${session?.session_type ?? "-"} | ` +
-    `source=${sourceLabel} | ` +
-    `confidence=${confidenceLabel} | ` +
-    `decision_id=${plan.decision_id ?? "-"} | ` +
-    `chosen_variant_id=${plan.chosen_variant_id ?? "-"} | ` +
-    `variant=${plan.variant ?? "-"}`;
+    `session_md=${session?.md_day_resolved ?? "-"} | ` +
+    `session_type=${session?.session_type ?? "-"}` +
+    (staffMode
+      ? ` | source=${sourceLabel} | confidence=${confidenceLabel} | decision_id=${plan.decision_id ?? "-"} | chosen_variant_id=${
+          plan.chosen_variant_id ?? "-"
+        } | variant=${plan.variant ?? "-"} | training_system=${trainingSystemLabel}`
+      : "");
 
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className={`rounded-2xl border bg-white p-6 shadow-sm ${(ui as any).panel}`}>
-          {planIsFallback && plan.entry_date !== today ? (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Stage-4 ákvörðun fannst ekki fyrir <b>{today}</b>. Sýni síðustu tiltæku ákvörðun: <b>{plan.entry_date}</b>.
-            </div>
-          ) : null}
-
-          {/* Header */}
-          <div className="flex items-start justify-between gap-4">
+          {/* HEADER */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-xs font-medium text-zinc-500">Player · Dagsákvörðun</div>
-              <div className="mt-2 text-xl font-semibold text-zinc-900">{name}</div>
+              <div className="text-xs font-medium text-zinc-500">Player · {today}</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-900">{name}</div>
               <div className="mt-1 text-sm text-zinc-600">
-                {position}
-                {team ? ` · ${team}` : ""}
+                {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-sm font-semibold text-zinc-900">
-                🔒 {lockLabel}
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
-                {decisionToText(decisionType)}
-              </div>
-
-              <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${(ui as any).pill}`}>
-                <span className={`h-2 w-2 rounded-full ${(ui as any).dot}`} />
-                {mdLabel}
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm font-semibold text-zinc-900">
-                {variantLabel}
-              </div>
-            </div>
-          </div>
-
-          {/* Decision card */}
-          <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Í dag</div>
-            <div className="mt-2 text-lg font-semibold text-zinc-900">Ákvörðun: {decisionToText(decisionType)}</div>
-            <div className="mt-1 text-sm text-zinc-700">{decisionSubtitle(decisionType)}</div>
-
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Dagsetning" value={plan.entry_date} />
-              <Stat label="MD context" value={mdLabel} />
-              <Stat label="Source" value={sourceLabel} />
-              <Stat label="Confidence" value={confidenceLabel} />
-            </div>
-
-            <div className="mt-3 rounded-lg border bg-white p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Decision basis</div>
-              <div className="mt-1 text-sm text-zinc-700">{whyText}</div>
-            </div>
-          </div>
-
-          {/* ✅ Staff-only: Coach override (Stage-4) */}
-          {staffMode ? (
-            <div className="mt-6 rounded-xl border bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Coach override</div>
-                  <div className="mt-1 text-sm text-zinc-600">
-                    Override uppfærir Stage-4 decision (source=COACH_OVERRIDE) og læsir dagsákvörðun.
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setOverrideErr("");
-                    setOverrideOpen((v) => !v);
-                  }}
-                  className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
-                >
-                  {overrideOpen ? "Loka" : "Override"}
-                </button>
-              </div>
-
-              {overrideOpen ? (
-                <div className="mt-4 rounded-2xl border bg-zinc-50 p-4">
-                  <div className="text-sm font-semibold text-zinc-900">Veldu variant og ástæðu</div>
-
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Variant</div>
-                      <select
-                        className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
-                        value={overrideVariantId}
-                        onChange={(e) => setOverrideVariantId(e.target.value)}
-                      >
-                        {variantOptions.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {String(v.variant).toUpperCase()} — {v.title ?? "Microdose"}
-                          </option>
-                        ))}
-                      </select>
-
-                      <div className="mt-2 text-xs text-zinc-600">
-                        Núverandi: {plan.variant ? `Variant ${plan.variant}` : "—"} · Source: {sourceLabel} · Locked:{" "}
-                        {lockedBool ? "YES" : "NO"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ástæða</div>
-                      <input
-                        className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
-                        placeholder="t.d. hamstring tightness, travel fatigue, coach decision..."
-                        value={overrideReason}
-                        onChange={(e) => setOverrideReason(e.target.value)}
-                      />
-                      <div className="mt-2 text-xs text-zinc-600">Skráist sem audit + why í decision.</div>
-                    </div>
-                  </div>
-
-                  {overrideErr ? (
-                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{overrideErr}</div>
-                  ) : null}
-
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <button
-                      onClick={() => {
-                        setOverrideOpen(false);
-                        setOverrideErr("");
-                      }}
-                      className="inline-flex items-center justify-center rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-50"
-                    >
-                      Hætta við
-                    </button>
-
-                    <button
-                      disabled={overrideSaving}
-                      onClick={submitOverride}
-                      className={`inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 ${
-                        overrideSaving ? "opacity-60" : ""
-                      }`}
-                    >
-                      {overrideSaving ? "Vistar…" : "Staðfesta override"}
-                    </button>
-                  </div>
+              {planIsFallback ? (
+                <div className="mt-2 text-xs font-semibold text-amber-700">
+                  Ath: plan kemur úr fallback (fyrri dagsetning) — plan_date={plan.entry_date}
                 </div>
               ) : null}
             </div>
-          ) : null}
 
-          {/* ✅ Stage-4 Audit (Overrides) */}
-          {staffMode ? (
-            <details className="mt-6 rounded-xl border bg-white">
-              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
-                Stage-4 Audit (Overrides)
-                <span className="ml-2 text-xs font-medium text-zinc-500">({overrideAudit.length} síðustu)</span>
-              </summary>
+            <div className="flex flex-wrap items-center gap-2">
+              <BadgePill>{lockLabel}</BadgePill>
+              <BadgePill>{decisionType}</BadgePill>
+              <BadgePill>{mdLabel}</BadgePill>
+              <BadgePill>{trainingSystemLabel}</BadgePill>
+              {/* readiness litir koma frá flagUi */}
+              <BadgePill className={(ui as any).pill}>
+                <span className={`mr-2 inline-block h-2 w-2 rounded-full ${(ui as any).dot}`} />
+                {flag}
+              </BadgePill>
+            </div>
+          </div>
 
-              <div className="px-4 pb-4">
-                {overrideAuditErr ? (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{overrideAuditErr}</div>
-                ) : null}
+          {/* TODAY MESSAGE */}
+          <div className="mt-6 rounded-2xl border bg-white p-5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Í dag</div>
+            <div className="mt-2 text-lg font-semibold text-zinc-900">Ákvörðun: {decisionType}</div>
+            <div className="mt-2 text-sm text-zinc-700">{message}</div>
 
-                {!overrideAuditErr && overrideAudit.length === 0 ? (
-                  <div className="rounded-lg border bg-zinc-50 p-3 text-sm text-zinc-700">
-                    Engin overrides skráð (fyrir þessa decision_id).
-                  </div>
-                ) : null}
-
-                {overrideAudit.length > 0 ? (
-                  <div className="space-y-3">
-                    {overrideAudit.map((o) => (
-                      <div key={o.id} className="rounded-xl border bg-zinc-50 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-zinc-900">
-                            Override → {o.overrode_to_readiness_level ?? "—"} · variant_id:{" "}
-                            {o.override_to_variant_id ? o.override_to_variant_id.slice(0, 8) + "…" : "—"}
-                          </div>
-                          <div className="text-xs text-zinc-600">
-                            {o.created_at ? new Date(o.created_at).toLocaleString() : "—"}
-                          </div>
-                        </div>
-
-                        <div className="mt-1 text-xs text-zinc-600">
-                          coach_profile_id: {o.coach_profile_id ?? "—"} · risk_level: {o.risk_level ?? "—"}
-                        </div>
-
-                        <div className="mt-2 grid gap-2 md:grid-cols-2">
-                          <div className="rounded-lg border bg-white p-2">
-                            <div className="text-xs font-semibold text-zinc-500">Reason code</div>
-                            <div className="mt-1 text-sm text-zinc-800">{o.reason_code ?? "—"}</div>
-                          </div>
-                          <div className="rounded-lg border bg-white p-2">
-                            <div className="text-xs font-semibold text-zinc-500">Reason text</div>
-                            <div className="mt-1 text-sm text-zinc-800">{o.reason_test ?? "—"}</div>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 text-xs text-zinc-600">decision_id: {o.decision_id}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+            {whyText ? (
+              <div className="mt-3 text-sm text-zinc-600">
+                <span className="font-semibold text-zinc-800">Af hverju:</span> {whyText}
               </div>
-            </details>
-          ) : null}
+            ) : null}
 
-          {/* Measurements */}
-          <details className="mt-6 rounded-xl border bg-white">
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Stat label="Ákvörðun" value={decisionType} />
+              <Stat label="MD context" value={mdLabel} />
+              <Stat label="Kerfi" value={trainingSystemLabel} />
+              <Stat label="Plan date" value={plan.entry_date ?? "—"} />
+            </div>
+          </div>
+
+          {/* METRICS */}
+          <details className="mt-6 rounded-2xl border bg-white">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
-              Mælingar dagsins <span className="ml-2 text-xs font-medium text-zinc-500">(aðeins til upplýsinga)</span>
+              Mælingar dagsins <span className="ml-2 text-xs font-normal text-zinc-500">(aðeins til upplýsingar)</span>
             </summary>
-
             <div className="px-4 pb-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Readiness metrics</div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <Stat label="Readiness" value={metrics?.readiness ?? "—"} />
-                <Stat label="Svefn" value={metrics?.sleep ?? "—"} />
-                <Stat label="Stífleiki" value={metrics?.soreness ?? "—"} />
+                <Stat label="Sleep" value={metrics?.sleep ?? "—"} />
+                <Stat label="Soreness" value={metrics?.soreness ?? "—"} />
+                <Stat label="Total" value={metrics?.total_score ?? "—"} />
               </div>
-
-              <div className="mt-3 text-xs text-zinc-500">
-                Skráð:{" "}
-                {metrics?.created_at
-                  ? new Date(metrics.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                  : "—"}
-              </div>
-
-              <div className="mt-3 text-xs text-zinc-500">Flokkun (internal): {plan.readiness_level ?? "—"}</div>
             </div>
           </details>
 
-          {/* Fix modules */}
-          <div className="mt-6 rounded-xl border bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ráðlagðar æfingar</div>
-                <div className="mt-1 text-sm text-zinc-600">Byggt á síðasta check-in. Þetta breytir ekki dagsæfingunni.</div>
-              </div>
-              <div className="text-right text-xs text-zinc-500">{fixModules.length ? `${fixModules.length} rútína` : ""}</div>
-            </div>
+          {/* STRUCTURE (header með grænum punkti, blocks gráir) */}
+          {renderStructureBlocks(plan.structure, {
+            headerTitle: plan.title,
+            headerDesc: plan.description,
+            lockLabel,
+          })}
 
-            {fixErr ? (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{fixErr}</div>
-            ) : null}
+          {/* FIX MODULES */}
+          {fixErr ? <div className="mt-6 rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-700">{fixErr}</div> : null}
+          {renderFixModules(fixModules)}
 
-            {!fixErr && fixModules.length === 0 ? (
-              <div className="mt-3 text-sm text-zinc-600">
-                Engar sérstakar ráðleggingar í dag — ef þú finnur fyrir stífleika eða eymslum, skrifaðu það í skilaboðin.
-              </div>
-            ) : null}
+          {/* POST-TRAINING (nú GRÁTT + MET layout fix) */}
+          {postTrainingErr ? (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-700">{postTrainingErr}</div>
+          ) : null}
+          {renderPostTraining(postTraining)}
 
-            {!fixErr && fixModules.length > 0 ? (
-              <div className={`mt-4 grid gap-3 ${fixModules.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
-                {fixModules.map((m) => {
-                  const items = m?.structure?.blocks?.[0]?.items ?? [];
-                  const duration = m?.structure?.duration_min ?? null;
-
-                  return (
-                    <div key={m.tag} className="rounded-xl border bg-zinc-50 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-zinc-900">{m.title}</div>
-                          {duration ? <div className="mt-1 text-xs text-zinc-600">⏱ {duration} mín</div> : null}
-                        </div>
-                      </div>
-
-                      {Array.isArray(items) && items.length > 0 ? (
-                        <ul className="mt-2 space-y-1 text-sm text-zinc-700">
-                          {items.slice(0, 6).map((it: any, idx: number) => (
-                            <li key={idx}>
-                              • {it?.name ?? "Æfing"} — {it?.dose ?? "—"}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="mt-2 text-sm text-zinc-600">Engin atriði skilgreind.</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Player message */}
-          <div className="mt-6">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Framkvæmd</div>
-            <div className="mt-2 rounded-xl border bg-zinc-50 p-4 text-sm text-zinc-800">
-              {message}
-              <div className="mt-3 rounded-lg border bg-white p-3 text-sm text-zinc-800">
-                <div className="font-semibold">Regla</div>
-                <div className="mt-1">Engin viðbótarvinna er nauðsynleg í dag. Framkvæmdu aðeins það sem stendur hér fyrir neðan.</div>
-              </div>
-            </div>
-          </div>
-
-          {/* ✅ ÆFING DAGSINS */}
-          <div className="mt-6 rounded-xl border bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
-                <div className="mt-2 text-lg font-semibold text-zinc-900">{plan.title ?? "Dagsæfing"}</div>
-                <div className="mt-1 text-sm text-zinc-600">{plan.description ?? "—"}</div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-xs font-medium text-zinc-500">Staða</div>
-                <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel}</div>
-              </div>
-            </div>
-
-            {showStructure ? (
-              <div className="mt-4 space-y-3">
-                {structureBlocks.map((b: any, idx: number) => (
-                  <div key={idx} className="rounded-xl border bg-zinc-50 p-3">
-                    <div className="text-sm font-semibold text-zinc-900">{b?.block ?? `Block ${idx + 1}`}</div>
-
-                    {isArray(b?.items) && b.items.length > 0 ? (
-                      <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
-                        {b.items.map((it: any, j: number) => (
-                          <li key={j}>{String(it)}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="mt-2 text-sm text-zinc-600">Engin atriði skilgreind.</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 text-sm text-zinc-600">Engin “structure” skilgreind.</div>
-            )}
-
-            <div className="mt-4 rounded-lg border bg-white p-3 text-sm text-zinc-800">
-              <div className="font-semibold">Rules</div>
-              <div className="mt-1">Stoppaðu snemma ef þarf. Markmið: líða betur eftir en fyrir.</div>
-            </div>
-          </div>
-
-          {/* ✅ EFTIR ÆFINGU */}
-          <div className="mt-6 rounded-xl border bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Eftir æfingu – mælt með</div>
-                <div className="mt-1 text-sm text-zinc-600">5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu.</div>
-              </div>
-              <div className="text-right text-xs text-zinc-500">{postTraining.length ? `${postTraining.length} rútína` : ""}</div>
-            </div>
-
-            {postTrainingErr ? (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{postTrainingErr}</div>
-            ) : null}
-
-            {!postTrainingErr && postTraining.length === 0 ? (
-              <div className="mt-3 text-sm text-zinc-600">Engar tillögur fundust.</div>
-            ) : null}
-
-            {postTraining.length > 0 ? (
-              <div className={`mt-4 grid gap-3 ${postTraining.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
-                {postTraining.map((t) => (
-                  <div key={t.id} className="rounded-xl border bg-zinc-50 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
-                        <div className="mt-1 text-xs text-zinc-600">⏱ {t.duration_min} mín</div>
-                      </div>
-                    </div>
-
-                    {isArray(t?.structure?.steps) && t.structure.steps.length > 0 ? (
-                      <div className="mt-3 space-y-2">
-                        {t.structure.steps.map((s: any, idx: number) => (
-                          <div key={idx} className="rounded-lg border bg-white p-2">
-                            <div className="text-sm font-medium text-zinc-900">
-                              {idx + 1}. {s?.title ?? "Step"}
-                            </div>
-
-                            <div className="mt-1 text-xs text-zinc-600">
-                              {s?.time_sec ? `${s.time_sec}s` : ""}
-                              {s?.sets ? ` • ${s.sets} sett` : ""}
-                              {s?.hold_sec ? ` • hold ${s.hold_sec}s` : ""}
-                              {s?.rest_sec ? ` • hvíld ${s.rest_sec}s` : ""}
-                              {s?.intensity ? ` • ${s.intensity}` : ""}
-                            </div>
-
-                            {Array.isArray(s?.cues) && s.cues.length > 0 ? (
-                              <ul className="mt-2 list-disc pl-5 text-xs text-zinc-600">
-                                {s.cues.slice(0, 3).map((c: string, i: number) => (
-                                  <li key={i}>{c}</li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="mt-3 text-sm text-zinc-600">Engin steps skilgreind.</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Staff-only debug */}
+          {/* STAFF DEBUG */}
           {staffMode ? (
             <details className="mt-6 rounded-xl border bg-white">
               <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
@@ -1426,6 +1469,46 @@ export default function PlayerPage() {
               </summary>
               <div className="px-4 pb-4">
                 <div className="rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl border bg-white p-3">
+                    <div className="font-semibold text-zinc-900">Source</div>
+                    <div className="mt-1 text-zinc-700">{sourceLabel}</div>
+                  </div>
+                  <div className="rounded-xl border bg-white p-3">
+                    <div className="font-semibold text-zinc-900">Confidence</div>
+                    <div className="mt-1 text-zinc-700">{confidenceLabel}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl border bg-white p-3">
+                    <div className="font-semibold text-zinc-900">Training system</div>
+                    <div className="mt-1 text-zinc-700">{trainingSystemLabel}</div>
+                  </div>
+                  <div className="rounded-xl border bg-white p-3">
+                    <div className="font-semibold text-zinc-900">Variant</div>
+                    <div className="mt-1 text-zinc-700">{variantLabel}</div>
+                  </div>
+                </div>
+
+                {overrideAuditErr ? (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-white p-3 text-xs text-red-700">{overrideAuditErr}</div>
+                ) : null}
+
+                {overrideAudit.length ? (
+                  <div className="mt-3 rounded-xl border bg-white p-3 text-xs text-zinc-700">
+                    <div className="font-semibold text-zinc-900">Override audit (latest)</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {overrideAudit.map((o) => (
+                        <li key={o.id}>
+                          {o.created_at}: to_variant={o.override_to_variant_id ?? "—"} · lvl={o.overrode_to_readiness_level ?? "—"} · reason=
+                          {o.reason_test ?? o.reason_code ?? "—"}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             </details>
           ) : null}
