@@ -5,8 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 
-
-
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -24,9 +22,12 @@ type PlayerRow = {
 
 type MetricsRow =
   | {
-      readiness: number | null;
-      sleep: number | null;
-      soreness: number | null;
+      fatigue_energy: number | null;
+      sleep_quality: number | null;
+      sleep_duration: number | null;
+      stress_mood: number | null;
+      muscle_soreness: number | null;
+
       total_score: number | null;
       created_at: string | null;
     }
@@ -141,6 +142,94 @@ type MicrodoseOverrideRow = {
 
 type VariantOption = { id: string; variant: string; title: string | null; description: string | null };
 
+// ✅ NEW: Stage4 final truth (what player uses for FULL/REDUCED/RECOVERY + coach note)
+type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
+
+type Stage4DecisionFinalRow =
+  | {
+      id: string;
+      player_id: string;
+      team_id: string | null;
+      entry_date: string;
+
+      system_decision: DecisionType | null;
+      coach_decision: DecisionType | null;
+      coach_note: string | null;
+      coach_user_id: string | null;
+
+      locked: boolean | null;
+
+      final_decision: DecisionType;
+      final_source: string | null; // SYSTEM | COACH
+      updated_at: string | null;
+    }
+  | null;
+
+/* -------------------------
+   Small UI primitives
+------------------------- */
+
+function cx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function SectionTitle({ kicker, title, sub }: { kicker?: string; title: string; sub?: string }) {
+  return (
+    <div>
+      {kicker ? <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{kicker}</div> : null}
+      <div className="mt-1 text-base font-semibold text-zinc-900">{title}</div>
+      {sub ? <div className="mt-1 text-sm text-zinc-600">{sub}</div> : null}
+    </div>
+  );
+}
+
+function CardShell({ children, className = "" }: { children: any; className?: string }) {
+  return <div className={cx("rounded-2xl border bg-white shadow-sm", className)}>{children}</div>;
+}
+
+function Chip({ children, className = "" }: { children: any; className?: string }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-800",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MiniDot({ className = "" }: { className?: string }) {
+  return <span className={cx("h-2 w-2 rounded-full", className)} />;
+}
+
+function Stat({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-zinc-900">{value}</div>
+    </div>
+  );
+}
+
+function MetricBox({ label, value }: { label: string; value: number | null | undefined }) {
+  return (
+    <div className="rounded-xl border bg-white p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-zinc-900">{value ?? "—"}</div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="h-px w-full bg-zinc-100" />;
+}
+
+/* -------------------------
+   Helpers (unchanged logic)
+------------------------- */
+
 // ✅ Dedupe helper
 function dedupeFixModulesByTag(input: FixModule[] | null | undefined): FixModule[] {
   const list = Array.isArray(input) ? input : [];
@@ -189,15 +278,6 @@ function readinessToFlag(level: string | null | undefined): Flag {
   return "GREEN";
 }
 
-type DecisionType = "FULL" | "REDUCED" | "RECOVERY";
-
-function inferDecisionType(decision: DecisionRow, _plan: Stage4PlanRow): DecisionType {
-  const dt = norm(decision?.recommended_day_type || decision?.final_planned_day_type);
-  if (dt.includes("OFF") || dt.includes("REST") || dt.includes("RECOVER")) return "RECOVERY";
-  if (dt.includes("MOD") || dt.includes("REDUCED") || dt.includes("LIGHT")) return "REDUCED";
-  return "FULL";
-}
-
 function mdContextLabel(mdDay: string | null | undefined) {
   const md = norm(mdDay);
   return md ? md : "—";
@@ -242,7 +322,7 @@ function pickDailyFromMdDay(mdDay: string | null): string {
   if (md === "MD-3") return "md3_speed_reset";
   if (md === "MD-4") return "md4_neural_reset";
 
-  // POST / MD+1 / MD+2 mapping (breyttu ef þú vilt)
+  // POST / MD+1 / MD+2 mapping
   if (md === "POST") return "md4_neural_reset";
   if (md === "MD+1") return "md2_maintenance";
   if (md === "MD+2") return "md3_speed_reset";
@@ -250,17 +330,13 @@ function pickDailyFromMdDay(mdDay: string | null): string {
   return DAILY_ROTATION_POOL[0];
 }
 
-function evaluatePostTrainingTemplateIds(
-  ctx: PostTrainingContext,
-  rules: PostTrainingRuleRow[],
-  alwaysInclude: string[] = [] // <-- ✅ ekki hardcode daily hér
-): string[] {
+function evaluatePostTrainingTemplateIds(ctx: PostTrainingContext, rules: PostTrainingRuleRow[], alwaysInclude: string[] = []) {
   const out: string[] = [];
 
-  // ✅ Daily rotation (endur-notar md1_/md2_/md3_/md4_)
+  // ✅ Daily rotation
   out.push(pickDailyFromMdDay(ctx.mdDay));
 
-  // ✅ Aðrar alwaysInclude (ef þú vilt)
+  // ✅ Always include
   for (const id of alwaysInclude) if (!out.includes(id)) out.push(id);
 
   const sorted = [...rules].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
@@ -286,31 +362,6 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
   return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
 }
 
-/* -------------------------
-   UI helpers
-------------------------- */
-
-function BadgePill({ children, className = "" }: { children: any; className?: string }) {
-  return (
-    <span
-      className={
-        "inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-800 " + className
-      }
-    >
-      {children}
-    </span>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: any }) {
-  return (
-    <div className="rounded-xl border bg-white p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-zinc-900">{value}</div>
-    </div>
-  );
-}
-
 function safeStringList(x: any): string[] {
   if (Array.isArray(x)) return x.map((v) => String(v));
   return [];
@@ -322,7 +373,6 @@ function safeStringList(x: any): string[] {
 function blockAccent(titleRaw: string) {
   const t = (titleRaw ?? "").toLowerCase();
 
-  // Halda merkingu (label) en ekki litum
   let label = "Partur";
 
   if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) label = "Upphitun";
@@ -331,7 +381,6 @@ function blockAccent(titleRaw: string) {
   else if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) label = "Accessory";
 
   return {
-    // ✅ Allt neutral / grátt
     wrap: "border-zinc-200 bg-zinc-50/60",
     badge: "bg-zinc-50 text-zinc-700 border-zinc-200",
     dot: "bg-zinc-400",
@@ -339,10 +388,7 @@ function blockAccent(titleRaw: string) {
   };
 }
 
-function renderStructureBlocks(
-  structure: any,
-  opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string }
-) {
+function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string }) {
   const blocks = Array.isArray(structure) ? structure : [];
   if (!blocks.length) return null;
 
@@ -351,46 +397,44 @@ function renderStructureBlocks(
   const lockLabel = opts?.lockLabel ?? "";
 
   return (
-    <div className="mt-6">
-      {/* Header (halda GRÆNA punktinum) */}
-      <div className="rounded-2xl border bg-white p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
-            <div className="mt-2 flex items-center gap-2">
-              {/* ✅ EKKI taka græna punktinn */}
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <div className="truncate text-base font-semibold text-zinc-900">{headerTitle || "Æfing dagsins"}</div>
+    <div className="space-y-3">
+      <CardShell>
+        <div className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />
+                <div className="truncate text-base font-semibold text-zinc-900">{headerTitle || "Æfing dagsins"}</div>
+              </div>
+              {headerDesc ? <div className="mt-1 text-sm text-zinc-600">{headerDesc}</div> : null}
             </div>
-            {headerDesc ? <div className="mt-1 text-sm text-zinc-600">{headerDesc}</div> : null}
-          </div>
 
-          <div className="text-right">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Staða</div>
-            <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel || "—"}</div>
+            <div className="text-right">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Staða</div>
+              <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel || "—"}</div>
+            </div>
           </div>
         </div>
-      </div>
+      </CardShell>
 
-      {/* Blocks */}
-      <div className="mt-3 space-y-3">
+      <div className="space-y-3">
         {blocks.map((b: any, idx: number) => {
           const title = String(b?.block ?? `Block ${idx + 1}`);
           const items = safeStringList(b?.items);
           const accent = blockAccent(title);
 
           return (
-            // ✅ Fjarlægjum border-l-4 lit, allt verður grátt
-            <div key={`${title}-${idx}`} className={`rounded-2xl border p-4 ${accent.wrap}`}>
+            <div key={`${title}-${idx}`} className={cx("rounded-2xl border p-4", accent.wrap)}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${accent.dot}`} />
+                    <span className={cx("h-2.5 w-2.5 rounded-full", accent.dot)} />
                     <div className="text-sm font-semibold text-zinc-900">{title}</div>
                   </div>
                 </div>
 
-                <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold ${accent.badge}`}>
+                <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)}>
                   {accent.label}
                 </span>
               </div>
@@ -412,45 +456,93 @@ function renderStructureBlocks(
   );
 }
 
+/* =========================
+   ✅ FIX MODULES — PARSER
+========================= */
+function extractIssueModuleItems(structure: any): { title: string; cues: string[] }[] {
+  if (!structure) return [];
+
+  if (typeof structure === "object" && Array.isArray((structure as any).blocks)) {
+    const out: { title: string; cues: string[] }[] = [];
+
+    for (let i = 0; i < (structure as any).blocks.length; i++) {
+      const b = (structure as any).blocks[i];
+      const t = String(b?.name ?? b?.title ?? b?.block ?? `Hluti ${i + 1}`).trim();
+
+      const rawItems = Array.isArray(b?.items) ? b.items : [];
+      const cues = rawItems
+        .map((x: any) => {
+          if (typeof x === "string") return x.trim();
+          const name = x?.name ?? x?.title ?? x?.exercise ?? "";
+          const dose = x?.dose ?? x?.reps ?? x?.time ?? x?.duration ?? "";
+          const s = [name, dose].filter(Boolean).join(" — ");
+          return (s || JSON.stringify(x)).trim();
+        })
+        .filter(Boolean);
+
+      if (cues.length) out.push({ title: t, cues });
+    }
+
+    return out;
+  }
+
+  if (Array.isArray(structure)) {
+    return structure
+      .map((s: any, idx: number) => {
+        const title = String(s?.title ?? s?.type ?? `Skref ${idx + 1}`).trim();
+        const cues = Array.isArray(s?.cues) ? s.cues.map((c: any) => String(c).trim()).filter(Boolean) : [];
+        return { title, cues };
+      })
+      .filter((x) => x.title || x.cues.length);
+  }
+
+  return [];
+}
+
 function renderFixModules(mods: FixModule[]) {
   return (
-    <div className="mt-6">
-      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ráðlagðar æfingar</div>
+    <div className="space-y-3">
+      <SectionTitle kicker="Ráðlagt" title="Ráðlagðar æfingar" sub="Miðað við check-in og athugasemdir." />
 
       {!mods.length ? (
-        <div className="mt-2 rounded-2xl border bg-white p-4 text-sm text-zinc-600">Engar ráðlagðar æfingar í dag.</div>
+        <CardShell>
+          <div className="p-4 sm:p-5 text-sm text-zinc-600">Engar ráðlagðar æfingar í dag.</div>
+        </CardShell>
       ) : (
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           {mods.map((m, idx) => {
-            const steps = Array.isArray(m?.structure) ? m.structure : [];
-            return (
-              <div key={`${m.tag}-${idx}`} className="rounded-2xl border bg-white p-4">
-                <div className="text-sm font-semibold text-zinc-900">{m.title || m.tag}</div>
-                {!!m.tag && <div className="mt-1 text-xs font-medium text-zinc-500">{m.tag}</div>}
+            const steps = extractIssueModuleItems(m?.structure);
 
-                {!!steps.length ? (
-                  <div className="mt-3 space-y-2">
-                    {steps.map((s: any, i: number) => {
-                      const st = String(s?.title ?? s?.type ?? `Skref ${i + 1}`);
-                      const cues = safeStringList(s?.cues);
-                      return (
-                        <div key={i} className="rounded-xl border bg-zinc-50 p-3">
-                          <div className="text-sm font-semibold text-zinc-900">{st}</div>
-                          {!!cues.length && (
+            return (
+              <CardShell key={`${m.tag}-${idx}`}>
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-base font-semibold text-zinc-900">{m.title || m.tag}</div>
+                      {!!m.tag && <div className="mt-1 text-xs font-medium text-zinc-500">{m.tag}</div>}
+                    </div>
+                  </div>
+
+                  {!!steps.length ? (
+                    <div className="mt-4 space-y-3">
+                      {steps.map((s, i) => (
+                        <div key={i} className="rounded-xl border bg-zinc-50 p-4">
+                          <div className="text-sm font-semibold text-zinc-900">{s.title}</div>
+                          {!!s.cues.length && (
                             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
-                              {cues.map((c, ci) => (
+                              {s.cues.map((c, ci) => (
                                 <li key={ci}>{c}</li>
                               ))}
                             </ul>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="mt-3 text-sm text-zinc-600">Engin structure gögn.</div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm text-zinc-600">Engin structure gögn.</div>
+                  )}
+                </div>
+              </CardShell>
             );
           })}
         </div>
@@ -470,20 +562,25 @@ function postTrainingAccent(_templateId: string, _tags: string[]) {
 }
 
 /** =========
- *  ✅ Post-training structure parser
- *  - styður: {sections:[{steps:[...]}]}, {blocks:[{items:[...]}]}, {steps:[...]}, array
- *  - ✅ NÝTT: ef steps eru string lines -> umbreyta í "exercises" (nafn + instructions)
+ *  ✅ Post-training structure parser (unchanged)
  *  ========= */
 type PTExercise = {
   name: string;
   instructions: string[];
   timeSec: number | null;
+  meta?: {
+    sets?: string;
+    holdSec?: number;
+    restSec?: number;
+    alternative?: string;
+    notes?: string;
+  };
 };
 
 type PTSection = {
   title: string | null;
   exercises: PTExercise[];
-  note?: string | null; // t.d. "Rule: ..."
+  note?: string | null;
 };
 
 function toStringList(x: any): string[] {
@@ -493,14 +590,34 @@ function toStringList(x: any): string[] {
 }
 
 function normalizePTExerciseFromObject(s: any, fallbackIndex: number): PTExercise {
-  const title = String(s?.title ?? s?.type ?? s?.name ?? `Skref ${fallbackIndex + 1}`);
-  const cues = toStringList(s?.cues ?? s?.items ?? s?.notes);
+  const title = String(s?.title ?? s?.type ?? s?.name ?? `Skref ${fallbackIndex + 1}`).trim();
+
+  const notes = s?.notes != null ? String(s.notes).trim() : "";
+  const bullets = Array.isArray(s?.bullets) ? s.bullets.map((b: any) => String(b).trim()).filter(Boolean) : [];
+  const cues = toStringList(s?.cues ?? s?.items ?? []);
+
+  const alternative = s?.alternative != null ? String(s.alternative).trim() : "";
+  const sets = s?.sets != null ? String(s.sets).trim() : "";
+  const holdSec = s?.duration_sec != null && Number.isFinite(Number(s.duration_sec)) ? Number(s.duration_sec) : undefined;
+  const restSec = s?.rest_sec != null && Number.isFinite(Number(s.rest_sec)) ? Number(s.rest_sec) : undefined;
+
+  const instructions: string[] = [];
+  for (const b of bullets) instructions.push(b);
+  for (const c of cues) instructions.push(c);
+
   const timeSecRaw = s?.time_sec != null ? Number(s.time_sec) : null;
 
   return {
     name: title,
-    instructions: cues,
+    instructions,
     timeSec: Number.isFinite(timeSecRaw as any) ? (timeSecRaw as number) : null,
+    meta: {
+      notes: notes || undefined,
+      alternative: alternative || undefined,
+      sets: sets || undefined,
+      holdSec,
+      restSec,
+    },
   };
 }
 
@@ -509,13 +626,6 @@ function isRuleLine(line: string) {
   return t.startsWith("rule:") || t.startsWith("regla:") || t.startsWith("ath:") || t.startsWith("note:");
 }
 
-/**
- * ✅ Parse string-steps (MET style):
- * - Lína með ":" byrjar nýja æfingu (left = name, right = fyrsta instruction)
- * - Ef engin ":" og engin current -> setur nýja æfingu með name=line
- * - Ef engin ":" og current -> line fer í instructions
- * - "Rule:" fer í section.note (ekki sem æfing)
- */
 function parseStringStepsToExercises(lines: string[]): { exercises: PTExercise[]; note: string | null } {
   const exercises: PTExercise[] = [];
   let note: string | null = null;
@@ -527,12 +637,10 @@ function parseStringStepsToExercises(lines: string[]): { exercises: PTExercise[]
     if (!line) continue;
 
     if (isRuleLine(line)) {
-      // ✅ safna í note (taka "Rule:" prefix af ef þú vilt)
       note = note ? `${note} ${line}` : line;
       continue;
     }
 
-    // Heuristic: "Hip MET: ..." -> name + instruction
     const hasColon = line.includes(":");
     if (hasColon) {
       const [left0, ...rest] = line.split(":");
@@ -551,7 +659,6 @@ function parseStringStepsToExercises(lines: string[]): { exercises: PTExercise[]
       continue;
     }
 
-    // No colon:
     if (!current) {
       current = { name: line, instructions: [], timeSec: null };
       exercises.push(current);
@@ -567,68 +674,66 @@ function parseStringStepsToExercises(lines: string[]): { exercises: PTExercise[]
 function extractPostTrainingSections(structure: any): PTSection[] {
   if (!structure) return [];
 
-  // ✅ Algengast: { sections: [ { title?, steps: [...] } ] }
   if (typeof structure === "object" && Array.isArray((structure as any).sections)) {
-    const secs: PTSection[] = (structure as any).sections.map((sec: any, si: number) => {
-      const secTitleRaw = sec?.title ?? sec?.name ?? sec?.block ?? null;
-      const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
+    const secs: PTSection[] = (structure as any).sections
+      .map((sec: any, si: number) => {
+        const secTitleRaw = sec?.title ?? sec?.name ?? sec?.block ?? null;
+        const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
 
-      const rawSteps = Array.isArray(sec?.steps) ? sec.steps : [];
+        const rawSteps = Array.isArray(sec?.steps) ? sec.steps : [];
 
-      // ✅ Ef þetta er string-listi -> parse í exercises (MET fix)
-      const allStrings = rawSteps.length > 0 && rawSteps.every((x: any) => typeof x === "string");
-      if (allStrings) {
-        const { exercises, note } = parseStringStepsToExercises(rawSteps.map((x: any) => String(x)));
+        const allStrings = rawSteps.length > 0 && rawSteps.every((x: any) => typeof x === "string");
+        if (allStrings) {
+          const { exercises, note } = parseStringStepsToExercises(rawSteps.map((x: any) => String(x)));
+          return {
+            title: secTitle || ((structure as any).sections.length > 1 ? `Hluti ${si + 1}` : null),
+            exercises,
+            note,
+          };
+        }
+
+        const exercises = rawSteps.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
         return {
           title: secTitle || ((structure as any).sections.length > 1 ? `Hluti ${si + 1}` : null),
           exercises,
-          note,
+          note: null,
         };
-      }
+      })
+      .filter((s: PTSection) => s.exercises.length);
 
-      // ✅ Annars: object steps -> map í exercises (name + instructions)
-      const exercises = rawSteps.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
-
-      return {
-        title: secTitle || ((structure as any).sections.length > 1 ? `Hluti ${si + 1}` : null),
-        exercises,
-        note: null,
-      };
-    });
-
-    return secs.filter((s) => s.exercises.length);
+    return secs;
   }
 
-  // ✅ Stundum: { blocks: [ { name/block?, items: [...] } ] }
   if (typeof structure === "object" && Array.isArray((structure as any).blocks)) {
-    const secs: PTSection[] = (structure as any).blocks.map((b: any, bi: number) => {
-      const secTitleRaw = b?.name ?? b?.title ?? b?.block ?? null;
-      const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
+    const secs: PTSection[] = (structure as any).blocks
+      .map((b: any, bi: number) => {
+        const secTitleRaw = b?.name ?? b?.title ?? b?.block ?? null;
+        const secTitle = secTitleRaw != null ? String(secTitleRaw) : null;
 
-      const raw = Array.isArray(b?.steps) ? b.steps : Array.isArray(b?.items) ? b.items : [];
+        const raw = Array.isArray(b?.steps) ? b.steps : Array.isArray(b?.items) ? b.items : [];
 
-      const allStrings = raw.length > 0 && raw.every((x: any) => typeof x === "string");
-      if (allStrings) {
-        const { exercises, note } = parseStringStepsToExercises(raw.map((x: any) => String(x)));
+        const allStrings = raw.length > 0 && raw.every((x: any) => typeof x === "string");
+        if (allStrings) {
+          const { exercises, note } = parseStringStepsToExercises(raw.map((x: any) => String(x)));
+          return {
+            title: secTitle || ((structure as any).blocks.length > 1 ? `Hluti ${bi + 1}` : null),
+            exercises,
+            note,
+          };
+        }
+
+        const exercises = raw.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
         return {
           title: secTitle || ((structure as any).blocks.length > 1 ? `Hluti ${bi + 1}` : null),
           exercises,
-          note,
+          note: null,
         };
-      }
+      })
+      .filter((s: PTSection) => s.exercises.length);
 
-      const exercises = raw.map((x: any, i: number) => normalizePTExerciseFromObject(x, i));
-      return {
-        title: secTitle || ((structure as any).blocks.length > 1 ? `Hluti ${bi + 1}` : null),
-        exercises,
-        note: null,
-      };
-    });
-
-    return secs.filter((s) => s.exercises.length);
+    return secs;
   }
 
-  // ✅ Eldra/annað: { steps: [...] }
   if (typeof structure === "object" && Array.isArray((structure as any).steps)) {
     const raw = (structure as any).steps;
 
@@ -642,7 +747,6 @@ function extractPostTrainingSections(structure: any): PTSection[] {
     return exercises.length ? [{ title: null, exercises, note: null }] : [];
   }
 
-  // ✅ Ef structure er bein array
   if (Array.isArray(structure)) {
     const allStrings = structure.length > 0 && structure.every((x: any) => typeof x === "string");
     if (allStrings) {
@@ -657,109 +761,158 @@ function extractPostTrainingSections(structure: any): PTSection[] {
   return [];
 }
 
-/** =========
- *  ✅ Render post-training (ALLT GRÁTT / NEUTRAL)
- *  ✅ NÝTT: Æfingaheiti númerað, instructions sem plain text (ENGIN bullets / engin numbering)
- *  ========= */
 function renderPostTraining(templates: PostTrainingTemplateRow[]) {
-  const count = templates.length;
-
   function isTendonTemplate(t: PostTrainingTemplateRow) {
     const id = (t?.id ?? "").toLowerCase();
     const tags = (t?.tags ?? []).map((x) => String(x).toLowerCase());
     return id.includes("tendon") || tags.includes("tendon_health") || tags.includes("achilles") || tags.includes("patellar");
   }
 
-  function isDailyMdTemplate(t: PostTrainingTemplateRow) {
+  function isMdRotationTemplate(t: PostTrainingTemplateRow) {
     const id = (t?.id ?? "").toLowerCase();
-    return id.startsWith("md1_") || id.startsWith("md2_") || id.startsWith("md3_") || id.startsWith("md4_");
+    return (
+      id.startsWith("md1_") ||
+      id.startsWith("md2_") ||
+      id.startsWith("md3_") ||
+      id.startsWith("md4_") ||
+      id.startsWith("md_") ||
+      id.startsWith("mdplus_") ||
+      id.startsWith("md_plus")
+    );
   }
 
-  // ✅ Röðun: Tendon fyrst, svo Daily (Neural Priming o.fl.), svo rest
-  const orderedTemplates = [...templates].sort((a, b) => {
-    const ra = isTendonTemplate(a) ? 0 : isDailyMdTemplate(a) ? 1 : 2;
-    const rb = isTendonTemplate(b) ? 0 : isDailyMdTemplate(b) ? 1 : 2;
-    return ra - rb;
+  function isDailyNeuralReset(t: PostTrainingTemplateRow) {
+    return (t?.id ?? "").toLowerCase() === "daily_neural_reset";
+  }
+
+  const filtered = templates.filter((t) => !isDailyNeuralReset(t) && (isTendonTemplate(t) || isMdRotationTemplate(t)));
+  const orderedTemplates = [...filtered].sort((a, b) => {
+    const rank = (t: PostTrainingTemplateRow) => (isTendonTemplate(t) ? 0 : 1);
+    return rank(a) - rank(b);
   });
 
+  const count = orderedTemplates.length;
+  const cleanTitle = (t?: string | null) => String(t ?? "").replace(/^\s*\d+[\)\.\-]\s*/g, "").trim();
+
   return (
-    <div className="mt-6">
+    <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Eftir æfingu — mælt með</div>
-          <div className="mt-1 text-sm text-zinc-600">5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu.</div>
-        </div>
+        <SectionTitle
+          kicker="Eftir æfingu"
+          title="Mælt með"
+          sub="5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu."
+        />
         <div className="text-xs font-semibold text-zinc-500">{count ? `${count} rútín${count === 1 ? "a" : "ur"}` : ""}</div>
       </div>
 
       {!orderedTemplates.length ? (
-        <div className="mt-2 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">Engar tillögur í dag.</div>
+        <CardShell>
+          <div className="p-4 sm:p-5 text-sm text-zinc-600">Engar tillögur í dag.</div>
+        </CardShell>
       ) : (
-        // ✅ Einn dálkur (tendon ofan á neural priming)
-        <div className="mt-3 grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {orderedTemplates.map((t) => {
             const accent = postTrainingAccent(t.id, t.tags ?? []);
             const sections = extractPostTrainingSections(t?.structure);
-            const totalExercises = sections.reduce((acc, s) => acc + s.exercises.length, 0);
-
-            let n = 0;
+            const isTendon = isTendonTemplate(t);
 
             return (
-              <div key={t.id} className={`rounded-2xl border p-4 ${accent.wrap}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? `${t.duration_min} mín` : ""}</div>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {(t.tags ?? []).slice(0, 4).map((tag) => (
-                      <span key={tag} className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${accent.chip}`}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {totalExercises ? (
-                  <div className="mt-3 space-y-3">
-                    {sections.map((sec, si) => (
-                      <div key={si} className="space-y-2">
-                        {sec.title ? (
-                          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{sec.title}</div>
-                        ) : null}
-
-                        {/* ✅ Section note (t.d. Rule: ...) */}
-                        {sec.note ? <div className="text-sm text-zinc-600">{sec.note}</div> : null}
-
-                        {sec.exercises.map((ex, i) => {
-                          n += 1;
-                          return (
-                            <div key={`${si}-${i}`} className="rounded-xl border border-zinc-200 bg-white p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="text-sm font-semibold text-zinc-900">
-                                  {n}. {ex.name}
-                                </div>
-                                {ex.timeSec ? <div className="text-xs font-semibold text-zinc-500">{ex.timeSec}s</div> : null}
-                              </div>
-
-                              {!!ex.instructions.length && (
-                                <div className="mt-2 space-y-1">
-                                  {ex.instructions.map((line, li) => (
-                                    <p key={li} className="text-sm text-zinc-700">
-                                      {line}
-                                    </p>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+              <div key={t.id} className={cx("rounded-2xl border", accent.wrap)}>
+                {/* ✅ Default closed */}
+                <details className="group">
+                  <summary className="cursor-pointer select-none p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-zinc-900">{t.title}</div>
+                        <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? `${t.duration_min} mín` : ""}</div>
                       </div>
-                    ))}
+
+                      {/* ✅ Mobile: hide tags (keeps cards compact). Desktop: show tags */}
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="hidden sm:flex flex-wrap justify-end gap-2">
+                          {(t.tags ?? []).slice(0, 5).map((tag) => (
+                            <span key={tag} className={cx("rounded-full border px-2 py-1 text-[11px] font-semibold", accent.chip)}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+
+                        <span className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</span>
+                        <span className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</span>
+                      </div>
+                    </div>
+                  </summary>
+
+                  <div className="border-t border-zinc-200/70" />
+
+                  <div className="p-4 sm:p-5">
+                    {!sections.length ? (
+                      <div className="text-sm text-zinc-600">Engin skref í template.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {sections.map((sec, si) => (
+                          <div key={si} className="rounded-xl border border-zinc-200 bg-white p-4">
+                            {!isTendon && sec.title ? (
+                              <div className="text-sm font-semibold text-zinc-900">{cleanTitle(sec.title)}</div>
+                            ) : null}
+                            {sec.note ? <div className="mt-1 text-sm text-zinc-600">{sec.note}</div> : null}
+
+                            <div className="mt-3 space-y-3">
+                              {sec.exercises.map((ex, i) => {
+                                const header = cleanTitle(ex.name);
+                                const meta = ex.meta ?? {};
+                                const items = (ex.instructions ?? []).filter(Boolean);
+
+                                return (
+                                  <div key={i} className="rounded-xl border border-zinc-200 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="text-sm font-semibold text-zinc-900">{header}</div>
+                                        {meta.notes ? <div className="mt-1 text-sm text-zinc-600">{meta.notes}</div> : null}
+                                      </div>
+
+                                      <div className="flex flex-wrap justify-end gap-2">
+                                        {meta.sets ? (
+                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
+                                            Sets {meta.sets}
+                                          </span>
+                                        ) : null}
+                                        {meta.holdSec != null ? (
+                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
+                                            Hold {meta.holdSec}s
+                                          </span>
+                                        ) : null}
+                                        {meta.restSec != null ? (
+                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
+                                            Rest {meta.restSec}s
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    {!!items.length ? (
+                                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                                        {items.map((line, li) => (
+                                          <li key={li}>{line}</li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+
+                                    {meta.alternative ? (
+                                      <div className="mt-3 text-sm text-zinc-600">
+                                        <span className="font-semibold text-zinc-700">Alternative:</span> {meta.alternative}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mt-3 text-sm text-zinc-600">Engin skref í template.</div>
-                )}
+                </details>
               </div>
             );
           })}
@@ -773,7 +926,6 @@ export default function PlayerClient() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const searchParams = useSearchParams();
 
-  // ✅ One source-of-truth day for all queries (supports ?date=YYYY-MM-DD)
   const day = useMemo(() => {
     const raw = searchParams?.get("date");
     return sanitizeDay(raw || null);
@@ -792,6 +944,8 @@ export default function PlayerClient() {
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
   const [planIsFallback, setPlanIsFallback] = useState(false);
 
+  const [stage4Final, setStage4Final] = useState<Stage4DecisionFinalRow>(null);
+
   const [metrics, setMetrics] = useState<MetricsRow>(null);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
@@ -807,7 +961,6 @@ export default function PlayerClient() {
 
   const staffMode = useMemo(() => isStaffRole(profile?.role), [profile?.role]);
 
-  // override state (you can keep this, even if you don’t show UI yet)
   const [overrideAudit, setOverrideAudit] = useState<MicrodoseOverrideRow[]>([]);
   const [overrideAuditErr, setOverrideAuditErr] = useState<string>("");
 
@@ -815,17 +968,59 @@ export default function PlayerClient() {
 
   async function ensureStage4Decision(playerId: string, dayInput: string) {
     const safeDay = sanitizeDay(dayInput);
+
     try {
       const { error } = await supabase.rpc("stage4_ensure_decision", {
         p_player_id: playerId,
         p_entry_date: safeDay,
       });
 
-      // ✅ This must NEVER blank the UI. Only log.
-      if (error) console.error("stage4_ensure_decision failed:", error);
+      if (error) {
+        const code = (error as any)?.code;
+        const msg = (error as any)?.message ?? (error as any)?.details ?? (error as any)?.hint ?? JSON.stringify(error);
+
+        const expectedCodes = new Set(["PGRST116"]);
+        const looksEmptyObject = typeof error === "object" && error && Object.keys(error as any).length === 0;
+
+        if (expectedCodes.has(String(code)) || looksEmptyObject) {
+          console.log("stage4_ensure_decision: no-op / no decision yet for", safeDay);
+          return;
+        }
+
+        console.error("stage4_ensure_decision failed:", { code, msg, raw: error });
+      }
     } catch (e: any) {
       console.error("stage4_ensure_decision unexpected error:", e?.message ?? e);
     }
+  }
+
+  async function fetchStage4FinalDecision(playerId: string, dayInput: string) {
+    const safeDay = sanitizeDay(dayInput);
+
+    const { data, error } = await supabase
+      .from("stage4_decisions_final")
+      .select(
+        [
+          "id",
+          "player_id",
+          "team_id",
+          "entry_date",
+          "system_decision",
+          "coach_decision",
+          "coach_note",
+          "coach_user_id",
+          "locked",
+          "final_decision",
+          "final_source",
+          "updated_at",
+        ].join(",")
+      )
+      .eq("player_id", playerId)
+      .eq("entry_date", safeDay)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return (data as any) as Stage4DecisionFinalRow;
   }
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
@@ -903,14 +1098,12 @@ export default function PlayerClient() {
           "why",
           "inputs",
 
-          // plan + optional variant meta
           "variant_id",
           "variant",
           "plan_title",
           "plan_description",
           "plan_structure",
 
-          // keep for compatibility (do not display to player)
           "locked_at",
           "is_locked",
         ].join(",")
@@ -953,7 +1146,6 @@ export default function PlayerClient() {
       return merged as Stage4PlanRow;
     }
 
-    // fallback (latest <= day)
     const { data: drow, error: dErr } = await supabase
       .from("microdose_decisions")
       .select("id, team_id, player_id, entry_date, md_day, readiness_level, chosen_variant_id, locked, source, confidence, why, inputs")
@@ -963,17 +1155,12 @@ export default function PlayerClient() {
       .limit(1)
       .maybeSingle();
 
-    if (dErr) {
-      console.error("microdose_decisions fallback error:", dErr);
-      throw new Error(dErr.message);
-    }
-
+    if (dErr) throw new Error(dErr.message);
     if (!drow?.id) {
       setPlanIsFallback(false);
       return null;
     }
 
-    // ✅ IMPORTANT: fallback now uses microdose_templates (NOT variants)
     const teamId = (drow as any)?.team_id ?? null;
     const mdDay = (drow as any)?.md_day ?? null;
     const lvl = (drow as any)?.readiness_level ?? null;
@@ -989,10 +1176,7 @@ export default function PlayerClient() {
         .eq("readiness_level", lvl)
         .maybeSingle();
 
-      if (trErr) {
-        console.error("microdose_templates fallback error:", trErr);
-        throw new Error(trErr.message);
-      }
+      if (trErr) throw new Error(trErr.message);
       templateRow = tr ?? null;
     }
 
@@ -1013,7 +1197,6 @@ export default function PlayerClient() {
       inputs: (drow as any).inputs ?? null,
 
       training_system: null,
-
       variant: null,
 
       title: templateRow?.title ?? null,
@@ -1037,8 +1220,7 @@ export default function PlayerClient() {
 
       const ruleRows = ((rules as any) ?? []) as PostTrainingRuleRow[];
 
-      // ✅ IMPORTANT: daily er nú valið inni í evaluatePostTrainingTemplateIds (rotation)
-      const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows);
+      const ids = evaluatePostTrainingTemplateIds(ctx, ruleRows, ["tendon_reload_lower"]);
 
       if (!ids.length) {
         setPostTraining([]);
@@ -1092,6 +1274,7 @@ export default function PlayerClient() {
 
       setPlan(null);
       setPlanIsFallback(false);
+      setStage4Final(null);
       setMetrics(null);
       setGenericMsg(null);
       setPlayerMeta(null);
@@ -1118,7 +1301,6 @@ export default function PlayerClient() {
           .maybeSingle();
 
         if (pErr) throw new Error(pErr.message);
-
         setProfile((prof as any) ?? null);
 
         if (!prof?.player_id) {
@@ -1126,36 +1308,18 @@ export default function PlayerClient() {
             .from("players")
             .select("id, full_name, position, team")
             .order("full_name", { ascending: true });
-
           if (lErr) throw new Error(lErr.message);
-
           setPlayers((list as PlayerRow[]) ?? []);
           return;
         }
 
         const safeDay = sanitizeDay(day);
 
-        // ✅ try ensure, but never block UI
         await ensureStage4Decision(prof.player_id, safeDay);
 
-        const { data: pm, error: pmErr } = await supabase
-          .from("players")
-          .select("id, full_name, position, team")
-          .eq("id", prof.player_id)
-          .maybeSingle();
-
+        const { data: pm, error: pmErr } = await supabase.from("players").select("id, full_name, position, team").eq("id", prof.player_id).maybeSingle();
         if (pmErr) console.error("players meta error:", pmErr.message);
         setPlayerMeta((pm as any) ?? null);
-
-        const { data: drow, error: dErr } = await supabase
-          .from("v_player_daily_decision_v3")
-          .select("planned_focus, final_planned_day_type, recommended_day_type, readiness_flag")
-          .eq("player_id", prof.player_id)
-          .eq("day_date", safeDay)
-          .maybeSingle();
-
-        if (dErr) console.error("decision error:", dErr.message);
-        setDecision((drow as any) ?? null);
 
         const { data: srow, error: sErr } = await supabase
           .from("v_player_session_today_v2")
@@ -1163,9 +1327,11 @@ export default function PlayerClient() {
           .eq("player_id", prof.player_id)
           .eq("day_date", safeDay)
           .maybeSingle();
-
         if (sErr) console.error("v_player_session_today_v2 error:", sErr.message);
         setSession((srow as any) ?? null);
+
+        const s4 = await fetchStage4FinalDecision(prof.player_id, safeDay);
+        setStage4Final((s4 as any) ?? null);
 
         const p = await fetchStage4Plan(prof.player_id, safeDay);
         setPlan((p as any) ?? null);
@@ -1177,11 +1343,20 @@ export default function PlayerClient() {
 
         const { data: mrow, error: mErr } = await supabase
           .from("readiness_entries")
-          .select("readiness, sleep, soreness, total_score, created_at")
+          .select(
+            `
+            fatigue_energy,
+            sleep_quality,
+            sleep_duration,
+            stress_mood,
+            muscle_soreness,
+            total_score,
+            created_at
+          `
+          )
           .eq("player_id", prof.player_id)
           .eq("entry_date", safeDay)
           .maybeSingle();
-
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
 
@@ -1248,272 +1423,199 @@ export default function PlayerClient() {
     }
   }
 
-  // ================= UI STATES =================
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-50">
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="h-4 w-48 animate-pulse rounded bg-zinc-200" />
-            <div className="mt-3 h-3 w-80 animate-pulse rounded bg-zinc-200" />
-            <div className="mt-6 h-24 animate-pulse rounded-xl bg-zinc-100" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-zinc-50">
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
-            <div className="text-sm font-semibold text-red-700">Villa</div>
-            <div className="mt-2 text-sm text-zinc-700">{error}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (profile && !profile.player_id) {
-    return (
-      <div className="min-h-screen bg-zinc-50">
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-xs font-medium text-zinc-500">Player · Setup</div>
-            <div className="mt-2 text-xl font-semibold text-zinc-900">Tengja notanda við leikmann</div>
-            <div className="mt-2 text-sm text-zinc-600">Þetta er til að prófa player-síðuna. Seinna má auto-linka þetta.</div>
-
-            <div className="mt-6 rounded-xl border bg-zinc-50 p-4">
-              <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Veldu leikmann</label>
-
-              <select
-                className="mt-2 w-full rounded-lg border bg-white p-3 text-sm"
-                value={selectedPlayerId}
-                onChange={(e) => setSelectedPlayerId(e.target.value)}
-              >
-                <option value="">— Veldu —</option>
-                {players.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name ?? "Ónefndur"} {p.position ? `(${p.position})` : ""} {p.team ? `· ${p.team}` : ""}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={linkPlayer}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
-              >
-                Vista tengingu
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ✅ If no plan: show helpful message BUT page still renders
   if (!plan) {
     return (
       <div className="min-h-screen bg-zinc-50">
         <div className="mx-auto max-w-3xl px-4 py-10">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-base font-semibold">Engin Stage-4 microdose ákvörðun fannst</div>
-            <div className="mt-2 text-sm text-zinc-600">
-              Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum. Farðu í{" "}
-              <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
+          <CardShell>
+            <div className="p-6">
+              <div className="text-base font-semibold">Engin Stage-4 microdose ákvörðun fannst</div>
+              <div className="mt-2 text-sm text-zinc-600">
+                Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum. Farðu í{" "}
+                <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
+              </div>
+              <div className="mt-4 text-xs text-zinc-500">date={sanitizeDay(day)}</div>
             </div>
-
-            <div className="mt-4 text-xs text-zinc-500">date={sanitizeDay(day)}</div>
-          </div>
+          </CardShell>
         </div>
       </div>
     );
   }
 
   const today = sanitizeDay(day);
+
   const name = playerMeta?.full_name ?? "Leikmaður";
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const decisionType = inferDecisionType(decision, plan);
+  const decisionType: DecisionType = (stage4Final?.final_decision ?? "FULL") as DecisionType;
+
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
 
-  const lockedBool = !!plan.locked;
+  const lockedBool = !!(stage4Final?.locked ?? plan.locked);
   const lockLabel = lockedBool ? "Læst" : "Ólæst";
 
   const trainingSystemLabel = plan.training_system ? String(plan.training_system) : "—";
 
-  const sourceLabel = plan.source ? String(plan.source).toUpperCase() : "—";
+  const coachMsg = (stage4Final?.coach_note ?? "").trim();
+  const baseMsg = genericMsg?.message || (ui as any).playerMessage;
+  const message = coachMsg ? coachMsg : baseMsg;
 
-  function formatConfidence(conf: number | null | undefined) {
-    if (conf == null) return "—";
-    if (conf <= 1) return `${Math.round(conf * 100)}%`;
-    return `${Math.round(conf)}%`;
-  }
-
-  const confidenceLabel = formatConfidence(plan.confidence);
-
-  // ✅ Players should not care about variants. Staff can see it in debug.
-  const variantLabel = plan.variant ? `Variant ${plan.variant}` : "Variant —";
-
-  const message = genericMsg?.message || (ui as any).playerMessage;
   const whyText = plan?.why || genericMsg?.why || (ui as any).why;
 
   const debugLine =
     `day=${today} | ` +
     `plan_entry_date=${plan.entry_date ?? "-"} | ` +
-    `decision_focus=${decision?.planned_focus ?? "-"} | ` +
-    `decision_day_type=${decision?.final_planned_day_type ?? "-"} | ` +
-    `decision_recommended=${decision?.recommended_day_type ?? "-"} | ` +
+    `final_decision=${stage4Final?.final_decision ?? "-"} | ` +
+    `final_source=${stage4Final?.final_source ?? "-"} | ` +
     `md_day=${plan.md_day ?? "-"} | ` +
     `session_md=${session?.md_day_resolved ?? "-"} | ` +
-    `session_type=${session?.session_type ?? "-"}` +
-    (staffMode
-      ? ` | source=${sourceLabel} | confidence=${confidenceLabel} | decision_id=${plan.decision_id ?? "-"} | chosen_variant_id=${
-          plan.chosen_variant_id ?? "-"
-        } | variant=${plan.variant ?? "-"} | training_system=${trainingSystemLabel}`
-      : "");
+    `session_type=${session?.session_type ?? "-"}`;
+
+  const decisionTone =
+    decisionType === "FULL"
+      ? "border-emerald-200 bg-emerald-50/50"
+      : decisionType === "REDUCED"
+      ? "border-amber-200 bg-amber-50/50"
+      : "border-rose-200 bg-rose-50/50";
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className={`rounded-2xl border bg-white p-6 shadow-sm ${(ui as any).panel}`}>
-          {/* HEADER */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-medium text-zinc-500">Player · {today}</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-900">{name}</div>
-              <div className="mt-1 text-sm text-zinc-600">
-                {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+        {/* ✅ Mobile-optimized sticky header */}
+        <div className="sticky top-2 z-20 mb-5">
+          <div className={cx("rounded-2xl border bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/70", (ui as any).panel)}>
+            <div className="p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-zinc-500">Player · {today}</div>
+                  <div className="mt-1 truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{name}</div>
+                  <div className="mt-1 text-sm text-zinc-600">
+                    {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip>{lockLabel}</Chip>
+                  <Chip className="border-zinc-200">{decisionType}</Chip>
+                  <Chip>{mdLabel}</Chip>
+                  <Chip>{trainingSystemLabel}</Chip>
+
+                  {String(stage4Final?.final_source ?? "").toUpperCase() === "COACH" ? (
+                    <Chip className="border-amber-200 bg-amber-50 text-amber-800">Override</Chip>
+                  ) : null}
+
+                  <Chip className={(ui as any).pill}>
+                    <MiniDot className={(ui as any).dot} />
+                    {readinessToFlag(plan.readiness_level)}
+                  </Chip>
+                </div>
               </div>
-              {planIsFallback ? (
-                <div className="mt-2 text-xs font-semibold text-amber-700">
-                  Ath: plan kemur úr fallback (fyrri dagsetning) — plan_date={plan.entry_date}
+            </div>
+          </div>
+        </div>
+
+        {/* Main grid */}
+        <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+          {/* LEFT */}
+          <div className="space-y-6">
+            {/* Decision hero */}
+            <div className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
+              <SectionTitle kicker="Í dag" title={`Ákvörðun: ${decisionType}`} />
+
+              {coachMsg ? (
+                <div className="mt-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                  Skilaboð frá þjálfara
                 </div>
               ) : null}
+
+              <div className="mt-3 text-sm leading-relaxed text-zinc-800">{message}</div>
+
+              {whyText ? (
+                <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-zinc-700">
+                  <span className="font-semibold text-zinc-900">Af hverju:</span> {whyText}
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Stat label="Ákvörðun" value={decisionType} />
+                <Stat label="MD context" value={mdLabel} />
+                <Stat label="Kerfi" value={trainingSystemLabel} />
+                <Stat label="Plan date" value={plan.entry_date ?? "—"} />
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <BadgePill>{lockLabel}</BadgePill>
-              <BadgePill>{decisionType}</BadgePill>
-              <BadgePill>{mdLabel}</BadgePill>
-              <BadgePill>{trainingSystemLabel}</BadgePill>
-              {/* readiness litir koma frá flagUi */}
-              <BadgePill className={(ui as any).pill}>
-                <span className={`mr-2 inline-block h-2 w-2 rounded-full ${(ui as any).dot}`} />
-                {flag}
-              </BadgePill>
-            </div>
+            {/* Metrics */}
+            <CardShell>
+              <details className="group">
+                <summary className="cursor-pointer select-none p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <SectionTitle kicker="Readiness" title="Mælingar dagsins" sub="Aðeins til upplýsingar — notað fyrir ákvörðunarlógík." />
+                    <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</div>
+                    <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</div>
+                  </div>
+
+                  {/* ✅ Mobile: 2 cols, Desktop: 3 cols */}
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="rounded-xl border bg-white px-3 py-2 text-xs text-zinc-700">
+                      <span className="font-semibold">Energy</span>: {metrics?.fatigue_energy ?? "—"}
+                    </div>
+                    <div className="rounded-xl border bg-white px-3 py-2 text-xs text-zinc-700">
+                      <span className="font-semibold">Sleep</span>: {metrics?.sleep_quality ?? "—"}
+                    </div>
+                    <div className="rounded-xl border bg-white px-3 py-2 text-xs text-zinc-700">
+                      <span className="font-semibold">Total</span>: {metrics?.total_score ?? "—"}
+                    </div>
+                  </div>
+                </summary>
+
+                <Divider />
+
+                <div className="p-4 sm:p-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricBox label="Fatigue / Energy" value={metrics?.fatigue_energy} />
+                    <MetricBox label="Sleep Quality" value={metrics?.sleep_quality} />
+                    <MetricBox label="Sleep Duration" value={metrics?.sleep_duration} />
+                    <MetricBox label="Stress / Mood" value={metrics?.stress_mood} />
+                    <MetricBox label="Muscle Soreness" value={metrics?.muscle_soreness} />
+                    <MetricBox label="Total" value={metrics?.total_score} />
+                  </div>
+                </div>
+              </details>
+            </CardShell>
+
+            {/* Fix modules */}
+            {renderFixModules(dedupeFixModulesByTag(fixRow?.fix_modules))}
           </div>
 
-          {/* TODAY MESSAGE */}
-          <div className="mt-6 rounded-2xl border bg-white p-5">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Í dag</div>
-            <div className="mt-2 text-lg font-semibold text-zinc-900">Ákvörðun: {decisionType}</div>
-            <div className="mt-2 text-sm text-zinc-700">{message}</div>
+          {/* RIGHT */}
+          <div className="space-y-6">
+            {renderStructureBlocks(plan.structure, {
+              headerTitle: plan.title,
+              headerDesc: plan.description,
+              lockLabel,
+            })}
 
-            {whyText ? (
-              <div className="mt-3 text-sm text-zinc-600">
-                <span className="font-semibold text-zinc-800">Af hverju:</span> {whyText}
-              </div>
+            {renderPostTraining(postTraining)}
+
+            {staffMode ? (
+              <CardShell>
+                <details className="group">
+                  <summary className="cursor-pointer select-none p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <SectionTitle kicker="Staff" title="Tæknilegar upplýsingar" sub="Debug view (staff only)" />
+                      <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</div>
+                      <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</div>
+                    </div>
+                  </summary>
+                  <Divider />
+                  <div className="p-4 sm:p-5">
+                    <div className="rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
+                  </div>
+                </details>
+              </CardShell>
             ) : null}
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Stat label="Ákvörðun" value={decisionType} />
-              <Stat label="MD context" value={mdLabel} />
-              <Stat label="Kerfi" value={trainingSystemLabel} />
-              <Stat label="Plan date" value={plan.entry_date ?? "—"} />
-            </div>
           </div>
-
-          {/* METRICS */}
-          <details className="mt-6 rounded-2xl border bg-white">
-            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
-              Mælingar dagsins <span className="ml-2 text-xs font-normal text-zinc-500">(aðeins til upplýsingar)</span>
-            </summary>
-            <div className="px-4 pb-4">
-              <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Readiness metrics</div>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <Stat label="Readiness" value={metrics?.readiness ?? "—"} />
-                <Stat label="Sleep" value={metrics?.sleep ?? "—"} />
-                <Stat label="Soreness" value={metrics?.soreness ?? "—"} />
-                <Stat label="Total" value={metrics?.total_score ?? "—"} />
-              </div>
-            </div>
-          </details>
-
-          {/* STRUCTURE (header með grænum punkti, blocks gráir) */}
-          {renderStructureBlocks(plan.structure, {
-            headerTitle: plan.title,
-            headerDesc: plan.description,
-            lockLabel,
-          })}
-
-          {/* FIX MODULES */}
-          {fixErr ? <div className="mt-6 rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-700">{fixErr}</div> : null}
-          {renderFixModules(fixModules)}
-
-          {/* POST-TRAINING (nú GRÁTT + MET layout fix) */}
-          {postTrainingErr ? (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-white p-4 text-sm text-red-700">{postTrainingErr}</div>
-          ) : null}
-          {renderPostTraining(postTraining)}
-
-          {/* STAFF DEBUG */}
-          {staffMode ? (
-            <details className="mt-6 rounded-xl border bg-white">
-              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-zinc-900">
-                Tæknilegar upplýsingar (staff)
-              </summary>
-              <div className="px-4 pb-4">
-                <div className="rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">{debugLine}</div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-xl border bg-white p-3">
-                    <div className="font-semibold text-zinc-900">Source</div>
-                    <div className="mt-1 text-zinc-700">{sourceLabel}</div>
-                  </div>
-                  <div className="rounded-xl border bg-white p-3">
-                    <div className="font-semibold text-zinc-900">Confidence</div>
-                    <div className="mt-1 text-zinc-700">{confidenceLabel}</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-xl border bg-white p-3">
-                    <div className="font-semibold text-zinc-900">Training system</div>
-                    <div className="mt-1 text-zinc-700">{trainingSystemLabel}</div>
-                  </div>
-                  <div className="rounded-xl border bg-white p-3">
-                    <div className="font-semibold text-zinc-900">Variant</div>
-                    <div className="mt-1 text-zinc-700">{variantLabel}</div>
-                  </div>
-                </div>
-
-                {overrideAuditErr ? (
-                  <div className="mt-3 rounded-xl border border-red-200 bg-white p-3 text-xs text-red-700">{overrideAuditErr}</div>
-                ) : null}
-
-                {overrideAudit.length ? (
-                  <div className="mt-3 rounded-xl border bg-white p-3 text-xs text-zinc-700">
-                    <div className="font-semibold text-zinc-900">Override audit (latest)</div>
-                    <ul className="mt-2 list-disc space-y-1 pl-5">
-                      {overrideAudit.map((o) => (
-                        <li key={o.id}>
-                          {o.created_at}: to_variant={o.override_to_variant_id ?? "—"} · lvl={o.overrode_to_readiness_level ?? "—"} · reason=
-                          {o.reason_test ?? o.reason_code ?? "—"}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            </details>
-          ) : null}
         </div>
       </div>
     </div>

@@ -24,7 +24,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Step = 1 | 2 | 3 | 4;
+// ✅ 5 spurningar + notes
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 // ✅ Always produce YYYY-MM-DD (UTC) so Postgres DATE will accept it
 function todayIsoDateUTC(): string {
@@ -96,17 +97,14 @@ function StepDot({ active }: { active: boolean }) {
 function friendlySupabaseError(e: any) {
   const msg = String(e?.message ?? e ?? "");
 
-  // Duplicate checkin same day
   if (e?.code === "23505" || msg.toLowerCase().includes("duplicate key")) {
     return "Þú hefur nú þegar skilað check-in í dag. Ef þarf að breyta, hafðu samband við þjálfara.";
   }
 
-  // Date parsing
   if (e?.code === "22007" || msg.toLowerCase().includes("invalid input syntax for type date")) {
     return "Villa með dagsetningu í vistun. Við sendum alltaf YYYY-MM-DD — ef þetta heldur áfram er líklegt að trigger/fall í DB sé að reyna að setja '' í einhvern DATE dálk.";
   }
 
-  // RLS / auth
   if (e?.code === "42501" || msg.toLowerCase().includes("row-level security")) {
     return "Aðgangsvilla (RLS). Þú hefur ekki heimild til að vista check-in. Hafðu samband við þjálfara.";
   }
@@ -122,9 +120,13 @@ export default function PlayerCheckinPage() {
 
   const [step, setStep] = React.useState<Step>(1);
 
-  const [readiness, setReadiness] = React.useState<number | null>(null); // 1–10
-  const [sleep, setSleep] = React.useState<number | null>(null); // 0–2
-  const [soreness, setSoreness] = React.useState<number | null>(null); // 1–5
+  // ✅ Research-aligned 5 (1–5, higher = better)
+  const [fatigueEnergy, setFatigueEnergy] = React.useState<number | null>(null); // 1–5
+  const [sleepQuality, setSleepQuality] = React.useState<number | null>(null); // 1–5
+  const [sleepDuration, setSleepDuration] = React.useState<number | null>(null); // 1–5
+  const [stressMood, setStressMood] = React.useState<number | null>(null); // 1–5
+  const [muscleSoreness, setMuscleSoreness] = React.useState<number | null>(null); // 1–5 (5 = feeling great)
+
   const [notes, setNotes] = React.useState("");
 
   // IMPORTANT: playerId þarf að vera players.id (FK í readiness_entries)
@@ -154,7 +156,6 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // 1) Find player
       let { data: playerRow, error: playerErr } = await supabase
         .from("players")
         .select("id, full_name")
@@ -169,7 +170,6 @@ export default function PlayerCheckinPage() {
         return;
       }
 
-      // 2) Ensure player exists
       if (!playerRow?.id) {
         const { error: ensureErr } = await supabase.rpc("ensure_player_for_user");
         if (cancelled) return;
@@ -216,17 +216,25 @@ export default function PlayerCheckinPage() {
   }, []);
 
   const canGoNext = React.useMemo(() => {
-    if (step === 1) return readiness !== null;
-    if (step === 2) return sleep !== null;
-    if (step === 3) return soreness !== null;
+    if (step === 1) return fatigueEnergy !== null;
+    if (step === 2) return sleepQuality !== null;
+    if (step === 3) return sleepDuration !== null;
+    if (step === 4) return stressMood !== null;
+    if (step === 5) return muscleSoreness !== null;
     return true;
-  }, [step, readiness, sleep, soreness]);
+  }, [step, fatigueEnergy, sleepQuality, sleepDuration, stressMood, muscleSoreness]);
 
   const submit = async () => {
     if (!playerId) return;
 
-    if (readiness === null || sleep === null || soreness === null) {
-      setError("Vinsamlegast fylltu út readiness, svefn og eymsli áður en þú sendir.");
+    if (
+      fatigueEnergy === null ||
+      sleepQuality === null ||
+      sleepDuration === null ||
+      stressMood === null ||
+      muscleSoreness === null
+    ) {
+      setError("Vinsamlegast svaraðu öllum 5 spurningunum áður en þú sendir.");
       return;
     }
 
@@ -234,8 +242,6 @@ export default function PlayerCheckinPage() {
     setSaving(true);
 
     try {
-      // ✅ HARD-SET entry_date so DB never receives "".
-      // We also validate format to avoid any weird runtime/cache issues.
       const entry_date = todayIsoDateUTC();
       if (!isIsoDate(entry_date)) {
         throw {
@@ -244,18 +250,21 @@ export default function PlayerCheckinPage() {
         };
       }
 
+      // ✅ Send ONLY the research-aligned columns.
+      // DB trigger will compute total_score + fill legacy readiness/sleep/soreness.
       const payload = {
         player_id: playerId,
-        entry_date, // ✅ explicit date
-        readiness,
-        sleep,
-        soreness,
+        entry_date,
+        fatigue_energy: fatigueEnergy,
+        sleep_quality: sleepQuality,
+        sleep_duration: sleepDuration,
+        stress_mood: stressMood,
+        muscle_soreness: muscleSoreness,
         notes: notes.trim() ? notes.trim() : null,
       };
 
       console.log("CHECKIN payload:", payload);
 
-      // ✅ Ask Supabase to return the inserted row so we know insert truly succeeded
       const res = await supabase
         .from("readiness_entries")
         .insert(payload)
@@ -268,7 +277,6 @@ export default function PlayerCheckinPage() {
         throw res.error;
       }
 
-      // ✅ extra sanity: if no data comes back, treat as failure (shouldn't happen with .single())
       if (!res.data?.id) {
         throw { message: "Insert tókst ekki (ekkert svar frá DB)." };
       }
@@ -305,9 +313,11 @@ export default function PlayerCheckinPage() {
 
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">Readiness: {readiness ?? "-"}</Badge>
-              <Badge variant="secondary">Svefn: {sleep ?? "-"}</Badge>
-              <Badge variant="secondary">Eymsli: {soreness ?? "-"}</Badge>
+              <Badge variant="secondary">Fatigue/Energy: {fatigueEnergy ?? "-"}</Badge>
+              <Badge variant="secondary">Sleep quality: {sleepQuality ?? "-"}</Badge>
+              <Badge variant="secondary">Sleep duration: {sleepDuration ?? "-"}</Badge>
+              <Badge variant="secondary">Stress/Mood: {stressMood ?? "-"}</Badge>
+              <Badge variant="secondary">Muscle soreness: {muscleSoreness ?? "-"}</Badge>
             </div>
 
             {notes.trim() ? (
@@ -347,24 +357,30 @@ export default function PlayerCheckinPage() {
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">
-              {step === 1 && "Readiness"}
-              {step === 2 && "Svefn (0–2)"}
-              {step === 3 && "Eymsli (1–5)"}
-              {step === 4 && "Athugasemd (valfrjálst)"}
+              {step === 1 && "Fatigue / Energy (1–5)"}
+              {step === 2 && "Sleep quality (1–5)"}
+              {step === 3 && "Sleep duration (1–5)"}
+              {step === 4 && "Stress & mood (1–5)"}
+              {step === 5 && "General muscle soreness (1–5)"}
+              {step === 6 && "Athugasemd (valfrjálst)"}
             </CardTitle>
             <div className="flex items-center gap-2">
               <StepDot active={step >= 1} />
               <StepDot active={step >= 2} />
               <StepDot active={step >= 3} />
               <StepDot active={step >= 4} />
+              <StepDot active={step >= 5} />
+              <StepDot active={step >= 6} />
             </div>
           </div>
 
           <CardDescription>
-            {step === 1 && "Veldu það sem passar best (vistast sem 1–10 í kerfinu)."}
-            {step === 2 && "Svefn síðustu nótt. 2 = góður svefn."}
-            {step === 3 && "Hversu aumur/auð? 1 = engin eymsli, 5 = mjög slæmt."}
-            {step === 4 && "Ef eitthvað skiptir máli (t.d. stífleiki, veikindi, stress) skrifaðu hér."}
+            {step === 1 && "Hvernig er orkan/þreytan í dag? 5 = mjög fersk/ur."}
+            {step === 2 && "Hvernig var gæði svefns? 5 = mjög góður svefn."}
+            {step === 3 && "Hversu lengi svafstu? 5 = 8+ klst."}
+            {step === 4 && "Hvernig er stress/skap í dag? 5 = mjög gott."}
+            {step === 5 && "Hvernig er almenn vöðvaeymsli? 5 = feeling great."}
+            {step === 6 && "Ef eitthvað skiptir máli (t.d. stífleiki, veikindi, óvenjulegt stress) skrifaðu hér."}
           </CardDescription>
         </CardHeader>
 
@@ -377,69 +393,53 @@ export default function PlayerCheckinPage() {
 
           {step === 1 ? (
             <div className="space-y-2">
-              <Label>Veldu readiness</Label>
+              <Label>Fatigue / Energy</Label>
               <PillScale
-                ariaLabel="Readiness val"
-                value={readiness}
-                onChange={setReadiness}
+                ariaLabel="Fatigue/Energy val"
+                value={fatigueEnergy}
+                onChange={setFatigueEnergy}
                 options={[
-                  { v: 2, label: "Lágt", hint: "Þreyta / Mikið orkuleysi" },
-                  { v: 4, label: "Frekar lágt", hint: "Smá orkuleysi" },
-                  { v: 6, label: "Miðlungs", hint: "Allt í lagi/Þokkaleg/ur" },
-                  { v: 8, label: "Gott", hint: "Ferskur" },
-                  { v: 10, label: "Frábært", hint: "Mjög ferskur" },
+                  { v: 1, label: "Very tired", hint: "Mikil þreyta" },
+                  { v: 2, label: "Quite tired", hint: "Frekar þreytt/ur" },
+                  { v: 3, label: "Normal", hint: "Góð/ur" },
+                  { v: 4, label: "Fresh", hint: "Fersk/ur" },
+                  { v: 5, label: "Very fresh", hint: "Mjög fersk/ur" },
                 ]}
               />
-              <div className="text-xs text-muted-foreground">Ef þú vilt nákvæmara: hugsaðu 1–10.</div>
             </div>
           ) : null}
 
           {step === 2 ? (
             <div className="space-y-2">
-              <Label>Svefn</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { v: 0, t: "Slakur", d: "Lítill eða truflaður" },
-                  { v: 1, t: "Miðlungs", d: "Allt í lagi" },
-                  { v: 2, t: "Góður", d: "Hvíldin góð" },
-                ].map((o) => {
-                  const active = sleep === o.v;
-                  return (
-                    <button
-                      key={o.v}
-                      type="button"
-                      onClick={() => setSleep(o.v)}
-                      className={[
-                        "rounded-xl border p-3 text-left transition",
-                        "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                        active ? "border-primary bg-primary/10" : "bg-background",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold">{o.t}</div>
-                        <div className="text-xs text-muted-foreground">{o.v}</div>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">{o.d}</div>
-                    </button>
-                  );
-                })}
-              </div>
+              <Label>Sleep quality</Label>
+              <PillScale
+                ariaLabel="Sleep quality val"
+                value={sleepQuality}
+                onChange={setSleepQuality}
+                options={[
+                  { v: 1, label: "Very bad", hint: "Mjög slæmur" },
+                  { v: 2, label: "Bad", hint: "Slæmur" },
+                  { v: 3, label: "Restless", hint: "Órólegur" },
+                  { v: 4, label: "Good", hint: "Góður" },
+                  { v: 5, label: "Very good", hint: "Mjög góður" },
+                ]}
+              />
             </div>
           ) : null}
 
           {step === 3 ? (
             <div className="space-y-2">
-              <Label>Eymsli</Label>
+              <Label>Sleep duration</Label>
               <PillScale
-                ariaLabel="Eymsli val"
-                value={soreness}
-                onChange={setSoreness}
+                ariaLabel="Sleep duration val"
+                value={sleepDuration}
+                onChange={setSleepDuration}
                 options={[
-                  { v: 1, label: "Engin", hint: "fersk/ur" },
-                  { v: 2, label: "Lítil", hint: "Finn aðeins til" },
-                  { v: 3, label: "Miðlungs", hint: "Áberandi en ekki of mikið" },
-                  { v: 4, label: "Mikil", hint: "Frekar erfitt að hreyfa" },
-                  { v: 5, label: "Mjög mikil", hint: "Sársauki, get ekki æft" },
+                  { v: 1, label: "< 5 hours", hint: "Mjög stuttur svefn" },
+                  { v: 2, label: "5–6 hours", hint: "Stuttur" },
+                  { v: 3, label: "6–7 hours", hint: "Miðlungs" },
+                  { v: 4, label: "7–8 hours", hint: "Góður" },
+                  { v: 5, label: "8+ hours", hint: "Mjög góður" },
                 ]}
               />
             </div>
@@ -447,12 +447,48 @@ export default function PlayerCheckinPage() {
 
           {step === 4 ? (
             <div className="space-y-2">
+              <Label>Stress & mood</Label>
+              <PillScale
+                ariaLabel="Stress & mood val"
+                value={stressMood}
+                onChange={setStressMood}
+                options={[
+                  { v: 1, label: "Very stressed", hint: "Mjög stressaður eða mjög mikið álag" },
+                  { v: 2, label: "Stressed", hint: "Stressaður / mikið álag" },
+                  { v: 3, label: "Normal", hint: "Góð/ur" },
+                  { v: 4, label: "Feeling good", hint: "Líður vel" },
+                  { v: 5, label: "Feeling great", hint: "Líður frábærlega" },
+                ]}
+              />
+            </div>
+          ) : null}
+
+          {step === 5 ? (
+            <div className="space-y-2">
+              <Label>General muscle soreness</Label>
+              <PillScale
+                ariaLabel="General muscle soreness val"
+                value={muscleSoreness}
+                onChange={setMuscleSoreness}
+                options={[
+                  { v: 1, label: "Very sore", hint: "Mjög aum/ur" },
+                  { v: 2, label: "Some soreness", hint: "Frekar aum/ur" },
+                  { v: 3, label: "Normal", hint: "Góð/ur" },
+                  { v: 4, label: "Good", hint: "Fersk/ur" },
+                  { v: 5, label: "Feeling great", hint: "Mjög fersk/ur" },
+                ]}
+              />
+            </div>
+          ) : null}
+
+          {step === 6 ? (
+            <div className="space-y-2">
               <Label htmlFor="notes">Athugasemd</Label>
               <Textarea
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Dæmi: stífur í mjöðm, illt í hásin, lítið borðað, stress…"
+                placeholder="Dæmi: stífur í mjöðm, illt í hásin, veikindi, óvenjulegt stress…"
                 className="min-h-[120px] rounded-xl"
               />
               <div className="text-xs text-muted-foreground">
@@ -463,7 +499,7 @@ export default function PlayerCheckinPage() {
 
           <Separator />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Skref {step}/4</span>
+            <span>Skref {step}/6</span>
           </div>
         </CardContent>
 
@@ -478,11 +514,11 @@ export default function PlayerCheckinPage() {
             Til baka
           </Button>
 
-          {step < 4 ? (
+          {step < 6 ? (
             <Button
               type="button"
               className="w-2/3 rounded-xl"
-              onClick={() => setStep((s) => (Math.min(4, s + 1) as Step))}
+              onClick={() => setStep((s) => (Math.min(6, s + 1) as Step))}
               disabled={!canGoNext || saving}
             >
               Áfram
@@ -492,7 +528,14 @@ export default function PlayerCheckinPage() {
               type="button"
               className="w-2/3 rounded-xl"
               onClick={submit}
-              disabled={saving || readiness === null || sleep === null || soreness === null}
+              disabled={
+                saving ||
+                fatigueEnergy === null ||
+                sleepQuality === null ||
+                sleepDuration === null ||
+                stressMood === null ||
+                muscleSoreness === null
+              }
             >
               {saving ? "Vista…" : "Senda check-in"}
             </Button>

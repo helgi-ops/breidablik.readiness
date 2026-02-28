@@ -3,30 +3,44 @@ import { NextResponse, type NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // ✅ Leyfa reset-password flæðið (Supabase sendir access_token í URL hash)
-  if (pathname.startsWith("/reset-password")) {
+  // ✅ Always allow public + static
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/home") ||
+    pathname.startsWith("/pricing") ||
+    pathname === "/favicon.ico" ||
+    pathname.startsWith("/api")
+  ) {
     return NextResponse.next();
   }
 
-  // Protected routes (auth redirect líka, því hún þarf session)
+  // ✅ Only protect these routes
   const isProtected =
-    pathname.startsWith("/player") ||
     pathname.startsWith("/coach") ||
+    pathname.startsWith("/player") ||
     pathname.startsWith("/auth/redirect");
 
   if (!isProtected) return NextResponse.next();
 
-  // Detect Supabase session cookie (sb-*)
-  const hasSbCookie = req.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.value);
+  // ✅ Supabase cookies (any sb-* cookie)
+  const hasSbCookie = req.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.value);
+
   if (hasSbCookie) return NextResponse.next();
 
-  // Redirect to login with next
+  // 🔁 Redirect unauthenticated users
   const nextParam = encodeURIComponent(pathname + search);
   const loginUrl = new URL(`/login?next=${nextParam}`, req.url);
 
   return NextResponse.redirect(loginUrl);
 }
 
+// 🚨 CRITICAL: Do NOT include "/" here
 export const config = {
-  matcher: ["/player/:path*", "/coach/:path*", "/auth/redirect", "/reset-password"],
+  matcher: ["/coach/:path*", "/player/:path*", "/auth/redirect", "/reset-password"],
 };

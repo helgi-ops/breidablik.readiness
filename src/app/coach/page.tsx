@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -28,12 +27,30 @@ type PlanPreview = {
   template_structure: any | null;
 };
 
-type Row = {
-  // ✅ MUST be the actual readiness_entries.id (or null)
-  readiness_entry_id: string | null;
+// ✅ Team Intelligence row (from v_coach_team_intelligence_today)
+type TeamIntel = {
+  team_id: string;
+  entry_date: string;
+  n_players: number | null;
+  n_red: number | null;
+  n_yellow: number | null;
+  n_green: number | null;
+  n_green_plus: number | null;
+  pct_red: number | null;
+  pct_yellow: number | null;
+  pct_green: number | null;
+  pct_green_plus: number | null;
+  n_volatile: number | null;
+  volatility_pct: number | null;
+  n_low_baseline: number | null;
+  baseline_low_pct: number | null;
+  baseline_maturity: string | null; // STABLE / BUILDING / ...
+  team_status: string | null; // OK / CAUTION / ALERT
+  recommendation: string | null;
+};
 
-  // ✅ Stage4 decision id (source of truth for override)
-  decision_id?: string | null;
+type Row = {
+  readiness_entry_id: string | null;
 
   entry_date: string;
   created_at: string;
@@ -41,20 +58,26 @@ type Row = {
   player_id: string;
   full_name: string;
   team: string | null;
+  team_id?: string | null;
   position: string | null;
 
   readiness: number | null;
   sleep: number | null;
   soreness: number | null;
+  fatigue_energy?: number | null;
+  sleep_quality?: number | null;
+  sleep_duration?: number | null;
+  stress_mood?: number | null;
+  muscle_soreness?: number | null;
   total_score: number | null;
   notes: string | null;
 
   planned_day_type?: string | null;
   planned_focus?: string | null;
 
-  training_action: TrainingAction | null;
-  coach_message: string | null;
-
+  // ✅ UI shows Stage4 final
+  training_action: TrainingAction | null; // final_decision
+  coach_message: string | null; // coach_note
   is_locked: boolean;
 
   final_color?: FinalColor | null;
@@ -63,7 +86,13 @@ type Row = {
 
   md_day?: string | null;
 
-  // ✅ UI-only
+  // ✅ Stage4 debug (from v7 directly)
+  system_decision?: TrainingAction | null;
+  coach_decision?: TrainingAction | null;
+  final_decision?: TrainingAction | null;
+  final_source?: string | null;
+  stage4_updated_at?: string | null;
+
   ui_key?: string;
 };
 
@@ -73,13 +102,6 @@ function todayISO() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function sanitizeDay(input: string | null | undefined) {
-  const raw = String(input ?? "").trim();
-  const cleaned = raw.replace(/\\/g, "").replace(/"/g, "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
-  return todayISO();
 }
 
 function prettyMd(md: string | null | undefined) {
@@ -94,8 +116,23 @@ function prettyMd(md: string | null | undefined) {
 // ✅ Extract "MD-3"/"MD+1"/"MD" from planned_focus when md_day column isn't available
 function mdFromPlannedFocus(focus: string | null | undefined) {
   const s = String(focus ?? "").toUpperCase();
-  const m = s.match(/\bMD[+-]?\d*\b/); // MD, MD-3, MD+1
+  const m = s.match(/\bMD[+-]?\d*\b/);
   return m?.[0] ?? null;
+}
+
+/**
+ * ✅ Hide debug reason in the main row + keep it short.
+ * (We still show the full debug in the expanded section.)
+ */
+function shortReason(reason?: string | null) {
+  const s = String(reason ?? "").trim();
+  if (!s) return null;
+
+  // Hide hybrid debug in main row
+  if (s.toLowerCase().startsWith("hybrid:")) return null;
+
+  // Keep it short
+  return s.length > 60 ? s.slice(0, 57) + "…" : s;
 }
 
 /**
@@ -148,6 +185,19 @@ const colorMeta = (c?: string | null) => {
     return { label: "YELLOW", dot: "bg-yellow-400", pill: "bg-yellow-50 text-yellow-800 border-yellow-200" };
   return { label: "GREEN", dot: "bg-green-500", pill: "bg-green-50 text-green-700 border-green-200" };
 };
+
+function v(n: number | null | undefined) {
+  return typeof n === "number" ? n : "—";
+}
+
+// ✅ Team status styling
+function teamStatusMeta(status: string | null | undefined) {
+  const s = String(status ?? "").toUpperCase();
+  if (s === "ALERT") return { label: "ALERT", border: "border-red-200", bg: "bg-red-50", text: "text-red-800" };
+  if (s === "CAUTION")
+    return { label: "CAUTION", border: "border-yellow-200", bg: "bg-yellow-50", text: "text-yellow-900" };
+  return { label: "OK", border: "border-green-200", bg: "bg-green-50", text: "text-green-800" };
+}
 
 function CoachHubCards() {
   return (
@@ -231,6 +281,9 @@ export default function CoachPage() {
   const [coachVerified, setCoachVerified] = useState(false);
   const [mdContextToday, setMdContextToday] = useState<string | null>(null);
 
+  // ✅ Team intelligence
+  const [teamIntel, setTeamIntel] = useState<TeamIntel | null>(null);
+
   // generate decisions
   const [genLoading, setGenLoading] = useState(false);
   const [genToast, setGenToast] = useState<string>("");
@@ -271,7 +324,7 @@ export default function CoachPage() {
     const name = (prof as any)?.display_name ?? auth?.user?.email ?? "";
     setCoachName(name);
 
-    if (role !== "coach") {
+    if (String(role ?? "").toLowerCase() !== "coach") {
       router.replace(`/login?next=${encodeURIComponent("/coach")}`);
       return false;
     }
@@ -303,6 +356,11 @@ export default function CoachPage() {
   useEffect(() => {
     if (!coachVerified) return;
     setPage(0);
+
+    // ✅ Clear drafts when context changes (avoids stale UI)
+    setDraftAction({});
+    setDraftMessage({});
+    setSaved({});
   }, [teamFilter, filter, search, coachVerified]);
 
   async function loadPlanPreview() {
@@ -364,6 +422,22 @@ export default function CoachPage() {
     }
   }
 
+  // ✅ fetch team intelligence for today
+  async function loadTeamIntelligenceToday() {
+    try {
+      const { data, error } = await supabase.from("v_coach_team_intelligence_today").select("*").maybeSingle();
+      if (error) {
+        console.error("Team intel error:", error.message);
+        setTeamIntel(null);
+        return;
+      }
+      setTeamIntel((data as any) ?? null);
+    } catch (e) {
+      console.error("Team intel error (catch):", e);
+      setTeamIntel(null);
+    }
+  }
+
   async function generateTodayDecisionsForTeam() {
     try {
       setGenToast("");
@@ -415,8 +489,8 @@ export default function CoachPage() {
       setError("");
       setLoading(true);
 
-      const entryDate =
-        new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+      const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+
       // Ensure Stage4 rows exist for today's date before reading views
       await supabase.rpc("stage4_bootstrap_for_date", { p_date: entryDate });
 
@@ -432,7 +506,7 @@ export default function CoachPage() {
               .from("v_training_day_context_team")
               .select("md_day")
               .eq("team_id", teamId)
-              .eq("day_date", entryDate)
+              .eq("date", entryDate)
               .maybeSingle();
             setMdContextToday((ctxRow as any)?.md_day ?? null);
           } else {
@@ -445,15 +519,20 @@ export default function CoachPage() {
         setMdContextToday(null);
       }
 
+      // ✅ load PI layer for today (Team Intelligence)
+      await loadTeamIntelligenceToday();
+
       await loadPlanPreview();
       await loadWeekGrid();
 
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      // ✅ Single source of truth: v7 (includes Stage4 columns)
       let q = supabase
-        .from("v_coach_readiness_today_v6")
+        .from("v_coach_readiness_today_v7")
         .select("*", { count: "exact" })
+        .eq("entry_date", entryDate) // ✅ IMPORTANT: v7 is not scoped; force today-only in UI
         .order("total_score", { ascending: true })
         .order("full_name", { ascending: true })
         .range(from, to);
@@ -475,18 +554,12 @@ export default function CoachPage() {
 
       const list: Row[] = raw.map((r) => {
         const playerId = String(r.player_id);
-
-        // ✅ FIX #1: readiness_entry_id MUST NOT use r.id (r.id is likely decision id in this view)
         const entryId: string | null = (r.readiness_entry_id ?? null) as string | null;
 
-        // ✅ decision_id now reliable from view (stage4_decisions)
-        const decisionId: string | null = (r.decision_id ?? null) as string | null;
-
-        const baseColor =
-          (String(r.final_color ?? r.color ?? r.auto_color ?? "").toLowerCase() as FinalColor) || null;
-
-        const baseFlag = (String(r.final_flag ?? r.computed_auto_flag ?? "").toUpperCase() as FinalFlag) || null;
-        const baseReason = (r.final_reason ?? r.computed_auto_reason ?? null) as string | null;
+        // ✅ Use v7 final_* only (no fallback to old columns)
+        const baseColor = (String(r.final_color ?? "").toLowerCase() as FinalColor) || null;
+        const baseFlag = (String(r.final_flag ?? "").toUpperCase() as FinalFlag) || null;
+        const baseReason = (r.final_reason ?? null) as string | null;
 
         const downgraded = applySorenessDowngrade({
           flag: baseFlag,
@@ -501,65 +574,78 @@ export default function CoachPage() {
 
         const plannedFocus = r.planned_focus ?? null;
         const perPlayerMd = mdFromPlannedFocus(plannedFocus);
-        const viewMd = (r.md_day ?? (r as any).system_md_context ?? null) as string | null;
+        const viewMd = (r.md_day ?? null) as string | null;
 
         return {
           readiness_entry_id: entryId,
-          decision_id: decisionId,
 
-        entry_date: String(r.entry_date ?? todayISO()).trim() || todayISO(),
+          entry_date: String(r.entry_date ?? entryDate).trim() || entryDate,
           created_at: String(r.created_at),
 
           player_id: playerId,
           full_name: String(r.full_name ?? ""),
           team: r.team ?? null,
           position: r.position ?? null,
+          team_id: (r as any).team_id ?? null,
 
           readiness: r.readiness ?? null,
           sleep: r.sleep ?? null,
           soreness: r.soreness ?? null,
+          fatigue_energy: (r as any).fatigue_energy ?? null,
+          sleep_quality: (r as any).sleep_quality ?? null,
+          sleep_duration: (r as any).sleep_duration ?? null,
+          stress_mood: (r as any).stress_mood ?? null,
+          muscle_soreness: (r as any).muscle_soreness ?? null,
           total_score: r.total_score ?? null,
           notes: r.notes ?? null,
 
           planned_focus: plannedFocus,
           planned_day_type: r.planned_day_type ?? null,
 
-          training_action: (r.training_action ?? null) as TrainingAction | null,
-          coach_message: r.coach_message ?? null,
-
-          is_locked: !!r.is_locked,
+          // ✅ Stage4 truth comes directly from view
+          training_action: (r.final_decision ?? "FULL") as TrainingAction,
+          coach_message: (r.coach_note ?? null) as string | null,
+          is_locked: !!(r.locked ?? false),
 
           final_color: finalColor,
           final_flag: finalFlag,
           final_reason: finalReason,
 
-          md_day: viewMd ?? perPlayerMd ?? mdDayToday,
+          md_day: viewMd ?? mdContextToday ?? perPlayerMd ?? mdDayToday,
 
-          ui_key: `${playerId}_${String(r.entry_date)}`,
+          system_decision: (r.system_decision ?? null) as TrainingAction | null,
+          coach_decision: (r.coach_decision ?? null) as TrainingAction | null,
+          final_decision: (r.final_decision ?? null) as TrainingAction | null,
+          final_source: (r.final_source ?? null) as string | null,
+          stage4_updated_at: (r.stage4_updated_at ?? null) as string | null,
+
+          ui_key: `${playerId}_${String(r.entry_date ?? entryDate)}`,
         };
       });
 
       setRows(list);
       setTotal(count ?? 0);
 
-      // init drafts
-      setDraftAction((prev) => {
-        const next = { ...prev };
+      // ✅ Always sync drafts to DB after reload
+      setDraftAction(() => {
+        const next: Record<string, TrainingAction> = {};
         for (const r of list) {
           const pid = String(r.player_id);
-          if (!next[pid]) next[pid] = (r.training_action ?? "FULL") as TrainingAction;
+          next[pid] = (r.training_action ?? "FULL") as TrainingAction;
         }
         return next;
       });
 
-      setDraftMessage((prev) => {
-        const next = { ...prev };
+      setDraftMessage(() => {
+        const next: Record<string, string> = {};
         for (const r of list) {
           const pid = String(r.player_id);
-          if (next[pid] === undefined) next[pid] = r.coach_message ?? "";
+          next[pid] = r.coach_message ?? "";
         }
         return next;
       });
+
+      setSaved({});
     } catch (e: any) {
       setError(e?.message ?? "Unknown error");
       setRows([]);
@@ -578,60 +664,39 @@ export default function CoachPage() {
     return acc;
   }, [rows]);
 
-  // ✅ Coach override flow: RPC upsert + readiness update + plan lock refresh
+  // ✅ Coach override flow: Stage4 only (+ optional plan lock refresh)
   async function saveOverride(r: Row) {
+    // ✅ Production behavior: never allow editing if locked
+    if (r.is_locked) return;
+
     const playerId = String(r.player_id);
     const action = draftAction[playerId] ?? r.training_action ?? "FULL";
     const message = (draftMessage[playerId] ?? r.coach_message ?? "").trim();
-    // ✅ Safe entry_date (never "")
-    const entryDate =
-      r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
+    const entryDate = r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
 
     setSaving((p) => ({ ...p, [playerId]: true }));
     setSaved((p) => ({ ...p, [playerId]: false }));
     setError("");
 
     try {
-      // 1) Stage4 override via RPC (handles missing rows)
-      const { data: sData, error: sErr } = await supabase.rpc("stage4_set_coach_override", {
+      // 1) Stage4 override via RPC
+      const { error: sErr } = await supabase.rpc("stage4_set_coach_override", {
         p_player_id: playerId,
         p_entry_date: entryDate,
         p_coach_decision: action,
         p_coach_note: message.length ? message : null,
       });
       if (sErr) throw new Error(`Stage4 RPC failed: ${sErr.message}`);
-      const newId = sData as unknown as string | null;
-      if (!newId) throw new Error("Stage4 RPC skilaði ekki id (óvænt).");
 
-      // 2) Update readiness_entries only if row exists (best effort)
-      if (r.readiness_entry_id) {
-        const { data: reData, error: reErr } = await supabase
-          .from("readiness_entries")
-          .update({
-            training_action: action,
-            coach_message: message.length ? message : null,
-          })
-          .eq("id", r.readiness_entry_id)
-          .select("id")
-          .limit(1);
-
-        if (reErr) {
-          console.warn("readiness_entries update blocked:", reErr.message);
-        } else if (!reData || reData.length === 0) {
-          console.warn("readiness_entries updated 0 rows (RLS or mismatch).");
-        }
-      }
-
-      // 3) Refresh player plan lock so the player page reflects the override
+      // 2) Optional: plan lock refresh (legacy). We warn but don't block the save.
       const { error: lockErr } = await supabase.rpc("coach_override_microdose_plan", {
         p_player_id: playerId,
         p_entry_date: entryDate,
         p_variant_id: null,
-        p_source: `COACH_${action}`,
+        p_source: "COACH",
       });
       if (lockErr) {
         console.warn("coach_override_microdose_plan failed payload:", { playerId, entryDate, action, r });
-        throw new Error(`coach_override_microdose_plan failed: ${lockErr.message}`);
       }
 
       setSaved((p) => ({ ...p, [playerId]: true }));
@@ -649,10 +714,10 @@ export default function CoachPage() {
 
   if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
 
-  const sourceLabel = planPreview?.source ?? "—";
   const confidenceLabel = formatConfidence(planPreview?.confidence);
 
-  const renderActionPills = (pid: string, _locked: boolean) => {
+  // ✅ LOCKED behavior: disable pills when locked
+  const renderActionPills = (pid: string, locked: boolean) => {
     const current = draftAction[pid] ?? "FULL";
     const pill = (value: TrainingAction, label: string) => {
       const active = current === value;
@@ -660,12 +725,12 @@ export default function CoachPage() {
         <button
           key={value}
           type="button"
-          disabled={false}
+          disabled={locked}
           onClick={() => setDraftAction((p) => ({ ...p, [pid]: value }))}
           className={[
             "rounded-full border px-3 py-1 text-xs font-semibold",
+            locked ? "opacity-50 cursor-not-allowed" : "",
             active ? "bg-black text-white border-black" : "bg-white text-gray-800 hover:bg-gray-50",
-            "",
           ].join(" ")}
         >
           {label}
@@ -685,13 +750,16 @@ export default function CoachPage() {
   const renderRow = (r: Row) => {
     const pid = String(r.player_id);
     const isSaving = !!saving[pid];
-    const isLocked = !!r.is_locked; // player-lock (coach may still override)
-
-    const cm = colorMeta(r.final_color ?? "green");
     const isOpen = expandedPlayerId === pid;
 
+    const cm = colorMeta(r.final_color ?? "green");
+    const isOverride = String(r.final_source ?? "").toUpperCase() === "COACH";
+
+    // ✅ Main row should NOT show "Hybrid: abs=..." debug
+    const mainReason = r.planned_focus || shortReason(r.final_reason) || "—";
+
     return (
-      <React.Fragment key={r.ui_key ?? r.decision_id ?? r.readiness_entry_id ?? pid}>
+      <React.Fragment key={r.ui_key ?? r.readiness_entry_id ?? pid}>
         <div className="rounded-lg border bg-white px-3 py-2">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1.4fr)_auto_auto_1fr_auto] md:items-center">
             <div className="min-w-0">
@@ -699,7 +767,7 @@ export default function CoachPage() {
               <div className="text-xs text-gray-500 truncate">{[r.team, r.position].filter(Boolean).join(" • ")}</div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}
               >
@@ -710,6 +778,19 @@ export default function CoachPage() {
               <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800">
                 {r.md_day ?? mdDayToday}
               </span>
+
+              {/* ✅ (3) Locked pill on main row */}
+              {r.is_locked ? (
+                <span className="inline-flex items-center rounded-full border bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                  Locked
+                </span>
+              ) : null}
+
+              {isOverride ? (
+                <span className="inline-flex items-center rounded-full border bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Override
+                </span>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-start md:justify-center">
@@ -719,22 +800,24 @@ export default function CoachPage() {
             </div>
 
             <div className="min-w-0 text-sm text-gray-700">
-              <span className="block truncate" title={(r.planned_focus ?? r.final_reason ?? "") as string}>
-                {r.planned_focus || r.final_reason || "—"}
+              <span className="block truncate" title={String(mainReason)}>
+                {mainReason}
               </span>
             </div>
 
             <div className="flex items-center gap-2 justify-end">
-              {renderActionPills(pid, isLocked || isSaving)}
+              {/* ✅ (2A) disable pills when locked */}
+              {renderActionPills(pid, r.is_locked)}
 
+              {/* ✅ (2B) disable Save when locked */}
               <button
                 onClick={async () => {
                   await saveOverride(r);
                 }}
-                disabled={isSaving}
+                disabled={isSaving || r.is_locked}
                 className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
               >
-                {isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
+                {r.is_locked ? "Locked" : isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
               </button>
 
               <button
@@ -753,16 +836,23 @@ export default function CoachPage() {
           <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700 space-y-3">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <div>
-                📊 Readiness: <span className="font-medium tabular-nums">{r.readiness ?? "—"}</span>
+                ⚡ Fatigue/Energy: <span className="font-medium tabular-nums">{v(r.fatigue_energy)}</span>
               </div>
               <div>
-                😴 Svefn: <span className="font-medium tabular-nums">{r.sleep ?? "—"}</span>
+                😴 Sleep quality: <span className="font-medium tabular-nums">{v(r.sleep_quality)}</span>
               </div>
               <div>
-                🦴 Stífleiki: <span className="font-medium tabular-nums">{r.soreness ?? "—"}</span>
+                ⏱ Sleep duration: <span className="font-medium tabular-nums">{v(r.sleep_duration)}</span>
               </div>
               <div>
-                ⚡ Ath.: <span className="font-medium tabular-nums">{r.notes ?? "—"}</span>
+                🧠 Stress/Mood: <span className="font-medium tabular-nums">{v(r.stress_mood)}</span>
+              </div>
+              <div>
+                💪 Muscle soreness: <span className="font-medium tabular-nums">{v(r.muscle_soreness)}</span>
+              </div>
+              <div className="min-w-[220px]">
+                📝 Notes:{" "}
+                <span className="font-medium">{r.notes && r.notes.trim().length ? r.notes : "—"}</span>
               </div>
               <div>
                 Skráð:{" "}
@@ -773,27 +863,39 @@ export default function CoachPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-gray-700">Coach message (override)</div>
+              <div className="text-xs font-semibold text-gray-700">Coach message (Stage4)</div>
               <textarea
                 className="w-full rounded-md border bg-white p-2 text-sm"
                 rows={2}
                 value={draftMessage[pid] ?? ""}
                 onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
-                disabled={isSaving}
+                disabled={isSaving || r.is_locked} // ✅ (2B) lock textarea too
                 placeholder="Skrifaðu coach skilaboð…"
               />
               <div className="text-xs text-gray-500">
-                Þetta vistast í <code>stage4_decisions.coach_note</code> (og <code>readiness_entries.coach_message</code>{" "}
-                ef readiness row er til) þegar þú ýtir á Save.
+                Þetta vistast í <code>stage4_decisions.coach_note</code> þegar þú ýtir á Save — og birtist á player-síðunni.
               </div>
             </div>
 
-            <div className="text-xs text-gray-500 space-y-1">
+            {/* ✅ Keep full auto debug here (NOT in main row) */}
+            <div className="text-xs text-gray-600">
               <div>
-                Decision id: <span className="font-mono">{r.decision_id ?? "—"}</span>
+                Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>
+                Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=
+                <span className="font-mono">{r.coach_decision ?? "—"}</span> · final=
+                <span className="font-mono">{r.final_decision ?? "—"}</span> · source=
+                <span className="font-mono">{r.final_source ?? "—"}</span>
               </div>
               <div>
                 Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span>
+              </div>
+              <div>
+                Stage4 updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span>
               </div>
             </div>
           </div>
@@ -802,9 +904,65 @@ export default function CoachPage() {
     );
   };
 
+  const tm = teamStatusMeta(teamIntel?.team_status);
+
   return (
     <div className="space-y-5">
       <CoachHubCards />
+
+      {/* ✅ Performance Intelligence (Team) */}
+      <Card className={`shadow-sm border ${tm.border}`}>
+        <CardHeader className={`${tm.bg}`}>
+          <CardTitle className={`text-base ${tm.text}`}>Performance Intelligence — Team</CardTitle>
+          <CardDescription className={`${tm.text}`}>
+            Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
+            <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
+            <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!teamIntel ? (
+            <div className="text-sm text-muted-foreground">Engin team intelligence færsla fannst í dag.</div>
+          ) : (
+            <>
+              <div className="grid gap-2 md:grid-cols-4">
+                <div className="rounded-md border bg-white p-3">
+                  <div className="text-xs text-gray-500">Volatility</div>
+                  <div className="text-lg font-semibold tabular-nums">{teamIntel.volatility_pct ?? 0}%</div>
+                  <div className="text-xs text-gray-500">volatile: {teamIntel.n_volatile ?? 0}</div>
+                </div>
+
+                <div className="rounded-md border bg-white p-3">
+                  <div className="text-xs text-gray-500">RED</div>
+                  <div className="text-lg font-semibold tabular-nums">{teamIntel.pct_red ?? 0}%</div>
+                  <div className="text-xs text-gray-500">n: {teamIntel.n_red ?? 0}</div>
+                </div>
+
+                <div className="rounded-md border bg-white p-3">
+                  <div className="text-xs text-gray-500">YELLOW</div>
+                  <div className="text-lg font-semibold tabular-nums">{teamIntel.pct_yellow ?? 0}%</div>
+                  <div className="text-xs text-gray-500">n: {teamIntel.n_yellow ?? 0}</div>
+                </div>
+
+                <div className="rounded-md border bg-white p-3">
+                  <div className="text-xs text-gray-500">GREEN (+)</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    green: {teamIntel.n_green ?? 0} · green+: {teamIntel.n_green_plus ?? 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border bg-white p-3">
+                <div className="text-xs font-semibold text-gray-700">Recommendation</div>
+                <div className="text-sm text-gray-800">{teamIntel.recommendation ?? "—"}</div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="shadow-sm">
         <CardHeader>
@@ -812,7 +970,7 @@ export default function CoachPage() {
           <CardDescription>
             Coach: <span className="font-medium">{coachName || "—"}</span> · Date:{" "}
             <span className="font-medium">{today}</span> · MD-day: <span className="font-medium">{mdDayToday}</span> ·
-            Source: <span className="font-medium">{sourceLabel}</span> · Confidence:{" "}
+            Source: <span className="font-medium">{planPreview?.source ?? "—"}</span> · Confidence:{" "}
             <span className="font-medium">{confidenceLabel}</span>
           </CardDescription>
         </CardHeader>
@@ -881,8 +1039,7 @@ export default function CoachPage() {
 
       <Card className="shadow-sm">
         <CardContent className="p-4 text-sm">
-          <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka
-          skammt.
+          <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.
         </CardContent>
       </Card>
     </div>
