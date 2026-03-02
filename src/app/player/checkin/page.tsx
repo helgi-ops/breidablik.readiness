@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "@/lib/supabaseClient"; // ✅ NOTA project client
 
 // shadcn/ui
 import {
@@ -18,16 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-// Supabase client (client-side)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-// ✅ 5 spurningar + notes
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
-// ✅ Always produce YYYY-MM-DD (UTC) so Postgres DATE will accept it
 function todayIsoDateUTC(): string {
   const d = new Date();
   const yyyy = d.getUTCFullYear();
@@ -36,7 +28,6 @@ function todayIsoDateUTC(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// ✅ Validate YYYY-MM-DD quickly (defensive)
 function isIsoDate(s: unknown): s is string {
   if (typeof s !== "string") return false;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -113,6 +104,8 @@ function friendlySupabaseError(e: any) {
 }
 
 export default function PlayerCheckinPage() {
+  const supabase = React.useMemo(() => getSupabaseClient(), []);
+
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -120,16 +113,14 @@ export default function PlayerCheckinPage() {
 
   const [step, setStep] = React.useState<Step>(1);
 
-  // ✅ Research-aligned 5 (1–5, higher = better)
-  const [fatigueEnergy, setFatigueEnergy] = React.useState<number | null>(null); // 1–5
-  const [sleepQuality, setSleepQuality] = React.useState<number | null>(null); // 1–5
-  const [sleepDuration, setSleepDuration] = React.useState<number | null>(null); // 1–5
-  const [stressMood, setStressMood] = React.useState<number | null>(null); // 1–5
-  const [muscleSoreness, setMuscleSoreness] = React.useState<number | null>(null); // 1–5 (5 = feeling great)
+  const [fatigueEnergy, setFatigueEnergy] = React.useState<number | null>(null);
+  const [sleepQuality, setSleepQuality] = React.useState<number | null>(null);
+  const [sleepDuration, setSleepDuration] = React.useState<number | null>(null);
+  const [stressMood, setStressMood] = React.useState<number | null>(null);
+  const [muscleSoreness, setMuscleSoreness] = React.useState<number | null>(null);
 
   const [notes, setNotes] = React.useState("");
 
-  // IMPORTANT: playerId þarf að vera players.id (FK í readiness_entries)
   const [playerId, setPlayerId] = React.useState<string | null>(null);
   const [playerName, setPlayerName] = React.useState<string | null>(null);
 
@@ -150,6 +141,10 @@ export default function PlayerCheckinPage() {
       }
 
       const user = authRes?.user;
+
+      // ✅ DEBUG: STRAX EFTIR getUser()
+      console.log("CHECKIN auth.uid:", user?.id ?? null);
+
       if (!user) {
         setLoading(false);
         setError("Þú þarft að vera skráður inn til að skila check-in.");
@@ -158,7 +153,7 @@ export default function PlayerCheckinPage() {
 
       let { data: playerRow, error: playerErr } = await supabase
         .from("players")
-        .select("id, full_name")
+        .select("id, full_name, user_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -182,7 +177,7 @@ export default function PlayerCheckinPage() {
 
         const res2 = await supabase
           .from("players")
-          .select("id, full_name")
+          .select("id, full_name, user_id")
           .eq("user_id", user.id)
           .maybeSingle();
 
@@ -203,6 +198,16 @@ export default function PlayerCheckinPage() {
         return;
       }
 
+      // ✅ DEBUG: staðfestum mapping (hjálpar við “einn leikmaður failar”)
+      console.log("CHECKIN player.id:", playerRow.id, "player.user_id:", playerRow.user_id ?? null);
+
+      // ✅ SANITY: ef eitthvað er “off” í mapping (ætti aldrei að gerast ef query eq user_id)
+      if (playerRow.user_id && playerRow.user_id !== user.id) {
+        setLoading(false);
+        setError("Tenging notanda við leikmann er röng (user_id mismatch). Hafðu samband við þjálfara.");
+        return;
+      }
+
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
       setLoading(false);
@@ -213,7 +218,7 @@ export default function PlayerCheckinPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [supabase]);
 
   const canGoNext = React.useMemo(() => {
     if (step === 1) return fatigueEnergy !== null;
@@ -242,6 +247,10 @@ export default function PlayerCheckinPage() {
     setSaving(true);
 
     try {
+      // ✅ Refresh user snapshot right before save (helps with “stuck session”)
+      const { data: authRes } = await supabase.auth.getUser();
+      console.log("CHECKIN submit auth.uid:", authRes?.user?.id ?? null);
+
       const entry_date = todayIsoDateUTC();
       if (!isIsoDate(entry_date)) {
         throw {
@@ -250,8 +259,6 @@ export default function PlayerCheckinPage() {
         };
       }
 
-      // ✅ Send ONLY the research-aligned columns.
-      // DB trigger will compute total_score + fill legacy readiness/sleep/soreness.
       const payload = {
         player_id: playerId,
         entry_date,
@@ -265,20 +272,23 @@ export default function PlayerCheckinPage() {
 
       console.log("CHECKIN payload:", payload);
 
+      // ✅ UPSERT = idempotent, verndar gegn duplicates/tvísmelli
       const res = await supabase
         .from("readiness_entries")
-        .insert(payload)
+        .upsert(payload, { onConflict: "player_id,entry_date" })
         .select("id, entry_date")
         .single();
 
+      console.log("CHECKIN upsert result:", { data: res.data, error: res.error });
+
       if (res.error) {
-        console.error("CHECKIN insert error (raw):", res.error);
-        console.error("CHECKIN insert error (json):", JSON.stringify(res.error, null, 2));
+        console.error("CHECKIN upsert error (raw):", res.error);
+        console.error("CHECKIN upsert error (json):", JSON.stringify(res.error, null, 2));
         throw res.error;
       }
 
       if (!res.data?.id) {
-        throw { message: "Insert tókst ekki (ekkert svar frá DB)." };
+        throw { message: "Vistun tókst ekki (ekkert svar frá DB)." };
       }
 
       setSuccess(true);

@@ -22,23 +22,41 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
             >
               Dashboard
             </Link>
+
+            <Link
+              href="/coach/players"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Players
+            </Link>
+
             <Link
               href="/coach/messages"
               className="rounded-md px-3 py-2 text-sm hover:bg-muted"
             >
               Messages
             </Link>
+
             <Link
               href="/coach/week-setup"
               className="rounded-md px-3 py-2 text-sm hover:bg-muted"
             >
               Week setup
             </Link>
+
             <Link
               href="/coach/match-minutes"
               className="rounded-md px-3 py-2 text-sm hover:bg-muted"
             >
               Match minutes
+            </Link>
+
+            {/* 🔥 NÝTT */}
+            <Link
+              href="/coach/templates"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Templates
             </Link>
           </nav>
         </div>

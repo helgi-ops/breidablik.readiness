@@ -89,6 +89,21 @@ type PlayerSessionTodayRow =
     }
   | null;
 
+type PlayerTemplateToday = {
+  entry_date: string;
+  note: string | null;
+  locked: boolean | null;
+  template:
+    | {
+        id: string;
+        code: string | null;
+        title: string | null;
+        description: string | null;
+        structure: any;
+      }
+    | null;
+};
+
 // ============================
 // ✅ Post-training types (DB)
 // ============================
@@ -250,6 +265,15 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// ✅ Always produce YYYY-MM-DD (UTC) so Postgres DATE will accept it
+function todayIsoDateUTC(): string {
+  const d = new Date();
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /**
  * ✅ IMPORTANT: never allow "" / "\"\"" / junk to reach Postgres date columns
  */
@@ -260,6 +284,15 @@ function sanitizeDay(input: string | null | undefined) {
   const cleaned = noQuotes.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
   return todayISO();
+}
+
+function isoDateUTCFromTimestamp(ts: string | null | undefined) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function norm(x: string | null | undefined) {
@@ -947,6 +980,7 @@ export default function PlayerClient() {
   const [stage4Final, setStage4Final] = useState<Stage4DecisionFinalRow>(null);
 
   const [metrics, setMetrics] = useState<MetricsRow>(null);
+  const [tplToday, setTplToday] = useState<PlayerTemplateToday | null>(null);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
   const [session, setSession] = useState<PlayerSessionTodayRow>(null);
@@ -965,6 +999,40 @@ export default function PlayerClient() {
   const [overrideAuditErr, setOverrideAuditErr] = useState<string>("");
 
   const fixModules = useMemo(() => dedupeFixModulesByTag(fixRow?.fix_modules), [fixRow?.fix_modules]);
+
+  // Fetch assigned template for the selected day (page date)
+  useEffect(() => {
+    const playerId = profile?.player_id ?? selectedPlayerId;
+    if (!playerId) return;
+
+    (async () => {
+      const entryDate = sanitizeDay(day);
+
+      const { data, error } = await supabase
+        .from("player_template_assignments")
+        .select(
+          `
+        entry_date,
+        note,
+        locked,
+        template:workout_templates (
+          id, code, title, description, structure
+        )
+      `
+        )
+        .eq("player_id", playerId)
+        .eq("entry_date", entryDate)
+        .maybeSingle();
+
+      if (error) {
+        console.error("tplToday fetch error:", error);
+        setTplToday(null);
+        return;
+      }
+
+      setTplToday((data as any) ?? null);
+    })();
+  }, [profile?.player_id, selectedPlayerId, supabase, day]);
 
   async function ensureStage4Decision(playerId: string, dayInput: string) {
     const safeDay = sanitizeDay(dayInput);
@@ -1584,12 +1652,66 @@ export default function PlayerClient() {
               </details>
             </CardShell>
 
-            {/* Fix modules */}
-            {renderFixModules(dedupeFixModulesByTag(fixRow?.fix_modules))}
+            {/* Fix modules (only if same day as page) */}
+            {isoDateUTCFromTimestamp(fixRow?.created_at) === sanitizeDay(day)
+              ? renderFixModules(dedupeFixModulesByTag(fixRow?.fix_modules))
+              : null}
           </div>
 
           {/* RIGHT */}
           <div className="space-y-6">
+            {tplToday?.template?.structure ? (
+              <div className="mb-2 rounded-xl border bg-white p-4">
+                <div className="text-sm font-semibold">Ráðlagðar æfingar</div>
+
+                <div className="mt-1 flex flex-col gap-1">
+                  <div className="text-lg font-bold">
+                    {tplToday.template.title ?? tplToday.template.code ?? "Template"}
+                  </div>
+
+                  {tplToday.template.description ? (
+                    <div className="text-sm opacity-80">{tplToday.template.description}</div>
+                  ) : null}
+
+                  {tplToday.note ? (
+                    <div className="text-sm mt-1">
+                      <span className="font-semibold">Coach note:</span> {tplToday.note}
+                    </div>
+                  ) : null}
+                </div>
+
+                {Array.isArray((tplToday.template as any)?.structure?.blocks) ? (
+                  <div className="mt-3 space-y-3">
+                    {(tplToday.template as any).structure.blocks.map((b: any, idx: number) => (
+                      <div key={idx} className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-sm font-semibold">{b.title ?? b.type ?? `Block ${idx + 1}`}</div>
+
+                        {b.protocol ? (
+                          <div className="text-sm mt-1">
+                            {b.protocol.exercise} — {b.protocol.sets}×{b.protocol.hold_seconds}s, hvíld {b.protocol.rest_seconds}s
+                          </div>
+                        ) : null}
+
+                        {Array.isArray(b.exercises) ? (
+                          <ul className="mt-1 text-sm list-disc pl-5">
+                            {b.exercises.map((ex: any, i: number) => (
+                              <li key={i}>
+                                {ex.name}
+                                {ex.sets ? ` — ${ex.sets}x${ex.reps ?? ""}` : ""}
+                                {typeof ex.velocity_target === "number" ? ` @ ${ex.velocity_target} m/s` : ""}
+                                {typeof ex.vl_threshold === "number" ? ` (VL ≤ ${Math.round(ex.vl_threshold * 100)}%)` : ""}
+                                {ex.tempo ? ` (tempo ${ex.tempo})` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {renderStructureBlocks(plan.structure, {
               headerTitle: plan.title,
               headerDesc: plan.description,
