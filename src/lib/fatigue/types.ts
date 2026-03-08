@@ -1,6 +1,14 @@
 export type FatigueType = "NONE" | "SYSTEMIC" | "NEURAL" | "TISSUE" | "MIXED";
 export type FatigueSeverity = "LOW" | "MODERATE" | "HIGH";
 export type FatigueConfidence = "LOW" | "MEDIUM" | "HIGH";
+export type FatigueDriverCategory = "NEURAL" | "TISSUE" | "SYSTEMIC";
+
+export type FatigueDriver = {
+  code: string;
+  label: string;
+  points: number;
+  category: FatigueDriverCategory;
+};
 export type TrainingModifier =
   | "NEURAL_LOW_DENSITY"
   | "NEURAL_LOW_CONTACT"
@@ -67,11 +75,19 @@ export type FatigueInput = {
 
 export type FatigueClassification = {
   playerId: string;
+  neuralScore: number;
+  tissueScore: number;
+  systemicScore: number;
   primaryFatigueType: FatigueType;
+  secondaryFatigueType: FatigueType;
   severity: FatigueSeverity;
   confidence: FatigueConfidence;
   score: number;
-  drivers: string[];
+  drivers: FatigueDriver[];
   recommendedModifiers: TrainingModifier[];
-  reasonCodes: string[];
+  debug: {
+    dataCompleteness: number;
+    scoreGap: number;
+    mixedState: boolean;
+  };
 };

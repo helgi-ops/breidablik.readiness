@@ -291,6 +291,7 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
     neuralScore,
     tissueScore,
     systemicScore,
+    score: top.score,
     primaryFatigueType,
     secondaryFatigueType,
     severity,
