@@ -33,10 +33,10 @@ export async function GET(req: Request) {
       .eq("notification_type", "session_rpe_missing")
       .order("sent_at", { ascending: false })
       .limit(50);
-    const rpeLog = !rpeErr || isMissingRpeNotificationLogError(rpeErr)
-      ? ((rpeRows ?? []) as Array<{ status: "sent" | "skipped" | "failed"; sent_at: string | null }>)
-      : null;
-    if (!rpeLog) throw new Error(rpeErr.message);
+    if (rpeErr && !isMissingRpeNotificationLogError(rpeErr)) {
+      throw new Error(rpeErr.message);
+    }
+    const rpeLog = (rpeRows ?? []) as Array<{ status: "sent" | "skipped" | "failed"; sent_at: string | null }>;
     let sent = 0;
     let skipped = 0;
     let failed = 0;
