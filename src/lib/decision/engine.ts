@@ -313,7 +313,7 @@ function buildExceptions(
     let action: ExceptionAction = "NORMAL";
 
     const fatigueInput = buildFatigueInput(p, yday, cfg);
-    const fatigue = classifyFatigue(fatigueInput, cfg);
+    const fatigue = classifyFatigue(fatigueInput);
     const neuralLoad = classifyNeuralLoad(buildNeuralLoadInput(p, yday, fatigue, cfg));
     const neuralBias = getPlayerNeuralBias({
       neuralLoadState: neuralLoad.neuralLoadState,
@@ -429,7 +429,7 @@ export function computeTeamDecision(
   const d = teamDeltaSignal(players);
 
   const fatigueItems: FatigueClassification[] = players.map((player) =>
-    classifyFatigue(buildFatigueInput(player, yday, cfg), cfg)
+    classifyFatigue(buildFatigueInput(player, yday, cfg))
   );
   const teamFatigueSummary = buildTeamFatigueSummary(fatigueItems);
   const neuralItems = players.map((player, idx) =>
