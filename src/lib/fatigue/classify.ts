@@ -1,167 +1,306 @@
-import { getRecommendedModifiers } from "@/lib/fatigue/modifiers";
-import type { CalibrationConfig, DeepPartial } from "@/lib/calibration/config";
-import { resolveCalibrationConfig } from "@/lib/calibration/config";
-import type { FatigueClassification, FatigueInput, FatigueType } from "@/lib/fatigue/types";
+import type {
+  FatigueClassification,
+  FatigueConfidence,
+  FatigueDriver,
+  FatigueInput,
+  FatigueSeverity,
+  FatigueType,
+} from "./types";
+import { getRecommendedModifiers } from "./modifiers";
 
-function severityFromScore(
-  score: number,
-  cfg: CalibrationConfig
-): FatigueClassification["severity"] {
-  if (score >= cfg.fatigue.severityThresholds.highMin) return "HIGH";
-  if (score >= cfg.fatigue.severityThresholds.moderateMin) return "MODERATE";
-  return "LOW";
-}
+export function classifyFatigue(input: FatigueInput): FatigueClassification {
+  const drivers: FatigueDriver[] = [];
 
-function confidenceFromSignals(signalCount: number, margin: number): FatigueClassification["confidence"] {
-  if (signalCount >= 5 && margin >= 2) return "HIGH";
-  if (signalCount >= 3 && margin >= 1) return "MEDIUM";
-  return "LOW";
-}
-
-function topTwo(scores: Record<Exclude<FatigueType, "NONE" | "MIXED">, number>) {
-  const entries = Object.entries(scores) as Array<[Exclude<FatigueType, "NONE" | "MIXED">, number]>;
-  entries.sort((a, b) => b[1] - a[1]);
-  return { first: entries[0], second: entries[1] };
-}
-
-export function classifyFatigue(
-  input: FatigueInput,
-  calibrationConfig?: DeepPartial<CalibrationConfig>
-): FatigueClassification {
-  const cfg = resolveCalibrationConfig(calibrationConfig);
-  const drivers: string[] = [];
   let neuralScore = 0;
   let tissueScore = 0;
   let systemicScore = 0;
 
   if ((input.deltaZ ?? 0) <= -1.0) {
     neuralScore += 2;
-    drivers.push("DELTA_Z_DROP");
+    drivers.push({
+      code: "DELTA_Z_DROP",
+      label: "Sharp readiness drop day-to-day",
+      points: 2,
+      category: "NEURAL",
+    });
   }
-  if ((input.energy ?? 10) <= 2) {
+
+  if ((input.energy ?? 99) <= 2) {
     neuralScore += 2;
-    drivers.push("LOW_ENERGY");
+    drivers.push({
+      code: "LOW_ENERGY",
+      label: "Low energy",
+      points: 2,
+      category: "NEURAL",
+    });
   }
-  if ((input.sleepQuality ?? 10) <= 2) {
+
+  if ((input.sleepQuality ?? 99) <= 2) {
     neuralScore += 1;
-    drivers.push("LOW_SLEEP_QUALITY");
+    drivers.push({
+      code: "LOW_SLEEP_QUALITY",
+      label: "Poor sleep quality",
+      points: 1,
+      category: "NEURAL",
+    });
   }
-  if ((input.sleepDuration ?? 10) <= 2) {
+
+  if ((input.sleepDuration ?? 99) <= 2) {
     neuralScore += 1;
-    drivers.push("LOW_SLEEP_DURATION");
+    drivers.push({
+      code: "LOW_SLEEP_DURATION",
+      label: "Short sleep duration",
+      points: 1,
+      category: "NEURAL",
+    });
   }
+
   if ((input.stress ?? 0) >= 4) {
     neuralScore += 1;
-    drivers.push("HIGH_STRESS");
+    drivers.push({
+      code: "HIGH_STRESS",
+      label: "High stress",
+      points: 1,
+      category: "NEURAL",
+    });
   }
+
   if (input.hsrHighYesterday) {
-    neuralScore += 1;
-    drivers.push("HIGH_HSR_YESTERDAY");
+    neuralScore += 2;
+    drivers.push({
+      code: "HIGH_HSR_YESTERDAY",
+      label: "High-speed running elevated yesterday",
+      points: 2,
+      category: "NEURAL",
+    });
   }
-  if (input.travelFlag || input.scheduleCongestion) {
+
+  if (input.scheduleCongestion) {
     neuralScore += 1;
-    drivers.push("SCHEDULE_OR_TRAVEL_LOAD");
+    drivers.push({
+      code: "SCHEDULE_CONGESTION_NEURAL",
+      label: "Congested schedule",
+      points: 1,
+      category: "NEURAL",
+    });
   }
-  if ((input.zReadiness ?? 1) <= -0.8 && (input.soreness ?? 0) <= 2) {
+
+  if (input.travelFlag) {
     neuralScore += 1;
-    drivers.push("LOW_READINESS_LOW_SORENESS_PATTERN");
+    drivers.push({
+      code: "TRAVEL_FLAG_NEURAL",
+      label: "Travel load present",
+      points: 1,
+      category: "NEURAL",
+    });
+  }
+
+  if ((input.soreness ?? 99) <= 2 && ((input.sten ?? 10) <= 4 || (input.totalScore ?? 99) <= 11)) {
+    neuralScore += 1;
+    drivers.push({
+      code: "LOW_SORENESS_POOR_READINESS",
+      label: "Poor readiness without high soreness",
+      points: 1,
+      category: "NEURAL",
+    });
   }
 
   if ((input.soreness ?? 0) >= 4) {
     tissueScore += 2;
-    drivers.push("HIGH_SORENESS");
+    drivers.push({
+      code: "HIGH_SORENESS",
+      label: "High muscle soreness",
+      points: 2,
+      category: "TISSUE",
+    });
   }
+
   if (input.hasPainFlag) {
-    tissueScore += 2;
-    drivers.push("PAIN_FLAG");
+    tissueScore += 3;
+    drivers.push({
+      code: "PAIN_FLAG",
+      label: `Pain flag present${input.painLocation ? ` (${input.painLocation})` : ""}`,
+      points: 3,
+      category: "TISSUE",
+    });
   }
+
   if (input.decelHighYesterday) {
-    tissueScore += 1;
-    drivers.push("HIGH_DECEL_YESTERDAY");
+    tissueScore += 2;
+    drivers.push({
+      code: "HIGH_DECEL",
+      label: "High deceleration load yesterday",
+      points: 2,
+      category: "TISSUE",
+    });
   }
+
   if (input.accelHighYesterday) {
     tissueScore += 1;
-    drivers.push("HIGH_ACCEL_YESTERDAY");
+    drivers.push({
+      code: "HIGH_ACCEL",
+      label: "High acceleration load yesterday",
+      points: 1,
+      category: "TISSUE",
+    });
   }
+
   if (input.repeatedSameComplaint) {
-    tissueScore += 1;
-    drivers.push("REPEATED_LOCAL_COMPLAINT");
+    tissueScore += 2;
+    drivers.push({
+      code: "REPEATED_COMPLAINT",
+      label: "Repeated same-region complaint",
+      points: 2,
+      category: "TISSUE",
+    });
   }
+
   if (input.localComplaintMatchesLoad) {
     tissueScore += 1;
-    drivers.push("COMPLAINT_MATCHES_LOAD");
+    drivers.push({
+      code: "COMPLAINT_MATCHES_LOAD",
+      label: "Complaint matches recent load pattern",
+      points: 1,
+      category: "TISSUE",
+    });
   }
 
   const poorWellnessCount =
     input.poorWellnessCount ??
-    [
-      (input.energy ?? 10) <= 3,
-      (input.sleepQuality ?? 10) <= 3,
-      (input.sleepDuration ?? 10) <= 3,
-      (input.stress ?? 0) >= 4,
-      (input.soreness ?? 0) >= 4,
-    ].filter(Boolean).length;
+    [input.energy, input.sleepQuality, input.sleepDuration, input.soreness]
+      .filter((v) => typeof v === "number" && (v as number) <= 2).length +
+      [input.stress].filter((v) => typeof v === "number" && (v as number) >= 4).length;
 
-  if (poorWellnessCount >= 3) {
-    systemicScore += 2;
-    drivers.push("MULTI_WELLNESS_POOR");
+  if (poorWellnessCount > 0) {
+    systemicScore += poorWellnessCount;
+    drivers.push({
+      code: "MULTI_DOMAIN_WELLNESS_DECLINE",
+      label: `${poorWellnessCount} poor wellness markers`,
+      points: poorWellnessCount,
+      category: "SYSTEMIC",
+    });
   }
-  if ((input.totalScore ?? 100) <= 40) {
+
+  if ((input.totalScore ?? 99) <= 11) {
     systemicScore += 2;
-    drivers.push("TOTAL_SCORE_LOW");
+    drivers.push({
+      code: "LOW_TOTAL_SCORE",
+      label: "Low total wellness score",
+      points: 2,
+      category: "SYSTEMIC",
+    });
   }
+
   if ((input.lowStenDays ?? 0) >= 2) {
     systemicScore += 2;
-    drivers.push("LOW_STEN_MULTIDAY");
+    drivers.push({
+      code: "LOW_STEN_MULTI_DAY",
+      label: "Low STEN on multiple days",
+      points: 2,
+      category: "SYSTEMIC",
+    });
   }
+
   if (input.scheduleCongestion) {
     systemicScore += 1;
-    drivers.push("SCHEDULE_CONGESTION");
+    drivers.push({
+      code: "SCHEDULE_CONGESTION_SYSTEMIC",
+      label: "Congested schedule",
+      points: 1,
+      category: "SYSTEMIC",
+    });
   }
+
   if (input.matchMinutesHigh) {
     systemicScore += 1;
-    drivers.push("MATCH_MINUTES_HIGH");
+    drivers.push({
+      code: "HIGH_MATCH_MINUTES",
+      label: "High recent match minutes",
+      points: 1,
+      category: "SYSTEMIC",
+    });
   }
+
   if (input.teamVolatilityHigh) {
     systemicScore += 1;
-    drivers.push("TEAM_VOLATILITY_HIGH");
+    drivers.push({
+      code: "TEAM_VOLATILITY_HIGH",
+      label: "Team volatility elevated",
+      points: 1,
+      category: "SYSTEMIC",
+    });
   }
+
   if (input.travelFlag) {
     systemicScore += 1;
-    drivers.push("TRAVEL_FLAG");
+    drivers.push({
+      code: "TRAVEL_FLAG_SYSTEMIC",
+      label: "Travel load present",
+      points: 1,
+      category: "SYSTEMIC",
+    });
   }
 
-  const scores: Record<Exclude<FatigueType, "NONE" | "MIXED">, number> = {
-    NEURAL: neuralScore,
-    TISSUE: tissueScore,
-    SYSTEMIC: systemicScore,
-  };
+  const ranked = [
+    { type: "NEURAL" as const, score: neuralScore },
+    { type: "TISSUE" as const, score: tissueScore },
+    { type: "SYSTEMIC" as const, score: systemicScore },
+  ].sort((a, b) => b.score - a.score);
 
-  const { first, second } = topTwo(scores);
-  const [firstType, firstScore] = first;
-  const [, secondScore] = second;
-  const margin = firstScore - secondScore;
+  const top = ranked[0];
+  const second = ranked[1];
 
   let primaryFatigueType: FatigueType = "NONE";
-  if (firstScore > 0) {
-    primaryFatigueType =
-      margin <= cfg.fatigue.mixedStateGapMax && secondScore > 0 ? "MIXED" : firstType;
+  let secondaryFatigueType: FatigueType = "NONE";
+
+  if (top.score === 0) {
+    primaryFatigueType = "NONE";
+    secondaryFatigueType = "NONE";
+  } else if (top.score - second.score <= 1 && second.score >= 3) {
+    primaryFatigueType = "MIXED";
+    secondaryFatigueType = second.type;
+  } else {
+    primaryFatigueType = top.type;
+    secondaryFatigueType = second.score > 0 ? second.type : "NONE";
   }
 
-  const severity = severityFromScore(firstScore, cfg);
-  const confidence = confidenceFromSignals(Array.from(new Set(drivers)).length, margin);
-  const recommendedModifiers = getRecommendedModifiers(primaryFatigueType, severity, input);
+  let severity: FatigueSeverity = "LOW";
+  if (top.score >= 6) severity = "HIGH";
+  else if (top.score >= 3) severity = "MODERATE";
+
+  const completenessRaw =
+    [input.hasWellnessData, input.hasLoadData, input.deltaZ != null, input.sten != null, input.totalScore != null]
+      .filter(Boolean).length / 5;
+
+  const scoreGap = top.score - second.score;
+
+  let confidence: FatigueConfidence = "LOW";
+  if (completenessRaw >= 0.8 && scoreGap >= 2) confidence = "HIGH";
+  else if (completenessRaw >= 0.5) confidence = "MODERATE";
+
+  const recommendedModifiers = getRecommendedModifiers({
+    primaryFatigueType,
+    secondaryFatigueType,
+    severity,
+    painLocation: input.painLocation ?? null,
+    mdDay: input.mdDay ?? null,
+  });
 
   return {
     playerId: input.playerId,
+    neuralScore,
+    tissueScore,
+    systemicScore,
     primaryFatigueType,
+    secondaryFatigueType,
     severity,
     confidence,
-    score: firstScore,
-    drivers: Array.from(new Set(drivers)),
+    drivers: drivers.sort((a, b) => b.points - a.points),
     recommendedModifiers,
-    reasonCodes: Array.from(new Set(drivers)),
+    debug: {
+      dataCompleteness: completenessRaw,
+      scoreGap,
+      mixedState: primaryFatigueType === "MIXED",
+    },
   };
 }
-
-export default classifyFatigue;
