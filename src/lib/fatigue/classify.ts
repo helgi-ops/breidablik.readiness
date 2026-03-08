@@ -276,7 +276,7 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
 
   let confidence: FatigueConfidence = "LOW";
   if (completenessRaw >= 0.8 && scoreGap >= 2) confidence = "HIGH";
-  else if (completenessRaw >= 0.5) confidence = "MODERATE";
+  else if (completenessRaw >= 0.5) confidence = "MEDIUM";
 
   const recommendedModifiers = getRecommendedModifiers({
     primaryFatigueType,
