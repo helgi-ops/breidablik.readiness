@@ -5,7 +5,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Mode = "signin" | "signup" | "reset";
-type TeamRow = { id: string; name: string };
+type Gender = "M" | "F";
+type Sport = "football" | "basketball" | "handball";
+
+type TeamRow = {
+  id: string;
+  name: string;
+  gender: string | null;
+  sport: string | null;
+};
 
 function utcYYYYMMDD(d = new Date()) {
   return d.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
@@ -14,7 +22,6 @@ function utcYYYYMMDD(d = new Date()) {
 function extractCheckinDone(row: any): boolean {
   if (!row) return false;
 
-  // Algeng boolean nöfn (mismunandi útgáfur af viewum)
   const boolDone =
     row.checkin_done ??
     row.did_checkin ??
@@ -26,7 +33,6 @@ function extractCheckinDone(row: any): boolean {
 
   if (typeof boolDone === "boolean") return boolDone;
 
-  // Ef enginn boolean reitur: infer-a út frá því að metrics/score eru til
   const hasAnyMetric =
     row.total_score != null ||
     row.readiness != null ||
@@ -38,15 +44,6 @@ function extractCheckinDone(row: any): boolean {
   return Boolean(hasAnyMetric);
 }
 
-/**
- * Reglan:
- * - ef EKKI búinn með check-in í dag -> /player/checkin
- * - ef búinn -> /player
- *
- * Lykilatriði:
- * - nota UTC dagsetningu (view oft reiknað í UTC)
- * - nota profiles.player_id ef viewið er tengt við players.id
- */
 async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
@@ -54,29 +51,17 @@ async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
 
   const today = utcYYYYMMDD();
 
-  // 1) Ná í profile til að fá player_id (ef til)
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, role, player_id")
     .eq("id", userId)
     .maybeSingle();
 
-  // Ef þetta er ekki PLAYER þá látum við ekki þessa reglu stjórna (en safe)
   const role = (profile as any)?.role ?? null;
-  if (role && role !== "PLAYER") {
-    // coach/admin etc. -> fer ekki í checkin flow
-    return "/player";
-  }
+  if (role && role !== "PLAYER") return "/player";
 
   const playerIdFromProfile = (profile as any)?.player_id as string | null;
-
-  // Við prófum í þessari röð:
-  // A) viewið notar players.id -> profile.player_id
-  // B) viewið notar auth uid -> userId
-  const candidatePlayerIds = [
-    playerIdFromProfile,
-    userId,
-  ].filter(Boolean) as string[];
+  const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
 
   for (const pid of candidatePlayerIds) {
     const { data, error } = await supabase
@@ -92,7 +77,6 @@ async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
     }
   }
 
-  // Ef viewið skilar ekki línu (eða mismatch), þá defaultum við í checkin (öruggt)
   return "/player/checkin";
 }
 
@@ -100,11 +84,23 @@ export default function LoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // ✅ default: fara í checkin-flow (svo við “uppfærum” í /player ef búið)
   const next = sp.get("next") || "/player/checkin";
 
-  // ✅ team id úr querystring ef þú vilt: /login?team=<uuid>
+  // Optional prefill
   const teamFromQuery = sp.get("team") || "";
+  const genderFromQueryRaw = (sp.get("gender") || "").toUpperCase();
+  const genderFromQuery: Gender | "" =
+    genderFromQueryRaw === "M" ? "M" : genderFromQueryRaw === "F" ? "F" : "";
+
+  const sportFromQueryRaw = (sp.get("sport") || "").toLowerCase();
+  const sportFromQuery: Sport | "" =
+    sportFromQueryRaw === "football"
+      ? "football"
+      : sportFromQueryRaw === "basketball"
+      ? "basketball"
+      : sportFromQueryRaw === "handball"
+      ? "handball"
+      : "";
 
   const [mode, setMode] = useState<Mode>("signin");
 
@@ -128,36 +124,107 @@ export default function LoginInner() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
 
+  // ✅ NEW: gender + sport flow
+  const [gender, setGender] = useState<Gender | null>(genderFromQuery ? (genderFromQuery as Gender) : null);
+  const [sport, setSport] = useState<Sport | null>(sportFromQuery ? (sportFromQuery as Sport) : null);
+
   // ✅ Team dropdown
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamId, setTeamId] = useState<string>(teamFromQuery);
 
-  // Ef querystring breytist (sjaldan), halda sync
+  // Keep sync with querystring (rare)
   useEffect(() => {
     if (teamFromQuery && teamFromQuery !== teamId) setTeamId(teamFromQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamFromQuery]);
 
-  // Sækja teams bara þegar þú ert í signup-mode (til að spara)
+  useEffect(() => {
+    if (genderFromQuery && genderFromQuery !== gender) setGender(genderFromQuery as Gender);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genderFromQueryRaw]);
+
+  useEffect(() => {
+    if (sportFromQuery && sportFromQuery !== sport) setSport(sportFromQuery as Sport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sportFromQueryRaw]);
+
+  // ✅ If team is prefilled but gender/sport is not, infer from that team row
+  useEffect(() => {
+    let alive = true;
+
+    async function inferFromTeam() {
+      if (mode !== "signup") return;
+      if (!teamId) return;
+
+      // Only infer missing parts
+      if (gender && sport) return;
+
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, gender, sport")
+        .eq("id", teamId)
+        .maybeSingle();
+
+      if (!alive) return;
+      if (error || !data) return;
+
+      if (!gender && (data.gender === "M" || data.gender === "F")) setGender(data.gender as Gender);
+      if (!sport && (data.sport === "football" || data.sport === "basketball" || data.sport === "handball"))
+        setSport(data.sport as Sport);
+    }
+
+    inferFromTeam();
+    return () => {
+      alive = false;
+    };
+  }, [mode, teamId, gender, sport]);
+
+  // ✅ Load teams only in signup, and only after gender + sport are chosen
   useEffect(() => {
     let alive = true;
 
     async function loadTeams() {
       if (mode !== "signup") return;
+
+      // Must choose both before listing teams
+      if (!gender || !sport) {
+        setTeams([]);
+        if (!teamFromQuery) setTeamId("");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("teams")
-        .select("id,name")
+        .select("id,name,gender,sport")
+        .eq("gender", gender)
+        .eq("sport", sport)
         .order("name");
 
       if (!alive) return;
-      if (!error && data) setTeams(data as TeamRow[]);
+
+      if (error) {
+        // show user-friendly error
+        console.warn("loadTeams error:", error);
+        setTeams([]);
+        if (!teamFromQuery) setTeamId("");
+        return;
+      }
+
+      const rows = (data ?? []) as TeamRow[];
+      setTeams(rows);
+
+      // if selected team doesn't belong to this filter -> reset (unless forced via query)
+      if (teamId) {
+        const ok = rows.some((t) => t.id === teamId);
+        if (!ok && !teamFromQuery) setTeamId("");
+      }
     }
 
     loadTeams();
     return () => {
       alive = false;
     };
-  }, [mode]);
+  }, [mode, gender, sport]); // intentionally not depending on teamId to avoid loops
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -169,9 +236,11 @@ export default function LoginInner() {
       Boolean(fullName.trim()) &&
       Boolean(email.trim()) &&
       Boolean(password) &&
+      Boolean(gender) &&
+      Boolean(sport) &&
       Boolean(teamId)
     );
-  }, [mode, fullName, email, password, teamId]);
+  }, [mode, fullName, email, password, gender, sport, teamId]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -181,18 +250,11 @@ export default function LoginInner() {
 
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        // ✅ NÝTT: reikna checkin status og velja rétt landing
         const landingPath = await getPlayerLandingPath();
-
-        const nextIsPlayerFlow =
-          next === "/player" || next === "/player/checkin";
-
+        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
 
         const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
@@ -202,6 +264,14 @@ export default function LoginInner() {
       }
 
       if (mode === "signup") {
+        if (!gender) {
+          setErr("Veldu kyn áður en þú býrð til aðgang.");
+          return;
+        }
+        if (!sport) {
+          setErr("Veldu sport áður en þú býrð til aðgang.");
+          return;
+        }
         if (!teamId) {
           setErr("Veldu lið áður en þú býrð til aðgang.");
           return;
@@ -214,29 +284,23 @@ export default function LoginInner() {
             data: {
               full_name: fullName,
               role: "PLAYER",
+              gender,
+              sport,
               team_id: teamId,
             },
             emailRedirectTo:
               typeof window !== "undefined"
-                ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-                    next
-                  )}`
+                ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
                 : undefined,
           },
         });
         if (error) throw error;
 
         if (!data.session) {
-          setMsg(
-            "Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu."
-          );
+          setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu.");
         } else {
-          // Ef session kemur strax: sama landing logic
           const landingPath = await getPlayerLandingPath();
-
-          const nextIsPlayerFlow =
-            next === "/player" || next === "/player/checkin";
-
+          const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
           const finalNext = nextIsPlayerFlow ? landingPath : next;
 
           const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
@@ -248,16 +312,11 @@ export default function LoginInner() {
 
       if (mode === "reset") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo:
-            typeof window !== "undefined"
-              ? `${window.location.origin}/reset-password`
-              : undefined,
+          redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
         });
         if (error) throw error;
 
-        setMsg(
-          "Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð."
-        );
+        setMsg("Við sendum þér tölvupóst með hlekk til að endurstilla lykilorð.");
         return;
       }
     } catch (e: any) {
@@ -270,11 +329,7 @@ export default function LoginInner() {
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
-        {mode === "signin"
-          ? "Innskráning"
-          : mode === "signup"
-          ? "Nýskráning"
-          : "Endurstilla lykilorð"}
+        {mode === "signin" ? "Innskráning" : mode === "signup" ? "Nýskráning" : "Endurstilla lykilorð"}
       </h1>
 
       <p style={{ opacity: 0.8, marginBottom: 16 }}>
@@ -294,37 +349,106 @@ export default function LoginInner() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Fullt nafn"
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                }}
+                style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
               />
             </label>
 
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>Lið</span>
-              <select
-                required
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                }}
-              >
-                <option value="">Veldu lið…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <small style={{ opacity: 0.7 }}>
-                Ef listinn er tómur þá er líklega RLS að loka á teams fyrir óinnskráða.
-              </small>
-            </label>
+            {/* Gender */}
+            <div style={{ display: "grid", gap: 6 }}>
+              <span>Kyn</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGender("M");
+                    if (!teamFromQuery) setTeamId("");
+                    setTeams([]);
+                    // do not clear sport: user might want to keep sport selection
+                  }}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    background: gender === "M" ? "black" : "white",
+                    color: gender === "M" ? "white" : "black",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    flex: 1,
+                  }}
+                >
+                  Karl
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGender("F");
+                    if (!teamFromQuery) setTeamId("");
+                    setTeams([]);
+                  }}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    background: gender === "F" ? "black" : "white",
+                    color: gender === "F" ? "white" : "black",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    flex: 1,
+                  }}
+                >
+                  Kona
+                </button>
+              </div>
+              <small style={{ opacity: 0.7 }}>Veldu kyn til að sjá rétt sport og lið.</small>
+            </div>
+
+            {/* Sport (after gender) */}
+            {gender && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>Sport</span>
+                <select
+                  required
+                  value={sport ?? ""}
+                  onChange={(e) => {
+                    const v = (e.target.value || "") as Sport | "";
+                    setSport(v ? (v as Sport) : null);
+                    if (!teamFromQuery) setTeamId("");
+                    setTeams([]);
+                  }}
+                  style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+                >
+                  <option value="">Veldu sport…</option>
+                  <option value="football">Fótbolti</option>
+                  <option value="basketball">Körfubolti</option>
+                  <option value="handball">Handbolti</option>
+                </select>
+                <small style={{ opacity: 0.7 }}>Veldu sport til að sjá rétt lið.</small>
+              </label>
+            )}
+
+            {/* Team (after gender + sport) */}
+            {gender && sport && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>Lið</span>
+                <select
+                  required
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
+                >
+                  <option value="">Veldu lið…</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <small style={{ opacity: 0.7 }}>
+                  Ef listinn er tómur þá vantar annaðhvort teams gögn eða RLS leyfi.
+                </small>
+              </label>
+            )}
           </>
         )}
 
@@ -357,26 +481,12 @@ export default function LoginInner() {
         )}
 
         {err && (
-          <div
-            style={{
-              background: "#ffecec",
-              border: "1px solid #ffb3b3",
-              padding: 10,
-              borderRadius: 8,
-            }}
-          >
+          <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 10, borderRadius: 8 }}>
             {err}
           </div>
         )}
         {msg && (
-          <div
-            style={{
-              background: "#eef7ff",
-              border: "1px solid #b3d9ff",
-              padding: 10,
-              borderRadius: 8,
-            }}
-          >
+          <div style={{ background: "#eef7ff", border: "1px solid #b3d9ff", padding: 10, borderRadius: 8 }}>
             {msg}
           </div>
         )}
@@ -413,12 +523,7 @@ export default function LoginInner() {
               setErr(null);
               setMsg(null);
             }}
-            style={{
-              background: "transparent",
-              border: "none",
-              textDecoration: "underline",
-              cursor: "pointer",
-            }}
+            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
             Ég á aðgang → Innskráning
           </button>
@@ -431,12 +536,7 @@ export default function LoginInner() {
               setErr(null);
               setMsg(null);
             }}
-            style={{
-              background: "transparent",
-              border: "none",
-              textDecoration: "underline",
-              cursor: "pointer",
-            }}
+            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
             Nýr notandi → Búa til aðgang
           </button>
@@ -450,12 +550,7 @@ export default function LoginInner() {
               setMsg(null);
               setPassword("");
             }}
-            style={{
-              background: "transparent",
-              border: "none",
-              textDecoration: "underline",
-              cursor: "pointer",
-            }}
+            style={{ background: "transparent", border: "none", textDecoration: "underline", cursor: "pointer" }}
           >
             Gleymt lykilorð?
           </button>

@@ -1,0 +1,102 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+export const runtime = "nodejs";
+
+type UnregisterBody = {
+  fcmToken?: string;
+};
+
+type ProfileRow = {
+  player_id: string | null;
+};
+
+type PlayerRow = {
+  id: string;
+};
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
+
+function getAdminClient() {
+  return createClient(requiredEnv("NEXT_PUBLIC_SUPABASE_URL"), requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false },
+  });
+}
+
+function messageFromError(err: unknown) {
+  return err instanceof Error ? err.message : "Unknown error";
+}
+
+async function getAuthUserIdFromBearer(sb: ReturnType<typeof getAdminClient>, req: Request): Promise<string | null> {
+  const auth = req.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return null;
+
+  const { data, error } = await sb.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
+}
+
+async function resolvePlayerIdForUser(sb: ReturnType<typeof getAdminClient>, userId: string): Promise<string | null> {
+  const { data: pByUser, error: pByUserErr } = await sb
+    .from("players")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (pByUserErr) throw new Error(pByUserErr.message);
+  if ((pByUser as PlayerRow | null)?.id) return (pByUser as PlayerRow).id;
+
+  const { data: profile, error: profileErr } = await sb
+    .from("profiles")
+    .select("player_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileErr) throw new Error(profileErr.message);
+  return (profile as ProfileRow | null)?.player_id ?? null;
+}
+
+export async function POST(req: Request) {
+  try {
+    const sb = getAdminClient();
+
+    const userId = await getAuthUserIdFromBearer(sb, req);
+    if (!userId) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = (await req.json().catch(() => ({}))) as UnregisterBody;
+    const fcmToken = String(body.fcmToken ?? "").trim();
+    if (!fcmToken) {
+      return NextResponse.json({ ok: false, error: "fcmToken is required" }, { status: 400 });
+    }
+
+    const playerId = await resolvePlayerIdForUser(sb, userId);
+    if (!playerId) {
+      return NextResponse.json({ ok: false, error: "Authenticated user is not mapped to a player" }, { status: 400 });
+    }
+
+    const { error: updateErr } = await sb
+      .from("player_push_tokens")
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("player_id", playerId)
+      .eq("fcm_token", fcmToken);
+
+    if (updateErr) {
+      return NextResponse.json({ ok: false, error: updateErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, playerId });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: messageFromError(error) }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: false, error: "Method Not Allowed" }, { status: 405 });
+}

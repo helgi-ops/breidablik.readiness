@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
+import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
+import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
+import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 
 type ProfileRow = {
   id: string;
@@ -179,6 +182,41 @@ type Stage4DecisionFinalRow =
       updated_at: string | null;
     }
   | null;
+
+type SessionRpeHistoryEntry = {
+  id: string;
+  player_id: string;
+  team_id: string | null;
+  session_date: string;
+  session_type: SessionType;
+  session_name: string | null;
+  duration_minutes: number;
+  rpe: number;
+  session_load: number;
+  source: string;
+  notes: string | null;
+  submitted_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type SessionRpeFormState = {
+  session_date: string;
+  session_type: SessionType;
+  session_name: string;
+  duration_minutes: string;
+  rpe: string;
+  notes: string;
+};
+
+type SessionRpeStatus = {
+  dateKey: string;
+  expectedToday: boolean;
+  submittedToday: boolean;
+  todayEntriesCount: number;
+  latestSubmissionAt: string | null;
+  state: "SUBMITTED_TODAY" | "REMINDER_DUE_TODAY" | "NOT_YET_SUBMITTED" | "NOT_EXPECTED_TODAY";
+};
 
 /* -------------------------
    Small UI primitives
@@ -998,7 +1036,37 @@ export default function PlayerClient() {
   const [overrideAudit, setOverrideAudit] = useState<MicrodoseOverrideRow[]>([]);
   const [overrideAuditErr, setOverrideAuditErr] = useState<string>("");
 
+  const [sessionRpeForm, setSessionRpeForm] = useState<SessionRpeFormState>({
+    session_date: todayISO(),
+    session_type: "team_training",
+    session_name: "",
+    duration_minutes: "",
+    rpe: "",
+    notes: "",
+  });
+  const [sessionRpeSubmitting, setSessionRpeSubmitting] = useState(false);
+  const [sessionRpeError, setSessionRpeError] = useState("");
+  const [sessionRpeSuccess, setSessionRpeSuccess] = useState("");
+  const [sessionRpeHistory, setSessionRpeHistory] = useState<SessionRpeHistoryEntry[]>([]);
+  const [sessionRpeHistoryLoading, setSessionRpeHistoryLoading] = useState(false);
+  const [sessionRpeHistoryError, setSessionRpeHistoryError] = useState("");
+  const [sessionRpeStatus, setSessionRpeStatus] = useState<SessionRpeStatus | null>(null);
+  const [sessionRpeStatusLoading, setSessionRpeStatusLoading] = useState(false);
+  const [sessionRpeStatusError, setSessionRpeStatusError] = useState("");
+
   const fixModules = useMemo(() => dedupeFixModulesByTag(fixRow?.fix_modules), [fixRow?.fix_modules]);
+
+  const sessionDurationNum = Number(sessionRpeForm.duration_minutes);
+  const sessionRpeNum = Number(sessionRpeForm.rpe);
+  const sessionLoadPreview =
+    Number.isFinite(sessionDurationNum) && Number.isFinite(sessionRpeNum) ? Math.round(sessionDurationNum * sessionRpeNum) : null;
+  const sessionRpeValid =
+    Number.isFinite(sessionDurationNum) &&
+    sessionDurationNum >= 1 &&
+    sessionDurationNum <= 300 &&
+    Number.isFinite(sessionRpeNum) &&
+    sessionRpeNum >= 0 &&
+    sessionRpeNum <= 10;
 
   // Fetch assigned template for the selected day (page date)
   useEffect(() => {
@@ -1033,6 +1101,11 @@ export default function PlayerClient() {
       setTplToday((data as any) ?? null);
     })();
   }, [profile?.player_id, selectedPlayerId, supabase, day]);
+
+  useEffect(() => {
+    const safeDay = sanitizeDay(day);
+    setSessionRpeForm((prev) => ({ ...prev, session_date: safeDay }));
+  }, [day]);
 
   async function ensureStage4Decision(playerId: string, dayInput: string) {
     const safeDay = sanitizeDay(dayInput);
@@ -1335,6 +1408,121 @@ export default function PlayerClient() {
     }
   }
 
+  async function loadSessionRpeHistory() {
+    try {
+      setSessionRpeHistoryLoading(true);
+      setSessionRpeHistoryError("");
+
+      const { data: authData, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw new Error(authErr.message);
+      const token = authData?.session?.access_token;
+      if (!token) throw new Error("Unauthorized");
+
+      const res = await fetch("/api/player/session-rpe/history", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        entries?: SessionRpeHistoryEntry[];
+      };
+
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to load session RPE history.");
+
+      setSessionRpeHistory((json.entries ?? []).slice(0, 5));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load session RPE history.";
+      setSessionRpeHistoryError(msg);
+      setSessionRpeHistory([]);
+    } finally {
+      setSessionRpeHistoryLoading(false);
+    }
+  }
+
+  async function loadSessionRpeStatus() {
+    try {
+      setSessionRpeStatusLoading(true);
+      setSessionRpeStatusError("");
+
+      const { data: authData, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw new Error(authErr.message);
+      const token = authData?.session?.access_token;
+      if (!token) throw new Error("Unauthorized");
+
+      const res = await fetch("/api/player/session-rpe/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        status?: SessionRpeStatus;
+      };
+      if (!res.ok || !json?.ok || !json.status) {
+        throw new Error(json?.error ?? "Failed to load Session RPE status.");
+      }
+
+      setSessionRpeStatus(json.status);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load Session RPE status.";
+      setSessionRpeStatusError(msg);
+      setSessionRpeStatus(null);
+    } finally {
+      setSessionRpeStatusLoading(false);
+    }
+  }
+
+  async function submitSessionRpe() {
+    if (!sessionRpeValid || sessionRpeSubmitting) return;
+
+    try {
+      setSessionRpeSubmitting(true);
+      setSessionRpeError("");
+      setSessionRpeSuccess("");
+
+      const { data: authData, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw new Error(authErr.message);
+      const token = authData?.session?.access_token;
+      if (!token) throw new Error("Unauthorized");
+
+      const res = await fetch("/api/player/session-rpe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          session_date: sessionRpeForm.session_date,
+          session_type: sessionRpeForm.session_type,
+          session_name: sessionRpeForm.session_name.trim() || null,
+          duration_minutes: Number(sessionRpeForm.duration_minutes),
+          rpe: Number(sessionRpeForm.rpe),
+          notes: sessionRpeForm.notes.trim() || null,
+        }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? "Could not submit Session RPE.");
+      }
+
+      setSessionRpeSuccess("Session RPE submitted.");
+      setSessionRpeForm((prev) => ({
+        ...prev,
+        session_name: "",
+        duration_minutes: "",
+        rpe: "",
+        notes: "",
+      }));
+      await loadSessionRpeHistory();
+      await loadSessionRpeStatus();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not submit Session RPE.";
+      setSessionRpeError(msg);
+    } finally {
+      setSessionRpeSubmitting(false);
+    }
+  }
+
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -1429,6 +1617,8 @@ export default function PlayerClient() {
         setMetrics((mrow as any) ?? null);
 
         await loadFixModulesForPlayer(prof.player_id);
+        await loadSessionRpeHistory();
+        await loadSessionRpeStatus();
       } catch (e: any) {
         console.error("PlayerPage load error:", e);
         setError(e?.message ?? "Óþekkt villa.");
@@ -1583,6 +1773,12 @@ export default function PlayerClient() {
           </div>
         </div>
 
+        {today === todayISO() && !metrics?.created_at ? (
+          <div className="mb-5">
+            <MissingCheckinBanner />
+          </div>
+        ) : null}
+
         {/* Main grid */}
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
           {/* LEFT */}
@@ -1650,6 +1846,203 @@ export default function PlayerClient() {
                   </div>
                 </div>
               </details>
+            </CardShell>
+
+            {/* Post-session RPE */}
+            <CardShell>
+              <div className="p-4 sm:p-5">
+                <SectionTitle kicker="Eftir æfingu" title="Post-Session RPE" sub="Rate how hard the full session felt overall." />
+
+                <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-zinc-900">RPE compliance today</div>
+                    {sessionRpeStatus ? (
+                      <span
+                        className={cx(
+                          "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                          sessionRpeStatus.state === "SUBMITTED_TODAY"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : sessionRpeStatus.state === "NOT_EXPECTED_TODAY"
+                            ? "border-slate-200 bg-slate-100 text-slate-700"
+                            : "border-amber-200 bg-amber-50 text-amber-800"
+                        )}
+                      >
+                        {sessionRpeStatus.state === "SUBMITTED_TODAY"
+                          ? "Submitted today"
+                          : sessionRpeStatus.state === "NOT_EXPECTED_TODAY"
+                          ? "No submission expected"
+                          : "Not yet submitted"}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-1 text-zinc-600">
+                    {sessionRpeStatus?.state === "SUBMITTED_TODAY"
+                      ? "You have already submitted post-session RPE for today."
+                      : sessionRpeStatus?.state === "NOT_EXPECTED_TODAY"
+                      ? "No RPE submission is expected today."
+                      : "Please submit your post-session RPE after training."}
+                  </div>
+
+                  {sessionRpeStatus?.latestSubmissionAt ? (
+                    <div className="mt-1 text-zinc-500">
+                      Latest submission:{" "}
+                      {new Date(sessionRpeStatus.latestSubmissionAt).toLocaleTimeString("is-IS", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      {sessionRpeStatus.todayEntriesCount > 1 ? ` · ${sessionRpeStatus.todayEntriesCount} sessions today` : ""}
+                    </div>
+                  ) : null}
+
+                  {sessionRpeStatusLoading ? <div className="mt-1 text-zinc-500">Loading status...</div> : null}
+                  {sessionRpeStatusError ? <div className="mt-1 text-rose-700">{sessionRpeStatusError}</div> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Date</label>
+                    <input
+                      type="date"
+                      value={sessionRpeForm.session_date}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_date: e.target.value }))}
+                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Session type</label>
+                    <select
+                      value={sessionRpeForm.session_type}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_type: e.target.value as SessionType }))}
+                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                    >
+                      {SESSION_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {formatSessionTypeLabel(type)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Session name (optional)</label>
+                    <input
+                      type="text"
+                      value={sessionRpeForm.session_name}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_name: e.target.value }))}
+                      placeholder="e.g. Team tactical + small sided games"
+                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Duration (minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={sessionRpeForm.duration_minutes}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">RPE (0–10)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.5}
+                      value={sessionRpeForm.rpe}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, rpe: e.target.value }))}
+                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Notes (optional)</label>
+                    <textarea
+                      rows={2}
+                      value={sessionRpeForm.notes}
+                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+                      placeholder="Optional context (travel, individual work, etc.)"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">
+                  <div className="font-semibold text-zinc-900">RPE guide</div>
+                  <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                    <div>0–2 = very easy</div>
+                    <div>3–4 = easy</div>
+                    <div>5–6 = moderate</div>
+                    <div>7–8 = hard</div>
+                    <div>9 = very hard</div>
+                    <div>10 = maximal</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                    Session load preview:{" "}
+                    <span className="tabular-nums text-zinc-900">{sessionLoadPreview == null ? "—" : sessionLoadPreview}</span>
+                  </div>
+                  {sessionLoadPreview != null ? (
+                    <div
+                      className={cx(
+                        "rounded-full border px-3 py-1 text-xs font-semibold",
+                        formatLoadBandClass(getSessionLoadBand(sessionLoadPreview))
+                      )}
+                    >
+                      {getSessionLoadBand(sessionLoadPreview)}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={!sessionRpeValid || sessionRpeSubmitting}
+                    onClick={() => submitSessionRpe()}
+                    className="rounded-lg border border-black bg-black px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {sessionRpeSubmitting ? "Submitting..." : "Submit Session RPE"}
+                  </button>
+                  {!sessionRpeValid ? <div className="text-xs text-zinc-500">Enter valid duration (1–300) and RPE (0–10).</div> : null}
+                </div>
+
+                {sessionRpeSuccess ? <div className="mt-2 text-xs text-emerald-700">{sessionRpeSuccess}</div> : null}
+                {sessionRpeError ? <div className="mt-2 text-xs text-rose-700">{sessionRpeError}</div> : null}
+
+                <div className="mt-4 rounded-xl border bg-white p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Recent submissions</div>
+                  {sessionRpeHistoryLoading ? (
+                    <div className="mt-2 text-xs text-zinc-500">Loading...</div>
+                  ) : sessionRpeHistoryError ? (
+                    <div className="mt-2 text-xs text-rose-700">{sessionRpeHistoryError}</div>
+                  ) : sessionRpeHistory.length === 0 ? (
+                    <div className="mt-2 text-xs text-zinc-500">No Session RPE entries yet.</div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {sessionRpeHistory.map((entry) => (
+                        <div key={entry.id} className="rounded-lg border bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-zinc-900">{entry.session_date}</span>
+                            <span>{formatSessionTypeLabel(entry.session_type)}</span>
+                            <span>{entry.duration_minutes} min</span>
+                            <span>RPE {entry.rpe}</span>
+                            <span className="font-semibold">Load {entry.session_load}</span>
+                          </div>
+                          {entry.session_name ? <div className="mt-1 text-zinc-600">{entry.session_name}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardShell>
 
             {/* Fix modules (only if same day as page) */}

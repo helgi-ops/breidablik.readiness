@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -556,6 +557,8 @@ export default function PlayerCheckinPage() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Ef eitthvað er “off” í líkamanum: skrifaðu athugasemd — það sparar tíma og minnkar áhættu.
       </p>
+
+      <EnableRemindersCard />
     </div>
   );
 }
