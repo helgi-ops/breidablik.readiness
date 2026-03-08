@@ -2,7 +2,7 @@ import type {
   FatigueInput,
   FatigueSeverity,
   FatigueType,
-  ModifierCode,
+  TrainingModifier,
 } from "./types";
 
 interface ModifierInput {
@@ -13,8 +13,8 @@ interface ModifierInput {
   mdDay: string | null;
 }
 
-export function getRecommendedModifiers(input: ModifierInput): ModifierCode[] {
-  const mods = new Set<ModifierCode>();
+export function getRecommendedModifiers(input: ModifierInput): TrainingModifier[] {
+  const mods = new Set<TrainingModifier>();
 
   switch (input.primaryFatigueType) {
     case "NEURAL":
