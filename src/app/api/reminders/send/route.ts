@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       timeZone,
     });
 
-    return NextResponse.json({ ok: true, dateKey: today, timezone: timeZone, ...result });
+    return NextResponse.json({ ok: true, timezone: timeZone, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Reminder send failed:", message);
