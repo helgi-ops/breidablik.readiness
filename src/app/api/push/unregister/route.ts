@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 type UnregisterBody = {
-  fcmToken?: string;
+  endpoint?: string;
 };
 
 type ProfileRow = {
@@ -71,9 +71,9 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as UnregisterBody;
-    const fcmToken = String(body.fcmToken ?? "").trim();
-    if (!fcmToken) {
-      return NextResponse.json({ ok: false, error: "fcmToken is required" }, { status: 400 });
+    const endpoint = String(body.endpoint ?? "").trim();
+    if (!endpoint) {
+      return NextResponse.json({ ok: false, error: "endpoint is required" }, { status: 400 });
     }
 
     const playerId = await resolvePlayerIdForUser(sb, userId);
@@ -82,10 +82,10 @@ export async function POST(req: Request) {
     }
 
     const { error: updateErr } = await sb
-      .from("player_push_tokens")
+      .from("player_push_subscriptions")
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq("player_id", playerId)
-      .eq("fcm_token", fcmToken);
+      .eq("endpoint", endpoint);
 
     if (updateErr) {
       return NextResponse.json({ ok: false, error: updateErr.message }, { status: 500 });

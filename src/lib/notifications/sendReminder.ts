@@ -1,15 +1,16 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BatchResponse, SendResponse } from "firebase-admin/messaging";
-import { getFirebaseAdminMessaging } from "@/lib/firebase-admin";
 import { getMissingPlayersForToday } from "@/lib/notifications/checkins";
 import type { ReminderType } from "@/lib/notifications/schedule";
+import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 
-type TokenRow = {
+type SubscriptionRow = {
   id: string;
   player_id: string;
-  fcm_token: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
   is_active: boolean | null;
   updated_at: string | null;
 };
@@ -18,21 +19,9 @@ type LogRow = {
   id: string;
 };
 
-const INVALID_TOKEN_CODES = new Set([
-  "messaging/registration-token-not-registered",
-  "messaging/invalid-registration-token",
-  "messaging/invalid-argument",
-]);
-
 function isMissingScheduledSlotColumnError(error: { message?: string; details?: string } | null | undefined) {
   const text = `${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
   return text.includes("scheduled_slot") && (text.includes("could not find") || text.includes("column"));
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
 }
 
 function reminderCopy(type: ReminderType) {
@@ -56,22 +45,22 @@ function reminderCopy(type: ReminderType) {
   };
 }
 
-async function getLatestActiveTokenByPlayer(sb: SupabaseClient, playerIds: string[]) {
-  if (!playerIds.length) return new Map<string, TokenRow>();
+async function getLatestActiveSubscriptionByPlayer(sb: SupabaseClient, playerIds: string[]) {
+  if (!playerIds.length) return new Map<string, SubscriptionRow>();
 
   const { data, error } = await sb
-    .from("player_push_tokens")
-    .select("id, player_id, fcm_token, is_active, updated_at")
+    .from("player_push_subscriptions")
+    .select("id, player_id, endpoint, p256dh, auth, is_active, updated_at")
     .eq("is_active", true)
     .in("player_id", playerIds)
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as TokenRow[];
-  const map = new Map<string, TokenRow>();
+  const rows = (data ?? []) as SubscriptionRow[];
+  const map = new Map<string, SubscriptionRow>();
   for (const row of rows) {
-    if (!row?.player_id || !row?.fcm_token) continue;
+    if (!row?.player_id || !row?.endpoint || !row?.p256dh || !row?.auth) continue;
     if (!map.has(row.player_id)) map.set(row.player_id, row);
   }
   return map;
@@ -84,14 +73,12 @@ async function reserveNotificationLog(
     dateKey: string;
     reminderType: ReminderType;
     scheduledSlot: string;
-    tokenId: string | null;
   }
 ): Promise<string | null> {
   const basePayload = {
     player_id: args.playerId,
     date_key: args.dateKey,
     reminder_type: args.reminderType,
-    token_id: args.tokenId,
     status: "pending",
     sent_at: new Date().toISOString(),
   };
@@ -148,12 +135,6 @@ async function completeNotificationLog(
   if (error) throw new Error(error.message);
 }
 
-function getErrorFromBatchResponse(batch: BatchResponse, token: string, indexMap: Map<string, number>): SendResponse | null {
-  const idx = indexMap.get(token);
-  if (idx == null) return null;
-  return batch.responses[idx] ?? null;
-}
-
 export async function sendReminderToMissingPlayers(
   sb: SupabaseClient,
   args: {
@@ -166,23 +147,22 @@ export async function sendReminderToMissingPlayers(
   const missing = await getMissingPlayersForToday(sb, { dateKey: args.dateKey, timeZone: args.timeZone });
   const missingPlayers = missing.players;
 
-  const tokensByPlayer = await getLatestActiveTokenByPlayer(
+  const subscriptionsByPlayer = await getLatestActiveSubscriptionByPlayer(
     sb,
     missingPlayers.map((p) => p.id)
   );
 
-  const queued: Array<{ playerId: string; token: string; tokenId: string | null; logId: string }> = [];
+  const queued: Array<{ playerId: string; subscription: NativePushSubscription; subscriptionId: string | null; logId: string }> = [];
   let skippedNoToken = 0;
   let skippedDuplicate = 0;
 
   for (const p of missingPlayers) {
-    const tokenRow = tokensByPlayer.get(p.id);
+    const row = subscriptionsByPlayer.get(p.id);
     const reserved = await reserveNotificationLog(sb, {
       playerId: p.id,
       dateKey: args.dateKey,
       reminderType: args.reminderType,
       scheduledSlot: args.scheduledSlot,
-      tokenId: tokenRow?.id ?? null,
     });
 
     if (!reserved) {
@@ -190,21 +170,25 @@ export async function sendReminderToMissingPlayers(
       continue;
     }
 
-    if (!tokenRow?.fcm_token) {
+    if (!row?.endpoint || !row?.p256dh || !row?.auth) {
       skippedNoToken += 1;
       await completeNotificationLog(sb, {
         logId: reserved,
         status: "skipped_no_token",
-        errorMessage: "No active token",
+        errorMessage: "No active subscription",
       });
       continue;
     }
 
     queued.push({
       playerId: p.id,
-      token: tokenRow.fcm_token,
-      tokenId: tokenRow.id ?? null,
+      subscriptionId: row.id ?? null,
       logId: reserved,
+      subscription: {
+        endpoint: row.endpoint,
+        p256dh: row.p256dh,
+        auth: row.auth,
+      },
     });
   }
 
@@ -225,88 +209,51 @@ export async function sendReminderToMissingPlayers(
     };
   }
 
-  const messaging = getFirebaseAdminMessaging();
   const message = reminderCopy(args.reminderType);
-  const uniqueTokens = Array.from(new Set(queued.map((q) => q.token)));
+  const payload = {
+    title: message.title,
+    body: message.body,
+    url: "/player/checkin",
+    type: "daily_checkin",
+    screen: "checkin",
+    reminder_type: args.reminderType,
+    scheduled_slot: args.scheduledSlot,
+    date_key: args.dateKey,
+  };
 
   let sent = 0;
   let failed = 0;
-  const invalidTokenIds = new Set<string>();
-
-  const tokenToResponse = new Map<string, SendResponse>();
-  const tokenBatches = chunk(uniqueTokens, 500);
-
-  for (const batchTokens of tokenBatches) {
-    const batchResponse = await messaging.sendEachForMulticast({
-      tokens: batchTokens,
-      notification: {
-        title: message.title,
-        body: message.body,
-      },
-      data: {
-        type: "daily_checkin",
-        screen: "checkin",
-        reminder_type: args.reminderType,
-        scheduled_slot: args.scheduledSlot,
-        date_key: args.dateKey,
-      },
-      webpush: {
-        fcmOptions: {
-          link: "/player/checkin",
-        },
-      },
-    });
-
-    sent += batchResponse.successCount;
-    failed += batchResponse.failureCount;
-
-    const indexMap = new Map<string, number>();
-    for (let i = 0; i < batchTokens.length; i += 1) indexMap.set(batchTokens[i]!, i);
-
-    for (const token of batchTokens) {
-      const response = getErrorFromBatchResponse(batchResponse, token, indexMap);
-      if (!response) continue;
-      tokenToResponse.set(token, response);
-    }
-  }
+  const invalidSubscriptionIds = new Set<string>();
 
   for (const item of queued) {
-    const res = tokenToResponse.get(item.token);
-    if (!res) {
-      await completeNotificationLog(sb, {
-        logId: item.logId,
-        status: "failed",
-        errorMessage: "No provider response for token",
-      });
-      continue;
-    }
-
-    if (res.success) {
+    try {
+      const response = await sendWebPush(item.subscription, payload);
+      sent += 1;
+      const locationHeader = response.headers?.location ?? null;
       await completeNotificationLog(sb, {
         logId: item.logId,
         status: "sent",
-        providerMessageId: (res as SendResponse).messageId ?? null,
+        providerMessageId: locationHeader,
       });
-      continue;
-    }
+    } catch (error) {
+      failed += 1;
+      await completeNotificationLog(sb, {
+        logId: item.logId,
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "Push send failed",
+      });
 
-    const errorCode = res.error?.code ?? "unknown";
-    await completeNotificationLog(sb, {
-      logId: item.logId,
-      status: "failed",
-      errorMessage: `${errorCode}${res.error?.message ? `: ${res.error.message}` : ""}`,
-    });
-
-    if (item.tokenId && INVALID_TOKEN_CODES.has(errorCode)) {
-      invalidTokenIds.add(item.tokenId);
+      if (item.subscriptionId && isSubscriptionGone(error)) {
+        invalidSubscriptionIds.add(item.subscriptionId);
+      }
     }
   }
 
   let removedInvalidTokens = 0;
-  if (invalidTokenIds.size > 0) {
-    const ids = Array.from(invalidTokenIds);
+  if (invalidSubscriptionIds.size > 0) {
+    const ids = Array.from(invalidSubscriptionIds);
     const { error } = await sb
-      .from("player_push_tokens")
+      .from("player_push_subscriptions")
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .in("id", ids);
 
@@ -320,7 +267,7 @@ export async function sendReminderToMissingPlayers(
     reminderType: args.reminderType,
     scheduledSlot: args.scheduledSlot,
     totalPlayersMatched: missingPlayers.length,
-    totalTokens: uniqueTokens.length,
+    totalTokens: queued.length,
     targetedPlayers: queued.length,
     sent,
     failed,

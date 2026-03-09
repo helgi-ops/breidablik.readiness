@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getFirebaseAdminMessaging } from "@/lib/push/firebaseAdmin";
+import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 
 type ReminderType = "first" | "second" | "manual";
 
@@ -8,9 +8,12 @@ type PlayerRow = {
   full_name: string | null;
 };
 
-type TokenRow = {
+type SubscriptionRow = {
+  id: string;
   player_id: string;
-  fcm_token: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 };
 
 type CheckinPlayerRow = { player_id: string };
@@ -142,29 +145,32 @@ export async function getCoachReminderStatus(
   };
 }
 
-async function getLatestActiveTokensByPlayer(
+async function getLatestActiveSubscriptionsByPlayer(
   sb: SupabaseClient,
   playerIds: string[]
-): Promise<Map<string, TokenRow>> {
+): Promise<Map<string, SubscriptionRow>> {
   if (!playerIds.length) return new Map();
 
   const { data, error } = await sb
-    .from("player_push_tokens")
-    .select("player_id, fcm_token, updated_at")
+    .from("player_push_subscriptions")
+    .select("id, player_id, endpoint, p256dh, auth, updated_at")
     .eq("is_active", true)
     .in("player_id", playerIds)
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as Array<TokenRow & { updated_at?: string | null }>;
-  const map = new Map<string, TokenRow>();
+  const rows = (data ?? []) as Array<SubscriptionRow & { updated_at?: string | null }>;
+  const map = new Map<string, SubscriptionRow>();
   for (const row of rows) {
-    if (!row?.player_id || !row?.fcm_token) continue;
+    if (!row?.player_id || !row?.endpoint || !row?.p256dh || !row?.auth) continue;
     if (!map.has(row.player_id)) {
       map.set(row.player_id, {
+        id: row.id,
         player_id: row.player_id,
-        fcm_token: row.fcm_token,
+        endpoint: row.endpoint,
+        p256dh: row.p256dh,
+        auth: row.auth,
       });
     }
   }
@@ -251,18 +257,19 @@ export async function sendReminderToMissingPlayers(
     dateKey: args.dateKey,
   });
 
-  const tokenMap = await getLatestActiveTokensByPlayer(
+  const subscriptionMap = await getLatestActiveSubscriptionsByPlayer(
     sb,
     missingPlayers.map((p) => p.id)
   );
 
-  const messaging = getFirebaseAdminMessaging();
   const msg = buildReminderMessage(args.reminderType);
 
   let sent = 0;
   let skippedNoToken = 0;
   let duplicateSkipped = 0;
   let failed = 0;
+
+  const invalidSubscriptionIds = new Set<string>();
 
   for (const player of missingPlayers) {
     const logId = await reserveLogRow(sb, {
@@ -276,55 +283,55 @@ export async function sendReminderToMissingPlayers(
       continue;
     }
 
-    const token = tokenMap.get(player.id)?.fcm_token;
-    if (!token) {
+    const sub = subscriptionMap.get(player.id);
+    if (!sub?.endpoint || !sub?.p256dh || !sub?.auth) {
       skippedNoToken += 1;
       await markLogStatus(sb, { id: logId, status: "skipped_no_token" });
       continue;
     }
 
     try {
-      const messageId = await messaging.send({
-        token,
-        notification: {
+      const response = await sendWebPush(
+        {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        } satisfies NativePushSubscription,
+        {
           title: msg.title,
           body: msg.body,
-        },
-        webpush: {
-          notification: {
-            title: msg.title,
-            body: msg.body,
-            icon: "/icons/icon-192.png",
-            badge: "/icons/icon-192.png",
-            data: {
-              targetUrl: "/player/checkin",
-            },
-          },
-          fcmOptions: {
-            link: "/player/checkin",
-          },
-        },
-        data: {
+          url: "/player/checkin",
+          type: "daily_checkin",
+          screen: "checkin",
           reminderType: args.reminderType,
           dateKey: args.dateKey,
-          targetUrl: "/player/checkin",
-        },
-      });
+        }
+      );
 
       sent += 1;
       await markLogStatus(sb, {
         id: logId,
         status: "sent",
-        providerMessageId: messageId,
+        providerMessageId: response.headers?.location ?? null,
       });
     } catch (err) {
       failed += 1;
-      console.error("Failed to send check-in reminder:", err);
+      if (sub?.id && isSubscriptionGone(err)) invalidSubscriptionIds.add(sub.id);
       await markLogStatus(sb, {
         id: logId,
         status: "failed",
       });
     }
+  }
+
+  let removedInvalidTokens = 0;
+  if (invalidSubscriptionIds.size > 0) {
+    const ids = Array.from(invalidSubscriptionIds);
+    const { error: deactivateErr } = await sb
+      .from("player_push_subscriptions")
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .in("id", ids);
+    if (!deactivateErr) removedInvalidTokens = ids.length;
   }
 
   return {
@@ -335,5 +342,6 @@ export async function sendReminderToMissingPlayers(
     skippedNoToken,
     duplicateSkipped,
     failed,
+    removedInvalidTokens,
   };
 }

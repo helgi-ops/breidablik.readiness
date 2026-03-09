@@ -4,11 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 type Body = {
-  fcmToken?: string;
-  deviceLabel?: string | null;
-  platform?: string | null;
-  userAgent?: string | null;
-  isActive?: boolean;
+  subscription?: {
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+  };
+  endpoint?: string;
 };
 
 type ProfilePlayerRow = {
@@ -51,10 +51,12 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
-    const fcmToken = String(body.fcmToken ?? "").trim();
+    const endpoint = String(body.subscription?.endpoint ?? "").trim();
+    const p256dh = String(body.subscription?.keys?.p256dh ?? "").trim();
+    const auth = String(body.subscription?.keys?.auth ?? "").trim();
 
-    if (!fcmToken) {
-      return NextResponse.json({ ok: false, error: "fcmToken is required" }, { status: 400 });
+    if (!endpoint || !p256dh || !auth) {
+      return NextResponse.json({ ok: false, error: "subscription.endpoint and subscription.keys are required" }, { status: 400 });
     }
 
     const { data: profile, error: profErr } = await sb
@@ -72,30 +74,21 @@ export async function POST(req: Request) {
 
     const nowIso = new Date().toISOString();
 
-    const { error: upsertErr } = await sb.from("player_push_tokens").upsert(
+    const { error: upsertErr } = await sb.from("player_push_subscriptions").upsert(
       {
         player_id: playerId,
-        fcm_token: fcmToken,
-        device_label: body.deviceLabel ?? null,
-        platform: body.platform ?? null,
-        user_agent: body.userAgent ?? req.headers.get("user-agent") ?? null,
-        is_active: body.isActive ?? true,
+        endpoint,
+        p256dh,
+        auth,
+        user_agent: req.headers.get("user-agent") ?? null,
+        is_active: true,
         last_seen_at: nowIso,
         updated_at: nowIso,
       },
-      { onConflict: "fcm_token" }
+      { onConflict: "endpoint" }
     );
 
     if (upsertErr) throw new Error(upsertErr.message);
-
-    // Keep only the latest token active for this player/device flow.
-    const { error: deactivateOldErr } = await sb
-      .from("player_push_tokens")
-      .update({ is_active: false, updated_at: nowIso })
-      .eq("player_id", playerId)
-      .neq("fcm_token", fcmToken);
-
-    if (deactivateOldErr) throw new Error(deactivateOldErr.message);
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
@@ -113,16 +106,16 @@ export async function DELETE(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
-    const fcmToken = String(body.fcmToken ?? "").trim();
+    const endpoint = String(body.endpoint ?? body.subscription?.endpoint ?? "").trim();
 
-    if (!fcmToken) {
-      return NextResponse.json({ ok: false, error: "fcmToken is required" }, { status: 400 });
+    if (!endpoint) {
+      return NextResponse.json({ ok: false, error: "endpoint is required" }, { status: 400 });
     }
 
     const { error } = await sb
-      .from("player_push_tokens")
+      .from("player_push_subscriptions")
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq("fcm_token", fcmToken);
+      .eq("endpoint", endpoint);
 
     if (error) throw new Error(error.message);
 

@@ -7,7 +7,7 @@ export default function RegisterServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
 
     navigator.serviceWorker
-      .register("/firebase-messaging-sw.js", { scope: "/" })
+      .register("/sw.js", { scope: "/" })
       .catch((err) => console.error("Service worker registration failed:", err));
   }, []);
 

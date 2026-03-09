@@ -50,7 +50,9 @@ export async function GET(req: Request) {
       ok: true,
       summary,
       rpe: {
-        pushConfigured: Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY),
+        pushConfigured: Boolean(
+          process.env.VAPID_SUBJECT && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+        ),
         dateKey,
         slots: getReminderSlotsForDateKey(dateKey, timeZone).map((slot) => slot.slotKey),
         sent,

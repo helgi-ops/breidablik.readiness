@@ -4,7 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 type RegisterBody = {
-  fcmToken?: string;
+  subscription?: {
+    endpoint?: string;
+    expirationTime?: number | null;
+    keys?: {
+      p256dh?: string;
+      auth?: string;
+    };
+  };
 };
 
 type ProfileRow = {
@@ -71,9 +78,12 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as RegisterBody;
-    const fcmToken = String(body.fcmToken ?? "").trim();
-    if (!fcmToken) {
-      return NextResponse.json({ ok: false, error: "fcmToken is required" }, { status: 400 });
+    const endpoint = String(body.subscription?.endpoint ?? "").trim();
+    const p256dh = String(body.subscription?.keys?.p256dh ?? "").trim();
+    const auth = String(body.subscription?.keys?.auth ?? "").trim();
+
+    if (!endpoint || !p256dh || !auth) {
+      return NextResponse.json({ ok: false, error: "subscription.endpoint and subscription.keys are required" }, { status: 400 });
     }
 
     const playerId = await resolvePlayerIdForUser(sb, userId);
@@ -83,15 +93,18 @@ export async function POST(req: Request) {
 
     const nowIso = new Date().toISOString();
 
-    const { error: upsertErr } = await sb.from("player_push_tokens").upsert(
+    const { error: upsertErr } = await sb.from("player_push_subscriptions").upsert(
       {
         player_id: playerId,
-        fcm_token: fcmToken,
+        endpoint,
+        p256dh,
+        auth,
+        user_agent: req.headers.get("user-agent"),
         is_active: true,
         updated_at: nowIso,
         last_seen_at: nowIso,
       },
-      { onConflict: "fcm_token" }
+      { onConflict: "endpoint" }
     );
 
     if (upsertErr) {

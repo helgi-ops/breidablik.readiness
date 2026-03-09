@@ -25,10 +25,10 @@ export default function EnablePushNotificationsButton() {
 
     if (result.reason === "denied") {
       setStatus("denied");
-      setMessage("Notifications were denied");
+      setMessage("Permission denied");
     } else if (result.reason === "unsupported") {
       setStatus("unsupported");
-      setMessage("Push notifications are not supported in this browser");
+      setMessage("Notifications are not supported on this device/browser");
     } else {
       setStatus("error");
       setMessage(result.error || "Could not enable notifications");
