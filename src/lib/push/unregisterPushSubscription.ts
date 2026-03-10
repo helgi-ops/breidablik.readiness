@@ -28,7 +28,7 @@ export async function unregisterPushSubscription(): Promise<void> {
   try {
     if (!browserSupportsPush()) return;
 
-    const registration = await navigator.serviceWorker.getRegistration("/");
+    const registration = await navigator.serviceWorker.ready;
     if (!registration) return;
 
     const subscription = await registration.pushManager.getSubscription();

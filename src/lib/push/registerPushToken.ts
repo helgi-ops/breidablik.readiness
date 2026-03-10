@@ -1,22 +1,47 @@
 "use client";
 
-import { registerPushSubscription } from "@/lib/push/registerPushSubscription";
+import {
+  registerPushSubscription,
+  RegisterPushSubscriptionError,
+} from "@/lib/push/registerPushSubscription";
 
 export type RegisterPushTokenResult = {
   success: boolean;
   token: string | null;
-  reason?: "unsupported" | "denied" | "unauthenticated" | "server-error" | "unknown";
+  reason?:
+    | "NOTIFICATION_UNSUPPORTED"
+    | "SERVICE_WORKER_UNSUPPORTED"
+    | "PUSH_UNSUPPORTED"
+    | "PERMISSION_DENIED"
+    | "VAPID_PUBLIC_KEY_MISSING"
+    | "REGISTER_API_FAILED"
+    | "UNKNOWN";
   error?: string;
 };
 
 export async function registerPushToken(): Promise<RegisterPushTokenResult> {
-  const result = await registerPushSubscription();
-  return {
-    success: result.success,
-    token: result.endpoint ?? null,
-    reason: result.reason,
-    error: result.error,
-  };
+  try {
+    const result = await registerPushSubscription();
+    return {
+      success: true,
+      token: result.endpoint,
+    };
+  } catch (error: unknown) {
+    if (error instanceof RegisterPushSubscriptionError) {
+      return {
+        success: false,
+        token: null,
+        reason: error.code,
+        error: error.message,
+      };
+    }
+    return {
+      success: false,
+      token: null,
+      reason: "UNKNOWN",
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 }
 
 export async function enablePushReminders() {
@@ -26,7 +51,8 @@ export async function enablePushReminders() {
 }
 
 export async function syncPushRemindersIfGranted() {
-  if (typeof window === "undefined" || !browserSupportsPush()) return null;
+  if (typeof window === "undefined") return null;
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return null;
   if (Notification.permission !== "granted") return null;
 
   const result = await registerPushToken();

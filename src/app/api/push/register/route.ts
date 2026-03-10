@@ -12,6 +12,7 @@ type RegisterBody = {
       auth?: string;
     };
   };
+  userAgent?: string;
 };
 
 type ProfileRow = {
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
         endpoint,
         p256dh,
         auth,
-        user_agent: req.headers.get("user-agent"),
+        user_agent: String(body.userAgent ?? req.headers.get("user-agent") ?? "").trim() || null,
         is_active: true,
         updated_at: nowIso,
         last_seen_at: nowIso,

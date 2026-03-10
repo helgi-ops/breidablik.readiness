@@ -18,20 +18,24 @@ export default function EnablePushNotificationsButton() {
 
     if (result.success) {
       setStatus("enabled");
-      setMessage("Notifications enabled");
+      setMessage("Tilkynningar virkar");
       setBusy(false);
       return;
     }
 
-    if (result.reason === "denied") {
+    if (result.reason === "PERMISSION_DENIED") {
       setStatus("denied");
-      setMessage("Permission denied");
-    } else if (result.reason === "unsupported") {
+      setMessage("Leyfi fyrir tilkynningum var hafnað");
+    } else if (
+      result.reason === "NOTIFICATION_UNSUPPORTED" ||
+      result.reason === "SERVICE_WORKER_UNSUPPORTED" ||
+      result.reason === "PUSH_UNSUPPORTED"
+    ) {
       setStatus("unsupported");
-      setMessage("Notifications are not supported on this device/browser");
+      setMessage("Þetta tæki/vafri styður ekki tilkynningar");
     } else {
       setStatus("error");
-      setMessage(result.error || "Could not enable notifications");
+      setMessage(result.error ? `Ekki tókst að virkja tilkynningar (${result.error})` : "Ekki tókst að virkja tilkynningar");
     }
 
     setBusy(false);
