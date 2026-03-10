@@ -184,6 +184,22 @@ type Stage4DecisionFinalRow =
     }
   | null;
 
+type CoachFinalFlagRow =
+  | {
+      final_flag: string | null;
+      final_color?: string | null;
+    }
+  | null;
+
+type PlanTemplateOverrideRow = {
+  title: string | null;
+  description: string | null;
+  structure: any;
+  readiness_level: string | null;
+  md_day?: string | null;
+  variant?: string | null;
+} | null;
+
 type SessionRpeHistoryEntry = {
   id: string;
   player_id: string;
@@ -350,6 +366,50 @@ function readinessToFlag(level: string | null | undefined): Flag {
   return "GREEN";
 }
 
+function decisionToFlag(decision: DecisionType | null | undefined): Flag | null {
+  const d = norm(decision ?? null);
+  if (d === "RECOVERY") return "RED";
+  if (d === "REDUCED") return "YELLOW";
+  if (d === "FULL") return "GREEN";
+  return null;
+}
+
+function flagToDecision(flag: Flag): DecisionType {
+  if (flag === "RED") return "RECOVERY";
+  if (flag === "YELLOW") return "REDUCED";
+  return "FULL";
+}
+
+function flagToReadinessLevel(flag: Flag): "GREEN" | "YELLOW" | "RED" {
+  if (flag === "RED") return "RED";
+  if (flag === "YELLOW") return "YELLOW";
+  return "GREEN";
+}
+
+function parseFinalFlag(flag: string | null | undefined): Flag | null {
+  const f = norm(flag);
+  if (f === "RED") return "RED";
+  if (f === "YELLOW") return "YELLOW";
+  if (f === "GREEN") return "GREEN";
+  return null;
+}
+
+function titleColorForFlag(flag: Flag): "Green" | "Yellow" | "Red" {
+  if (flag === "RED") return "Red";
+  if (flag === "YELLOW") return "Yellow";
+  return "Green";
+}
+
+function normalizeSessionHeaderTitleByFlag(title: string | null | undefined, flag: Flag): string | null {
+  const raw = (title ?? "").trim();
+  if (!raw) return title ?? null;
+  const normalizedColor = titleColorForFlag(flag);
+  let next = raw.replace(/\bMD\s*\((Green|Yellow|Red)\)/gi, `MD (${normalizedColor})`);
+  next = next.replace(/\((Green|Yellow|Red)\)/gi, `(${normalizedColor})`);
+  next = next.replace(/\bMD\s+(Green|Yellow|Red)\b/gi, `MD (${normalizedColor})`);
+  return next;
+}
+
 function mdContextLabel(mdDay: string | null | undefined) {
   const md = norm(mdDay);
   return md ? md : "—";
@@ -437,6 +497,33 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
 function safeStringList(x: any): string[] {
   if (Array.isArray(x)) return x.map((v) => String(v));
   return [];
+}
+
+function selectTemplateOverrideCandidate(
+  rows: Array<{
+    title: string | null;
+    description: string | null;
+    structure: any;
+    readiness_level: string | null;
+    md_day?: string | null;
+    variant?: string | null;
+  }>,
+  preferredVariant: string | null | undefined,
+  mdDay: string | null | undefined
+) {
+  if (!rows.length) return null;
+  const preferred = norm(preferredVariant);
+  const md = norm(mdDay);
+
+  const byMd = md ? rows.filter((r) => norm(r.md_day ?? null) === md) : rows;
+  const byMdOrAll = byMd.length ? byMd : rows;
+
+  if (preferred) {
+    const exactVariant = byMdOrAll.find((r) => norm(r.variant ?? null) === preferred);
+    if (exactVariant) return exactVariant;
+  }
+
+  return byMdOrAll[0] ?? rows[0] ?? null;
 }
 
 /** =========
@@ -1014,9 +1101,11 @@ export default function PlayerClient() {
   const [playerMeta, setPlayerMeta] = useState<PlayerRow | null>(null);
 
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
+  const [planTemplateOverride, setPlanTemplateOverride] = useState<PlanTemplateOverrideRow>(null);
   const [planIsFallback, setPlanIsFallback] = useState(false);
 
   const [stage4Final, setStage4Final] = useState<Stage4DecisionFinalRow>(null);
+  const [coachFinalFlag, setCoachFinalFlag] = useState<CoachFinalFlagRow>(null);
 
   const [metrics, setMetrics] = useState<MetricsRow>(null);
   const [tplToday, setTplToday] = useState<PlayerTemplateToday | null>(null);
@@ -1530,8 +1619,10 @@ export default function PlayerClient() {
       setError("");
 
       setPlan(null);
+      setPlanTemplateOverride(null);
       setPlanIsFallback(false);
       setStage4Final(null);
+      setCoachFinalFlag(null);
       setMetrics(null);
       setGenericMsg(null);
       setPlayerMeta(null);
@@ -1590,6 +1681,14 @@ export default function PlayerClient() {
         const s4 = await fetchStage4FinalDecision(prof.player_id, safeDay);
         setStage4Final((s4 as any) ?? null);
 
+        const { data: coachFlagRow } = await supabase
+          .from("v_coach_readiness_today_v8")
+          .select("final_flag, final_color")
+          .eq("player_id", prof.player_id)
+          .eq("entry_date", safeDay)
+          .maybeSingle();
+        setCoachFinalFlag((coachFlagRow as any) ?? null);
+
         const p = await fetchStage4Plan(prof.player_id, safeDay);
         setPlan((p as any) ?? null);
 
@@ -1631,7 +1730,14 @@ export default function PlayerClient() {
     run();
   }, [supabase, day]);
 
-  const flag: Flag = useMemo(() => readinessToFlag(plan?.readiness_level), [plan?.readiness_level]);
+  const flag: Flag = useMemo(() => {
+    const fromCoachView = parseFinalFlag(coachFinalFlag?.final_flag ?? null);
+    if (fromCoachView) return fromCoachView;
+
+    const fromSystemDecision = decisionToFlag(stage4Final?.system_decision ?? null);
+    if (fromSystemDecision) return fromSystemDecision;
+    return readinessToFlag(plan?.readiness_level);
+  }, [coachFinalFlag?.final_flag, plan?.readiness_level, stage4Final?.system_decision]);
   const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]);
 
   useEffect(() => {
@@ -1666,6 +1772,82 @@ export default function PlayerClient() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.md_day, session?.session_type, session?.md_day_resolved]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!plan) {
+        setPlanTemplateOverride(null);
+        return;
+      }
+
+      const mdDay = plan?.md_day ?? session?.md_day_resolved ?? null;
+
+      if (!mdDay) {
+        setPlanTemplateOverride(null);
+        return;
+      }
+
+      const desiredReadiness = flagToReadinessLevel(flag);
+      const currentReadiness = norm(plan.readiness_level);
+      if (currentReadiness === desiredReadiness) {
+        setPlanTemplateOverride(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("microdose_templates")
+        .select("title, description, structure, readiness_level, md_day, variant")
+        .eq("readiness_level", desiredReadiness)
+        .eq("md_day", mdDay)
+        .order("variant", { ascending: true });
+
+      if (error) {
+        console.error("microdose_templates override error:", error.message);
+        setPlanTemplateOverride(null);
+        return;
+      }
+
+      let rows = ((data as any[]) ?? []) as Array<{
+        title: string | null;
+        description: string | null;
+        structure: any;
+        readiness_level: string | null;
+        md_day?: string | null;
+        variant?: string | null;
+      }>;
+
+      // Fallback: if no exact md_day row was found for desired readiness, pick the first available
+      // row for this team+readiness so player view still follows the effective readiness flag.
+      if (!rows.length) {
+        const { data: fallbackRows, error: fallbackErr } = await supabase
+          .from("microdose_templates")
+          .select("title, description, structure, readiness_level, md_day, variant")
+          .eq("readiness_level", desiredReadiness)
+          .order("md_day", { ascending: true })
+          .order("variant", { ascending: true })
+          .limit(20);
+
+        if (fallbackErr) {
+          console.error("microdose_templates override fallback error:", fallbackErr.message);
+          setPlanTemplateOverride(null);
+          return;
+        }
+        rows = ((fallbackRows as any[]) ?? []) as Array<{
+          title: string | null;
+          description: string | null;
+          structure: any;
+          readiness_level: string | null;
+          md_day?: string | null;
+          variant?: string | null;
+        }>;
+      }
+
+      const chosen = selectTemplateOverrideCandidate(rows, plan?.variant ?? null, mdDay);
+      setPlanTemplateOverride((chosen as PlanTemplateOverrideRow) ?? null);
+    };
+
+    run();
+  }, [supabase, plan?.md_day, plan?.variant, plan?.readiness_level, session?.md_day_resolved, flag]);
 
   async function linkPlayer() {
     try {
@@ -1707,7 +1889,17 @@ export default function PlayerClient() {
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
-  const decisionType: DecisionType = (stage4Final?.final_decision ?? "FULL") as DecisionType;
+  const decisionType: DecisionType = (() => {
+    const fromFlag = flagToDecision(flag);
+    const fromFinal = (stage4Final?.final_decision ?? null) as DecisionType | null;
+    if (!fromFinal) return fromFlag;
+
+    const finalAsFlag = decisionToFlag(fromFinal);
+    if (finalAsFlag && finalAsFlag === flag) return fromFinal;
+
+    // Keep player-facing command aligned with effective final flag shown in UI.
+    return fromFlag;
+  })();
 
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
 
@@ -1715,6 +1907,9 @@ export default function PlayerClient() {
   const lockLabel = lockedBool ? "Læst" : "Ólæst";
 
   const trainingSystemLabel = plan.training_system ? String(plan.training_system) : "—";
+  const planStructureForRender = planTemplateOverride?.structure ?? plan.structure;
+  const sessionHeaderTitle = normalizeSessionHeaderTitleByFlag(planTemplateOverride?.title ?? plan.title, flag);
+  const sessionHeaderDesc = planTemplateOverride?.description ?? plan.description;
 
   const coachMsg = (stage4Final?.coach_note ?? "").trim();
   const baseMsg = genericMsg?.message || (ui as any).playerMessage;
@@ -1766,7 +1961,7 @@ export default function PlayerClient() {
 
                   <Chip className={(ui as any).pill}>
                     <MiniDot className={(ui as any).dot} />
-                    {readinessToFlag(plan.readiness_level)}
+                    {flag}
                   </Chip>
                 </div>
               </div>
@@ -2112,9 +2307,9 @@ export default function PlayerClient() {
               </div>
             ) : null}
 
-            {renderStructureBlocks(plan.structure, {
-              headerTitle: plan.title,
-              headerDesc: plan.description,
+            {renderStructureBlocks(planStructureForRender, {
+              headerTitle: sessionHeaderTitle,
+              headerDesc: sessionHeaderDesc,
               lockLabel,
             })}
 
