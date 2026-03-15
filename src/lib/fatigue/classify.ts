@@ -25,6 +25,7 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
     });
   }
 
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.energy ?? 99) <= 2) {
     neuralScore += 2;
     drivers.push({
@@ -33,8 +34,18 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
       points: 2,
       category: "NEURAL",
     });
+    if ((input.energy ?? 99) === 1) {
+      neuralScore += 1;
+      drivers.push({
+        code: "VERY_LOW_ENERGY",
+        label: "Very low energy",
+        points: 1,
+        category: "NEURAL",
+      });
+    }
   }
 
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.sleepQuality ?? 99) <= 2) {
     neuralScore += 1;
     drivers.push({
@@ -43,8 +54,18 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
       points: 1,
       category: "NEURAL",
     });
+    if ((input.sleepQuality ?? 99) === 1) {
+      neuralScore += 1;
+      drivers.push({
+        code: "VERY_LOW_SLEEP_QUALITY",
+        label: "Very poor sleep quality",
+        points: 1,
+        category: "NEURAL",
+      });
+    }
   }
 
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.sleepDuration ?? 99) <= 2) {
     neuralScore += 1;
     drivers.push({
@@ -53,6 +74,15 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
       points: 1,
       category: "NEURAL",
     });
+    if ((input.sleepDuration ?? 99) === 1) {
+      neuralScore += 1;
+      drivers.push({
+        code: "VERY_LOW_SLEEP_DURATION",
+        label: "Very short sleep duration",
+        points: 1,
+        category: "NEURAL",
+      });
+    }
   }
 
   if ((input.stress ?? 0) >= 4) {
@@ -95,21 +125,23 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
     });
   }
 
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.soreness ?? 99) <= 2 && ((input.sten ?? 10) <= 4 || (input.totalScore ?? 99) <= 11)) {
     neuralScore += 1;
     drivers.push({
       code: "LOW_SORENESS_POOR_READINESS",
-      label: "Poor readiness without high soreness",
+      label: "Low soreness score with poor readiness context",
       points: 1,
       category: "NEURAL",
     });
   }
 
-  if ((input.soreness ?? 0) >= 4) {
+  // 1-5 soreness scale: 1/2 are caution, 4/5 are good.
+  if ((input.soreness ?? 99) <= 2) {
     tissueScore += 2;
     drivers.push({
-      code: "HIGH_SORENESS",
-      label: "High muscle soreness",
+      code: "LOW_SORENESS",
+      label: "Low soreness score indicates elevated tissue caution",
       points: 2,
       category: "TISSUE",
     });
@@ -168,6 +200,7 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
   const poorWellnessCount =
     input.poorWellnessCount ??
     [input.energy, input.sleepQuality, input.sleepDuration, input.soreness]
+      // 3 = neutral baseline. Only values <=2 count as fatigue signals.
       .filter((v) => typeof v === "number" && (v as number) <= 2).length +
       [input.stress].filter((v) => typeof v === "number" && (v as number) >= 4).length;
 

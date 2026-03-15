@@ -49,6 +49,12 @@ type VariantCard = {
   structure: any;
 };
 
+type PlayerStatusRow = {
+  full_name: string | null;
+  final_color: string | null;
+  final_flag: string | null;
+};
+
 /* =========================
    UI MAP
 ========================= */
@@ -148,6 +154,17 @@ function colorKeyToReadinessLevelForTemplates(ck: ColorKey): "GREEN_PLUS" | "GRE
   return "RED";
 }
 
+function mapPlayerStatusToColorKey(input: { final_color?: string | null; final_flag?: string | null }): ColorKey | null {
+  const color = String(input.final_color ?? "").toLowerCase().trim();
+  const byFlag = mapReadinessToColorKey(input.final_flag ?? null);
+  if (byFlag) return byFlag;
+  if (color === "green_plus") return "green_plus";
+  if (color === "green") return "green";
+  if (color === "yellow") return "yellow";
+  if (color === "red") return "red";
+  return null;
+}
+
 function readinessOrderKey(rl: string) {
   const r = normalizeReadiness(rl);
   if (r === "GREEN_PLUS") return 1;
@@ -211,6 +228,7 @@ export default function DisplayClient() {
 
   // ✅ templates fetched for selected md_day
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [playersToday, setPlayersToday] = useState<PlayerStatusRow[]>([]);
 
   /* =========================
      URL SYNC
@@ -314,10 +332,30 @@ export default function DisplayClient() {
       });
 
       setTemplates(rows);
+
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const todayKey = `${yyyy}-${mm}-${dd}`;
+
+      const { data: playerData, error: playerErr } = await supabase
+        .from("v_coach_readiness_today_v8")
+        .select("full_name, final_color, final_flag")
+        .eq("entry_date", todayKey)
+        .order("full_name", { ascending: true });
+
+      if (!playerErr) {
+        setPlayersToday((playerData ?? []) as PlayerStatusRow[]);
+      } else {
+        setPlayersToday([]);
+      }
+
       setLastUpdated(new Date());
     } catch (e: any) {
       setErr(e?.message ?? "Unknown error");
       setTemplates([]);
+      setPlayersToday([]);
     } finally {
       setLoading(false);
     }
@@ -406,6 +444,23 @@ export default function DisplayClient() {
     return `Build: TV_TEMPLATES_${md} • Rows: ${rows} • Updated: ${ts}`;
   }, [selectedMdDay, lastUpdated, templates.length]);
 
+  const playersByColor = useMemo(() => {
+    const groups: Record<ColorKey, string[]> = {
+      green_plus: [],
+      green: [],
+      yellow: [],
+      red: [],
+    };
+    for (const row of playersToday) {
+      const ck = mapPlayerStatusToColorKey(row);
+      if (!ck) continue;
+      const name = String(row.full_name ?? "").trim();
+      if (!name) continue;
+      groups[ck].push(name);
+    }
+    return groups;
+  }, [playersToday]);
+
   return (
     <div className="min-h-screen w-full bg-background p-6">
       <div className="flex items-start justify-between gap-4 mb-4">
@@ -459,7 +514,48 @@ export default function DisplayClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card className="mb-4 border border-slate-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Players Today</CardTitle>
+          <CardDescription className="text-xs">Readiness color list for current day</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {MODES.map((ck) => {
+              const ui = colorUi[ck];
+              const list = playersByColor[ck] ?? [];
+              return (
+                <div key={`players-${ck}`} className={`rounded-xl border ${ui.border} ${ui.softBg} p-2.5`}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <span className={`h-2.5 w-2.5 rounded-full ${ui.dot}`} />
+                      <span>{ui.label}</span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">
+                      {list.length}
+                    </Badge>
+                  </div>
+                  <div className="max-h-36 overflow-auto pr-1">
+                    {list.length ? (
+                      <ul className="space-y-0.5 text-[11px] leading-tight">
+                        {list.map((name) => (
+                          <li key={`${ck}-${name}`} className="truncate">
+                            {name}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground">No players</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {MODES.map((ck) => {
           const ui = colorUi[ck];
           const isActive = ck === mode;

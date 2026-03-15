@@ -2,6 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
+import {
+  MICROPULSE_PRODUCT_IDENTITY,
+  ORDERED_PLAN_DEFINITIONS,
+  getPlanSummary,
+} from "@/lib/micropulse/product";
 
 type Lang = "IS" | "EN";
 
@@ -11,6 +16,7 @@ type CopyShape = {
     coach: string;
     intelligence: string;
     decisions: string;
+    ate: string;
     faq: string;
     pricing: string;
     cta: string;
@@ -27,14 +33,17 @@ type CopyShape = {
     title: string;
     risk: string;
     action: string;
-    needsReview: string;
+    review: string;
     players: string;
     recommendation: string;
     piTitle: string;
-    mix: string;
-    volatility: string;
     baseline: string;
+    volatility: string;
+    mix: string;
+    fatigue: string;
     neural: string;
+    nextRisk: string;
+    ate: string;
   };
   how: {
     title: string;
@@ -50,14 +59,43 @@ type CopyShape = {
     title: string;
     sub: string;
     chips: string[];
-    list: Array<{ t: string; d: string }>;
+    items: Array<{ t: string; d: string }>;
     summaryTitle: string;
-    summaryItems: string[];
+    summaryRows: string[];
   };
   decisions: {
     title: string;
     sub: string;
-    items: string[];
+    actions: string[];
+    scenariosTitle: string;
+    scenarios: Array<{ t: string; d: string }>;
+  };
+  ate: {
+    title: string;
+    sub: string;
+    cards: Array<{ t: string; d: string }>;
+    note: string;
+  };
+  features: {
+    title: string;
+    groups: Array<{
+      name: string;
+      items: string[];
+    }>;
+  };
+  pricing: {
+    title: string;
+    sub: string;
+    plans: Array<{
+      name: string;
+      bestFor: string;
+      price: string;
+      summary: string;
+      features: string[];
+      cta: string;
+      href: string;
+      highlight?: boolean;
+    }>;
   };
   testimonials: {
     title: string;
@@ -71,7 +109,7 @@ type CopyShape = {
     title: string;
     body: string;
     start: string;
-    walkthrough: string;
+    demo: string;
   };
   auth: { signIn: string };
   footer: string;
@@ -81,229 +119,489 @@ const COPY: Record<Lang, CopyShape> = {
   EN: {
     nav: {
       how: "How it works",
-      coach: "Coach Dashboard",
-      intelligence: "Team Intelligence",
+      coach: "Coach OS",
+      intelligence: "Performance Intelligence",
       decisions: "Team Decisions",
+      ate: "ATE",
       faq: "FAQ",
       pricing: "Pricing",
       cta: "Get started",
     },
     hero: {
-      title: "From readiness inputs to today's training decision.",
-      sub: "MicroPulse is a coach-controlled operating system for daily readiness: scan the squad, review flagged players, and confirm a clear team call (FULL / REDUCED / RECOVERY).",
-      primary: "Start free",
+      title: "Performance intelligence for coaching, performance, and medical staff.",
+      sub: "MicroPulse connects athlete monitoring, training decisions, and performance intelligence in one platform, helping teams detect fatigue earlier, adjust sessions faster, and coordinate staff decisions with more confidence.",
+      primary: "Start with Free",
       secondary: "Book a demo",
-      chips: ["Today Command Center", "Performance Intelligence — Team", "Needs review workflow", "Check-in reminders", "Match-week tools"],
-      trust: "Built for coaching operations",
+      chips: [
+        "Today Command Center",
+        "Coach Dashboard",
+        "Performance Intelligence — Team",
+        "Team Neural Load",
+        "FULL / REDUCED / RECOVERY",
+        "Adaptive Training Engine",
+      ],
+      trust: "Performance Intelligence Platform",
     },
     panel: {
       title: "Today Command Center",
-      risk: "Risk level: CAUTION",
-      action: "Team action: REDUCED",
-      needsReview: "Needs review: 7 players",
+      risk: "Risk Level: CAUTION",
+      action: "Team Action: REDUCED",
+      review: "Needs review: 7 players",
       players: "Total players: 30",
-      recommendation: "Team plan recommendation: keep quality high, reduce volume, and apply individual mods for flagged players.",
+      recommendation: "Team Recommendation: keep quality high, reduce volume, and use individual modifications for flagged players.",
       piTitle: "Performance Intelligence — Team",
-      mix: "Readiness mix: 20% RED / 53% YELLOW / 27% GREEN",
-      volatility: "Volatility: 60%",
-      baseline: "Baseline: BUILDING",
-      neural: "Team intelligence: dominant neural load rising, next-day risk moderate",
+      baseline: "Baseline: On track",
+      volatility: "Volatility: Elevated",
+      mix: "Readiness Mix: 20% RED · 53% YELLOW · 27% GREEN",
+      fatigue: "Team Fatigue: Dominant systemic pattern",
+      neural: "Team Neural Load: Rising",
+      nextRisk: "Next-day Risk: Moderate",
+      ate: "ATE: Session guidance ready for S&C review",
     },
     how: {
-      title: "A daily coaching workflow, not dashboard noise",
-      sub: "MicroPulse connects check-ins, team context, and staff review into one operational flow.",
+      title: "Most systems stop at monitoring. MicroPulse supports decisions.",
+      sub: "Most athlete monitoring systems collect data and leave interpretation to staff. MicroPulse turns readiness, recovery, training context, and performance signals into operational decisions.",
       steps: [
-        { t: "1) Players check in", d: "Daily readiness and wellness inputs are captured across the squad." },
-        { t: "2) MicroPulse scans the team", d: "Command Center summarizes risk, action state, and who needs review." },
-        { t: "3) Staff review flagged players", d: "Coaches use the review queue, reasons, and team context to decide fast." },
-        { t: "4) Confirm and lock the plan", d: "Set FULL / REDUCED / RECOVERY, apply templates, save, and lock." },
+        { t: "1) Players check in", d: "Daily readiness and wellness inputs are collected across the squad." },
+        { t: "2) MicroPulse scans the squad", d: "Today Command Center and team intelligence surface risk, action state, and key changes." },
+        { t: "3) Staff review flagged players", d: "Use the players-needing-review flow, reasons, and context before training starts." },
+        { t: "4) Staff confirm the day plan", d: "Set FULL / REDUCED / RECOVERY, apply templates, save, and lock the final plan." },
       ],
     },
     coach: {
-      title: "Coach Dashboard built for match-week reality",
-      sub: "The dashboard is designed for scan → decide → confirm under time pressure.",
+      title: "Built for coaching, performance, and medical alignment",
+      sub: "A shared decision engine so coaches, S&C, performance directors, and medical staff can work from one operational picture.",
       cards: [
-        { t: "Today Command Center", d: "Immediate team snapshot: risk, action, flagged players, and recommendation in one strip." },
-        { t: "Players needing review", d: "Operational queue for players that need attention before training starts." },
-        { t: "Coach controls", d: "Set FULL / REDUCED / RECOVERY, apply templates, save and lock decisions." },
-        { t: "Performance Intelligence — Team", d: "Readiness mix, baseline, volatility, status snapshot, and plan recommendation." },
-        { t: "Compliance monitoring", d: "Track missing check-ins, send reminders, and keep daily input coverage high." },
-        { t: "Match-week operations", d: "Week setup, match minutes, templates, messages, TV view, and yesterday load context." },
+        { t: "Today Command Center", d: "Understand the team in seconds with risk level, team action, players needing review, and recommendation." },
+        { t: "Players Needing Review", d: "Direct staff attention to the right athletes before training begins." },
+        { t: "Decision Controls", d: "Apply FULL / REDUCED / RECOVERY, use templates, and keep decisions consistent with save + lock." },
+        { t: "Compliance Monitoring", d: "Track check-in reminders, missing players, and daily response coverage." },
+        { t: "Match-week Operations", d: "Run Week setup, Match minutes, Yesterday Load context, TV view, and Messages from one workflow." },
+        { t: "Staff Alignment", d: "Keep coach, performance, and support staff aligned on one daily plan." },
       ],
     },
     intelligence: {
-      title: "Supporting team intelligence that helps staff act early",
-      sub: "Performance Intelligence and Team Intelligence sit under the daily command layer to support better calls.",
-      chips: ["Baseline", "Volatility", "Readiness mix", "Neural load", "Fatigue pattern", "Unit alerts"],
-      list: [
-        { t: "Performance Intelligence — Team", d: "Macro context for the day: readiness distribution, stability, and team recommendation." },
-        { t: "Team intelligence", d: "Dominant state, trajectory, next-day risk, and high-risk count in a concise coach view." },
-        { t: "Neural + fatigue signal", d: "Spot rising neural load or systemic strain before it becomes a session problem." },
-        { t: "Unit alerts", d: "Catch affected player groups early and coordinate decisions across staff." },
+      title: "More than monitoring.",
+      sub: "MicroPulse combines explainable readiness and risk logic with decision support and workflow execution.",
+      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "Unit Alerts"],
+      items: [
+        { t: "Detect fatigue and instability earlier", d: "Surface neural fatigue, volatility, and trend shifts before they become costly." },
+        { t: "Adjust sessions with more confidence", d: "Use explainable readiness and load context to shape the day plan." },
+        { t: "Surface operational risk", d: "Highlight workflow and integration issues that can affect daily execution." },
+        { t: "Keep departments aligned", d: "Coordinate coaching, performance, and medical decisions with one source of truth." },
       ],
       summaryTitle: "Example team summary",
-      summaryItems: [
-        "Status snapshot: CAUTION",
-        "Dominant fatigue pattern: MIXED",
-        "Neural load: RISING",
-        "Next-day risk: MODERATE",
-        "High-risk players: 4",
+      summaryRows: [
+        "Status: Stable",
+        "Baseline: On track",
+        "Readiness Mix: Balanced with yellow concentration",
+        "Dominant Fatigue: Systemic",
+        "Neural Load: Rising",
+        "Next-day Risk: Moderate",
+        "Unit Alerts: Midfield load concentration",
       ],
     },
     decisions: {
-      title: "Review the right players. Confirm the right plan.",
-      sub: "Daily decision workspace for coaching staff.",
-      items: [
-        "Needs review queue with clear context",
-        "Why / action clarity for each player",
-        "Template-assisted plan decisions",
-        "Save + lock for staff alignment",
-        "Check-in reminders and missing-input follow-up",
-        "Operational tools: messages, week setup, match minutes, TV view",
+      title: "Better decisions, less guesswork.",
+      sub: "MicroPulse helps teams make faster, clearer, and more consistent decisions by combining monitoring, performance context, and decision support in one operational system.",
+      actions: [
+        "Review flagged players with context",
+        "See recommended action states",
+        "Use templates in the same flow",
+        "Save and lock final team decisions",
+        "Run Generate Today Decisions and confirm outputs",
+      ],
+      scenariosTitle: "Operational use cases",
+      scenarios: [
+        { t: "Daily squad readiness review", d: "Scan team status before field or gym starts." },
+        { t: "Flagged-player triage", d: "Prioritize interventions where it matters most." },
+        { t: "Neural fatigue management", d: "Adjust plan when neural load and next-day risk trend up." },
+        { t: "Match-week support", d: "Coordinate decisions with Week setup and Match minutes context." },
+      ],
+    },
+    ate: {
+      title: "Adaptive Training Engine (ATE)",
+      sub: "Deterministic strength & conditioning decision support layered on top of MicroPulse workflows.",
+      cards: [
+        { t: "Coach-support, not coach-replacement", d: "ATE supports staff decisions; coaches keep final control." },
+        { t: "Context-aware session guidance", d: "Uses readiness, fatigue, neural load, md context, and yesterday load to guide sessions." },
+        { t: "Microdose-template aligned", d: "Keeps session identity anchored to current microdose templates while applying small, explainable adjustments." },
+        { t: "Faster S&C decisions", d: "Helps staff translate daily signals into practical programming choices with consistency." },
+      ],
+      note: "ATE is integrated as decision support inside the existing coach workflow and session decision layer.",
+    },
+    features: {
+      title: "One platform across monitoring, intelligence, decisions, and operations",
+      groups: [
+        {
+          name: "Monitoring",
+          items: [
+            "Daily player check-ins",
+            "Readiness and wellness tracking",
+            "Team-level status visibility",
+          ],
+        },
+        {
+          name: "Intelligence",
+          items: [
+            "Performance Intelligence — Team",
+            "Neural fatigue and volatility context",
+            "Load and recovery signal visibility",
+          ],
+        },
+        {
+          name: "Decision Support",
+          items: [
+            "FULL / REDUCED / RECOVERY guidance",
+            "Adaptive Training Engine support",
+            "Explainable player-state and match-week context logic",
+          ],
+        },
+        {
+          name: "Workflow / Operations",
+          items: [
+            "Players needing review workflow",
+            "Check-in reminders and compliance tracking",
+            "Week setup, match context, and staff coordination",
+          ],
+        },
       ],
     },
     testimonials: {
-      title: "Trusted in daily staff workflow",
+      title: "Built for daily staff decisions",
       items: [
-        { q: "We stopped debating dashboards and started confirming plans faster.", a: "Head Coach" },
-        { q: "The review queue tells us exactly where to spend attention.", a: "Performance Staff" },
-        { q: "Command Center + team intelligence gives us clear daily alignment.", a: "Sport Scientist" },
+        { q: "We align faster before training because everyone is working from one command layer.", a: "Head Coach" },
+        { q: "The review workflow cuts noise and puts our attention where it should be.", a: "Performance Coach" },
+        { q: "ATE helps us keep S&C programming consistent with the day context.", a: "Strength & Conditioning Staff" },
       ],
     },
     faq: {
       title: "FAQ",
       items: [
-        { q: "Is this only for football?", a: "No. MicroPulse supports team-sport workflows across football, basketball, handball, volleyball, and academies." },
-        { q: "What does the coach dashboard actually help with?", a: "It helps staff scan team status, review flagged players, decide faster, and confirm the plan for the day." },
-        { q: "How do FULL / REDUCED / RECOVERY decisions work?", a: "The system turns daily readiness + context into a team action recommendation, with coach controls to adjust, save, and lock." },
-        { q: "What is Performance Intelligence — Team?", a: "A team-level layer with readiness mix, volatility, baseline, status snapshot, and recommendation to support day-level calls." },
-        { q: "Does MicroPulse help identify neural fatigue / next-day risk?", a: "Yes. Team intelligence surfaces dominant fatigue and neural load context, including trajectory and next-day risk summaries." },
-        { q: "Can coaches lock decisions and use templates?", a: "Yes. Coaches can use templates and lock the final daily plan for staff consistency." },
-        { q: "Does it support match-week operations?", a: "Yes. Workflows include week setup, match minutes, templates, messages, TV view, and compliance support." },
+        { q: "Is this only for football?", a: "No. MicroPulse supports multi-sport team environments, including football, basketball, handball, volleyball, and academies." },
+        { q: "What does the coach dashboard help staff do?", a: "It helps staff scan the squad, review flagged players, understand team intelligence, and confirm the day plan." },
+        { q: "How do FULL / REDUCED / RECOVERY decisions work?", a: "MicroPulse combines daily inputs and context into a recommended team action that coaches can adjust, save, and lock." },
+        { q: "What is Performance Intelligence — Team?", a: "A team-level layer for baseline, volatility, readiness mix, status snapshot, and recommendation." },
+        { q: "How does MicroPulse help with neural fatigue / neural load?", a: "It surfaces Team Neural Load trend, dominant fatigue context, and next-day risk so staff can adjust earlier." },
+        { q: "Can staff save and lock decisions?", a: "Yes. Coaches can confirm the final daily call using save and lock controls." },
+        { q: "Does MicroPulse support match-week operations?", a: "Yes. Current workflow includes Week setup, Match minutes, Messages, TV view, and Yesterday Load context." },
+        { q: "What is Adaptive Training Engine (ATE)?", a: "ATE is a deterministic decision support layer for strength & conditioning planning inside the existing MicroPulse workflow." },
+        { q: "Is ATE replacing the coach?", a: "No. ATE supports coaches and performance staff; final decisions remain coach-led." },
+        { q: "How does ATE support strength & conditioning staff?", a: "It helps convert readiness and team context into practical, explainable session guidance with better day-to-day consistency." },
       ],
     },
     cta: {
-      title: "Run today's readiness workflow with clarity.",
-      body: "Give coaches one place to scan the squad, review flagged players, understand team intelligence, and confirm the training plan.",
-      start: "Start free",
-      walkthrough: "Book a demo",
+      title: "See how MicroPulse supports daily performance decisions.",
+      body: "Run daily decisions in one platform: monitor readiness, interpret risk, adjust sessions, and coordinate coaching, performance, and medical workflows.",
+      start: "Start with Free",
+      demo: "Talk to us about Elite",
     },
     auth: { signIn: "Sign in" },
-    footer: "Coach-controlled readiness and team decisions.",
+    footer: "Performance intelligence and decision support for coaching, performance, and medical teams.",
+    pricing: {
+      title: "Choose the MicroPulse plan that fits your team",
+      sub: "MicroPulse scales from simple daily monitoring to full performance intelligence for coaching, performance, and medical staff.",
+      plans: [
+        {
+          name: "Free",
+          bestFor: "Best for small teams, academies, and coaches testing the platform.",
+          price: "€0 / month",
+          summary: "Start with daily monitoring and basic team visibility.",
+          features: [
+            "Daily player check-in",
+            "Basic readiness score",
+            "Player monitoring dashboard",
+            "Individual player status",
+            "Limited team size",
+            "Basic monitoring insights",
+          ],
+          cta: "Start with Free",
+          href: "/pricing",
+        },
+        {
+          name: "Pro",
+          bestFor: "Best for S&C coaches, performance staff, and single-team environments.",
+          price: "€349 / month",
+          summary: "Run daily team operations with smarter readiness and session decision support.",
+          features: [
+            "Adaptive Training Engine",
+            "Neural Fatigue Model",
+            "Smart readiness decisions",
+            "Session adjustment suggestions",
+            "Coach dashboard and team readiness overview",
+            "Player volatility tracking and match-week context",
+            "Explainable decision support",
+            "Team workflow tools",
+          ],
+          cta: "Book a demo",
+          href: "/pricing#demo",
+          highlight: true,
+        },
+        {
+          name: "Elite",
+          bestFor: "Best for professional clubs, multi-team organizations, and leadership staff.",
+          price: "From €1250 / month",
+          summary: "Scale performance intelligence across teams, departments, and leadership.",
+          features: [
+            "Everything in Pro",
+            "Performance Intelligence platform",
+            "Injury risk modelling and load forecasting",
+            "Neural + volatility intelligence",
+            "Cross-team analytics and organization dashboards",
+            "Executive reporting",
+            "Automation and smart alerts",
+            "Advanced integrations",
+            "Medical + performance oversight",
+          ],
+          cta: "Talk to us about Elite",
+          href: "/pricing#demo",
+        },
+      ],
+    },
   },
 
   IS: {
     nav: {
       how: "Hvernig virkar",
-      coach: "Coach Dashboard",
-      intelligence: "Liðsgreind",
-      decisions: "Ákvarðanir",
+      coach: "Coach OS",
+      intelligence: "Performance Intelligence",
+      decisions: "Daglegar ákvarðanir",
+      ate: "ATE",
       faq: "Spurningar",
       pricing: "Verðskrá",
       cta: "Byrja",
     },
     hero: {
-      title: "Frá readiness innslætti í skýra ákvörðun dagsins.",
-      sub: "MicroPulse er coach-controlled stýrikerfi fyrir daglegt readiness: skannaðu hópinn, farðu yfir flagged leikmenn og staðfestu skýra liðákvörðun (FULL / REDUCED / RECOVERY).",
-      primary: "Byrja frítt",
+      title: "Performance intelligence fyrir þjálfara, performance og medical staff.",
+      sub: "MicroPulse tengir athlete monitoring, æfingaákvarðanir og performance intelligence í einum vettvangi svo staff geti brugðist fyrr við þreytu, stillt æfingar hraðar og samræmt ákvarðanir betur.",
+      primary: "Byrja með Free",
       secondary: "Bóka demo",
-      chips: ["Today Command Center", "Performance Intelligence — Team", "Needs review workflow", "Check-in reminders", "Leikjaviku verkfæri"],
-      trust: "Byggt fyrir þjálfarateymi",
+      chips: [
+        "Today Command Center",
+        "Coach Dashboard",
+        "Performance Intelligence — Team",
+        "Team Neural Load",
+        "FULL / REDUCED / RECOVERY",
+        "Adaptive Training Engine",
+      ],
+      trust: "Performance Intelligence Platform",
     },
     panel: {
       title: "Today Command Center",
       risk: "Áhættustig: CAUTION",
       action: "Liðsaðgerð: REDUCED",
-      needsReview: "Needs review: 7 leikmenn",
-      players: "Heildarfjöldi: 30",
-      recommendation: "Team plan recommendation: halda gæðum háum, lækka heildarálag og nota einstaklingsaðlögun fyrir flagged leikmenn.",
+      review: "Needs review: 7 leikmenn",
+      players: "Heildarfjöldi leikmanna: 30",
+      recommendation: "Team Recommendation: halda gæðum háum, draga úr magni og beita einstaklingsaðlögun fyrir flagged leikmenn.",
       piTitle: "Performance Intelligence — Team",
-      mix: "Readiness mix: 20% RED / 53% YELLOW / 27% GREEN",
-      volatility: "Volatility: 60%",
-      baseline: "Baseline: BUILDING",
-      neural: "Team intelligence: dominant neural load rising, next-day risk moderate",
+      baseline: "Baseline: On track",
+      volatility: "Volatility: Elevated",
+      mix: "Readiness Mix: 20% RED · 53% YELLOW · 27% GREEN",
+      fatigue: "Team Fatigue: dominant systemic pattern",
+      neural: "Team Neural Load: Rising",
+      nextRisk: "Next-day Risk: Moderate",
+      ate: "ATE: session guidance tilbúið fyrir S&C review",
     },
     how: {
-      title: "Daglegt coach workflow, ekki dashboard hávaði",
-      sub: "MicroPulse tengir check-in, liðssamhengi og staff review í eitt hagnýtt flæði.",
+      title: "Flest kerfi stoppa við mælingar. MicroPulse styður ákvarðanir.",
+      sub: "Flest athlete monitoring kerfi safna gögnum en skilja túlkun eftir hjá staffi. MicroPulse fer skrefinu lengra og breytir readiness, recovery, álagssamhengi og performance merkjum í skýrari ákvarðanir.",
       steps: [
         { t: "1) Leikmenn skrá inn", d: "Dagleg readiness- og vellíðanargögn safnast fyrir allan hópinn." },
-        { t: "2) MicroPulse skannar hópinn", d: "Command Center sýnir áhættu, liðsaðgerð og hverjir þurfa review." },
-        { t: "3) Teymið fer yfir flagged leikmenn", d: "Þjálfarar nota review queue, skýringar og samhengi til að taka hraðari ákvarðanir." },
-        { t: "4) Staðfesta og læsa plani", d: "Setja FULL / REDUCED / RECOVERY, velja template, vista og læsa." },
+        { t: "2) MicroPulse skannar hópinn", d: "Today Command Center og liðsgreind sýna áhættu, liðsaðgerð og lykilbreytingar." },
+        { t: "3) Staff fer yfir flagged leikmenn", d: "Notaðu players-needing-review flæðið áður en æfing hefst." },
+        { t: "4) Staff staðfestir dagsplan", d: "Setja FULL / REDUCED / RECOVERY, velja templates, vista og læsa endanlegri ákvörðun." },
       ],
     },
     coach: {
-      title: "Coach Dashboard fyrir raunverulegan leikjaviku-dag",
-      sub: "Dashboardið er hannað fyrir skanna → ákveða → staðfesta undir tímamörkum.",
+      title: "Byggt fyrir samhæfingu þjálfara, performance og medical staff",
+      sub: "Eitt ákvörðunarlag sem heldur deildum samstilltum í daglegum rekstri.",
       cards: [
-        { t: "Today Command Center", d: "Skýr samantekt dagsins: áhætta, liðsaðgerð, flagged leikmenn og ráðlegging í einu view." },
-        { t: "Players needing review", d: "Hagnýt review röð fyrir þá leikmenn sem þurfa athygli fyrir æfingu." },
-        { t: "Coach controls", d: "Setja FULL / REDUCED / RECOVERY, velja templates, vista og læsa ákvörðun." },
-        { t: "Performance Intelligence — Team", d: "Readiness mix, baseline, volatility, status snapshot og liðsráðlegging." },
-        { t: "Compliance monitoring", d: "Fylgjast með vantar check-in, senda reminders og bæta daglega gagnaskráningu." },
-        { t: "Leikjaviku verkfæri", d: "Week setup, match minutes, templates, messages, TV view og yesterday load samhengi." },
+        { t: "Today Command Center", d: "Skildu stöðu liðsins á sekúndum: áhætta, liðsaðgerð, needs review og ráðlegging." },
+        { t: "Players Needing Review", d: "Beindu athygli staffs á réttu leikmennina fyrir æfingu." },
+        { t: "Decision Controls", d: "Settu FULL / REDUCED / RECOVERY, notaðu templates og haltu samræmi með save + lock." },
+        { t: "Compliance Monitoring", d: "Fylgstu með check-in reminders, vantar leikmenn og svörun dagsins." },
+        { t: "Match-week Operations", d: "Keyrðu Week setup, Match minutes, Yesterday Load samhengi, TV view og Messages." },
+        { t: "Staff Alignment", d: "Samræmdu þjálfara, performance og stuðningsstaff á einu dagsplani." },
       ],
     },
     intelligence: {
-      title: "Liðsgreind sem hjálpar teyminu að bregðast fyrr við",
-      sub: "Performance Intelligence og Team Intelligence styðja daglega ákvörðun, án óþarfa flækju.",
-      chips: ["Baseline", "Volatility", "Readiness mix", "Neural load", "Fatigue pattern", "Unit alerts"],
-      list: [
-        { t: "Performance Intelligence — Team", d: "Yfirsýn dagsins: readiness dreifing, stöðugleiki og liðsráðlegging." },
-        { t: "Team intelligence", d: "Dominant state, trajectory, next-day risk og high-risk count í stuttri coach samantekt." },
-        { t: "Neural + fatigue signal", d: "Sjá rising neural load eða systemic þreytu áður en það verður æfingavandamál." },
-        { t: "Unit alerts", d: "Greina snemma hvaða leikmannahópar eru undir álagi og samhæfa teymisákvarðanir." },
+      title: "Meira en monitoring.",
+      sub: "MicroPulse sameinar útskýranlega readiness/risk rökfræði, ákvörðunarstuðning og rekstrarflæði.",
+      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "Unit Alerts"],
+      items: [
+        { t: "Performance Intelligence — Team", d: "Staða dagsins fyrir readiness prófíl, baseline, volatility og ráðleggingu." },
+        { t: "Team Fatigue samhengi", d: "Sjáðu dominant fatigue pattern og hvar álag er að safnast í hópnum." },
+        { t: "Team Neural Load samhengi", d: "Greindu rising neural load snemma og notaðu trajectory + next-day risk til að stilla daginn." },
+        { t: "Unit Alerts", d: "Greindu áhrif á leikmannahópa snemma og samhæfðu staff hraðar." },
       ],
       summaryTitle: "Dæmi um liðsyfirlit",
-      summaryItems: [
-        "Status snapshot: CAUTION",
-        "Dominant fatigue pattern: MIXED",
-        "Neural load: RISING",
-        "Next-day risk: MODERATE",
-        "High-risk players: 4",
+      summaryRows: [
+        "Status: Stable",
+        "Baseline: On track",
+        "Readiness Mix: Jafnvægi með yellow þéttni",
+        "Dominant Fatigue: Systemic",
+        "Neural Load: Rising",
+        "Next-day Risk: Moderate",
+        "Unit Alerts: Miðjuhópur undir álagi",
       ],
     },
     decisions: {
-      title: "Farðu yfir rétta leikmenn. Staðfestu rétt plan.",
-      sub: "Daglegt ákvarðanavinnusvæði fyrir þjálfarateymi.",
-      items: [
-        "Needs review röð með skýru samhengi",
-        "Skýrleiki í why / action fyrir hvern leikmann",
-        "Template-studdar ákvarðanir",
-        "Vista + læsa fyrir samræmi í teymi",
-        "Check-in reminders og eftirfylgni þegar input vantar",
-        "Rekstrarverkfæri: messages, week setup, match minutes, TV view",
+      title: "Betri ákvarðanir, minni getgáta.",
+      sub: "MicroPulse hjálpar teymum að taka hraðari, skýrari og samræmdari ákvarðanir með því að tengja monitoring, performance samhengi og ákvörðunarstuðning í eitt kerfi.",
+      actions: [
+        "Fara yfir flagged leikmenn með samhengi",
+        "Sjá ráðlagðar action states",
+        "Nota templates í sama flæði",
+        "Vista og læsa endanlegum liðákvörðunum",
+        "Keyra Generate Today Decisions og staðfesta niðurstöður",
+      ],
+      scenariosTitle: "Dæmigerð notkun",
+      scenarios: [
+        { t: "Dagleg readiness yfirferð", d: "Skannaðu liðsstöðu áður en völlur eða salur byrjar." },
+        { t: "Triage fyrir flagged leikmenn", d: "Forgangsraðaðu inngripum þar sem þau skipta mestu." },
+        { t: "Neural fatigue stýring", d: "Stilltu plan þegar neural load og next-day risk hækka." },
+        { t: "Leikjaviku stuðningur", d: "Samhæfðu ákvarðanir með Week setup og Match minutes samhengi." },
+      ],
+    },
+    ate: {
+      title: "Adaptive Training Engine (ATE)",
+      sub: "Deterministic stuðningur fyrir styrktar- og þolþjálfun ofan á núverandi MicroPulse vinnuflæði.",
+      cards: [
+        { t: "Stuðningur, ekki staðgengill", d: "ATE styður staff ákvörðun; þjálfarar halda lokaákvörðun." },
+        { t: "Samhengismiðuð session guidance", d: "Notar readiness, fatigue, neural load, md context og yesterday load til að styðja session planning." },
+        { t: "Samræmt microdose templates", d: "Heldur session identity í núverandi templates og bætir við litlum, útskýranlegum breytingum." },
+        { t: "Hraðari S&C ákvarðanir", d: "Hjálpar staffi að breyta daglegum merkjum í hagnýtar og stöðugar programming ákvarðanir." },
+      ],
+      note: "ATE er notað sem ákvörðunarstuðningur inni í núverandi coach workflow og session decision layer.",
+    },
+    features: {
+      title: "Einn vettvangur fyrir monitoring, intelligence, decisions og operations",
+      groups: [
+        {
+          name: "Monitoring",
+          items: [
+            "Dagleg player check-in",
+            "Readiness og wellness tracking",
+            "Liðsyfirsýn í rauntíma",
+          ],
+        },
+        {
+          name: "Intelligence",
+          items: [
+            "Performance Intelligence — Team",
+            "Neural fatigue og volatility samhengi",
+            "Load og recovery merki í samhengi",
+          ],
+        },
+        {
+          name: "Decision Support",
+          items: [
+            "FULL / REDUCED / RECOVERY guidance",
+            "Adaptive Training Engine stuðningur",
+            "Útskýranleg player-state og match-week context rökfræði",
+          ],
+        },
+        {
+          name: "Workflow / Operations",
+          items: [
+            "Players needing review workflow",
+            "Check-in reminders og compliance yfirsýn",
+            "Week setup, match samhengi og staff samhæfing",
+          ],
+        },
       ],
     },
     testimonials: {
-      title: "Treyst í daglegu teymisflæði",
+      title: "Byggt fyrir daglegar staff ákvarðanir",
       items: [
-        { q: "Við hættum að rökræða dashboard og fórum að staðfesta plan hraðar.", a: "Aðalþjálfari" },
-        { q: "Review röðin segir okkur nákvæmlega hvar við eigum að setja athygli.", a: "Performance teymi" },
-        { q: "Command Center + liðsgreind gefur skýra daglega samstillingu.", a: "Sport Scientist" },
+        { q: "Við samstillum okkur hraðar fyrir æfingu því allir vinna út frá einu command layer.", a: "Aðalþjálfari" },
+        { q: "Review flæðið dregur úr hávaða og setur fókusinn á rétta leikmenn.", a: "Performance Coach" },
+        { q: "ATE hjálpar okkur að halda S&C skipulagningu samræmdri við samhengi dagsins.", a: "Strength & Conditioning Staff" },
       ],
     },
     faq: {
       title: "Algengar spurningar",
       items: [
-        { q: "Er þetta bara fyrir fótbolta?", a: "Nei. MicroPulse styður vinnuflæði fyrir mismunandi liðasport, m.a. fótbolta, körfu, handbolta, blak og akademíur." },
-        { q: "Hvernig nýtist coach dashboardið í raun?", a: "Það hjálpar teyminu að skanna stöðu liðsins, fara yfir flagged leikmenn, taka hraðari ákvörðun og staðfesta dagsplanið." },
-        { q: "Hvernig virkar FULL / REDUCED / RECOVERY?", a: "Kerfið sameinar readiness og samhengi í liðsaðgerð, með coach stjórnun til að breyta, vista og læsa endanlegri ákvörðun." },
-        { q: "Hvað er Performance Intelligence — Team?", a: "Liðslag sem sýnir readiness mix, volatility, baseline, status snapshot og liðsráðleggingu fyrir daginn." },
-        { q: "Hjálpar MicroPulse með neural fatigue / next-day risk?", a: "Já. Team intelligence sýnir dominant fatigue og neural load samhengi, ásamt trajectory og next-day risk samantekt." },
-        { q: "Geta þjálfarar læst ákvörðunum og notað templates?", a: "Já. Þjálfarar geta unnið með templates og læst daglegri niðurstöðu fyrir samræmi í staffi." },
-        { q: "Styður kerfið leikjaviku rekstur?", a: "Já. Flæðið styður week setup, match minutes, templates, messages, TV view og compliance eftirfylgni." },
+        { q: "Er þetta aðeins fyrir fótbolta?", a: "Nei. MicroPulse styður fjölbreytt liðasport, m.a. fótbolta, körfu, handbolta, blak og akademíur." },
+        { q: "Hvernig hjálpar coach dashboardið staffi í daglegu starfi?", a: "Það hjálpar staffi að skanna hópinn, fara yfir flagged leikmenn, skilja liðsgreind og staðfesta dagsplan." },
+        { q: "Hvernig virka FULL / REDUCED / RECOVERY ákvarðanir?", a: "MicroPulse sameinar dagleg inntök og samhengi í ráðlagða liðsaðgerð sem þjálfarar geta breytt, vistað og læst." },
+        { q: "Hvað er Performance Intelligence — Team?", a: "Liðslag fyrir baseline, volatility, readiness mix, status snapshot og ráðleggingu dagsins." },
+        { q: "Hvernig styður MicroPulse neural fatigue / neural load?", a: "Kerfið sýnir Team Neural Load trend, dominant fatigue samhengi og next-day risk svo staff geti brugðist fyrr við." },
+        { q: "Getur staff vistað og læst ákvörðunum?", a: "Já. Þjálfarar geta staðfest lokaákvörðun dagsins með save og lock." },
+        { q: "Styður MicroPulse leikjaviku rekstur?", a: "Já. Núverandi workflow styður Week setup, Match minutes, Messages, TV view og Yesterday Load samhengi." },
+        { q: "Hvað er Adaptive Training Engine (ATE)?", a: "ATE er deterministic ákvörðunarstuðningur fyrir styrktar- og þolþjálfun innan núverandi MicroPulse workflow." },
+        { q: "Er ATE að taka yfir þjálfarann?", a: "Nei. ATE er stuðningur fyrir þjálfara og performance staff; lokaákvörðun er alltaf hjá staffi." },
+        { q: "Hvernig styður ATE styrktar- og þolþjálfarateymi?", a: "Það hjálpar að breyta readiness og liðsamhengi í hagnýta, útskýranlega session guidance með betra samræmi milli daga." },
       ],
     },
     cta: {
-      title: "Keyrðu readiness workflow dagsins með skýrleika.",
-      body: "Gefðu þjálfurum einn stað til að skanna hópinn, fara yfir flagged leikmenn, skilja liðsgreind og staðfesta æfingaplan dagsins.",
-      start: "Byrja frítt",
-      walkthrough: "Bóka demo",
+      title: "Sjáðu hvernig MicroPulse styður daglegar performance ákvarðanir.",
+      body: "Keyrðu daglegar ákvarðanir í einu kerfi: fylgstu með readiness, túlkaðu áhættu, stilltu æfingar og samræmdu þjálfara-, performance- og medical flæði.",
+      start: "Byrja með Free",
+      demo: "Tala við okkur um Elite",
     },
     auth: { signIn: "Innskrá" },
-    footer: "Coach-controlled readiness og liðsákvarðanir.",
+    footer: "Performance intelligence og ákvörðunarstuðningur fyrir þjálfara-, performance- og medical teymi.",
+    pricing: {
+      title: "Veldu MicroPulse leiðina sem hentar teyminu þínu",
+      sub: "MicroPulse skalar frá einföldu daglegu monitoring yfir í fullt performance intelligence fyrir þjálfara-, performance- og medical staff.",
+      plans: [
+        {
+          name: "Free",
+          bestFor: "Fyrir smærri lið, akademíur og þjálfara sem vilja prófa kerfið.",
+          price: "€0 / month",
+          summary: "Byrjaðu á daglegu monitoring og grunn yfirsýn.",
+          features: [
+            "Dagleg player check-in",
+            "Grunn readiness score",
+            "Player monitoring dashboard",
+            "Einstaklingsstaða leikmanna",
+            "Takmörkuð liðastærð",
+            "Grunn monitoring insights",
+          ],
+          cta: "Byrja með Free",
+          href: "/pricing",
+        },
+        {
+          name: "Pro",
+          bestFor: "Fyrir S&C, performance staff og eitt lið.",
+          price: "€349 / month",
+          summary: "Keyrðu daglegan rekstur með skýrari readiness og session decision support.",
+          features: [
+            "Adaptive Training Engine",
+            "Neural Fatigue Model",
+            "Smart readiness decisions",
+            "Session adjustment suggestions",
+            "Coach dashboard og team readiness overview",
+            "Player volatility tracking og match-week context",
+            "Explainable decision support",
+            "Team workflow tools",
+          ],
+          cta: "Bóka demo",
+          href: "/pricing#demo",
+          highlight: true,
+        },
+        {
+          name: "Elite",
+          bestFor: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
+          price: "From €1250 / month",
+          summary: "Skalaðu performance intelligence yfir lið, deildir og stjórnendur.",
+          features: [
+            "Everything in Pro",
+            "Performance Intelligence platform",
+            "Injury risk modelling og load forecasting",
+            "Neural + volatility intelligence",
+            "Cross-team analytics og organization dashboards",
+            "Executive reporting",
+            "Automation og smart alerts",
+            "Advanced integrations",
+            "Medical + performance oversight",
+          ],
+          cta: "Tala við okkur um Elite",
+          href: "/pricing#demo",
+        },
+      ],
+    },
   },
 };
 
@@ -321,14 +619,74 @@ function useSmoothScroll() {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
       history.replaceState(null, "", href);
     }
+
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
   }, []);
 }
 
+function cx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function HomeLanding() {
   const [lang, setLang] = React.useState<Lang>("EN");
   const t = COPY[lang];
+  const pricingPlans = React.useMemo(() => {
+    if (lang !== "EN") return t.pricing.plans;
+    return ORDERED_PLAN_DEFINITIONS.map((plan) => ({
+      name: plan.displayName,
+      bestFor:
+        plan.key === "FREE"
+          ? "Best for small teams and academies"
+          : plan.key === "PRO"
+            ? "Best for coaches and performance staff"
+            : "Best for professional clubs and multi-team organizations",
+      price: plan.monthlyPriceLabel,
+      summary: getPlanSummary(plan.key),
+      features:
+        plan.key === "FREE"
+          ? [
+              "Daily player check-in",
+              "Basic readiness score",
+              "Player monitoring dashboard",
+              "Individual player status",
+              "Limited team size",
+              "Basic monitoring insights",
+            ]
+          : plan.key === "PRO"
+            ? [
+                "Everything in Free plus:",
+                "Adaptive Training Engine",
+                "Neural Fatigue Model",
+                "Coach dashboard",
+                "Team readiness overview",
+                "Player volatility tracking",
+                "Match-week context logic",
+                "Explainable readiness decisions",
+                "Session adjustment suggestions",
+                "Team workflow tools",
+                "Daily performance insights",
+              ]
+            : [
+                "Everything in Pro plus:",
+                "Performance Intelligence platform",
+                "Injury risk modelling",
+                "Load forecasting",
+                "Neural + volatility intelligence",
+                "Cross-team performance analytics",
+                "Organization dashboards",
+                "Executive reporting",
+                "Automation and smart alerts",
+                "Advanced integrations",
+                "Medical + performance oversight",
+                "Multi-team management",
+              ],
+      cta: plan.key === "FREE" ? "Start Free" : plan.key === "PRO" ? "Start Pro" : "Talk to us",
+      href: plan.key === "FREE" ? "/pricing" : "/pricing#demo",
+      highlight: Boolean(plan.highlighted),
+    }));
+  }, [lang, t.pricing.plans]);
 
   useSmoothScroll();
 
@@ -346,37 +704,53 @@ export default function HomeLanding() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url(/hero-football.jpg)" }} />
-          <div className="absolute inset-0 bg-cover bg-center opacity-60 mix-blend-overlay" style={{ backgroundImage: "url(/hero-basketball.jpg)" }} />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/80" />
-          <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-white via-white/75 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/85" />
+          <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-white via-white/70 to-transparent" />
         </div>
 
         <header className="relative z-10">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
             <div className="flex items-center gap-2">
-              <div className="relative h-7 w-7 overflow-hidden rounded-lg bg-emerald-500/90" />
-              <span className="font-semibold tracking-tight text-white/90">MicroPulse</span>
+              <div className="h-7 w-7 rounded-lg bg-emerald-500/90" />
+              <span className="font-semibold tracking-tight text-white/95">MicroPulse</span>
             </div>
 
-            <nav className="hidden items-center gap-7 text-sm text-white/80 md:flex">
+            <nav className="hidden items-center gap-6 text-sm text-white/80 md:flex">
               <a href="#how" className="hover:text-white">{t.nav.how}</a>
               <a href="#coach" className="hover:text-white">{t.nav.coach}</a>
               <a href="#intelligence" className="hover:text-white">{t.nav.intelligence}</a>
               <a href="#decisions" className="hover:text-white">{t.nav.decisions}</a>
+              <a href="#ate" className="hover:text-white">{t.nav.ate}</a>
               <a href="#faq" className="hover:text-white">{t.nav.faq}</a>
               <Link href="/pricing" className="hover:text-white">{t.nav.pricing}</Link>
             </nav>
 
             <div className="flex items-center gap-3">
               <div className="flex items-center rounded-xl border border-white/20 bg-white/5 p-1">
-                <button onClick={() => setLang("IS")} className={`rounded-lg px-2.5 py-1 text-xs transition ${lang === "IS" ? "bg-white/15 text-white" : "text-white/70 hover:text-white"}`}>IS</button>
-                <button onClick={() => setLang("EN")} className={`rounded-lg px-2.5 py-1 text-xs transition ${lang === "EN" ? "bg-white/15 text-white" : "text-white/70 hover:text-white"}`}>EN</button>
+                <button
+                  onClick={() => setLang("IS")}
+                  className={cx(
+                    "rounded-lg px-2.5 py-1 text-xs transition",
+                    lang === "IS" ? "bg-white/15 text-white" : "text-white/70 hover:text-white"
+                  )}
+                >
+                  IS
+                </button>
+                <button
+                  onClick={() => setLang("EN")}
+                  className={cx(
+                    "rounded-lg px-2.5 py-1 text-xs transition",
+                    lang === "EN" ? "bg-white/15 text-white" : "text-white/70 hover:text-white"
+                  )}
+                >
+                  EN
+                </button>
               </div>
 
               <Link href="/login" className="rounded-xl border border-white/25 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10">
                 {t.auth.signIn}
               </Link>
-              <Link href="/pricing" className="rounded-xl bg-blue-600 px-4 py-2 text-sm text-white shadow-[0_18px_40px_rgba(37,99,235,0.35)] transition hover:bg-blue-700">
+              <Link href="/pricing" className="rounded-xl bg-blue-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700">
                 {t.nav.cta}
               </Link>
             </div>
@@ -385,45 +759,60 @@ export default function HomeLanding() {
 
         <div className="relative z-10">
           <div className="mx-auto max-w-6xl px-6 pb-16 pt-10 md:pb-24 md:pt-14">
-            <div className="grid items-center gap-10 md:grid-cols-2">
+            <div className="grid items-center gap-10 lg:grid-cols-2">
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">{t.hero.title}</h1>
-                <p className="mt-5 max-w-xl text-white/80 md:text-lg">{t.hero.sub}</p>
+                <p className="mt-5 max-w-2xl text-white/85 md:text-lg">{t.hero.sub}</p>
 
                 <div className="mt-7 flex flex-wrap gap-3">
-                  <Link href="/signup" className="rounded-2xl bg-blue-600 px-6 py-3 text-white shadow-[0_20px_55px_rgba(37,99,235,0.35)] transition hover:bg-blue-700">{t.hero.primary}</Link>
-                  <Link href="/pricing#demo" className="rounded-2xl border border-white/25 bg-white/5 px-6 py-3 text-white transition hover:bg-white/10">{t.hero.secondary}</Link>
+                  <Link href="/login" className="rounded-2xl bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700">
+                    {t.hero.primary}
+                  </Link>
+                  <Link href="/pricing#demo" className="rounded-2xl border border-white/25 bg-white/5 px-6 py-3 text-white transition hover:bg-white/10">
+                    {t.hero.secondary}
+                  </Link>
                 </div>
 
-                <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-white/60">
+                <div className="mt-8 flex flex-wrap gap-2 text-xs text-white/70">
                   {t.hero.chips.map((chip) => (
-                    <span key={chip} className="rounded-full bg-white/10 px-3 py-1 backdrop-blur">{chip}</span>
+                    <span key={chip} className="rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+                      {chip}
+                    </span>
                   ))}
                 </div>
 
-                <div className="mt-8 text-xs tracking-widest text-white/55">{t.hero.trust.toUpperCase()}</div>
+                <div className="mt-8 text-xs tracking-[0.18em] text-white/60">
+                  {(lang === "EN" ? MICROPULSE_PRODUCT_IDENTITY.category : t.hero.trust).toUpperCase()}
+                </div>
               </div>
 
-              <div className="relative mx-auto w-full max-w-xl">
-                <div className="rounded-3xl bg-white/95 p-5 shadow-[0_40px_90px_rgba(0,0,0,0.45)] ring-1 ring-black/10">
+              <div className="mx-auto w-full max-w-xl space-y-3">
+                <div className="rounded-3xl bg-white/95 p-5 shadow-[0_35px_80px_rgba(0,0,0,0.38)] ring-1 ring-black/10">
                   <div className="text-sm font-semibold text-neutral-900">{t.panel.title}</div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border bg-white p-3 text-sm font-medium text-neutral-800">{t.panel.risk}</div>
-                    <div className="rounded-2xl border bg-white p-3 text-sm font-medium text-neutral-800">{t.panel.action}</div>
-                    <div className="rounded-2xl border bg-white p-3 text-sm font-medium text-neutral-800">{t.panel.needsReview}</div>
-                    <div className="rounded-2xl border bg-white p-3 text-sm font-medium text-neutral-800">{t.panel.players}</div>
+                    {[t.panel.risk, t.panel.action, t.panel.review, t.panel.players].map((line) => (
+                      <div key={line} className="rounded-2xl border bg-white p-3 text-sm font-medium text-neutral-800">
+                        {line}
+                      </div>
+                    ))}
                   </div>
                   <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t.panel.recommendation}</div>
+                </div>
 
-                  <div className="mt-5 rounded-2xl border bg-neutral-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{t.panel.piTitle}</div>
-                    <div className="mt-2 space-y-1.5 text-sm text-neutral-700">
-                      <div>{t.panel.mix}</div>
-                      <div>{t.panel.volatility}</div>
-                      <div>{t.panel.baseline}</div>
-                      <div>{t.panel.neural}</div>
-                    </div>
+                <div className="rounded-3xl border bg-neutral-50 p-5 shadow-sm">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{t.panel.piTitle}</div>
+                  <div className="mt-2 space-y-1.5 text-sm text-neutral-700">
+                    <div>{t.panel.baseline}</div>
+                    <div>{t.panel.volatility}</div>
+                    <div>{t.panel.mix}</div>
+                    <div>{t.panel.fatigue}</div>
+                    <div>{t.panel.neural}</div>
+                    <div>{t.panel.nextRisk}</div>
                   </div>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                  {t.panel.ate}
                 </div>
               </div>
             </div>
@@ -448,9 +837,9 @@ export default function HomeLanding() {
 
       <section id="coach" className="border-t bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-2xl font-semibold md:text-3xl">{t.coach.title}</h3>
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.coach.title}</h2>
           <p className="mt-3 max-w-3xl text-sm text-neutral-600">{t.coach.sub}</p>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {t.coach.cards.map((card) => (
               <div key={card.t} className="rounded-3xl border bg-white p-6 shadow-sm">
                 <div className="text-sm font-semibold">{card.t}</div>
@@ -463,17 +852,21 @@ export default function HomeLanding() {
 
       <section id="intelligence" className="border-t bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-10 md:grid-cols-2">
+          <div className="grid gap-10 lg:grid-cols-2">
             <div>
-              <h3 className="text-2xl font-semibold md:text-3xl">{t.intelligence.title}</h3>
+              <h2 className="text-2xl font-semibold md:text-3xl">{t.intelligence.title}</h2>
               <p className="mt-3 text-sm text-neutral-600">{t.intelligence.sub}</p>
+
               <div className="mt-5 flex flex-wrap gap-2">
                 {t.intelligence.chips.map((chip) => (
-                  <span key={chip} className="rounded-full border bg-white px-3 py-1 text-xs text-neutral-700 shadow-sm">{chip}</span>
+                  <span key={chip} className="rounded-full border bg-white px-3 py-1 text-xs text-neutral-700 shadow-sm">
+                    {chip}
+                  </span>
                 ))}
               </div>
+
               <div className="mt-6 space-y-3">
-                {t.intelligence.list.map((item) => (
+                {t.intelligence.items.map((item) => (
                   <div key={item.t} className="rounded-2xl border bg-white p-4 shadow-sm">
                     <div className="text-sm font-semibold">{item.t}</div>
                     <div className="mt-1.5 text-sm text-neutral-600">{item.d}</div>
@@ -485,8 +878,10 @@ export default function HomeLanding() {
             <div className="rounded-3xl border bg-neutral-50 p-6 shadow-sm">
               <div className="text-sm font-semibold">{t.intelligence.summaryTitle}</div>
               <div className="mt-4 space-y-2">
-                {t.intelligence.summaryItems.map((line) => (
-                  <div key={line} className="rounded-2xl border bg-white px-4 py-3 text-sm text-neutral-700">{line}</div>
+                {t.intelligence.summaryRows.map((line) => (
+                  <div key={line} className="rounded-2xl border bg-white px-4 py-3 text-sm text-neutral-700">
+                    {line}
+                  </div>
                 ))}
               </div>
             </div>
@@ -496,24 +891,133 @@ export default function HomeLanding() {
 
       <section id="decisions" className="border-t bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="md:col-span-2">
-              <h3 className="text-2xl font-semibold">{t.decisions.title}</h3>
-              <p className="mt-3 text-sm text-neutral-600">{t.decisions.sub}</p>
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                {t.decisions.items.map((item) => (
-                  <div key={item} className="rounded-2xl border bg-white p-4 text-sm text-neutral-700 shadow-sm">✅ {item}</div>
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.decisions.title}</h2>
+          <p className="mt-3 max-w-3xl text-sm text-neutral-600">{t.decisions.sub}</p>
+
+          <div className="mt-6 grid gap-8 lg:grid-cols-2">
+            <div>
+              <div className="grid gap-3">
+                {t.decisions.actions.map((item) => (
+                  <div key={item} className="rounded-2xl border bg-white p-4 text-sm text-neutral-700 shadow-sm">
+                    {item}
+                  </div>
                 ))}
               </div>
             </div>
 
-            <div id="cta" className="rounded-3xl border bg-neutral-50 p-6 shadow-sm">
-              <h4 className="text-lg font-semibold">{t.cta.title}</h4>
-              <p className="mt-2 text-sm text-neutral-600">{t.cta.body}</p>
-              <div className="mt-5 grid gap-3">
-                <Link href="/signup" className="rounded-2xl bg-blue-600 px-4 py-3 text-center text-white transition hover:bg-blue-700">{t.cta.start}</Link>
-                <Link href="/pricing#demo" className="rounded-2xl border bg-white px-4 py-3 text-center transition hover:bg-neutral-50">{t.cta.walkthrough}</Link>
+            <div>
+              <div className="text-sm font-semibold text-neutral-900">{t.decisions.scenariosTitle}</div>
+              <div className="mt-3 space-y-3">
+                {t.decisions.scenarios.map((scenario) => (
+                  <div key={scenario.t} className="rounded-2xl border bg-white p-4 shadow-sm">
+                    <div className="text-sm font-semibold">{scenario.t}</div>
+                    <div className="mt-1.5 text-sm text-neutral-600">{scenario.d}</div>
+                  </div>
+                ))}
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="ate" className="border-t bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.ate.title}</h2>
+          <p className="mt-3 max-w-3xl text-sm text-neutral-600">{t.ate.sub}</p>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            {t.ate.cards.map((card) => (
+              <div key={card.t} className="rounded-3xl border bg-white p-6 shadow-sm">
+                <div className="text-sm font-semibold">{card.t}</div>
+                <div className="mt-2 text-sm text-neutral-600">{card.d}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{t.ate.note}</div>
+        </div>
+      </section>
+
+      <section className="border-t bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.features.title}</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {t.features.groups.map((group) => (
+              <div key={group.name} className="rounded-3xl border bg-white p-6 shadow-sm">
+                <div className="text-sm font-semibold text-neutral-900">{group.name}</div>
+                <div className="mt-4 space-y-2">
+                  {group.items.map((item) => (
+                    <div key={item} className="rounded-2xl border bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="border-t bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.pricing.title}</h2>
+          <p className="mt-3 max-w-3xl text-sm text-neutral-600">{t.pricing.sub}</p>
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            {pricingPlans.map((plan) => (
+              <div
+                key={plan.name}
+                className={cx(
+                  "relative rounded-3xl border p-6 shadow-sm",
+                  plan.highlight ? "border-neutral-900 bg-neutral-900 text-white" : "bg-white text-neutral-900"
+                )}
+              >
+                {plan.highlight ? (
+                  <div className="absolute -top-3 left-6 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Most popular</div>
+                ) : null}
+                <div className="text-sm font-semibold">{plan.name}</div>
+                <div className="mt-2 text-3xl font-semibold">{plan.price}</div>
+                <div className={cx("mt-3 text-sm", plan.highlight ? "text-white/80" : "text-neutral-600")}>{plan.bestFor}</div>
+                <div className={cx("mt-3 text-sm", plan.highlight ? "text-white/90" : "text-neutral-700")}>{plan.summary}</div>
+                <div className="mt-5 space-y-2">
+                  {plan.features.map((feature) => (
+                    <div
+                      key={feature}
+                      className={cx(
+                        "rounded-2xl px-3 py-2 text-sm",
+                        plan.highlight ? "bg-white/10 text-white" : "border bg-neutral-50 text-neutral-700"
+                      )}
+                    >
+                      {feature}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6">
+                  <Link
+                    href={plan.href}
+                    className={cx(
+                      "block rounded-2xl px-4 py-3 text-center text-sm transition",
+                      plan.highlight ? "bg-blue-600 text-white hover:bg-blue-700" : "border bg-white hover:bg-neutral-50"
+                    )}
+                  >
+                    {plan.cta}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 rounded-3xl border bg-neutral-50 p-6 text-center">
+            <div className="text-lg font-semibold text-neutral-900">Not sure which plan fits your team?</div>
+            <div className="mt-2 text-sm text-neutral-600">
+              Start with Free or talk to us about how MicroPulse can support your performance staff and athletes.
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <Link href="/pricing" className="rounded-2xl border bg-white px-5 py-2.5 text-sm text-neutral-900 transition hover:bg-neutral-100">
+                Start Free
+              </Link>
+              <Link href="/pricing#demo" className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm text-white transition hover:bg-blue-700">
+                Book a Demo
+              </Link>
             </div>
           </div>
         </div>
@@ -521,7 +1025,7 @@ export default function HomeLanding() {
 
       <section className="border-t bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-2xl font-semibold md:text-3xl">{t.testimonials.title}</h3>
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.testimonials.title}</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {t.testimonials.items.map((item) => (
               <div key={item.q} className="rounded-3xl border bg-white p-6 shadow-sm">
@@ -535,7 +1039,7 @@ export default function HomeLanding() {
 
       <section id="faq" className="border-t bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-2xl font-semibold md:text-3xl">{t.faq.title}</h3>
+          <h2 className="text-2xl font-semibold md:text-3xl">{t.faq.title}</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {t.faq.items.map((item) => (
               <details key={item.q} className="group rounded-3xl border bg-white p-6 shadow-sm">
@@ -549,6 +1053,21 @@ export default function HomeLanding() {
                 <p className="mt-3 text-sm text-neutral-600">{item.a}</p>
               </details>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="cta" className="border-t bg-neutral-50 py-16">
+        <div className="mx-auto max-w-5xl px-6 text-center">
+          <h2 className="text-3xl font-semibold tracking-tight text-neutral-900 md:text-4xl">{t.cta.title}</h2>
+          <p className="mx-auto mt-4 max-w-3xl text-sm text-neutral-600 md:text-base">{t.cta.body}</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/login" className="rounded-2xl bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700">
+              {t.cta.start}
+            </Link>
+            <Link href="/pricing#demo" className="rounded-2xl border bg-white px-6 py-3 text-neutral-900 transition hover:bg-neutral-100">
+              {t.cta.demo}
+            </Link>
           </div>
         </div>
       </section>

@@ -9,6 +9,8 @@ import { getCurrentScheduledSlot, getDateKeyInTimezone, getOperationalTimezone }
 import { sendReminderToMissingPlayers } from "@/lib/notifications/sendReminder";
 import { sendRpeReminderToMissingPlayers } from "@/lib/notifications/sendRpeReminder";
 import { getCurrentScheduledSlot as getCurrentRpeScheduledSlot } from "@/lib/session-rpe/reminderConfig";
+import { matchReadinessEmailSchedule, matchRpeEmailSchedule } from "@/lib/reminders/emailSchedule";
+import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminders/emailReminders";
 
 export const runtime = "nodejs";
 
@@ -36,10 +38,13 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as CronBody;
     const timeZone = getOperationalTimezone();
     const dateKey = getDateKeyInTimezone(new Date(), timeZone);
+    const now = new Date();
     const checkinSlot = getCurrentScheduledSlot({ timeZone, toleranceMinutes: 6 });
     const rpeSlot = getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 6 });
+    const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 6 });
+    const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 6 });
 
-    if (!checkinSlot && !rpeSlot) {
+    if (!checkinSlot && !rpeSlot && !readinessEmailSlot && !rpeEmailSlot) {
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -67,6 +72,18 @@ export async function POST(req: Request) {
               scheduledSlot: rpeSlot.slotKey,
             }
           : null,
+        readinessEmail: readinessEmailSlot
+          ? {
+              localTime: readinessEmailSlot.localTime,
+              slotKey: readinessEmailSlot.slotKey,
+            }
+          : null,
+        rpeEmail: rpeEmailSlot
+          ? {
+              localTime: rpeEmailSlot.localTime,
+              slotKey: rpeEmailSlot.slotKey,
+            }
+          : null,
       });
     }
 
@@ -88,6 +105,18 @@ export async function POST(req: Request) {
           timeZone,
         })
       : null;
+    const readinessEmailResult = readinessEmailSlot
+      ? await runReadinessEmailReminders(sb, {
+          dateKey,
+          timeZone,
+        })
+      : null;
+    const rpeEmailResult = rpeEmailSlot
+      ? await runRpeEmailReminders(sb, {
+          dateKey,
+          timeZone,
+        })
+      : null;
 
     return NextResponse.json({
       ok: true,
@@ -105,6 +134,20 @@ export async function POST(req: Request) {
             reminderType: rpeSlot.reminderType,
             scheduledSlot: rpeSlot.slotKey,
             result: rpeResult,
+          }
+        : null,
+      readinessEmail: readinessEmailSlot
+        ? {
+            localTime: readinessEmailSlot.localTime,
+            slotKey: readinessEmailSlot.slotKey,
+            result: readinessEmailResult,
+          }
+        : null,
+      rpeEmail: rpeEmailSlot
+        ? {
+            localTime: rpeEmailSlot.localTime,
+            slotKey: rpeEmailSlot.slotKey,
+            result: rpeEmailResult,
           }
         : null,
     });

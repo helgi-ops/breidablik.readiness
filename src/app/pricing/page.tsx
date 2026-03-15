@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { MICROPULSE_PRODUCT_IDENTITY } from "@/lib/micropulse/product";
 
 type Lang = "IS" | "EN";
 type PlanKey = "free" | "pro" | "elite";
@@ -16,67 +17,89 @@ const COPY = {
       getStarted: "Start free",
     },
     hero: {
-      title: "Performance decisions, made with precision.",
-      sub: "MicroPulse is a performance intelligence platform built for modern teams. Turn daily readiness data into structured, accountable training decisions.",
-      chips: ["Football", "Basketball", "High-performance teams"],
+      title: "Performance intelligence pricing for coaching, performance, and medical teams.",
+      sub: "Choose the operational depth your environment needs, from daily monitoring to full decision support and multi-team intelligence.",
+      chips: ["Coaching staff", "Performance teams", "Medical staff"],
     },
     positioning: {
-      line1: "MicroPulse isn’t a tracking tool.",
-      line2: "It’s a decision intelligence system for performance departments.",
+      line1: "MicroPulse is more than monitoring.",
+      line2: "It converts monitoring data into training decisions.",
     },
     plans: {
-      title: "Plans",
-      sub: "Deploy at the level your performance environment requires.",
-      recommended: "Recommended",
+      title: "Choose the MicroPulse plan that fits your team",
+      sub: "MicroPulse scales from simple daily monitoring to full performance intelligence for coaching, performance, and medical staff.",
+      recommended: "Most popular",
       free: {
         name: "Free",
-        pricePrimary: "€0",
-        priceSecondary: "0 ISK / month",
-        note: "For evaluation and workflow testing.",
-        bullets: ["Daily readiness inputs", "Basic decision output", "Limited team size", "Community support"],
-        cta: "Start free",
+        pricePrimary: "€0 / month",
+        priceSecondary: "Best for small teams and academies",
+        note: "Start with daily monitoring and basic team visibility.",
+        bullets: [
+          "Daily player check-in",
+          "Basic readiness score",
+          "Player monitoring dashboard",
+          "Individual player status",
+          "Limited team size",
+          "Basic monitoring insights",
+        ],
+        cta: "Start Free",
       },
       pro: {
         name: "Pro",
         pricePrimary: "€349 / month",
-        priceSecondary: "49,900 ISK / month",
-        note: "For performance-driven teams operating in competitive environments.",
+        priceSecondary: "Best for coaches and performance staff",
+        note: "Run your daily team operations with smarter readiness and session decision support.",
         bullets: [
-          "Full team workflows",
-          "Coach override + decision lock",
-          "Decision templates",
-          "Coach & player dashboards",
-          "Match-week logic engine",
-          "Stage 4 automation layer",
+          "Everything in Free plus:",
+          "Adaptive Training Engine",
+          "Neural Fatigue Model",
+          "Coach dashboard",
+          "Team readiness overview",
+          "Player volatility tracking",
+          "Match-week context logic",
+          "Explainable readiness decisions",
+          "Session adjustment suggestions",
+          "Team workflow tools",
+          "Daily performance insights",
         ],
-        cta: "Book a demo",
+        cta: "Start Pro",
       },
       elite: {
         name: "Elite",
-        pricePrimary: "From €1,250 / month",
-        priceSecondary: "From 149,000 ISK / month",
-        note: "For clubs deploying across multiple teams and departments.",
+        pricePrimary: "From €1250 / month",
+        priceSecondary: "Best for professional clubs and multi-team organizations",
+        note: "Scale performance intelligence across teams, departments, and leadership.",
         bullets: [
           "Everything in Pro",
-          "Multi-team architecture",
-          "Custom workflows & integrations",
-          "Structured onboarding & rollout",
-          "Governance & policy controls",
-          "Priority performance support",
+          "Performance Intelligence platform",
+          "Injury risk modelling",
+          "Load forecasting",
+          "Neural + volatility intelligence",
+          "Cross-team performance analytics",
+          "Organization dashboards",
+          "Executive reporting",
+          "Automation and smart alerts",
+          "Advanced integrations",
+          "Medical + performance oversight",
+          "Multi-team management",
         ],
         cta: "Talk to us",
       },
-      trustLine: "Built for organizations preparing for the next generation of athlete management.",
+      trustLine: "Run monitoring, decision support, and performance intelligence from one platform.",
     },
     compare: {
       title: "Quick compare",
       rows: [
-        ["Daily inputs", "✅", "✅", "✅"],
-        ["Decision output", "✅", "✅", "✅"],
-        ["Coach override + lock", "—", "✅", "✅"],
-        ["Templates & rotation", "—", "✅", "✅"],
-        ["Match-week logic engine", "—", "✅", "✅"],
-        ["Club rollout support", "—", "—", "✅"],
+        ["Daily player check-in", "✅", "✅", "✅"],
+        ["Coach dashboard", "—", "✅", "✅"],
+        ["Adaptive Training Engine", "—", "✅", "✅"],
+        ["Neural fatigue model", "—", "✅", "✅"],
+        ["Explainable readiness decisions", "—", "✅", "✅"],
+        ["Performance intelligence", "—", "—", "✅"],
+        ["Injury risk modelling", "—", "—", "✅"],
+        ["Cross-team analytics", "—", "—", "✅"],
+        ["Automation & alerts", "—", "—", "✅"],
+        ["Advanced integrations", "—", "—", "✅"],
       ],
     },
     demo: {
@@ -98,7 +121,7 @@ const COPY = {
       requiredEmail: "Valid email is required.",
       requiredOrg: "Club / Organization is required.",
     },
-    footer: "Micro inputs. Clear signals. Better decisions.",
+    footer: "Performance intelligence and decision support for modern team operations.",
     sports: ["Football", "Basketball", "Handball", "Volleyball", "Other"],
     preview: {
       title: "MicroPulse",
@@ -117,67 +140,88 @@ const COPY = {
       getStarted: "Byrja frítt",
     },
     hero: {
-      title: "Ákvarðanir í afreksumhverfi — með nákvæmni.",
-      sub: "MicroPulse er performance intelligence kerfi fyrir nútíma lið. Breyttu daglegum readiness gögnum í skýrar, rekjanlegar og ábyrgar æfingaákvarðanir.",
-      chips: ["Fótbolti", "Körfubolti", "Afrekslið"],
+      title: "Verðlagning fyrir performance intelligence hjá þjálfara-, performance- og medical teymum.",
+      sub: "Veldu rekstrardýpt sem hentar þínu umhverfi: frá daglegu monitoring yfir í fullan ákvörðunarstuðning og multi-team yfirsýn.",
+      chips: ["Þjálfarateymi", "Performance teymi", "Medical staff"],
     },
     positioning: {
-      line1: "MicroPulse er ekki bara tracking.",
-      line2: "Þetta er decision intelligence kerfi fyrir performance teymi.",
+      line1: "MicroPulse er meira en monitoring.",
+      line2: "Kerfið breytir monitoring gögnum í æfingaákvarðanir.",
     },
     plans: {
       title: "Leiðir",
-      sub: "Veldu innleiðingu sem passar þínu afreksumhverfi.",
+      sub: "Skipulagt eftir þroska teymis: monitoring, decision support og organization-level intelligence.",
       recommended: "Mælt með",
       free: {
         name: "Free",
-        pricePrimary: "€0",
-        priceSecondary: "0 ISK / mánuði",
-        note: "Til að prófa vinnuflæðið og meta lausnina.",
-        bullets: ["Daglegur readiness innsláttur", "Grunn-ákvörðun", "Takmörkuð liðastærð", "Community stuðningur"],
-        cta: "Byrja frítt",
+        pricePrimary: "€0 / month",
+        priceSecondary: "Fyrir smærri lið, akademíur og þjálfara sem vilja prófa kerfið.",
+        note: "Byrjaðu með daglegu monitoring og grunn liðsyfirsýn.",
+        bullets: [
+          "Dagleg player check-in",
+          "Grunn readiness score",
+          "Player monitoring dashboard",
+          "Einstaklingsstaða leikmanna",
+          "Takmörkuð liðastærð",
+          "Grunn monitoring insights",
+        ],
+        cta: "Byrja með Free",
       },
       pro: {
         name: "Pro",
-        pricePrimary: "€349 / mánuði",
-        priceSecondary: "49.900 ISK / mánuði",
-        note: "Fyrir lið og performance teymi í samkeppnisumhverfi.",
+        pricePrimary: "€349 / month",
+        priceSecondary: "Fyrir S&C þjálfara, performance staff og single-team umhverfi.",
+        note: "Keyrðu daglegan rekstur með skýrari readiness og session decision support.",
         bullets: [
-          "Fullt teymisvinnuflæði",
-          "Coach override + læsing",
-          "Ákvörðunarsnið (templates)",
-          "Coach & player dashboards",
-          "Leikjaviku rökfræði (match-week)",
-          "Stage 4 automation layer",
+          "Adaptive Training Engine",
+          "Neural Fatigue Model",
+          "Smart readiness decisions",
+          "Session adjustment suggestions",
+          "Coach dashboard",
+          "Team readiness overview",
+          "Player volatility tracking",
+          "Match-week context logic",
+          "Explainable decision support",
+          "Team workflow tools",
         ],
         cta: "Bóka demo",
       },
       elite: {
         name: "Elite",
-        pricePrimary: "Frá €1,250 / mánuði",
-        priceSecondary: "Frá 149.000 ISK / mánuði",
-        note: "Fyrir klúbba sem innleiða á mörg lið og deildir.",
+        pricePrimary: "From €1250 / month",
+        priceSecondary: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
+        note: "Skalaðu performance intelligence yfir lið, deildir og stjórnendur.",
         bullets: [
-          "Allt í Pro",
-          "Multi-team architecture",
-          "Sérsniðin vinnuflæði & tengingar",
-          "Onboarding + innleiðing",
-          "Governance & policy controls",
-          "Forgangsstuðningur",
+          "Everything in Pro",
+          "Performance Intelligence platform",
+          "Injury risk modelling",
+          "Load forecasting",
+          "Neural + volatility intelligence",
+          "Cross-team analytics",
+          "Organization dashboards",
+          "Executive reporting",
+          "Automation and smart alerts",
+          "Advanced integrations",
+          "Medical + performance oversight",
+          "Multi-team management",
         ],
-        cta: "Tala við okkur",
+        cta: "Tala við okkur um Elite",
       },
-      trustLine: "Fyrir félög sem eru að byggja upp næstu kynslóð athlete management.",
+      trustLine: "Einn vettvangur fyrir monitoring, decision support og performance intelligence.",
     },
     compare: {
       title: "Stutt samanburður",
       rows: [
-        ["Daglegur innsláttur", "✅", "✅", "✅"],
-        ["Ákvörðun", "✅", "✅", "✅"],
-        ["Coach override + læsing", "—", "✅", "✅"],
-        ["Snið + rotation", "—", "✅", "✅"],
-        ["Leikjaviku rökfræði", "—", "✅", "✅"],
-        ["Innleiðingarstuðningur", "—", "—", "✅"],
+        ["Daglegt player check-in", "✅", "✅", "✅"],
+        ["Coach dashboard", "—", "✅", "✅"],
+        ["Adaptive Training Engine", "—", "✅", "✅"],
+        ["Neural fatigue model", "—", "✅", "✅"],
+        ["Útskýranleg readiness decisions", "—", "✅", "✅"],
+        ["Performance intelligence", "—", "—", "✅"],
+        ["Injury risk modelling", "—", "—", "✅"],
+        ["Cross-team analytics", "—", "—", "✅"],
+        ["Automation & alerts", "—", "—", "✅"],
+        ["Advanced integrations", "—", "—", "✅"],
       ],
     },
     demo: {
@@ -199,7 +243,7 @@ const COPY = {
       requiredEmail: "Gilt netfang vantar.",
       requiredOrg: "Klúbbur / skipulag vantar.",
     },
-    footer: "Micro inputs. Clear signals. Better decisions.",
+    footer: "Performance intelligence og ákvörðunarstuðningur fyrir daglegan teymisrekstur.",
     sports: ["Fótbolti", "Körfubolti", "Handbolti", "Blak", "Annað"],
     preview: {
       title: "MicroPulse",
@@ -289,48 +333,50 @@ export default function PricingPage() {
       setSent(true);
       setForm({ name: "", email: "", org: "", sport: COPY[lang].sports[0], message: "" });
       setPlan("pro");
-    } catch (err: any) {
-      setError(err?.message ?? "Something went wrong.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setLoading(false);
     }
   }
 
-  const Plans = [
-    {
-      key: "free" as const,
-      dark: false,
-      recommended: false,
-      name: t.plans.free.name,
-      pricePrimary: t.plans.free.pricePrimary,
-      priceSecondary: t.plans.free.priceSecondary,
-      note: t.plans.free.note,
-      bullets: t.plans.free.bullets,
-      cta: { label: t.plans.free.cta, href: "/signup" },
-    },
-    {
-      key: "pro" as const,
-      dark: true,
-      recommended: true,
-      name: t.plans.pro.name,
-      pricePrimary: t.plans.pro.pricePrimary,
-      priceSecondary: t.plans.pro.priceSecondary,
-      note: t.plans.pro.note,
-      bullets: t.plans.pro.bullets,
-      cta: { label: t.plans.pro.cta, href: "#demo" },
-    },
-    {
-      key: "elite" as const,
-      dark: false,
-      recommended: false,
-      name: t.plans.elite.name,
-      pricePrimary: t.plans.elite.pricePrimary,
-      priceSecondary: t.plans.elite.priceSecondary,
-      note: t.plans.elite.note,
-      bullets: t.plans.elite.bullets,
-      cta: { label: t.plans.elite.cta, href: "#demo" },
-    },
-  ];
+  const Plans = React.useMemo(() => {
+    return [
+      {
+        key: "free" as const,
+        dark: false,
+        recommended: false,
+        name: t.plans.free.name,
+        pricePrimary: t.plans.free.pricePrimary,
+        priceSecondary: t.plans.free.priceSecondary,
+        note: t.plans.free.note,
+        bullets: t.plans.free.bullets,
+        cta: { label: t.plans.free.cta, href: "/signup" },
+      },
+      {
+        key: "pro" as const,
+        dark: true,
+        recommended: true,
+        name: t.plans.pro.name,
+        pricePrimary: t.plans.pro.pricePrimary,
+        priceSecondary: t.plans.pro.priceSecondary,
+        note: t.plans.pro.note,
+        bullets: t.plans.pro.bullets,
+        cta: { label: t.plans.pro.cta, href: "#demo" },
+      },
+      {
+        key: "elite" as const,
+        dark: false,
+        recommended: false,
+        name: t.plans.elite.name,
+        pricePrimary: t.plans.elite.pricePrimary,
+        priceSecondary: t.plans.elite.priceSecondary,
+        note: t.plans.elite.note,
+        bullets: t.plans.elite.bullets,
+        cta: { label: t.plans.elite.cta, href: "#demo" },
+      },
+    ];
+  }, [t]);
 
   return (
     <main className="min-h-screen bg-white text-neutral-900">
@@ -341,7 +387,7 @@ export default function PricingPage() {
             <div className="relative h-7 w-7 overflow-hidden rounded-lg bg-emerald-500/90">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.45),transparent_55%)]" />
             </div>
-            <span className="font-semibold tracking-tight">MicroPulse</span>
+                <span className="font-semibold tracking-tight">{MICROPULSE_PRODUCT_IDENTITY.name}</span>
           </Link>
 
           <div className="flex items-center gap-3">
@@ -543,6 +589,25 @@ export default function PricingPage() {
           </div>
 
           <div className="mt-10 text-center text-sm text-neutral-500">{t.plans.trustLine}</div>
+
+          <div className="mt-8 rounded-3xl border bg-neutral-50 p-6 text-center">
+            <h3 className="text-lg font-semibold text-neutral-900">
+              {lang === "IS" ? "Ertu ekki viss hvaða leið hentar teyminu?" : "Not sure which plan fits your team?"}
+            </h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              {lang === "IS"
+                ? "Byrjaðu með Free eða bókaðu demo til að sjá hvernig MicroPulse styður staff og leikmenn í daglegum rekstri."
+                : "Start with Free or talk to us about how MicroPulse can support your performance staff and athletes."}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <Link href="/signup" className="rounded-2xl border bg-white px-5 py-2.5 text-sm text-neutral-900 hover:bg-neutral-100">
+                {lang === "IS" ? "Byrja með Free" : "Start Free"}
+              </Link>
+              <a href="#demo" className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm text-white hover:bg-blue-700">
+                {lang === "IS" ? "Bóka Demo" : "Book a Demo"}
+              </a>
+            </div>
+          </div>
 
           {/* Compare */}
           <div className="mt-10 rounded-3xl border bg-neutral-50 p-6 md:p-8">

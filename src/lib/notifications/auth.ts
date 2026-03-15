@@ -21,8 +21,13 @@ async function getUserIdFromCookieSession(): Promise<string | null> {
         return cookieStore.getAll().map((c) => ({ name: c.name, value: c.value }));
       },
       setAll(cookiesToSet) {
-        for (const c of cookiesToSet) {
-          cookieStore.set(c.name, c.value, c.options);
+        try {
+          for (const c of cookiesToSet) {
+            cookieStore.set(c.name, c.value, c.options);
+          }
+        } catch {
+          // Read-only cookie contexts are valid in some route executions.
+          // In that case we still allow server-side auth reads via existing cookies.
         }
       },
     },

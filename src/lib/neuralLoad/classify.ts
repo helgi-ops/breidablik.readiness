@@ -55,17 +55,32 @@ export function classifyNeuralLoad(input: NeuralLoadInput): NeuralLoadClassifica
     pushDriver(drivers, "DELTA_Z_DROP", "Negative deltaZ", 1);
   }
 
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.energy ?? 99) <= 2) {
     score += 2;
     pushDriver(drivers, "LOW_ENERGY", "Low energy", 2);
+    if ((input.energy ?? 99) === 1) {
+      score += 1;
+      pushDriver(drivers, "VERY_LOW_ENERGY", "Very low energy", 1);
+    }
   }
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.sleepQuality ?? 99) <= 2) {
     score += 1;
     pushDriver(drivers, "LOW_SLEEP_QUALITY", "Poor sleep quality", 1);
+    if ((input.sleepQuality ?? 99) === 1) {
+      score += 1;
+      pushDriver(drivers, "VERY_LOW_SLEEP_QUALITY", "Very poor sleep quality", 1);
+    }
   }
+  // 3 = neutral baseline. Only values <=2 count as fatigue signals.
   if ((input.sleepDuration ?? 99) <= 2) {
     score += 1;
     pushDriver(drivers, "LOW_SLEEP_DURATION", "Short sleep duration", 1);
+    if ((input.sleepDuration ?? 99) === 1) {
+      score += 1;
+      pushDriver(drivers, "VERY_LOW_SLEEP_DURATION", "Very short sleep duration", 1);
+    }
   }
   if ((input.stress ?? 0) >= 4) {
     score += 1;
@@ -162,6 +177,7 @@ export function classifyNeuralLoad(input: NeuralLoadInput): NeuralLoadClassifica
     debug: {
       dataCompleteness: dataCompleteness(input),
       recentDropCount: countRecentDrops(input.zHistory ?? null),
+      // 3 = neutral baseline. Only values <=2 count as fatigue signals.
       sleepTrendFlag: (input.sleepQuality ?? 99) <= 2 || (input.sleepDuration ?? 99) <= 2,
       repeatedHighLoadFlag: !!(input.hsrHighYesterday && input.maxVelocityHighYesterday),
     },

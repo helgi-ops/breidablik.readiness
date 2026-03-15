@@ -4,11 +4,69 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import computeTeamDecision from "@/lib/decision/engine";
 import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
 import { buildTeamNeuralLoadSummary } from "@/lib/neuralLoad/teamSummary";
 import { runNeuralLoadValidationSuite } from "@/lib/neuralLoad/validation";
 import type { NeuralLoadClassification } from "@/lib/neuralLoad/types";
+import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
+import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
+import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
+import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
+import {
+  buildPerformanceIntelligenceDecision,
+  buildTeamPerformanceIntelligenceSummary,
+} from "@/lib/micropulse/performanceIntelligence";
+import type { PerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import { buildTeamRiskMap } from "@/lib/micropulse/performanceIntelligence/teamRiskMap";
+import { buildWeeklyRiskReport } from "@/lib/micropulse/performanceIntelligence/weeklyReport";
+import { buildTeamOutlook } from "@/lib/micropulse/performanceIntelligence/teamOutlook";
+import { resolveSessionMdContextFromSources } from "@/lib/micropulse/weekSetup/sessionSource";
+import { computePlayerVolatilitySummary } from "@/lib/micropulse/volatility/compute";
+import { summarizeDrivers, volatilityLevelLabel, volatilityLevelTone } from "@/lib/micropulse/volatility/format";
+import type { VolatilityDailyPoint } from "@/lib/micropulse/volatility/types";
+import {
+  buildNeuralVolatilityIntelligenceDecision,
+  buildTeamNeuralVolatilitySummary,
+  type NeuralVolatilityIntelligenceDecision,
+} from "@/lib/micropulse/neuralVolatilityIntelligence";
+import {
+  buildPrescriptionDecision,
+  buildTeamPrescriptionSummary,
+  type PrescriptionDecision,
+} from "@/lib/micropulse/prescriptionEngine";
+import {
+  buildSessionDraft,
+  buildTeamSessionBuildSummary,
+  type SessionDraft,
+} from "@/lib/micropulse/autoSessionBuilder";
+import {
+  buildWorkflowEvent,
+  loadSessionDraftRecordByPlayerDate,
+  saveSessionDraftRecord,
+  saveSessionWorkflowEvent,
+  type SessionDraftRecord,
+} from "@/lib/micropulse/sessionWorkflow";
+import {
+  applyCoachRules,
+  buildTeamRulesSummary,
+  type FinalRecommendationDecision,
+  type CoachRule,
+} from "@/lib/micropulse/rulesEngine";
+import {
+  buildRuntimeRulesFromAdminConfig,
+  createDefaultAdminConfigSnapshot,
+  getProtectedPlayerTags,
+  isPlayerProtectedByAdminConfig,
+  loadAdminConfigSnapshotFromStorage,
+  type AdminConfigSnapshot,
+} from "@/lib/micropulse/adminConfig";
+import ExplainabilityDrawer from "@/components/performanceIntelligence/ExplainabilityDrawer";
+import PerformanceIntelligencePanel from "@/components/performanceIntelligence/PerformanceIntelligencePanel";
+import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
+import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
+import TeamSessionBuildSummaryCard from "@/components/sessionBuilder/TeamSessionBuildSummary";
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,6 +75,7 @@ import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
+import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 
 /** -----------------------------
  * Types
@@ -25,6 +84,14 @@ type TrainingAction = "FULL" | "REDUCED" | "RECOVERY";
 type FinalColor = "red" | "yellow" | "green";
 type FinalFlag = "RED" | "YELLOW" | "GREEN";
 type Filter = "all" | FinalColor;
+type PlayerDetailSectionKey =
+  | "readinessDecision"
+  | "injuryRisk"
+  | "readinessInputs"
+  | "fatigueAdaptation"
+  | "trainingSession"
+  | "neuralLoad"
+  | "coachMessage";
 
 type PlanPreview = {
   team_id: string | null;
@@ -96,6 +163,44 @@ type DayStateInput = {
   };
 };
 
+type DecisionConfidence = {
+  level: "HIGH" | "MEDIUM" | "LOW";
+  inputsUsed: string[];
+  missingInputs: string[];
+  fallbackUsed: boolean;
+};
+
+type ReadinessRiskReportPlayer = {
+  name: string;
+  readinessStatus: "YELLOW" | "RED";
+  score: number | null;
+  confidence: number | null;
+  why: string[];
+  checkInScore: number | null;
+  zScore: number | null;
+  deltaZ: number | null;
+  acwr: number | null;
+  sleepScore: number | null;
+  hrv: number | null;
+  volatility: number | null;
+  ateSessionMode: "full" | "modified" | "recovery";
+  injuryRiskLevel: "LOW" | "MODERATE" | "HIGH";
+  injuryConfidence: "low" | "medium" | "high";
+  injuryWhy: string[];
+  injuryRecommendation: string[];
+};
+
+type ReadinessRiskReportData = {
+  teamName: string;
+  date: string;
+  flaggedPlayers: ReadinessRiskReportPlayer[];
+  summary: {
+    green: number;
+    yellow: number;
+    red: number;
+  };
+};
+
 type Row = {
   readiness_entry_id: string | null;
 
@@ -158,6 +263,11 @@ type Row = {
   _neural_load?: NeuralLoadClassification | null;
   _neural_bias_applied?: boolean;
   _neural_bias_reason_codes?: string[] | null;
+  _performance_intelligence?: PerformanceIntelligenceDecision | null;
+  _neural_volatility_intelligence?: NeuralVolatilityIntelligenceDecision | null;
+  _prescription_decision?: PrescriptionDecision | null;
+  _final_recommendation_decision?: FinalRecommendationDecision | null;
+  _session_draft?: SessionDraft | null;
 
   training_modifier?: any | null;
 
@@ -179,6 +289,36 @@ function todayISO() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function isoMondayOfISO(yyyyMmDd: string): string {
+  const d = new Date(`${yyyyMmDd}T00:00:00`);
+  const day = d.getDay(); // Sun=0..Sat=6
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysISO(yyyyMmDd: string, days: number): string {
+  const d = new Date(`${yyyyMmDd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function mapNoMatchIntentToGrid(intent: string | null | undefined): { dayTypeFinal: string; doseFinal: string } {
+  const token = String(intent ?? "").trim().toUpperCase();
+  if (token === "OFF") return { dayTypeFinal: "OFF", doseFinal: "OFF" };
+  if (token === "GAME") return { dayTypeFinal: "GAME", doseFinal: "GAME" };
+  if (token === "RECOVERY") return { dayTypeFinal: "RECOVERY", doseFinal: "RECOVERY" };
+  if (token === "FORCE") return { dayTypeFinal: "TRAIN", doseFinal: "FORCE" };
+  if (token === "VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "VELOCITY" };
+  if (token === "NEURAL_VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "NEURAL / VELOCITY" };
+  if (token === "POLISH_CALM") return { dayTypeFinal: "TRAIN", doseFinal: "POLISH / CALM" };
+  if (token === "ACTIVATION") return { dayTypeFinal: "TRAIN", doseFinal: "ACTIVATION" };
+  return { dayTypeFinal: "TRAIN", doseFinal: "TRAIN" };
 }
 
 function toNum(x: any): number | null {
@@ -302,6 +442,51 @@ function sparkline(values: number[], opts?: { min?: number; max?: number }) {
     .join("");
 }
 
+function volatilityLinePoints(values: number[], width = 220, height = 44, padding = 4): string {
+  if (!values.length) return "";
+  if (values.length === 1) {
+    const y = height / 2;
+    return `${padding},${y} ${width - padding},${y}`;
+  }
+
+  const min = 0;
+  const max = 100;
+  const innerW = Math.max(1, width - padding * 2);
+  const innerH = Math.max(1, height - padding * 2);
+  const stepX = innerW / (values.length - 1);
+
+  return values
+    .map((raw, idx) => {
+      const x = padding + idx * stepX;
+      const clamped = Math.max(min, Math.min(max, raw));
+      const t = (clamped - min) / (max - min);
+      const y = padding + (1 - t) * innerH;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function volatilitySeriesPoints(values: number[], width = 220, height = 44, padding = 4): Array<{ x: number; y: number; value: number }> {
+  if (!values.length) return [];
+  if (values.length === 1) {
+    return [{ x: width / 2, y: height / 2, value: Math.max(0, Math.min(100, values[0])) }];
+  }
+
+  const min = 0;
+  const max = 100;
+  const innerW = Math.max(1, width - padding * 2);
+  const innerH = Math.max(1, height - padding * 2);
+  const stepX = innerW / (values.length - 1);
+
+  return values.map((raw, idx) => {
+    const x = padding + idx * stepX;
+    const clamped = Math.max(min, Math.min(max, raw));
+    const t = (clamped - min) / (max - min);
+    const y = padding + (1 - t) * innerH;
+    return { x, y, value: clamped };
+  });
+}
+
 function prettyMd(md: string | null | undefined) {
   const v = (md ?? "").trim();
   if (!v) return { md: "—", label: "No MD set" };
@@ -315,6 +500,12 @@ function mdFromPlannedFocus(focus: string | null | undefined) {
   const s = String(focus ?? "").toUpperCase();
   const m = s.match(/\bMD[+-]?\d*\b/);
   return m?.[0] ?? null;
+}
+
+function dateKey(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw.slice(0, 10);
 }
 
 function isValidMdToken(x: string | null | undefined) {
@@ -338,7 +529,7 @@ function applySorenessDowngrade(input: {
 }) {
   const soreness = input.soreness ?? 0;
 
-  if (soreness < 4 || !input.flag || !input.color) {
+  if (soreness > 2 || !input.flag || !input.color) {
     return {
       final_flag: input.flag,
       final_color: input.color,
@@ -350,7 +541,7 @@ function applySorenessDowngrade(input: {
   const final_color: FinalColor = input.color === "green" ? "yellow" : input.color === "yellow" ? "red" : "red";
 
   const final_reason =
-    input.flag === "GREEN" ? "YELLOW: High soreness. Adjust load." : "RED: High soreness. Recovery/very light day.";
+    input.flag === "GREEN" ? "YELLOW: Low soreness reported. Adjust load." : "RED: Low soreness and risk signal. Recovery/very light day.";
 
   return { final_flag, final_color, final_reason };
 }
@@ -489,6 +680,19 @@ const flagToAction = (flag: string | null | undefined): TrainingAction => {
   return "FULL";
 };
 
+function actionToSessionMode(action: TrainingAction | null | undefined): "full" | "modified" | "recovery" | "pending" {
+  if (action === "RECOVERY") return "recovery";
+  if (action === "REDUCED") return "modified";
+  if (action === "FULL") return "full";
+  return "pending";
+}
+
+function actionToPlannedIntensity(action: TrainingAction | null | undefined): "low" | "moderate" | "high" {
+  if (action === "RECOVERY") return "low";
+  if (action === "REDUCED") return "moderate";
+  return "high";
+}
+
 function computeTeamRisk(signal: TeamSignal | null) {
   if (!signal || !signal.n_players) {
     return {
@@ -545,6 +749,25 @@ function riskUi(level: "UNKNOWN" | "STABLE" | "CAUTION" | "HIGH") {
   }
 }
 
+function titleCaseToken(value: string | null | undefined): string {
+  const v = String(value ?? "").trim().toLowerCase();
+  if (!v) return "—";
+  return v
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+function performanceRiskTone(
+  band: "LOW" | "MODERATE" | "HIGH" | "CRITICAL"
+): string {
+  if (band === "LOW") return "text-emerald-700";
+  if (band === "MODERATE") return "text-amber-700";
+  if (band === "HIGH") return "text-orange-700";
+  return "text-red-700";
+}
+
 function summaryLines(text: string | null | undefined, maxParts = 3): string[] {
   const raw = String(text ?? "").trim();
   if (!raw) return [];
@@ -554,6 +777,161 @@ function summaryLines(text: string | null | undefined, maxParts = 3): string[] {
     .filter(Boolean);
   if (parts.length) return parts.slice(0, maxParts);
   return [raw];
+}
+
+function toMaybeFinite(x: unknown): number | null {
+  const n = typeof x === "string" ? Number(x) : (x as number);
+  return Number.isFinite(n) ? n : null;
+}
+
+function scoreFmt(x: number | null) {
+  return x == null ? "—" : String(x);
+}
+
+function numFmt(x: number | null, digits = 2) {
+  return x == null ? "—" : x.toFixed(digits);
+}
+
+function confidenceFmt(x: number | null) {
+  if (x == null) return "—";
+  return x <= 1 ? `${Math.round(x * 100)}%` : `${Math.round(x)}%`;
+}
+
+const reportStyles = StyleSheet.create({
+  page: { padding: 24, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  h1: { fontSize: 16, fontWeight: 700, marginBottom: 8 },
+  section: { marginBottom: 12, paddingBottom: 8, borderBottom: "1 solid #E5E7EB" },
+  sectionTitle: { fontSize: 12, fontWeight: 700, marginBottom: 6 },
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
+  muted: { color: "#4B5563" },
+  playerCard: { marginBottom: 10, padding: 8, border: "1 solid #E5E7EB", borderRadius: 6 },
+  playerHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  badgeYellow: { color: "#92400E" },
+  badgeRed: { color: "#991B1B" },
+  whyList: { marginTop: 2, marginBottom: 6 },
+  whyItem: { marginBottom: 2 },
+  table: { border: "1 solid #D1D5DB", borderRadius: 4, overflow: "hidden", marginTop: 4 },
+  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
+  cellH: { flex: 1, padding: 4, fontSize: 9, fontWeight: 700 },
+  cell: { flex: 1, padding: 4, fontSize: 9 },
+  footerSummary: { marginTop: 8, fontSize: 11, fontWeight: 700 },
+});
+
+function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }) {
+  const playersPerPage = 2;
+  const flaggedPages: ReadinessRiskReportPlayer[][] = [];
+  for (let i = 0; i < data.flaggedPlayers.length; i += playersPerPage) {
+    flaggedPages.push(data.flaggedPlayers.slice(i, i + playersPerPage));
+  }
+  if (flaggedPages.length === 0) flaggedPages.push([]);
+
+  return (
+    <Document>
+      {flaggedPages.map((pagePlayers, pageIdx) => (
+        <Page key={`risk-report-page-${pageIdx}`} size="A4" style={reportStyles.page}>
+          <View style={reportStyles.section}>
+            <Text style={reportStyles.h1}>Readiness Risk Report</Text>
+            <View style={reportStyles.row}>
+              <Text>Team: {data.teamName || "—"}</Text>
+              <Text>Date: {data.date}</Text>
+            </View>
+            <Text style={reportStyles.muted}>
+              Flagged players (YELLOW/RED): {data.flaggedPlayers.length} · Page {pageIdx + 1}/{flaggedPages.length}
+            </Text>
+          </View>
+
+          <View style={reportStyles.section}>
+            <Text style={reportStyles.sectionTitle}>Flagged Players</Text>
+            {pagePlayers.length ? (
+              pagePlayers.map((p, i) => (
+                <View key={`${p.name}-${pageIdx}-${i}`} style={reportStyles.playerCard}>
+                  <View style={reportStyles.playerHeader}>
+                    <Text>{p.name}</Text>
+                    <Text style={p.readinessStatus === "RED" ? reportStyles.badgeRed : reportStyles.badgeYellow}>
+                      {p.readinessStatus}
+                    </Text>
+                  </View>
+                  <View style={reportStyles.row}>
+                    <Text>Score: {scoreFmt(p.score)}</Text>
+                    <Text>Confidence: {confidenceFmt(p.confidence)}</Text>
+                  </View>
+                  <Text style={reportStyles.sectionTitle}>WHY</Text>
+                  <View style={reportStyles.whyList}>
+                    {(p.why.length ? p.why : ["No ATE reasons available."]).map((reason, idx) => (
+                      <Text key={`${p.name}-${pageIdx}-why-${idx}`} style={reportStyles.whyItem}>
+                        - {reason}
+                      </Text>
+                    ))}
+                  </View>
+
+                  <Text style={reportStyles.sectionTitle}>Data Breakdown</Text>
+                  <View style={reportStyles.table}>
+                    <View style={reportStyles.tHead}>
+                      <Text style={reportStyles.cellH}>Check-in</Text>
+                      <Text style={reportStyles.cellH}>Z score</Text>
+                      <Text style={reportStyles.cellH}>Delta Z</Text>
+                      <Text style={reportStyles.cellH}>ACWR</Text>
+                      <Text style={reportStyles.cellH}>Sleep</Text>
+                      <Text style={reportStyles.cellH}>HRV</Text>
+                      <Text style={reportStyles.cellH}>Volatility</Text>
+                    </View>
+                    <View style={reportStyles.tRow}>
+                      <Text style={reportStyles.cell}>{scoreFmt(p.checkInScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.zScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.deltaZ)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.acwr)}</Text>
+                      <Text style={reportStyles.cell}>{scoreFmt(p.sleepScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.hrv)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.volatility)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={[reportStyles.row, { marginTop: 6 }]}>
+                    <Text>ATE recommendation</Text>
+                    <Text>{p.ateSessionMode}</Text>
+                  </View>
+                  <View style={[reportStyles.row, { marginTop: 4 }]}>
+                    <Text>Injury risk</Text>
+                    <Text>
+                      {p.injuryRiskLevel} ({p.injuryConfidence})
+                    </Text>
+                  </View>
+                  <View style={reportStyles.whyList}>
+                    {(p.injuryWhy.length ? p.injuryWhy : ["No additional injury-risk pattern identified."]).map((line, idx) => (
+                      <Text key={`${p.name}-${pageIdx}-inj-why-${idx}`} style={reportStyles.whyItem}>
+                        - {line}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={reportStyles.whyList}>
+                    {(p.injuryRecommendation.length ? p.injuryRecommendation : ["Maintain planned loading with routine monitoring."]).map(
+                      (line, idx) => (
+                        <Text key={`${p.name}-${pageIdx}-inj-rec-${idx}`} style={reportStyles.whyItem}>
+                          - {line}
+                        </Text>
+                      )
+                    )}
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={reportStyles.muted}>No YELLOW/RED players on current data.</Text>
+            )}
+          </View>
+
+          {pageIdx === flaggedPages.length - 1 ? (
+            <View>
+              <Text style={reportStyles.sectionTitle}>Team Summary</Text>
+              <Text style={reportStyles.footerSummary}>
+                GREEN: {data.summary.green} · YELLOW: {data.summary.yellow} · RED: {data.summary.red}
+              </Text>
+            </View>
+          ) : null}
+        </Page>
+      ))}
+    </Document>
+  );
 }
 
 function dominantTeamAction(signal: TeamSignal | null): TrainingAction | "—" {
@@ -567,10 +945,78 @@ function dominantTeamAction(signal: TeamSignal | null): TrainingAction | "—" {
   return pairs[0]?.[0] ?? "—";
 }
 
+function graphAthleteStateFromFlag(flag: FinalFlag | null | undefined): "GREEN" | "YELLOW" | "RED" | null {
+  const f = String(flag ?? "").toUpperCase();
+  if (f === "RED") return "RED";
+  if (f === "YELLOW") return "YELLOW";
+  if (f === "GREEN") return "GREEN";
+  return null;
+}
+
+function graphMdContextFromToken(md: string | null | undefined): "MD5" | "MD4" | "MD3" | "MD2" | "MD1" | "MD_PLUS_1" | "OFF" | "UNKNOWN" | null {
+  const raw = String(md ?? "").trim().toUpperCase();
+  if (!raw) return null;
+  if (raw === "OFF" || raw === "REST") return "OFF";
+  if (raw === "UNKNOWN") return "UNKNOWN";
+  if (raw === "MD" || raw === "MD-1" || raw === "MD1") return "MD1";
+  if (raw === "MD+1") return "MD_PLUS_1";
+  if (raw === "MD-2" || raw === "MD2") return "MD2";
+  if (raw === "MD-3" || raw === "MD3") return "MD3";
+  if (raw === "MD-4" || raw === "MD4") return "MD4";
+  if (raw === "MD-5" || raw === "MD5") return "MD5";
+  return null;
+}
+
+function graphNeuralFatigueBandFromState(
+  neuralState: string | null | undefined
+): "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | null {
+  const s = String(neuralState ?? "").toUpperCase();
+  if (!s) return null;
+  if (s === "CRITICAL") return "VERY_HIGH";
+  if (s === "HIGH") return "HIGH";
+  if (s === "RISING") return "MODERATE";
+  if (s === "STABLE") return "LOW";
+  return null;
+}
+
+function buildDecisionConfidence(params: {
+  readinessScore: number | null;
+  mdContext: string | null;
+  neuralFatigueBand: string | null;
+  yesterdayLoadBand: string | null;
+  fallbackUsed: boolean;
+}): DecisionConfidence {
+  const inputs: Array<{ label: string; present: boolean }> = [
+    { label: "Readiness score", present: typeof params.readinessScore === "number" && Number.isFinite(params.readinessScore) },
+    {
+      label: "MD context",
+      present: !!params.mdContext && params.mdContext !== "UNKNOWN",
+    },
+    { label: "Neural fatigue band", present: !!params.neuralFatigueBand },
+    { label: "Yesterday load band", present: !!params.yesterdayLoadBand },
+  ];
+
+  const inputsUsed = inputs.filter((x) => x.present).map((x) => x.label);
+  const missingInputs = inputs.filter((x) => !x.present).map((x) => x.label);
+  const usedCount = inputsUsed.length;
+  const fallbackUsed = params.fallbackUsed;
+
+  let level: DecisionConfidence["level"] = "MEDIUM";
+  if (usedCount === inputs.length && !fallbackUsed) level = "HIGH";
+  else if (usedCount <= 1 || (fallbackUsed && usedCount <= 2)) level = "LOW";
+
+  return {
+    level,
+    inputsUsed,
+    missingInputs,
+    fallbackUsed,
+  };
+}
+
 /** -----------------------------
  * Small UI components
  * ----------------------------- */
-function CoachHubCards() {
+function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
   return (
     <div className="grid gap-3 md:grid-cols-4">
       <Card className="shadow-sm">
@@ -589,6 +1035,7 @@ function CoachHubCards() {
         <CardHeader>
           <CardTitle className="text-base">Week setup</CardTitle>
           <CardDescription>Æfingavika, match-plan og álag.</CardDescription>
+          {weeklyOutlook ? <div className="text-xs text-slate-600">{weeklyOutlook}</div> : null}
         </CardHeader>
         <CardContent>
           <Button asChild variant="secondary" className="w-full">
@@ -650,6 +1097,7 @@ export default function CoachPage() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+  const [detailSectionOpenByPlayer, setDetailSectionOpenByPlayer] = useState<Record<string, Partial<Record<PlayerDetailSectionKey, boolean>>>>({});
 
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
   const [weekGrid, setWeekGrid] = useState<any[]>([]);
@@ -660,6 +1108,7 @@ export default function CoachPage() {
   const [coachVerified, setCoachVerified] = useState(false);
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+  const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
 
   // MD context
   const [mdContextToday, setMdContextToday] = useState<string | null>(null);
@@ -677,8 +1126,21 @@ export default function CoachPage() {
   const [autoLockRan, setAutoLockRan] = useState(false);
   const isAdmin = useMemo(() => String(coachRole ?? "").toLowerCase() === "admin", [coachRole]);
 
+  useEffect(() => {
+    const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
+    load();
+
+    const onStorage = () => load();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // Z history
   const [zHistory, setZHistory] = useState<Record<string, number[]>>({});
+  const [recentMonitoringByPlayer, setRecentMonitoringByPlayer] = useState<Record<string, VolatilityDailyPoint[]>>({});
+  const [volatilityOpenByPlayer, setVolatilityOpenByPlayer] = useState<Record<string, boolean>>({});
+  const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
+  const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
 
   // Yesterday load context
   const [ctxHsr, setCtxHsr] = useState<string>("");
@@ -697,6 +1159,7 @@ export default function CoachPage() {
   const [reminderStatusLoading, setReminderStatusLoading] = useState(false);
   const [reminderStatusError, setReminderStatusError] = useState("");
   const [manualReminderSending, setManualReminderSending] = useState(false);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
 
   // Auto-fill zeros when OFF
   useEffect(() => {
@@ -713,8 +1176,8 @@ export default function CoachPage() {
 
   // Header MD-day (team display)
   const mdDayToday = useMemo(() => {
-    const t = todayISO();
-    const row = (weekGrid ?? []).find((x: any) => String(x.day_date) === t) ?? null;
+    const t = dateKey(todayISO());
+    const row = (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === t) ?? null;
     const src = mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
     return prettyMd(src).md;
   }, [weekGrid, planPreview?.md_day, mdContextToday]);
@@ -734,11 +1197,77 @@ export default function CoachPage() {
     const n = Number(v);
     return Number.isFinite(n) && v.trim() !== "" ? n : null;
   }
-  function driverLabel(code: string): string {
-    return String(code ?? "")
+  function driverLabel(input: unknown): string {
+    if (input && typeof input === "object") {
+      const obj = input as { label?: unknown; code?: unknown; points?: unknown };
+      if (typeof obj.label === "string" && obj.label.trim().length) {
+        const pts = typeof obj.points === "number" && Number.isFinite(obj.points) ? `(+${obj.points})` : "";
+        return `${obj.label}${pts}`;
+      }
+      if (typeof obj.code === "string" && obj.code.trim().length) {
+        return String(obj.code)
+          .toLowerCase()
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+    }
+    return String(input ?? "")
       .toLowerCase()
       .replace(/_/g, " ")
       .replace(/\b\w/g, (m) => m.toUpperCase());
+  }
+  function hasExplicitPainInNotes(note: string | null | undefined): boolean {
+    const text = String(note ?? "").toLowerCase();
+    if (!text) return false;
+    return /(pain|injur|injury|meið|meid|verk|hamstring|groin|adductor|achilles|patellar|stíf)/i.test(text);
+  }
+  function deriveTissueProtectionSignal(input: {
+    fatigueType: string;
+    fatigueSeverity: string;
+    sorenessScore: number | null;
+    noteText: string | null | undefined;
+    neuralFatigueBand: "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | null;
+    readinessScore: number | null;
+    zScore: number | null;
+    stenScore: number | null;
+  }): {
+    painProtection: boolean;
+    tissueSignal: boolean;
+    tissueSeverity: "LOW" | "MODERATE" | "HIGH" | null;
+    explicitPainTextFlag: boolean;
+  } {
+    const tissueSignal = input.fatigueType === "TISSUE";
+    const tissueSeverity: "LOW" | "MODERATE" | "HIGH" | null =
+      input.fatigueSeverity === "LOW" || input.fatigueSeverity === "MODERATE" || input.fatigueSeverity === "HIGH"
+        ? input.fatigueSeverity
+        : null;
+    const lowSoreness = typeof input.sorenessScore === "number" && input.sorenessScore <= 2;
+    const goodSoreness = typeof input.sorenessScore === "number" && input.sorenessScore >= 4;
+    const explicitPainTextFlag = hasExplicitPainInNotes(input.noteText);
+    const tissueSeverityEscalates = tissueSeverity === "MODERATE" || tissueSeverity === "HIGH";
+    const strongRedCompanion =
+      input.neuralFatigueBand === "HIGH" ||
+      input.neuralFatigueBand === "VERY_HIGH" ||
+      (typeof input.readinessScore === "number" && input.readinessScore < 40) ||
+      (typeof input.zScore === "number" && input.zScore <= -1);
+    const strongPositiveGuardrail =
+      typeof input.zScore === "number" &&
+      input.zScore > 1.5 &&
+      typeof input.stenScore === "number" &&
+      input.stenScore >= 8 &&
+      goodSoreness &&
+      tissueSeverity === "LOW";
+    const painProtection =
+      tissueSignal &&
+      !strongPositiveGuardrail &&
+      (tissueSeverityEscalates || lowSoreness || explicitPainTextFlag || strongRedCompanion);
+
+    return {
+      painProtection,
+      tissueSignal,
+      tissueSeverity,
+      explicitPainTextFlag,
+    };
   }
   function formatAdaptationFallback(adaptation: Row["_adaptation"]): string {
     if (!adaptation) return "";
@@ -1028,16 +1557,56 @@ export default function CoachPage() {
     }
   }
 
-  async function loadWeekGrid(): Promise<any[]> {
+  async function loadWeekGrid(entryDate: string): Promise<any[]> {
     try {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id;
       if (!uid) return [];
 
-      const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
-      const teamId = (prof as any)?.team_id;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id, id, user_id")
+        .or(`id.eq.${uid},user_id.eq.${uid}`)
+        .maybeSingle();
+
+      const teamId =
+        (prof as any)?.team_id ??
+        (
+          await supabase
+            .from("coach_teams")
+            .select("team_id,is_primary")
+            .eq("coach_id", uid)
+            .order("is_primary", { ascending: false })
+            .limit(1)
+        ).data?.[0]?.team_id ??
+        null;
       if (!teamId) return [];
 
+      // Primary source: saved Week Setup (coach_week_setup) for the current week.
+      const weekStartDate = isoMondayOfISO(entryDate);
+      const { data: coachWeekSetup } = await supabase
+        .from("coach_week_setup")
+        .select("week_start_date, no_match_intents")
+        .eq("team_id", teamId)
+        .eq("week_start_date", weekStartDate)
+        .maybeSingle();
+
+      const intents = Array.isArray((coachWeekSetup as any)?.no_match_intents) ? ((coachWeekSetup as any).no_match_intents as string[]) : null;
+      if (intents && intents.length === 7) {
+        const derivedGrid = intents.map((intent, idx) => {
+          const mapped = mapNoMatchIntentToGrid(intent);
+          return {
+            day_date: addDaysISO(weekStartDate, idx),
+            md_day: null,
+            day_type_final: mapped.dayTypeFinal,
+            dose_final: mapped.doseFinal,
+          };
+        });
+        setWeekGrid(derivedGrid);
+        return derivedGrid;
+      }
+
+      // Fallback: legacy week_setups/v_week_plan_grid path.
       const { data: ws } = await supabase
         .from("week_setups")
         .select("id")
@@ -1093,6 +1662,7 @@ export default function CoachPage() {
   async function loadZHistoryForPlayers(entryDate: string, playerIds: string[]): Promise<Record<string, number[]>> {
     if (!playerIds.length) {
       setZHistory({});
+      setRecentMonitoringByPlayer({});
       return {};
     }
 
@@ -1103,7 +1673,9 @@ export default function CoachPage() {
     try {
       const { data, error } = await supabase
         .from("readiness_entries")
-        .select("player_id, entry_date, training_modifier")
+        .select(
+          "player_id, entry_date, training_modifier, total_score, fatigue_energy, sleep_quality, stress_mood, muscle_soreness"
+        )
         .in("player_id", playerIds)
         .gte("entry_date", startISO)
         .lte("entry_date", entryDate)
@@ -1112,19 +1684,38 @@ export default function CoachPage() {
       if (error) throw error;
 
       const map: Record<string, number[]> = {};
+      const monitoringMap: Record<string, VolatilityDailyPoint[]> = {};
       for (const r of (data ?? []) as any[]) {
         const pid = String(r.player_id);
+        const date = String(r.entry_date ?? "").slice(0, 10);
         const z = extractZ(r.training_modifier);
-        if (z == null) continue;
-        if (!map[pid]) map[pid] = [];
-        map[pid].push(z);
+        const dz = extractYesterdayZ(r.training_modifier);
+        if (z != null) {
+          if (!map[pid]) map[pid] = [];
+          map[pid].push(z);
+        }
+
+        if (!monitoringMap[pid]) monitoringMap[pid] = [];
+        monitoringMap[pid].push({
+          date,
+          checkInScore: toNum(r.total_score),
+          zScore: z,
+          deltaZ: z != null && dz != null ? z - dz : null,
+          soreness: toNum(r.muscle_soreness),
+          sleepQuality: toNum(r.sleep_quality),
+          mood: toNum(r.stress_mood),
+          energy: toNum(r.fatigue_energy),
+          stress: toNum(r.stress_mood),
+        });
       }
 
       setZHistory(map);
+      setRecentMonitoringByPlayer(monitoringMap);
       return map;
     } catch (e) {
       console.warn("loadZHistoryForPlayers failed:", e);
       setZHistory({});
+      setRecentMonitoringByPlayer({});
       return {};
     }
   }
@@ -1276,14 +1867,14 @@ export default function CoachPage() {
       // Team intelligence + plan preview + grid
       await loadTeamIntelligenceToday();
       const pp = await loadPlanPreview();
-      const grid = await loadWeekGrid();
+      const grid = await loadWeekGrid(entryDate);
 
       // Auto-set OFF for yesterday (UI only)
       try {
         const y = new Date(entryDate);
         y.setDate(y.getDate() - 1);
         const yesterdayISO = y.toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
-        const yRow = (grid ?? []).find((x: any) => String(x.day_date) === String(yesterdayISO)) ?? null;
+        const yRow = (grid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(yesterdayISO)) ?? null;
         const yDose = String(yRow?.dose_final ?? yRow?.day_type_final ?? "").toUpperCase();
         if (yDose === "OFF") {
           setCtxIntensity("OFF");
@@ -1381,8 +1972,14 @@ export default function CoachPage() {
       const raw: any[] = (data ?? []) as any[];
 
       // Team-level MD truth
-      const gridRowToday = (grid ?? []).find((x: any) => String(x.day_date) === String(entryDate)) ?? null;
+      const gridRowToday = (grid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(entryDate)) ?? null;
+      const weekSetupDoseToday = String(gridRowToday?.dose_final ?? "").trim() || null;
+      const weekSetupDayTypeToday = String(gridRowToday?.day_type_final ?? "").trim() || null;
+      const weekSetupMdDay = resolveSessionMdContextFromSources({
+        weekSetupDay: gridRowToday,
+      }).mdContext;
       const teamMdDay =
+        (weekSetupMdDay !== "UNKNOWN" ? weekSetupMdDay : null) ??
         (isValidMdToken(ctxMd) ? String(ctxMd).toUpperCase() : null) ??
         (isValidMdToken(gridRowToday?.md_day) ? String(gridRowToday.md_day).toUpperCase() : null) ??
         (isValidMdToken(pp?.md_day) ? String(pp?.md_day).toUpperCase() : null) ??
@@ -1417,7 +2014,7 @@ export default function CoachPage() {
           finalReason = downgraded.final_reason ?? finalReason;
         }
 
-        const plannedFocus = r.planned_focus ?? null;
+        const plannedFocus = r.planned_focus ?? weekSetupDoseToday ?? weekSetupDayTypeToday ?? null;
         const perPlayerMdRaw = mdFromPlannedFocus(plannedFocus);
         const perPlayerMd = isValidMdToken(perPlayerMdRaw) ? perPlayerMdRaw : null;
 
@@ -1454,7 +2051,7 @@ export default function CoachPage() {
           notes: r.notes ?? null,
 
           planned_focus: plannedFocus,
-          planned_day_type: r.planned_day_type ?? null,
+          planned_day_type: r.planned_day_type ?? weekSetupDayTypeToday ?? null,
 
           training_action: (r.final_decision ?? "FULL") as TrainingAction,
           coach_message: (r.coach_note ?? null) as string | null,
@@ -1985,6 +2582,675 @@ export default function CoachPage() {
     [rows, adaptationByPlayer, neuralByPlayer, neuralBiasByPlayer],
   );
 
+  const performanceIntelligenceByPlayer = useMemo(() => {
+    const out = new Map<string, PerformanceIntelligenceDecision>();
+    const hsrValue = toIntOrNull(ctxHsr);
+    const vMaxValue = toNumOrNull(ctxVmax);
+    const durationValue = toNumOrNull(ctxDuration);
+    const intensityToken = String(ctxIntensity ?? "").toUpperCase();
+    const gpsSpike = intensityToken !== "OFF" && (hsrValue ?? 0) >= 1000;
+
+    for (const r of rowsWithAdaptive) {
+      const pid = String(r.player_id);
+      const fatigue = fatigueByPlayer.get(pid) as Record<string, unknown> | undefined;
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const tmObj = tm && typeof tm === "object" ? (tm as Record<string, unknown>) : null;
+      const tmLoad = tmObj?.load && typeof tmObj.load === "object" ? (tmObj.load as Record<string, unknown>) : null;
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const selectedAction: TrainingAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const mdContextResolved = resolveSessionMdContextFromSources({
+        weekSetupDay:
+          (weekGrid ?? []).find((x: { day_date?: string | null }) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ??
+          null,
+        rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+        teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+        plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+        previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+      });
+      const mdToken = String(mdContextResolved.mdContext ?? "").toUpperCase();
+      const neuralState = String(r._neural_load?.neuralLoadState ?? "").toUpperCase();
+      const neuralMetrics =
+        r._neural_load && typeof r._neural_load === "object" ? (r._neural_load as unknown as Record<string, unknown>) : null;
+      const neuralScore = toMaybeFinite(neuralMetrics?.score) ?? null;
+      const tmPi = tmObj?.pi && typeof tmObj.pi === "object" ? (tmObj.pi as Record<string, unknown>) : null;
+      const acwrValue = toMaybeFinite(fatigue?.acwr) ?? toMaybeFinite(tmObj?.acwr) ?? toMaybeFinite(tmLoad?.acwr);
+      const volatilityValue = toMaybeFinite(tmPi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+      const recentPoints = recentMonitoringByPlayer[pid] ?? [];
+      const volatilitySummary = computePlayerVolatilitySummary(recentPoints);
+      const volatilityWindow = volatilitySummary.overallScore ?? volatilityValue;
+
+      const decision = buildPerformanceIntelligenceDecision({
+        playerId: pid,
+        playerName: r.full_name,
+        date: String(r.entry_date ?? today),
+        readinessScore: normalizedReadinessScore,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode(selectedAction),
+        neuralFatigueScore: neuralScore,
+        neuralFatigueFlag: neuralState === "HIGH" || neuralState === "CRITICAL",
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        rpe: toMaybeFinite(tmObj?.session_rpe),
+        sessionLoad: toMaybeFinite(tmLoad?.session_load),
+        acuteLoad: hsrValue,
+        chronicLoad: toMaybeFinite(tmLoad?.chronic_load),
+        acuteChronicRatio: acwrValue,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: volatilityWindow,
+        volatility7d: volatilityWindow,
+        matchCongestionScore: mdToken === "MD1" || mdToken === "MD2" ? 65 : mdToken === "MD3" ? 45 : 20,
+        travelLoadScore: 0,
+        upcomingMatchInDays: mdToken === "MD1" ? 1 : mdToken === "MD2" ? 2 : mdToken === "MD3" ? 3 : null,
+        plannedSessionIntensity: actionToPlannedIntensity(selectedAction),
+        dataConfidence: undefined,
+        gpsSpike,
+        maxVelocityPct: vMaxValue,
+        durationMinutes: durationValue,
+      });
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [
+    rowsWithAdaptive,
+    fatigueByPlayer,
+    ctxHsr,
+    ctxVmax,
+    ctxDuration,
+    ctxIntensity,
+    weekGrid,
+    mdDayToday,
+    planPreview?.md_day,
+    today,
+    teamIntel?.volatility_pct,
+    recentMonitoringByPlayer,
+  ]);
+
+  const rowsWithPerformanceIntelligence = useMemo(
+    () =>
+      rowsWithAdaptive.map((r) => ({
+        ...r,
+        _performance_intelligence: performanceIntelligenceByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithAdaptive, performanceIntelligenceByPlayer],
+  );
+
+  const neuralVolatilityByPlayer = useMemo(() => {
+    const out = new Map<string, NeuralVolatilityIntelligenceDecision>();
+
+    for (const r of rowsWithPerformanceIntelligence) {
+      const pid = String(r.player_id);
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const tmObj = tm && typeof tm === "object" ? (tm as Record<string, unknown>) : null;
+      const tmLoad = tmObj?.load && typeof tmObj.load === "object" ? (tmObj.load as Record<string, unknown>) : null;
+      const history = recentMonitoringByPlayer[pid] ?? [];
+      const normalizedReadinessHistory = history
+        .map((point) =>
+          point.checkInScore == null ? null : Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)),
+        )
+        .map((value) => (typeof value === "number" && Number.isFinite(value) ? value : null));
+      const readinessStateHistory = history.map((point) => {
+        const raw = point.checkInScore;
+        const norm = raw == null ? null : Math.max(0, Math.min(100, ((raw - 5) / 20) * 100));
+        if (norm == null) return null;
+        if (norm < 40) return "RED";
+        if (norm < 60) return "YELLOW";
+        return "GREEN";
+      });
+      const neuralFatigueHistory = history.map((point) => {
+        if (typeof point.deltaZ === "number" && point.deltaZ <= -0.4) return 8;
+        if (typeof point.deltaZ === "number" && point.deltaZ <= -0.2) return 6;
+        if (typeof point.deltaZ === "number" && point.deltaZ >= 0.2) return 3;
+        return 5;
+      });
+      const volatilitySummary = computePlayerVolatilitySummary(history);
+
+      const decision = buildNeuralVolatilityIntelligenceDecision({
+        playerId: pid,
+        date: String(r.entry_date ?? today),
+        readinessScore:
+          typeof r.total_score === "number" ? Math.max(0, Math.min(100, ((r.total_score - 5) / 20) * 100)) : null,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode((r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag)),
+        neuralFatigueScore: toMaybeFinite(r._neural_load?.neuralLoadScore) ?? null,
+        neuralFatigueFlag: ["HIGH", "CRITICAL"].includes(String(r._neural_load?.neuralLoadState ?? "").toUpperCase()),
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        acuteLoad: toIntOrNull(ctxHsr),
+        chronicLoad: toMaybeFinite(tmLoad?.chronic_load),
+        acuteChronicRatio: toMaybeFinite(tmObj?.acwr) ?? toMaybeFinite(tmLoad?.acwr),
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: volatilitySummary.overallScore,
+        volatility7d: volatilitySummary.overallScore,
+        matchCongestionScore:
+          String(r.md_day ?? "").toUpperCase() === "MD-1"
+            ? 65
+            : String(r.md_day ?? "").toUpperCase() === "MD-2"
+              ? 55
+              : 25,
+        travelLoadScore: 0,
+        upcomingMatchInDays: String(r.md_day ?? "").toUpperCase() === "MD-1" ? 1 : null,
+        readinessHistory: normalizedReadinessHistory,
+        neuralFatigueHistory,
+        sorenessHistory: history.map((point) => (typeof point.soreness === "number" ? point.soreness : null)),
+        sleepHistory: history.map((point) => (typeof point.sleepQuality === "number" ? point.sleepQuality : null)),
+        stressHistory: history.map((point) => (typeof point.stress === "number" ? point.stress : null)),
+        volatilityHistory: volatilitySummary.dailyComposite,
+        riskHistory: history.map((point) => {
+          const d = buildPerformanceIntelligenceDecision({
+            readinessScore: point.checkInScore == null ? null : Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)),
+            sorenessScore: point.soreness ?? null,
+            sleepScore: point.sleepQuality ?? null,
+            stressScore: point.stress ?? null,
+            energyScore: point.energy ?? null,
+            zScore: point.zScore ?? null,
+            deltaZ: point.deltaZ ?? null,
+          });
+          return d.injuryRisk.score;
+        }),
+        loadHistory: [],
+        sessionModeHistory: [],
+        athleteStateHistory: readinessStateHistory,
+        dataConfidence: null,
+      });
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [rowsWithPerformanceIntelligence, recentMonitoringByPlayer, ctxHsr, today]);
+
+  const rowsWithNeuralVolatility = useMemo(
+    () =>
+      rowsWithPerformanceIntelligence.map((r) => ({
+        ...r,
+        _neural_volatility_intelligence: neuralVolatilityByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithPerformanceIntelligence, neuralVolatilityByPlayer],
+  );
+
+  const teamNeuralVolatilitySummary = useMemo(() => {
+    const decisions: Array<{ playerId?: string; playerName?: string; decision: NeuralVolatilityIntelligenceDecision }> = [];
+    for (const r of rowsWithNeuralVolatility) {
+      if (!r._neural_volatility_intelligence) continue;
+      decisions.push({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        decision: r._neural_volatility_intelligence,
+      });
+    }
+    return buildTeamNeuralVolatilitySummary(decisions);
+  }, [rowsWithNeuralVolatility]);
+
+  const prescriptionByPlayer = useMemo(() => {
+    const out = new Map<string, PrescriptionDecision>();
+    for (const r of rowsWithNeuralVolatility) {
+      const pid = String(r.player_id);
+      const pi = r._performance_intelligence ?? null;
+      const nvi = r._neural_volatility_intelligence ?? null;
+      const selectedAction: TrainingAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const mdToken = String(r.md_day ?? "").toUpperCase();
+
+      const decision = buildPrescriptionDecision({
+        playerId: pid,
+        date: String(r.entry_date ?? today),
+        readinessScore: normalizedReadinessScore,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode(selectedAction),
+
+        injuryRiskScore: pi?.injuryRisk.score ?? null,
+        injuryRiskBand: pi?.injuryRisk.band ?? null,
+        performanceScore: pi?.performanceForecast.score ?? null,
+        performanceBand: pi?.performanceForecast.band ?? null,
+        loadToleranceScore: pi?.loadForecast.score ?? null,
+        loadToleranceBand: pi?.loadForecast.band ?? null,
+
+        fatigueAccumulationScore: nvi?.fatigueAccumulation.score ?? null,
+        fatigueAccumulationBand: nvi?.fatigueAccumulation.band ?? null,
+        instabilityWindowScore: nvi?.instabilityWindow.score ?? null,
+        instabilityWindowBand: nvi?.instabilityWindow.band ?? null,
+        collapseRiskScore: nvi?.collapseRisk.score ?? null,
+        collapseRiskBand: nvi?.collapseRisk.band ?? null,
+        peakWindowScore: nvi?.peakWindow.score ?? null,
+        peakWindowBand: nvi?.peakWindow.band ?? null,
+        trendDirection: nvi?.trendState.direction ?? null,
+
+        neuralFatigueScore: toMaybeFinite(r._neural_load?.neuralLoadScore) ?? null,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        acuteLoad: toIntOrNull(ctxHsr),
+        chronicLoad: null,
+        acuteChronicRatio: null,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: nvi?.instabilityWindow.score ?? null,
+        volatility7d: nvi?.instabilityWindow.score ?? null,
+        matchCongestionScore: mdToken === "MD-1" || mdToken === "MD1" ? 70 : mdToken === "MD-2" || mdToken === "MD2" ? 55 : 25,
+        travelLoadScore: 0,
+        upcomingMatchInDays: mdToken === "MD-1" || mdToken === "MD1" ? 1 : mdToken === "MD-2" || mdToken === "MD2" ? 2 : null,
+        plannedSessionType: "mixed",
+        plannedSessionIntensity:
+          selectedAction === "RECOVERY" ? "low" : selectedAction === "REDUCED" ? "moderate" : "high",
+        dayType:
+          mdToken === "MD-1" || mdToken === "MD1"
+            ? "md-1"
+            : mdToken === "MD-2" || mdToken === "MD2"
+            ? "md-2"
+            : mdToken === "MD-3" || mdToken === "MD3"
+            ? "md-3"
+            : mdToken === "MD+1" || mdToken === "MD_PLUS_1"
+            ? "md+1"
+            : "training",
+        weekDensity: (mdToken === "MD-1" || mdToken === "MD1") && (mdDayToday === "MD-2" || mdDayToday === "MD-1") ? "congested" : "normal",
+      });
+
+      out.set(pid, decision);
+    }
+    return out;
+  }, [rowsWithNeuralVolatility, today, ctxHsr, mdDayToday]);
+
+  const rowsWithPrescription = useMemo(
+    () =>
+      rowsWithNeuralVolatility.map((r) => ({
+        ...r,
+        _prescription_decision: prescriptionByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithNeuralVolatility, prescriptionByPlayer],
+  );
+
+  const teamPrescriptionSummary = useMemo(() => {
+    const decisions: Array<{ playerId?: string; playerName?: string; decision: PrescriptionDecision }> = [];
+    for (const r of rowsWithPrescription) {
+      if (!r._prescription_decision) continue;
+      decisions.push({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        decision: r._prescription_decision,
+      });
+    }
+    return buildTeamPrescriptionSummary(decisions);
+  }, [rowsWithPrescription]);
+
+  const customCoachRules = useMemo<CoachRule[]>(() => buildRuntimeRulesFromAdminConfig(adminConfigSnapshot), [adminConfigSnapshot]);
+
+  const finalRecommendationByPlayer = useMemo(() => {
+    const out = new Map<string, FinalRecommendationDecision>();
+
+    for (const r of rowsWithPrescription) {
+      const pid = String(r.player_id);
+      const prescription = r._prescription_decision ?? null;
+      if (!prescription) continue;
+
+      const manualOverrideActionRaw = String(r.final_decision ?? "").toUpperCase();
+      const manualOverrideAction: "FULL" | "MODIFIED" | "RECOVERY" | null =
+        manualOverrideActionRaw === "REDUCED" ? "MODIFIED" : manualOverrideActionRaw === "FULL" || manualOverrideActionRaw === "RECOVERY" ? manualOverrideActionRaw : null;
+
+      const manualOverride =
+        String(r.final_source ?? "").toUpperCase() === "COACH_OVERRIDE" && r.final_decision
+          ? {
+              applied: true,
+              overriddenBy: null,
+              reason: r.coach_message ?? "Coach override",
+              finalAction: manualOverrideAction,
+              finalInstruction: r.coach_message ?? undefined,
+            }
+          : null;
+
+      const runtimeProtected = isPlayerProtectedByAdminConfig(adminConfigSnapshot, pid);
+      const configuredTags = getProtectedPlayerTags(adminConfigSnapshot, pid);
+      const isProtectedPlayer =
+        runtimeProtected ||
+        !!normalizeTrainingModifier(r.training_modifier)?.protected_player ||
+        (typeof r.notes === "string" && /return|protected|r2p|restricted/i.test(r.notes));
+
+      const decision = applyCoachRules(
+        {
+          playerId: pid,
+          playerName: r.full_name,
+          teamId: r.team_id ?? undefined,
+          dayType:
+            String(r.md_day ?? "").toUpperCase() === "MD-1"
+              ? "md-1"
+              : String(r.md_day ?? "").toUpperCase() === "MD-2"
+              ? "md-2"
+              : String(r.md_day ?? "").toUpperCase() === "MD-3"
+              ? "md-3"
+              : String(r.md_day ?? "").toUpperCase() === "MD+1"
+              ? "md+1"
+              : "training",
+          weekDensity: (teamIntel?.volatility_pct ?? 0) >= 45 ? "congested" : "normal",
+          playerTags: isProtectedPlayer ? Array.from(new Set(["protected", ...configuredTags])) : [],
+          isProtectedPlayer,
+          readinessState: graphAthleteStateFromFlag(r.final_flag),
+          athleteState: graphAthleteStateFromFlag(r.final_flag),
+          injuryRiskBand: r._performance_intelligence?.injuryRisk.band ?? null,
+          injuryRiskScore: r._performance_intelligence?.injuryRisk.score ?? null,
+          performanceBand: r._performance_intelligence?.performanceForecast.band ?? null,
+          loadToleranceBand: r._performance_intelligence?.loadForecast.band ?? null,
+          fatigueAccumulationBand: r._neural_volatility_intelligence?.fatigueAccumulation.band ?? null,
+          instabilityWindowBand: r._neural_volatility_intelligence?.instabilityWindow.band ?? null,
+          collapseRiskBand: r._neural_volatility_intelligence?.collapseRisk.band ?? null,
+          peakWindowBand: r._neural_volatility_intelligence?.peakWindow.band ?? null,
+          trendDirection: r._neural_volatility_intelligence?.trendState.direction ?? null,
+          prescriptionDecision: prescription,
+          dataConfidence: prescription.confidence,
+          plannedSessionType: "mixed",
+          plannedSessionIntensity:
+            prescription.action === "RECOVERY" || prescription.action === "HOLD"
+              ? "low"
+              : prescription.action === "MODIFIED"
+              ? "moderate"
+              : "high",
+          sessionMode:
+            prescription.action === "FULL"
+              ? "full"
+              : prescription.action === "MODIFIED"
+              ? "modified"
+              : "recovery",
+        },
+        customCoachRules,
+        manualOverride,
+      );
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [rowsWithPrescription, customCoachRules, teamIntel?.volatility_pct, adminConfigSnapshot]);
+
+  const rowsWithFinalRecommendation = useMemo(
+    () =>
+      rowsWithPrescription.map((r) => ({
+        ...r,
+        _final_recommendation_decision: finalRecommendationByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithPrescription, finalRecommendationByPlayer],
+  );
+
+  const sessionDraftByPlayer = useMemo(() => {
+    const out = new Map<string, SessionDraft>();
+    for (const r of rowsWithFinalRecommendation) {
+      const pid = String(r.player_id);
+      const finalRecommendationDecision = r._final_recommendation_decision ?? null;
+      const prescriptionDecision = r._prescription_decision ?? null;
+      if (!finalRecommendationDecision && !prescriptionDecision) continue;
+
+      const selectedAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const mdToken = String(r.md_day ?? "").toUpperCase();
+      const dayType: "matchday" | "md+1" | "md+2" | "md-3" | "md-2" | "md-1" | "training" | "off" =
+        mdToken === "MD-1"
+          ? "md-1"
+          : mdToken === "MD-2"
+          ? "md-2"
+          : mdToken === "MD-3"
+          ? "md-3"
+          : mdToken === "MD+1"
+          ? "md+1"
+          : mdToken === "OFF"
+          ? "off"
+          : "training";
+
+      const draft = buildSessionDraft({
+        playerId: pid,
+        playerName: r.full_name,
+        teamId: r.team_id ?? undefined,
+        date: r.entry_date,
+        dayType,
+        weekDensity: (teamIntel?.volatility_pct ?? 0) >= 45 ? "congested" : "normal",
+        plannedSessionType:
+          selectedAction === "RECOVERY" ? "recovery" : selectedAction === "FULL" ? "field" : "mixed",
+        plannedSessionIntensity: actionToPlannedIntensity(selectedAction),
+        prescriptionDecision,
+        finalRecommendationDecision,
+        dataConfidence: finalRecommendationDecision?.confidence ?? prescriptionDecision?.confidence ?? null,
+        isProtectedPlayer: !!normalizeTrainingModifier(r.training_modifier)?.protected_player,
+      });
+
+      out.set(pid, draft);
+    }
+    return out;
+  }, [rowsWithFinalRecommendation, teamIntel?.volatility_pct]);
+
+  const rowsWithSessionDraft = useMemo(
+    () =>
+      rowsWithFinalRecommendation.map((r) => ({
+        ...r,
+        _session_draft: sessionDraftByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithFinalRecommendation, sessionDraftByPlayer],
+  );
+
+  const teamSessionBuildSummary = useMemo(() => {
+    const drafts: Array<{ playerId?: string; playerName?: string; draft: SessionDraft }> = [];
+    for (const r of rowsWithSessionDraft) {
+      if (!r._session_draft) continue;
+      drafts.push({ playerId: String(r.player_id), playerName: r.full_name, draft: r._session_draft });
+    }
+    return buildTeamSessionBuildSummary(drafts);
+  }, [rowsWithSessionDraft]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    for (const row of rowsWithSessionDraft) {
+      const draft = row._session_draft ?? null;
+      if (!draft) continue;
+
+      const playerId = String(row.player_id);
+      const date = row.entry_date || todayISO();
+      const existing = loadSessionDraftRecordByPlayerDate(playerId, date);
+      if (existing) continue;
+
+      const createdAt = new Date().toISOString();
+      const record: SessionDraftRecord = {
+        id: `wf:${playerId}:${date}`,
+        playerId,
+        playerName: row.full_name,
+        teamId: row.team_id ?? undefined,
+        date,
+        originalGeneratedDraft: structuredClone(draft),
+        workingDraft: structuredClone(draft),
+        approvedDraft: null,
+        publishedDraft: null,
+        status: "GENERATED",
+        version: 1,
+        createdAt,
+        updatedAt: createdAt,
+        createdBy: "system:auto-session-builder",
+        lastEditedBy: null,
+        approvedBy: null,
+        approvedAt: null,
+        publishedBy: null,
+        publishedAt: null,
+      };
+
+      saveSessionDraftRecord(record);
+      saveSessionWorkflowEvent(
+        buildWorkflowEvent({
+          workflowId: record.id,
+          actionType: "GENERATED",
+          actorId: "system",
+          actorName: "Auto Session Builder",
+          summary: "Session draft generated from recommendation stack.",
+          metadata: {
+            playerId,
+            date,
+            draftAction: draft.draftAction,
+            sessionType: draft.sessionType,
+          },
+        }),
+      );
+    }
+  }, [rowsWithSessionDraft]);
+
+  const teamRulesSummary = useMemo(
+    () =>
+      buildTeamRulesSummary(
+        rowsWithSessionDraft
+          .filter((r) => !!r._final_recommendation_decision)
+          .map((r) => ({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            decision: r._final_recommendation_decision!,
+            isProtectedPlayer: !!normalizeTrainingModifier(r.training_modifier)?.protected_player,
+          })),
+      ),
+    [rowsWithSessionDraft],
+  );
+
+  const teamPerformanceIntelligence = useMemo(
+    () => {
+      const decisions: Array<{ playerId?: string; playerName?: string; decision: PerformanceIntelligenceDecision }> = [];
+      for (const r of rowsWithNeuralVolatility) {
+        if (!r._performance_intelligence) continue;
+        decisions.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          decision: r._performance_intelligence,
+        });
+      }
+      return buildTeamPerformanceIntelligenceSummary(decisions);
+    },
+    [rowsWithNeuralVolatility],
+  );
+
+  const teamPerformanceRiskGroups = useMemo(() => {
+    const groups = {
+      lowRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      moderateRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      highRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      recoveryRecommendedPlayers: [] as Array<{ playerId: string; playerName: string }>,
+    };
+
+    for (const r of rowsWithNeuralVolatility) {
+      const pi = r._performance_intelligence;
+      if (!pi) continue;
+      const item = { playerId: String(r.player_id), playerName: r.full_name };
+      if (pi.injuryRisk.band === "LOW") groups.lowRiskPlayers.push(item);
+      else if (pi.injuryRisk.band === "MODERATE") groups.moderateRiskPlayers.push(item);
+      else groups.highRiskPlayers.push(item);
+      if (pi.loadForecast.recommendedAction === "recovery") groups.recoveryRecommendedPlayers.push(item);
+    }
+
+    return groups;
+  }, [rowsWithNeuralVolatility]);
+
+  const teamRiskMap = useMemo(
+    () =>
+      buildTeamRiskMap(
+        rowsWithNeuralVolatility
+          .filter((r) => !!r._performance_intelligence)
+          .map((r) => ({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            decision: r._performance_intelligence!,
+          })),
+      ),
+    [rowsWithNeuralVolatility],
+  );
+
+  const weeklyRiskReport = useMemo(() => {
+    const entries: Array<{
+      playerId?: string;
+      playerName?: string;
+      date: string;
+      decision: PerformanceIntelligenceDecision;
+    }> = [];
+
+    for (const r of rowsWithNeuralVolatility) {
+      const current = r._performance_intelligence;
+      if (current) {
+        entries.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          date: dateKey(String(r.entry_date ?? today)),
+          decision: current,
+        });
+      }
+
+      const history = recentMonitoringByPlayer[String(r.player_id)] ?? [];
+      for (const point of history.slice(-7)) {
+        if (!point?.date) continue;
+        entries.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          date: dateKey(point.date),
+          decision: buildPerformanceIntelligenceDecision({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            date: point.date,
+            readinessScore: point.checkInScore != null ? Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)) : null,
+            readinessState:
+              String(point.readinessState ?? "").toUpperCase() === "RED"
+                ? "RED"
+                : String(point.readinessState ?? "").toUpperCase() === "YELLOW"
+                  ? "YELLOW"
+                  : String(point.readinessState ?? "").toUpperCase() === "GREEN"
+                    ? "GREEN"
+                    : "GRAY",
+            athleteState:
+              String(point.readinessState ?? "").toUpperCase() === "RED"
+                ? "RED"
+                : String(point.readinessState ?? "").toUpperCase() === "YELLOW"
+                  ? "YELLOW"
+                  : String(point.readinessState ?? "").toUpperCase() === "GREEN"
+                    ? "GREEN"
+                    : "GRAY",
+            sessionMode: "pending",
+            sorenessScore: point.soreness ?? null,
+            sleepScore: point.sleepQuality ?? null,
+            stressScore: point.stress ?? null,
+            energyScore: point.energy ?? null,
+            moodScore: point.mood ?? null,
+            zScore: point.zScore ?? null,
+            deltaZ: point.deltaZ ?? null,
+            volatility5d: null,
+            volatility7d: null,
+          }),
+        });
+      }
+    }
+    return buildWeeklyRiskReport(entries);
+  }, [rowsWithNeuralVolatility, recentMonitoringByPlayer, today]);
+
+  const teamOutlook = useMemo(
+    () =>
+      buildTeamOutlook(
+        rowsWithNeuralVolatility
+          .map((r) => r._performance_intelligence)
+          .filter((d): d is PerformanceIntelligenceDecision => !!d),
+      ),
+    [rowsWithNeuralVolatility],
+  );
+
+  const weeklyPerformanceOutlook = useMemo(() => {
+    if (!weekGrid?.length) return null;
+    const highCount = teamPerformanceRiskGroups.highRiskPlayers.length;
+    const modCount = teamPerformanceRiskGroups.moderateRiskPlayers.length;
+    const recCount = teamPerformanceRiskGroups.recoveryRecommendedPlayers.length;
+    return `Weekly risk outlook: ${highCount} elevated, ${modCount} moderate, ${recCount} recovery recommended.`;
+  }, [weekGrid, teamPerformanceRiskGroups]);
+
   const needsReviewCount = useMemo(
     () => rowsWithAdaptive.filter((r) => r._needs_review).length,
     [rowsWithAdaptive]
@@ -2000,14 +3266,25 @@ export default function CoachPage() {
     const painFlag = rowsWithAdaptive.filter((r) => {
       const pid = String(r.player_id);
       const fatigue = fatigueByPlayer.get(pid) as
-        | { primaryFatigueType?: string; drivers?: string[]; reasonCodes?: string[] }
+        | { primaryFatigueType?: string; severity?: string; drivers?: unknown[]; reasonCodes?: unknown[] }
         | null
         | undefined;
       const fatigueType = String(fatigue?.primaryFatigueType ?? "").toUpperCase();
-      const drivers = [...(fatigue?.drivers ?? []), ...(fatigue?.reasonCodes ?? [])].map((d) =>
-        String(d).toUpperCase()
-      );
-      return fatigueType === "TISSUE" || drivers.includes("PAIN_FLAG");
+      const fatigueSeverity = String(fatigue?.severity ?? "").toUpperCase();
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const signal = deriveTissueProtectionSignal({
+        fatigueType,
+        fatigueSeverity,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        noteText: r.notes ?? null,
+        neuralFatigueBand: graphNeuralFatigueBandFromState(r._neural_load?.neuralLoadState),
+        readinessScore: normalizedReadinessScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        stenScore: typeof r._sten === "number" ? r._sten : null,
+      });
+      return signal.painProtection;
     }).length;
     const manualReview = rowsWithAdaptive.filter((r) =>
       String(r.final_source ?? "").toUpperCase().includes("COACH")
@@ -2024,6 +3301,240 @@ export default function CoachPage() {
     const lockedRows = rowsWithAdaptive.filter((r) => !!r.is_locked).length;
     return { neuralBiasApplied, highNextDayRisk, lockedRows };
   }, [rowsWithAdaptive]);
+
+  const readinessRiskReportData = useMemo<ReadinessRiskReportData>(() => {
+    const flaggedRows = rowsWithAdaptive.filter((r) => {
+      const flag = String(r.final_flag ?? "").toUpperCase();
+      return flag === "YELLOW" || flag === "RED";
+    });
+
+    const hsrYesterday = toIntOrNull(ctxHsr);
+    const yesterdayLoadBand: "LOW" | "MODERATE" | "HIGH" | null =
+      String(ctxIntensity ?? "").toUpperCase() === "OFF"
+        ? "LOW"
+        : hsrYesterday == null
+        ? null
+        : hsrYesterday >= 800
+        ? "HIGH"
+        : hsrYesterday >= 500
+        ? "MODERATE"
+        : "LOW";
+
+    const flaggedPlayers: ReadinessRiskReportPlayer[] = flaggedRows.map((r) => {
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const weekSetupRowForEntry =
+        (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ?? null;
+      const mdContextResolved = resolveSessionMdContextFromSources({
+        weekSetupDay: weekSetupRowForEntry,
+        rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+        teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+        plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+        previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+      });
+      const mdContextInput = mdContextResolved.mdContext;
+      const neuralFatigueBandInput = graphNeuralFatigueBandFromState(r._neural_load?.neuralLoadState);
+      const graphSession = buildDevDailySessionAdapterResult({
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        mdContext: mdContextInput,
+        readinessScore: normalizedReadinessScore,
+        neuralFatigueBand: neuralFatigueBandInput,
+        yesterdayLoadBand,
+      });
+
+      const ateState = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+      const ateSessionMode: "full" | "modified" | "recovery" =
+        ateState === "RED" ? "recovery" : ateState === "YELLOW" ? "modified" : "full";
+      const reasons = graphSession.ateDecisionPanel?.reasonLines?.filter(Boolean) ?? [];
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const fatigue = fatigueByPlayer.get(String(r.player_id)) ?? null;
+      const fatigueMetrics = fatigue && typeof fatigue === "object" ? (fatigue as Record<string, unknown>) : null;
+      const fatigueType = String((fatigueMetrics?.primaryFatigueType as string | undefined) ?? "").toUpperCase();
+      const fatigueSeverity = String((fatigueMetrics?.severity as string | undefined) ?? "").toUpperCase();
+      const tissueSignal = deriveTissueProtectionSignal({
+        fatigueType,
+        fatigueSeverity,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        noteText: r.notes ?? null,
+        neuralFatigueBand: neuralFatigueBandInput,
+        readinessScore: normalizedReadinessScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        stenScore: typeof r._sten === "number" ? r._sten : null,
+      });
+      const acwrValue = toMaybeFinite(fatigueMetrics?.acwr) ?? toMaybeFinite(tm?.acwr) ?? toMaybeFinite(tm?.load?.acwr);
+      const hrvValue = toMaybeFinite(fatigueMetrics?.hrv) ?? toMaybeFinite(tm?.hrv);
+      const hrvChangePctValue = toMaybeFinite(fatigueMetrics?.hrv_change_pct) ?? toMaybeFinite(tm?.hrv_change_pct);
+      const volatilityValue = toMaybeFinite(tm?.pi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+      const lightAteStateRaw = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+      const lightAteState =
+        lightAteStateRaw === "RED"
+          ? "RED"
+          : lightAteStateRaw === "YELLOW"
+          ? "YELLOW"
+          : lightAteStateRaw === "GREEN" || lightAteStateRaw === "GREEN_PLUS"
+          ? "GREEN"
+          : "GRAY";
+      const snapshot = buildDailyAthleteSnapshot({
+        athleteId: String(r.player_id),
+        date: String(r.entry_date ?? today),
+        manual: {
+          id: r.readiness_entry_id ?? null,
+          totalScore: rawTotalScore,
+          soreness: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+          stress: typeof r.stress_mood === "number" ? r.stress_mood : null,
+          mood: typeof r.stress_mood === "number" ? r.stress_mood : null,
+          sleepQuality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+          motivation: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+          completed: rawTotalScore != null,
+          sourceDate: String(r.entry_date ?? today),
+        },
+        load: {
+          zScore: typeof r._z_today === "number" ? r._z_today : null,
+          deltaZ: typeof r._dz === "number" ? r._dz : null,
+          acuteLoad: toIntOrNull(ctxHsr) ?? null,
+          acwr: acwrValue ?? null,
+          sessionRpeLoad: toMaybeFinite(tm?.session_load) ?? null,
+          volatility5d: volatilityValue ?? null,
+          sourceDate: String(r.entry_date ?? today),
+        },
+        context: {
+          weekSetupLabel: r.md_day ?? mdDayToday,
+          expectedSessionType: graphSession.ateDecisionPanel?.sessionLabel ?? null,
+          rehab: false,
+          returnToPlay: false,
+          sourceDate: String(r.entry_date ?? today),
+        },
+      });
+      const readinessDecision = buildExplainableReadinessDecision({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        date: r.entry_date,
+        dailySnapshot: snapshot,
+        readinessScore: normalizedReadinessScore ?? undefined,
+        checkinScore: rawTotalScore ?? undefined,
+        zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+        deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+        volatility: volatilityValue ?? undefined,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+        hrvScore: hrvValue ?? undefined,
+        hrvChangePct: hrvChangePctValue ?? undefined,
+        acuteLoad: toIntOrNull(ctxHsr) ?? undefined,
+        acwr: acwrValue ?? undefined,
+        durationMinutes: toNumOrNull(ctxDuration) ?? undefined,
+        neuralFatigueLevel:
+          neuralFatigueBandInput === "VERY_HIGH" || neuralFatigueBandInput === "HIGH"
+            ? "high"
+            : neuralFatigueBandInput === "MODERATE"
+            ? "moderate"
+            : "low",
+        neuralFatigueReason: r._neural_load?.summary ?? null,
+        stenScore: typeof r._sten === "number" ? r._sten : undefined,
+        tissueSignal: tissueSignal.tissueSignal,
+        tissueSeverity: tissueSignal.tissueSeverity,
+        explicitPainTextFlag: tissueSignal.explicitPainTextFlag,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+        sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+        painFlag: tissueSignal.painProtection,
+        highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+        maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+        gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+        recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+        recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+        matchCongestion: undefined,
+        travelLoad: undefined,
+        dataCompleteness: undefined,
+        lightAteState,
+      });
+      const injuryRiskDecision = buildInjuryRiskDecision({
+        acwr: acwrValue ?? undefined,
+        zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+        deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+        volatility: volatilityValue ?? undefined,
+        recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+        recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+        highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+        maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+        hrvChangePct: hrvChangePctValue ?? undefined,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+        sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+        painFlag: tissueSignal.painProtection,
+        gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+        matchCongestion: undefined,
+        travelLoad: undefined,
+      }, readinessDecision);
+      const athleteDecision = buildAthleteDecision({
+        snapshot,
+        readinessDecision,
+        injuryDecision: injuryRiskDecision,
+        neural: neural
+          ? {
+              status:
+                String(neural.neuralLoadState ?? "").toUpperCase() === "CRITICAL" || String(neural.neuralLoadState ?? "").toUpperCase() === "HIGH"
+                  ? "suppressed"
+                  : String(neural.neuralLoadState ?? "").toUpperCase() === "RISING"
+                  ? "caution"
+                  : "clear",
+              confidence: 0.65,
+              summary: neural.summary ?? null,
+            }
+          : null,
+        hardBlock: false,
+      });
+
+      return {
+        name: r.full_name,
+        readinessStatus: String(r.final_flag).toUpperCase() === "RED" ? "RED" : "YELLOW",
+        score: typeof r.readiness === "number" ? r.readiness : rawTotalScore,
+        confidence: athleteDecision.decisionConfidence,
+        why: athleteDecision.explanationLines.length ? athleteDecision.explanationLines : reasons,
+        checkInScore: rawTotalScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        acwr: acwrValue,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        hrv: hrvValue,
+        volatility: volatilityValue,
+        ateSessionMode: athleteDecision.sessionMode === "pending" ? ateSessionMode : athleteDecision.sessionMode,
+        injuryRiskLevel: injuryRiskDecision.injuryRiskLevel,
+        injuryConfidence: injuryRiskDecision.confidence,
+        injuryWhy: injuryRiskDecision.why,
+        injuryRecommendation: injuryRiskDecision.recommendation,
+      };
+    });
+
+    const green = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "GREEN").length;
+    const yellow = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "YELLOW").length;
+    const red = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "RED").length;
+
+    return {
+      teamName: rowsWithAdaptive[0]?.team ?? "Team",
+      date: today,
+      flaggedPlayers,
+      summary: { green, yellow, red },
+    };
+  }, [rowsWithAdaptive, ctxHsr, ctxIntensity, mdDayToday, planPreview?.md_day, weekGrid, teamIntel?.volatility_pct, fatigueByPlayer, today]);
+
+  async function downloadReadinessRiskReport() {
+    try {
+      setPdfDownloading(true);
+      const blob = await pdf(<ReadinessRiskReportDocument data={readinessRiskReportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `readiness-risk-report-${readinessRiskReportData.date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("readiness risk report download failed:", e?.message ?? e);
+      alert("Could not generate PDF report.");
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
   const tm = teamStatusMeta(teamIntel?.team_status);
@@ -2091,10 +3602,11 @@ export default function CoachPage() {
           disabled={disabled}
           onClick={() => setDraftAction((p) => ({ ...p, [pid]: value }))}
           className={[
-            "rounded-full border px-3 py-1 text-xs font-semibold",
-            disabled ? "opacity-50 cursor-not-allowed" : "",
-            active ? "bg-black text-white border-black" : "bg-white text-gray-800 hover:bg-gray-50",
+            "inline-flex h-12 min-w-[108px] items-center justify-center rounded-xl border px-4 text-sm font-semibold tracking-wide transition-colors",
+            disabled ? "cursor-not-allowed opacity-50" : "",
+            active ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50",
           ].join(" ")}
+          aria-pressed={active}
         >
           {label}
         </button>
@@ -2102,7 +3614,7 @@ export default function CoachPage() {
     };
 
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {pill("FULL", "FULL")}
         {pill("REDUCED", "REDUCED")}
         {pill("RECOVERY", "RECOVERY")}
@@ -2125,369 +3637,882 @@ export default function CoachPage() {
 
     const zVal = typeof r._z_today === "number" ? r._z_today : null;
     const zText = zVal != null ? zVal.toFixed(2) : "—";
-    const stenText = typeof r._sten === "number" ? String(r._sten) : "—";
-
     const dzVal = typeof r._dz === "number" ? r._dz : null;
     const dzText = dzVal != null ? dzVal.toFixed(2) : "—";
-    const dzColor =
-      dzVal != null && dzVal <= -0.25 ? "text-red-600" : dzVal != null && dzVal >= 0.25 ? "text-green-600" : "text-gray-600";
-    const dzIcon = dzVal != null && dzVal <= -0.25 ? "↓" : dzVal != null && dzVal >= 0.25 ? "↑" : "→";
-    const dzAbsBig =
-      "text-lg font-bold tracking-tight " +
-      (dzColor?.includes("red") ? "text-red-700" : dzColor?.includes("amber") ? "text-amber-800" : "text-emerald-800");
-
-    const mainReason = r.planned_focus || shortReason(r.final_reason) || "—";
+    const stenVal = typeof r._sten === "number" ? r._sten : zToSten(zVal);
+    const stenText = stenVal != null ? stenVal.toFixed(2) : "—";
     const fatigue = fatigueByPlayer.get(pid) ?? null;
     const fatigueType = String(fatigue?.primaryFatigueType ?? "NONE").toUpperCase();
     const fatigueSeverity = String(fatigue?.severity ?? "").toUpperCase();
-    const fatigueDrivers = (fatigue?.drivers ?? fatigue?.reasonCodes ?? []) as string[];
-    const adaptationSummary = r._adaptation_summary ?? formatAdaptationFallback(r._adaptation);
-    const adaptationLines = adaptationDetailLines(r._adaptation);
+    const fatigueDrivers = ((fatigue?.drivers ?? fatigue?.reasonCodes ?? []) as unknown[]).filter((v) => v != null);
+    const adaptationSummaryRaw = r._adaptation_summary ?? formatAdaptationFallback(r._adaptation);
+    const adaptationLinesRaw = adaptationDetailLines(r._adaptation);
     const neural = r._neural_load ?? null;
     const neuralBiasApplied = !!r._neural_bias_applied;
     const neuralBiasWhy = formatNeuralBiasReasons(r._neural_bias_reason_codes, 3);
-    const selectedAction: TrainingAction =
-      draftAction[pid] ?? (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
-    const callTone =
-      selectedAction === "RECOVERY"
-        ? "border-red-200 bg-red-50 text-red-800"
-        : selectedAction === "REDUCED"
-        ? "border-yellow-200 bg-yellow-50 text-yellow-800"
-        : "border-green-200 bg-green-50 text-green-800";
+    const hsrYesterday = toIntOrNull(ctxHsr);
+    const yesterdayLoadBand: "LOW" | "MODERATE" | "HIGH" | null =
+      String(ctxIntensity ?? "").toUpperCase() === "OFF"
+        ? "LOW"
+        : hsrYesterday == null
+        ? null
+        : hsrYesterday >= 800
+        ? "HIGH"
+        : hsrYesterday >= 500
+        ? "MODERATE"
+        : "LOW";
+    const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+    // readiness questionnaire total_score is stored as a 5–25 sum; normalize to 0–100 before Light ATE thresholds
+    const normalizedReadinessScore =
+      rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+    const weekSetupRowForEntry =
+      (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ?? null;
+    const mdContextResolved = resolveSessionMdContextFromSources({
+      weekSetupDay: weekSetupRowForEntry,
+      rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+      teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+      plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+      previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+    });
+    const mdContextInput = mdContextResolved.mdContext;
+    const neuralFatigueBandInput = graphNeuralFatigueBandFromState(neural?.neuralLoadState);
+    const graphSession = buildDevDailySessionAdapterResult({
+      athleteState: graphAthleteStateFromFlag(r.final_flag),
+      mdContext: mdContextInput,
+      readinessScore: normalizedReadinessScore,
+      neuralFatigueBand: neuralFatigueBandInput,
+      yesterdayLoadBand,
+    });
+    const decisionConfidence = buildDecisionConfidence({
+      readinessScore: normalizedReadinessScore,
+      mdContext: mdContextInput,
+      neuralFatigueBand: neuralFatigueBandInput,
+      yesterdayLoadBand,
+      fallbackUsed: graphSession.mode !== "graph" || !!graphSession.fallbackReason,
+    });
+    const performanceIntelligence = r._performance_intelligence ?? null;
+    const piRiskLabel = performanceIntelligence ? titleCaseToken(performanceIntelligence.injuryRisk.band) : null;
+    const piLoadLabel = performanceIntelligence
+      ? performanceIntelligence.loadForecast.band === "TOLERATES_HIGH"
+        ? "High"
+        : performanceIntelligence.loadForecast.band === "TOLERATES_MODERATE"
+          ? "Moderate"
+          : performanceIntelligence.loadForecast.band === "TOLERATES_LOW"
+            ? "Low"
+            : "Recovery only"
+      : null;
+    const piActionLabel = performanceIntelligence
+      ? performanceIntelligence.loadForecast.recommendedAction === "full"
+        ? "Full"
+        : performanceIntelligence.loadForecast.recommendedAction === "modified"
+          ? "Modified"
+          : "Recovery"
+      : null;
+    const piMainDriver =
+      performanceIntelligence?.injuryRisk.primaryDrivers?.[0]?.label ??
+      performanceIntelligence?.loadForecast.primaryDrivers?.[0]?.label ??
+      null;
+    const piExplanationLine =
+      performanceIntelligence?.explanationLines?.[0] ??
+      performanceIntelligence?.coachSummary ??
+      null;
+    const prescription = r._prescription_decision ?? null;
+    const prescriptionCompactLine = prescription
+      ? `Action: ${titleCaseToken(prescription.action)} · Cap: ${titleCaseToken(
+          prescription.intensityCap,
+        )} · Volume: ${titleCaseToken(prescription.volumeAdjustment)}`
+      : null;
+    const prescriptionGuidanceLine = prescription
+      ? `Exposure: ${prescription.exposureGuidance
+          .slice(0, 2)
+          .map((tag) => titleCaseToken(tag))
+          .join(", ")}${prescription.exposureGuidance.length > 2 ? "…" : ""}`
+      : null;
+    const finalRecommendationDecision = r._final_recommendation_decision ?? null;
+    const finalRecommendationLine = finalRecommendationDecision
+      ? `Final action: ${titleCaseToken(finalRecommendationDecision.finalRecommendation.action)}${
+          finalRecommendationDecision.manualOverride?.applied ? " · Override applied" : ""
+        }${finalRecommendationDecision.requiresCoachReview ? " · Review required" : ""}`
+      : null;
+    const finalRecommendationSummary = finalRecommendationDecision?.overrideSummary ?? null;
+    const sessionDraft = r._session_draft ?? null;
+    const sessionDraftLine = sessionDraft ? `Draft ready: ${titleCaseToken(sessionDraft.draftAction)} ${sessionDraft.sessionType.toLowerCase()} session` : null;
+    const neuralVolatility = r._neural_volatility_intelligence ?? null;
+    const nvCompactLine = neuralVolatility
+      ? `Fatigue build: ${titleCaseToken(neuralVolatility.fatigueAccumulation.band)} · Stability: ${titleCaseToken(
+          neuralVolatility.instabilityWindow.band,
+        )} · Collapse risk: ${titleCaseToken(neuralVolatility.collapseRisk.band)} · Peak window: ${titleCaseToken(
+          neuralVolatility.peakWindow.band,
+        )}`
+      : null;
+    const nvExplainLine = neuralVolatility?.explanationLines?.[0] ?? null;
+    const fatigueMetrics = fatigue && typeof fatigue === "object" ? (fatigue as Record<string, unknown>) : null;
+    const tm = normalizeTrainingModifier(r.training_modifier);
+    const tissueSignal = deriveTissueProtectionSignal({
+      fatigueType,
+      fatigueSeverity,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+      noteText: r.notes ?? null,
+      neuralFatigueBand: neuralFatigueBandInput,
+      readinessScore: normalizedReadinessScore,
+      zScore: typeof r._z_today === "number" ? r._z_today : null,
+      stenScore: typeof r._sten === "number" ? r._sten : null,
+    });
+    const acwrValue = toMaybeFinite(fatigueMetrics?.acwr) ?? toMaybeFinite(tm?.acwr) ?? toMaybeFinite(tm?.load?.acwr);
+    const hrvChangePctValue = toMaybeFinite(fatigueMetrics?.hrv_change_pct) ?? toMaybeFinite(tm?.hrv_change_pct);
+    const volatilityValue = toMaybeFinite(tm?.pi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+    const lightAteStateRaw = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+    const lightAteState =
+      lightAteStateRaw === "RED"
+        ? "RED"
+        : lightAteStateRaw === "YELLOW"
+        ? "YELLOW"
+        : lightAteStateRaw === "GREEN" || lightAteStateRaw === "GREEN_PLUS"
+        ? "GREEN"
+        : "GRAY";
+    const snapshot = buildDailyAthleteSnapshot({
+      athleteId: String(r.player_id),
+      date: String(r.entry_date ?? today),
+      manual: {
+        id: r.readiness_entry_id ?? null,
+        totalScore: rawTotalScore,
+        soreness: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        stress: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        mood: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        sleepQuality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        motivation: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        completed: rawTotalScore != null,
+        sourceDate: String(r.entry_date ?? today),
+      },
+      load: {
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        acuteLoad: toIntOrNull(ctxHsr) ?? null,
+        acwr: acwrValue ?? null,
+        sessionRpeLoad: toMaybeFinite(tm?.session_load) ?? null,
+        volatility5d: volatilityValue ?? null,
+        sourceDate: String(r.entry_date ?? today),
+      },
+      context: {
+        weekSetupLabel: r.md_day ?? mdDayToday,
+        expectedSessionType: graphSession.ateDecisionPanel?.sessionLabel ?? null,
+        rehab: false,
+        returnToPlay: false,
+        sourceDate: String(r.entry_date ?? today),
+      },
+    });
 
-    const whyParts: string[] = [];
-    if (neural) whyParts.push(`Neural ${neural.neuralLoadState}`, neural.readinessTrajectory);
-    if (fatigue && fatigueType !== "NONE") whyParts.push(`Fatigue ${fatigueType}`, fatigueSeverity || "");
-    if (!whyParts.length) whyParts.push(mainReason);
-    const whySummary = truncateLine(
-      whyParts
-        .filter((x) => String(x).trim().length > 0)
-        .join(" · ")
-        .replace(/\s·\s$/g, ""),
-      82
+    const explainableDecision = buildExplainableReadinessDecision({
+      playerId: String(r.player_id),
+      playerName: r.full_name,
+      date: r.entry_date,
+      dailySnapshot: snapshot,
+      readinessScore: normalizedReadinessScore ?? undefined,
+      checkinScore: rawTotalScore ?? undefined,
+      zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+      deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+      volatility: volatilityValue ?? undefined,
+      sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+      hrvScore: toMaybeFinite(fatigueMetrics?.hrv) ?? toMaybeFinite(tm?.hrv) ?? undefined,
+      hrvChangePct: hrvChangePctValue ?? undefined,
+      acuteLoad: toIntOrNull(ctxHsr) ?? undefined,
+      acwr: acwrValue ?? undefined,
+      durationMinutes: toNumOrNull(ctxDuration) ?? undefined,
+      neuralFatigueLevel:
+        neuralFatigueBandInput === "VERY_HIGH" || neuralFatigueBandInput === "HIGH"
+          ? "high"
+          : neuralFatigueBandInput === "MODERATE"
+          ? "moderate"
+          : "low",
+      neuralFatigueReason: neural?.summary ?? null,
+      stenScore: typeof r._sten === "number" ? r._sten : undefined,
+      tissueSignal: tissueSignal.tissueSignal,
+      tissueSeverity: tissueSignal.tissueSeverity,
+      explicitPainTextFlag: tissueSignal.explicitPainTextFlag,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+      sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+      painFlag: tissueSignal.painProtection,
+      highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+      maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+      gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+      recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+      recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+      dataCompleteness: undefined,
+      lightAteState,
+    });
+    const injuryRiskDecision = buildInjuryRiskDecision({
+      acwr: acwrValue ?? undefined,
+      zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+      deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+      volatility: volatilityValue ?? undefined,
+      recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+      recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+      highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+      maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+      sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+      hrvChangePct: hrvChangePctValue ?? undefined,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+      sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+      painFlag: tissueSignal.painProtection,
+      gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+    }, explainableDecision);
+    const athleteDecision = buildAthleteDecision({
+      snapshot,
+      readinessDecision: explainableDecision,
+      injuryDecision: injuryRiskDecision,
+      neural: neural
+        ? {
+            status:
+              String(neural.neuralLoadState ?? "").toUpperCase() === "CRITICAL" || String(neural.neuralLoadState ?? "").toUpperCase() === "HIGH"
+                ? "suppressed"
+                : String(neural.neuralLoadState ?? "").toUpperCase() === "RISING"
+                ? "caution"
+                : "clear",
+            confidence: 0.65,
+            summary: neural.summary ?? null,
+          }
+        : null,
+      hardBlock: false,
+    });
+    const volatilityPoints = recentMonitoringByPlayer[pid] ?? [];
+    const volatilitySummary = computePlayerVolatilitySummary(volatilityPoints);
+    const volatilityGraphLabels = volatilitySummary.dayLabels.slice(-volatilitySummary.dailyComposite.length);
+    const volatilityGraphPoints = volatilitySeriesPoints(volatilitySummary.dailyComposite);
+    const volatilityPanelId = `volatility-panel-${pid}`;
+    const volatilityExpanded = !!volatilityOpenByPlayer[pid];
+    const strongGreenGuardrail =
+      explainableDecision.athleteState === "GREEN" &&
+      typeof zVal === "number" &&
+      zVal > 1.5 &&
+      typeof stenVal === "number" &&
+      stenVal >= 8 &&
+      typeof r.muscle_soreness === "number" &&
+      r.muscle_soreness >= 4 &&
+      fatigueType === "TISSUE" &&
+      fatigueSeverity === "LOW" &&
+      injuryRiskDecision.injuryRiskLevel === "LOW" &&
+      !["HIGH", "CRITICAL"].includes(String(neural?.neuralLoadState ?? "").toUpperCase());
+    const legacyRecoveryOverreach =
+      !!r._adaptation?.recoveryBias ||
+      (typeof r._adaptation?.reduceVolumePct === "number" && r._adaptation.reduceVolumePct >= 40) ||
+      /recovery bias|-40%\s*volume/i.test(String(adaptationSummaryRaw ?? ""));
+    const adaptationSummary =
+      strongGreenGuardrail && legacyRecoveryOverreach
+        ? "Adaptive: monitoring only (strong readiness, no hard red flags)"
+        : adaptationSummaryRaw;
+    const adaptationLines =
+      strongGreenGuardrail && legacyRecoveryOverreach
+        ? ["Standard monitoring only."]
+        : adaptationLinesRaw;
+
+    const currentMessage = (draftMessage[pid] ?? r.coach_message ?? "").trim();
+    const readinessInputSummary = `Score ${rawTotalScore ?? "—"} · Logged ${new Date(r.created_at).toLocaleTimeString("is-IS", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+    const fatigueSummaryText = [fatigueType !== "NONE" ? fatigueType : null, fatigueSeverity || null, adaptationSummary || null].filter(Boolean).join(" · ") || "No fatigue flags";
+    const trainingSessionSummary =
+      graphSession.mode === "graph"
+        ? graphSession.ateDecisionPanel?.sessionLabel ?? "Training graph session"
+        : "Legacy template rendering";
+    const neuralSummaryText = neural
+      ? `${neural.neuralLoadState} · ${neural.nextDayRisk}`
+      : neuralBiasApplied
+      ? "Bias applied"
+      : "No neural load data";
+    const coachMessageSummary = currentMessage ? currentMessage : "No coach message";
+
+    const isSectionOpen = (sectionKey: PlayerDetailSectionKey, defaultOpen = false) =>
+      detailSectionOpenByPlayer[pid]?.[sectionKey] ?? defaultOpen;
+
+    const toggleSection = (sectionKey: PlayerDetailSectionKey, defaultOpen = false) => {
+      setDetailSectionOpenByPlayer((prev) => ({
+        ...prev,
+        [pid]: {
+          ...(prev[pid] ?? {}),
+          [sectionKey]: !(prev[pid]?.[sectionKey] ?? defaultOpen),
+        },
+      }));
+    };
+
+    const renderMetricTile = (
+      label: string,
+      value: string,
+      valueClassName: string,
+      tileClassName = "border-[#ece7de] bg-[#f7f4ee]"
+    ) => (
+      <div className={`min-w-[150px] flex-1 rounded-[20px] border px-4 py-3 ${tileClassName}`}>
+        <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-slate-700">{label}</div>
+        <div className={`mt-2 text-[22px] font-semibold leading-none tabular-nums ${valueClassName}`}>{value}</div>
+      </div>
     );
 
-    const actionParts: string[] = [];
-    const cleanedAdaptive = adaptationSummary ? String(adaptationSummary).replace(/^Adaptive:\s*/i, "") : "";
-    if (cleanedAdaptive) actionParts.push(cleanedAdaptive);
-    if (neuralBiasApplied) actionParts.push("Neural bias contributed");
-    if (!actionParts.length) {
-      actionParts.push(
-        selectedAction === "RECOVERY"
-          ? "Recovery-focused training"
-          : selectedAction === "REDUCED"
-          ? "Reduced load training"
-          : "Standard training load"
+    const renderAccordionSection = (
+      sectionKey: PlayerDetailSectionKey,
+      title: string,
+      summary: string,
+      content: React.ReactNode,
+      defaultOpen = false
+    ) => {
+      const open = isSectionOpen(sectionKey, defaultOpen);
+      const panelId = `${pid}-${sectionKey}-panel`;
+
+      return (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm" key={sectionKey}>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => toggleSection(sectionKey, defaultOpen)}
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-semibold tracking-tight text-slate-900">{title}</div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="truncate text-right text-sm font-medium text-slate-600">{summary}</div>
+              <span
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-500 transition-transform ${
+                  open ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </div>
+          </button>
+          {open ? (
+            <div id={panelId} className="border-t border-slate-200 bg-slate-50/35 px-4 py-4">
+              {content}
+            </div>
+          ) : null}
+        </section>
       );
-    }
-    const actionSummary = truncateLine(actionParts.join(" · "), 82);
+    };
 
     return (
       <React.Fragment key={r.ui_key ?? r.readiness_entry_id ?? pid}>
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3.5 shadow-sm transition-shadow hover:shadow-md">
-          {/* HEADER */}
-          <div className="flex flex-col gap-2.5 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="truncate text-sm md:text-base font-semibold max-w-[520px]">{r.full_name}</div>
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${callTone}`}>
-                  {selectedAction}
-                </span>
-
-                {r._needs_review ? (
-                  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium">Needs review</span>
-                ) : null}
-
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-semibold tracking-tight text-slate-950">{r.full_name}</div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
-                  <span className={`h-2.5 w-2.5 rounded-full ${cm.dot}`} />
+                  <span className={`h-2 w-2 rounded-full ${cm.dot}`} />
                   <span className="tabular-nums">{scoreText}</span>
                 </span>
-
-                <span className="inline-flex items-center rounded-full border bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-800">{mdText}</span>
-              </div>
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                {r._needs_review ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    Needs review
+                  </span>
+                ) : null}
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                  {mdText}
+                </span>
                 {r.is_locked ? (
-                  <span className="inline-flex items-center rounded-full border bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                     Locked
                   </span>
                 ) : null}
-
                 {isOverride ? (
-                  <span className="inline-flex items-center rounded-full border bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
                     Override
                   </span>
                 ) : null}
                 {neuralBiasApplied ? (
-                  <span className="inline-flex items-center rounded-full border bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
                     Neural bias
                   </span>
                 ) : null}
               </div>
             </div>
 
-            <div className="flex flex-col items-start gap-2 md:items-end">
-              <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
-                {renderActionPills(pid, r.is_locked)}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
-                <select
-                  className="h-9 w-44 rounded-md border px-2 py-1 text-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const tid = e.target.value;
-                    if (!tid) return;
-                    assignTemplate(r.player_id, r.entry_date, tid, r.team_id ?? null);
-                  }}
-                  disabled={lockedForCoach || isSaving}
-                >
-                  <option value="">Template…</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title ?? t.code}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={async () => saveConfirmed(r)}
-                  disabled={isSaving || lockedForCoach}
-                  className="h-9 rounded-md border px-3 text-sm disabled:opacity-50"
-                  title={lockedForCoach ? "Locked fyrir daginn" : "Save (editable)"}
-                >
-                  {lockedForCoach ? "Locked" : isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
-                </button>
-
-                {!r.is_locked ? (
-                  <button
-                    onClick={async () => lockForDay(r)}
-                    disabled={isSaving}
-                    className="h-9 rounded-md border px-3 text-sm disabled:opacity-50"
-                    title="Lock (endanlegt fyrir daginn)"
-                  >
-                    Lock
-                  </button>
-                ) : isAdmin ? (
-                  <button
-                    onClick={async () => unlockForDay(r)}
-                    disabled={isSaving}
-                    className="h-9 rounded-md border px-3 text-sm disabled:opacity-50"
-                    title="Admin: Unlock"
-                  >
-                    Unlock
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="h-9 w-9 rounded-md border text-gray-600 hover:bg-gray-50"
-                  aria-label="Sýna nánar"
-                  onClick={() => setExpandedPlayerId((prev) => (prev === pid ? null : pid))}
-                >
-                  {isOpen ? "▴" : "▾"}
-                </button>
-              </div>
+            <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[360px] xl:items-end">
+              {renderActionPills(pid, r.is_locked)}
             </div>
           </div>
 
-          {/* SUMMARY: WHY + ACTION */}
-          <div className="mt-2.5 grid gap-2 md:grid-cols-2">
-            <div className="rounded-lg border bg-gray-50/70 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500">Why</div>
-              <div className="mt-0.5 truncate text-sm text-gray-800" title={whySummary}>
-                {whySummary}
-              </div>
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid flex-1 gap-3 md:grid-cols-3">
+              {renderMetricTile("Z-SCORE", zText, zVal != null && zVal > 0 ? "text-[#3f6f1f]" : "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
+              {renderMetricTile("DELTA Z", dzText, dzVal != null ? "text-[#3f6f1f]" : "text-slate-900", "border-[#dce9c9] bg-[#eaf4da]")}
+              {renderMetricTile("STEN", stenText, "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
             </div>
 
-            <div className="rounded-lg border bg-gray-50/70 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500">Action</div>
-              <div className="mt-0.5 truncate text-sm text-gray-800" title={actionSummary}>
-                {actionSummary}
-              </div>
-            </div>
-          </div>
-
-          {/* METRICS: STEN + ΔZ + spark */}
-          <div className="mt-2 flex flex-col gap-2.5">
-            <div className="inline-flex w-fit items-center gap-4 rounded-md border bg-gray-50 px-3 py-2">
-              <div className="leading-tight">
-                <div className="text-[10px] uppercase tracking-wide text-gray-500">STEN</div>
-                <div className="text-sm font-semibold tabular-nums text-gray-900" title={`z=${zText}`}>
-                  {stenText}
-                </div>
-              </div>
-
-              <div className={`inline-flex items-center gap-2 ${dzColor}`} title={`Δz (today - yesterday). z=${zText}`}>
-                <span className={dzAbsBig}>{dzIcon}</span>
-                <span className={`${dzAbsBig} tabular-nums`}>{dzText}</span>
-              </div>
-
-              {r._spark ? (
-                <div className="ml-2 font-mono text-xs text-gray-500" title="Last ~7 days Z">
-                  {r._spark}
-                </div>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 self-end rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              aria-expanded={isOpen}
+              onClick={() => setExpandedPlayerId((prev) => (prev === pid ? null : pid))}
+            >
+              <span>{isOpen ? "Hide details" : "Show details"}</span>
+              <span className={`transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
+                ▾
+              </span>
+            </button>
           </div>
         </div>
 
-        {isOpen && (
-          <div className="mt-2 rounded-lg border bg-gray-50 px-3 py-3 text-sm text-gray-700 space-y-4">
-            <div className="space-y-2 border-b border-gray-200 pb-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-700">Readiness</div>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <div>
-                ⚡ Fatigue/Energy: <span className="font-medium tabular-nums">{v(r.fatigue_energy)}</span>
-              </div>
-              <div>
-                😴 Sleep quality: <span className="font-medium tabular-nums">{v(r.sleep_quality)}</span>
-              </div>
-              <div>
-                ⏱ Sleep duration: <span className="font-medium tabular-nums">{v(r.sleep_duration)}</span>
-              </div>
-              <div>
-                🧠 Stress/Mood: <span className="font-medium tabular-nums">{v(r.stress_mood)}</span>
-              </div>
-              <div>
-                💪 Muscle soreness: <span className="font-medium tabular-nums">{v(r.muscle_soreness)}</span>
-              </div>
-              <div className="min-w-[220px]">
-                📝 Notes: <span className="font-medium">{r.notes && r.notes.trim().length ? r.notes : "—"}</span>
-              </div>
-              <div>
-                Skráð:{" "}
-                <span className="font-medium">
-                  {new Date(r.created_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-              <div>
-                Baseline n: <span className="font-mono">{r._baseline_n ?? "—"}</span>
-              </div>
-              <div>
-                z: <span className="font-mono">{zText}</span>
-              </div>
-            </div>
-            </div>
-
-            <div className="space-y-2 border-b border-gray-200 pb-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-700">Coach message (Stage4)</div>
-              <textarea
-                className="w-full rounded-md border bg-white p-2 text-sm"
-                rows={2}
-                value={draftMessage[pid] ?? ""}
-                onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
-                disabled={isSaving || (r.is_locked && !isAdmin)}
-                placeholder="Skrifaðu coach skilaboð…"
-              />
-              <div className="text-xs text-gray-500">
-                Save = confirmed (editable). Lock = endanlegt fyrir daginn. Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} mín fyrir session start.
-              </div>
-            </div>
-
-            <div className="text-xs text-gray-600 border-b border-gray-200 pb-3">
-              <div>
-                Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span>
-              </div>
-            </div>
-
-            {fatigue ? (
-              <div className="text-xs text-gray-600 space-y-1 border-b border-gray-200 pb-3">
-                <div className="font-semibold uppercase tracking-wide text-gray-700">Fatigue</div>
-                <div>
-                  Type: <span className="font-mono">{fatigueType}</span>
-                  {fatigueSeverity ? (
-                    <>
-                      {" "}
-                      · Severity: <span className="font-mono">{fatigueSeverity}</span>
-                    </>
-                  ) : null}
+        {isOpen ? (
+          <div className="mt-3 space-y-3">
+            {renderAccordionSection(
+              "readinessDecision",
+              "Readiness decision",
+              `${athleteDecision.athleteState} · Confidence: ${explainableDecision.confidence}`,
+              <div className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                      {athleteDecision.reasons.map((line) => (
+                        <li key={`${pid}-exp-why-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Coach action</div>
+                      {performanceIntelligence ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPiDrawerPlayerName(r.full_name);
+                            setPiDrawerDecision(performanceIntelligence);
+                          }}
+                          className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Why?
+                        </button>
+                      ) : null}
+                    </div>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                      {(athleteDecision.recommendations.length
+                        ? athleteDecision.recommendations
+                        : ["Monitor quality and adjust only if response drops."]).map((line) => (
+                        <li key={`${pid}-exp-act-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                {!!fatigueDrivers?.length ? (
-                  <div>
-                    Drivers: <span className="font-mono">{fatigueDrivers.slice(0, 6).map(driverLabel).join(", ")}</span>
-                  </div>
-                ) : null}
-                {!!fatigue?.recommendedModifiers?.length ? (
-                  <div>
-                    Modifiers: <span className="font-mono">{fatigue.recommendedModifiers.join(", ")}</span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
 
-            {(r._adaptation_summary || adaptationLines.length > 0) && (
-              <div className="text-xs text-gray-600 space-y-1 border-b border-gray-200 pb-3">
-                <div className="font-semibold uppercase tracking-wide text-gray-700">Adaptation</div>
-                {r._adaptation_summary ? (
-                  <div>
-                    Summary: <span className="font-mono">{r._adaptation_summary}</span>
+                {performanceIntelligence || prescription || neuralVolatility || finalRecommendationDecision ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-600">
+                    {performanceIntelligence ? (
+                      <div>
+                        Risk: <span className={`font-semibold ${performanceRiskTone(performanceIntelligence.injuryRisk.band)}`}>{piRiskLabel}</span> ·
+                        Load: <span className="font-semibold text-slate-700"> {piLoadLabel}</span> · Action:{" "}
+                        <span className="font-semibold text-slate-700">{piActionLabel}</span>
+                      </div>
+                    ) : null}
+                    {piMainDriver ? (
+                      <div>
+                        Main driver: <span className="font-medium text-slate-700">{piMainDriver}</span>
+                      </div>
+                    ) : null}
+                    {piExplanationLine ? <div>{piExplanationLine}</div> : null}
+                    {prescriptionCompactLine ? <div>{prescriptionCompactLine}</div> : null}
+                    {prescriptionGuidanceLine ? <div>{prescriptionGuidanceLine}</div> : null}
+                    {finalRecommendationLine ? <div>{finalRecommendationLine}</div> : null}
+                    {finalRecommendationSummary ? <div>{finalRecommendationSummary}</div> : null}
+                    {sessionDraftLine ? <div>{sessionDraftLine}</div> : null}
+                    {nvCompactLine ? <div>{nvCompactLine}</div> : null}
+                    {nvExplainLine ? <div>{nvExplainLine}</div> : null}
                   </div>
                 ) : null}
-                {adaptationLines.map((line) => (
-                  <div key={`${pid}-ad-${line}`}>{line}</div>
-                ))}
+              </div>,
+              true
+            )}
+
+            {renderAccordionSection(
+              "injuryRisk",
+              "Injury risk",
+              `${injuryRiskDecision.injuryRiskLevel} · Confidence: ${injuryRiskDecision.confidence}`,
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                    {injuryRiskDecision.why.map((line) => (
+                      <li key={`${pid}-inj-why-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recommendation</div>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                    {injuryRiskDecision.recommendation.map((line) => (
+                      <li key={`${pid}-inj-rec-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
 
-            {neural ? (
-              <div className="text-xs text-gray-600 space-y-1 border-b border-gray-200 pb-3">
-                <div className="font-semibold uppercase tracking-wide text-gray-700">Neural load</div>
-                <div>
-                  State: <span className="font-mono">{neural.neuralLoadState}</span> · Trajectory:{" "}
-                  <span className="font-mono">{neural.readinessTrajectory}</span> · Next-day risk:{" "}
-                  <span className="font-mono">{neural.nextDayRisk}</span> · Score: <span className="font-mono">{neural.neuralLoadScore}</span>
+            {renderAccordionSection(
+              "readinessInputs",
+              "Readiness inputs",
+              readinessInputSummary,
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Fatigue/Energy: <span className="font-semibold tabular-nums text-slate-900">{v(r.fatigue_energy)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Sleep quality: <span className="font-semibold tabular-nums text-slate-900">{v(r.sleep_quality)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Sleep duration: <span className="font-semibold tabular-nums text-slate-900">{v(r.sleep_duration)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Stress/Mood: <span className="font-semibold tabular-nums text-slate-900">{v(r.stress_mood)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Muscle soreness: <span className="font-semibold tabular-nums text-slate-900">{v(r.muscle_soreness)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Baseline n: <span className="font-semibold tabular-nums text-slate-900">{r._baseline_n ?? "—"}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Recorded: <span className="font-semibold text-slate-900">{new Date(r.created_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Supporting metrics: <span className="font-semibold text-slate-900">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)}</span></div>
                 </div>
-                <div>Summary: <span className="font-mono">{neural.summary}</span></div>
-                {!!neural.drivers?.length && (
-                  <div>
-                    Drivers:{" "}
-                    <span className="font-mono">
-                      {neural.drivers
-                        .slice(0, 4)
-                        .map((d) => `${d.label}(+${d.points})`)
-                        .join(", ")}
-                    </span>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  Notes: <span className="font-medium text-slate-900">{r.notes && r.notes.trim().length ? r.notes : "—"}</span>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  Supporting metrics: <span className="font-mono">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)} · acwr {numFmt(explainableDecision.supportingMetrics?.acwr ?? null)} · sleep {numFmt(explainableDecision.supportingMetrics?.sleepScore ?? null)} · hrvΔ {numFmt(explainableDecision.supportingMetrics?.hrvChangePct ?? null)} · vol {numFmt(explainableDecision.supportingMetrics?.volatility ?? null)}</span>
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "fatigueAdaptation",
+              "Fatigue & adaptation",
+              fatigueSummaryText,
+              <div className="space-y-4">
+                {fatigue ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-900">Fatigue</div>
+                    <div className="mt-2">
+                      Type: <span className="font-mono">{fatigueType}</span>
+                      {fatigueSeverity ? (
+                        <>
+                          {" "}
+                          · Severity: <span className="font-mono">{fatigueSeverity}</span>
+                        </>
+                      ) : null}
+                    </div>
+                    {!!fatigueDrivers?.length ? (
+                      <div className="mt-1">Drivers: <span className="font-mono">{fatigueDrivers.slice(0, 6).map(driverLabel).join(", ")}</span></div>
+                    ) : null}
+                    {!!fatigue?.recommendedModifiers?.length ? (
+                      <div className="mt-1">Modifiers: <span className="font-mono">{fatigue.recommendedModifiers.join(", ")}</span></div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No fatigue detail available.</div>
+                )}
+
+                {adaptationSummary || adaptationLines.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-900">Adaptation</div>
+                    {adaptationSummary ? <div className="mt-2">{adaptationSummary}</div> : null}
+                    {adaptationLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5">
+                        {adaptationLines.map((line) => (
+                          <li key={`${pid}-ad-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                    aria-expanded={volatilityExpanded}
+                    aria-controls={volatilityPanelId}
+                    onClick={() =>
+                      setVolatilityOpenByPlayer((prev) => ({
+                        ...prev,
+                        [pid]: !volatilityExpanded,
+                      }))
+                    }
+                  >
+                    <span className={`transition-transform ${volatilityExpanded ? "rotate-90" : ""}`} aria-hidden="true">▸</span>
+                    <span>Recent volatility{typeof volatilitySummary.overallScore === "number" ? ` · ${volatilitySummary.overallScore.toFixed(1)}` : ""}</span>
+                  </button>
+
+                  {volatilityExpanded ? (
+                    <div id={volatilityPanelId} className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-900">Recent volatility</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold tabular-nums text-slate-700">
+                            Score {typeof volatilitySummary.overallScore === "number" ? `${volatilitySummary.overallScore.toFixed(1)}/100` : "—"}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${volatilityLevelTone(volatilitySummary.level)}`}>
+                            {volatilityLevelLabel(volatilitySummary.level)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                        Last {volatilitySummary.windowDays || volatilitySummary.sampleSize || 0} days
+                      </div>
+                      <div className="mt-2 text-sm text-slate-700">{volatilitySummary.interpretation}</div>
+                      {volatilitySummary.drivers.length ? (
+                        <div className="mt-2 text-xs text-slate-600">
+                          <span className="font-medium text-slate-700">Main drivers:</span> {summarizeDrivers(volatilitySummary)}
+                        </div>
+                      ) : null}
+                      {volatilitySummary.drivers.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {volatilitySummary.drivers.map((driver) => (
+                            <span key={`${pid}-vol-driver-${driver.key}`} className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] tabular-nums text-slate-600">
+                              {driver.label}: {driver.volatilityScore.toFixed(1)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {volatilitySummary.dailyComposite.length >= 2 ? (
+                        <div className="mt-3 rounded-xl border border-slate-200 bg-white px-2 py-2">
+                          <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                            <span>Volatility trend</span>
+                            <span className="tabular-nums">min {Math.min(...volatilitySummary.dailyComposite).toFixed(1)} · max {Math.max(...volatilitySummary.dailyComposite).toFixed(1)}</span>
+                          </div>
+                          <svg viewBox="0 0 220 44" className="h-11 w-full" role="img" aria-label="Recent volatility line graph">
+                            <line x1="0" y1="43.5" x2="220" y2="43.5" stroke="#E5E7EB" strokeWidth="1" />
+                            <line x1="0" y1="22" x2="220" y2="22" stroke="#F3F4F6" strokeWidth="1" />
+                            <polyline fill="none" stroke="#374151" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" points={volatilityLinePoints(volatilitySummary.dailyComposite)} />
+                            {volatilityGraphPoints.map((p, idx) => (
+                              <g key={`${pid}-vol-point-${idx}`}>
+                                <circle cx={p.x} cy={p.y} r="1.8" fill="#111827" />
+                                <text x={p.x} y={Math.max(7, p.y - 3)} textAnchor="middle" fontSize="6" fill="#374151">
+                                  {p.value.toFixed(1)}
+                                </text>
+                              </g>
+                            ))}
+                          </svg>
+                          <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                            {volatilitySummary.dailyComposite.map((value, idx) => (
+                              <span key={`${pid}-vol-day-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 tabular-nums">
+                                {volatilityGraphLabels[idx] ?? `D-${volatilitySummary.dailyComposite.length - 1 - idx}`}: {value.toFixed(1)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {volatilitySummary.currentVsTrendNote ? <div className="mt-2 text-[10px] text-slate-500">{volatilitySummary.currentVsTrendNote}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "trainingSession",
+              "Training session",
+              trainingSessionSummary,
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-900">Session planning</span>
+                  <span
+                    className={
+                      graphSession.mode === "graph"
+                        ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                        : "inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
+                    }
+                  >
+                    Session source: {graphSession.mode === "graph" ? "Training Graph" : "Legacy template"}
+                  </span>
+                </div>
+
+                {graphSession.mode === "graph" && graphSession.ateDecisionPanel ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-900">{graphSession.ateDecisionPanel.title}</div>
+                      {graphSession.ateDecisionPanel.sourceLabel ? <span className="text-[10px] uppercase tracking-wide text-slate-500">{graphSession.ateDecisionPanel.sourceLabel}</span> : null}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">Session: {graphSession.ateDecisionPanel.sessionLabel}</div>
+                    <div className="mt-1 text-sm text-slate-500">State: {graphSession.ateDecisionPanel.athleteStateLabel}</div>
+                    <div className="mt-1 text-sm text-slate-500">MD: {graphSession.ateDecisionPanel.mdContextLabel}</div>
+                    {graphSession.ateDecisionPanel.adjustmentLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Adjustments</div> : null}
+                    {graphSession.ateDecisionPanel.adjustmentLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+                        {graphSession.ateDecisionPanel.adjustmentLines.map((line) => (
+                          <li key={`${pid}-ate-adjust-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {graphSession.ateDecisionPanel.reasonLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div> : null}
+                    {graphSession.ateDecisionPanel.reasonLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-600">
+                        {graphSession.ateDecisionPanel.reasonLines.slice(0, 4).map((line) => (
+                          <li key={`${pid}-ate-reason-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {graphSession.ateDecisionPanel.riskFlagLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Risk</div> : null}
+                    {graphSession.ateDecisionPanel.riskFlagLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-amber-700">
+                        {graphSession.ateDecisionPanel.riskFlagLines.slice(0, 3).map((line) => (
+                          <li key={`${pid}-ate-risk-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Decision confidence</div>
+                        <span
+                          className={
+                            decisionConfidence.level === "HIGH"
+                              ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
+                              : decisionConfidence.level === "MEDIUM"
+                              ? "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                              : "inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700"
+                          }
+                        >
+                          {decisionConfidence.level === "HIGH" ? "High" : decisionConfidence.level === "MEDIUM" ? "Medium" : "Low"}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-600">Inputs: {decisionConfidence.inputsUsed.length ? decisionConfidence.inputsUsed.join(", ") : "None"}</div>
+                      <div className="mt-1 text-xs text-slate-600">Missing: {decisionConfidence.missingInputs.length ? decisionConfidence.missingInputs.join(", ") : "None"}</div>
+                      <div className="mt-1 text-xs text-slate-600">Fallbacks: {decisionConfidence.fallbackUsed ? "Partial" : "None"}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Legacy template rendering retained.
+                    {graphSession.fallbackReason ? <> Fallback reason: <span className="font-mono">{graphSession.fallbackReason}</span></> : null}
                   </div>
                 )}
-              </div>
-            ) : null}
 
-            {neuralBiasApplied ? (
-              <div className="text-xs text-gray-600 space-y-1 border-b border-gray-200 pb-3">
-                <div className="font-semibold uppercase tracking-wide text-gray-700">Neural bias</div>
-                <div>
-                  Applied: <span className="font-mono">yes</span>
+                {graphSession.mode === "graph" && graphSession.coachView ? (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900">{graphSession.coachView.title}</div>
+                      <div className="text-sm text-slate-500">{graphSession.coachView.subtitle}</div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {graphSession.coachView.nodes.map((node) => (
+                        <div key={`${pid}-graph-${node.nodeId}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-900">{node.title}</div>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{node.status}</span>
+                          </div>
+                          {node.exercises.length ? <div className="mt-2 text-sm text-slate-700">{node.exercises.join(", ")}</div> : <div className="mt-2 text-sm text-slate-500">No exercise selected</div>}
+                          {node.prescriptionLines.length ? (
+                            <ul className="mt-2 list-disc pl-5 text-sm text-slate-600">
+                              {node.prescriptionLines.slice(0, 3).map((line) => (
+                                <li key={`${pid}-${node.nodeId}-${line}`}>{line}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {sessionDraft ? (
+                  <div className="space-y-3">
+                    <SessionDraftCard draft={sessionDraft} />
+                    <SessionDraftDetails draft={sessionDraft} />
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const tid = e.target.value;
+                      if (!tid) return;
+                      assignTemplate(r.player_id, r.entry_date, tid, r.team_id ?? null);
+                    }}
+                    disabled={lockedForCoach || isSaving}
+                  >
+                    <option value="">Template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title ?? t.code}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={async () => saveConfirmed(r)}
+                    disabled={isSaving || lockedForCoach}
+                    className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                    title={lockedForCoach ? "Locked fyrir daginn" : "Save (editable)"}
+                  >
+                    {lockedForCoach ? "Locked" : isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
+                  </button>
+
+                  {!r.is_locked ? (
+                    <button
+                      onClick={async () => lockForDay(r)}
+                      disabled={isSaving}
+                      className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                      title="Lock (endanlegt fyrir daginn)"
+                    >
+                      Lock
+                    </button>
+                  ) : isAdmin ? (
+                    <button
+                      onClick={async () => unlockForDay(r)}
+                      disabled={isSaving}
+                      className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                      title="Admin: Unlock"
+                    >
+                      Unlock
+                    </button>
+                  ) : null}
                 </div>
-                <div>
-                  Why: <span className="font-mono">{neuralBiasWhy || "Neural risk signals crossed bias threshold."}</span>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                  <div>Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span></div>
+                  <div className="mt-1">Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=<span className="font-mono">{r.coach_decision ?? "—"}</span> · final=<span className="font-mono">{r.final_decision ?? "—"}</span> · source=<span className="font-mono">{r.final_source ?? "—"}</span></div>
+                  <div className="mt-1">Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span> · Updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span></div>
                 </div>
-                {!!r._neural_bias_reason_codes?.length ? (
-                  <div>
-                    Codes: <span className="font-mono">{r._neural_bias_reason_codes.join(", ")}</span>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "neuralLoad",
+              "Neural load",
+              neuralSummaryText,
+              <div className="space-y-4">
+                {neural ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <div>State: <span className="font-mono">{neural.neuralLoadState}</span> · Trajectory: <span className="font-mono">{neural.readinessTrajectory}</span> · Next-day risk: <span className="font-mono">{neural.nextDayRisk}</span> · Score: <span className="font-mono">{neural.neuralLoadScore}</span></div>
+                    <div className="mt-2">Summary: <span className="font-mono">{neural.summary}</span></div>
+                    {!!neural.drivers?.length ? (
+                      <div className="mt-2">Drivers: <span className="font-mono">{neural.drivers.slice(0, 4).map((d) => `${d.label}(+${d.points})`).join(", ")}</span></div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No neural load data.</div>
+                )}
+
+                {neuralBiasApplied ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div>Applied: <span className="font-mono">yes</span></div>
+                    <div className="mt-2">Why: <span className="font-mono">{neuralBiasWhy || "Neural risk signals crossed bias threshold."}</span></div>
+                    {!!r._neural_bias_reason_codes?.length ? <div className="mt-2">Codes: <span className="font-mono">{r._neural_bias_reason_codes.join(", ")}</span></div> : null}
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            )}
 
-            <div className="text-xs text-gray-600 space-y-1">
-              <div className="font-semibold uppercase tracking-wide text-gray-700">Stage4 / debug</div>
-              <div>
-                Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=<span className="font-mono">{r.coach_decision ?? "—"}</span> ·
-                final=<span className="font-mono">{r.final_decision ?? "—"}</span> · source=<span className="font-mono">{r.final_source ?? "—"}</span>
+            {renderAccordionSection(
+              "coachMessage",
+              "Coach message",
+              coachMessageSummary,
+              <div className="space-y-3">
+                <textarea
+                  className="min-h-[96px] w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800"
+                  rows={3}
+                  value={draftMessage[pid] ?? ""}
+                  onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
+                  disabled={isSaving || (r.is_locked && !isAdmin)}
+                  placeholder="Skrifaðu coach skilaboð…"
+                />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  Save = confirmed (editable). Lock = endanlegt fyrir daginn. Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} mín fyrir session start.
+                </div>
               </div>
-              <div>
-                Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span>
-              </div>
-              <div>
-                Stage4 updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span>
-              </div>
-              <div>
-                Role: <span className="font-mono">{coachRole}</span>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+        ) : null}
       </React.Fragment>
     );
   };
@@ -2502,16 +4527,27 @@ export default function CoachPage() {
   const statLabelClass = "text-[10px] uppercase tracking-wide text-slate-500";
   const statValueClass = "mt-1 text-lg font-semibold tabular-nums text-slate-900";
   const softSurfaceClass = "rounded-xl border border-slate-200 bg-slate-50/50 shadow-sm";
+  const summaryCardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm";
+  const summaryTileClass = "rounded-2xl border border-slate-200 bg-white p-4";
+  const compactTileClass = "rounded-xl border p-3";
 
   return (
     <div className="space-y-6">
-      <CoachHubCards />
+      <CoachHubCards weeklyOutlook={weeklyPerformanceOutlook} />
 
       {/* Today Command Center */}
-      <Card className="border border-slate-200 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-slate-100 via-white to-slate-50 pb-3">
-          <CardTitle className={sectionTitleClass}>Today Command Center</CardTitle>
-          <CardDescription className={sectionSubtitleClass}>Today&apos;s coaching decision summary</CardDescription>
+      <Card className={summaryCardClass}>
+        <CardHeader className="pb-2">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">Today Command Center</CardTitle>
+              <CardDescription className="mt-1 text-sm text-slate-500">Today&apos;s coaching decision summary</CardDescription>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
+              <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {(() => {
@@ -2528,71 +4564,56 @@ export default function CoachPage() {
             const nFull = teamSignal?.n_full ?? 0;
             const nReduced = teamSignal?.n_reduced ?? 0;
             const nRecovery = teamSignal?.n_recovery ?? 0;
+            const commandTiles = [
+              { label: "Risk level", value: risk.label, tone: "border-slate-200 bg-white" },
+              { label: "Team action", value: leadingAction, tone: "border-slate-200 bg-white" },
+              { label: "Needs review", value: String(needsReviewCount), tone: "border-slate-200 bg-white" },
+              { label: "Total players", value: String(totalPlayers), tone: "border-slate-200 bg-white" },
+            ];
+            const statusTiles = [
+              { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+              { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
+              { label: "Recovery", value: String(nRecovery), sub: "Protected", tone: "border-rose-200 bg-rose-50 text-rose-800" },
+              { label: "Dominant fatigue", value: fatigueDominant, sub: "Team signal", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+              { label: "Neural load", value: neuralState, sub: "Current state", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+              { label: "Next-day risk", value: nextDayRisk, sub: "Forecast", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+            ];
 
             return (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${ui.pill}`}>{risk.label}</div>
-                    <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${dayStateInfo.badge}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
+                  <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${dayStateInfo.badge}`}>
                       Diagnostic: {dayStateInfo.label}
+                  </div>
+                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                    Team outlook: {teamOutlook.band}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {commandTiles.map((tile) => (
+                    <div key={tile.label} className={`${summaryTileClass} ${tile.tone}`}>
+                      <div className={statLabelClass}>{tile.label}</div>
+                      <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{tile.value}</div>
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Coach: <span className="font-semibold">{coachDisplayName ?? "—"}</span> · MD {mdDayToday}
-                  </div>
+                  ))}
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className={statLabelClass}>Risk level</div>
-                    <div className="mt-1 text-xl font-semibold">{risk.label}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className={statLabelClass}>Team action</div>
-                    <div className="mt-1 text-xl font-semibold">{leadingAction}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className={statLabelClass}>Needs review</div>
-                    <div className="mt-1 text-xl font-semibold tabular-nums">{needsReviewCount}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className={statLabelClass}>Total players</div>
-                    <div className="mt-1 text-xl font-semibold tabular-nums">{totalPlayers}</div>
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                  {statusTiles.map((tile) => (
+                    <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
+                      <div className="text-[10px] uppercase tracking-wide opacity-80">{tile.label}</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
+                      <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-emerald-700">Full</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-emerald-700">{nFull}</div>
-                  </div>
-                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-yellow-700">Reduced</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-yellow-700">{nReduced}</div>
-                  </div>
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-red-700">Recovery</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{nRecovery}</div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className={statLabelClass}>Dominant fatigue</div>
-                    <div className="mt-1 text-lg font-semibold">{fatigueDominant}</div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className={statLabelClass}>Neural load</div>
-                    <div className="mt-1 text-lg font-semibold">{neuralState}</div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className={statLabelClass}>Next-day risk</div>
-                    <div className="mt-1 text-lg font-semibold">{nextDayRisk}</div>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border border-slate-200 bg-white p-3 text-sm ${ui.text}`}>
-                  <div className={statLabelClass}>Coach recommendation</div>
-                  <div className="mt-1 font-medium text-gray-800">{rec}</div>
-                  <div className="mt-2 text-xs text-slate-500">
+                <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
+                  <div className="text-[10px] uppercase tracking-wide opacity-80">Coach recommendation</div>
+                  <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
+                  <div className="mt-2 text-xs text-slate-600">
                     Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
                   </div>
                 </div>
@@ -2602,13 +4623,277 @@ export default function CoachPage() {
         </CardContent>
       </Card>
 
-      <section className="space-y-3">
+      <Card className={`h-full border ${tm.border} shadow-sm`}>
+        <CardHeader className={`${tm.bg}`}>
+          <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
+          <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
+            Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
+            <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
+            <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          {!teamIntel ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+          ) : (
+            <>
+              <div className="grid gap-3 lg:grid-cols-12">
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm lg:col-span-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Volatility</div>
+                  <div className="mt-3 text-3xl font-semibold tabular-nums text-emerald-950">{teamIntel.volatility_pct ?? 0}%</div>
+                  <div className="mt-2 text-sm text-emerald-800">volatile players: <span className="font-semibold">{teamIntel.n_volatile ?? 0}</span></div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm lg:col-span-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-amber-700">Readiness mix</div>
+                  <div className="mt-3 text-2xl font-semibold text-amber-950 tabular-nums">
+                    {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
+                  </div>
+                  <div className="mt-1 text-xs text-amber-700">RED / YELLOW / GREEN(+)</div>
+                  <div className="mt-2 text-sm text-amber-800 tabular-nums">
+                    n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 shadow-sm lg:col-span-4">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-rose-700">Status snapshot</div>
+                  <div className="mt-3 text-2xl font-semibold text-rose-950">{teamIntel.team_status ?? "—"}</div>
+                  <div className="mt-2 text-sm text-rose-800">
+                    baseline: <span className="font-semibold">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
+                    <span className="font-semibold">{teamIntel.n_players ?? "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Team summary</div>
+                  <div className="mt-3 space-y-3 text-sm text-slate-700">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <span className="text-slate-500">Avg risk</span>
+                      <span className="font-semibold tabular-nums text-slate-900">{teamPerformanceIntelligence.averageRiskScore.toFixed(1)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <span className="text-slate-500">Avg performance</span>
+                      <span className="font-semibold tabular-nums text-slate-900">{teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">High / critical risk</span>
+                      <span className="font-semibold text-slate-900">
+                        {(teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0) +
+                          (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    {teamPerformanceIntelligence.teamSummaryText}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Monitoring pattern</div>
+                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-slate-500">Risk bands</span>
+                      <span className="text-right font-semibold text-slate-900">
+                        Low {teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0} · Mod {teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0} · High {teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0} · Critical {teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-slate-500">Recovery recommended</span>
+                      <span className="font-semibold text-slate-900">{teamPerformanceIntelligence.loadToleranceCounts.RECOVERY_ONLY ?? 0}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-slate-500">Neural + volatility</span>
+                      <span className="text-right font-semibold text-slate-900">
+                        {teamNeuralVolatilitySummary.unstablePlayers.length} unstable · {teamNeuralVolatilitySummary.collapseWatchPlayers.length} collapse watch · {teamNeuralVolatilitySummary.peakWindowPlayers.length} peak window
+                      </span>
+                    </div>
+                  </div>
+                  <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+                    <li>{teamNeuralVolatilitySummary.summaryText}</li>
+                    <li>{teamPrescriptionSummary.summaryText}</li>
+                  </ul>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Session recommendation</div>
+                  <div className="mt-3 space-y-3 text-sm text-slate-700">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+                      <span className="text-slate-500">Prescription</span>
+                      <span className="text-right font-semibold text-slate-900">
+                        {teamPrescriptionSummary.fullCount} full · {teamPrescriptionSummary.modifiedCount} modified · {teamPrescriptionSummary.recoveryCount} recovery · {teamPrescriptionSummary.holdCount} hold
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-slate-500">Protect for match</span>
+                      <span className="text-right font-semibold text-slate-900">
+                        {teamPrescriptionSummary.protectForMatchCount} · Limited exposure {teamPrescriptionSummary.limitedExposureCount}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    {summaryLines(teamIntel.recommendation, 3).length ? (
+                      summaryLines(teamIntel.recommendation, 3).map((line, idx) => <div key={`perf-ti-rec-${idx}`}>{line}</div>)
+                    ) : (
+                      <div>—</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Rules / overrides</div>
+                  <div className="mt-3 space-y-3 text-sm text-slate-700">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <span className="text-slate-500">Adjusted players</span>
+                      <span className="font-semibold text-slate-900">{teamRulesSummary.overriddenPlayersCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <span className="text-slate-500">Review required</span>
+                      <span className="font-semibold text-slate-900">{teamRulesSummary.reviewRequiredCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Protected players</span>
+                      <span className="font-semibold text-slate-900">{teamRulesSummary.protectedPlayersCount}</span>
+                    </div>
+                  </div>
+                  <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+                    <li>{teamRulesSummary.summaryText}</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Drafts / workflow</div>
+                <div className="mt-4">
+                  <TeamSessionBuildSummaryCard summary={teamSessionBuildSummary} />
+                  <div className="mt-2 text-[11px]">
+                    <Link href="/coach/session-workflow" className="font-medium text-slate-700 underline underline-offset-2">
+                      Open Session Workflow
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <section className="space-y-4">
         <div className={`flex items-end justify-between gap-3 px-3 py-2 ${softSurfaceClass}`}>
           <div>
             <div className={sectionTitleClass}>Supporting team intelligence</div>
             <div className={sectionSubtitleClass}>Performance context and team-level monitoring beneath the command summary.</div>
+            <div className="mt-1 text-xs text-slate-600">
+              Team outlook: <span className="font-semibold text-slate-800">{teamOutlook.band}</span>
+            </div>
           </div>
           <div className="text-[11px] uppercase tracking-wide text-slate-500">Level 2</div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card className={summaryCardClass}>
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Team Intelligence</CardTitle>
+              <CardDescription className={sectionSubtitleClass}>High-level team monitoring summary.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!teamIntel ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-white">
+                  {[
+                    ["Status", teamIntel.team_status ?? "—"],
+                    ["Baseline maturity", teamIntel.baseline_maturity ?? "—"],
+                    ["Players", String(teamIntel.n_players ?? "—")],
+                    ["Volatility", `${teamIntel.volatility_pct ?? 0}%`],
+                    ["Volatile players", String(teamIntel.n_volatile ?? 0)],
+                    ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
+                    ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
+                    ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                    ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
+                    ["Prescription", teamPrescriptionSummary.summaryText],
+                    ["Rules / override", teamRulesSummary.summaryText],
+                  ].map(([label, value], idx, rows) => (
+                    <div
+                      key={label}
+                      className={`flex items-center justify-between gap-4 px-4 py-3 ${idx < rows.length - 1 ? "border-b border-slate-200" : ""}`}
+                    >
+                      <div className="text-sm text-slate-500">{label}</div>
+                      <div className="text-right text-sm font-semibold text-slate-900">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className={summaryCardClass}>
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Readiness Mix</CardTitle>
+              <CardDescription className={sectionSubtitleClass}>Current team state distribution and risk map.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!teamIntel ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{queueEmptyMessage}</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-rose-700">Red</div>
+                      <div className="mt-1 text-xl font-semibold tabular-nums text-rose-800">{teamIntel.pct_red ?? 0}%</div>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-amber-700">Yellow</div>
+                      <div className="mt-1 text-xl font-semibold tabular-nums text-amber-800">{teamIntel.pct_yellow ?? 0}%</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green</div>
+                      <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-800">{(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="h-4 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                      <div className="flex h-full w-full">
+                        <div className="bg-rose-400/70" style={{ width: `${teamIntel.pct_red ?? 0}%` }} />
+                        <div className="bg-amber-400/70" style={{ width: `${teamIntel.pct_yellow ?? 0}%` }} />
+                        <div className="bg-emerald-400/70" style={{ width: `${(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%` }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>n: {teamIntel.n_red ?? 0}</span>
+                      <span>n: {teamIntel.n_yellow ?? 0}</span>
+                      <span>n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1">
+                    <div className="text-sm font-semibold text-slate-900">Team Risk Map</div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-700">Low Risk</div>
+                        <div className="mt-1 text-xl font-semibold text-emerald-800">{teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0}</div>
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-amber-700">Moderate</div>
+                        <div className="mt-1 text-xl font-semibold text-amber-800">{teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0}</div>
+                      </div>
+                      <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-orange-700">High Risk</div>
+                        <div className="mt-1 text-xl font-semibold text-orange-800">{teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0}</div>
+                      </div>
+                      <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-rose-700">Critical</div>
+                        <div className="mt-1 text-xl font-semibold text-rose-800">{teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-3">
@@ -2617,143 +4902,50 @@ export default function CoachPage() {
           <LoadMetricsCard teamId={coachTeamId} />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-12">
-          <div className="xl:col-span-4">
-            <Card className="h-full border border-slate-200 bg-white shadow-sm">
-              <CardHeader>
-                <CardTitle className={sectionTitleClass}>Check-in reminders</CardTitle>
-                <CardDescription className={sectionSubtitleClass}>Status for today and manual reminder trigger for players missing check-in.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className={statLabelClass}>Total players</div>
-                    <div className={statValueClass}>{reminderStatus?.totalPlayers ?? "—"}</div>
-                  </div>
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-green-700">Checked in</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{reminderStatus?.checkedIn ?? "—"}</div>
-                  </div>
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-amber-700">Missing check-ins</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-amber-700">{reminderStatus?.missing ?? "—"}</div>
-                  </div>
+        <div>
+          <Card className="h-full border border-slate-200 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle className={sectionTitleClass}>Check-in reminders</CardTitle>
+              <CardDescription className={sectionSubtitleClass}>Status for today and manual reminder trigger for players missing check-in.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className={statLabelClass}>Total players</div>
+                  <div className={statValueClass}>{reminderStatus?.totalPlayers ?? "—"}</div>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={() => sendManualReminder(today)} disabled={manualReminderSending || reminderStatusLoading}>
-                    {manualReminderSending ? "Sending..." : "Send reminder to missing players"}
-                  </Button>
-                  <Button variant="outline" onClick={() => loadReminderStatus(today)} disabled={manualReminderSending || reminderStatusLoading}>
-                    {reminderStatusLoading ? "Loading..." : "Refresh status"}
-                  </Button>
-                  <div className="text-xs text-gray-500">
-                    Last manual send:{" "}
-                    <span className="font-medium text-gray-700">
-                      {reminderStatus?.lastManualSendAt ? new Date(reminderStatus.lastManualSendAt).toLocaleString() : "—"}
-                    </span>
-                  </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-green-700">Checked in</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{reminderStatus?.checkedIn ?? "—"}</div>
                 </div>
-
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
-                  <span className="font-semibold text-slate-700">Compliance diagnostic:</span> {complianceMessage}
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-amber-700">Missing check-ins</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-amber-700">{reminderStatus?.missing ?? "—"}</div>
                 </div>
+              </div>
 
-                {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
-              </CardContent>
-            </Card>
-          </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={() => sendManualReminder(today)} disabled={manualReminderSending || reminderStatusLoading}>
+                  {manualReminderSending ? "Sending..." : "Send reminder to missing players"}
+                </Button>
+                <Button variant="outline" onClick={() => loadReminderStatus(today)} disabled={manualReminderSending || reminderStatusLoading}>
+                  {reminderStatusLoading ? "Loading..." : "Refresh status"}
+                </Button>
+                <div className="text-xs text-gray-500">
+                  Last manual send:{" "}
+                  <span className="font-medium text-gray-700">
+                    {reminderStatus?.lastManualSendAt ? new Date(reminderStatus.lastManualSendAt).toLocaleString() : "—"}
+                  </span>
+                </div>
+              </div>
 
-          <div className="xl:col-span-8">
-            {/* Performance Intelligence — Team */}
-            <Card className={`h-full border ${tm.border} shadow-sm`}>
-              <CardHeader className={`${tm.bg}`}>
-                <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
-                <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
-                  Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
-                  <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
-                  <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
-                </CardDescription>
-              </CardHeader>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Compliance diagnostic:</span> {complianceMessage}
+              </div>
 
-              <CardContent className="space-y-4">
-                {!teamIntel ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
-                ) : (
-                  <>
-                    <div className="grid gap-3 lg:grid-cols-12">
-                      <div className="rounded-xl border border-slate-300 bg-white p-4 shadow-sm lg:col-span-4">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Volatility (hero)</div>
-                        <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{teamIntel.volatility_pct ?? 0}%</div>
-                        <div className="mt-1 text-xs text-slate-500">volatile players: {teamIntel.n_volatile ?? 0}</div>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-4">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Readiness mix</div>
-                        <div className="mt-1 text-base font-semibold text-slate-900 tabular-nums">
-                          {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">RED / YELLOW / GREEN(+)</div>
-                        <div className="mt-1 text-xs text-slate-500 tabular-nums">
-                          n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-4">
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Status snapshot</div>
-                        <div className="mt-1 text-base font-semibold text-slate-900">{teamIntel.team_status ?? "—"}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          baseline: <span className="font-medium text-slate-700">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
-                          <span className="font-medium text-slate-700">{teamIntel.n_players ?? "—"}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 shadow-sm">
-                        <div className="text-[10px] uppercase tracking-wide text-red-700">Red</div>
-                        <div className="text-lg font-semibold tabular-nums text-red-800">{teamIntel.pct_red ?? 0}%</div>
-                        <div className="text-xs text-red-700">n: {teamIntel.n_red ?? 0}</div>
-                      </div>
-
-                      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 shadow-sm">
-                        <div className="text-[10px] uppercase tracking-wide text-yellow-700">Yellow</div>
-                        <div className="text-lg font-semibold tabular-nums text-yellow-800">{teamIntel.pct_yellow ?? 0}%</div>
-                        <div className="text-xs text-yellow-700">n: {teamIntel.n_yellow ?? 0}</div>
-                      </div>
-
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 shadow-sm">
-                        <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green (+)</div>
-                        <div className="text-lg font-semibold tabular-nums text-emerald-800">
-                          {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
-                        </div>
-                        <div className="text-xs text-emerald-700">
-                          n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                        <div className={statLabelClass}>Avg STEN</div>
-                        <div className="text-lg font-semibold tabular-nums">{teamSten.avg == null ? "—" : teamSten.avg.toFixed(1)}</div>
-                        <div className="text-xs text-gray-500">coverage: {teamSten.coverage}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white p-3 shadow-sm">
-                      <div className="text-[10px] uppercase tracking-wide text-slate-600">Team plan recommendation</div>
-                      <div className="mt-1 space-y-1 text-sm font-medium text-slate-900">
-                        {summaryLines(teamIntel.recommendation, 3).length ? (
-                          summaryLines(teamIntel.recommendation, 3).map((line, idx) => <div key={`ti-rec-${idx}`}>{line}</div>)
-                        ) : (
-                          <div>—</div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -3235,6 +5427,13 @@ export default function CoachPage() {
                         <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
                           {genLoading ? "Generating…" : "Generate Today Decisions"}
                         </Button>
+                        <Button
+                          variant="outline"
+                          onClick={downloadReadinessRiskReport}
+                          disabled={pdfDownloading || loading}
+                        >
+                          {pdfDownloading ? "Generating PDF…" : "Download Readiness Risk Report"}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -3247,7 +5446,7 @@ export default function CoachPage() {
               {rows.length === 0 ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{queueEmptyMessage}</div>
               ) : (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-gray-50/40 p-3 md:p-4 space-y-4">{rowsWithAdaptive.map((r) => renderRow(r))}</div>
+                <div className="mt-3 rounded-xl border border-slate-200 bg-gray-50/40 p-3 md:p-4 space-y-4">{rowsWithSessionDraft.map((r) => renderRow(r))}</div>
               )}
 
               {/* Simple paging */}
@@ -3264,10 +5463,86 @@ export default function CoachPage() {
                   </Button>
                 </div>
               </div>
+
+              <details className="rounded-xl border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Team Risk Map</summary>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Low Risk</div>
+                    <div className="mt-1 space-y-0.5 text-emerald-900">
+                      {teamRiskMap.lowRisk.slice(0, 8).map((p) => (
+                        <div key={`low-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                      ))}
+                      {!teamRiskMap.lowRisk.length ? <div className="text-emerald-700/70">No players</div> : null}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Moderate Risk</div>
+                    <div className="mt-1 space-y-0.5 text-yellow-900">
+                      {teamRiskMap.moderateRisk.slice(0, 8).map((p) => (
+                        <div key={`mod-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                      ))}
+                      {!teamRiskMap.moderateRisk.length ? <div className="text-yellow-700/70">No players</div> : null}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-700">High Risk</div>
+                    <div className="mt-1 space-y-0.5 text-orange-900">
+                      {teamRiskMap.highRisk.slice(0, 8).map((p) => (
+                        <div key={`high-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                      ))}
+                      {!teamRiskMap.highRisk.length ? <div className="text-orange-700/70">No players</div> : null}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Critical</div>
+                    <div className="mt-1 space-y-0.5 text-red-900">
+                      {teamRiskMap.criticalRisk.slice(0, 8).map((p) => (
+                        <div key={`crit-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                      ))}
+                      {!teamRiskMap.criticalRisk.length ? <div className="text-red-700/70">No players</div> : null}
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details className="rounded-xl border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Weekly Performance Intelligence</summary>
+                <div className="mt-2 space-y-2 text-xs text-slate-700">
+                  <div>
+                    Team average risk: <span className="font-semibold tabular-nums">{weeklyRiskReport.avgRiskScore.toFixed(1)}</span>
+                  </div>
+                  <div>{weeklyRiskReport.teamTrend}</div>
+                  <div>{weeklyRiskReport.recommendation}</div>
+                  <div>
+                    Highest risk:{" "}
+                    {weeklyRiskReport.highestRiskPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                  </div>
+                  <div>
+                    Improving: {weeklyRiskReport.mostImprovedPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                  </div>
+                </div>
+              </details>
+
+              <PerformanceIntelligencePanel
+                teamOutlook={teamOutlook}
+                weeklyReport={weeklyRiskReport}
+                riskMap={teamRiskMap}
+              />
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <ExplainabilityDrawer
+        open={!!piDrawerDecision}
+        onClose={() => {
+          setPiDrawerDecision(null);
+          setPiDrawerPlayerName(null);
+        }}
+        playerName={piDrawerPlayerName}
+        decision={piDrawerDecision}
+      />
 
       <Card className="shadow-sm">
         <CardContent className="p-4 text-sm">

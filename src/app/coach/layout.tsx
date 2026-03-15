@@ -1,11 +1,17 @@
+"use client";
+
 // src/app/coach/layout.tsx
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function CoachLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isDisplayRoute = pathname?.startsWith("/coach/display");
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+        <div className={`${isDisplayRoute ? "w-full px-4 py-3" : "mx-auto flex max-w-6xl items-center justify-between px-4 py-3"} flex items-center justify-between`}>
           <div className="flex items-center gap-3">
             <div className="text-sm font-semibold tracking-tight">
               Coach · Readiness
@@ -58,11 +64,53 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
             >
               Templates
             </Link>
+
+            <Link
+              href="/coach/session-workflow"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Session workflow
+            </Link>
+
+            <Link
+              href="/coach/settings"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Settings
+            </Link>
+
+            <Link
+              href="/coach/org-reporting"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Org reporting
+            </Link>
+
+            <Link
+              href="/coach/reporting-center"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Reporting center
+            </Link>
+
+            <Link
+              href="/coach/integrations"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Integrations
+            </Link>
+
+            <Link
+              href="/coach/automation-center"
+              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              Automation
+            </Link>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className={isDisplayRoute ? "w-full px-4 py-6" : "mx-auto max-w-6xl px-4 py-6"}>{children}</main>
     </div>
   );
 }

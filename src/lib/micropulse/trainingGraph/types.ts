@@ -1,3 +1,5 @@
+import type { IsoPrescription } from "../isometrics/types";
+
 export type AthleteState =
   | "GREEN_PLUS"
   | "GREEN"
@@ -226,6 +228,7 @@ export interface ResolvedNode {
   rest: RestPrescription | null;
   notes: string[];
   reasons: RuleReasonCode[];
+  isoPrescriptions?: Record<string, IsoPrescription> | null;
 }
 
 export interface ResolvedSession {

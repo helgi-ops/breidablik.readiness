@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
@@ -8,6 +9,48 @@ import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
+import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
+import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
+import {
+  buildNeuralVolatilityIntelligenceDecision,
+  type NeuralVolatilityIntelligenceDecision,
+} from "@/lib/micropulse/neuralVolatilityIntelligence";
+import { buildPrescriptionDecision, type PrescriptionDecision } from "@/lib/micropulse/prescriptionEngine";
+import { applyCoachRules, type FinalRecommendationDecision } from "@/lib/micropulse/rulesEngine";
+import { buildSessionDraft, type SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
+import {
+  buildPlayerPublishedSessionView,
+  loadSessionDraftRecordByPlayerDate,
+  type PlayerPublishedSessionView,
+} from "@/lib/micropulse/sessionWorkflow";
+import {
+  acknowledgeSession,
+  buildPlayerAcknowledgedNotification,
+  buildPlayerCompletedNotification,
+  buildPlayerSessionStatusView,
+  completeSession,
+  loadAssignmentsForPlayer,
+  markSessionSeen,
+  saveNotificationEvent,
+  type PlayerSessionStatusView,
+  type SessionAssignmentRecord,
+  updatePlayerSessionStatus,
+} from "@/lib/micropulse/sessionDelivery";
+import {
+  buildRuntimeRulesFromAdminConfig,
+  createDefaultAdminConfigSnapshot,
+  getProtectedPlayerTags,
+  isPlayerProtectedByAdminConfig,
+  loadAdminConfigSnapshotFromStorage,
+  type AdminConfigSnapshot,
+} from "@/lib/micropulse/adminConfig";
+import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
+import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
+import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
+import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
+import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionView";
+import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
 
 type ProfileRow = {
   id: string;
@@ -127,6 +170,33 @@ type PostTrainingTemplateRow = {
   structure: any; // jsonb
   is_active: boolean;
 };
+
+function riskTrendLinePoints(values: number[], width = 320, height = 80, padding = 8): string {
+  if (!values.length) return "";
+  if (values.length === 1) {
+    const y = height / 2;
+    return `${padding},${y} ${width - padding},${y}`;
+  }
+  const innerW = Math.max(1, width - padding * 2);
+  const innerH = Math.max(1, height - padding * 2);
+  const stepX = innerW / (values.length - 1);
+
+  return values
+    .map((raw, idx) => {
+      const x = padding + idx * stepX;
+      const v = Math.max(0, Math.min(100, raw));
+      const y = padding + (1 - v / 100) * innerH;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function readinessMarkerTone(state: "GREEN" | "YELLOW" | "RED" | "GRAY"): string {
+  if (state === "GREEN") return "#16a34a";
+  if (state === "YELLOW") return "#ca8a04";
+  if (state === "RED") return "#dc2626";
+  return "#64748b";
+}
 
 // ============================
 // ✅ Fix modules (from check-in notes)
@@ -1143,6 +1213,23 @@ export default function PlayerClient() {
   const [sessionRpeStatus, setSessionRpeStatus] = useState<SessionRpeStatus | null>(null);
   const [sessionRpeStatusLoading, setSessionRpeStatusLoading] = useState(false);
   const [sessionRpeStatusError, setSessionRpeStatusError] = useState("");
+  const [playerRiskTrend, setPlayerRiskTrend] = useState<PlayerRiskTrend>({ dates: [], riskScores: [], readinessStates: [] });
+  const [neuralVolatilityDecision, setNeuralVolatilityDecision] = useState<NeuralVolatilityIntelligenceDecision | null>(null);
+  const [prescriptionDecision, setPrescriptionDecision] = useState<PrescriptionDecision | null>(null);
+  const [finalRecommendationDecision, setFinalRecommendationDecision] = useState<FinalRecommendationDecision | null>(null);
+  const [sessionDraft, setSessionDraft] = useState<SessionDraft | null>(null);
+  const [publishedSessionView, setPublishedSessionView] = useState<PlayerPublishedSessionView | null>(null);
+  const [assignmentRecord, setAssignmentRecord] = useState<SessionAssignmentRecord | null>(null);
+  const [playerSessionStatusView, setPlayerSessionStatusView] = useState<PlayerSessionStatusView | null>(null);
+  const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+
+  useEffect(() => {
+    const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
+    load();
+    const onStorage = () => load();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const fixModules = useMemo(() => dedupeFixModulesByTag(fixRow?.fix_modules), [fixRow?.fix_modules]);
 
@@ -1201,24 +1288,43 @@ export default function PlayerClient() {
     const safeDay = sanitizeDay(dayInput);
 
     try {
-      const { error } = await supabase.rpc("stage4_ensure_decision", {
+      // Prefer legacy RPC path (most reliable for stage4 generation in dev/prod parity).
+      const rpc = await supabase.rpc("stage4_ensure_decision", {
         p_player_id: playerId,
         p_entry_date: safeDay,
       });
+      if (!rpc.error) return;
 
-      if (error) {
-        const code = (error as any)?.code;
-        const msg = (error as any)?.message ?? (error as any)?.details ?? (error as any)?.hint ?? JSON.stringify(error);
+      const rpcCode = String((rpc.error as any)?.code ?? "");
+      const rpcMsg = String((rpc.error as any)?.message ?? (rpc.error as any)?.details ?? (rpc.error as any)?.hint ?? "").trim();
+      const rpcExpectedNoop = rpcCode === "PGRST116" || rpcMsg.toLowerCase().includes("no rows") || rpcMsg.toLowerCase().includes("no-op");
+      if (rpcExpectedNoop) {
+        console.log("stage4_ensure_decision (rpc): no-op / no decision yet for", safeDay);
+        return;
+      }
 
-        const expectedCodes = new Set(["PGRST116"]);
-        const looksEmptyObject = typeof error === "object" && error && Object.keys(error as any).length === 0;
+      console.warn("stage4_ensure_decision (rpc) failed, trying API fallback:", { code: rpcCode || null, msg: rpcMsg || null });
 
-        if (expectedCodes.has(String(code)) || looksEmptyObject) {
-          console.log("stage4_ensure_decision: no-op / no decision yet for", safeDay);
-          return;
-        }
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !sessionData?.session?.access_token) {
+        console.error("stage4_ensure_decision fallback skipped: missing auth token");
+        return;
+      }
 
-        console.error("stage4_ensure_decision failed:", { code, msg, raw: error });
+      const res = await fetch("/api/stage4/ensure-decision", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          player_id: playerId,
+          entry_date: safeDay,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error("stage4_ensure_decision fallback failed:", { status: res.status, body: body.slice(0, 200) });
       }
     } catch (e: any) {
       console.error("stage4_ensure_decision unexpected error:", e?.message ?? e);
@@ -1256,27 +1362,34 @@ export default function PlayerClient() {
 
   async function loadGenericMessage(teamId: string | null, flag: Flag) {
     if (teamId) {
-      const { data: teamMsg } = await supabase
+      const { data: teamRows, error: teamErr } = await supabase
         .from("player_flag_messages")
         .select("title, message, why")
         .eq("team_id", teamId)
         .eq("flag", flag)
         .eq("lang", "is")
         .eq("is_active", true)
-        .maybeSingle();
+        .order("id", { ascending: false })
+        .limit(1);
 
-      if (teamMsg?.message) return teamMsg as any;
+      if (!teamErr) {
+        const teamMsg = Array.isArray(teamRows) ? teamRows[0] : null;
+        if (teamMsg?.message) return teamMsg as any;
+      }
     }
 
-    const { data: globalMsg } = await supabase
+    const { data: globalRows, error: globalErr } = await supabase
       .from("player_flag_messages")
       .select("title, message, why")
       .is("team_id", null)
       .eq("flag", flag)
       .eq("lang", "is")
       .eq("is_active", true)
-      .maybeSingle();
+      .order("id", { ascending: false })
+      .limit(1);
 
+    if (globalErr) return null;
+    const globalMsg = Array.isArray(globalRows) ? globalRows[0] : null;
     return (globalMsg as any) ?? null;
   }
 
@@ -1388,6 +1501,76 @@ export default function PlayerClient() {
 
     if (dErr) throw new Error(dErr.message);
     if (!drow?.id) {
+      // Fallback 1: use assigned workout template for the day if present.
+      const { data: assignment } = await supabase
+        .from("player_template_assignments")
+        .select(
+          `
+          entry_date,
+          template:workout_templates (
+            id, title, description, structure
+          )
+        `
+        )
+        .eq("player_id", playerId)
+        .eq("entry_date", safeDay)
+        .maybeSingle();
+
+      if (assignment?.template) {
+        setPlanIsFallback(true);
+        const tpl = assignment.template as any;
+        return {
+          decision_id: null,
+          team_id: null,
+          player_id: playerId,
+          entry_date: safeDay,
+          md_day: null,
+          readiness_level: null,
+          chosen_variant_id: null,
+          locked: false,
+          source: "TEMPLATE_ASSIGNMENT_FALLBACK",
+          confidence: null,
+          why: "Fallback plan from assigned daily template.",
+          inputs: null,
+          training_system: null,
+          variant: null,
+          title: tpl?.title ?? "Training Session",
+          description: tpl?.description ?? null,
+          structure: tpl?.structure ?? [],
+        } as Stage4PlanRow;
+      }
+
+      // Fallback 2: use session context row so page can render (no hard-stop).
+      const { data: sessionRow } = await supabase
+        .from("v_player_session_today_v2")
+        .select("team_id, md_day_resolved, readiness_flag, planned_focus, session_type")
+        .eq("player_id", playerId)
+        .eq("day_date", safeDay)
+        .maybeSingle();
+
+      if (sessionRow) {
+        setPlanIsFallback(true);
+        return {
+          decision_id: null,
+          team_id: (sessionRow as any).team_id ?? null,
+          player_id: playerId,
+          entry_date: safeDay,
+          md_day: (sessionRow as any).md_day_resolved ?? null,
+          readiness_level: (sessionRow as any).readiness_flag ?? null,
+          chosen_variant_id: null,
+          locked: false,
+          source: "SESSION_CONTEXT_FALLBACK",
+          confidence: null,
+          why: "Fallback plan from session context.",
+          inputs: null,
+          training_system: null,
+          variant: null,
+          title: (sessionRow as any).planned_focus ?? "Training Session",
+          description: (sessionRow as any).session_type ? `Session type: ${(sessionRow as any).session_type}` : null,
+          structure: [],
+        } as Stage4PlanRow;
+      }
+
       setPlanIsFallback(false);
       return null;
     }
@@ -1690,7 +1873,52 @@ export default function PlayerClient() {
         setCoachFinalFlag((coachFlagRow as any) ?? null);
 
         const p = await fetchStage4Plan(prof.player_id, safeDay);
-        setPlan((p as any) ?? null);
+        if (p) {
+          setPlan((p as any) ?? null);
+        } else if (srow) {
+          setPlanIsFallback(true);
+          setPlan({
+            decision_id: null,
+            team_id: (srow as any).team_id ?? null,
+            player_id: prof.player_id,
+            entry_date: safeDay,
+            md_day: (srow as any).md_day_resolved ?? null,
+            readiness_level: (srow as any).readiness_flag ?? null,
+            chosen_variant_id: null,
+            locked: false,
+            source: "RUN_SESSION_FALLBACK",
+            confidence: null,
+            why: "Fallback plan generated from today's session context.",
+            inputs: null,
+            training_system: null,
+            variant: null,
+            title: (srow as any).planned_focus ?? "Training Session",
+            description: (srow as any).session_type ? `Session type: ${(srow as any).session_type}` : null,
+            structure: [],
+          } as Stage4PlanRow);
+        } else {
+          // Last-resort fallback to preserve the player dashboard layout in dev flow.
+          setPlanIsFallback(true);
+          setPlan({
+            decision_id: null,
+            team_id: null,
+            player_id: prof.player_id,
+            entry_date: safeDay,
+            md_day: null,
+            readiness_level: "GREEN",
+            chosen_variant_id: null,
+            locked: false,
+            source: "EMPTY_PLAN_FALLBACK",
+            confidence: null,
+            why: "Fallback plan generated because Stage-4/session rows were unavailable.",
+            inputs: null,
+            training_system: null,
+            variant: null,
+            title: "Training Session",
+            description: "Plan is being prepared. Follow coach guidance for today.",
+            structure: [],
+          } as Stage4PlanRow);
+        }
 
         if (isStaffRole(prof?.role)) {
           const did = (p as any)?.decision_id ?? null;
@@ -1715,6 +1943,247 @@ export default function PlayerClient() {
           .maybeSingle();
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
+        setNeuralVolatilityDecision(null);
+        setPrescriptionDecision(null);
+        setFinalRecommendationDecision(null);
+
+        const { data: trendRows, error: trendErr } = await supabase
+          .from("readiness_entries")
+          .select("entry_date,total_score,sleep_quality,stress_mood,fatigue_energy,muscle_soreness")
+          .eq("player_id", prof.player_id)
+          .lte("entry_date", safeDay)
+          .order("entry_date", { ascending: true })
+          .limit(7);
+        if (trendErr) {
+          console.error("readiness trend error:", trendErr.message);
+          setNeuralVolatilityDecision(null);
+          setPrescriptionDecision(null);
+          setFinalRecommendationDecision(null);
+        } else {
+          const cleanTrendRows = ((trendRows ?? []) as any[])
+            .filter((row) => !!row)
+            .sort((a, b) => String(a.entry_date ?? "").localeCompare(String(b.entry_date ?? "")));
+          const trendInput =
+            cleanTrendRows.map((row: any) => {
+              const rawTotal = typeof row.total_score === "number" ? row.total_score : null;
+              const normalizedReadiness =
+                rawTotal == null ? null : Math.max(0, Math.min(100, ((rawTotal - 5) / 20) * 100));
+              const state =
+                normalizedReadiness == null
+                  ? "GRAY"
+                  : normalizedReadiness < 40
+                    ? "RED"
+                    : normalizedReadiness < 60
+                      ? "YELLOW"
+                      : "GREEN";
+              const d = buildPerformanceIntelligenceDecision({
+                date: String(row.entry_date ?? ""),
+                readinessScore: normalizedReadiness,
+                readinessState: state,
+                athleteState: state,
+                sessionMode: "pending",
+                sleepScore: typeof row.sleep_quality === "number" ? row.sleep_quality : null,
+                stressScore: typeof row.stress_mood === "number" ? row.stress_mood : null,
+                energyScore: typeof row.fatigue_energy === "number" ? row.fatigue_energy : null,
+                sorenessScore: typeof row.muscle_soreness === "number" ? row.muscle_soreness : null,
+              });
+              return {
+                date: String(row.entry_date ?? ""),
+                decision: d,
+                readinessState: state as "GREEN" | "YELLOW" | "RED" | "GRAY",
+              };
+            }) ?? [];
+          setPlayerRiskTrend(buildPlayerRiskTrend(trendInput));
+
+          const todayRawTotal = typeof mrow?.total_score === "number" ? mrow.total_score : null;
+          const todayReadinessScore =
+            todayRawTotal == null ? null : Math.max(0, Math.min(100, ((todayRawTotal - 5) / 20) * 100));
+          const todaySnapshot = buildDailyAthleteSnapshot({
+            athleteId: prof.player_id,
+            date: safeDay,
+            manual: {
+              totalScore: todayRawTotal,
+              soreness: typeof mrow?.muscle_soreness === "number" ? mrow.muscle_soreness : null,
+              stress: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+              mood: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+              sleepQuality: typeof mrow?.sleep_quality === "number" ? mrow.sleep_quality : null,
+              motivation: typeof mrow?.fatigue_energy === "number" ? mrow.fatigue_energy : null,
+              completed: todayRawTotal != null,
+              sourceDate: safeDay,
+            },
+            context: {
+              rehab: false,
+              returnToPlay: false,
+              sourceDate: safeDay,
+            },
+          });
+          const readinessDecision = buildExplainableReadinessDecision({
+            playerId: prof.player_id,
+            playerName: playerMeta?.full_name ?? undefined,
+            date: safeDay,
+            dailySnapshot: todaySnapshot,
+            readinessScore: todayReadinessScore ?? undefined,
+            checkinScore: todayRawTotal ?? undefined,
+            sleepScore: typeof mrow?.sleep_quality === "number" ? mrow.sleep_quality : undefined,
+            sorenessScore: typeof mrow?.muscle_soreness === "number" ? mrow.muscle_soreness : undefined,
+          });
+          const athleteDecision = buildAthleteDecision({
+            snapshot: todaySnapshot,
+            readinessDecision,
+          });
+          const riskHistory = trendInput.map((item) => item.decision.injuryRisk.score);
+
+          const nviDecision = buildNeuralVolatilityIntelligenceDecision({
+            date: safeDay,
+            readinessScore: todayReadinessScore,
+            readinessState: athleteDecision.athleteState,
+            athleteState: athleteDecision.athleteState,
+            sessionMode: athleteDecision.sessionMode,
+            sorenessScore: typeof mrow?.muscle_soreness === "number" ? mrow.muscle_soreness : null,
+            sleepScore: typeof mrow?.sleep_quality === "number" ? mrow.sleep_quality : null,
+            stressScore: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+            energyScore: typeof mrow?.fatigue_energy === "number" ? mrow.fatigue_energy : null,
+            moodScore: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+            readinessHistory: cleanTrendRows.map((row) =>
+              typeof row.total_score === "number" ? Math.max(0, Math.min(100, ((row.total_score - 5) / 20) * 100)) : null,
+            ),
+            sorenessHistory: cleanTrendRows.map((row) => (typeof row.muscle_soreness === "number" ? row.muscle_soreness : null)),
+            sleepHistory: cleanTrendRows.map((row) => (typeof row.sleep_quality === "number" ? row.sleep_quality : null)),
+            stressHistory: cleanTrendRows.map((row) => (typeof row.stress_mood === "number" ? row.stress_mood : null)),
+            neuralFatigueHistory: cleanTrendRows.map((row) => {
+              if (typeof row.total_score === "number" && row.total_score <= 10) return 8;
+              if (typeof row.total_score === "number" && row.total_score <= 14) return 6;
+              return 4;
+            }),
+            riskHistory,
+          });
+          setNeuralVolatilityDecision(nviDecision);
+
+          const piToday = buildPerformanceIntelligenceDecision({
+            date: safeDay,
+            readinessScore: todayReadinessScore,
+            readinessState: athleteDecision.athleteState,
+            athleteState: athleteDecision.athleteState,
+            sessionMode: athleteDecision.sessionMode,
+            sleepScore: typeof mrow?.sleep_quality === "number" ? mrow.sleep_quality : null,
+            stressScore: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+            energyScore: typeof mrow?.fatigue_energy === "number" ? mrow.fatigue_energy : null,
+            sorenessScore: typeof mrow?.muscle_soreness === "number" ? mrow.muscle_soreness : null,
+            zScore: null,
+            deltaZ: null,
+            volatility5d: null,
+            volatility7d: null,
+          });
+
+          const prescription = buildPrescriptionDecision({
+              date: safeDay,
+              readinessScore: todayReadinessScore,
+              readinessState: athleteDecision.athleteState,
+              athleteState: athleteDecision.athleteState,
+              sessionMode: athleteDecision.sessionMode,
+              injuryRiskScore: piToday.injuryRisk.score,
+              injuryRiskBand: piToday.injuryRisk.band,
+              performanceScore: piToday.performanceForecast.score,
+              performanceBand: piToday.performanceForecast.band,
+              loadToleranceScore: piToday.loadForecast.score,
+              loadToleranceBand: piToday.loadForecast.band,
+              fatigueAccumulationScore: nviDecision.fatigueAccumulation.score,
+              fatigueAccumulationBand: nviDecision.fatigueAccumulation.band,
+              instabilityWindowScore: nviDecision.instabilityWindow.score,
+              instabilityWindowBand: nviDecision.instabilityWindow.band,
+              collapseRiskScore: nviDecision.collapseRisk.score,
+              collapseRiskBand: nviDecision.collapseRisk.band,
+              peakWindowScore: nviDecision.peakWindow.score,
+              peakWindowBand: nviDecision.peakWindow.band,
+              trendDirection: nviDecision.trendState.direction,
+              sleepScore: typeof mrow?.sleep_quality === "number" ? mrow.sleep_quality : null,
+              stressScore: typeof mrow?.stress_mood === "number" ? mrow.stress_mood : null,
+              energyScore: typeof mrow?.fatigue_energy === "number" ? mrow.fatigue_energy : null,
+              sorenessScore: typeof mrow?.muscle_soreness === "number" ? mrow.muscle_soreness : null,
+              plannedSessionType: "mixed",
+              plannedSessionIntensity: "moderate",
+              dayType: "training",
+            });
+          setPrescriptionDecision(prescription);
+
+          const runtimeRules = buildRuntimeRulesFromAdminConfig(adminConfigSnapshot);
+          const protectedPlayerId = profile?.player_id ?? undefined;
+          const protectedTags = protectedPlayerId ? getProtectedPlayerTags(adminConfigSnapshot, protectedPlayerId) : [];
+          const protectedByConfig = protectedPlayerId ? isPlayerProtectedByAdminConfig(adminConfigSnapshot, protectedPlayerId) : false;
+
+          const finalDecision = applyCoachRules(
+            {
+              playerId: profile?.player_id ?? undefined,
+              playerName: playerMeta?.full_name ?? undefined,
+              teamId: (profile as any)?.team_id ?? undefined,
+              dayType: "training",
+              weekDensity: "normal",
+              playerTags: protectedByConfig ? Array.from(new Set(["protected", ...protectedTags])) : protectedTags,
+              isProtectedPlayer: protectedByConfig,
+              readinessState: athleteDecision.athleteState,
+              athleteState: athleteDecision.athleteState,
+              injuryRiskBand: piToday.injuryRisk.band,
+              injuryRiskScore: piToday.injuryRisk.score,
+              performanceBand: piToday.performanceForecast.band,
+              loadToleranceBand: piToday.loadForecast.band,
+              fatigueAccumulationBand: nviDecision.fatigueAccumulation.band,
+              instabilityWindowBand: nviDecision.instabilityWindow.band,
+              collapseRiskBand: nviDecision.collapseRisk.band,
+              peakWindowBand: nviDecision.peakWindow.band,
+              trendDirection: nviDecision.trendState.direction,
+              prescriptionDecision: prescription,
+              dataConfidence: prescription.confidence,
+            },
+            runtimeRules,
+            null,
+          );
+          setFinalRecommendationDecision(finalDecision);
+
+          setSessionDraft(
+            buildSessionDraft({
+              playerId: profile?.player_id ?? undefined,
+              playerName: playerMeta?.full_name ?? undefined,
+              teamId: (profile as any)?.team_id ?? undefined,
+              date: safeDay,
+              dayType: "training",
+              weekDensity: "normal",
+              plannedSessionType: "mixed",
+              plannedSessionIntensity: "moderate",
+              prescriptionDecision: prescription,
+              finalRecommendationDecision: finalDecision,
+              dataConfidence: finalDecision.confidence,
+              isProtectedPlayer: protectedByConfig,
+            }),
+          );
+
+          const playerIdForWorkflow = profile?.player_id ?? null;
+          if (playerIdForWorkflow) {
+            const workflowRecord = loadSessionDraftRecordByPlayerDate(playerIdForWorkflow, safeDay);
+            const publishedView = workflowRecord ? buildPlayerPublishedSessionView(workflowRecord) : null;
+            setPublishedSessionView(publishedView);
+
+            const playerAssignments = loadAssignmentsForPlayer(playerIdForWorkflow)
+              .filter((a) => a.sessionDate === safeDay)
+              .sort((a, b) => b.version - a.version);
+            const activeAssignment = playerAssignments[0] ?? null;
+
+            if (activeAssignment && publishedView) {
+              const seenAssignment = activeAssignment.seenAt ? activeAssignment : markSessionSeen(activeAssignment);
+              if (!activeAssignment.seenAt) {
+                updatePlayerSessionStatus(seenAssignment);
+              }
+              setAssignmentRecord(seenAssignment);
+              setPlayerSessionStatusView(buildPlayerSessionStatusView(seenAssignment));
+            } else {
+              setAssignmentRecord(null);
+              setPlayerSessionStatusView(null);
+            }
+          } else {
+            setPublishedSessionView(null);
+            setAssignmentRecord(null);
+            setPlayerSessionStatusView(null);
+          }
+        }
 
         await loadFixModulesForPlayer(prof.player_id);
         await loadSessionRpeHistory();
@@ -1728,7 +2197,25 @@ export default function PlayerClient() {
     };
 
     run();
-  }, [supabase, day]);
+  }, [supabase, day, adminConfigSnapshot]);
+
+  function handleAcknowledgePublishedSession() {
+    if (!assignmentRecord) return;
+    const next = acknowledgeSession(assignmentRecord);
+    updatePlayerSessionStatus(next);
+    saveNotificationEvent(buildPlayerAcknowledgedNotification(next, "IN_APP"));
+    setAssignmentRecord(next);
+    setPlayerSessionStatusView(buildPlayerSessionStatusView(next));
+  }
+
+  function handleCompletePublishedSession() {
+    if (!assignmentRecord) return;
+    const next = completeSession(assignmentRecord);
+    updatePlayerSessionStatus(next);
+    saveNotificationEvent(buildPlayerCompletedNotification(next, "IN_APP"));
+    setAssignmentRecord(next);
+    setPlayerSessionStatusView(buildPlayerSessionStatusView(next));
+  }
 
   const flag: Flag = useMemo(() => {
     const fromCoachView = parseFinalFlag(coachFinalFlag?.final_flag ?? null);
@@ -1950,6 +2437,12 @@ export default function PlayerClient() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/player/settings/integrations"
+                    className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Integrations
+                  </Link>
                   <Chip>{lockLabel}</Chip>
                   <Chip className="border-zinc-200">{decisionType}</Chip>
                   <Chip>{mdLabel}</Chip>
@@ -2040,6 +2533,99 @@ export default function PlayerClient() {
                     <MetricBox label="Muscle Soreness" value={metrics?.muscle_soreness} />
                     <MetricBox label="Total" value={metrics?.total_score} />
                   </div>
+                </div>
+              </details>
+            </CardShell>
+
+            <CardShell>
+              <details className="group">
+                <summary className="cursor-pointer select-none p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <SectionTitle kicker="Performance Intelligence" title="Player Risk Trend" sub="Last 7 days risk trend." />
+                    <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Open</div>
+                    <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Close</div>
+                  </div>
+                </summary>
+                <Divider />
+                <div className="p-4 sm:p-5">
+                  {playerRiskTrend.riskScores.length >= 2 ? (
+                    <div className="rounded-xl border bg-white p-3">
+                      <svg viewBox="0 0 320 80" className="h-20 w-full" role="img" aria-label="Player risk trend">
+                        <line x1="0" y1="79.5" x2="320" y2="79.5" stroke="#e5e7eb" strokeWidth="1" />
+                        <line x1="0" y1="40" x2="320" y2="40" stroke="#f3f4f6" strokeWidth="1" />
+                        <polyline
+                          fill="none"
+                          stroke="#334155"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={riskTrendLinePoints(playerRiskTrend.riskScores)}
+                        />
+                        {playerRiskTrend.riskScores.map((score, idx) => {
+                          const x = 8 + (idx * (320 - 16)) / Math.max(1, playerRiskTrend.riskScores.length - 1);
+                          const y = 8 + (1 - Math.max(0, Math.min(100, score)) / 100) * (80 - 16);
+                          return (
+                            <g key={`risk-point-${idx}`}>
+                              <circle
+                                cx={x}
+                                cy={y}
+                                r="2.4"
+                                fill={readinessMarkerTone(playerRiskTrend.readinessStates[idx] ?? "GRAY")}
+                              />
+                              <text x={x} y={Math.max(8, y - 4)} textAnchor="middle" fontSize="7" fill="#334155">
+                                {score.toFixed(1)}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                      <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-zinc-600">
+                        {playerRiskTrend.dates.map((d, idx) => (
+                          <span key={`risk-day-${d}-${idx}`} className="rounded border bg-zinc-50 px-1.5 py-0.5 tabular-nums">
+                            {d}: {playerRiskTrend.riskScores[idx]?.toFixed(1) ?? "—"} ({playerRiskTrend.readinessStates[idx] ?? "GRAY"})
+                          </span>
+                        ))}
+                      </div>
+                      {neuralVolatilityDecision ? (
+                        <div className="mt-2 rounded-lg border bg-zinc-50 p-2 text-[11px] text-zinc-700">
+                          Fatigue build: <span className="font-semibold">{neuralVolatilityDecision.fatigueAccumulation.band}</span> · Stability:{" "}
+                          <span className="font-semibold">{neuralVolatilityDecision.instabilityWindow.band}</span> · Collapse risk:{" "}
+                          <span className="font-semibold">{neuralVolatilityDecision.collapseRisk.band}</span> · Peak window:{" "}
+                          <span className="font-semibold">{neuralVolatilityDecision.peakWindow.band}</span>
+                        </div>
+                      ) : null}
+                      {prescriptionDecision ? (
+                        <div className="mt-2 rounded-lg border bg-zinc-50 p-2 text-[11px] text-zinc-700">
+                          <div>
+                            Action: <span className="font-semibold">{prescriptionDecision.action}</span> · Intensity cap:{" "}
+                            <span className="font-semibold">{prescriptionDecision.intensityCap}</span> · Volume:{" "}
+                            <span className="font-semibold">{prescriptionDecision.volumeAdjustment}</span>
+                          </div>
+                          <div className="mt-1">{prescriptionDecision.coachInstruction}</div>
+                        </div>
+                      ) : null}
+                      {publishedSessionView ? (
+                        <div className="mt-2">
+                          <PublishedSessionView view={publishedSessionView} title="Today’s published session" />
+                          <div className="mt-2">
+                            <PlayerSessionStatusCard
+                              statusView={playerSessionStatusView}
+                              onAcknowledge={handleAcknowledgePublishedSession}
+                              onComplete={handleCompletePublishedSession}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                      {sessionDraft ? (
+                        <div className="mt-2 space-y-2">
+                          <SessionDraftCard draft={sessionDraft} />
+                          <SessionDraftDetails draft={sessionDraft} />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-600">Insufficient risk trend data for the last 7 days.</div>
+                  )}
                 </div>
               </details>
             </CardShell>
