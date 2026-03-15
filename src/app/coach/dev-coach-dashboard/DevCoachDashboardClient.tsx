@@ -3464,6 +3464,7 @@ export default function CoachPage() {
         matchCongestion: undefined,
         travelLoad: undefined,
       }, readinessDecision);
+      const neural = r._neural_load ?? null;
       const athleteDecision = buildAthleteDecision({
         snapshot,
         readinessDecision,

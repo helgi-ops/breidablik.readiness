@@ -2019,7 +2019,7 @@ export default function PlayerClient() {
           });
           const readinessDecision = buildExplainableReadinessDecision({
             playerId: prof.player_id,
-            playerName: playerMeta?.full_name ?? undefined,
+            playerName: playerMeta?.full_name ?? prof.player_id,
             date: safeDay,
             dailySnapshot: todaySnapshot,
             readinessScore: todayReadinessScore ?? undefined,

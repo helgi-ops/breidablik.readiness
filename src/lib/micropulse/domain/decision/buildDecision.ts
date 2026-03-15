@@ -65,7 +65,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   const rehab = snapshot.context.rehab === true || snapshot.context.returnToPlay === true;
   const neuralStatus = params.neural?.status ?? "unknown";
   const injurySeverity =
-    params.injuryDecision?.injuryRiskLevel === "CRITICAL" || params.injuryDecision?.injuryRiskLevel === "HIGH"
+    params.injuryDecision?.injuryRiskLevel === "HIGH"
       ? "high"
       : params.injuryDecision?.injuryRiskLevel === "MODERATE"
       ? "moderate"

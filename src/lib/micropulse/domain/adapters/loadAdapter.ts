@@ -11,6 +11,8 @@ type LoadInput = {
   volatility7d?: number | null;
 };
 
+type LoadSourcePriority = "gps" | "rpe" | "whoop" | "unknown";
+
 export function mapLoadToSnapshotFields(args: {
   load?: LoadInput | null;
   whoopStrain?: number | null;
@@ -20,7 +22,7 @@ export function mapLoadToSnapshotFields(args: {
   const hasRpe = typeof load?.sessionRpeLoad === "number" && Number.isFinite(load.sessionRpeLoad);
   const hasWhoop = typeof args.whoopStrain === "number" && Number.isFinite(args.whoopStrain);
 
-  const loadSourcePriority = hasGps ? "gps" : hasRpe ? "rpe" : hasWhoop ? "whoop" : "unknown";
+  const loadSourcePriority: LoadSourcePriority = hasGps ? "gps" : hasRpe ? "rpe" : hasWhoop ? "whoop" : "unknown";
 
   return {
     load: {
