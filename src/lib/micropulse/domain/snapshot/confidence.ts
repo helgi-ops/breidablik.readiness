@@ -21,13 +21,17 @@ export function hasEnoughRecoverySignal(snapshot: DailyAthleteSnapshot): boolean
 
 export function hasEnoughLoadSignal(snapshot: DailyAthleteSnapshot): boolean {
   const load = snapshot.load;
+  const externalLoad = snapshot.externalLoad;
   return (
     hasFiniteNumber(load.sessionRpeLoad) ||
     hasFiniteNumber(load.acuteLoad) ||
     hasFiniteNumber(load.chronicLoad) ||
     hasFiniteNumber(load.acwr) ||
     hasFiniteNumber(load.gpsLoad) ||
-    hasFiniteNumber(load.whoopStrain)
+    hasFiniteNumber(load.whoopStrain) ||
+    hasFiniteNumber(externalLoad.playerLoad) ||
+    hasFiniteNumber(externalLoad.totalDistance) ||
+    hasFiniteNumber(externalLoad.sprintDistance)
   );
 }
 
@@ -52,6 +56,7 @@ export function computeSnapshotConfidence(snapshot: DailyAthleteSnapshot): numbe
   if (snapshot.subjective.checkInCompleted) score += 0.28;
   if (hasEnoughRecoverySignal(snapshot)) score += 0.16;
   if (hasEnoughLoadSignal(snapshot)) score += 0.22;
+  if (snapshot.derived.hasExternalLoadData) score += 0.08;
   if (snapshot.derived.hasContextData) score += 0.14;
   if (snapshot.derived.hasNeuromuscularData) score += 0.08;
   if (snapshot.derived.hasWhoopData) score += 0.1;
@@ -59,6 +64,7 @@ export function computeSnapshotConfidence(snapshot: DailyAthleteSnapshot): numbe
 
   if (!snapshot.subjective.checkInCompleted && !snapshot.derived.hasWhoopData) score -= 0.08;
   if (!snapshot.derived.hasLoadData && !snapshot.derived.hasContextData) score -= 0.06;
+  if (!snapshot.derived.hasLoadData && !snapshot.derived.hasExternalLoadData) score -= 0.04;
   if (!hasEnoughDecisionSignal(snapshot)) score -= 0.14;
 
   return clamp01(score);

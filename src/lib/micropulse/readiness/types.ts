@@ -1,5 +1,12 @@
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 import type { DailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot/types";
+import type {
+  CatapultDailyLoadRow,
+  CatapultExternalLoadBaseline,
+  CatapultExternalLoadSignals,
+  CatapultReadinessModifier,
+  ExternalLoadState,
+} from "@/lib/micropulse/externalLoad";
 
 export type NormalizedPlayerMonitoringInput = {
   playerId: string;
@@ -50,6 +57,12 @@ export type NormalizedPlayerMonitoringInput = {
 
   lightAteState?: "GREEN" | "YELLOW" | "RED" | "GRAY" | null;
 
+  catapultDailyLoad?: CatapultDailyLoadRow | null;
+  catapultBaseline?: CatapultExternalLoadBaseline | null;
+  catapultSignals?: CatapultExternalLoadSignals | null;
+  externalLoadState?: ExternalLoadState | null;
+  catapultReadinessModifier?: CatapultReadinessModifier | null;
+
   // Optional normalized WHOOP snapshot for conservative fusion in readiness interpretation.
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
   whoop?: {
@@ -74,10 +87,15 @@ export type ExplainableReadinessDecision = {
   athleteState: "GREEN" | "YELLOW" | "RED" | "GRAY";
   sessionMode: "full" | "modified" | "recovery" | "pending";
   confidence: "low" | "medium" | "high";
+  confidenceHint?: string | null;
   score?: number;
   why: string[];
   coachAction: string[];
   riskFactors: string[];
+  externalLoadState?: ExternalLoadState | null;
+  catapultWhyLines?: string[];
+  catapultActionHint?: string | null;
+  catapultConfidenceHint?: string | null;
   supportingMetrics?: {
     readinessScore?: number;
     zScore?: number;

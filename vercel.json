@@ -15,6 +15,10 @@
     {
       "path": "/api/notifications/cron?secret=$REMINDER_CRON_SECRET",
       "schedule": "0 13 * * 2,4"
+    },
+    {
+      "path": "/api/integrations/catapult/daily-sync?secret=$CATAPULT_CRON_SECRET",
+      "schedule": "0 2 * * *"
     }
   ]
 }

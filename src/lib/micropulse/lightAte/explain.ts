@@ -11,6 +11,8 @@ export function mapLightAteReasonCodeToLabel(code: LightAteReasonCode): string {
     HIGH_NEURAL_FATIGUE: "High neural fatigue",
     VERY_HIGH_NEURAL_FATIGUE: "Very high neural fatigue",
     HIGH_YESTERDAY_LOAD: "High yesterday load",
+    EXTERNAL_PLAYER_LOAD_SPIKE: "External player load spike",
+    SPRINT_DISTANCE_SPIKE: "Sprint distance spike",
     MD_TEMPLATE_SELECTED: "Session template selected",
     STATE_REDUCED: "Reduced state selected",
     VL_CAPPED_BY_MD: "Match-day velocity cap applied",

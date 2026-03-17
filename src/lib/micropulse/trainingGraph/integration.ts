@@ -403,6 +403,7 @@ export function buildDailyTrainingGraphFromLightAte(
     readinessScore: input.readinessScore ?? null,
     neuralFatigueBand: input.neuralFatigueBand ?? null,
     yesterdayLoadBand: input.yesterdayLoadBand ?? null,
+    // External load modifies Light ATE state/flags before graph selection.
     parameterModifiers: lightAteDecision.modifiers,
   });
   const microdoseAteDecisionContract = buildMicrodoseAteDecisionContract({

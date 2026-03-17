@@ -7,6 +7,20 @@ export const runtime = "nodejs";
 
 const OAUTH_STATE_COOKIE = "whoop_oauth_state";
 
+function toWhoopConnectError(error: unknown): { message: string; code: number } {
+  const raw = error instanceof Error ? error.message : "Unable to initialize WHOOP OAuth.";
+  if (raw.includes("WHOOP env vars missing")) {
+    return {
+      message: "WHOOP integration is not configured for this environment yet.",
+      code: 503,
+    };
+  }
+  return {
+    message: raw,
+    code: raw.includes("Forbidden") ? 403 : 500,
+  };
+}
+
 export async function GET(req: Request) {
   try {
     const userId = await resolveWhoopRouteUserId(req);
@@ -39,8 +53,7 @@ export async function GET(req: Request) {
     });
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to initialize WHOOP OAuth.";
-    const code = message.includes("Forbidden") ? 403 : 500;
+    const { message, code } = toWhoopConnectError(error);
     return NextResponse.json({ ok: false, error: message }, { status: code });
   }
 }
@@ -75,8 +88,7 @@ export async function POST(req: Request) {
     });
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to initialize WHOOP OAuth.";
-    const code = message.includes("Forbidden") ? 403 : 500;
+    const { message, code } = toWhoopConnectError(error);
     return NextResponse.json({ ok: false, error: message }, { status: code });
   }
 }

@@ -24,6 +24,16 @@ import {
   loadSessionDraftRecordByPlayerDate,
   type PlayerPublishedSessionView,
 } from "@/lib/micropulse/sessionWorkflow";
+import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
+import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
+import {
+  computeCatapultMetricAverage,
+  computeCatapultWeeklyMetricSnapshot,
+  getCatapultMetricDefinition,
+  getCatapultMetricValue,
+  getDefaultCatapultTodayVsTeamMetricKeys,
+  getDefaultCatapultWeeklyLoadMetricKeys,
+} from "@/lib/integrations/catapult/metricCatalog";
 import {
   acknowledgeSession,
   buildPlayerAcknowledgedNotification,
@@ -364,6 +374,43 @@ function MetricBox({ label, value }: { label: string; value: number | null | und
 
 function Divider() {
   return <div className="h-px w-full bg-zinc-100" />;
+}
+
+function metricFmt(value: number | null | undefined, digits = 0) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toFixed(digits);
+}
+
+function acwrFmt(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toFixed(2);
+}
+
+function externalLoadTone(playerValue: number | null | undefined, referenceValue: number | null | undefined) {
+  if (playerValue == null || referenceValue == null || referenceValue <= 0) {
+    return {
+      tone: "border-zinc-200 bg-zinc-50 text-zinc-700",
+      label: "No baseline",
+    };
+  }
+
+  const ratio = playerValue / referenceValue;
+  if (ratio >= 1.2) {
+    return {
+      tone: "border-rose-200 bg-rose-50 text-rose-800",
+      label: "High",
+    };
+  }
+  if (ratio >= 1.05) {
+    return {
+      tone: "border-amber-200 bg-amber-50 text-amber-800",
+      label: "Elevated",
+    };
+  }
+  return {
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    label: "Normal",
+  };
 }
 
 /* -------------------------
@@ -1178,6 +1225,9 @@ export default function PlayerClient() {
   const [coachFinalFlag, setCoachFinalFlag] = useState<CoachFinalFlagRow>(null);
 
   const [metrics, setMetrics] = useState<MetricsRow>(null);
+  const [catapultToday, setCatapultToday] = useState<CatapultDailyLoadRow | null>(null);
+  const [catapultTeamToday, setCatapultTeamToday] = useState<CatapultDailyLoadRow[]>([]);
+  const [catapultHistory, setCatapultHistory] = useState<CatapultDailyLoadRow[]>([]);
   const [tplToday, setTplToday] = useState<PlayerTemplateToday | null>(null);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
@@ -1222,6 +1272,38 @@ export default function PlayerClient() {
   const [assignmentRecord, setAssignmentRecord] = useState<SessionAssignmentRecord | null>(null);
   const [playerSessionStatusView, setPlayerSessionStatusView] = useState<PlayerSessionStatusView | null>(null);
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+
+  const todayVsTeamMetrics = useMemo(() => {
+    return getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        value: getCatapultMetricValue(catapultToday as unknown as Record<string, unknown> | null, key),
+        teamAverage: computeCatapultMetricAverage(
+          catapultTeamToday as unknown as Array<Record<string, unknown>>,
+          key,
+        ),
+      };
+    });
+  }, [catapultTeamToday, catapultToday]);
+
+  const weeklyLoadMetrics = useMemo(() => {
+    return getDefaultCatapultWeeklyLoadMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        acwrSupported: !!definition.acwrSupported,
+        weekly: computeCatapultWeeklyMetricSnapshot({
+          rows: catapultHistory as unknown as Array<Record<string, unknown>>,
+          key,
+        }),
+      };
+    });
+  }, [catapultHistory]);
 
   useEffect(() => {
     const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
@@ -1943,6 +2025,61 @@ export default function PlayerClient() {
           .maybeSingle();
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
+        const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
+        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 27);
+        const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
+
+        const [{ data: catapultTodayRows, error: catapultTodayErr }, { data: catapultHistoryRows, error: catapultHistoryErr }] = await Promise.all([
+          supabase
+            .from("player_external_load_daily")
+            .select("*")
+            .eq("source", "catapult")
+            .eq("player_id", prof.player_id)
+            .eq("date", safeDay),
+          supabase
+            .from("player_external_load_daily")
+            .select("*")
+            .eq("source", "catapult")
+            .eq("player_id", prof.player_id)
+            .gte("date", catapultStartDate)
+            .lte("date", safeDay)
+            .order("date", { ascending: true }),
+        ]);
+        if (catapultTodayErr) console.error("player catapult today error:", catapultTodayErr.message);
+        if (catapultHistoryErr) console.error("player catapult history error:", catapultHistoryErr.message);
+
+        const normalizedPlayerToday = ((catapultTodayRows ?? []) as Record<string, unknown>[])
+          .map(normalizeCatapultDailyLoadRow)
+          .filter((row): row is CatapultDailyLoadRow => row != null)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .at(-1) ?? null;
+        const normalizedPlayerHistory = ((catapultHistoryRows ?? []) as Record<string, unknown>[])
+          .map(normalizeCatapultDailyLoadRow)
+          .filter((row): row is CatapultDailyLoadRow => row != null)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        setCatapultToday(normalizedPlayerToday);
+        setCatapultHistory(normalizedPlayerHistory);
+
+        if (prof.team_id) {
+          const { data: catapultTeamRows, error: catapultTeamErr } = await supabase
+            .from("player_external_load_daily")
+            .select("*")
+            .eq("source", "catapult")
+            .eq("team_id", prof.team_id)
+            .eq("date", safeDay);
+          if (catapultTeamErr) {
+            console.error("player catapult team error:", catapultTeamErr.message);
+            setCatapultTeamToday([]);
+          } else {
+            setCatapultTeamToday(
+              ((catapultTeamRows ?? []) as Record<string, unknown>[])
+                .map(normalizeCatapultDailyLoadRow)
+                .filter((row): row is CatapultDailyLoadRow => row != null),
+            );
+          }
+        } else {
+          setCatapultTeamToday([]);
+        }
         setNeuralVolatilityDecision(null);
         setPrescriptionDecision(null);
         setFinalRecommendationDecision(null);
@@ -2500,7 +2637,7 @@ export default function PlayerClient() {
 
             {/* Metrics */}
             <CardShell>
-              <details className="group">
+              <details className="group" open>
                 <summary className="cursor-pointer select-none p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
                     <SectionTitle kicker="Readiness" title="Mælingar dagsins" sub="Aðeins til upplýsingar — notað fyrir ákvörðunarlógík." />
@@ -2520,6 +2657,12 @@ export default function PlayerClient() {
                       <span className="font-semibold">Total</span>: {metrics?.total_score ?? "—"}
                     </div>
                   </div>
+
+                  {catapultToday || catapultHistory.length ? (
+                    <div className="mt-3 rounded-xl border bg-white px-3 py-2 text-xs text-zinc-700">
+                      <span className="font-semibold">Catapult</span>: Required external-load metrics available below.
+                    </div>
+                  ) : null}
                 </summary>
 
                 <Divider />
@@ -2532,6 +2675,69 @@ export default function PlayerClient() {
                     <MetricBox label="Stress / Mood" value={metrics?.stress_mood} />
                     <MetricBox label="Muscle Soreness" value={metrics?.muscle_soreness} />
                     <MetricBox label="Total" value={metrics?.total_score} />
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Catapult</div>
+                    {catapultToday || catapultHistory.length ? (
+                      <div className="mt-3 space-y-4">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Today vs Team</div>
+                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {todayVsTeamMetrics.map((item) => {
+                              const tone = externalLoadTone(item.value, item.teamAverage);
+                              return (
+                                <div key={`player-catapult-team-${item.key}`} className={cx("rounded-xl border px-3 py-3", tone.tone)}>
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</div>
+                                  <div className="mt-2 text-lg font-semibold tabular-nums">{metricFmt(item.value, item.digits)}</div>
+                                  <div className="mt-1 text-[11px]">
+                                    Team {metricFmt(item.teamAverage, item.digits)} · {tone.label}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Weekly Load</div>
+                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {weeklyLoadMetrics.map((item) => {
+                              const tone = externalLoadTone(item.weekly.acute7Avg, item.weekly.chronic28Avg);
+                              return (
+                                <div key={`player-catapult-weekly-${item.key}`} className={cx("rounded-xl border px-3 py-3", tone.tone)}>
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</div>
+                                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                                    <div>
+                                      <div className="uppercase tracking-wide opacity-70">7d</div>
+                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                        {metricFmt(item.weekly.acute7Avg, item.digits)}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="uppercase tracking-wide opacity-70">28d</div>
+                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                        {metricFmt(item.weekly.chronic28Avg, item.digits)}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="uppercase tracking-wide opacity-70">ACWR</div>
+                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                        {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
+                        No Catapult external-load data available for this day yet.
+                      </div>
+                    )}
                   </div>
                 </div>
               </details>

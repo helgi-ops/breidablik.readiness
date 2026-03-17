@@ -35,6 +35,8 @@ export type LightAteReasonCode =
   | "HIGH_NEURAL_FATIGUE"
   | "VERY_HIGH_NEURAL_FATIGUE"
   | "HIGH_YESTERDAY_LOAD"
+  | "EXTERNAL_PLAYER_LOAD_SPIKE"
+  | "SPRINT_DISTANCE_SPIKE"
   | "MD_TEMPLATE_SELECTED"
   | "STATE_REDUCED"
   | "VL_CAPPED_BY_MD"
@@ -55,6 +57,12 @@ export interface LightAteDecisionInput {
   readinessScore?: number | null;
   neuralFatigueBand?: LightAteNeuralFatigueBand | null;
   yesterdayLoadBand?: LightAteYesterdayLoadBand | null;
+  externalLoad?: {
+    playerLoad?: number | null;
+    playerLoad7DayAverage?: number | null;
+    sprintDistance?: number | null;
+    sprintDistance7DayAverage?: number | null;
+  } | null;
   mdContext: LightAteMdContext;
 }
 

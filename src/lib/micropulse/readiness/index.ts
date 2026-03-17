@@ -5,9 +5,53 @@ import type { ExplainableReadinessDecision, NormalizedPlayerMonitoringInput } fr
 import type { WhoopFusionFeatures } from "@/lib/micropulse/integrations/whoopFusion";
 import type { DailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot/types";
 import { mapSnapshotToReadinessInput } from "@/lib/micropulse/domain/adapters";
+import { buildCatapultReadinessContextFromDatabase } from "@/lib/micropulse/externalLoad";
+import {
+  buildCatapultActionHint,
+  buildCatapultConfidenceHint,
+  buildCatapultWhyLines,
+  mergeActionLines,
+  mergeWhyLines,
+} from "@/lib/micropulse/externalLoad";
 
 export type { ExplainableReadinessDecision, NormalizedPlayerMonitoringInput } from "./types";
 export { runReadinessValidationSuite } from "./validation";
+
+export async function buildExplainableReadinessDecisionWithCatapult(
+  input: NormalizedPlayerMonitoringInput,
+  options?: { teamId?: string | null }
+): Promise<ExplainableReadinessDecision> {
+  const shouldHydrateCatapult =
+    !input.catapultDailyLoad &&
+    !input.catapultBaseline &&
+    !input.catapultSignals &&
+    !input.catapultReadinessModifier &&
+    !!input.playerId &&
+    !!input.date;
+
+  if (!shouldHydrateCatapult) {
+    return buildExplainableReadinessDecision(input);
+  }
+
+  try {
+    const catapult = await buildCatapultReadinessContextFromDatabase({
+      playerId: input.playerId,
+      date: input.date,
+      teamId: options?.teamId ?? null,
+    });
+    return buildExplainableReadinessDecision({
+      ...input,
+      catapultDailyLoad: catapult.today,
+      catapultBaseline: catapult.baseline,
+      catapultSignals: catapult.signals,
+      externalLoadState: catapult.signals.externalLoadState,
+      catapultReadinessModifier: catapult.modifier,
+    });
+  } catch {
+    return buildExplainableReadinessDecision(input);
+  }
+}
+
 export function buildExplainableReadinessDecisionFromSnapshot(args: {
   snapshot: DailyAthleteSnapshot;
   playerName?: string | null;
@@ -49,15 +93,43 @@ export function buildExplainableReadinessDecision(input: NormalizedPlayerMonitor
           notes: normalized.whoop.notes ?? [],
         }
       : null;
+  const catapultWhyLines = buildCatapultWhyLines({
+    signals: normalized.catapultSignals ?? null,
+    modifier: normalized.catapultReadinessModifier ?? null,
+  });
+  const catapultActionHint = buildCatapultActionHint({
+    externalLoadState: normalized.externalLoadState ?? null,
+    signals: normalized.catapultSignals ?? null,
+    athleteState: rules.athleteState,
+  });
+  const catapultConfidenceHint = buildCatapultConfidenceHint({
+    signals: normalized.catapultSignals ?? null,
+    readinessConfidence: rules.confidence,
+  });
+  const whyLines = mergeWhyLines({
+    baseLines: explainReadinessWhy(rules.triggeredRules, whoopFeatures, rules.externalLoadExplanations),
+    catapultLines: catapultWhyLines,
+    maxLines: 3,
+  });
+  const coachAction = mergeActionLines({
+    baseLines: explainReadinessCoachActions(rules.triggeredRules, rules.athleteState),
+    catapultHint: catapultActionHint,
+    maxLines: 3,
+  });
 
   return {
     athleteState: rules.athleteState,
     sessionMode: rules.sessionMode,
     confidence: rules.confidence,
+    confidenceHint: catapultConfidenceHint,
     score: rules.score,
-    why: explainReadinessWhy(rules.triggeredRules, whoopFeatures),
-    coachAction: explainReadinessCoachActions(rules.triggeredRules, rules.athleteState),
+    why: whyLines,
+    coachAction,
     riskFactors: rules.riskFactors,
+    externalLoadState: normalized.externalLoadState ?? null,
+    catapultWhyLines,
+    catapultActionHint,
+    catapultConfidenceHint,
     supportingMetrics: {
       readinessScore: normalized.readinessScore ?? normalized.checkinScore,
       zScore: normalized.zScore,

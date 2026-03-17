@@ -21,6 +21,18 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function hasPlayerLoadSpike(input: LightAteDecisionInput): boolean {
+  const load = input.externalLoad?.playerLoad;
+  const baseline = input.externalLoad?.playerLoad7DayAverage;
+  return typeof load === "number" && typeof baseline === "number" && baseline > 0 && load > baseline * 1.4;
+}
+
+function hasSprintDistanceSpike(input: LightAteDecisionInput): boolean {
+  const sprint = input.externalLoad?.sprintDistance;
+  const baseline = input.externalLoad?.sprintDistance7DayAverage;
+  return typeof sprint === "number" && typeof baseline === "number" && baseline > 0 && sprint > baseline * 1.5;
+}
+
 function classifyReadiness(readinessScore?: number | null): LightAteAthleteState {
   if (typeof readinessScore !== "number" || Number.isNaN(readinessScore)) {
     return LIGHT_ATE_DEFAULTS.fallbackState;
@@ -50,6 +62,12 @@ export function determineLightAteState(
     if (neural !== "LOW" && neural !== "MODERATE" && neural !== "HIGH") state = "GREEN";
   } else if (state === "GREEN" && neural === "HIGH") {
     state = "YELLOW";
+  }
+
+  if (hasPlayerLoadSpike(input)) {
+    if (state === "GREEN_PLUS") state = "GREEN";
+    else if (state === "GREEN") state = "YELLOW";
+    else if (state === "YELLOW") state = "RED";
   }
 
   return state;
@@ -189,6 +207,8 @@ function buildReasons(params: {
   else if (input.neuralFatigueBand === "VERY_HIGH") reasons.push("VERY_HIGH_NEURAL_FATIGUE");
 
   if (input.yesterdayLoadBand === "HIGH") reasons.push("HIGH_YESTERDAY_LOAD");
+  if (hasPlayerLoadSpike(input)) reasons.push("EXTERNAL_PLAYER_LOAD_SPIKE");
+  if (hasSprintDistanceSpike(input)) reasons.push("SPRINT_DISTANCE_SPIKE");
   reasons.push("MD_TEMPLATE_SELECTED");
 
   if (athleteState === "YELLOW" || athleteState === "RED") reasons.push("STATE_REDUCED");
@@ -207,6 +227,8 @@ function buildRiskFlags(input: LightAteDecisionInput, athleteState: LightAteAthl
   if (input.neuralFatigueBand === "VERY_HIGH") flags.push("VERY_HIGH_NEURAL_FATIGUE");
   if (input.neuralFatigueBand === "HIGH") flags.push("HIGH_NEURAL_FATIGUE");
   if (input.yesterdayLoadBand === "HIGH") flags.push("HIGH_YESTERDAY_LOAD");
+  if (hasPlayerLoadSpike(input)) flags.push("EXTERNAL_PLAYER_LOAD_SPIKE");
+  if (hasSprintDistanceSpike(input)) flags.push("SPRINT_DISTANCE_SPIKE");
   if (input.mdContext === "MD1") flags.push("MD1_FRESHNESS_PROTECTION");
   return unique(flags);
 }

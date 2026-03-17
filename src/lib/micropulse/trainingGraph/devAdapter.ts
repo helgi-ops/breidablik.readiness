@@ -21,6 +21,12 @@ export interface DevDailySessionAdapterInput {
   readinessScore?: number | null;
   neuralFatigueBand?: "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | null;
   yesterdayLoadBand?: "LOW" | "MODERATE" | "HIGH" | null;
+  externalLoad?: {
+    playerLoad?: number | null;
+    playerLoad7DayAverage?: number | null;
+    sprintDistance?: number | null;
+    sprintDistance7DayAverage?: number | null;
+  } | null;
 }
 
 export interface DevDailySessionAdapterResult {
@@ -87,6 +93,7 @@ export function buildDevDailySessionAdapterResult(input: DevDailySessionAdapterI
       readinessScore: input.readinessScore ?? null,
       neuralFatigueBand,
       yesterdayLoadBand,
+      externalLoad: input.externalLoad ?? null,
     });
 
     if ("reason" in lightAteGraph) {

@@ -39,6 +39,19 @@ export interface DailyAthleteSnapshot {
     loadSourcePriority?: "gps" | "rpe" | "whoop" | "unknown" | null;
   };
 
+  externalLoad: {
+    totalDistance?: number | null;
+    highSpeedDistance?: number | null;
+    sprintDistance?: number | null;
+    accelerations?: number | null;
+    decelerations?: number | null;
+    playerLoad?: number | null;
+    maxVelocity?: number | null;
+    playerLoad7DayAverage?: number | null;
+    sprintDistance7DayAverage?: number | null;
+    source?: "catapult" | null;
+  };
+
   neuromuscular: {
     cmj?: number | null;
     imtp?: number | null;
@@ -77,6 +90,7 @@ export interface DailyAthleteSnapshot {
     hasManualData: boolean;
     hasWhoopData: boolean;
     hasLoadData: boolean;
+    hasExternalLoadData: boolean;
     hasNeuromuscularData: boolean;
     hasContextData: boolean;
     overallSnapshotConfidence: number;

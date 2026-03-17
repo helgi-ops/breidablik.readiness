@@ -8,6 +8,7 @@ export type ReadinessRuleResult = {
   riskFactors: string[];
   triggeredRules: string[];
   missingInputs: string[];
+  externalLoadExplanations: string[];
 };
 
 function hasNumber(v: unknown): boolean {
@@ -170,6 +171,7 @@ function finalizeResult(params: {
   missingInputs: string[];
   confidenceBias?: -1 | 0 | 1;
   scoreDelta?: number;
+  externalLoadExplanations?: string[];
 }): ReadinessRuleResult {
   const scoreAdjusted =
     typeof params.score === "number"
@@ -184,7 +186,59 @@ function finalizeResult(params: {
     riskFactors: Array.from(new Set(params.riskFactors)),
     triggeredRules: Array.from(new Set(params.triggeredRules)),
     missingInputs: params.missingInputs,
+    externalLoadExplanations: params.externalLoadExplanations ?? [],
   };
+}
+
+function applyCatapultStateShift(params: {
+  athleteState: ExplainableReadinessDecision["athleteState"];
+  sessionMode: ExplainableReadinessDecision["sessionMode"];
+  input: NormalizedPlayerMonitoringInput;
+}): Pick<ReadinessRuleResult, "athleteState" | "sessionMode"> {
+  const modifier = params.input.catapultReadinessModifier;
+  const signals = params.input.catapultSignals;
+  if (!modifier || !signals) {
+    return { athleteState: params.athleteState, sessionMode: params.sessionMode };
+  }
+
+  const severeContext =
+    (typeof params.input.readinessScore === "number" && params.input.readinessScore <= 50) ||
+    (typeof params.input.checkinScore === "number" && params.input.checkinScore <= 11) ||
+    (typeof params.input.zScore === "number" && params.input.zScore <= -0.8) ||
+    (typeof params.input.sleepScore === "number" && params.input.sleepScore <= 2) ||
+    params.input.matchCongestion === true ||
+    params.input.travelLoad === true ||
+    params.input.painFlag === true ||
+    params.input.tissueSignal === true;
+  const cautionContext =
+    severeContext ||
+    (typeof params.input.acwr === "number" && params.input.acwr >= 1.15) ||
+    (typeof params.input.sorenessScore === "number" && params.input.sorenessScore <= 2) ||
+    (typeof params.input.deltaZ === "number" && params.input.deltaZ <= -0.1);
+
+  if (params.athleteState === "RED" || signals.externalLoadState === "unknown") {
+    return { athleteState: params.athleteState, sessionMode: params.sessionMode };
+  }
+
+  if (params.athleteState === "YELLOW") {
+    if (modifier.suggestedStateShift >= 2 && severeContext) {
+      return { athleteState: "RED", sessionMode: "recovery" };
+    }
+    return { athleteState: "YELLOW", sessionMode: "modified" };
+  }
+
+  if (params.athleteState === "GREEN") {
+    if (modifier.suggestedStateShift >= 2) {
+      return cautionContext
+        ? { athleteState: "YELLOW", sessionMode: "modified" }
+        : { athleteState: "GREEN", sessionMode: "full" };
+    }
+    if (modifier.suggestedStateShift >= 1 && cautionContext) {
+      return { athleteState: "YELLOW", sessionMode: "modified" };
+    }
+  }
+
+  return { athleteState: params.athleteState, sessionMode: params.sessionMode };
 }
 
 export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): ReadinessRuleResult {
@@ -193,6 +247,11 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   const riskFactors: string[] = [];
 
   const completeness = computeCompleteness(input);
+  const catapultModifier = input.catapultReadinessModifier ?? null;
+  const catapultSignals = input.catapultSignals ?? null;
+  const catapultExplanations = catapultModifier?.explanations.map((item) => item.message) ?? [];
+  const catapultScoreDelta = catapultModifier?.scoreDelta ?? 0;
+  const catapultFlags = catapultModifier?.cautionFlags ?? [];
   if (!hasNumber(input.zScore)) missingInputs.push("zScore");
   if (!hasNumber(input.deltaZ)) missingInputs.push("deltaZ");
   if (!hasNumber(input.acwr)) missingInputs.push("acwr");
@@ -202,6 +261,17 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   if (!hasNumber(input.stenScore)) missingInputs.push("stenScore");
   if (!hasNumber(input.readinessScore) && !hasNumber(input.checkinScore)) missingInputs.push("readinessScore");
 
+  if (catapultSignals?.externalLoadState === "elevated") triggeredRules.push("CATAPULT_EXTERNAL_LOAD_ELEVATED");
+  if (catapultSignals?.externalLoadState === "high") triggeredRules.push("CATAPULT_EXTERNAL_LOAD_HIGH");
+  if (catapultSignals?.externalLoadState === "unknown" && catapultExplanations.length) triggeredRules.push("CATAPULT_EXTERNAL_LOAD_UNKNOWN");
+  if (catapultFlags.includes("catapult_hir_spike")) triggeredRules.push("CATAPULT_HIR_SPIKE");
+  if (catapultFlags.includes("catapult_decel_spike")) triggeredRules.push("CATAPULT_DECEL_SPIKE");
+  if (catapultFlags.includes("catapult_accel_spike")) triggeredRules.push("CATAPULT_ACCEL_SPIKE");
+  if (catapultFlags.includes("catapult_player_load_spike")) triggeredRules.push("CATAPULT_PLAYER_LOAD_SPIKE");
+  if (catapultFlags.includes("catapult_max_velocity")) triggeredRules.push("CATAPULT_MAX_VELOCITY");
+  if (catapultFlags.includes("catapult_band6_exposure")) triggeredRules.push("CATAPULT_SPRINT_EXPOSURE_CAUTION");
+  riskFactors.push(...catapultFlags);
+
   const lightState = input.lightAteState ?? null;
   if (lightState === "RED") {
     triggeredRules.push("LIGHT_ATE_RED_PRIORITY");
@@ -210,21 +280,30 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       sessionMode: "recovery",
       confidence: completeness >= 0.5 ? "high" : "medium",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["low_readiness_state", "ate_red_priority"],
+      riskFactors: ["low_readiness_state", "ate_red_priority", ...catapultFlags],
       triggeredRules,
       missingInputs,
+      scoreDelta: catapultScoreDelta,
+      externalLoadExplanations: catapultExplanations,
     });
   }
   if (lightState === "YELLOW") {
     triggeredRules.push("LIGHT_ATE_YELLOW_PRIORITY");
-    return finalizeResult({
+    const shifted = applyCatapultStateShift({
       athleteState: "YELLOW",
       sessionMode: "modified",
+      input,
+    });
+    return finalizeResult({
+      athleteState: shifted.athleteState,
+      sessionMode: shifted.sessionMode,
       confidence: completeness >= 0.5 ? "high" : "medium",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["moderate_readiness_state", "ate_yellow_priority"],
+      riskFactors: ["moderate_readiness_state", "ate_yellow_priority", ...catapultFlags],
       triggeredRules,
       missingInputs,
+      scoreDelta: catapultScoreDelta,
+      externalLoadExplanations: catapultExplanations,
     });
   }
 
@@ -235,9 +314,11 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       sessionMode: "pending",
       confidence: "low",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["insufficient_data"],
+      riskFactors: ["insufficient_data", ...catapultFlags],
       triggeredRules,
       missingInputs,
+      scoreDelta: catapultScoreDelta,
+      externalLoadExplanations: catapultExplanations,
     });
   }
 
@@ -336,7 +417,8 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       riskFactors,
       triggeredRules,
       missingInputs,
-      scoreDelta: loadPatch.scoreDelta,
+      scoreDelta: loadPatch.scoreDelta + catapultScoreDelta,
+      externalLoadExplanations: catapultExplanations,
     });
   }
 
@@ -390,16 +472,22 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   whoopScoreDelta = cautionPatch.scoreDelta + positivePatch.scoreDelta + loadPatch.scoreDelta;
 
   if (triggeredRules.some((r) => r.startsWith("YELLOW_"))) {
-    return finalizeResult({
+    const shifted = applyCatapultStateShift({
       athleteState: "YELLOW",
       sessionMode: "modified",
+      input,
+    });
+    return finalizeResult({
+      athleteState: shifted.athleteState,
+      sessionMode: shifted.sessionMode,
       confidence: completeness >= 0.6 ? "medium" : "low",
       score: readiness,
       riskFactors,
       triggeredRules,
       missingInputs,
       confidenceBias: whoopConfidenceBias === -1 ? 0 : whoopConfidenceBias,
-      scoreDelta: whoopScoreDelta,
+      scoreDelta: whoopScoreDelta + catapultScoreDelta,
+      externalLoadExplanations: catapultExplanations,
     });
   }
 
@@ -409,15 +497,21 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   }
 
   triggeredRules.push("GREEN_STABLE");
-  return finalizeResult({
+  const shifted = applyCatapultStateShift({
     athleteState: "GREEN",
     sessionMode: "full",
+    input,
+  });
+  return finalizeResult({
+    athleteState: shifted.athleteState,
+    sessionMode: shifted.sessionMode,
     confidence: strongReadinessDay || completeness >= 0.7 ? "high" : "medium",
     score: readiness,
     riskFactors: riskFactors.length > 0 ? riskFactors : ["stable_profile"],
     triggeredRules,
     missingInputs,
     confidenceBias: whoopConfidenceBias,
-    scoreDelta: whoopScoreDelta,
+    scoreDelta: whoopScoreDelta + catapultScoreDelta,
+    externalLoadExplanations: catapultExplanations,
   });
 }

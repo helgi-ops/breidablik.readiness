@@ -76,6 +76,25 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
+import {
+  buildCatapultReadinessContextFromRows,
+  buildTeamExternalLoadSummary,
+  normalizeCatapultDailyLoadRow,
+  type CatapultExternalLoadBaseline,
+  type CatapultDailyLoadRow,
+  type CatapultExternalLoadSignals,
+  type CatapultReadinessModifier,
+  type TeamExternalLoadSummary,
+} from "@/lib/micropulse/externalLoad";
+import {
+  computeCatapultMetricAverage,
+  computeCatapultWeeklyMetricSnapshot,
+  getCatapultMetricDefinition,
+  getCatapultMetricValue,
+  getDefaultCatapultTodayVsTeamMetricKeys,
+  getDefaultCatapultWeeklyLoadMetricKeys,
+  type CatapultMetricKey,
+} from "@/lib/integrations/catapult/metricCatalog";
 
 /** -----------------------------
  * Types
@@ -146,6 +165,46 @@ type ReminderStatus = {
   checkedIn: number;
   missing: number;
   lastManualSendAt: string | null;
+};
+
+type ExternalLoadDailyRow = {
+  player_id: string;
+  date: string;
+  total_distance: number | null;
+  high_speed_distance: number | null;
+  sprint_distance: number | null;
+  accelerations: number | null;
+  decelerations: number | null;
+  player_load: number | null;
+  max_velocity: number | null;
+  velocity_band5_total_distance?: number | null;
+  velocity_band6_total_distance?: number | null;
+  hir_dist?: number | null;
+  max_vel?: number | null;
+  accel_b2_3_tot_effs_gen2?: number | null;
+  tot_as?: number | null;
+  decel_b2_3_tot_effs_gen2?: number | null;
+  tot_ds?: number | null;
+  total_player_load?: number | null;
+  player_load_per_minute?: number | null;
+  source: string | null;
+};
+
+type ExternalLoadBaseline = {
+  totalDistanceAvg: number | null;
+  sprintDistanceAvg: number | null;
+  accelerationsAvg: number | null;
+  playerLoadAvg: number | null;
+  maxVelocityAvg: number | null;
+  velocityBand5Avg: number | null;
+  velocityBand6Avg: number | null;
+  hirDistAvg: number | null;
+  accelB23Avg: number | null;
+  totAsAvg: number | null;
+  decelB23Avg: number | null;
+  totDsAvg: number | null;
+  totalPlayerLoadAvg: number | null;
+  maxVelAvg: number | null;
 };
 
 type DayState = "NORMAL_DAY" | "OFF_DAY" | "NO_INPUT_EXPECTED" | "MISSING_INPUT";
@@ -278,6 +337,12 @@ type Row = {
 
   _sten?: number | null;
   _baseline_n?: number | null;
+  _external_load_today?: ExternalLoadDailyRow | null;
+  _external_load_baseline?: ExternalLoadBaseline | null;
+  _catapult_baseline?: CatapultExternalLoadBaseline | null;
+  _catapult_signals?: CatapultExternalLoadSignals | null;
+  _catapult_modifier?: CatapultReadinessModifier | null;
+  _catapult_history?: CatapultDailyLoadRow[] | null;
 };
 
 /** -----------------------------
@@ -792,9 +857,71 @@ function numFmt(x: number | null, digits = 2) {
   return x == null ? "—" : x.toFixed(digits);
 }
 
+function averageMetric(values: Array<number | null | undefined>): number | null {
+  const nums = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!nums.length) return null;
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+}
+
+function summarizeExternalLoad(rows: ExternalLoadDailyRow[], targetDate: string): {
+  today: ExternalLoadDailyRow | null;
+  baseline: ExternalLoadBaseline | null;
+} {
+  const today = rows.find((row) => row.date === targetDate) ?? null;
+  const baselineRows = rows
+    .filter((row) => row.date < targetDate)
+    .slice(-7);
+
+  if (!today && baselineRows.length === 0) {
+    return { today: null, baseline: null };
+  }
+
+  return {
+    today,
+    baseline: {
+      totalDistanceAvg: averageMetric(baselineRows.map((row) => row.total_distance)),
+      sprintDistanceAvg: averageMetric(baselineRows.map((row) => row.sprint_distance)),
+      accelerationsAvg: averageMetric(baselineRows.map((row) => row.accelerations)),
+      playerLoadAvg: averageMetric(baselineRows.map((row) => row.player_load)),
+      maxVelocityAvg: averageMetric(baselineRows.map((row) => row.max_velocity)),
+      velocityBand5Avg: averageMetric(baselineRows.map((row) => row.velocity_band5_total_distance ?? null)),
+      velocityBand6Avg: averageMetric(baselineRows.map((row) => row.velocity_band6_total_distance ?? null)),
+      hirDistAvg: averageMetric(baselineRows.map((row) => row.hir_dist ?? null)),
+      accelB23Avg: averageMetric(baselineRows.map((row) => row.accel_b2_3_tot_effs_gen2 ?? null)),
+      totAsAvg: averageMetric(baselineRows.map((row) => row.tot_as ?? null)),
+      decelB23Avg: averageMetric(baselineRows.map((row) => row.decel_b2_3_tot_effs_gen2 ?? null)),
+      totDsAvg: averageMetric(baselineRows.map((row) => row.tot_ds ?? null)),
+      totalPlayerLoadAvg: averageMetric(baselineRows.map((row) => row.total_player_load ?? null)),
+      maxVelAvg: averageMetric(baselineRows.map((row) => row.max_vel ?? null)),
+    },
+  };
+}
+
+function externalLoadTone(value: number | null | undefined, baseline: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || typeof baseline !== "number" || !Number.isFinite(baseline) || baseline <= 0) {
+    return {
+      label: "No baseline",
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    };
+  }
+
+  const ratio = value / baseline;
+  if (ratio >= 1.5) {
+    return { label: "Red", tone: "border-red-200 bg-red-50 text-red-700" };
+  }
+  if (ratio >= 1.2) {
+    return { label: "Yellow", tone: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
+  return { label: "Green", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+}
+
 function confidenceFmt(x: number | null) {
   if (x == null) return "—";
   return x <= 1 ? `${Math.round(x * 100)}%` : `${Math.round(x)}%`;
+}
+
+function acwrFmt(x: number | null) {
+  return x == null ? "—" : x.toFixed(2);
 }
 
 const reportStyles = StyleSheet.create({
@@ -1159,6 +1286,8 @@ export default function CoachPage() {
   const [reminderStatusLoading, setReminderStatusLoading] = useState(false);
   const [reminderStatusError, setReminderStatusError] = useState("");
   const [manualReminderSending, setManualReminderSending] = useState(false);
+  const [catapultSyncing, setCatapultSyncing] = useState(false);
+  const [catapultSyncMessage, setCatapultSyncMessage] = useState("");
   const [pdfDownloading, setPdfDownloading] = useState(false);
 
   // Auto-fill zeros when OFF
@@ -1384,6 +1513,29 @@ export default function CoachPage() {
       setReminderStatusError(e?.message ?? "Failed to send manual reminders.");
     } finally {
       setManualReminderSending(false);
+    }
+  }
+
+  async function syncCatapultForDate(entryDate: string) {
+    try {
+      setCatapultSyncing(true);
+      setCatapultSyncMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/integrations/catapult/daily-sync", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date: entryDate }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync Catapult.");
+      const stored = Number(json?.result?.storedCount ?? 0);
+      const unmatched = Number(json?.result?.unmatchedCount ?? 0);
+      setCatapultSyncMessage(`Catapult synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      await loadToday();
+    } catch (e: any) {
+      setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");
+    } finally {
+      setCatapultSyncing(false);
     }
   }
 
@@ -1760,6 +1912,78 @@ export default function CoachPage() {
     }
   }
 
+  async function hydrateExternalLoad(entryDate: string, list: Row[]): Promise<Row[]> {
+    const playerIds = list.map((row) => String(row.player_id));
+    if (!playerIds.length) return list;
+
+    try {
+      const startDate = addDaysISO(entryDate, -28);
+      const { data, error } = await supabase
+        .from("player_external_load_daily")
+        .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .gte("date", startDate)
+        .lte("date", entryDate)
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+
+      const byPlayer = new Map<string, ExternalLoadDailyRow[]>();
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        const playerId = String(row.player_id);
+        const listForPlayer = byPlayer.get(playerId) ?? [];
+        listForPlayer.push({
+          player_id: playerId,
+          date: String(row.date),
+          total_distance: toMaybeFinite(row.total_distance),
+          high_speed_distance: toMaybeFinite(row.high_speed_distance),
+          sprint_distance: toMaybeFinite(row.sprint_distance),
+          accelerations: toMaybeFinite(row.accelerations),
+          decelerations: toMaybeFinite(row.decelerations),
+          player_load: toMaybeFinite(row.player_load),
+          max_velocity: toMaybeFinite(row.max_velocity),
+          velocity_band5_total_distance: toMaybeFinite(row.velocity_band5_total_distance),
+          velocity_band6_total_distance: toMaybeFinite(row.velocity_band6_total_distance),
+          hir_dist: toMaybeFinite(row.hir_dist),
+          max_vel: toMaybeFinite(row.max_vel),
+          accel_b2_3_tot_effs_gen2: toMaybeFinite(row.accel_b2_3_tot_effs_gen2),
+          tot_as: toMaybeFinite(row.tot_as),
+          decel_b2_3_tot_effs_gen2: toMaybeFinite(row.decel_b2_3_tot_effs_gen2),
+          tot_ds: toMaybeFinite(row.tot_ds),
+          total_player_load: toMaybeFinite(row.total_player_load),
+          player_load_per_minute: toMaybeFinite(row.player_load_per_minute),
+          source: (row.source as string | null) ?? null,
+        });
+        byPlayer.set(playerId, listForPlayer);
+      }
+
+      return list.map((row) => {
+        const playerRows = byPlayer.get(String(row.player_id)) ?? [];
+        const externalLoad = summarizeExternalLoad(playerRows, entryDate);
+        const catapultRows = playerRows
+          .map((item) => normalizeCatapultDailyLoadRow(item as unknown as Record<string, unknown>))
+          .filter((item): item is NonNullable<typeof item> => item != null);
+        const catapultContext = buildCatapultReadinessContextFromRows({
+          rows: catapultRows,
+          date: entryDate,
+        });
+        return {
+          ...row,
+          _external_load_today: externalLoad.today,
+          _external_load_baseline: externalLoad.baseline,
+          _catapult_baseline: catapultContext.baseline,
+          _catapult_signals: catapultContext.signals,
+          _catapult_modifier: catapultContext.modifier,
+          _catapult_history: catapultRows,
+        };
+      });
+    } catch (e) {
+      console.warn("hydrateExternalLoad failed:", e);
+      return list;
+    }
+  }
+
   /** -----------------------------
    * Auto-lock helpers
    * ----------------------------- */
@@ -2114,12 +2338,14 @@ export default function CoachPage() {
         };
       });
 
-      setRows(withSpark);
+      const withExternalLoad = await hydrateExternalLoad(entryDate, withSpark);
+
+      setRows(withExternalLoad);
       setTotal(count ?? 0);
 
       setDraftAction(() => {
         const next: Record<string, TrainingAction> = {};
-        for (const r of withSpark) {
+        for (const r of withExternalLoad) {
           const pid = String(r.player_id);
           next[pid] = (r.training_action ?? "FULL") as TrainingAction;
         }
@@ -2128,7 +2354,7 @@ export default function CoachPage() {
 
       setDraftMessage(() => {
         const next: Record<string, string> = {};
-        for (const r of withSpark) {
+        for (const r of withExternalLoad) {
           const pid = String(r.player_id);
           next[pid] = r.coach_message ?? "";
         }
@@ -2136,7 +2362,7 @@ export default function CoachPage() {
       });
 
       setSaved({});
-      await lockAllForTodayIfNeeded(entryDate, withSpark);
+      await lockAllForTodayIfNeeded(entryDate, withExternalLoad);
     } catch (e: any) {
       setError(e?.message ?? "Unknown error");
       setRows([]);
@@ -2418,6 +2644,35 @@ export default function CoachPage() {
       coverage: `${stens.length}/${rows.length}`,
     };
   }, [rows]);
+
+  const teamExternalLoadSummary = useMemo<TeamExternalLoadSummary | null>(() => {
+    if (!rows.length) return null;
+    const teamId = String(rows.find((row) => row.team_id)?.team_id ?? coachTeamId ?? "").trim();
+    const entryDate = String(rows[0]?.entry_date ?? today).trim();
+    if (!teamId || !entryDate) return null;
+
+    return buildTeamExternalLoadSummary({
+      date: entryDate,
+      teamId,
+      players: rows.map((row) => ({
+        playerId: String(row.player_id),
+        playerName: row.full_name,
+        readinessState: row.final_flag ?? "GRAY",
+        externalLoadState: row._catapult_signals?.externalLoadState ?? "unknown",
+        dataQuality: row._catapult_signals?.dataQuality,
+        todayRow: row._catapult_history?.find((item) => item.date === entryDate) ?? null,
+        historyRows: row._catapult_history ?? [],
+        playerLoadSpike: row._catapult_signals?.playerLoadSpike ?? null,
+        hirSpike: row._catapult_signals?.hirSpike ?? null,
+        decelSpike: row._catapult_signals?.decelSpike ?? null,
+        accelSpike: row._catapult_signals?.accelSpike ?? null,
+        densityStressRatio: row._catapult_signals?.densityStressRatio ?? null,
+        maxVelocityExposureRatio: row._catapult_signals?.maxVelocityExposureRatio ?? null,
+        band6ExposureRatio: row._catapult_signals?.band6ExposureRatio ?? null,
+        neuromuscularBurdenScore: row._catapult_signals?.neuromuscularBurdenScore ?? null,
+      })),
+    });
+  }, [coachTeamId, rows, today]);
 
   const fatigueSnapshot = useMemo(() => {
     try {
@@ -3335,12 +3590,20 @@ export default function CoachPage() {
       });
       const mdContextInput = mdContextResolved.mdContext;
       const neuralFatigueBandInput = graphNeuralFatigueBandFromState(r._neural_load?.neuralLoadState);
+      const externalLoadToday = r._external_load_today ?? null;
+      const externalLoadBaseline = r._external_load_baseline ?? null;
       const graphSession = buildDevDailySessionAdapterResult({
         athleteState: graphAthleteStateFromFlag(r.final_flag),
         mdContext: mdContextInput,
         readinessScore: normalizedReadinessScore,
         neuralFatigueBand: neuralFatigueBandInput,
         yesterdayLoadBand,
+        externalLoad: {
+          playerLoad: externalLoadToday?.player_load ?? null,
+          playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+          sprintDistance: externalLoadToday?.sprint_distance ?? null,
+          sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+        },
       });
 
       const ateState = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
@@ -3405,6 +3668,19 @@ export default function CoachPage() {
           returnToPlay: false,
           sourceDate: String(r.entry_date ?? today),
         },
+        externalLoad: {
+          totalDistance: externalLoadToday?.total_distance ?? null,
+          highSpeedDistance: externalLoadToday?.high_speed_distance ?? null,
+          sprintDistance: externalLoadToday?.sprint_distance ?? null,
+          accelerations: externalLoadToday?.accelerations ?? null,
+          decelerations: externalLoadToday?.decelerations ?? null,
+          playerLoad: externalLoadToday?.player_load ?? null,
+          maxVelocity: externalLoadToday?.max_velocity ?? null,
+          playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+          sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+          source: externalLoadToday ? "catapult" : null,
+          sourceDate: String(r.entry_date ?? today),
+        },
       });
       const readinessDecision = buildExplainableReadinessDecision({
         playerId: String(r.player_id),
@@ -3445,6 +3721,11 @@ export default function CoachPage() {
         travelLoad: undefined,
         dataCompleteness: undefined,
         lightAteState,
+        catapultDailyLoad: r._catapult_baseline ? (r._catapult_signals ? (r._external_load_today ? normalizeCatapultDailyLoadRow(r._external_load_today as unknown as Record<string, unknown>) : null) : null) ?? undefined : undefined,
+        catapultBaseline: r._catapult_baseline ?? undefined,
+        catapultSignals: r._catapult_signals ?? undefined,
+        externalLoadState: r._catapult_signals?.externalLoadState ?? undefined,
+        catapultReadinessModifier: r._catapult_modifier ?? undefined,
       });
       const injuryRiskDecision = buildInjuryRiskDecision({
         acwr: acwrValue ?? undefined,
@@ -3677,12 +3958,20 @@ export default function CoachPage() {
     });
     const mdContextInput = mdContextResolved.mdContext;
     const neuralFatigueBandInput = graphNeuralFatigueBandFromState(neural?.neuralLoadState);
+    const externalLoadToday = r._external_load_today ?? null;
+    const externalLoadBaseline = r._external_load_baseline ?? null;
     const graphSession = buildDevDailySessionAdapterResult({
       athleteState: graphAthleteStateFromFlag(r.final_flag),
       mdContext: mdContextInput,
       readinessScore: normalizedReadinessScore,
       neuralFatigueBand: neuralFatigueBandInput,
       yesterdayLoadBand,
+      externalLoad: {
+        playerLoad: externalLoadToday?.player_load ?? null,
+        playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+        sprintDistance: externalLoadToday?.sprint_distance ?? null,
+        sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+      },
     });
     const decisionConfidence = buildDecisionConfidence({
       readinessScore: normalizedReadinessScore,
@@ -3801,6 +4090,19 @@ export default function CoachPage() {
         returnToPlay: false,
         sourceDate: String(r.entry_date ?? today),
       },
+      externalLoad: {
+        totalDistance: externalLoadToday?.total_distance ?? null,
+        highSpeedDistance: externalLoadToday?.high_speed_distance ?? null,
+        sprintDistance: externalLoadToday?.sprint_distance ?? null,
+        accelerations: externalLoadToday?.accelerations ?? null,
+        decelerations: externalLoadToday?.decelerations ?? null,
+        playerLoad: externalLoadToday?.player_load ?? null,
+        maxVelocity: externalLoadToday?.max_velocity ?? null,
+        playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+        sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+        source: externalLoadToday ? "catapult" : null,
+        sourceDate: String(r.entry_date ?? today),
+      },
     });
 
     const explainableDecision = buildExplainableReadinessDecision({
@@ -3840,6 +4142,11 @@ export default function CoachPage() {
       recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
       dataCompleteness: undefined,
       lightAteState,
+      catapultDailyLoad: r._catapult_baseline ? (r._external_load_today ? normalizeCatapultDailyLoadRow(r._external_load_today as unknown as Record<string, unknown>) : null) ?? undefined : undefined,
+      catapultBaseline: r._catapult_baseline ?? undefined,
+      catapultSignals: r._catapult_signals ?? undefined,
+      externalLoadState: r._catapult_signals?.externalLoadState ?? undefined,
+      catapultReadinessModifier: r._catapult_modifier ?? undefined,
     });
     const injuryRiskDecision = buildInjuryRiskDecision({
       acwr: acwrValue ?? undefined,
@@ -3874,6 +4181,38 @@ export default function CoachPage() {
           }
         : null,
       hardBlock: false,
+    });
+    const teamTodayRows = rows
+      .map((row) => row._external_load_today)
+      .filter((item): item is ExternalLoadDailyRow => item != null);
+    const todayVsTeamMetrics = getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      const value = getCatapultMetricValue(externalLoadToday as unknown as Record<string, unknown> | null, key);
+      const teamAverage = computeCatapultMetricAverage(
+        teamTodayRows as unknown as Array<Record<string, unknown>>,
+        key,
+      );
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        value,
+        teamAverage,
+      };
+    });
+    const weeklyLoadMetrics = getDefaultCatapultWeeklyLoadMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      const weekly = computeCatapultWeeklyMetricSnapshot({
+        rows: (r._catapult_history ?? []) as unknown as Array<Record<string, unknown>>,
+        key,
+      });
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        acwrSupported: !!definition.acwrSupported,
+        weekly,
+      };
     });
     const volatilityPoints = recentMonitoringByPlayer[pid] ?? [];
     const volatilitySummary = computePlayerVolatilitySummary(volatilityPoints);
@@ -4059,7 +4398,7 @@ export default function CoachPage() {
             {renderAccordionSection(
               "readinessDecision",
               "Readiness decision",
-              `${athleteDecision.athleteState} · Confidence: ${explainableDecision.confidence}`,
+              `${athleteDecision.athleteState} · Confidence: ${explainableDecision.confidence}${explainableDecision.confidenceHint ? ` · ${explainableDecision.confidenceHint}` : ""}`,
               <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
@@ -4165,6 +4504,73 @@ export default function CoachPage() {
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                   Notes: <span className="font-medium text-slate-900">{r.notes && r.notes.trim().length ? r.notes : "—"}</span>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">External load</div>
+                    <div className="text-xs text-slate-500">Catapult</div>
+                  </div>
+                  {externalLoadToday ? (
+                    <div className="mt-3 space-y-4">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Today vs Team</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          {todayVsTeamMetrics.map((item) => {
+                            const tone = externalLoadTone(item.value, item.teamAverage);
+                            return (
+                              <div key={`${pid}-external-team-${item.key}`} className={`rounded-2xl border px-3 py-3 ${tone.tone}`}>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.14em]">{item.label}</div>
+                                <div className="mt-2 text-base font-semibold tabular-nums">
+                                  {item.value == null ? "—" : numFmt(item.value, item.digits)}
+                                </div>
+                                <div className="mt-1 text-[11px]">
+                                  Team {item.teamAverage == null ? "—" : numFmt(item.teamAverage, item.digits)} · {tone.label}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Weekly Load</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {weeklyLoadMetrics.map((item) => {
+                            const tone = externalLoadTone(item.weekly.acute7Avg, item.weekly.chronic28Avg);
+                            return (
+                              <div key={`${pid}-external-weekly-${item.key}`} className={`rounded-2xl border px-3 py-3 ${tone.tone}`}>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.14em]">{item.label}</div>
+                                <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">7d</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.weekly.acute7Avg == null ? "—" : numFmt(item.weekly.acute7Avg, item.digits)}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">28d</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.weekly.chronic28Avg == null ? "—" : numFmt(item.weekly.chronic28Avg, item.digits)}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">ACWR</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      No Catapult external load synced for this player on this date.
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
                   Supporting metrics: <span className="font-mono">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)} · acwr {numFmt(explainableDecision.supportingMetrics?.acwr ?? null)} · sleep {numFmt(explainableDecision.supportingMetrics?.sleepScore ?? null)} · hrvΔ {numFmt(explainableDecision.supportingMetrics?.hrvChangePct ?? null)} · vol {numFmt(explainableDecision.supportingMetrics?.volatility ?? null)}</span>
@@ -4543,10 +4949,16 @@ export default function CoachPage() {
             <div>
               <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">Today Command Center</CardTitle>
               <CardDescription className="mt-1 text-sm text-slate-500">Today&apos;s coaching decision summary</CardDescription>
+              {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
             </div>
-            <div className="text-right text-xs text-slate-500">
-              <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
-              <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              <div className="text-right text-xs text-slate-500">
+                <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
+                <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
+                {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -4561,6 +4973,7 @@ export default function CoachPage() {
             const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
             const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
             const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
+            const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
             const totalPlayers = teamSignal?.n_players ?? 0;
             const nFull = teamSignal?.n_full ?? 0;
             const nReduced = teamSignal?.n_reduced ?? 0;
@@ -4617,6 +5030,7 @@ export default function CoachPage() {
                   <div className="mt-2 text-xs text-slate-600">
                     Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
                   </div>
+                  {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
                 </div>
               </>
             );
@@ -4686,9 +5100,20 @@ export default function CoachPage() {
                           (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)}
                       </span>
                     </div>
+                    {teamExternalLoadSummary ? (
+                      <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+                        <span className="text-slate-500">External load</span>
+                        <span className="text-right font-semibold text-slate-900">
+                          {teamExternalLoadSummary.teamState} · {teamExternalLoadSummary.counts.high} high · {teamExternalLoadSummary.counts.elevated} elevated
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    {teamPerformanceIntelligence.teamSummaryText}
+                    <div>{teamPerformanceIntelligence.teamSummaryText}</div>
+                    {teamExternalLoadSummary?.summaryLines.slice(0, 1).map((line, idx) => (
+                      <div key={`team-external-summary-${idx}`} className="mt-1">{line}</div>
+                    ))}
                   </div>
                 </div>
 
@@ -4715,6 +5140,7 @@ export default function CoachPage() {
                   <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
                     <li>{teamNeuralVolatilitySummary.summaryText}</li>
                     <li>{teamPrescriptionSummary.summaryText}</li>
+                    {teamExternalLoadSummary?.alerts.slice(0, 2).map((alert) => <li key={alert.code}>{alert.title}</li>)}
                   </ul>
                 </div>
 
@@ -4735,8 +5161,10 @@ export default function CoachPage() {
                     </div>
                   </div>
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    {summaryLines(teamIntel.recommendation, 3).length ? (
-                      summaryLines(teamIntel.recommendation, 3).map((line, idx) => <div key={`perf-ti-rec-${idx}`}>{line}</div>)
+                    {[...summaryLines(teamIntel.recommendation, 2), ...(teamExternalLoadSummary?.summaryLines.slice(0, 1) ?? [])].length ? (
+                      [...summaryLines(teamIntel.recommendation, 2), ...(teamExternalLoadSummary?.summaryLines.slice(0, 1) ?? [])]
+                        .slice(0, 3)
+                        .map((line, idx) => <div key={`perf-ti-rec-${idx}`}>{line}</div>)
                     ) : (
                       <div>—</div>
                     )}
@@ -4813,7 +5241,20 @@ export default function CoachPage() {
                     ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
                     ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
                     ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                    [
+                      "External load",
+                      teamExternalLoadSummary
+                        ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
+                        : "—",
+                    ],
+                    [
+                      "Catapult coverage",
+                      teamExternalLoadSummary
+                        ? `${teamExternalLoadSummary.counts.totalPlayers - teamExternalLoadSummary.counts.unknown}/${teamExternalLoadSummary.counts.totalPlayers}`
+                        : "—",
+                    ],
                     ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
+                    ["External load note", teamExternalLoadSummary?.summaryLines[0] ?? "—"],
                     ["Prescription", teamPrescriptionSummary.summaryText],
                     ["Rules / override", teamRulesSummary.summaryText],
                   ].map(([label, value], idx, rows) => (

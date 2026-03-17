@@ -56,6 +56,19 @@ type SnapshotBuilderParams = {
     expectedSessionType?: string | null;
     sourceDate?: string | null;
   } | null;
+  externalLoad?: {
+    totalDistance?: number | null;
+    highSpeedDistance?: number | null;
+    sprintDistance?: number | null;
+    accelerations?: number | null;
+    decelerations?: number | null;
+    playerLoad?: number | null;
+    maxVelocity?: number | null;
+    playerLoad7DayAverage?: number | null;
+    sprintDistance7DayAverage?: number | null;
+    source?: "catapult" | null;
+    sourceDate?: string | null;
+  } | null;
   rawRefs?: DailyAthleteSnapshot["rawRefs"];
 };
 
@@ -102,6 +115,18 @@ export function buildDailyAthleteSnapshot(params: SnapshotBuilderParams): DailyA
     recovery: whoop.recovery,
     autonomic: whoop.autonomic,
     load: load.load,
+    externalLoad: {
+      totalDistance: params.externalLoad?.totalDistance ?? null,
+      highSpeedDistance: params.externalLoad?.highSpeedDistance ?? null,
+      sprintDistance: params.externalLoad?.sprintDistance ?? null,
+      accelerations: params.externalLoad?.accelerations ?? null,
+      decelerations: params.externalLoad?.decelerations ?? null,
+      playerLoad: params.externalLoad?.playerLoad ?? null,
+      maxVelocity: params.externalLoad?.maxVelocity ?? null,
+      playerLoad7DayAverage: params.externalLoad?.playerLoad7DayAverage ?? null,
+      sprintDistance7DayAverage: params.externalLoad?.sprintDistance7DayAverage ?? null,
+      source: params.externalLoad?.source ?? null,
+    },
     neuromuscular: {
       cmj: params.neuromuscular?.cmj ?? null,
       imtp: params.neuromuscular?.imtp ?? null,
@@ -117,6 +142,10 @@ export function buildDailyAthleteSnapshot(params: SnapshotBuilderParams): DailyA
       hasWhoopData: whoop.integrations.whoop?.snapshotAvailable === true,
       hasLoadData:
         load.load.gpsLoad != null || load.load.sessionRpeLoad != null || load.load.acuteLoad != null || load.load.acwr != null,
+      hasExternalLoadData:
+        params.externalLoad?.playerLoad != null ||
+        params.externalLoad?.totalDistance != null ||
+        params.externalLoad?.sprintDistance != null,
       hasNeuromuscularData:
         params.neuromuscular?.cmj != null ||
         params.neuromuscular?.imtp != null ||

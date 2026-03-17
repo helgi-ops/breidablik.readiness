@@ -2,7 +2,8 @@ import { buildWhoopExplanationLines, type WhoopFusionFeatures } from "@/lib/micr
 
 export function explainReadinessWhy(
   triggeredRules: string[],
-  whoopFeatures?: WhoopFusionFeatures | null
+  whoopFeatures?: WhoopFusionFeatures | null,
+  externalLoadExplanations?: string[] | null
 ): string[] {
   const lines: string[] = [];
   for (const code of triggeredRules) {
@@ -26,13 +27,22 @@ export function explainReadinessWhy(
     if (code === "WHOOP_MIXED_SIGNALS") lines.push("WHOOP recovery and sleep markers were mixed.");
     if (code === "WHOOP_LOAD_CONTEXT_ONLY") lines.push("WHOOP load was elevated and treated as context only.");
     if (code === "WHOOP_LOAD_CONTEXT_DOWNWEIGHTED") lines.push("WHOOP load context was downweighted due to richer team load data.");
+    if (code === "CATAPULT_EXTERNAL_LOAD_ELEVATED") lines.push("External load is moderately elevated versus recent Catapult baseline.");
+    if (code === "CATAPULT_EXTERNAL_LOAD_HIGH") lines.push("External load is clearly elevated versus recent Catapult baseline.");
+    if (code === "CATAPULT_EXTERNAL_LOAD_UNKNOWN") lines.push("External load data is insufficient for a stable Catapult baseline.");
+    if (code === "CATAPULT_HIR_SPIKE") lines.push("High-intensity running load is above the recent norm.");
+    if (code === "CATAPULT_DECEL_SPIKE") lines.push("Deceleration burden is above the recent norm.");
+    if (code === "CATAPULT_ACCEL_SPIKE") lines.push("Acceleration load is above the recent norm.");
+    if (code === "CATAPULT_PLAYER_LOAD_SPIKE") lines.push("PlayerLoad is elevated versus the recent baseline.");
+    if (code === "CATAPULT_MAX_VELOCITY") lines.push("Top-speed exposure is higher than typical.");
+    if (code === "CATAPULT_SPRINT_EXPOSURE_CAUTION") lines.push("Sprint exposure is higher than typical.");
     if (code === "VOLATILITY_DEEMPHASIZED_STRONG_DAY")
       lines.push("Current-day readiness is strong, so volatility is treated as a secondary caution.");
     if (code === "GREEN_STRONG_READINESS_GOOD_SORENESS")
       lines.push("Muscle soreness does not currently suggest elevated recovery concern.");
     if (code === "GREEN_STABLE") lines.push("Readiness and load profile appear stable for normal training.");
   }
-  const unique = Array.from(new Set(lines));
+  const unique = Array.from(new Set([...(externalLoadExplanations ?? []), ...lines]));
   const shouldIncludeWhoop =
     !!whoopFeatures &&
     whoopFeatures.hasWhoopData &&
@@ -60,6 +70,15 @@ export function explainReadinessCoachActions(triggeredRules: string[], athleteSt
   }
   if (triggeredRules.includes("WHOOP_LOAD_CONTEXT_ONLY")) {
     lines.push("Treat elevated WHOOP strain as context; avoid adding unnecessary load.");
+  }
+  if (triggeredRules.includes("CATAPULT_EXTERNAL_LOAD_ELEVATED")) {
+    lines.push("Keep external load controlled and monitor first-block response.");
+  }
+  if (triggeredRules.includes("CATAPULT_EXTERNAL_LOAD_HIGH")) {
+    lines.push("Reduce external load exposure and avoid unnecessary high-speed volume.");
+  }
+  if (triggeredRules.includes("CATAPULT_SPRINT_EXPOSURE_CAUTION")) {
+    lines.push("Limit additional sprint exposure unless warm-up response is clearly positive.");
   }
   if (triggeredRules.includes("YELLOW_HIGH_VOLATILITY")) lines.push("Keep session flexible and adjust during first block feedback.");
   if (athleteState === "GREEN") lines.push("Run planned session with standard monitoring.");

@@ -1,5 +1,10 @@
 import type { NormalizedPlayerMonitoringInput } from "./types";
 import { buildReadinessWhoopSection } from "@/lib/integrations/shared/monitoringSnapshot";
+import {
+  buildCatapultReadinessModifier,
+  computeCatapultExternalLoadSignals,
+  type CatapultDailyLoadRow,
+} from "@/lib/micropulse/externalLoad";
 
 function n(v: unknown): number | undefined {
   const val = typeof v === "string" ? Number(v) : (v as number);
@@ -23,6 +28,46 @@ export function normalizePlayerMonitoringInput(input: NormalizedPlayerMonitoring
   const whoopSection =
     input.whoop ??
     (input.whoopSnapshot?.source === "whoop" ? buildReadinessWhoopSection(input.whoopSnapshot) : undefined);
+  const snapshotCatapultDailyLoad: CatapultDailyLoadRow | null =
+    snapshot?.externalLoad?.source === "catapult"
+      ? {
+          playerId: input.playerId,
+          teamId: null,
+          date: input.date,
+          totalDistance: n(snapshot.externalLoad.totalDistance) ?? null,
+          hirDist: n(snapshot.externalLoad.highSpeedDistance) ?? null,
+          maxVelocity: n(snapshot.externalLoad.maxVelocity) ?? null,
+          accelerations: n(snapshot.externalLoad.accelerations) ?? null,
+          decelerations: n(snapshot.externalLoad.decelerations) ?? null,
+          playerLoad: n(snapshot.externalLoad.playerLoad) ?? null,
+          playerLoadPerMinute: null,
+          velocityBand5TotalDistance: null,
+          velocityBand6TotalDistance: n(snapshot.externalLoad.sprintDistance) ?? null,
+          accelBand2to3Efforts: null,
+          decelBand2to3Efforts: null,
+          totalAccelerations: n(snapshot.externalLoad.accelerations) ?? null,
+          totalDecelerations: n(snapshot.externalLoad.decelerations) ?? null,
+        }
+      : null;
+  const catapultBaseline = input.catapultBaseline ?? null;
+  const catapultDailyLoad = input.catapultDailyLoad ?? snapshotCatapultDailyLoad;
+  const catapultSignals =
+    input.catapultSignals ??
+    (catapultDailyLoad && catapultBaseline
+      ? computeCatapultExternalLoadSignals({
+          today: catapultDailyLoad,
+          baseline: catapultBaseline,
+        })
+      : null);
+  const catapultReadinessModifier =
+    input.catapultReadinessModifier ??
+    (catapultDailyLoad && catapultBaseline && catapultSignals
+      ? buildCatapultReadinessModifier({
+          today: catapultDailyLoad,
+          baseline: catapultBaseline,
+          signals: catapultSignals,
+        })
+      : null);
 
   return {
     ...input,
@@ -55,6 +100,11 @@ export function normalizePlayerMonitoringInput(input: NormalizedPlayerMonitoring
     gpsSpike: b(input.gpsSpike),
     matchCongestion: b(input.matchCongestion ?? snapshot?.context.matchCongestion),
     travelLoad: b(input.travelLoad ?? snapshot?.context.travel),
+    catapultDailyLoad,
+    catapultBaseline,
+    catapultSignals,
+    externalLoadState: input.externalLoadState ?? catapultSignals?.externalLoadState ?? null,
+    catapultReadinessModifier,
     whoop: whoopSection
       ? {
           ...whoopSection,
