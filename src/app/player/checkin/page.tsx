@@ -260,6 +260,8 @@ export default function PlayerCheckinPage() {
         };
       }
 
+      // notes is kept out of the main upsert — some DB environments don't have
+      // the column yet. We attempt a separate update after the core insert succeeds.
       const payload = {
         player_id: playerId,
         entry_date,
@@ -268,7 +270,6 @@ export default function PlayerCheckinPage() {
         sleep_duration: sleepDuration,
         stress_mood: stressMood,
         muscle_soreness: muscleSoreness,
-        notes: notes.trim() ? notes.trim() : null,
       };
 
       console.log("CHECKIN payload:", payload);
@@ -290,6 +291,18 @@ export default function PlayerCheckinPage() {
 
       if (!res.data?.id) {
         throw { message: "Vistun tókst ekki (ekkert svar frá DB)." };
+      }
+
+      // Attempt to save notes separately — fail silently if column doesn't exist
+      const trimmedNotes = notes.trim();
+      if (trimmedNotes) {
+        const notesRes = await supabase
+          .from("readiness_entries")
+          .update({ notes: trimmedNotes })
+          .eq("id", res.data.id);
+        if (notesRes.error) {
+          console.warn("CHECKIN notes update failed (column may not exist):", notesRes.error.message);
+        }
       }
 
       setSuccess(true);

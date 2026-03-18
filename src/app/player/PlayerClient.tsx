@@ -27,6 +27,7 @@ import {
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
+  CatapultMetricKey,
   computeCatapultMetricAverage,
   computeCatapultWeeklyMetricSnapshot,
   getCatapultMetricDefinition,
