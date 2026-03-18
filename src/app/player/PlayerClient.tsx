@@ -363,11 +363,55 @@ function Stat({ label, value }: { label: string; value: any }) {
   );
 }
 
+function metricTone(value: number | null | undefined): "green" | "amber" | "red" | "neutral" {
+  if (value == null) return "neutral";
+  if (value >= 4) return "green";
+  if (value >= 3) return "amber";
+  return "red";
+}
+
 function MetricBox({ label, value }: { label: string; value: number | null | undefined }) {
+  const tone = metricTone(value);
+  const fillPct = value != null ? Math.min(100, (value / 5) * 100) : 0;
+
+  const bgClass =
+    tone === "green" ? "bg-emerald-50 border-emerald-200" :
+    tone === "amber" ? "bg-amber-50 border-amber-200" :
+    tone === "red"   ? "bg-red-50 border-red-200" :
+    "bg-white border-zinc-200";
+
+  const barColor =
+    tone === "green" ? "bg-emerald-500" :
+    tone === "amber" ? "bg-amber-400" :
+    tone === "red"   ? "bg-red-500" :
+    "bg-zinc-200";
+
+  const labelColor =
+    tone === "green" ? "text-emerald-700" :
+    tone === "amber" ? "text-amber-700" :
+    tone === "red"   ? "text-red-700" :
+    "text-zinc-500";
+
+  const contextLabel =
+    tone === "green" ? "Good" :
+    tone === "amber" ? "Monitor" :
+    tone === "red"   ? "Low" :
+    null;
+
   return (
-    <div className="rounded-xl border bg-white p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+    <div className={`rounded-xl border p-3 ${bgClass}`}>
+      <div className={`text-[11px] font-semibold uppercase tracking-wide ${labelColor}`}>{label}</div>
       <div className="mt-1 text-lg font-semibold text-zinc-900">{value ?? "—"}</div>
+      {value != null && (
+        <>
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-black/10">
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${fillPct}%` }} />
+          </div>
+          {contextLabel && (
+            <div className={`mt-1 text-[10px] font-medium ${labelColor}`}>{contextLabel}</div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -384,6 +428,46 @@ function metricFmt(value: number | null | undefined, digits = 0) {
 function acwrFmt(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "—";
   return value.toFixed(2);
+}
+
+function acwrZone(value: number | null | undefined): {
+  text: string; bg: string; label: string;
+} {
+  if (value == null || !Number.isFinite(value)) {
+    return { text: "text-zinc-400", bg: "bg-zinc-50 border-zinc-200", label: "—" };
+  }
+  if (value < 0.8)  return { text: "text-blue-700",  bg: "bg-blue-50 border-blue-200",   label: "Low" };
+  if (value <= 1.3) return { text: "text-green-700", bg: "bg-green-50 border-green-200", label: "Optimal" };
+  if (value <= 1.5) return { text: "text-amber-700", bg: "bg-amber-50 border-amber-200", label: "Elevated" };
+  return              { text: "text-red-700",   bg: "bg-red-50 border-red-200",     label: "High" };
+}
+
+function gpsDateMinusDays(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function computeGpsSnapshot(
+  rows: Array<Record<string, unknown>>,
+  key: CatapultMetricKey,
+  refDate: string
+): { acute7Avg: number | null; chronic28Avg: number | null; acwr: number | null } {
+  const acuteStart   = gpsDateMinusDays(refDate, 6);
+  const chronicStart = gpsDateMinusDays(refDate, 27);
+  const def = getCatapultMetricDefinition(key);
+
+  const acute   = rows.filter(r => typeof r.date === "string" && r.date >= acuteStart   && r.date <= refDate);
+  const chronic = rows.filter(r => typeof r.date === "string" && r.date >= chronicStart && r.date <= refDate);
+
+  const acute7Avg   = computeCatapultMetricAverage(acute,   key);
+  const chronic28Avg = computeCatapultMetricAverage(chronic, key);
+  const acwr =
+    def.acwrSupported && typeof acute7Avg === "number" && typeof chronic28Avg === "number" && chronic28Avg > 0
+      ? acute7Avg / chronic28Avg
+      : null;
+
+  return { acute7Avg, chronic28Avg, acwr };
 }
 
 function externalLoadTone(playerValue: number | null | undefined, referenceValue: number | null | undefined) {
@@ -1290,17 +1374,24 @@ export default function PlayerClient() {
   }, [catapultTeamToday, catapultToday]);
 
   const weeklyLoadMetrics = useMemo(() => {
+    const refDate = sanitizeDay(null); // today
     return getDefaultCatapultWeeklyLoadMetricKeys().map((key) => {
       const definition = getCatapultMetricDefinition(key);
+      const snapshot = computeGpsSnapshot(
+        catapultHistory as unknown as Array<Record<string, unknown>>,
+        key,
+        refDate
+      );
       return {
         key,
         label: definition.label,
         digits: definition.digits ?? 0,
         acwrSupported: !!definition.acwrSupported,
-        weekly: computeCatapultWeeklyMetricSnapshot({
-          rows: catapultHistory as unknown as Array<Record<string, unknown>>,
-          key,
-        }),
+        weekly: {
+          acute7Avg: snapshot.acute7Avg,
+          chronic28Avg: snapshot.chronic28Avg,
+          acwr: snapshot.acwr,
+        },
       };
     });
   }, [catapultHistory]);
@@ -2026,7 +2117,7 @@ export default function PlayerClient() {
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
         const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
-        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 27);
+        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 34);
         const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
 
         const [{ data: catapultTodayRows, error: catapultTodayErr }, { data: catapultHistoryRows, error: catapultHistoryErr }] = await Promise.all([
@@ -2700,29 +2791,37 @@ export default function PlayerClient() {
                         </div>
 
                         <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Weekly Load</div>
+                          <div className="flex items-center justify-between">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">GPS Load Monitoring</div>
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-400" /> &lt;0.8</span>
+                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> 0.8–1.3</span>
+                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> 1.3–1.5</span>
+                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> &gt;1.5</span>
+                            </div>
+                          </div>
                           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {weeklyLoadMetrics.map((item) => {
-                              const tone = externalLoadTone(item.weekly.acute7Avg, item.weekly.chronic28Avg);
+                              const zone = item.acwrSupported ? acwrZone(item.weekly.acwr) : acwrZone(null);
                               return (
-                                <div key={`player-catapult-weekly-${item.key}`} className={cx("rounded-xl border px-3 py-3", tone.tone)}>
-                                  <div className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</div>
+                                <div key={`player-catapult-weekly-${item.key}`} className={cx("rounded-xl border px-3 py-3", zone.bg)}>
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{item.label}</div>
                                   <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
                                     <div>
-                                      <div className="uppercase tracking-wide opacity-70">7d</div>
-                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      <div className="uppercase tracking-wide text-zinc-400">7D</div>
+                                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
                                         {metricFmt(item.weekly.acute7Avg, item.digits)}
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="uppercase tracking-wide opacity-70">28d</div>
-                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      <div className="uppercase tracking-wide text-zinc-400">28D</div>
+                                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
                                         {metricFmt(item.weekly.chronic28Avg, item.digits)}
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="uppercase tracking-wide opacity-70">ACWR</div>
-                                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      <div className="uppercase tracking-wide text-zinc-400">ACWR</div>
+                                      <div className={cx("mt-1 text-sm font-semibold tabular-nums", item.acwrSupported ? zone.text : "text-zinc-400")}>
                                         {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
                                       </div>
                                     </div>

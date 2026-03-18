@@ -1,0 +1,59 @@
+import type { DecisionState, SessionMode } from "./types";
+
+export const DECISION_THRESHOLDS = {
+  ACWR_HIGH: 1.5,
+  ACWR_ELEVATED: 1.3,
+  ACWR_LOW_DROP: 0.8,
+
+  LOAD_SPIKE_HIGH: 0.3,
+  LOAD_SPIKE_MODERATE: 0.2,
+  LOAD_DROP_HIGH: -0.3,
+
+  HIGH_SORENESS_BAD: 2,
+  MODERATE_SORENESS_BAD: 3,
+
+  LOW_SLEEP_BAD: 2,
+  MODERATE_SLEEP_BAD: 3,
+
+  LOW_RECOVERY_BAD: 2,
+  MODERATE_RECOVERY_BAD: 3,
+
+  HIGH_FATIGUE_BAD: 4,
+  MODERATE_FATIGUE_BAD: 3,
+
+  HIGH_RISK_SCORE: 0.75,
+  MODERATE_RISK_SCORE: 0.5,
+
+  MIN_CONFIDENCE_WITHOUT_LOAD: 0.55,
+  MIN_CONFIDENCE_WITHOUT_WELLNESS: 0.6,
+} as const;
+
+export const DECISION_STATE_SEVERITY: Record<DecisionState, number> = {
+  GREEN: 0,
+  YELLOW: 1,
+  RED: 2,
+  GRAY: 1,
+};
+
+export const DEFAULT_SESSION_MODE_BY_STATE: Record<DecisionState, SessionMode> = {
+  GREEN: "full",
+  YELLOW: "modified",
+  RED: "recovery",
+  GRAY: "pending",
+};
+
+export const CONFIDENCE_PENALTIES = {
+  MISSING_LOAD: 0.14,
+  MISSING_WELLNESS: 0.12,
+  FALLBACK_ONLY: 0.1,
+  CONFLICTING_INPUTS: 0.1,
+  GRAY_STATE: 0.18,
+  MANUAL_REVIEW: 0.1,
+} as const;
+
+export const EXPLANATION_IMPACT = {
+  HIGH: 85,
+  MODERATE: 65,
+  LOW: 40,
+  INFO: 20,
+} as const;

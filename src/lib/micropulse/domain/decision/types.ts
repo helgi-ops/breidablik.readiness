@@ -1,3 +1,5 @@
+import type { TrainingRecommendation } from "@/lib/micropulse/decision";
+
 export type AthleteState = "GREEN" | "YELLOW" | "RED" | "GRAY";
 export type SessionMode = "full" | "modified" | "recovery" | "pending";
 export type LoadAction = "normal" | "reduce" | "cap" | "top_up" | "monitor";
@@ -58,4 +60,5 @@ export interface AthleteDecision {
       concernLevel?: "none" | "low" | "moderate" | "high" | null;
     };
   };
+  trainingRecommendation?: TrainingRecommendation;
 }

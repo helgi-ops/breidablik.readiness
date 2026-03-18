@@ -28,26 +28,29 @@ export type CatapultWeeklyMetricSnapshot = {
 };
 
 const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
-  { key: "totalDistance", label: "Avg Dist (m)", digits: 0, aliases: ["total_distance", "totalDistance"] },
+  { key: "totalDistance", label: "Avg Dist (m)", digits: 0, acwrSupported: true, aliases: ["total_distance", "totalDistance"] },
   {
     key: "velocityBand5TotalDistance",
     label: "Vel B5 Avg Dist (Sess) (m)",
     digits: 0,
+    acwrSupported: true,
     aliases: ["velocity_band5_total_distance", "velocityBand5TotalDistance"],
   },
   {
     key: "velocityBand6TotalDistance",
     label: "Vel B6 Avg Dist (Sess) (m)",
     digits: 0,
+    acwrSupported: true,
     aliases: ["velocity_band6_total_distance", "velocityBand6TotalDistance"],
   },
-  { key: "hirDist", label: "HIR Dist (m)", digits: 0, aliases: ["hir_dist", "hirDist"] },
+  { key: "hirDist", label: "HIR Dist (m)", digits: 0, acwrSupported: true, aliases: ["hir_dist", "hirDist"] },
   { key: "maxVelocity", label: "Max Vel (km/h)", digits: 1, aliases: ["max_vel", "max_velocity", "maxVel", "maxVelocity"] },
   {
     key: "accelB23TotEffsGen2",
     label: "Acceleration B2-3 Total Efforts (Gen 2)",
     digits: 0,
     required: true,
+    acwrSupported: true,
     aliases: ["accel_b2_3_tot_effs_gen2", "accelB23TotEffsGen2", "accelBand2to3Efforts"],
   },
   {
@@ -63,6 +66,7 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     label: "Deceleration B2-3 Total Efforts (Gen 2)",
     digits: 0,
     required: true,
+    acwrSupported: true,
     aliases: ["decel_b2_3_tot_effs_gen2", "decelB23TotEffsGen2", "decelBand2to3Efforts"],
   },
   {
@@ -77,6 +81,7 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     key: "totalPlayerLoad",
     label: "Total Player Load",
     digits: 0,
+    acwrSupported: true,
     aliases: ["total_player_load", "player_load", "totalPlayerLoad", "playerLoad"],
   },
 ] as const;

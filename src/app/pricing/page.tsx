@@ -47,6 +47,7 @@ const COPY = {
       pro: {
         name: "Pro",
         pricePrimary: "€349 / month",
+        priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Best for coaches and performance staff",
         note: "Run your daily team operations with smarter readiness and session decision support.",
         bullets: [
@@ -67,6 +68,7 @@ const COPY = {
       elite: {
         name: "Elite",
         pricePrimary: "From €1250 / month",
+        priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Best for professional clubs and multi-team organizations",
         note: "Scale performance intelligence across teams, departments, and leadership.",
         bullets: [
@@ -170,6 +172,7 @@ const COPY = {
       pro: {
         name: "Pro",
         pricePrimary: "€349 / month",
+        priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Fyrir S&C þjálfara, performance staff og single-team umhverfi.",
         note: "Keyrðu daglegan rekstur með skýrari readiness og session decision support.",
         bullets: [
@@ -189,6 +192,7 @@ const COPY = {
       elite: {
         name: "Elite",
         pricePrimary: "From €1250 / month",
+        priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
         note: "Skalaðu performance intelligence yfir lið, deildir og stjórnendur.",
         bullets: [
@@ -359,6 +363,7 @@ export default function PricingPage() {
         recommended: true,
         name: t.plans.pro.name,
         pricePrimary: t.plans.pro.pricePrimary,
+        priceLocal: t.plans.pro.priceLocal,
         priceSecondary: t.plans.pro.priceSecondary,
         note: t.plans.pro.note,
         bullets: t.plans.pro.bullets,
@@ -370,6 +375,7 @@ export default function PricingPage() {
         recommended: false,
         name: t.plans.elite.name,
         pricePrimary: t.plans.elite.pricePrimary,
+        priceLocal: t.plans.elite.priceLocal,
         priceSecondary: t.plans.elite.priceSecondary,
         note: t.plans.elite.note,
         bullets: t.plans.elite.bullets,
@@ -535,6 +541,11 @@ export default function PricingPage() {
                 </div>
 
                 <div className="mt-2 text-3xl font-semibold">{p.pricePrimary}</div>
+                {p.priceLocal ? (
+                  <div className={classNames("mt-0.5 text-xs", p.dark ? "text-white/55" : "text-neutral-400")}>
+                    {p.priceLocal}
+                  </div>
+                ) : null}
                 <div className={classNames("text-sm", p.dark ? "text-white/70" : "text-neutral-500")}>
                   {p.priceSecondary}
                 </div>

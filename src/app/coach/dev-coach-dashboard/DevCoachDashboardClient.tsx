@@ -149,6 +149,9 @@ type TeamIntel = {
   baseline_maturity: string | null;
   team_status: string | null;
   recommendation: string | null;
+  narrative?: string | null;
+  monitoring_notes?: string[] | string | null;
+  session_recommendation?: string | null;
 };
 
 type TeamSignal = {
@@ -1206,8 +1209,9 @@ function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
 export default function CoachPage() {
   const router = useRouter();
 
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 100;
 
+  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps">("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -1268,6 +1272,15 @@ export default function CoachPage() {
   const [volatilityOpenByPlayer, setVolatilityOpenByPlayer] = useState<Record<string, boolean>>({});
   const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
   const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
+
+  // GPS tab — all players fetched independently of readiness rows
+  const [gpsAllPlayers, setGpsAllPlayers] = useState<Array<{
+    id: string;
+    name: string;
+    position: string;
+    history: Array<Record<string, unknown>>;
+  }>>([]);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   // Yesterday load context
   const [ctxHsr, setCtxHsr] = useState<string>("");
@@ -1542,25 +1555,45 @@ export default function CoachPage() {
   async function loadYesterdayContext(teamId: string, entryDate: string) {
     const yday = ydayOf(entryDate);
 
+    // Auto-populate from Catapult team data — no manual input needed
     const { data, error } = await supabase
-      .from("training_session_context")
-      .select("hsr_m, acc_total, dec_total, total_distance_m, max_velocity_pct, intensity, duration_min")
+      .from("player_external_load_daily")
+      .select("hir_dist, tot_as, tot_ds, total_distance, max_vel")
       .eq("team_id", teamId)
-      .eq("session_date", yday)
-      .maybeSingle();
+      .eq("date", yday)
+      .eq("source", "catapult");
 
     if (error) {
-      console.warn("loadYesterdayContext error:", error.message);
+      console.warn("loadYesterdayContext (Catapult) error:", error.message);
       return;
     }
 
-    setCtxHsr(data?.hsr_m?.toString() ?? "");
-    setCtxAcc(data?.acc_total?.toString() ?? "");
-    setCtxDec(data?.dec_total?.toString() ?? "");
-    setCtxDist(data?.total_distance_m?.toString() ?? "");
-    setCtxVmax(data?.max_velocity_pct?.toString() ?? "");
-    setCtxIntensity((data?.intensity as any) ?? "");
-    setCtxDuration(data?.duration_min?.toString() ?? "");
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    if (!rows.length) return;
+
+    function avgOf(key: string): number | null {
+      const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && isFinite(v));
+      return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+    }
+    function maxOf(key: string): number | null {
+      const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && isFinite(v));
+      return vals.length ? Math.max(...vals) : null;
+    }
+
+    const avgDist = avgOf("total_distance");
+    const intensity: "OFF" | "LOW" | "MEDIUM" | "HIGH" =
+      avgDist == null || avgDist === 0 ? "OFF"
+      : avgDist > 7000 ? "HIGH"
+      : avgDist > 4000 ? "MEDIUM"
+      : "LOW";
+
+    setCtxHsr(avgOf("hir_dist")?.toString() ?? "");
+    setCtxAcc(avgOf("tot_as")?.toString() ?? "");
+    setCtxDec(avgOf("tot_ds")?.toString() ?? "");
+    setCtxDist(avgDist?.toString() ?? "");
+    setCtxVmax(maxOf("max_vel")?.toString() ?? "");
+    setCtxIntensity(intensity);
+    setCtxDuration("");
   }
 
   async function saveYesterdayContext(teamId: string, entryDate: string) {
@@ -1917,7 +1950,7 @@ export default function CoachPage() {
     if (!playerIds.length) return list;
 
     try {
-      const startDate = addDaysISO(entryDate, -28);
+      const startDate = addDaysISO(entryDate, -35); // 35 days to ensure full 28-day chronic window
       const { data, error } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
@@ -2619,6 +2652,60 @@ export default function CoachPage() {
     setDraftMessage({});
     setSaved({});
   }, [teamFilter, filter, search, coachVerified]);
+
+  // GPS tab — fetch ALL players with Catapult data, independent of readiness rows
+  useEffect(() => {
+    if (dashTab !== "gps" || !coachVerified) return;
+    let alive = true;
+    (async () => {
+      setGpsLoading(true);
+      try {
+        const startDate = addDaysISO(today, -35);
+        const { data: playerData } = await supabase
+          .from("players")
+          .select("id, full_name, position")
+          .eq("is_active", true)
+          .order("full_name");
+
+        if (!playerData?.length || !alive) return;
+        const playerIds = (playerData as Array<Record<string, unknown>>).map((p) => String(p.id));
+
+        const { data: loadData } = await supabase
+          .from("player_external_load_daily")
+          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds")
+          .eq("source", "catapult")
+          .in("player_id", playerIds)
+          .gte("date", startDate)
+          .lte("date", today)
+          .order("date");
+
+        if (!alive) return;
+
+        const byPlayer = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of ((loadData ?? []) as Array<Record<string, unknown>>)) {
+          const pid = String(row.player_id);
+          const list = byPlayer.get(pid) ?? [];
+          list.push(row);
+          byPlayer.set(pid, list);
+        }
+
+        const result = (playerData as Array<Record<string, unknown>>)
+          .filter((p) => (byPlayer.get(String(p.id)) ?? []).length > 0)
+          .map((p) => ({
+            id: String(p.id),
+            name: String(p.full_name ?? ""),
+            position: String(p.position ?? "—"),
+            history: byPlayer.get(String(p.id)) ?? [],
+          }));
+
+        if (alive) setGpsAllPlayers(result);
+      } finally {
+        if (alive) setGpsLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashTab, coachVerified, today]);
 
   /** -----------------------------
    * Derived UI data
@@ -4942,409 +5029,214 @@ export default function CoachPage() {
     <div className="space-y-6">
       <CoachHubCards weeklyOutlook={weeklyPerformanceOutlook} />
 
-      {/* Today Command Center */}
-      <Card className={summaryCardClass}>
-        <CardHeader className="pb-2">
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">Today Command Center</CardTitle>
-              <CardDescription className="mt-1 text-sm text-slate-500">Today&apos;s coaching decision summary</CardDescription>
-              {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
-            </div>
-            <div className="flex flex-col items-start gap-2 md:items-end">
-              <div className="text-right text-xs text-slate-500">
-                <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
-                <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
-                {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {(() => {
-            const risk = computeTeamRisk(teamSignal);
-            const ui = riskUi(risk.level);
-            const leadingAction = dominantTeamAction(teamSignal);
-            const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
-              ?.teamFatigueSummary;
-            const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
-            const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
-            const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
-            const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
-            const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
-            const totalPlayers = teamSignal?.n_players ?? 0;
-            const nFull = teamSignal?.n_full ?? 0;
-            const nReduced = teamSignal?.n_reduced ?? 0;
-            const nRecovery = teamSignal?.n_recovery ?? 0;
-            const commandTiles = [
-              { label: "Risk level", value: risk.label, tone: "border-slate-200 bg-white" },
-              { label: "Team action", value: leadingAction, tone: "border-slate-200 bg-white" },
-              { label: "Needs review", value: String(needsReviewCount), tone: "border-slate-200 bg-white" },
-              { label: "Total players", value: String(totalPlayers), tone: "border-slate-200 bg-white" },
-            ];
-            const statusTiles = [
-              { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-              { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
-              { label: "Recovery", value: String(nRecovery), sub: "Protected", tone: "border-rose-200 bg-rose-50 text-rose-800" },
-              { label: "Dominant fatigue", value: fatigueDominant, sub: "Team signal", tone: "border-slate-200 bg-slate-50 text-slate-800" },
-              { label: "Neural load", value: neuralState, sub: "Current state", tone: "border-slate-200 bg-slate-50 text-slate-800" },
-              { label: "Next-day risk", value: nextDayRisk, sub: "Forecast", tone: "border-slate-200 bg-slate-50 text-slate-800" },
-            ];
-
+      {/* ── Tab navigation ── */}
+      <div className="border-b border-slate-200">
+        <nav className="-mb-px flex">
+          {(["today", "squad", "intel", "load", "gps"] as const).map((tabId) => {
+            const labels: Record<string, string> = {
+              today: "Today",
+              squad: "Squad",
+              intel: "Intelligence",
+              load: "Load & RPE",
+              gps: "GPS Data",
+            };
             return (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
-                  <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${dayStateInfo.badge}`}>
-                      Diagnostic: {dayStateInfo.label}
-                  </div>
-                  <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                    Team outlook: {teamOutlook.band}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {commandTiles.map((tile) => (
-                    <div key={tile.label} className={`${summaryTileClass} ${tile.tone}`}>
-                      <div className={statLabelClass}>{tile.label}</div>
-                      <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{tile.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                  {statusTiles.map((tile) => (
-                    <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
-                      <div className="text-[10px] uppercase tracking-wide opacity-80">{tile.label}</div>
-                      <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
-                      <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
-                  <div className="text-[10px] uppercase tracking-wide opacity-80">Coach recommendation</div>
-                  <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
-                  <div className="mt-2 text-xs text-slate-600">
-                    Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
-                  </div>
-                  {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
-                </div>
-              </>
+              <button
+                key={tabId}
+                onClick={() => setDashTab(tabId)}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  dashTab === tabId
+                    ? "border-slate-900 text-slate-900"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                {labels[tabId]}
+              </button>
             );
-          })()}
-        </CardContent>
-      </Card>
+          })}
+        </nav>
+      </div>
 
-      <Card className={`h-full border ${tm.border} shadow-sm`}>
-        <CardHeader className={`${tm.bg}`}>
-          <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
-          <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
-            Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
-            <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
-            <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {!teamIntel ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
-          ) : (
-            <>
-              <div className="grid gap-3 lg:grid-cols-12">
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm lg:col-span-4">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Volatility</div>
-                  <div className="mt-3 text-3xl font-semibold tabular-nums text-emerald-950">{teamIntel.volatility_pct ?? 0}%</div>
-                  <div className="mt-2 text-sm text-emerald-800">volatile players: <span className="font-semibold">{teamIntel.n_volatile ?? 0}</span></div>
-                </div>
-
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-sm lg:col-span-4">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-amber-700">Readiness mix</div>
-                  <div className="mt-3 text-2xl font-semibold text-amber-950 tabular-nums">
-                    {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
-                  </div>
-                  <div className="mt-1 text-xs text-amber-700">RED / YELLOW / GREEN(+)</div>
-                  <div className="mt-2 text-sm text-amber-800 tabular-nums">
-                    n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 shadow-sm lg:col-span-4">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-rose-700">Status snapshot</div>
-                  <div className="mt-3 text-2xl font-semibold text-rose-950">{teamIntel.team_status ?? "—"}</div>
-                  <div className="mt-2 text-sm text-rose-800">
-                    baseline: <span className="font-semibold">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
-                    <span className="font-semibold">{teamIntel.n_players ?? "—"}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Team summary</div>
-                  <div className="mt-3 space-y-3 text-sm text-slate-700">
-                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                      <span className="text-slate-500">Avg risk</span>
-                      <span className="font-semibold tabular-nums text-slate-900">{teamPerformanceIntelligence.averageRiskScore.toFixed(1)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                      <span className="text-slate-500">Avg performance</span>
-                      <span className="font-semibold tabular-nums text-slate-900">{teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500">High / critical risk</span>
-                      <span className="font-semibold text-slate-900">
-                        {(teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0) +
-                          (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)}
-                      </span>
-                    </div>
-                    {teamExternalLoadSummary ? (
-                      <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
-                        <span className="text-slate-500">External load</span>
-                        <span className="text-right font-semibold text-slate-900">
-                          {teamExternalLoadSummary.teamState} · {teamExternalLoadSummary.counts.high} high · {teamExternalLoadSummary.counts.elevated} elevated
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    <div>{teamPerformanceIntelligence.teamSummaryText}</div>
-                    {teamExternalLoadSummary?.summaryLines.slice(0, 1).map((line, idx) => (
-                      <div key={`team-external-summary-${idx}`} className="mt-1">{line}</div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Monitoring pattern</div>
-                  <div className="mt-3 space-y-2 text-sm text-slate-700">
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-slate-500">Risk bands</span>
-                      <span className="text-right font-semibold text-slate-900">
-                        Low {teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0} · Mod {teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0} · High {teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0} · Critical {teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}
-                      </span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-slate-500">Recovery recommended</span>
-                      <span className="font-semibold text-slate-900">{teamPerformanceIntelligence.loadToleranceCounts.RECOVERY_ONLY ?? 0}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-slate-500">Neural + volatility</span>
-                      <span className="text-right font-semibold text-slate-900">
-                        {teamNeuralVolatilitySummary.unstablePlayers.length} unstable · {teamNeuralVolatilitySummary.collapseWatchPlayers.length} collapse watch · {teamNeuralVolatilitySummary.peakWindowPlayers.length} peak window
-                      </span>
-                    </div>
-                  </div>
-                  <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-                    <li>{teamNeuralVolatilitySummary.summaryText}</li>
-                    <li>{teamPrescriptionSummary.summaryText}</li>
-                    {teamExternalLoadSummary?.alerts.slice(0, 2).map((alert) => <li key={alert.code}>{alert.title}</li>)}
-                  </ul>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Session recommendation</div>
-                  <div className="mt-3 space-y-3 text-sm text-slate-700">
-                    <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
-                      <span className="text-slate-500">Prescription</span>
-                      <span className="text-right font-semibold text-slate-900">
-                        {teamPrescriptionSummary.fullCount} full · {teamPrescriptionSummary.modifiedCount} modified · {teamPrescriptionSummary.recoveryCount} recovery · {teamPrescriptionSummary.holdCount} hold
-                      </span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-slate-500">Protect for match</span>
-                      <span className="text-right font-semibold text-slate-900">
-                        {teamPrescriptionSummary.protectForMatchCount} · Limited exposure {teamPrescriptionSummary.limitedExposureCount}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    {[...summaryLines(teamIntel.recommendation, 2), ...(teamExternalLoadSummary?.summaryLines.slice(0, 1) ?? [])].length ? (
-                      [...summaryLines(teamIntel.recommendation, 2), ...(teamExternalLoadSummary?.summaryLines.slice(0, 1) ?? [])]
-                        .slice(0, 3)
-                        .map((line, idx) => <div key={`perf-ti-rec-${idx}`}>{line}</div>)
-                    ) : (
-                      <div>—</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Rules / overrides</div>
-                  <div className="mt-3 space-y-3 text-sm text-slate-700">
-                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                      <span className="text-slate-500">Adjusted players</span>
-                      <span className="font-semibold text-slate-900">{teamRulesSummary.overriddenPlayersCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                      <span className="text-slate-500">Review required</span>
-                      <span className="font-semibold text-slate-900">{teamRulesSummary.reviewRequiredCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-slate-500">Protected players</span>
-                      <span className="font-semibold text-slate-900">{teamRulesSummary.protectedPlayersCount}</span>
-                    </div>
-                  </div>
-                  <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-                    <li>{teamRulesSummary.summaryText}</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Drafts / workflow</div>
-                <div className="mt-4">
-                  <TeamSessionBuildSummaryCard summary={teamSessionBuildSummary} />
-                  <div className="mt-2 text-[11px]">
-                    <Link href="/coach/session-workflow" className="font-medium text-slate-700 underline underline-offset-2">
-                      Open Session Workflow
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <section className="space-y-4">
-        <div className={`flex items-end justify-between gap-3 px-3 py-2 ${softSurfaceClass}`}>
-          <div>
-            <div className={sectionTitleClass}>Supporting team intelligence</div>
-            <div className={sectionSubtitleClass}>Performance context and team-level monitoring beneath the command summary.</div>
-            <div className="mt-1 text-xs text-slate-600">
-              Team outlook: <span className="font-semibold text-slate-800">{teamOutlook.band}</span>
-            </div>
-          </div>
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">Level 2</div>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
+      {/* ══════════════════════════════════════════
+          TODAY TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "today" && (
+        <div className="space-y-6">
+          {/* Today Command Center */}
           <Card className={summaryCardClass}>
-            <CardHeader className="pb-3">
-              <CardTitle className={sectionTitleClass}>Team Intelligence</CardTitle>
-              <CardDescription className={sectionSubtitleClass}>High-level team monitoring summary.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!teamIntel ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
-              ) : (
-                <div className="rounded-2xl border border-slate-200 bg-white">
-                  {[
-                    ["Status", teamIntel.team_status ?? "—"],
-                    ["Baseline maturity", teamIntel.baseline_maturity ?? "—"],
-                    ["Players", String(teamIntel.n_players ?? "—")],
-                    ["Volatility", `${teamIntel.volatility_pct ?? 0}%`],
-                    ["Volatile players", String(teamIntel.n_volatile ?? 0)],
-                    ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
-                    ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
-                    ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
-                    [
-                      "External load",
-                      teamExternalLoadSummary
-                        ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
-                        : "—",
-                    ],
-                    [
-                      "Catapult coverage",
-                      teamExternalLoadSummary
-                        ? `${teamExternalLoadSummary.counts.totalPlayers - teamExternalLoadSummary.counts.unknown}/${teamExternalLoadSummary.counts.totalPlayers}`
-                        : "—",
-                    ],
-                    ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
-                    ["External load note", teamExternalLoadSummary?.summaryLines[0] ?? "—"],
-                    ["Prescription", teamPrescriptionSummary.summaryText],
-                    ["Rules / override", teamRulesSummary.summaryText],
-                  ].map(([label, value], idx, rows) => (
-                    <div
-                      key={label}
-                      className={`flex items-center justify-between gap-4 px-4 py-3 ${idx < rows.length - 1 ? "border-b border-slate-200" : ""}`}
-                    >
-                      <div className="text-sm text-slate-500">{label}</div>
-                      <div className="text-right text-sm font-semibold text-slate-900">{value}</div>
-                    </div>
-                  ))}
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">Today Command Center</CardTitle>
+                  <CardDescription className="mt-1 text-sm text-slate-500">Today&apos;s coaching decision summary</CardDescription>
+                  {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={summaryCardClass}>
-            <CardHeader className="pb-3">
-              <CardTitle className={sectionTitleClass}>Readiness Mix</CardTitle>
-              <CardDescription className={sectionSubtitleClass}>Current team state distribution and risk map.</CardDescription>
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <div className="text-right text-xs text-slate-500">
+                    <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
+                    <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
+                    {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!teamIntel ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{queueEmptyMessage}</div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-rose-700">Red</div>
-                      <div className="mt-1 text-xl font-semibold tabular-nums text-rose-800">{teamIntel.pct_red ?? 0}%</div>
-                    </div>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-amber-700">Yellow</div>
-                      <div className="mt-1 text-xl font-semibold tabular-nums text-amber-800">{teamIntel.pct_yellow ?? 0}%</div>
-                    </div>
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green</div>
-                      <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-800">{(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%</div>
-                    </div>
-                  </div>
+              {(() => {
+                const risk = computeTeamRisk(teamSignal);
+                const ui = riskUi(risk.level);
+                const leadingAction = dominantTeamAction(teamSignal);
+                const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
+                  ?.teamFatigueSummary;
+                const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
+                const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
+                const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
+                const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
+                const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
+                const totalPlayers = teamSignal?.n_players ?? 0;
+                const nFull = teamSignal?.n_full ?? 0;
+                const nReduced = teamSignal?.n_reduced ?? 0;
+                const nRecovery = teamSignal?.n_recovery ?? 0;
+                const commandTiles = [
+                  { label: "Risk level", value: risk.label, tone: "border-slate-200 bg-white" },
+                  { label: "Team action", value: leadingAction, tone: "border-slate-200 bg-white" },
+                  { label: "Needs review", value: String(needsReviewCount), tone: "border-slate-200 bg-white" },
+                  { label: "Total players", value: String(totalPlayers), tone: "border-slate-200 bg-white" },
+                ];
+                const statusTiles = [
+                  { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+                  { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
+                  { label: "Recovery", value: String(nRecovery), sub: "Protected", tone: "border-rose-200 bg-rose-50 text-rose-800" },
+                  { label: "Dominant fatigue", value: fatigueDominant, sub: "Team signal", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                  { label: "Neural load", value: neuralState, sub: "Current state", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                  { label: "Next-day risk", value: nextDayRisk, sub: "Forecast", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                ];
 
-                  <div className="space-y-2">
-                    <div className="h-4 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-                      <div className="flex h-full w-full">
-                        <div className="bg-rose-400/70" style={{ width: `${teamIntel.pct_red ?? 0}%` }} />
-                        <div className="bg-amber-400/70" style={{ width: `${teamIntel.pct_yellow ?? 0}%` }} />
-                        <div className="bg-emerald-400/70" style={{ width: `${(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%` }} />
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
+                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${dayStateInfo.badge}`}>
+                          Diagnostic: {dayStateInfo.label}
+                      </div>
+                      <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                        Team outlook: {teamOutlook.band}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>n: {teamIntel.n_red ?? 0}</span>
-                      <span>n: {teamIntel.n_yellow ?? 0}</span>
-                      <span>n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}</span>
-                    </div>
-                  </div>
 
-                  <div className="pt-1">
-                    <div className="text-sm font-semibold text-slate-900">Team Risk Map</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-emerald-700">Low Risk</div>
-                        <div className="mt-1 text-xl font-semibold text-emerald-800">{teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0}</div>
-                      </div>
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-amber-700">Moderate</div>
-                        <div className="mt-1 text-xl font-semibold text-amber-800">{teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0}</div>
-                      </div>
-                      <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-orange-700">High Risk</div>
-                        <div className="mt-1 text-xl font-semibold text-orange-800">{teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0}</div>
-                      </div>
-                      <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-rose-700">Critical</div>
-                        <div className="mt-1 text-xl font-semibold text-rose-800">{teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}</div>
-                      </div>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      {commandTiles.map((tile) => (
+                        <div key={tile.label} className={`${summaryTileClass} ${tile.tone}`}>
+                          <div className={statLabelClass}>{tile.label}</div>
+                          <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{tile.value}</div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                </>
-              )}
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                      {statusTiles.map((tile) => (
+                        <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
+                          <div className="text-[10px] uppercase tracking-wide opacity-80">{tile.label}</div>
+                          <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
+                          <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
+                      <div className="text-[10px] uppercase tracking-wide opacity-80">Coach recommendation</div>
+                      <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
+                      <div className="mt-2 text-xs text-slate-600">
+                        Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
+                      </div>
+                      {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
+                    </div>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
-        </div>
 
-        <div className="grid gap-3">
-          <SessionRpeMonitoringCard teamId={coachTeamId} />
-          <DailyInternalLoadCard teamId={coachTeamId} />
-          <LoadMetricsCard teamId={coachTeamId} />
-        </div>
+          {/* Readiness Today — team signal summary */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Readiness Today</CardTitle>
+              <CardDescription>
+                Coach: <span className="font-medium">{coachDisplayName ?? coachName ?? "—"}</span> · Date: <span className="font-medium">{today}</span> · MD-day:{" "}
+                <span className="font-medium">{mdDayToday}</span> · Source: <span className="font-medium">{planPreview?.source ?? "—"}</span> · Confidence:{" "}
+                <span className="font-medium">{formatConfidence(planPreview?.confidence)}</span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {teamSignal
+                ? (() => {
+                    const risk = computeTeamRisk(teamSignal);
+                    const ui = riskUi(risk.level);
+                    const recLines = summaryLines(risk.recommendation, 3);
+                    return (
+                      <div className={`rounded-xl border ${ui.border} bg-white p-4 shadow-sm space-y-3`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
+                          <div className="text-xs text-gray-500">
+                            Auto-lock: {AUTO_LOCK_MINUTES_BEFORE}m before session ({String(DEFAULT_SESSION_START.hour).padStart(2, "0")}:
+                            {String(DEFAULT_SESSION_START.minute).padStart(2, "0")})
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Total</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.n_players}</div>
+                          </div>
+                          <div className="rounded-lg border bg-green-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-green-700">Full</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{teamSignal.n_full}</div>
+                          </div>
+                          <div className="rounded-lg border bg-yellow-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-yellow-700">Reduced</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-yellow-700">{teamSignal.n_reduced}</div>
+                          </div>
+                          <div className="rounded-lg border bg-red-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-red-700">Recovery</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{teamSignal.n_recovery}</div>
+                          </div>
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Avg confidence</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.avg_confidence ?? "-"}</div>
+                          </div>
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Needs review</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{needsReviewCount}</div>
+                          </div>
+                        </div>
+                        <div className={`grid gap-2 md:grid-cols-2 text-xs ${ui.text}`}>
+                          <div className="rounded-lg border bg-white p-3">
+                            <div className="font-semibold text-gray-700">Why</div>
+                            <div className="mt-1">{risk.why}</div>
+                          </div>
+                          <div className="rounded-lg border bg-white p-3">
+                            <div className="font-semibold text-gray-700">Team plan</div>
+                            <div className="mt-1 space-y-1">
+                              {recLines.length ? (
+                                recLines.map((line, idx) => (
+                                  <div key={`rec-${idx}`} className="leading-relaxed">
+                                    {line}
+                                  </div>
+                                ))
+                              ) : (
+                                <div>{risk.recommendation}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                : null}
+            </CardContent>
+          </Card>
 
-        <div>
+          {/* Check-in reminders */}
           <Card className="h-full border border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <CardTitle className={sectionTitleClass}>Check-in reminders</CardTitle>
@@ -5365,7 +5257,6 @@ export default function CoachPage() {
                   <div className="mt-1 text-lg font-semibold tabular-nums text-amber-700">{reminderStatus?.missing ?? "—"}</div>
                 </div>
               </div>
-
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={() => sendManualReminder(today)} disabled={manualReminderSending || reminderStatusLoading}>
                   {manualReminderSending ? "Sending..." : "Send reminder to missing players"}
@@ -5380,601 +5271,869 @@ export default function CoachPage() {
                   </span>
                 </div>
               </div>
-
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
                 <span className="font-semibold text-slate-700">Compliance diagnostic:</span> {complianceMessage}
               </div>
-
               {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
             </CardContent>
           </Card>
+
         </div>
-      </section>
+      )}
 
-      {/* Yesterday Load + local MicroPulse preview */}
-      <Card className="shadow-sm border-2 border-black/5">
-        <CardHeader>
-          <CardTitle className="text-base">Yesterday Load (Coach input)</CardTitle>
-          <CardDescription>
-            Settu inn álag frá gær (lið) til að bæta context. Þetta breytir engu í Stage4 — þetta er bara input + local preview.
-          </CardDescription>
-        </CardHeader>
+      {/* ══════════════════════════════════════════
+          SQUAD TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "squad" && (
+        <div className="space-y-6">
 
-        <CardContent className="space-y-3">
-          {!coachTeamId ? (
-            <div className="text-sm text-muted-foreground">Vantar team_id (profile).</div>
-          ) : (
-            <>
-              {(() => {
-                const isOff = ctxIntensity === "OFF";
-                return (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <div className="text-sm mb-1">HSR (m)</div>
-                      <Input value={ctxHsr} onChange={(e) => setCtxHsr(e.target.value)} placeholder="t.d. 800" disabled={isOff} />
-                    </div>
-                    <div>
-                      <div className="text-sm mb-1">Acc total</div>
-                      <Input value={ctxAcc} onChange={(e) => setCtxAcc(e.target.value)} placeholder="t.d. 55" disabled={isOff} />
-                    </div>
-                    <div>
-                      <div className="text-sm mb-1">Dec total</div>
-                      <Input value={ctxDec} onChange={(e) => setCtxDec(e.target.value)} placeholder="t.d. 60" disabled={isOff} />
-                    </div>
-                    <div>
-                      <div className="text-sm mb-1">Distance (m)</div>
-                      <Input value={ctxDist} onChange={(e) => setCtxDist(e.target.value)} placeholder="t.d. 8400" disabled={isOff} />
-                    </div>
-
-                    <div>
-                      <div className="text-sm mb-1">Max vel (%)</div>
-                      <Input value={ctxVmax} onChange={(e) => setCtxVmax(e.target.value)} placeholder="t.d. 92" disabled={isOff} />
-                    </div>
-                    <div>
-                      <div className="text-sm mb-1">Duration (min)</div>
-                      <Input value={ctxDuration} onChange={(e) => setCtxDuration(e.target.value)} placeholder="t.d. 75" disabled={isOff} />
-                    </div>
-                    <div>
-                      <div className="text-sm mb-1">Intensity (fallback)</div>
-                      <select className="w-full h-10 border rounded-md px-3 text-sm" value={ctxIntensity} onChange={(e) => setCtxIntensity(e.target.value as any)}>
-                        <option value="">—</option>
-                        <option value="OFF">OFF</option>
-                        <option value="LOW">LOW</option>
-                        <option value="MEDIUM">MEDIUM</option>
-                        <option value="HIGH">HIGH</option>
-                      </select>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => {
-                    const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
-                    saveYesterdayContext(coachTeamId, entryDate);
-                  }}
-                  disabled={ctxSaving}
-                >
-                  {ctxSaving ? "Saving..." : "Save yesterday load"}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
-                    loadYesterdayContext(coachTeamId, entryDate);
-                  }}
-                  disabled={ctxSaving}
-                >
-                  Reload
-                </Button>
-
-                <Button
-                  onClick={async () => {
-                    console.log("Compute clicked", {
-                      localDecisionLoading,
-                      rowsLength: rows.length,
-                      ctxIntensity,
-                      ctxHsr,
-                      ctxAcc,
-                      ctxDec,
-                      ctxDist,
-                      ctxVmax,
-                      ctxDuration,
-                      hasEngine: !!computeTeamDecision,
-                      engineType: typeof computeTeamDecision,
-                    });
-                    await computeLocalTeamDecisionPreview();
-                  }}
-                  disabled={localDecisionLoading || rows.length === 0}
-                  className="ml-auto"
-                >
-                  {localDecisionLoading ? "Computing…" : "Compute MicroPulse (preview)"}
-                </Button>
+          {/* Players needing review */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <div className={sectionTitleClass}>Players needing review today</div>
+                <div className={sectionSubtitleClass}>{needsReviewCount} players flagged by the system</div>
               </div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">Operational workspace · scan · decide · confirm</div>
+            </div>
 
-              {localDecisionError ? <div className="text-sm text-red-600">{localDecisionError}</div> : null}
-
-              {localDecision ? (
-                <div className="rounded-md border bg-white p-3 text-sm">
-                  <div className="font-semibold">
-                    MicroPulse preview: <span className="ml-2">{localDecision.team_action}</span>
-                    <span className="ml-3 text-muted-foreground">(score: {localDecision.decision_score})</span>
-                  </div>
-                  <div className="mt-1 text-muted-foreground">Reasons: {(localDecision.reasons ?? []).join(", ") || "—"}</div>
-                  {!!localDecision?.neural_bias_applied ? (
-                    <div className="mt-1 text-muted-foreground">
-                      Neural bias applied: yes
-                      {Array.isArray(localDecision?.neural_bias_reason_codes) && localDecision.neural_bias_reason_codes.length
-                        ? ` · ${formatNeuralBiasReasons(localDecision.neural_bias_reason_codes, 3)}`
-                        : ""}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 text-muted-foreground">Exceptions (preview): {(localDecision.exceptions ?? []).length}</div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">Review context</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400">Today only</div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Needs review</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{needsReviewCount}</div>
                 </div>
-              ) : (
-                <div className="text-xs text-muted-foreground">Tip: Fylltu inn load og ýttu á “Compute MicroPulse (preview)”. Þetta breytir engu í Stage4—bara preview.</div>
-              )}
-            </>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Neural bias</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.neuralBiasApplied}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>High next-day risk</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.highNextDayRisk}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Locked cards</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.lockedRows}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-gray-50 p-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Players flagged today</div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>High neural load</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.highNeuralLoad}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Low readiness</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Pain flag</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.painFlag}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Manual review</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.manualReview}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="grid gap-3 lg:grid-cols-12">
+                <div className="lg:col-span-7">
+                  <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Filters</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
+                      All
+                    </Button>
+                    <Button variant={filter === "red" ? "default" : "outline"} onClick={() => setFilter("red")}>
+                      Red ({counts.red})
+                    </Button>
+                    <Button variant={filter === "yellow" ? "default" : "outline"} onClick={() => setFilter("yellow")}>
+                      Yellow ({counts.yellow})
+                    </Button>
+                    <Button variant={filter === "green" ? "default" : "outline"} onClick={() => setFilter("green")}>
+                      Green ({counts.green})
+                    </Button>
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Actions</div>
+                  <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
+                    <Input placeholder="Leita að leikmanni…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-[220px]" />
+                    <Button variant="outline" onClick={() => loadToday()} disabled={loading || genLoading}>
+                      {loading ? "Hleð..." : "Refresh"}
+                    </Button>
+                    <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
+                      {genLoading ? "Generating…" : "Generate Today Decisions"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={downloadReadinessRiskReport}
+                      disabled={pdfDownloading || loading}
+                    >
+                      {pdfDownloading ? "Generating PDF…" : "Download Readiness Risk Report"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error ? <div className="text-sm text-red-600">{error}</div> : null}
+          {genToast ? <div className="text-sm text-green-700">{genToast}</div> : null}
+
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{queueEmptyMessage}</div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-gray-50/40 p-3 md:p-4 space-y-4">{rowsWithSessionDraft.map((r) => renderRow(r))}</div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Readiness Today */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Readiness Today</CardTitle>
-          <CardDescription>
-            Coach: <span className="font-medium">{coachDisplayName ?? coachName ?? "—"}</span> · Date: <span className="font-medium">{today}</span> · MD-day:{" "}
-            <span className="font-medium">{mdDayToday}</span> · Source: <span className="font-medium">{planPreview?.source ?? "—"}</span> · Confidence:{" "}
-            <span className="font-medium">{formatConfidence(planPreview?.confidence)}</span>
-          </CardDescription>
-        </CardHeader>
+          {/* Paging */}
+          <div className="flex items-center justify-between pt-2 text-sm text-gray-600">
+            <div>
+              Page {page + 1} / {totalPages} · total {total}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Prev
+              </Button>
+              <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
 
-        <CardContent className="space-y-3">
-          {teamSignal
-            ? (() => {
-                const risk = computeTeamRisk(teamSignal);
-                const ui = riskUi(risk.level);
-                const recLines = summaryLines(risk.recommendation, 3);
-                return (
-                  <div className={`rounded-xl border ${ui.border} bg-white p-4 shadow-sm space-y-3`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
-                      <div className="text-xs text-gray-500">
-                        Auto-lock: {AUTO_LOCK_MINUTES_BEFORE}m before session ({String(DEFAULT_SESSION_START.hour).padStart(2, "0")}:
-                        {String(DEFAULT_SESSION_START.minute).padStart(2, "0")})
+          {/* Team Risk Map */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Team Risk Map</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Low Risk</div>
+                  <div className="mt-1 space-y-0.5 text-emerald-900">
+                    {teamRiskMap.lowRisk.slice(0, 8).map((p) => (
+                      <div key={`low-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.lowRisk.length ? <div className="text-emerald-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Moderate Risk</div>
+                  <div className="mt-1 space-y-0.5 text-yellow-900">
+                    {teamRiskMap.moderateRisk.slice(0, 8).map((p) => (
+                      <div key={`mod-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.moderateRisk.length ? <div className="text-yellow-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-700">High Risk</div>
+                  <div className="mt-1 space-y-0.5 text-orange-900">
+                    {teamRiskMap.highRisk.slice(0, 8).map((p) => (
+                      <div key={`high-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.highRisk.length ? <div className="text-orange-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Critical</div>
+                  <div className="mt-1 space-y-0.5 text-red-900">
+                    {teamRiskMap.criticalRisk.slice(0, 8).map((p) => (
+                      <div key={`crit-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.criticalRisk.length ? <div className="text-red-700/70">No players</div> : null}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Weekly Performance Intelligence */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Weekly Performance Intelligence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm text-slate-700">
+                <div>
+                  Team average risk: <span className="font-semibold tabular-nums">{weeklyRiskReport.avgRiskScore.toFixed(1)}</span>
+                </div>
+                <div>{weeklyRiskReport.teamTrend}</div>
+                <div>{weeklyRiskReport.recommendation}</div>
+                <div>
+                  Highest risk:{" "}
+                  {weeklyRiskReport.highestRiskPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                </div>
+                <div>
+                  Improving: {weeklyRiskReport.mostImprovedPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          INTELLIGENCE TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "intel" && (
+        <div className="space-y-6">
+
+          {/* Performance Intelligence — Team */}
+          <Card className={`h-full border ${tm.border} shadow-sm`}>
+            <CardHeader className={`${tm.bg}`}>
+              <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
+              <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
+                Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
+                <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
+                <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {!teamIntel ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+              ) : (
+                <>
+                  <div className="grid gap-3 lg:grid-cols-12">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Volatility</div>
+                      <div className="mt-3 text-3xl font-semibold tabular-nums text-emerald-950">{teamIntel.volatility_pct ?? 0}%</div>
+                      <div className="mt-2 text-sm text-emerald-800">volatile players: <span className="font-semibold">{teamIntel.n_volatile ?? 0}</span></div>
+                    </div>
+
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-amber-700">Readiness Mix</div>
+                      <div className="mt-3 text-xl font-semibold tabular-nums text-amber-950">
+                        {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
+                      </div>
+                      <div className="mt-2 text-xs text-amber-800">
+                        RED / YELLOW / GREEN(+)
+                      </div>
+                      <div className="mt-1 text-xs text-amber-700">
+                        n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
                       </div>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                      <div className="rounded-lg border bg-gray-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500">Total</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.n_players}</div>
-                      </div>
-                      <div className="rounded-lg border bg-green-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-green-700">Full</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{teamSignal.n_full}</div>
-                      </div>
-                      <div className="rounded-lg border bg-yellow-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-yellow-700">Reduced</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums text-yellow-700">{teamSignal.n_reduced}</div>
-                      </div>
-                      <div className="rounded-lg border bg-red-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-red-700">Recovery</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{teamSignal.n_recovery}</div>
-                      </div>
-                      <div className="rounded-lg border bg-gray-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500">Avg confidence</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.avg_confidence ?? "-"}</div>
-                      </div>
-                      <div className="rounded-lg border bg-gray-50 p-3">
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500">Needs review</div>
-                        <div className="mt-1 text-lg font-semibold tabular-nums">{needsReviewCount}</div>
-                      </div>
-                    </div>
-
-                    <div className={`grid gap-2 md:grid-cols-2 text-xs ${ui.text}`}>
-                      <div className="rounded-lg border bg-white p-3">
-                        <div className="font-semibold text-gray-700">Why</div>
-                        <div className="mt-1">{risk.why}</div>
-                      </div>
-                      <div className="rounded-lg border bg-white p-3">
-                        <div className="font-semibold text-gray-700">Team plan</div>
-                        <div className="mt-1 space-y-1">
-                          {recLines.length ? (
-                            recLines.map((line, idx) => (
-                              <div key={`rec-${idx}`} className="leading-relaxed">
-                                {line}
-                              </div>
-                            ))
-                          ) : (
-                            <div>{risk.recommendation}</div>
-                          )}
-                        </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-600">Status Snapshot</div>
+                      <div className="mt-3 text-2xl font-semibold text-slate-900">{teamIntel.team_status ?? "—"}</div>
+                      <div className="mt-2 text-xs text-slate-600">
+                        baseline: <span className="font-semibold text-slate-800">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
+                        <span className="font-semibold text-slate-800">{teamIntel.n_players ?? "—"}</span>
                       </div>
                     </div>
                   </div>
-                );
-              })()
-            : null}
 
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <div className="space-y-3 rounded-xl border bg-gray-50/40 p-3">
-                <div className="flex items-end justify-between gap-3">
-                  <div className="text-sm font-semibold">Team intelligence</div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive signals</div>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-1">
-                  {(fatigueSnapshot as any)?.teamFatigueSummary ? (
-                    <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-                      <div className="flex items-end justify-between gap-3">
-                        <div className="text-sm font-semibold">Team Fatigue</div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive summary</div>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant pattern</div>
-                          <div className="mt-1 text-lg font-semibold">
-                            {String((fatigueSnapshot as any).teamFatigueSummary.dominantType ?? "—")}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Team Summary</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
+                          ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                          [
+                            "High / critical risk",
+                            String(
+                              (teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0) +
+                                (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)
+                            ),
+                          ],
+                          [
+                            "External load",
+                            teamExternalLoadSummary
+                              ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
+                              : "—",
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
                           </div>
-                        </div>
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">High severity count</div>
-                          <div className="mt-1 text-lg font-semibold tabular-nums">
-                            {(fatigueSnapshot as any).teamFatigueSummary.highSeverityCount ??
-                              (fatigueSnapshot as any).teamFatigueSummary.highCount ??
-                              0}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                      <div className="text-xs text-gray-600">
-                        {(fatigueSnapshot as any).teamFatigueSummary.summaryText ?? "No dominant fatigue pattern today."}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-                      <div className="flex items-end justify-between gap-3">
-                        <div className="text-sm font-semibold">Team Fatigue</div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {dayStateInfo.state === "MISSING_INPUT"
-                          ? "Fatigue summary is limited because expected check-ins are missing."
-                          : dayStateInfo.state === "OFF_DAY"
-                          ? "OFF day detected; fatigue summary is intentionally low-priority."
-                          : dayStateInfo.state === "NO_INPUT_EXPECTED"
-                          ? "No input expected for this day context."
-                          : "No team fatigue summary available yet."}
-                      </div>
-                    </div>
-                  )}
-
-                  {teamNeuralSummary ? (
-                    <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-                      <div className="flex items-end justify-between gap-3">
-                        <div className="text-sm font-semibold">Team Neural Load</div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Prediction summary</div>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant state</div>
-                          <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.dominantState}</div>
-                        </div>
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">Trajectory</div>
-                          <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.trajectorySummary}</div>
-                        </div>
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">Next-day risk</div>
-                          <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.nextDayRiskSummary}</div>
-                        </div>
-                        <div className="rounded-lg border bg-gray-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-gray-500">High-risk count</div>
-                          <div className="mt-1 text-lg font-semibold tabular-nums">{teamNeuralSummary.highRiskCount}</div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-600">{teamNeuralSummary.summaryText}</div>
-                      {!!(fatigueSnapshot as any)?.neural_bias_applied ? (
-                        <div className="text-xs text-gray-700">
-                          <span className="font-semibold">Neural bias applied.</span>{" "}
-                          <span className="text-gray-600">
-                            Why: {formatNeuralBiasReasons((fatigueSnapshot as any)?.neural_bias_reason_codes, 3) || "Neural load/risk threshold nudge."}
-                          </span>
+                      {teamIntel.narrative ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
+                          {teamIntel.narrative}
                         </div>
                       ) : null}
                     </div>
-                  ) : (
-                    <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-                      <div className="flex items-end justify-between gap-3">
-                        <div className="text-sm font-semibold">Team Neural Load</div>
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Monitoring Pattern</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Risk bands", `Low ${teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0} · Mod ${teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0} · High ${teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0} · Critical ${teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}`],
+                          ["Recovery recommended", String(teamSignal?.n_recovery ?? 0)],
+                          ["Neural + volatility", teamNeuralVolatilitySummary.summaryText],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="text-xs text-gray-600">
-                        {dayStateInfo.state === "MISSING_INPUT"
-                          ? "Neural load summary is incomplete because expected inputs are missing."
-                          : dayStateInfo.state === "OFF_DAY"
-                          ? "OFF day detected; neural load monitoring is informational only."
-                          : dayStateInfo.state === "NO_INPUT_EXPECTED"
-                          ? "No neural input expected for this day context."
-                          : "No team neural summary available yet."}
+                      {teamIntel.monitoring_notes ? (
+                        <div className="mt-3 space-y-1 text-xs text-slate-600">
+                          {(Array.isArray(teamIntel.monitoring_notes) ? teamIntel.monitoring_notes : [teamIntel.monitoring_notes]).map((note: string, i: number) => (
+                            <div key={i} className="leading-relaxed">• {note}</div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Session Recommendation</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Prescription", teamPrescriptionSummary.summaryText],
+                          ["Protect for match", teamExternalLoadSummary ? `${teamExternalLoadSummary.counts.totalPlayers} · Limited exposure ${teamExternalLoadSummary.counts.unknown}` : "—"],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamIntel.session_recommendation ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
+                          {teamIntel.session_recommendation}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 text-[11px]">
+                        <Link href="/coach/session-workflow" className="font-medium text-slate-700 underline underline-offset-2">
+                          Open Session Workflow
+                        </Link>
                       </div>
                     </div>
-                  )}
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Rules / Overrides</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Adjusted players", String(teamRulesSummary.overriddenPlayersCount ?? 0)],
+                          ["Review required", String(teamRulesSummary.reviewRequiredCount ?? 0)],
+                          ["Protected players", String(teamRulesSummary.protectedPlayersCount ?? 0)],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamRulesSummary.summaryText ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                          {teamRulesSummary.summaryText}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Supporting team intelligence */}
+          <section className="space-y-4">
+            <div className={`flex items-end justify-between gap-3 px-3 py-2 ${softSurfaceClass}`}>
+              <div>
+                <div className={sectionTitleClass}>Supporting team intelligence</div>
+                <div className={sectionSubtitleClass}>Performance context and team-level monitoring beneath the command summary.</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  Team outlook: <span className="font-semibold text-slate-800">{teamOutlook.band}</span>
                 </div>
               </div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-500">Level 2</div>
+            </div>
 
-              {unitAlerts?.length > 0 && (
-                <div className="rounded-xl border bg-white p-4">
-                  <div className="text-sm font-semibold">Unit alerts</div>
-
-                  <div className="mt-3 grid gap-2">
-                    {unitAlerts
-                      .filter((u) => u.unit !== "unknown")
-                      .map((u) => (
-                        <div key={`${u.unit}-${u.sport}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
-                          <div className="font-medium">
-                            {u.unit_label} <span className="text-slate-500">({u.sport})</span>
-                          </div>
-
-                          <div className="text-slate-700">
-                            {u.n_recovery + u.n_reduced}/{u.n_players} affected ({u.affected_pct}%)
-                          </div>
-
-                          <div
-                            className={[
-                              "rounded-full border px-2 py-0.5 font-semibold",
-                              u.alert_level === "HIGH"
-                                ? "border-red-200 bg-red-50 text-red-800"
-                                : u.alert_level === "CAUTION"
-                                ? "border-yellow-200 bg-yellow-50 text-yellow-800"
-                                : "border-green-200 bg-green-50 text-green-800",
-                            ].join(" ")}
-                          >
-                            {u.alert_level}
-                          </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Card className={summaryCardClass}>
+                <CardHeader className="pb-3">
+                  <CardTitle className={sectionTitleClass}>Team Intelligence</CardTitle>
+                  <CardDescription className={sectionSubtitleClass}>High-level team monitoring summary.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!teamIntel ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white">
+                      {[
+                        ["Status", teamIntel.team_status ?? "—"],
+                        ["Baseline maturity", teamIntel.baseline_maturity ?? "—"],
+                        ["Players", String(teamIntel.n_players ?? "—")],
+                        ["Volatility", `${teamIntel.volatility_pct ?? 0}%`],
+                        ["Volatile players", String(teamIntel.n_volatile ?? 0)],
+                        ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
+                        ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
+                        ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                        [
+                          "External load",
+                          teamExternalLoadSummary
+                            ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
+                            : "—",
+                        ],
+                        [
+                          "Catapult coverage",
+                          teamExternalLoadSummary
+                            ? `${teamExternalLoadSummary.counts.totalPlayers - teamExternalLoadSummary.counts.unknown}/${teamExternalLoadSummary.counts.totalPlayers}`
+                            : "—",
+                        ],
+                        ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
+                        ["External load note", teamExternalLoadSummary?.summaryLines[0] ?? "—"],
+                        ["Prescription", teamPrescriptionSummary.summaryText],
+                        ["Rules / override", teamRulesSummary.summaryText],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                          <div className="text-xs text-slate-500">{label}</div>
+                          <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className={summaryCardClass}>
+                <CardHeader className="pb-3">
+                  <CardTitle className={sectionTitleClass}>Readiness Mix</CardTitle>
+                  <CardDescription className={sectionSubtitleClass}>Current team state distribution and risk map.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!teamIntel ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{queueEmptyMessage}</div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-rose-700">Red</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-rose-800">{teamIntel.pct_red ?? 0}%</div>
+                        </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-amber-700">Yellow</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-amber-800">{teamIntel.pct_yellow ?? 0}%</div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-800">{(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-3">
+                        <div className="h-4 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                          <div className="flex h-full w-full">
+                            <div className="bg-rose-400/70" style={{ width: `${teamIntel.pct_red ?? 0}%` }} />
+                            <div className="bg-amber-400/70" style={{ width: `${teamIntel.pct_yellow ?? 0}%` }} />
+                            <div className="bg-emerald-400/70" style={{ width: `${(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>n: {teamIntel.n_red ?? 0}</span>
+                          <span>n: {teamIntel.n_yellow ?? 0}</span>
+                          <span>n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3">
+                        <div className="text-sm font-semibold text-slate-900">Team Risk Map</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-emerald-700">Low Risk</div>
+                            <div className="mt-1 text-xl font-semibold text-emerald-800">{teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-amber-700">Moderate</div>
+                            <div className="mt-1 text-xl font-semibold text-amber-800">{teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-orange-700">High Risk</div>
+                            <div className="mt-1 text-xl font-semibold text-orange-800">{teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-rose-700">Critical</div>
+                            <div className="mt-1 text-xl font-semibold text-rose-800">{teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* Team intelligence signals: Fatigue + Neural Load + Unit Alerts */}
+          <div className="space-y-3 rounded-xl border bg-gray-50/40 p-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-sm font-semibold">Team intelligence</div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive signals</div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-1">
+              {(fatigueSnapshot as any)?.teamFatigueSummary ? (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Fatigue</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive summary</div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant pattern</div>
+                      <div className="mt-1 text-lg font-semibold">
+                        {String((fatigueSnapshot as any).teamFatigueSummary.dominantType ?? "—")}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High severity count</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">
+                        {(fatigueSnapshot as any).teamFatigueSummary.highSeverityCount ??
+                          (fatigueSnapshot as any).teamFatigueSummary.highCount ??
+                          0}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {(fatigueSnapshot as any).teamFatigueSummary.summaryText ?? "No dominant fatigue pattern today."}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Fatigue</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {dayStateInfo.state === "MISSING_INPUT"
+                      ? "Fatigue summary is limited because expected check-ins are missing."
+                      : dayStateInfo.state === "OFF_DAY"
+                      ? "OFF day detected; fatigue summary is intentionally low-priority."
+                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+                      ? "No input expected for this day context."
+                      : "No team fatigue summary available yet."}
                   </div>
                 </div>
               )}
 
-              <div className="pt-1">
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">Dev diagnostics · Level 3</div>
-              </div>
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 shadow-sm space-y-3">
-                <div className="flex items-end justify-between gap-3">
-                  <div className="text-sm font-semibold text-gray-700">Neural Load QA (dev)</div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-400">Validation suite</div>
+              {teamNeuralSummary ? (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Neural Load</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Prediction summary</div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant state</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.dominantState}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Trajectory</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.trajectorySummary}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Next-day risk</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.nextDayRiskSummary}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High-risk count</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">{teamNeuralSummary.highRiskCount}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600">{teamNeuralSummary.summaryText}</div>
+                  {!!(fatigueSnapshot as any)?.neural_bias_applied ? (
+                    <div className="text-xs text-gray-700">
+                      <span className="font-semibold">Neural bias applied.</span>{" "}
+                      <span className="text-gray-600">
+                        Why: {formatNeuralBiasReasons((fatigueSnapshot as any)?.neural_bias_reason_codes, 3) || "Neural load/risk threshold nudge."}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-lg border bg-gray-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Cases</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums">{neuralValidation.total}</div>
+              ) : (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Neural Load</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
                   </div>
-                  <div className="rounded-lg border bg-green-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-green-700">Pass</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{neuralValidation.passed}</div>
-                  </div>
-                  <div className="rounded-lg border bg-red-50 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-red-700">Fail</div>
-                    <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{neuralValidation.failed}</div>
+                  <div className="text-xs text-gray-600">
+                    {dayStateInfo.state === "MISSING_INPUT"
+                      ? "Neural load summary is incomplete because expected inputs are missing."
+                      : dayStateInfo.state === "OFF_DAY"
+                      ? "OFF day detected; neural load monitoring is informational only."
+                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+                      ? "No neural input expected for this day context."
+                      : "No team neural summary available yet."}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {neuralValidation.cases.map((c) => (
-                    <div key={c.id} className="rounded-md border p-2 text-xs">
-                      <div className="font-semibold">
-                        Case {c.id}: {c.title} · {c.pass ? "PASS" : "FAIL"}
-                      </div>
-                      <div className="mt-1">
-                        {c.output.neuralLoadState} · {c.output.readinessTrajectory} · {c.output.nextDayRisk} · score {c.output.neuralLoadScore}
-                      </div>
-                      <div className="mt-1 text-gray-600">{c.output.summary}</div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Performance Intelligence Panel */}
+          <PerformanceIntelligencePanel
+            teamOutlook={teamOutlook}
+            weeklyReport={weeklyRiskReport}
+            riskMap={teamRiskMap}
+          />
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          LOAD & RPE TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "load" && (
+        <div className="space-y-6">
+
+          {/* Session RPE Monitoring + Daily Internal Load + Load Metrics */}
+          <div className="grid gap-3">
+            <SessionRpeMonitoringCard teamId={coachTeamId} />
+            <DailyInternalLoadCard teamId={coachTeamId} />
+            <LoadMetricsCard teamId={coachTeamId} />
+          </div>
+
+          {/* Yesterday Load — auto from Catapult */}
+          {(ctxDist || ctxHsr || ctxAcc) && (
+            <Card className="shadow-sm border border-slate-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Yesterday Load <span className="text-xs font-normal text-slate-400 ml-1">· Catapult team avg</span></CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-sm">
+                  {[
+                    { label: "Distance", value: ctxDist ? `${ctxDist} m` : "—" },
+                    { label: "HIR Dist", value: ctxHsr ? `${ctxHsr} m` : "—" },
+                    { label: "Acc", value: ctxAcc || "—" },
+                    { label: "Dec", value: ctxDec || "—" },
+                    { label: "Intensity", value: ctxIntensity || "—" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2">
+                      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{item.label}</div>
+                      <div className="mt-0.5 font-semibold text-slate-800">{item.value}</div>
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dev diagnostics · Level 3 */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-3">Dev diagnostics · Level 3</div>
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 shadow-sm space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div className="text-sm font-semibold text-gray-700">Neural Load QA (dev)</div>
+                <div className="text-[11px] uppercase tracking-wide text-gray-400">Validation suite</div>
               </div>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
-                <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 pb-3">
-                  <div>
-                    <div className={sectionTitleClass}>Players needing review today</div>
-                    <div className={sectionSubtitleClass}>{needsReviewCount} players flagged by the system</div>
-                  </div>
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Operational workspace · scan · decide · confirm</div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Cases</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums">{neuralValidation.total}</div>
                 </div>
-
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Review context</div>
-                    <div className="text-[10px] uppercase tracking-wide text-gray-400">Today only</div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Needs review</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{needsReviewCount}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Neural bias</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.neuralBiasApplied}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>High next-day risk</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.highNextDayRisk}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Locked cards</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.lockedRows}</div>
-                    </div>
-                  </div>
+                <div className="rounded-lg border bg-green-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-green-700">Pass</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{neuralValidation.passed}</div>
                 </div>
-
-                <div className="rounded-lg border border-slate-200 bg-gray-50 p-2.5">
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Players flagged today</div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>High neural load</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.highNeuralLoad}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Low readiness</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Pain flag</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.painFlag}</div>
-                    </div>
-                    <div className="rounded-md border border-slate-200 bg-white p-2">
-                      <div className={statLabelClass}>Manual review</div>
-                      <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.manualReview}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="grid gap-3 lg:grid-cols-12">
-                    <div className="lg:col-span-7">
-                      <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Filters</div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
-                          All
-                        </Button>
-                        <Button variant={filter === "red" ? "default" : "outline"} onClick={() => setFilter("red")}>
-                          Red ({counts.red})
-                        </Button>
-                        <Button variant={filter === "yellow" ? "default" : "outline"} onClick={() => setFilter("yellow")}>
-                          Yellow ({counts.yellow})
-                        </Button>
-                        <Button variant={filter === "green" ? "default" : "outline"} onClick={() => setFilter("green")}>
-                          Green ({counts.green})
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="lg:col-span-5">
-                      <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Actions</div>
-                      <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
-                        <Input placeholder="Leita að leikmanni…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-[220px]" />
-
-                        <Button variant="outline" onClick={() => loadToday()} disabled={loading || genLoading}>
-                          {loading ? "Hleð..." : "Refresh"}
-                        </Button>
-
-                        <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
-                          {genLoading ? "Generating…" : "Generate Today Decisions"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={downloadReadinessRiskReport}
-                          disabled={pdfDownloading || loading}
-                        >
-                          {pdfDownloading ? "Generating PDF…" : "Download Readiness Risk Report"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                <div className="rounded-lg border bg-red-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-red-700">Fail</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{neuralValidation.failed}</div>
                 </div>
               </div>
-
-              {error ? <div className="text-sm text-red-600">{error}</div> : null}
-              {genToast ? <div className="text-sm text-green-700">{genToast}</div> : null}
-
-              {rows.length === 0 ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{queueEmptyMessage}</div>
-              ) : (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-gray-50/40 p-3 md:p-4 space-y-4">{rowsWithSessionDraft.map((r) => renderRow(r))}</div>
-              )}
-
-              {/* Simple paging */}
-              <div className="flex items-center justify-between pt-2 text-sm text-gray-600">
-                <div>
-                  Page {page + 1} / {totalPages} · total {total}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                    Prev
-                  </Button>
-                  <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                    Next
-                  </Button>
-                </div>
+              <div className="space-y-2">
+                {neuralValidation.cases.map((c) => (
+                  <div key={c.id} className="rounded-md border p-2 text-xs">
+                    <div className="font-semibold">
+                      Case {c.id}: {c.title} · {c.pass ? "PASS" : "FAIL"}
+                    </div>
+                    <div className="mt-1">
+                      {c.output.neuralLoadState} · {c.output.readinessTrajectory} · {c.output.nextDayRisk} · score {c.output.neuralLoadScore}
+                    </div>
+                    <div className="mt-1 text-gray-600">{c.output.summary}</div>
+                  </div>
+                ))}
               </div>
-
-              <details className="rounded-xl border border-slate-200 bg-white p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Team Risk Map</summary>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Low Risk</div>
-                    <div className="mt-1 space-y-0.5 text-emerald-900">
-                      {teamRiskMap.lowRisk.slice(0, 8).map((p) => (
-                        <div key={`low-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
-                      ))}
-                      {!teamRiskMap.lowRisk.length ? <div className="text-emerald-700/70">No players</div> : null}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Moderate Risk</div>
-                    <div className="mt-1 space-y-0.5 text-yellow-900">
-                      {teamRiskMap.moderateRisk.slice(0, 8).map((p) => (
-                        <div key={`mod-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
-                      ))}
-                      {!teamRiskMap.moderateRisk.length ? <div className="text-yellow-700/70">No players</div> : null}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-700">High Risk</div>
-                    <div className="mt-1 space-y-0.5 text-orange-900">
-                      {teamRiskMap.highRisk.slice(0, 8).map((p) => (
-                        <div key={`high-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
-                      ))}
-                      {!teamRiskMap.highRisk.length ? <div className="text-orange-700/70">No players</div> : null}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Critical</div>
-                    <div className="mt-1 space-y-0.5 text-red-900">
-                      {teamRiskMap.criticalRisk.slice(0, 8).map((p) => (
-                        <div key={`crit-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
-                      ))}
-                      {!teamRiskMap.criticalRisk.length ? <div className="text-red-700/70">No players</div> : null}
-                    </div>
-                  </div>
-                </div>
-              </details>
-
-              <details className="rounded-xl border border-slate-200 bg-white p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Weekly Performance Intelligence</summary>
-                <div className="mt-2 space-y-2 text-xs text-slate-700">
-                  <div>
-                    Team average risk: <span className="font-semibold tabular-nums">{weeklyRiskReport.avgRiskScore.toFixed(1)}</span>
-                  </div>
-                  <div>{weeklyRiskReport.teamTrend}</div>
-                  <div>{weeklyRiskReport.recommendation}</div>
-                  <div>
-                    Highest risk:{" "}
-                    {weeklyRiskReport.highestRiskPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
-                  </div>
-                  <div>
-                    Improving: {weeklyRiskReport.mostImprovedPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
-                  </div>
-                </div>
-              </details>
-
-              <PerformanceIntelligencePanel
-                teamOutlook={teamOutlook}
-                weeklyReport={weeklyRiskReport}
-                riskMap={teamRiskMap}
-              />
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          GPS DATA TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "gps" && (() => {
+        const GPS_METRICS: Array<{
+          key: string;
+          label: string;
+          shortLabel: string;
+          aliases: string[];
+          digits: number;
+        }> = [
+          { key: "totalDistance",              label: "Total Distance (m)",   shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                        digits: 0 },
+          { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)", shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],               digits: 0 },
+          { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)", shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],               digits: 0 },
+          { key: "accelBand2to3Efforts", label: "Accel B2-3 Efforts (Gen 2)", shortLabel: "Accel B2-3",  aliases: ["accelBand2to3Efforts", "accel_band2to3_efforts", "accel_b2_3_tot_effs_gen2", "accelB23TotEffsGen2"],  digits: 0 },
+          { key: "totalAccelerations",   label: "Tot Accels (#)",              shortLabel: "Tot Accels",  aliases: ["totalAccelerations", "total_accelerations", "tot_as", "totAs"],                                    digits: 0 },
+          { key: "decelBand2to3Efforts", label: "Decel B2-3 Efforts (Gen 2)", shortLabel: "Decel B2-3",  aliases: ["decelBand2to3Efforts", "decel_band2to3_efforts", "decel_b2_3_tot_effs_gen2", "decelB23TotEffsGen2"],  digits: 0 },
+          { key: "totalDecelerations",   label: "Tot Decels (#)",              shortLabel: "Tot Decels",  aliases: ["totalDecelerations", "total_decelerations", "tot_ds", "totDs"],                                    digits: 0 },
+        ];
+
+        function getVal(row: Record<string, unknown>, aliases: string[]): number | null {
+          for (const alias of aliases) {
+            const v = row[alias];
+            if (typeof v === "number" && Number.isFinite(v)) return v;
+          }
+          return null;
+        }
+
+        function avg(vals: number[]): number | null {
+          if (!vals.length) return null;
+          return vals.reduce((s, v) => s + v, 0) / vals.length;
+        }
+
+        function dateMinusDays(dateStr: string, days: number): string {
+          const d = new Date(`${dateStr}T00:00:00.000Z`);
+          d.setUTCDate(d.getUTCDate() - days);
+          return d.toISOString().slice(0, 10);
+        }
+
+        function computeSnapshot(history: Array<Record<string, unknown>>, aliases: string[], digits: number) {
+          const refDate = today; // component-level today date
+          const acuteStart = dateMinusDays(refDate, 6);   // last 7 calendar days inclusive
+          const chronicStart = dateMinusDays(refDate, 27); // last 28 calendar days inclusive
+
+          const dated = history.filter((r) => typeof r.date === "string");
+
+          const acuteVals = dated
+            .filter((r) => String(r.date) >= acuteStart && String(r.date) <= refDate)
+            .map((r) => getVal(r, aliases))
+            .filter((v): v is number => v != null);
+
+          const chronicVals = dated
+            .filter((r) => String(r.date) >= chronicStart && String(r.date) <= refDate)
+            .map((r) => getVal(r, aliases))
+            .filter((v): v is number => v != null);
+
+          const a7 = avg(acuteVals);
+          const c28 = avg(chronicVals);
+          const acwr = a7 != null && c28 != null && c28 > 0 ? a7 / c28 : null;
+          const fmt = (n: number | null) => n == null ? "—" : n.toFixed(digits);
+          return { a7: fmt(a7), c28: fmt(c28), acwr };
+        }
+
+        function acwrColor(v: number | null): string {
+          if (v == null) return "text-slate-400";
+          if (v > 1.5) return "text-red-600 font-semibold";
+          if (v > 1.3) return "text-amber-600 font-semibold";
+          if (v >= 0.8) return "text-emerald-700";
+          return "text-blue-600 font-semibold"; // < 0.8 — of lítið álag
+        }
+
+        function acwrBg(v: number | null): string {
+          if (v == null) return "";
+          if (v > 1.5) return "bg-red-50";
+          if (v > 1.3) return "bg-amber-50";
+          if (v >= 0.8) return "bg-emerald-50";
+          return "bg-blue-50"; // < 0.8 — of lítið álag
+        }
+
+        const gpsRows = gpsAllPlayers.map((p) => ({
+          name: p.name,
+          position: p.position,
+          snapshots: GPS_METRICS.map((m) => computeSnapshot(p.history, m.aliases, m.digits)),
+        }));
+
+        const noData = !gpsLoading && gpsRows.length === 0;
+
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">GPS Data — Squad Load</CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      7-day acute · 28-day chronic · ACWR per player · Catapult
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" />&lt;0.8 Low</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />0.8–1.3 OK</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />1.3–1.5 Elevated</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" />&gt;1.5 High</span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {gpsLoading ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">Loading GPS data…</div>
+                ) : noData ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">
+                    No Catapult GPS data available. Sync Catapult to load player data.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 whitespace-nowrap border-r border-slate-200">
+                            Player
+                          </th>
+                          {GPS_METRICS.map((m) => (
+                            <th key={m.key} colSpan={3} className="px-2 py-2.5 text-center text-xs font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap">
+                              {m.shortLabel}
+                            </th>
+                          ))}
+                        </tr>
+                        <tr className="border-b border-slate-200 bg-slate-50/60">
+                          <th className="sticky left-0 z-10 bg-slate-50/60 px-4 py-1.5 border-r border-slate-200" />
+                          {GPS_METRICS.map((m) => (
+                            <React.Fragment key={m.key}>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500 border-l border-slate-200">7D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">28D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">ACWR</th>
+                            </React.Fragment>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gpsRows.map((player, i) => (
+                          <tr key={player.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
+                            <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-900 whitespace-nowrap border-r border-slate-200" style={{ background: i % 2 === 0 ? "white" : "rgb(248 250 252 / 0.4)" }}>
+                              <div>{player.name}</div>
+                              <div className="text-[11px] text-slate-400">{player.position}</div>
+                            </td>
+                            {player.snapshots.map((snap, si) => (
+                              <React.Fragment key={si}>
+                                <td className="px-3 py-2 text-center text-slate-700 border-l border-slate-100 tabular-nums">{snap.a7}</td>
+                                <td className="px-3 py-2 text-center text-slate-500 tabular-nums">{snap.c28}</td>
+                                <td className={`px-3 py-2 text-center tabular-nums ${acwrColor(snap.acwr)} ${acwrBg(snap.acwr)}`}>
+                                  {snap.acwr == null ? "—" : snap.acwr.toFixed(2)}
+                                </td>
+                              </React.Fragment>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       <ExplainabilityDrawer
         open={!!piDrawerDecision}

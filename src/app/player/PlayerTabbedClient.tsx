@@ -477,12 +477,46 @@ function AteCommandCardPortal() {
 
   const copy = ateCardCopy(dailyDecision.playerState);
 
+  const chipColor =
+    dailyDecision.playerState === "GREEN" ? "#22c55e" :
+    dailyDecision.playerState === "YELLOW" ? "#eab308" :
+    dailyDecision.playerState === "RED" ? "#ef4444" :
+    "#94a3b8";
+
+  const stateLabel =
+    dailyDecision.playerState === "GREEN" ? "GREEN" :
+    dailyDecision.playerState === "YELLOW" ? "YELLOW" :
+    dailyDecision.playerState === "RED" ? "RED" :
+    "PENDING";
+
   return createPortal(
-    <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">TODAY</div>
-      <div className="mt-1 text-base font-semibold tracking-tight text-zinc-900">{copy.title}</div>
-      <div className="mt-2 text-sm text-zinc-700">{copy.body}</div>
-      <div className="mt-1 text-sm text-zinc-600">{copy.secondary}</div>
+    <div
+      className="mt-3 rounded-xl p-4"
+      style={{ background: "#0f172a" }}
+    >
+      <div className="text-[10px] uppercase tracking-[0.1em] text-slate-400">Today</div>
+      <div className="mt-1 text-base font-bold tracking-tight text-white">{copy.title}</div>
+      <div className="mt-1 text-sm leading-relaxed text-slate-300">{copy.body}</div>
+      <div className="mt-1 text-xs text-slate-400">{copy.secondary}</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+          style={{ background: "rgba(255,255,255,0.10)", color: "white" }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: chipColor }} />
+          {stateLabel}
+        </span>
+        {dailyDecision.sessionMode !== "pending" && (
+          <span
+            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+            style={{ background: "rgba(255,255,255,0.10)", color: "#cbd5e1" }}
+          >
+            {dailyDecision.sessionMode === "full" ? "Full session" :
+             dailyDecision.sessionMode === "modified" ? "Modified session" :
+             "Recovery session"}
+          </span>
+        )}
+      </div>
     </div>,
     mountNode
   );

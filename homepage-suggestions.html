@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MicroPulse — Homepage Suggestions</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #111; }
+
+  .top-bar { background: #111; color: #fff; text-align: center; padding: 12px; font-size: 13px; letter-spacing: .5px; }
+  .top-bar span { color: #6ee7b7; font-weight: 600; }
+
+  .page { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+  .intro { color: #555; font-size: 15px; margin-bottom: 40px; }
+
+  /* Section card */
+  .section-card { background: #fff; border-radius: 16px; border: 1px solid #e5e5e5; margin-bottom: 32px; overflow: hidden; }
+  .section-header { padding: 18px 24px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; }
+  .section-number { background: #111; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .section-title { font-size: 16px; font-weight: 700; }
+  .section-subtitle { font-size: 12px; color: #888; margin-top: 2px; }
+  .section-body { padding: 0; }
+
+  /* Before / After */
+  .ba-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .ba-col { padding: 20px 24px; }
+  .ba-col:first-child { border-right: 1px solid #f0f0f0; }
+  .ba-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .ba-label.before { color: #aaa; }
+  .ba-label.after { color: #059669; }
+
+  .text-before { font-size: 14px; color: #999; line-height: 1.6; font-style: italic; }
+  .text-after { font-size: 14px; color: #111; line-height: 1.6; font-weight: 500; }
+  .text-after strong { color: #2563eb; }
+
+  /* Mock UI blocks */
+  .mock-hero { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 28px; }
+  .mock-tag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e5e5; border-radius: 99px; padding: 4px 12px; font-size: 11px; color: #555; margin-bottom: 14px; }
+  .mock-tag span { width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block; }
+  .mock-h1 { font-size: 22px; font-weight: 700; line-height: 1.25; margin-bottom: 10px; }
+  .mock-h1 em { font-style: normal; color: #2563eb; }
+  .mock-sub { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 16px; }
+  .mock-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .mock-btn-primary { background: #111; color: #fff; border-radius: 10px; padding: 8px 18px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
+  .mock-btn-secondary { background: #fff; color: #111; border-radius: 10px; padding: 8px 18px; font-size: 12px; font-weight: 600; border: 1px solid #ddd; cursor: pointer; }
+  .mock-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mock-chip { border: 1px solid #e5e5e5; border-radius: 99px; padding: 3px 10px; font-size: 10px; color: #444; background: #fafafa; }
+  .mock-chip.highlight { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+
+  .mock-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 12px; }
+  .mock-panel-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f4f8; }
+  .mock-panel-row:last-child { border-bottom: none; }
+  .mock-panel-row span:last-child { font-weight: 600; }
+  .badge { padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; }
+  .badge-red { background: #fee2e2; color: #b91c1c; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+
+  /* Chip strip */
+  .chip-strip { display: flex; gap: 6px; flex-wrap: wrap; padding: 16px 24px; background: #fafafa; border-top: 1px solid #f0f0f0; }
+  .chip { font-size: 11px; border-radius: 99px; padding: 4px 10px; border: 1px solid #e5e5e5; background: #fff; color: #444; }
+  .chip.new { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+  .chip.removed { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; text-decoration: line-through; }
+  .chip.changed { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+
+  /* Testimonial mock */
+  .testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 20px 24px; }
+  .testimonial-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 16px; }
+  .testimonial-q { font-size: 13px; color: #111; line-height: 1.5; margin-bottom: 10px; }
+  .testimonial-a { font-size: 11px; color: #888; font-weight: 600; }
+  .testimonial-card.new-style { border-color: #bfdbfe; background: #f0f7ff; }
+
+  /* How it works */
+  .steps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 20px 24px; }
+  .step-card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; font-size: 13px; }
+  .step-card.new-style { border-color: #a7f3d0; background: #f0fdf4; }
+  .step-num { font-size: 10px; font-weight: 700; color: #10b981; margin-bottom: 4px; }
+  .step-title { font-weight: 700; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: #666; line-height: 1.5; }
+
+  /* Reason tag */
+  .reason { display: inline-flex; align-items: center; gap: 5px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 600; margin-top: 10px; }
+
+  /* Summary */
+  .summary-note { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #78350f; margin-top: 12px; line-height: 1.5; }
+
+  @media (max-width: 640px) {
+    .ba-grid, .testimonial-grid, .steps-grid { grid-template-columns: 1fr; }
+    .ba-col:first-child { border-right: none; border-bottom: 1px solid #f0f0f0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">MicroPulse Homepage — <span>6 tillögur að breytingum</span> · Samþykki þarf áður en breyting fer í gang</div>
+
+<div class="page">
+  <h1>Homepage — Tillögur</h1>
+  <p class="intro">Hér eru 6 hlutir sem mætti skoða að uppfæra. Hvert atriði sýnir bæði núverandi texta og tillögu að nýjum texta ásamt sjónrænum skissum.</p>
+
+  <!-- ─── 1. HERO TITLE ─────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">1</div>
+      <div>
+        <div class="section-title">Hero — Titill</div>
+        <div class="section-subtitle">Aðaltexti sem fyrst sést þegar síðan opnar</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="ba-grid">
+        <div class="ba-col">
+          <div class="ba-label before">Núverandi</div>
+          <div class="text-before">"Performance intelligence for coaching, performance, and medical staff."</div>
+          <div class="text-before" style="margin-top:8px;font-size:12px;">IS: "Performance intelligence fyrir þjálfara, performance og medical staff."</div>
+        </div>
+        <div class="ba-col">
+          <div class="ba-label after">Tillaga</div>
+          <div class="text-after">EN: "Know who needs attention — before training starts."<br><br>IS: "Veistu hverjir þurfa athygli — áður en æfingin byrjar."</div>
+          <div class="reason">✓ Beinni. Talar til þjálfarans — ekki tæknifólkið.</div>
+        </div>
+      </div>
+      <!-- Mock -->
+      <div style="padding:0 24px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="mock-hero" style="opacity:.5;">
+          <div class="mock-tag"><span></span> Performance Intelligence Platform</div>
+          <div class="mock-h1">Performance intelligence for coaching, performance, and medical staff.</div>
+          <div class="mock-sub">MicroPulse connects athlete monitoring, training decisions, and performance intelligence in one platform...</div>
+          <div class="mock-btns"><button class="mock-btn-primary">Start with Free</button><button class="mock-btn-secondary">Book a demo</button></div>
+        </div>
+        <div class="mock-hero" style="border-color:#2563eb;">
+          <div class="mock-tag"><span></span> Performance Intelligence Platform</div>
+          <div class="mock-h1">Know who needs attention — <em>before training starts.</em></div>
+          <div class="mock-sub">MicroPulse gives staff one daily view: who's at risk, what to adjust, and why — built on real monitoring data.</div>
+          <div class="mock-btns"><button class="mock-btn-primary">Start with Free</button><button class="mock-btn-secondary">Book a demo</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 2. HERO SUBTITLE ─────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">2</div>
+      <div>
+        <div class="section-title">Hero — Undirtexti</div>
+        <div class="section-subtitle">Stutt lýsing undir titlinum</div>
+      </div>
+    </div>
+    <div class="ba-grid">
+      <div class="ba-col">
+        <div class="ba-label before">Núverandi (61 orð)</div>
+        <div class="text-before">"MicroPulse connects athlete monitoring, training decisions, and performance intelligence in one platform, helping teams detect fatigue earlier, adjust sessions faster, and coordinate staff decisions with more confidence."</div>
+      </div>
+      <div class="ba-col">
+        <div class="ba-label after">Tillaga (28 orð)</div>
+        <div class="text-after">EN: "MicroPulse gives staff one daily view: who's at risk, what to adjust, and why — built on real monitoring data from your squad."<br><br>IS: "MicroPulse gefur staffi eina daglega mynd: hverjir eru í hættu, hvað á að breyta og hvers vegna."</div>
+        <div class="reason">✓ Styttri. Sama skilaboð, minna rugl.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 3. HERO CHIPS ────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">3</div>
+      <div>
+        <div class="section-title">Hero — Feature chips</div>
+        <div class="section-subtitle">Litlir merkar undir takkunum í hero</div>
+      </div>
+    </div>
+    <div class="ba-grid">
+      <div class="ba-col">
+        <div class="ba-label before">Núverandi</div>
+        <div class="chip-strip" style="padding:0;margin-top:8px;">
+          <span class="chip">Today Command Center</span>
+          <span class="chip">Coach Dashboard</span>
+          <span class="chip">GPS Load Monitoring — ACWR</span>
+          <span class="chip">Performance Intelligence — Team</span>
+          <span class="chip">Team Neural Load</span>
+          <span class="chip">FULL / REDUCED / RECOVERY</span>
+          <span class="chip">Adaptive Training Engine</span>
+        </div>
+      </div>
+      <div class="ba-col">
+        <div class="ba-label after">Tillaga — skemmra og skýrari</div>
+        <div class="chip-strip" style="padding:0;margin-top:8px;">
+          <span class="chip new">Daily readiness scan</span>
+          <span class="chip new">GPS load & ACWR</span>
+          <span class="chip new">FULL / REDUCED / RECOVERY</span>
+          <span class="chip new">Fatigue & neural load</span>
+          <span class="chip new">Match-week operations</span>
+          <span class="chip new">Adaptive Training Engine</span>
+        </div>
+        <div class="reason">✓ Talar um hvað kerfið gerir — ekki innri heiti.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 4. HOW IT WORKS ──────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">4</div>
+      <div>
+        <div class="section-title">How it works — Titill og skref</div>
+        <div class="section-subtitle">4 skref sem lýsa flæðinu</div>
+      </div>
+    </div>
+    <div class="ba-grid">
+      <div class="ba-col">
+        <div class="ba-label before">Núverandi titill</div>
+        <div class="text-before">"Most systems stop at monitoring. MicroPulse supports decisions."</div>
+      </div>
+      <div class="ba-col">
+        <div class="ba-label after">Tillaga</div>
+        <div class="text-after">EN: "From check-in to training plan — in minutes."<br><br>IS: "Frá check-in yfir í æfingarplan — á nokkrum mínútum."</div>
+        <div class="reason">✓ Sýnir hvata notandans — hraða.</div>
+      </div>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card" style="opacity:.5;">
+        <div class="step-num">STEP 1</div>
+        <div class="step-title">Players check in</div>
+        <div class="step-desc">Daily readiness and wellness inputs are collected across the squad.</div>
+      </div>
+      <div class="step-card new-style">
+        <div class="step-num">SKREF 1</div>
+        <div class="step-title">Leikmenn skrá inn</div>
+        <div class="step-desc">Dagleg readiness-gögn safnast — takes 60 seconds per player.</div>
+      </div>
+      <div class="step-card" style="opacity:.5;">
+        <div class="step-num">STEP 2</div>
+        <div class="step-title">MicroPulse scans the squad</div>
+        <div class="step-desc">Today Command Center and team intelligence surface risk, action state, and key changes.</div>
+      </div>
+      <div class="step-card new-style">
+        <div class="step-num">SKREF 2</div>
+        <div class="step-title">Sjáðu stöðuna í einu yfirliti</div>
+        <div class="step-desc">Risk level, liðsaðgerð og 7 leikmenn sem þurfa athygli — strax.</div>
+      </div>
+      <div class="step-card" style="opacity:.5;">
+        <div class="step-num">STEP 3</div>
+        <div class="step-title">Staff review flagged players</div>
+        <div class="step-desc">Use the players-needing-review flow, reasons, and context before training starts.</div>
+      </div>
+      <div class="step-card new-style">
+        <div class="step-num">SKREF 3</div>
+        <div class="step-title">Farðu yfir flagged leikmenn</div>
+        <div class="step-desc">Sjáðu hvers vegna og hvað á að gera — áður en þú labbar á völlinn.</div>
+      </div>
+      <div class="step-card" style="opacity:.5;">
+        <div class="step-num">STEP 4</div>
+        <div class="step-title">Staff confirm the day plan</div>
+        <div class="step-desc">Set FULL / REDUCED / RECOVERY, apply templates, save, and lock the final plan.</div>
+      </div>
+      <div class="step-card new-style">
+        <div class="step-num">SKREF 4</div>
+        <div class="step-title">Staðfestu daginn</div>
+        <div class="step-desc">FULL / REDUCED / RECOVERY — vistað og læst. Allir staff sjá sömu mynd.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 5. TESTIMONIALS ──────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">5</div>
+      <div>
+        <div class="section-title">Testimonials — Vitnisburðar</div>
+        <div class="section-subtitle">Þrjú tilvitnun frá starfsmönnum</div>
+      </div>
+    </div>
+    <div class="ba-grid" style="padding-bottom:0;">
+      <div class="ba-col">
+        <div class="ba-label before">Núverandi — of almennar</div>
+        <div class="testimonial-grid" style="padding:0;grid-template-columns:1fr;">
+          <div class="testimonial-card">
+            <div class="testimonial-q">"We align faster before training because everyone is working from one command layer."</div>
+            <div class="testimonial-a">— Head Coach</div>
+          </div>
+          <div class="testimonial-card">
+            <div class="testimonial-q">"The review workflow cuts noise and puts our attention where it should be."</div>
+            <div class="testimonial-a">— Performance Coach</div>
+          </div>
+        </div>
+      </div>
+      <div class="ba-col">
+        <div class="ba-label after">Tillaga — með nafni og klúbbi</div>
+        <div class="testimonial-grid" style="padding:0;grid-template-columns:1fr;">
+          <div class="testimonial-card new-style">
+            <div class="testimonial-q">"We used to spend 20 minutes before training figuring out who needs what. Now it takes two minutes."</div>
+            <div class="testimonial-a">— Head Coach, Breiðablik</div>
+          </div>
+          <div class="testimonial-card new-style">
+            <div class="testimonial-q">"The GPS ACWR view tells me instantly who's underloaded going into a match week."</div>
+            <div class="testimonial-a">— S&C Coach, Breiðablik</div>
+          </div>
+        </div>
+        <div class="reason">✓ Raunverulegur vitnisburður er miklu öflugari en almenn lýsing.</div>
+      </div>
+    </div>
+    <div class="summary-note" style="margin:0 24px 20px;">
+      💡 <strong>Athugasemd:</strong> Þetta krefst þess að þú samþykkir og gefur raunveruleg tilvitnun. Við getum gert þetta síðar — eða sett "coming soon" placeholder.
+    </div>
+  </div>
+
+  <!-- ─── 6. CTA SECTION ───────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number">6</div>
+      <div>
+        <div class="section-title">Lokakall (CTA)</div>
+        <div class="section-subtitle">Neðsti hluti síðunnar áður en footer</div>
+      </div>
+    </div>
+    <div class="ba-grid">
+      <div class="ba-col">
+        <div class="ba-label before">Núverandi</div>
+        <div class="text-before">"See how MicroPulse supports daily performance decisions."<br><br>Takki: "Start with Free" og "Talk to us about Elite"</div>
+      </div>
+      <div class="ba-col">
+        <div class="ba-label after">Tillaga</div>
+        <div class="text-after">EN: "Ready to run smarter training days?"<br><br>IS: "Tilbúinn að keyra betri æfingardaga?"<br><br>Takki: "Start free — no setup needed" og "Book a 20-min demo"</div>
+        <div class="reason">✓ Punchier. Takkar eru skýrari hvað á sér stað.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary table -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-number" style="background:#059669;">✓</div>
+      <div>
+        <div class="section-title">Samantekt — Hvað þarf samþykki?</div>
+      </div>
+    </div>
+    <div style="padding:20px 24px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:2px solid #f0f0f0;">
+            <th style="text-align:left;padding:8px 0;color:#888;">#</th>
+            <th style="text-align:left;padding:8px 0;color:#888;">Hluti</th>
+            <th style="text-align:left;padding:8px 0;color:#888;">Hvað breytist</th>
+            <th style="text-align:left;padding:8px 0;color:#888;">Þarft samþykki á</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f5f5f5;">
+            <td style="padding:10px 0;color:#888;">1</td>
+            <td style="padding:10px 0;font-weight:600;">Hero titill</td>
+            <td style="padding:10px 0;color:#555;">Styttri og punchier</td>
+            <td><span class="badge badge-blue">Texti</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f5f5f5;">
+            <td style="padding:10px 0;color:#888;">2</td>
+            <td style="padding:10px 0;font-weight:600;">Hero undirtexti</td>
+            <td style="padding:10px 0;color:#555;">Styttri — sama skilaboð</td>
+            <td><span class="badge badge-blue">Texti</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f5f5f5;">
+            <td style="padding:10px 0;color:#888;">3</td>
+            <td style="padding:10px 0;font-weight:600;">Hero chips</td>
+            <td style="padding:10px 0;color:#555;">Meira notendamiðaðar</td>
+            <td><span class="badge badge-blue">Texti</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f5f5f5;">
+            <td style="padding:10px 0;color:#888;">4</td>
+            <td style="padding:10px 0;font-weight:600;">How it works</td>
+            <td style="padding:10px 0;color:#555;">Titill + skref orðalag</td>
+            <td><span class="badge badge-blue">Texti</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f5f5f5;">
+            <td style="padding:10px 0;color:#888;">5</td>
+            <td style="padding:10px 0;font-weight:600;">Testimonials</td>
+            <td style="padding:10px 0;color:#555;">Raunverulegar tilvitnanir + nafn/klúbbur</td>
+            <td><span class="badge badge-amber">Þarft raunveruleg tilvitnun frá þér</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#888;">6</td>
+            <td style="padding:10px 0;font-weight:600;">CTA neðst</td>
+            <td style="padding:10px 0;color:#555;">Titill + takkameðskrift</td>
+            <td><span class="badge badge-blue">Texti</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="summary-note">
+        Allar breytingar eru <strong>textibreytingar eingöngu</strong> — engin breyting á útliti eða uppbyggingu síðunnar. Eina undantekningin er <strong>testimonials (#5)</strong> þar sem við þurfum raunverulegar tilvitnanir frá þér eða staff.
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

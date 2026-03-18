@@ -1,5 +1,6 @@
 import type { InjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import type { ExplainableReadinessDecision } from "@/lib/micropulse/readiness";
+import { buildDecisionInputFromReadinessContext, buildTrainingRecommendation } from "@/lib/micropulse/decision";
 import type { DailyAthleteSnapshot } from "../snapshot/types";
 import { buildDecisionExplanationLines, buildDecisionReasons, buildDecisionRecommendations } from "./explanations";
 import { buildDecisionFlags } from "./flags";
@@ -146,6 +147,37 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     injurySeverity,
     lowDataConfidence,
   });
+  const trainingRecommendation = buildTrainingRecommendation(
+    buildDecisionInputFromReadinessContext({
+      athleteId: snapshot.athleteId,
+      date: snapshot.date,
+      readinessDecision: params.readinessDecision ?? null,
+      injuryDecision: params.injuryDecision ?? null,
+      lightAteState: readinessState,
+      monitoringInput: {
+        playerId: snapshot.athleteId,
+        playerName: snapshot.athleteId,
+        date: snapshot.date,
+        readinessScore: params.readinessDecision?.score ?? undefined,
+        checkinScore: params.readinessDecision?.supportingMetrics?.readinessScore ?? undefined,
+        sleepScore: params.readinessDecision?.supportingMetrics?.sleepScore ?? undefined,
+        sorenessScore: params.readinessDecision?.supportingMetrics?.sorenessScore ?? undefined,
+        acuteLoad: params.readinessDecision?.supportingMetrics?.acuteLoad ?? undefined,
+        chronicLoad: params.readinessDecision?.supportingMetrics?.chronicLoad ?? undefined,
+        acwr: params.readinessDecision?.supportingMetrics?.acwr ?? undefined,
+        lightAteState: readinessState,
+        catapultDailyLoad: undefined,
+      },
+      snapshot,
+      context: {
+        sessionType: snapshot.context.expectedSessionType ?? null,
+        phaseOfWeek: snapshot.context.weekSetupLabel ?? null,
+        daysToMatch: null,
+        daysSinceMatch: null,
+        manuallyFlagged: hardBlock,
+      },
+    })
+  );
 
   return {
     athleteId: snapshot.athleteId,
@@ -194,5 +226,6 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
         concernLevel: loadConcernLevel,
       },
     },
+    trainingRecommendation,
   };
 }

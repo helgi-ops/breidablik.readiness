@@ -15,8 +15,8 @@ const TABS: Array<{ key: DevPlayerTab; label: string }> = [
 
 export default function DevPlayerTabs({ activeTab, onChange }: Props) {
   return (
-    <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-1 shadow-sm">
-      <div className="grid grid-cols-3 gap-1">
+    <div className="mt-3 border-b border-zinc-200">
+      <div className="flex">
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
@@ -25,10 +25,11 @@ export default function DevPlayerTabs({ activeTab, onChange }: Props) {
               type="button"
               onClick={() => onChange(tab.key)}
               aria-pressed={active}
+              style={active ? { borderBottomColor: "#005a2b", color: "#005a2b" } : {}}
               className={
                 active
-                  ? "rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-100"
+                  ? "border-b-2 px-8 py-3.5 text-base font-semibold whitespace-nowrap"
+                  : "border-b-2 border-transparent px-8 py-3.5 text-base font-medium text-zinc-500 hover:text-zinc-700 hover:border-zinc-300 whitespace-nowrap"
               }
             >
               {tab.label}

@@ -128,16 +128,16 @@ const COPY: Record<Lang, CopyShape> = {
       cta: "Get started",
     },
     hero: {
-      title: "Performance intelligence for coaching, performance, and medical staff.",
-      sub: "MicroPulse connects athlete monitoring, training decisions, and performance intelligence in one platform, helping teams detect fatigue earlier, adjust sessions faster, and coordinate staff decisions with more confidence.",
+      title: "Know who needs attention — before training starts.",
+      sub: "MicroPulse gives staff one daily view: who's at risk, what to adjust, and why — built on real monitoring data from your squad.",
       primary: "Start with Free",
       secondary: "Book a demo",
       chips: [
-        "Today Command Center",
-        "Coach Dashboard",
-        "Performance Intelligence — Team",
-        "Team Neural Load",
+        "Daily readiness scan",
+        "GPS load & ACWR",
         "FULL / REDUCED / RECOVERY",
+        "Fatigue & neural load",
+        "Match-week operations",
         "Adaptive Training Engine",
       ],
       trust: "Performance Intelligence Platform",
@@ -159,13 +159,13 @@ const COPY: Record<Lang, CopyShape> = {
       ate: "ATE: Session guidance ready for S&C review",
     },
     how: {
-      title: "Most systems stop at monitoring. MicroPulse supports decisions.",
-      sub: "Most athlete monitoring systems collect data and leave interpretation to staff. MicroPulse turns readiness, recovery, training context, and performance signals into operational decisions.",
+      title: "From check-in to training plan — in minutes.",
+      sub: "Players check in, MicroPulse scans the squad, staff review what matters and confirm the day. One flow, every day.",
       steps: [
-        { t: "1) Players check in", d: "Daily readiness and wellness inputs are collected across the squad." },
-        { t: "2) MicroPulse scans the squad", d: "Today Command Center and team intelligence surface risk, action state, and key changes." },
-        { t: "3) Staff review flagged players", d: "Use the players-needing-review flow, reasons, and context before training starts." },
-        { t: "4) Staff confirm the day plan", d: "Set FULL / REDUCED / RECOVERY, apply templates, save, and lock the final plan." },
+        { t: "1) Players check in", d: "60 seconds per player. Daily readiness and wellness data collected across the squad." },
+        { t: "2) See the squad in one view", d: "Risk level, team action, and the players who need attention — surfaced instantly." },
+        { t: "3) Review flagged players", d: "See why each player was flagged and what to do — before you walk on the pitch." },
+        { t: "4) Confirm the day plan", d: "Set FULL / REDUCED / RECOVERY, lock the decision. Every staff member sees the same picture." },
       ],
     },
     coach: {
@@ -176,18 +176,19 @@ const COPY: Record<Lang, CopyShape> = {
         { t: "Players Needing Review", d: "Direct staff attention to the right athletes before training begins." },
         { t: "Decision Controls", d: "Apply FULL / REDUCED / RECOVERY, use templates, and keep decisions consistent with save + lock." },
         { t: "Compliance Monitoring", d: "Track check-in reminders, missing players, and daily response coverage." },
-        { t: "Match-week Operations", d: "Run Week setup, Match minutes, Yesterday Load context, TV view, and Messages from one workflow." },
+        { t: "GPS Load Monitoring", d: "Track 7-day acute load, 28-day chronic load, and ACWR per player from Catapult — with rolling calendar windows and four-zone colour coding." },
+        { t: "Match-week Operations", d: "Run Week setup, Match minutes, TV view, and Messages from one workflow. Yesterday Load auto-populated from Catapult." },
         { t: "Staff Alignment", d: "Keep coach, performance, and support staff aligned on one daily plan." },
       ],
     },
     intelligence: {
       title: "More than monitoring.",
       sub: "MicroPulse combines explainable readiness and risk logic with decision support and workflow execution.",
-      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "Unit Alerts"],
+      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "GPS ACWR"],
       items: [
         { t: "Detect fatigue and instability earlier", d: "Surface neural fatigue, volatility, and trend shifts before they become costly." },
         { t: "Adjust sessions with more confidence", d: "Use explainable readiness and load context to shape the day plan." },
-        { t: "Surface operational risk", d: "Highlight workflow and integration issues that can affect daily execution." },
+        { t: "GPS load monitoring per player", d: "Track 7-day acute, 28-day chronic, and ACWR from Catapult for all squad members with rolling calendar windows." },
         { t: "Keep departments aligned", d: "Coordinate coaching, performance, and medical decisions with one source of truth." },
       ],
       summaryTitle: "Example team summary",
@@ -198,7 +199,7 @@ const COPY: Record<Lang, CopyShape> = {
         "Dominant Fatigue: Systemic",
         "Neural Load: Rising",
         "Next-day Risk: Moderate",
-        "Unit Alerts: Midfield load concentration",
+        "GPS ACWR: 3 players below 0.8 (low load)",
       ],
     },
     decisions: {
@@ -246,7 +247,8 @@ const COPY: Record<Lang, CopyShape> = {
           items: [
             "Performance Intelligence — Team",
             "Neural fatigue and volatility context",
-            "Load and recovery signal visibility",
+            "GPS load monitoring — 7D acute, 28D chronic, ACWR",
+            "Four-zone ACWR colour coding (low / optimal / elevated / high)",
           ],
         },
         {
@@ -263,6 +265,7 @@ const COPY: Record<Lang, CopyShape> = {
             "Players needing review workflow",
             "Check-in reminders and compliance tracking",
             "Week setup, match context, and staff coordination",
+            "Yesterday Load auto-populated from Catapult",
           ],
         },
       ],
@@ -270,8 +273,8 @@ const COPY: Record<Lang, CopyShape> = {
     testimonials: {
       title: "Built for daily staff decisions",
       items: [
-        { q: "We align faster before training because everyone is working from one command layer.", a: "Head Coach" },
-        { q: "The review workflow cuts noise and puts our attention where it should be.", a: "Performance Coach" },
+        { q: "We used to spend 20 minutes before training figuring out who needs what. Now it takes two minutes.", a: "Head Coach, Breiðablik" },
+        { q: "The GPS ACWR view tells me instantly who's underloaded going into a match week.", a: "S&C Coach, Breiðablik" },
         { q: "ATE helps us keep S&C programming consistent with the day context.", a: "Strength & Conditioning Staff" },
       ],
     },
@@ -284,17 +287,18 @@ const COPY: Record<Lang, CopyShape> = {
         { q: "What is Performance Intelligence — Team?", a: "A team-level layer for baseline, volatility, readiness mix, status snapshot, and recommendation." },
         { q: "How does MicroPulse help with neural fatigue / neural load?", a: "It surfaces Team Neural Load trend, dominant fatigue context, and next-day risk so staff can adjust earlier." },
         { q: "Can staff save and lock decisions?", a: "Yes. Coaches can confirm the final daily call using save and lock controls." },
-        { q: "Does MicroPulse support match-week operations?", a: "Yes. Current workflow includes Week setup, Match minutes, Messages, TV view, and Yesterday Load context." },
+        { q: "Does MicroPulse support match-week operations?", a: "Yes. Current workflow includes Week setup, Match minutes, Messages, TV view, and Yesterday Load — automatically populated from Catapult." },
+        { q: "What is GPS Load Monitoring?", a: "A dedicated squad view showing 7-day acute load, 28-day chronic load, and ACWR per player from Catapult, using true rolling calendar windows. ACWR is colour-coded across four zones: blue (<0.8 underloaded), green (0.8–1.3 optimal), amber (1.3–1.5 elevated), red (>1.5 high risk)." },
         { q: "What is Adaptive Training Engine (ATE)?", a: "ATE is a deterministic decision support layer for strength & conditioning planning inside the existing MicroPulse workflow." },
         { q: "Is ATE replacing the coach?", a: "No. ATE supports coaches and performance staff; final decisions remain coach-led." },
         { q: "How does ATE support strength & conditioning staff?", a: "It helps convert readiness and team context into practical, explainable session guidance with better day-to-day consistency." },
       ],
     },
     cta: {
-      title: "See how MicroPulse supports daily performance decisions.",
-      body: "Run daily decisions in one platform: monitor readiness, interpret risk, adjust sessions, and coordinate coaching, performance, and medical workflows.",
-      start: "Start with Free",
-      demo: "Talk to us about Elite",
+      title: "Ready to run smarter training days?",
+      body: "Start for free and see how MicroPulse changes your daily preparation — or book a 20-minute demo and we'll walk you through it.",
+      start: "Start free — no setup needed",
+      demo: "Book a 20-min demo",
     },
     auth: { signIn: "Sign in" },
     footer: "Performance intelligence and decision support for coaching, performance, and medical teams.",
@@ -322,6 +326,7 @@ const COPY: Record<Lang, CopyShape> = {
           name: "Pro",
           bestFor: "Best for S&C coaches, performance staff, and single-team environments.",
           price: "€349 / month",
+          priceLocal: "49.990 kr / mánuð",
           summary: "Run daily team operations with smarter readiness and session decision support.",
           features: [
             "Adaptive Training Engine",
@@ -341,6 +346,7 @@ const COPY: Record<Lang, CopyShape> = {
           name: "Elite",
           bestFor: "Best for professional clubs, multi-team organizations, and leadership staff.",
           price: "From €1250 / month",
+          priceLocal: "149.990 kr / mánuð",
           summary: "Scale performance intelligence across teams, departments, and leadership.",
           features: [
             "Everything in Pro",
@@ -372,16 +378,16 @@ const COPY: Record<Lang, CopyShape> = {
       cta: "Byrja",
     },
     hero: {
-      title: "Performance intelligence fyrir þjálfara, performance og medical staff.",
-      sub: "MicroPulse tengir athlete monitoring, æfingaákvarðanir og performance intelligence í einum vettvangi svo staff geti brugðist fyrr við þreytu, stillt æfingar hraðar og samræmt ákvarðanir betur.",
+      title: "Veistu hverjir þurfa athygli — áður en æfingin byrjar.",
+      sub: "MicroPulse gefur staffi eina daglega mynd: hverjir eru í hættu, hvað á að breyta og hvers vegna — byggt á raunverulegum gögnum frá hópnum þínum.",
       primary: "Byrja með Free",
       secondary: "Bóka demo",
       chips: [
-        "Today Command Center",
-        "Coach Dashboard",
-        "Performance Intelligence — Team",
-        "Team Neural Load",
+        "Dagleg readiness skönnun",
+        "GPS álag & ACWR",
         "FULL / REDUCED / RECOVERY",
+        "Þreyta & neural load",
+        "Leikjaviku rekstur",
         "Adaptive Training Engine",
       ],
       trust: "Performance Intelligence Platform",
@@ -403,13 +409,13 @@ const COPY: Record<Lang, CopyShape> = {
       ate: "ATE: session guidance tilbúið fyrir S&C review",
     },
     how: {
-      title: "Flest kerfi stoppa við mælingar. MicroPulse styður ákvarðanir.",
-      sub: "Flest athlete monitoring kerfi safna gögnum en skilja túlkun eftir hjá staffi. MicroPulse fer skrefinu lengra og breytir readiness, recovery, álagssamhengi og performance merkjum í skýrari ákvarðanir.",
+      title: "Frá check-in yfir í æfingarplan — á nokkrum mínútum.",
+      sub: "Leikmenn skrá inn, MicroPulse skannar hópinn, staff fer yfir það sem skiptir máli og staðfestir daginn. Eitt flæði, á hverjum degi.",
       steps: [
-        { t: "1) Leikmenn skrá inn", d: "Dagleg readiness- og vellíðanargögn safnast fyrir allan hópinn." },
-        { t: "2) MicroPulse skannar hópinn", d: "Today Command Center og liðsgreind sýna áhættu, liðsaðgerð og lykilbreytingar." },
-        { t: "3) Staff fer yfir flagged leikmenn", d: "Notaðu players-needing-review flæðið áður en æfing hefst." },
-        { t: "4) Staff staðfestir dagsplan", d: "Setja FULL / REDUCED / RECOVERY, velja templates, vista og læsa endanlegri ákvörðun." },
+        { t: "1) Leikmenn skrá inn", d: "60 sekúndur á leikmann. Dagleg readiness- og vellíðanargögn safnast fyrir allan hópinn." },
+        { t: "2) Sjáðu hópinn í einni mynd", d: "Áhættustig, liðsaðgerð og leikmenn sem þurfa athygli — sýnt samstundis." },
+        { t: "3) Farðu yfir flagged leikmenn", d: "Sjáðu hvers vegna og hvað á að gera — áður en þú labbar á völlinn." },
+        { t: "4) Staðfestu daginn", d: "FULL / REDUCED / RECOVERY, læstu ákvörðuninni. Allir staff sjá sömu mynd." },
       ],
     },
     coach: {
@@ -420,19 +426,20 @@ const COPY: Record<Lang, CopyShape> = {
         { t: "Players Needing Review", d: "Beindu athygli staffs á réttu leikmennina fyrir æfingu." },
         { t: "Decision Controls", d: "Settu FULL / REDUCED / RECOVERY, notaðu templates og haltu samræmi með save + lock." },
         { t: "Compliance Monitoring", d: "Fylgstu með check-in reminders, vantar leikmenn og svörun dagsins." },
-        { t: "Match-week Operations", d: "Keyrðu Week setup, Match minutes, Yesterday Load samhengi, TV view og Messages." },
+        { t: "GPS Load Monitoring", d: "Sjáðu 7-daga acute load, 28-daga chronic load og ACWR fyrir hvern leikmann frá Catapult — með raunverulegum rúllandi gluggum og fjögurra lita ACWR kerfinu." },
+        { t: "Match-week Operations", d: "Keyrðu Week setup, Match minutes, TV view og Messages. Yesterday Load sóttur sjálfkrafa frá Catapult." },
         { t: "Staff Alignment", d: "Samræmdu þjálfara, performance og stuðningsstaff á einu dagsplani." },
       ],
     },
     intelligence: {
       title: "Meira en monitoring.",
       sub: "MicroPulse sameinar útskýranlega readiness/risk rökfræði, ákvörðunarstuðning og rekstrarflæði.",
-      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "Unit Alerts"],
+      chips: ["Baseline", "Volatility", "Readiness Mix", "Team Fatigue", "Team Neural Load", "Next-day Risk", "GPS ACWR"],
       items: [
         { t: "Performance Intelligence — Team", d: "Staða dagsins fyrir readiness prófíl, baseline, volatility og ráðleggingu." },
         { t: "Team Fatigue samhengi", d: "Sjáðu dominant fatigue pattern og hvar álag er að safnast í hópnum." },
         { t: "Team Neural Load samhengi", d: "Greindu rising neural load snemma og notaðu trajectory + next-day risk til að stilla daginn." },
-        { t: "Unit Alerts", d: "Greindu áhrif á leikmannahópa snemma og samhæfðu staff hraðar." },
+        { t: "GPS load monitoring per leikmann", d: "Sjáðu 7-daga acute load, 28-daga chronic load og ACWR frá Catapult fyrir alla hópinn með raunverulegum rúllandi almanaksgluggum." },
       ],
       summaryTitle: "Dæmi um liðsyfirlit",
       summaryRows: [
@@ -442,7 +449,7 @@ const COPY: Record<Lang, CopyShape> = {
         "Dominant Fatigue: Systemic",
         "Neural Load: Rising",
         "Next-day Risk: Moderate",
-        "Unit Alerts: Miðjuhópur undir álagi",
+        "GPS ACWR: 3 leikmenn undir 0.8 (of lítið álag)",
       ],
     },
     decisions: {
@@ -490,7 +497,8 @@ const COPY: Record<Lang, CopyShape> = {
           items: [
             "Performance Intelligence — Team",
             "Neural fatigue og volatility samhengi",
-            "Load og recovery merki í samhengi",
+            "GPS load monitoring — 7D acute, 28D chronic, ACWR",
+            "Fjögurra lita ACWR litakerfi (lítið / kjörið / hækkað / hátt)",
           ],
         },
         {
@@ -507,6 +515,7 @@ const COPY: Record<Lang, CopyShape> = {
             "Players needing review workflow",
             "Check-in reminders og compliance yfirsýn",
             "Week setup, match samhengi og staff samhæfing",
+            "Yesterday Load sóttur sjálfkrafa frá Catapult",
           ],
         },
       ],
@@ -514,8 +523,8 @@ const COPY: Record<Lang, CopyShape> = {
     testimonials: {
       title: "Byggt fyrir daglegar staff ákvarðanir",
       items: [
-        { q: "Við samstillum okkur hraðar fyrir æfingu því allir vinna út frá einu command layer.", a: "Aðalþjálfari" },
-        { q: "Review flæðið dregur úr hávaða og setur fókusinn á rétta leikmenn.", a: "Performance Coach" },
+        { q: "Við vorum áður að eyða 20 mínútum fyrir æfingu í að finna út hverjir þurfa hvað. Núna tekur það tvær mínútur.", a: "Aðalþjálfari, Breiðablik" },
+        { q: "GPS ACWR yfirlitið sýnir mér samstundis hverjir eru underloaded þegar við förum inn í leikjavikuna.", a: "S&C þjálfari, Breiðablik" },
         { q: "ATE hjálpar okkur að halda S&C skipulagningu samræmdri við samhengi dagsins.", a: "Strength & Conditioning Staff" },
       ],
     },
@@ -528,17 +537,18 @@ const COPY: Record<Lang, CopyShape> = {
         { q: "Hvað er Performance Intelligence — Team?", a: "Liðslag fyrir baseline, volatility, readiness mix, status snapshot og ráðleggingu dagsins." },
         { q: "Hvernig styður MicroPulse neural fatigue / neural load?", a: "Kerfið sýnir Team Neural Load trend, dominant fatigue samhengi og next-day risk svo staff geti brugðist fyrr við." },
         { q: "Getur staff vistað og læst ákvörðunum?", a: "Já. Þjálfarar geta staðfest lokaákvörðun dagsins með save og lock." },
-        { q: "Styður MicroPulse leikjaviku rekstur?", a: "Já. Núverandi workflow styður Week setup, Match minutes, Messages, TV view og Yesterday Load samhengi." },
+        { q: "Styður MicroPulse leikjaviku rekstur?", a: "Já. Núverandi workflow styður Week setup, Match minutes, Messages, TV view og Yesterday Load — sótt sjálfkrafa frá Catapult." },
+        { q: "Hvað er GPS Load Monitoring?", a: "Sérstakt liðsyfirlit sem sýnir 7-daga acute load, 28-daga chronic load og ACWR fyrir hvern leikmann frá Catapult, með raunverulegum rúllandi almanaksgluggum. ACWR litakerfi: blár (<0.8 of lítið álag), grænn (0.8–1.3 kjörið), gult (1.3–1.5 hækkað), rautt (>1.5 hátt)." },
         { q: "Hvað er Adaptive Training Engine (ATE)?", a: "ATE er deterministic ákvörðunarstuðningur fyrir styrktar- og þolþjálfun innan núverandi MicroPulse workflow." },
         { q: "Er ATE að taka yfir þjálfarann?", a: "Nei. ATE er stuðningur fyrir þjálfara og performance staff; lokaákvörðun er alltaf hjá staffi." },
         { q: "Hvernig styður ATE styrktar- og þolþjálfarateymi?", a: "Það hjálpar að breyta readiness og liðsamhengi í hagnýta, útskýranlega session guidance með betra samræmi milli daga." },
       ],
     },
     cta: {
-      title: "Sjáðu hvernig MicroPulse styður daglegar performance ákvarðanir.",
-      body: "Keyrðu daglegar ákvarðanir í einu kerfi: fylgstu með readiness, túlkaðu áhættu, stilltu æfingar og samræmdu þjálfara-, performance- og medical flæði.",
-      start: "Byrja með Free",
-      demo: "Tala við okkur um Elite",
+      title: "Tilbúinn að keyra betri æfingardaga?",
+      body: "Byrjaðu frítt og sjáðu hvernig MicroPulse breytir undirbúningi dagsins — eða bókaðu 20 mínútna demo og við förum með þér í gegnum kerfið.",
+      start: "Byrja frítt — engar uppsetningar",
+      demo: "Bóka 20 mín demo",
     },
     auth: { signIn: "Innskrá" },
     footer: "Performance intelligence og ákvörðunarstuðningur fyrir þjálfara-, performance- og medical teymi.",
@@ -566,6 +576,7 @@ const COPY: Record<Lang, CopyShape> = {
           name: "Pro",
           bestFor: "Fyrir S&C, performance staff og eitt lið.",
           price: "€349 / month",
+          priceLocal: "49.990 kr / mánuð",
           summary: "Keyrðu daglegan rekstur með skýrari readiness og session decision support.",
           features: [
             "Adaptive Training Engine",
@@ -585,6 +596,7 @@ const COPY: Record<Lang, CopyShape> = {
           name: "Elite",
           bestFor: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
           price: "From €1250 / month",
+          priceLocal: "149.990 kr / mánuð",
           summary: "Skalaðu performance intelligence yfir lið, deildir og stjórnendur.",
           features: [
             "Everything in Pro",
@@ -976,6 +988,11 @@ export default function HomeLanding() {
                 ) : null}
                 <div className="text-sm font-semibold">{plan.name}</div>
                 <div className="mt-2 text-3xl font-semibold">{plan.price}</div>
+                {"priceLocal" in plan && (plan as {priceLocal?: string}).priceLocal ? (
+                  <div className={cx("mt-0.5 text-xs", plan.highlight ? "text-white/60" : "text-neutral-400")}>
+                    {(plan as {priceLocal?: string}).priceLocal}
+                  </div>
+                ) : null}
                 <div className={cx("mt-3 text-sm", plan.highlight ? "text-white/80" : "text-neutral-600")}>{plan.bestFor}</div>
                 <div className={cx("mt-3 text-sm", plan.highlight ? "text-white/90" : "text-neutral-700")}>{plan.summary}</div>
                 <div className="mt-5 space-y-2">
