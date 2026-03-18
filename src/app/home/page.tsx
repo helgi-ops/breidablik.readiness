@@ -90,6 +90,7 @@ type CopyShape = {
       name: string;
       bestFor: string;
       price: string;
+      priceLocal?: string;
       summary: string;
       features: string[];
       cta: string;
