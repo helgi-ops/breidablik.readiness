@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -335,8 +335,16 @@ function SectionTitle({ kicker, title, sub }: { kicker?: string; title: string; 
   );
 }
 
-function CardShell({ children, className = "" }: { children: any; className?: string }) {
-  return <div className={cx("rounded-2xl border bg-white shadow-sm", className)}>{children}</div>;
+function CardShell({
+  children,
+  className = "",
+  ...props
+}: { children: any; className?: string } & ComponentPropsWithoutRef<"div">) {
+  return (
+    <div className={cx("rounded-2xl border bg-white shadow-sm", className)} {...props}>
+      {children}
+    </div>
+  );
 }
 
 function Chip({ children, className = "" }: { children: any; className?: string }) {
@@ -2581,20 +2589,39 @@ export default function PlayerClient() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-800" />
+          <div className="text-sm text-zinc-400">Hleð gögnum...</div>
+        </div>
+      </div>
+    );
+  }
+
   if (!plan) {
     return (
-      <div className="min-h-screen bg-zinc-50">
-        <div className="mx-auto max-w-3xl px-4 py-10">
-          <CardShell>
-            <div className="p-6">
-              <div className="text-base font-semibold">Engin Stage-4 microdose ákvörðun fannst</div>
-              <div className="mt-2 text-sm text-zinc-600">
-                Þetta gerist ef Stage-4 decision-engine hefur ekki verið keyrð í dag og engin “resolved/final” view skilar gögnum. Farðu í{" "}
-                <b>/player/checkin</b> og vertu viss um að Stage-4 keyrsla hafi verið framkvæmd.
-              </div>
-              <div className="mt-4 text-xs text-zinc-500">date={sanitizeDay(day)}</div>
+      <div className="min-h-screen bg-zinc-50 flex items-start justify-center pt-16 px-4">
+        <div className="w-full max-w-sm">
+          <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm p-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100">
+              <svg className="h-7 w-7 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+              </svg>
             </div>
-          </CardShell>
+            <div className="text-base font-semibold text-zinc-900">Engar líðansgögn í dag</div>
+            <div className="mt-2 text-sm text-zinc-500 leading-relaxed">
+              Þú hefur ekki skráð líðan þína í dag enn. Skráðu líðan til að fá dagleg ráð og þjálfunaráætlun.
+            </div>
+            <a
+              href="/player/checkin"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
+            >
+              Skrá líðan núna
+            </a>
+            <div className="mt-3 text-xs text-zinc-400">{sanitizeDay(day)}</div>
+          </div>
         </div>
       </div>
     );
@@ -2729,7 +2756,7 @@ export default function PlayerClient() {
             </div>
 
             {/* Metrics */}
-            <CardShell>
+            <CardShell data-player-card="metrics">
               <details className="group" open>
                 <summary className="cursor-pointer select-none p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -2846,7 +2873,7 @@ export default function PlayerClient() {
 
             {profile?.player_id ? <ValdStatusCard playerId={profile.player_id} date={today} /> : null}
 
-            <CardShell>
+            <CardShell data-player-card="risk">
               <details className="group">
                 <summary className="cursor-pointer select-none p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -2939,14 +2966,14 @@ export default function PlayerClient() {
               </details>
             </CardShell>
 
-            <CardShell>
+            <CardShell data-player-card="reminders">
               <div className="p-4 sm:p-5">
                 <EnableRemindersCard />
               </div>
             </CardShell>
 
             {/* Post-session RPE */}
-            <CardShell>
+            <CardShell data-player-card="rpe">
               <div className="p-4 sm:p-5">
                 <SectionTitle kicker="Eftir æfingu" title="Post-Session RPE" sub="Rate how hard the full session felt overall." />
 

@@ -8,7 +8,6 @@ import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement"
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
-import DevPlayerRPETab from "./dev-player-dashboard/DevPlayerRPETab";
 import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import {
@@ -270,6 +269,10 @@ function buildNormalizedDailyDecision(): NormalizedPlayerDailyDecision {
   };
 }
 
+function detectCardByKey(key: string): HTMLElement | null {
+  return document.querySelector(`[data-player-card="${key}"]`) as HTMLElement | null;
+}
+
 function detectCardByTitle(title: string): HTMLElement | null {
   const titleNode = Array.from(document.querySelectorAll("div.text-base.font-semibold.text-zinc-900")).find(
     (el) => (el.textContent ?? "").trim() === title
@@ -278,6 +281,8 @@ function detectCardByTitle(title: string): HTMLElement | null {
 }
 
 function detectRpeCard(): HTMLElement | null {
+  const explicit = detectCardByKey("rpe");
+  if (explicit) return explicit;
   // Find the existing Post-Session RPE card rendered by PlayerClient
   const cards = Array.from(document.querySelectorAll("div.rounded-2xl.border, div.rounded-xl.border")) as HTMLElement[];
   const match =
@@ -635,8 +640,8 @@ export default function DevPlayerClient() {
       attempts += 1;
       const header = detectHeaderCard();
       const decisionCard = detectDecisionHeroCard();
-      const metricsCard = detectCardByTitle("Mælingar dagsins");
-      const riskCard = detectCardByTitle("Player Risk Trend");
+      const metricsCard = detectCardByKey("metrics") ?? detectCardByTitle("Mælingar dagsins");
+      const riskCard = detectCardByKey("risk") ?? detectCardByTitle("Player Risk Trend");
       const rpeCard = detectRpeCard();
       const valdCard = detectValdCard();
       const leftColumn = (decisionCard?.parentElement as HTMLElement | null) ?? null;
@@ -667,8 +672,7 @@ export default function DevPlayerClient() {
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
-      // Always hide old RPE card — DevPlayerRPETab renders its own UI in the portal
-      if (rpeCard) rpeCard.style.display = "none";
+      if (rpeCard) rpeCard.style.display = showRpe ? "" : "none";
       // Hide the existing VALD card from Today — it lives in the Neuromuscular Testing tab now
       if (valdCard) valdCard.style.display = "none";
       if (rightColumn) rightColumn.style.display = showToday ? "" : "none";
@@ -771,7 +775,6 @@ export default function DevPlayerClient() {
         ? createPortal(
             <div className="mt-3">
               {activeTab === "history" && <DevPlayerHistoryTab />}
-              {activeTab === "rpe" && <DevPlayerRPETab />}
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
             </div>,
