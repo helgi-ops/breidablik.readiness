@@ -26,6 +26,13 @@ type RpeStatus = {
   todayEntriesCount: number;
 };
 
+type AcwrData = {
+  acute7: number;
+  chronic28: number;
+  acwr: number | null;
+  zone: "undertrain" | "optimal" | "caution" | "high_risk" | "insufficient";
+};
+
 type FormState = {
   session_date: string;
   session_type: SessionType;
@@ -54,6 +61,10 @@ export default function DevPlayerRPETab() {
   const [history, setHistory] = useState<SessionRpeEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // ACWR
+  const [acwr, setAcwr] = useState<AcwrData | null>(null);
+  const [acwrLoading, setAcwrLoading] = useState(true);
 
   // Form
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
@@ -99,10 +110,27 @@ export default function DevPlayerRPETab() {
     }
   }, []);
 
+  const loadAcwr = useCallback(async () => {
+    setAcwrLoading(true);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch("/api/player/session-rpe/acwr", { headers });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to load ACWR.");
+      setAcwr({ acute7: json.acute7, chronic28: json.chronic28, acwr: json.acwr, zone: json.zone });
+    } catch {
+      // Non-critical — fail silently, show placeholder
+      setAcwr(null);
+    } finally {
+      setAcwrLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStatus();
     loadHistory();
-  }, [loadStatus, loadHistory]);
+    loadAcwr();
+  }, [loadStatus, loadHistory, loadAcwr]);
 
   async function handleSubmit() {
     if (!valid || submitting) return;
@@ -127,7 +155,7 @@ export default function DevPlayerRPETab() {
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Could not submit Session RPE.");
       setSubmitSuccess("Session RPE submitted.");
       setForm(DEFAULT_FORM);
-      await Promise.all([loadStatus(), loadHistory()]);
+      await Promise.all([loadStatus(), loadHistory(), loadAcwr()]);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Could not submit Session RPE.");
     } finally {
@@ -183,6 +211,82 @@ export default function DevPlayerRPETab() {
             )}
             {statusLoading && <div className="mt-1 text-zinc-500">Loading status...</div>}
             {statusError && <div className="mt-1 text-rose-700">{statusError}</div>}
+          </div>
+
+          {/* ── Training Load / ACWR ─────────────────────────────── */}
+          <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-3">Training Load</div>
+            {acwrLoading ? (
+              <div className="text-xs text-zinc-400">Hleð æfingaálag...</div>
+            ) : (
+              <>
+                {/* Three stat tiles */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Acute */}
+                  <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-center">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Acute</div>
+                    <div className="text-[10px] text-zinc-400 mb-1">7 dagar</div>
+                    <div className="text-xl font-bold tabular-nums text-zinc-900">
+                      {acwr ? acwr.acute7 : <span className="text-zinc-300">—</span>}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">AU</div>
+                  </div>
+                  {/* Chronic */}
+                  <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-center">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Chronic</div>
+                    <div className="text-[10px] text-zinc-400 mb-1">28 dagar avg/viku</div>
+                    <div className="text-xl font-bold tabular-nums text-zinc-900">
+                      {acwr ? acwr.chronic28 : <span className="text-zinc-300">—</span>}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">AU</div>
+                  </div>
+                  {/* ACWR */}
+                  <div className={cx(
+                    "rounded-lg border px-3 py-3 text-center",
+                    acwr?.zone === "optimal"    ? "border-emerald-200 bg-emerald-50" :
+                    acwr?.zone === "caution"    ? "border-amber-200 bg-amber-50" :
+                    acwr?.zone === "high_risk"  ? "border-red-200 bg-red-50" :
+                    acwr?.zone === "undertrain" ? "border-blue-200 bg-blue-50" :
+                    "border-zinc-200 bg-white"
+                  )}>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">ACWR</div>
+                    <div className="text-[10px] text-zinc-400 mb-1">Acute / Chronic</div>
+                    <div className={cx(
+                      "text-xl font-bold tabular-nums",
+                      acwr?.zone === "optimal"    ? "text-emerald-700" :
+                      acwr?.zone === "caution"    ? "text-amber-700" :
+                      acwr?.zone === "high_risk"  ? "text-red-700" :
+                      acwr?.zone === "undertrain" ? "text-blue-700" :
+                      "text-zinc-400"
+                    )}>
+                      {acwr?.acwr != null ? acwr.acwr.toFixed(2) : "—"}
+                    </div>
+                    <div className={cx(
+                      "text-[10px] font-semibold mt-0.5",
+                      acwr?.zone === "optimal"    ? "text-emerald-600" :
+                      acwr?.zone === "caution"    ? "text-amber-600" :
+                      acwr?.zone === "high_risk"  ? "text-red-600" :
+                      acwr?.zone === "undertrain" ? "text-blue-600" :
+                      "text-zinc-400"
+                    )}>
+                      {acwr?.zone === "optimal"    ? "✓ Sweet spot" :
+                       acwr?.zone === "caution"    ? "⚠ Gæta sér" :
+                       acwr?.zone === "high_risk"  ? "⛔ Há áhætta" :
+                       acwr?.zone === "undertrain" ? "↓ Of lítið" :
+                       "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ACWR zone legend */}
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-500">
+                  <span><span className="font-semibold text-blue-600">&lt;0.80</span> Of lítið</span>
+                  <span><span className="font-semibold text-emerald-600">0.80–1.30</span> Sweet spot</span>
+                  <span><span className="font-semibold text-amber-600">1.30–1.50</span> Gæta sér</span>
+                  <span><span className="font-semibold text-red-600">&gt;1.50</span> Há áhætta</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Form */}
