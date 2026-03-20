@@ -8,6 +8,7 @@ import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement"
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
+import DevPlayerRPETab from "./dev-player-dashboard/DevPlayerRPETab";
 import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import {
@@ -666,7 +667,8 @@ export default function DevPlayerClient() {
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
-      if (rpeCard) rpeCard.style.display = showRpe ? "" : "none";
+      // Always hide old RPE card — DevPlayerRPETab renders its own UI in the portal
+      if (rpeCard) rpeCard.style.display = "none";
       // Hide the existing VALD card from Today — it lives in the Neuromuscular Testing tab now
       if (valdCard) valdCard.style.display = "none";
       if (rightColumn) rightColumn.style.display = showToday ? "" : "none";
@@ -769,6 +771,7 @@ export default function DevPlayerClient() {
         ? createPortal(
             <div className="mt-3">
               {activeTab === "history" && <DevPlayerHistoryTab />}
+              {activeTab === "rpe" && <DevPlayerRPETab />}
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
             </div>,
