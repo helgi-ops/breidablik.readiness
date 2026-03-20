@@ -9,7 +9,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
 import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
-import DevPlayerRPETab from "./dev-player-dashboard/DevPlayerRPETab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import {
   buildDevPlayerRiskViewModel,
@@ -566,6 +565,7 @@ export default function DevPlayerClient() {
   const searchParams = useSearchParams();
   const activeTab = useMemo(() => normalizeDevPlayerTab(searchParams?.get("tab")), [searchParams]);
   const [tabsMountNode, setTabsMountNode] = useState<HTMLElement | null>(null);
+  const [panelMountNode, setPanelMountNode] = useState<HTMLElement | null>(null);
 
   // ── Plan tier ──────────────────────────────────────────────
   const [planTier, setPlanTier] = useState<PlanTier>("FREE");
@@ -651,7 +651,9 @@ export default function DevPlayerClient() {
       setDailyDecision(nextDecision);
 
       const tabsSlot = ensureTabSlot("dev-player-tabs-slot", header);
+      const panelSlot = tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null;
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
+      setPanelMountNode((prev) => (prev === panelSlot ? prev : panelSlot));
 
       const showToday = activeTab === "today";
       const showHistory = activeTab === "history";
@@ -664,8 +666,7 @@ export default function DevPlayerClient() {
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
-      // Always hide the old RPE card — new tab has its own component
-      if (rpeCard) rpeCard.style.display = "none";
+      if (rpeCard) rpeCard.style.display = showRpe ? "" : "none";
       // Hide the existing VALD card from Today — it lives in the Neuromuscular Testing tab now
       if (valdCard) valdCard.style.display = "none";
       if (rightColumn) rightColumn.style.display = showToday ? "" : "none";
@@ -686,6 +687,14 @@ export default function DevPlayerClient() {
       if (leftColumn) {
         const cards = Array.from(leftColumn.children) as HTMLElement[];
         for (const card of cards) {
+          if (card.id === "dev-player-tabs-slot") {
+            card.style.display = "";
+            continue;
+          }
+          if (card.id === "dev-player-tab-panel-slot") {
+            card.style.display = showToday ? "none" : "";
+            continue;
+          }
           if (card === decisionCard) {
             card.style.display = showToday ? "" : "none";
             continue;
@@ -699,8 +708,7 @@ export default function DevPlayerClient() {
             continue;
           }
           if (rpeCard && card === rpeCard) {
-            // Always hide the old RPE card — new RPE tab has its own component
-            card.style.display = "none";
+            card.style.display = showRpe ? "" : "none";
             continue;
           }
           if (valdCard && card === valdCard) {
@@ -756,18 +764,15 @@ export default function DevPlayerClient() {
     <>
       <PlayerClient />
       <AteCommandCardPortal activeTab={activeTab} />
-      {tabsMountNode
+      {tabsMountNode ? createPortal(<DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />, tabsMountNode) : null}
+      {panelMountNode
         ? createPortal(
-            <>
-              <DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />
-              <div className="mt-3">
-                {activeTab === "history" && <DevPlayerHistoryTab />}
-                {activeTab === "rpe" && <DevPlayerRPETab />}
-                {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
-                {activeTab === "vald" && <DevPlayerVALDTab />}
-              </div>
-            </>,
-            tabsMountNode
+            <div className="mt-3">
+              {activeTab === "history" && <DevPlayerHistoryTab />}
+              {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
+              {activeTab === "vald" && <DevPlayerVALDTab />}
+            </div>,
+            panelMountNode
           )
         : null}
     </>
