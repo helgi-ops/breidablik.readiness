@@ -18,6 +18,15 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
   ) {
     lines.push("Current loading context may increase risk if full loading continues.");
   }
+  if (triggeredRules.includes("VALD_HAMSTRING_RISK")) {
+    lines.push("Hamstring testing suggests elevated asymmetry or force concern.");
+  }
+  if (triggeredRules.includes("VALD_GROIN_RISK")) {
+    lines.push("Groin strength profile suggests additional caution.");
+  }
+  if (triggeredRules.includes("VALD_NEUROMUSCULAR_CAUTION")) {
+    lines.push("Neuromuscular testing suggests lower explosive readiness.");
+  }
   if (triggeredRules.includes("GOOD_SORENESS_SIGNAL")) {
     lines.push("Muscle soreness does not currently suggest elevated recovery concern.");
   }
@@ -34,6 +43,9 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("REPEATED_WARNING_DAYS")) drivers.push("Repeated warning days");
   if (triggeredRules.includes("SORENESS_PAIN_FLAG")) drivers.push("Soreness/pain flag");
   if (triggeredRules.includes("GPS_SPIKE_POOR_RECOVERY")) drivers.push("GPS spike under poor recovery");
+  if (triggeredRules.includes("VALD_HAMSTRING_RISK")) drivers.push("Hamstring asymmetry / force concern");
+  if (triggeredRules.includes("VALD_GROIN_RISK")) drivers.push("Groin profile concern");
+  if (triggeredRules.includes("VALD_NEUROMUSCULAR_CAUTION")) drivers.push("Neuromuscular readiness decrement");
   return Array.from(new Set(drivers)).slice(0, 5);
 }
 

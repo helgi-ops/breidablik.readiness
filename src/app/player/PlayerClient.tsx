@@ -62,6 +62,7 @@ import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
 import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
 import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionView";
 import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
+import ValdStatusCard from "@/components/player/ValdStatusCard";
 
 type ProfileRow = {
   id: string;
@@ -2842,6 +2843,8 @@ export default function PlayerClient() {
                 </div>
               </details>
             </CardShell>
+
+            {profile?.player_id ? <ValdStatusCard playerId={profile.player_id} date={today} /> : null}
 
             <CardShell>
               <details className="group">

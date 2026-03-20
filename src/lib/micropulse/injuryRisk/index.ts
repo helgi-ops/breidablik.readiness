@@ -14,7 +14,7 @@ export function buildInjuryRiskDecision(
     injuryRiskLevel: rules.injuryRiskLevel,
     confidence: rules.confidence,
     riskScore: rules.riskScore,
-    why: explainInjuryRiskWhy(rules.triggeredRules),
+    why: Array.from(new Set([...explainInjuryRiskWhy(rules.triggeredRules), ...(input.valdReasons ?? [])])).slice(0, 4),
     modifiableDrivers: explainInjuryRiskDrivers(rules.triggeredRules),
     recommendation: explainInjuryRiskRecommendations(rules.injuryRiskLevel),
     supportingMetrics: {

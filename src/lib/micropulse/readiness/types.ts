@@ -7,6 +7,7 @@ import type {
   CatapultReadinessModifier,
   ExternalLoadState,
 } from "@/lib/micropulse/externalLoad";
+import type { ValdDailySnapshot, ValdReadinessAdjustment } from "@/lib/micropulse/vald/types";
 
 export type NormalizedPlayerMonitoringInput = {
   playerId: string;
@@ -62,6 +63,8 @@ export type NormalizedPlayerMonitoringInput = {
   catapultSignals?: CatapultExternalLoadSignals | null;
   externalLoadState?: ExternalLoadState | null;
   catapultReadinessModifier?: CatapultReadinessModifier | null;
+  valdDailySnapshot?: ValdDailySnapshot | null;
+  valdReadinessAdjustment?: ValdReadinessAdjustment | null;
 
   // Optional normalized WHOOP snapshot for conservative fusion in readiness interpretation.
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
@@ -96,6 +99,7 @@ export type ExplainableReadinessDecision = {
   catapultWhyLines?: string[];
   catapultActionHint?: string | null;
   catapultConfidenceHint?: string | null;
+  valdWhyLines?: string[];
   supportingMetrics?: {
     readinessScore?: number;
     zScore?: number;

@@ -8,11 +8,17 @@ import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement"
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
+import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
+import DevPlayerRPETab from "./dev-player-dashboard/DevPlayerRPETab";
+import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
   type DevPlayerTab,
 } from "@/lib/micropulse/playerDashboard/devPlayerViewModel";
+import { supabase } from "@/lib/supabaseClient";
+
+type PlanTier = "FREE" | "PRO" | "ELITE";
 
 type FinalAction = "FULL" | "REDUCED" | "RECOVERY";
 type AteCardState = "GREEN" | "YELLOW" | "RED" | "GRAY";
@@ -271,6 +277,34 @@ function detectCardByTitle(title: string): HTMLElement | null {
   return (titleNode?.closest("div.rounded-2xl.border.bg-white.shadow-sm") as HTMLElement | null) ?? null;
 }
 
+function detectRpeCard(): HTMLElement | null {
+  // Find the existing Post-Session RPE card rendered by PlayerClient
+  const cards = Array.from(document.querySelectorAll("div.rounded-2xl.border, div.rounded-xl.border")) as HTMLElement[];
+  const match =
+    cards.find((el) => {
+      const txt = el.textContent ?? "";
+      return (
+        (txt.includes("Post-Session RPE") || txt.includes("EFTIR ÆFINGU")) &&
+        (txt.includes("Rate how hard") || txt.includes("RPE compliance") || txt.includes("Submit Session RPE") || txt.includes("Session load preview"))
+      );
+    }) ?? null;
+  return (match?.closest("div.rounded-2xl.border.bg-white.shadow-sm") as HTMLElement | null) ?? match;
+}
+
+function detectValdCard(): HTMLElement | null {
+  // Find any card that contains "VALD" as a section kicker label
+  const cards = Array.from(document.querySelectorAll("div.rounded-2xl.border, div.rounded-xl.border")) as HTMLElement[];
+  const match =
+    cards.find((el) => {
+      const txt = el.textContent ?? "";
+      return (
+        txt.includes("VALD") &&
+        (txt.includes("CMJ") || txt.includes("NordBord") || txt.includes("No recent VALD") || txt.includes("Neuromuscular") || txt.includes("VALD data"))
+      );
+    }) ?? null;
+  return (match?.closest("div.rounded-2xl.border.bg-white.shadow-sm") as HTMLElement | null) ?? match;
+}
+
 function detectDecisionHeroCard(): HTMLElement | null {
   const cards = Array.from(document.querySelectorAll("div.rounded-2xl.border")) as HTMLElement[];
   return (
@@ -316,6 +350,10 @@ function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | nu
   if (!slot) {
     slot = document.createElement("div");
     slot.id = id;
+    if (id === "dev-player-tab-panel-slot") {
+      slot.className = "mt-3";
+      slot.style.width = "100%";
+    }
   }
   if (slot.parentElement !== anchor.parentElement) {
     anchor.parentElement.insertBefore(slot, anchor.nextSibling);
@@ -407,7 +445,7 @@ function refineLegacyDecisionCard(decision: NormalizedPlayerDailyDecision): void
   }
 }
 
-function AteCommandCardPortal() {
+function AteCommandCardPortal({ activeTab }: { activeTab: DevPlayerTab }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [dailyDecision, setDailyDecision] = useState<NormalizedPlayerDailyDecision>({
     playerState: "GRAY",
@@ -473,7 +511,7 @@ function AteCommandCardPortal() {
     };
   }, []);
 
-  if (!mountNode) return null;
+  if (!mountNode || activeTab !== "today") return null;
 
   const copy = ateCardCopy(dailyDecision.playerState);
 
@@ -528,7 +566,55 @@ export default function DevPlayerClient() {
   const searchParams = useSearchParams();
   const activeTab = useMemo(() => normalizeDevPlayerTab(searchParams?.get("tab")), [searchParams]);
   const [tabsMountNode, setTabsMountNode] = useState<HTMLElement | null>(null);
-  const [riskMountNode, setRiskMountNode] = useState<HTMLElement | null>(null);
+
+  // ── Plan tier ──────────────────────────────────────────────
+  const [planTier, setPlanTier] = useState<PlanTier>("FREE");
+
+  useEffect(() => {
+    let alive = true;
+    async function loadPlanTier() {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return;
+
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const teamId = (prof as any)?.team_id;
+      if (!teamId || !alive) return;
+
+      const { data: team } = await supabase
+        .from("teams")
+        .select("plan_tier")
+        .eq("id", teamId)
+        .maybeSingle();
+
+      if (alive && team) setPlanTier(((team as any).plan_tier as PlanTier) ?? "FREE");
+    }
+    loadPlanTier();
+    return () => { alive = false; };
+  }, []);
+
+  const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
+  const isElite = planTier === "ELITE";
+
+  // If on a locked tab, redirect to today
+  useEffect(() => {
+    const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe"]);
+    const eliteOnlyTabs = new Set<DevPlayerTab>(["vald"]);
+    const tabLocked =
+      (!isAtLeastPro && proOnlyTabs.has(activeTab)) ||
+      (!isElite && eliteOnlyTabs.has(activeTab));
+    if (tabLocked) {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.delete("tab");
+      const next = params.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [activeTab, isAtLeastPro, isElite, pathname, router, searchParams]);
   const [dailyDecision, setDailyDecision] = useState<NormalizedPlayerDailyDecision>({
     playerState: "GRAY",
     sessionMode: "pending",
@@ -550,6 +636,8 @@ export default function DevPlayerClient() {
       const decisionCard = detectDecisionHeroCard();
       const metricsCard = detectCardByTitle("Mælingar dagsins");
       const riskCard = detectCardByTitle("Player Risk Trend");
+      const rpeCard = detectRpeCard();
+      const valdCard = detectValdCard();
       const leftColumn = (decisionCard?.parentElement as HTMLElement | null) ?? null;
       const mainGrid = (leftColumn?.parentElement as HTMLElement | null) ?? null;
       const rightColumn = (mainGrid?.children?.[1] as HTMLElement | null) ?? null;
@@ -565,17 +653,21 @@ export default function DevPlayerClient() {
       const tabsSlot = ensureTabSlot("dev-player-tabs-slot", header);
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
 
-      const riskSlot = ensureTabSlot("dev-player-risk-slot", header);
-      setRiskMountNode((prev) => (prev === riskSlot ? prev : riskSlot));
-
       const showToday = activeTab === "today";
+      const showHistory = activeTab === "history";
       const showDashboard = activeTab === "dashboard";
       const showRisk = activeTab === "risk";
-      const expandContent = showDashboard || showRisk;
+      const showRpe = activeTab === "rpe";
+      const showVald = activeTab === "vald";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
+      // Always hide the old RPE card — new tab has its own component
+      if (rpeCard) rpeCard.style.display = "none";
+      // Hide the existing VALD card from Today — it lives in the Neuromuscular Testing tab now
+      if (valdCard) valdCard.style.display = "none";
       if (rightColumn) rightColumn.style.display = showToday ? "" : "none";
 
       mainGrid.style.gridTemplateColumns = expandContent ? "minmax(0, 1fr)" : "";
@@ -606,12 +698,28 @@ export default function DevPlayerClient() {
             card.style.display = showRisk ? "" : "none";
             continue;
           }
-          card.style.display = showToday ? "" : "none";
+          if (rpeCard && card === rpeCard) {
+            // Always hide the old RPE card — new RPE tab has its own component
+            card.style.display = "none";
+            continue;
+          }
+          if (valdCard && card === valdCard) {
+            // Always hide the old VALD card — new tab has its own component
+            card.style.display = "none";
+            continue;
+          }
+          // History tab: hide all legacy cards (History renders its own content)
+          card.style.display = (showToday || showHistory) ? "" : "none";
         }
       }
 
-      if (riskSlot) {
-        riskSlot.style.display = showRisk ? "" : "none";
+      // On history tab, hide all left-column cards (history renders in the portal slot)
+      if (leftColumn && showHistory) {
+        const cards = Array.from(leftColumn.children) as HTMLElement[];
+        for (const card of cards) {
+          if (card.id === "dev-player-tabs-slot") continue;
+          card.style.display = "none";
+        }
       }
 
       refineLegacyDecisionCard(nextDecision);
@@ -627,6 +735,9 @@ export default function DevPlayerClient() {
   }, [activeTab]);
 
   function setTab(tab: DevPlayerTab) {
+    // Block navigation to locked tabs
+    if (!isAtLeastPro && (tab === "dashboard" || tab === "risk" || tab === "rpe")) return;
+    if (!isElite && tab === "vald") return;
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     if (tab === "today") params.delete("tab");
     else params.set("tab", tab);
@@ -644,12 +755,20 @@ export default function DevPlayerClient() {
   return (
     <>
       <PlayerClient />
-      <AteCommandCardPortal />
+      <AteCommandCardPortal activeTab={activeTab} />
       {tabsMountNode
-        ? createPortal(<DevPlayerTabs activeTab={activeTab} onChange={setTab} />, tabsMountNode)
-        : null}
-      {riskMountNode && activeTab === "risk"
-        ? createPortal(<DevPlayerRiskTab viewModel={riskViewModel} />, riskMountNode)
+        ? createPortal(
+            <>
+              <DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />
+              <div className="mt-3">
+                {activeTab === "history" && <DevPlayerHistoryTab />}
+                {activeTab === "rpe" && <DevPlayerRPETab />}
+                {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
+                {activeTab === "vald" && <DevPlayerVALDTab />}
+              </div>
+            </>,
+            tabsMountNode
+          )
         : null}
     </>
   );

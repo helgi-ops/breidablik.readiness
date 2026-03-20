@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 // Select
 import {
@@ -36,6 +37,8 @@ type PlayerRow = {
   position?: string | null;
   sport?: string | null;
   unit?: string | null;
+  status?: string | null;
+  requested_at?: string | null;
 };
 
 const SPORT_OPTIONS = [
@@ -62,12 +65,19 @@ function norm(v: any) {
   return s.length ? s : null;
 }
 
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function CoachPlayersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [approving, setApproving] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [pendingPlayers, setPendingPlayers] = useState<PlayerRow[]>([]);
   const [q, setQ] = useState("");
 
   // selection
@@ -103,10 +113,10 @@ export default function CoachPlayersPage() {
       if (!userId) {
         setProfile(null);
         setPlayers([]);
+        setPendingPlayers([]);
         return;
       }
 
-      // ✅ HVAR: þetta þarf að passa við þitt profiles schema
       const { data: prof, error: profErr } = await supabase
         .from("profiles")
         .select("id, role, team_id, player_id, display_name")
@@ -119,6 +129,7 @@ export default function CoachPlayersPage() {
       const tId = (prof as any)?.team_id ?? null;
       if (!tId) {
         setPlayers([]);
+        setPendingPlayers([]);
         return;
       }
 
@@ -129,27 +140,61 @@ export default function CoachPlayersPage() {
   }
 
   async function loadPlayers(tId: string) {
-    // ✅ HVAR: sækja players fyrir coach team_id
     const { data, error } = await supabase
       .from("players")
-      .select("id, full_name, team_id, team, position, sport, unit")
+      .select("id, full_name, team_id, team, position, sport, unit, status, requested_at")
       .eq("team_id", tId)
       .order("full_name", { ascending: true });
 
     if (error) throw error;
 
-    const list = (data ?? []) as PlayerRow[];
-    setPlayers(list);
+    const all = (data ?? []) as PlayerRow[];
+    const active = all.filter((p) => (p.status ?? "ACTIVE") !== "PENDING" && (p.status ?? "ACTIVE") !== "REJECTED");
+    const pending = all.filter((p) => p.status === "PENDING");
 
-    // init selection + drafts
+    setPlayers(active);
+    setPendingPlayers(pending);
+
     const sel: Record<string, boolean> = {};
     const dr: Record<string, { sport?: string | null; unit?: string | null }> = {};
-    for (const p of list) {
+    for (const p of active) {
       sel[p.id] = false;
       dr[p.id] = { sport: p.sport ?? null, unit: p.unit ?? null };
     }
     setSelected(sel);
     setDraft(dr);
+  }
+
+  async function approvePlayer(playerId: string) {
+    if (!teamId) return;
+    setApproving(playerId);
+    try {
+      const { error } = await supabase
+        .from("players")
+        .update({ status: "ACTIVE", is_active: true })
+        .eq("id", playerId)
+        .eq("team_id", teamId);
+      if (error) throw error;
+      await loadPlayers(teamId);
+    } finally {
+      setApproving(null);
+    }
+  }
+
+  async function rejectPlayer(playerId: string) {
+    if (!teamId) return;
+    setApproving(playerId);
+    try {
+      const { error } = await supabase
+        .from("players")
+        .update({ status: "REJECTED", is_active: false })
+        .eq("id", playerId)
+        .eq("team_id", teamId);
+      if (error) throw error;
+      await loadPlayers(teamId);
+    } finally {
+      setApproving(null);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -169,16 +214,12 @@ export default function CoachPlayersPage() {
     if (selectedIds.length === 0) return;
 
     const next = { ...draft };
-
     for (const id of selectedIds) {
       const prev = next[id] ?? {};
       const sport = bulkSport ?? prev.sport ?? null;
-
-      // ef sport breytist og bulkUnit ekki valið → núllum unit til að forðast mis-match
       const unit =
         bulkUnit ??
         (bulkSport && bulkSport !== (prev.sport ?? null) ? null : (prev.unit ?? null));
-
       next[id] = { sport, unit };
     }
     setDraft(next);
@@ -187,10 +228,8 @@ export default function CoachPlayersPage() {
   function setRowSport(id: string, sport: string | null) {
     setDraft((prev) => {
       const cur = prev[id] ?? {};
-      const nextSport = sport;
-      // ef sport breytist → núllum unit svo user velji rétt unit fyrir sport
-      const nextUnit = (cur.sport ?? null) !== nextSport ? null : (cur.unit ?? null);
-      return { ...prev, [id]: { ...cur, sport: nextSport, unit: nextUnit } };
+      const nextUnit = (cur.sport ?? null) !== sport ? null : (cur.unit ?? null);
+      return { ...prev, [id]: { ...cur, sport, unit: nextUnit } };
     });
   }
 
@@ -204,32 +243,26 @@ export default function CoachPlayersPage() {
 
     setSaving(true);
     try {
-      // finnum hvað hefur breyst
       const updates: { id: string; sport: string | null; unit: string | null }[] = [];
 
       for (const p of players) {
         const d = draft[p.id] ?? {};
         const sport = norm(d.sport);
         const unit = norm(d.unit);
-        const oldSport = norm(p.sport);
-        const oldUnit = norm(p.unit);
-
-        if (sport !== oldSport || unit !== oldUnit) {
+        if (sport !== norm(p.sport) || unit !== norm(p.unit)) {
           updates.push({ id: p.id, sport, unit });
         }
       }
 
       if (updates.length === 0) return;
 
-      // ✅ HVAR: Uppfæra players.unit + players.sport
-      // (Promise.all í batch)
       const results = await Promise.all(
         updates.map((u) =>
           supabase
             .from("players")
             .update({ sport: u.sport, unit: u.unit })
             .eq("id", u.id)
-            .eq("team_id", teamId) // extra safety
+            .eq("team_id", teamId)
             .select("id")
         )
       );
@@ -237,7 +270,6 @@ export default function CoachPlayersPage() {
       const firstErr = results.find((r) => (r as any)?.error)?.error;
       if (firstErr) throw firstErr;
 
-      // reload list
       await loadPlayers(teamId);
     } finally {
       setSaving(false);
@@ -249,7 +281,65 @@ export default function CoachPlayersPage() {
   }, [players]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+
+      {/* ── Pending requests ── */}
+      {(loading || pendingPlayers.length > 0) && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">Bíður samþykkis</CardTitle>
+              {pendingPlayers.length > 0 && (
+                <Badge variant="secondary" className="bg-amber-200 text-amber-900">
+                  {pendingPlayers.length}
+                </Badge>
+              )}
+            </div>
+            <CardDescription>
+              Eftirfarandi leikmenn skráðu sig og bíða samþykkis þíns.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="py-2 text-sm text-slate-500">Hleð...</div>
+            ) : pendingPlayers.length === 0 ? (
+              <div className="py-2 text-sm text-slate-500">Engir leikmenn í bið.</div>
+            ) : (
+              <div className="divide-y rounded-xl border bg-white">
+                {pendingPlayers.map((p) => (
+                  <div key={p.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="font-medium">{p.full_name ?? "—"}</div>
+                      <div className="text-xs text-slate-500">Skráði sig {formatDate(p.requested_at)}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => approvePlayer(p.id)}
+                        disabled={approving === p.id}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {approving === p.id ? "..." : "Samþykkja"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => rejectPlayer(p.id)}
+                        disabled={approving === p.id}
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        {approving === p.id ? "..." : "Hafna"}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Active players ── */}
       <Card>
         <CardHeader>
           <CardTitle>Assign Units</CardTitle>

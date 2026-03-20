@@ -1,4 +1,4 @@
-export type DevPlayerTab = "today" | "dashboard" | "risk";
+export type DevPlayerTab = "today" | "history" | "dashboard" | "risk" | "rpe" | "vald";
 
 export type DevPlayerRiskViewModel = {
   statusLabel: string;
@@ -11,8 +11,11 @@ export type DevPlayerRiskViewModel = {
 
 export function normalizeDevPlayerTab(value: string | null | undefined): DevPlayerTab {
   const v = String(value ?? "").trim().toLowerCase();
+  if (v === "history") return "history";
   if (v === "dashboard") return "dashboard";
   if (v === "risk") return "risk";
+  if (v === "rpe") return "rpe";
+  if (v === "vald") return "vald";
   return "today";
 }
 

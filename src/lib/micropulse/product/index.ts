@@ -18,3 +18,5 @@ export {
   getUpgradeMessageForFeature,
 } from "./planMessaging";
 export { resolveOrganizationPlan, resolveTeamPlan, resolveEffectivePlan, summarizePlanAssignment } from "./planResolution";
+export { usePlan } from "./usePlan";
+export type { UsePlanResult } from "./usePlan";

@@ -75,6 +75,7 @@ import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
+import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import {
   buildCatapultReadinessContextFromRows,
@@ -95,6 +96,8 @@ import {
   getDefaultCatapultWeeklyLoadMetricKeys,
   type CatapultMetricKey,
 } from "@/lib/integrations/catapult/metricCatalog";
+import { usePlan } from "@/lib/micropulse/product";
+import UpgradeWall from "@/components/micropulse/UpgradeWall";
 
 /** -----------------------------
  * Types
@@ -261,6 +264,43 @@ type ReadinessRiskReportData = {
     yellow: number;
     red: number;
   };
+};
+
+// ── Post-Training Report types ─────────────────────────────────
+type PostTrainingReportPlayer = {
+  name: string;
+  position: string;
+  readinessFlag: "GREEN" | "YELLOW" | "RED" | "—";
+  totalDistance: number | null;
+  totalDistancePct: number | null;   // % of 28D chronic avg
+  hsd: number | null;                // High-speed distance (Vel B5+B6)
+  hsdPct: number | null;
+  playerLoad: number | null;
+  playerLoadPct: number | null;
+  playerLoadPerMin: number | null;
+  accelB23: number | null;
+  decelB23: number | null;
+  maxVelocity: number | null;
+  acwr: number | null;
+  attentionFlag: "OK" | "MONITOR" | "ALERT";
+  attentionReason: string[];
+};
+
+type PostTrainingReportData = {
+  teamName: string;
+  sessionDate: string;
+  mdDay: string;
+  players: PostTrainingReportPlayer[];
+  teamAvg: {
+    totalDistance: number | null;
+    hsd: number | null;
+    playerLoad: number | null;
+    accelB23: number | null;
+    decelB23: number | null;
+    maxVelocity: number | null;
+  };
+  alertCount: number;
+  monitorCount: number;
 };
 
 type Row = {
@@ -1064,6 +1104,242 @@ function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }
   );
 }
 
+// ── Post-Training GPS Report PDF ──────────────────────────────
+const postStyles = StyleSheet.create({
+  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  h1: { fontSize: 15, fontWeight: 700, marginBottom: 4 },
+  subtitle: { fontSize: 10, color: "#6B7280", marginBottom: 14 },
+  section: { marginBottom: 14 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #E5E7EB" },
+  summaryRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  summaryBox: { flex: 1, border: "1 solid #E5E7EB", borderRadius: 4, padding: 6, alignItems: "center" },
+  summaryVal: { fontSize: 13, fontWeight: 700 },
+  summaryLabel: { fontSize: 8, color: "#6B7280", marginTop: 2 },
+  table: { border: "1 solid #D1D5DB", borderRadius: 4, overflow: "hidden" },
+  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
+  tRowAlt: { flexDirection: "row", borderTop: "1 solid #E5E7EB", backgroundColor: "#F9FAFB" },
+  colName: { width: "18%", padding: 4, fontSize: 9 },
+  colPos: { width: "8%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colFlag: { width: "8%", padding: 4, fontSize: 9, textAlign: "center" },
+  colMetric: { width: "9%", padding: 4, fontSize: 9, textAlign: "right" },
+  colPct: { width: "7%", padding: 4, fontSize: 9, textAlign: "right" },
+  colAttn: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
+  hdr: { fontWeight: 700 },
+  attnAlert: { color: "#DC2626", fontWeight: 700 },
+  attnMonitor: { color: "#D97706", fontWeight: 700 },
+  attnOk: { color: "#16A34A" },
+  flagRed: { color: "#DC2626", fontWeight: 700 },
+  flagYellow: { color: "#D97706", fontWeight: 700 },
+  flagGreen: { color: "#16A34A" },
+  alertBox: { marginBottom: 6, padding: 6, border: "1 solid #FCA5A5", borderRadius: 4, backgroundColor: "#FEF2F2" },
+  alertName: { fontWeight: 700, marginBottom: 2 },
+  alertLine: { color: "#7F1D1D", fontSize: 9 },
+  monitorBox: { marginBottom: 6, padding: 6, border: "1 solid #FDE68A", borderRadius: 4, backgroundColor: "#FFFBEB" },
+  monitorName: { fontWeight: 700, marginBottom: 2 },
+  monitorLine: { color: "#78350F", fontSize: 9 },
+});
+
+function numFmt2(v: number | null, digits = 0): string {
+  if (v == null) return "—";
+  return v.toFixed(digits);
+}
+
+function pctFmt(v: number | null): string {
+  if (v == null) return "—";
+  const s = Math.round(v);
+  return (s >= 0 ? "+" : "") + s + "%";
+}
+
+function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) {
+  const PLAYERS_PER_PAGE = 15;
+  const pages: PostTrainingReportPlayer[][] = [];
+  for (let i = 0; i < data.players.length; i += PLAYERS_PER_PAGE) {
+    pages.push(data.players.slice(i, i + PLAYERS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  const alerts = data.players.filter((p) => p.attentionFlag === "ALERT");
+  const monitors = data.players.filter((p) => p.attentionFlag === "MONITOR");
+
+  return (
+    <Document>
+      {/* ── Page 1: Summary + Attention + Table ── */}
+      <Page size="A4" orientation="landscape" style={postStyles.page}>
+        {/* Header */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.h1}>Post-Training GPS Report</Text>
+          <Text style={postStyles.subtitle}>
+            {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
+          </Text>
+        </View>
+
+        {/* Team averages */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>Team Average — Session</Text>
+          <View style={postStyles.summaryRow}>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.totalDistance, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Total Dist (m)</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.hsd, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>HSD (m)</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.playerLoad, 1)}</Text>
+              <Text style={postStyles.summaryLabel}>Player Load</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.accelB23, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Accel B2-3</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.decelB23, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Decel B2-3</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.maxVelocity, 1)}</Text>
+              <Text style={postStyles.summaryLabel}>Max Vel (m/s)</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Attention flags */}
+        {(alerts.length > 0 || monitors.length > 0) && (
+          <View style={postStyles.section}>
+            <Text style={postStyles.sectionTitle}>
+              Attention — {alerts.length} ALERT · {monitors.length} MONITOR
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                {alerts.map((p) => (
+                  <View key={p.name + "-alert"} style={postStyles.alertBox}>
+                    <Text style={postStyles.alertName}>🔴 {p.name} ({p.position})</Text>
+                    {p.attentionReason.map((line, i) => (
+                      <Text key={i} style={postStyles.alertLine}>· {line}</Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+              <View style={{ flex: 1 }}>
+                {monitors.map((p) => (
+                  <View key={p.name + "-monitor"} style={postStyles.monitorBox}>
+                    <Text style={postStyles.monitorName}>🟡 {p.name} ({p.position})</Text>
+                    {p.attentionReason.map((line, i) => (
+                      <Text key={i} style={postStyles.monitorLine}>· {line}</Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Player table — first page */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>Player GPS Data (sorted by Total Distance)</Text>
+          <View style={postStyles.table}>
+            <View style={postStyles.tHead}>
+              <Text style={[postStyles.colName, postStyles.hdr]}>Player</Text>
+              <Text style={[postStyles.colPos, postStyles.hdr]}>Pos</Text>
+              <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
+              <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
+            </View>
+            {(pages[0] ?? []).map((p, i) => {
+              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+              const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
+              const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
+              return (
+                <View key={p.name} style={rowStyle}>
+                  <Text style={postStyles.colName}>{p.name}</Text>
+                  <Text style={postStyles.colPos}>{p.position}</Text>
+                  <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
+                  <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </Page>
+
+      {/* ── Overflow pages if many players ── */}
+      {pages.slice(1).map((pagePlayers, pgIdx) => (
+        <Page key={`pt-page-${pgIdx + 2}`} size="A4" orientation="landscape" style={postStyles.page}>
+          <Text style={postStyles.h1}>Post-Training GPS Report — {data.sessionDate} (cont.)</Text>
+          <View style={[postStyles.section, { marginTop: 8 }]}>
+            <View style={postStyles.table}>
+              <View style={postStyles.tHead}>
+                <Text style={[postStyles.colName, postStyles.hdr]}>Player</Text>
+                <Text style={[postStyles.colPos, postStyles.hdr]}>Pos</Text>
+                <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
+                <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
+              </View>
+              {pagePlayers.map((p, i) => {
+                const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+                const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
+                const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
+                return (
+                  <View key={p.name} style={rowStyle}>
+                    <Text style={postStyles.colName}>{p.name}</Text>
+                    <Text style={postStyles.colPos}>{p.position}</Text>
+                    <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
+                    <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </Page>
+      ))}
+    </Document>
+  );
+}
+
 function dominantTeamAction(signal: TeamSignal | null): TrainingAction | "—" {
   if (!signal) return "—";
   const pairs: Array<[TrainingAction, number]> = [
@@ -1211,7 +1487,10 @@ export default function CoachPage() {
 
   const PAGE_SIZE = 100;
 
-  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps">("today");
+  // Plan-based access control
+  const { isAtLeastPro, loading: planLoading } = usePlan();
+
+  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility">("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -1290,6 +1569,12 @@ export default function CoachPage() {
   const [ctxVmax, setCtxVmax] = useState<string>("");
   const [ctxDuration, setCtxDuration] = useState<string>("");
   const [ctxIntensity, setCtxIntensity] = useState<"LOW" | "MEDIUM" | "HIGH" | "OFF" | "">("");
+  // GPS-specific yesterday metrics (from Catapult)
+  const [ctxVelB5, setCtxVelB5] = useState<string>("");
+  const [ctxVelB6, setCtxVelB6] = useState<string>("");
+  const [ctxAccB23, setCtxAccB23] = useState<string>("");
+  const [ctxDecB23, setCtxDecB23] = useState<string>("");
+  const [ctxYesterdayLoaded, setCtxYesterdayLoaded] = useState(false);
 
   const [ctxSaving, setCtxSaving] = useState(false);
   const [localDecisionLoading, setLocalDecisionLoading] = useState(false);
@@ -1302,6 +1587,7 @@ export default function CoachPage() {
   const [catapultSyncing, setCatapultSyncing] = useState(false);
   const [catapultSyncMessage, setCatapultSyncMessage] = useState("");
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
 
   // Auto-fill zeros when OFF
   useEffect(() => {
@@ -1558,7 +1844,7 @@ export default function CoachPage() {
     // Auto-populate from Catapult team data — no manual input needed
     const { data, error } = await supabase
       .from("player_external_load_daily")
-      .select("hir_dist, tot_as, tot_ds, total_distance, max_vel")
+      .select("hir_dist, tot_as, tot_ds, total_distance, max_vel, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
       .eq("team_id", teamId)
       .eq("date", yday)
       .eq("source", "catapult");
@@ -1569,6 +1855,7 @@ export default function CoachPage() {
     }
 
     const rows = (data ?? []) as Array<Record<string, unknown>>;
+    setCtxYesterdayLoaded(true);
     if (!rows.length) return;
 
     function avgOf(key: string): number | null {
@@ -1594,6 +1881,11 @@ export default function CoachPage() {
     setCtxVmax(maxOf("max_vel")?.toString() ?? "");
     setCtxIntensity(intensity);
     setCtxDuration("");
+    // GPS-specific metrics
+    setCtxVelB5(avgOf("velocity_band5_total_distance")?.toString() ?? "");
+    setCtxVelB6(avgOf("velocity_band6_total_distance")?.toString() ?? "");
+    setCtxAccB23(avgOf("accel_b2_3_tot_effs_gen2")?.toString() ?? "");
+    setCtxDecB23(avgOf("decel_b2_3_tot_effs_gen2")?.toString() ?? "");
   }
 
   async function saveYesterdayContext(teamId: string, entryDate: string) {
@@ -3905,6 +4197,215 @@ export default function CoachPage() {
     }
   }
 
+  async function downloadPostTrainingReport() {
+    try {
+      setPdfPostDownloading(true);
+
+      // ── 1. Fetch active players ──────────────────────────────
+      const { data: playerData } = await supabase
+        .from("players")
+        .select("id, full_name, position")
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (!playerData?.length) {
+        alert("Engir leikmenn fundust.");
+        return;
+      }
+
+      const playerIds = (playerData as Array<Record<string, unknown>>).map((p) => String(p.id));
+
+      // ── 2. Find most recent session date with GPS data ───────
+      const { data: latestDateRows } = await supabase
+        .from("player_external_load_daily")
+        .select("date")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .lte("date", today)
+        .order("date", { ascending: false })
+        .limit(1);
+
+      const sessionDate: string = (latestDateRows?.[0] as any)?.date ?? today;
+      const chronicStart = addDaysISO(sessionDate, -27);
+
+      // Fetch only columns that actually exist in player_external_load_daily
+      const { data: loadRows, error: loadErr } = await supabase
+        .from("player_external_load_daily")
+        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .gte("date", chronicStart)
+        .lte("date", sessionDate)
+        .order("date");
+
+      if (loadErr) {
+        console.error("GPS load fetch error:", loadErr);
+        alert(`GPS gögn villa: ${loadErr.message}`);
+        return;
+      }
+
+      // ── 3. Build readiness flag lookup from current rows ─────
+      const flagByPlayerId = new Map<string, "GREEN" | "YELLOW" | "RED">();
+      for (const r of rowsWithAdaptive) {
+        const flag = String(r.final_flag ?? "").toUpperCase();
+        if (flag === "GREEN" || flag === "YELLOW" || flag === "RED") {
+          flagByPlayerId.set(String(r.player_id), flag as "GREEN" | "YELLOW" | "RED");
+        }
+      }
+
+      // ── 4. Compute per-player metrics ─────────────────────────
+      type LoadRow = {
+        player_id: string; date: string;
+        total_distance: number | null;
+        velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null;
+        accel_b2_3_tot_effs_gen2: number | null; tot_as: number | null;
+        decel_b2_3_tot_effs_gen2: number | null; tot_ds: number | null;
+        total_player_load: number | null; player_load_per_minute: number | null;
+        max_vel: number | null;
+      };
+
+      const rows28 = ((loadRows ?? []) as unknown as LoadRow[]);
+      const rowsToday = rows28.filter((r) => r.date === sessionDate);
+      const byPlayer = new Map<string, LoadRow[]>();
+      for (const r of rows28) {
+        const list = byPlayer.get(r.player_id) ?? [];
+        list.push(r);
+        byPlayer.set(r.player_id, list);
+      }
+
+      function avgOf(vals: (number | null)[]): number | null {
+        const nums = vals.filter((v): v is number => v != null && Number.isFinite(v));
+        return nums.length ? nums.reduce((s, v) => s + v, 0) / nums.length : null;
+      }
+      function pctVsNorm(val: number | null, norm: number | null): number | null {
+        if (val == null || norm == null || norm === 0) return null;
+        return ((val - norm) / norm) * 100;
+      }
+
+      const reportPlayers: PostTrainingReportPlayer[] = [];
+
+      for (const player of playerData as Array<Record<string, unknown>>) {
+        const pid = String(player.id);
+        const todayRow = rowsToday.find((r) => r.player_id === pid) ?? null;
+        if (!todayRow) continue; // No GPS data for today — skip
+
+        const hist = byPlayer.get(pid) ?? [];
+        const hist28 = hist.filter((r) => r.date >= chronicStart && r.date <= sessionDate);
+
+        const hsdToday = (todayRow.velocity_band5_total_distance ?? 0) + (todayRow.velocity_band6_total_distance ?? 0);
+        const hsd28Avg = avgOf(hist28.map((r) => (r.velocity_band5_total_distance ?? 0) + (r.velocity_band6_total_distance ?? 0)));
+        const pl28Avg = avgOf(hist28.map((r) => r.total_player_load));
+        const dist28Avg = avgOf(hist28.map((r) => r.total_distance));
+
+        // Compute ACWR from fetched rows: acute = 7D avg, chronic = 28D avg of total_distance
+        const acuteStart = addDaysISO(sessionDate, -6);
+        const acuteRows = hist28.filter((r) => r.date >= acuteStart && r.date <= sessionDate);
+        const acute7 = avgOf(acuteRows.map((r) => r.total_distance));
+        const chronic28 = dist28Avg;
+        const acwr = acute7 != null && chronic28 != null && chronic28 > 0 ? acute7 / chronic28 : null;
+
+        const readinessFlag = flagByPlayerId.get(pid) ?? "—" as const;
+
+        // Compute attention signal
+        const reasons: string[] = [];
+        let attentionFlag: "OK" | "MONITOR" | "ALERT" = "OK";
+
+        if (acwr != null && acwr > 1.5) {
+          reasons.push(`ACWR ${acwr.toFixed(2)} — klínískt hár álag (>1.5)`);
+          attentionFlag = "ALERT";
+        } else if (acwr != null && acwr > 1.3) {
+          reasons.push(`ACWR ${acwr.toFixed(2)} — hár álag (>1.3)`);
+          attentionFlag = "MONITOR";
+        }
+
+        if ((readinessFlag === "RED" || readinessFlag === "YELLOW") && acwr != null && acwr > 1.2) {
+          reasons.push(`${readinessFlag} readiness + hár ACWR — hvíldarþörf`);
+          attentionFlag = readinessFlag === "RED" ? "ALERT" : "MONITOR";
+        }
+
+        const distPct = pctVsNorm(todayRow.total_distance, dist28Avg);
+        if (distPct != null && distPct > 30) {
+          reasons.push(`Vegalengd ${Math.round(distPct)}% yfir 28D meðaltali`);
+          if (attentionFlag !== "ALERT") attentionFlag = "MONITOR";
+        }
+
+        const plPct = pctVsNorm(todayRow.total_player_load, pl28Avg);
+        if (plPct != null && plPct > 30) {
+          reasons.push(`Player Load ${Math.round(plPct)}% yfir 28D meðaltali`);
+          if (attentionFlag !== "ALERT") attentionFlag = "MONITOR";
+        }
+
+        if (readinessFlag === "RED" && attentionFlag === "OK") {
+          reasons.push("RED readiness í dag — fylgjast með líðan á morgun");
+          attentionFlag = "MONITOR";
+        }
+
+        reportPlayers.push({
+          name: String(player.full_name ?? ""),
+          position: String(player.position ?? "—"),
+          readinessFlag,
+          totalDistance: todayRow.total_distance,
+          totalDistancePct: pctVsNorm(todayRow.total_distance, dist28Avg),
+          hsd: hsdToday > 0 ? hsdToday : null,
+          hsdPct: pctVsNorm(hsdToday > 0 ? hsdToday : null, hsd28Avg),
+          playerLoad: todayRow.total_player_load,
+          playerLoadPct: plPct,
+          playerLoadPerMin: todayRow.player_load_per_minute,
+          accelB23: todayRow.accel_b2_3_tot_effs_gen2,
+          decelB23: todayRow.decel_b2_3_tot_effs_gen2,
+          maxVelocity: todayRow.max_vel,
+          acwr,
+          attentionFlag,
+          attentionReason: reasons,
+        });
+      }
+
+      // Sort by total distance desc
+      reportPlayers.sort((a, b) => (b.totalDistance ?? 0) - (a.totalDistance ?? 0));
+
+      // ── 5. Team averages ─────────────────────────────────────
+      const teamAvg = {
+        totalDistance: avgOf(reportPlayers.map((p) => p.totalDistance)),
+        hsd: avgOf(reportPlayers.map((p) => p.hsd)),
+        playerLoad: avgOf(reportPlayers.map((p) => p.playerLoad)),
+        accelB23: avgOf(reportPlayers.map((p) => p.accelB23)),
+        decelB23: avgOf(reportPlayers.map((p) => p.decelB23)),
+        maxVelocity: reportPlayers.reduce((max, p) => (p.maxVelocity != null && (max == null || p.maxVelocity > max) ? p.maxVelocity : max), null as number | null),
+      };
+
+      const reportData: PostTrainingReportData = {
+        teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
+        sessionDate,
+        mdDay: mdDayToday,
+        players: reportPlayers,
+        teamAvg,
+        alertCount: reportPlayers.filter((p) => p.attentionFlag === "ALERT").length,
+        monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
+      };
+
+      if (reportPlayers.length === 0) {
+        alert("Engin GPS gögn fundust í Catapult. Gakktu úr skugga um að Catapult sync hafi verið keyrt.");
+        return;
+      }
+
+      // ── 6. Generate and download PDF ─────────────────────────
+      const blob = await pdf(<PostTrainingReportDocument data={reportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `post-training-gps-report-${sessionDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("post-training report download failed:", e?.message ?? e);
+      alert("Could not generate post-training PDF report.");
+    } finally {
+      setPdfPostDownloading(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
   const tm = teamStatusMeta(teamIntel?.team_status);
   const dayStateInfo = useMemo(() => {
@@ -5032,25 +5533,33 @@ export default function CoachPage() {
       {/* ── Tab navigation ── */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex">
-          {(["today", "squad", "intel", "load", "gps"] as const).map((tabId) => {
+          {(["today", "squad", "intel", "load", "gps", "volatility"] as const).map((tabId) => {
             const labels: Record<string, string> = {
               today: "Today",
               squad: "Squad",
               intel: "Intelligence",
               load: "Load & RPE",
               gps: "GPS Data",
+              volatility: "Volatility",
             };
+            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility"]);
+            const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
             return (
               <button
                 key={tabId}
                 onClick={() => setDashTab(tabId)}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   dashTab === tabId
                     ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
                 {labels[tabId]}
+                {isLocked && (
+                  <svg className="h-3 w-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                )}
               </button>
             );
           })}
@@ -5278,13 +5787,23 @@ export default function CoachPage() {
             </CardContent>
           </Card>
 
+          <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
+
         </div>
       )}
 
       {/* ══════════════════════════════════════════
           SQUAD TAB
       ══════════════════════════════════════════ */}
-      {dashTab === "squad" && (
+      {dashTab === "squad" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Squad overview"
+          description="See all players, filter by readiness flag, and review the full squad table."
+        />
+      )}
+
+      {dashTab === "squad" && isAtLeastPro && (
         <div className="space-y-6">
 
           {/* Players needing review */}
@@ -5379,6 +5898,14 @@ export default function CoachPage() {
                       disabled={pdfDownloading || loading}
                     >
                       {pdfDownloading ? "Generating PDF…" : "Download Readiness Risk Report"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={downloadPostTrainingReport}
+                      disabled={pdfPostDownloading || loading}
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    >
+                      {pdfPostDownloading ? "Generating PDF…" : "⬇ Post-Training GPS Report"}
                     </Button>
                   </div>
                 </div>
@@ -5486,7 +6013,15 @@ export default function CoachPage() {
       {/* ══════════════════════════════════════════
           INTELLIGENCE TAB
       ══════════════════════════════════════════ */}
-      {dashTab === "intel" && (
+      {dashTab === "intel" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Team intelligence"
+          description="Neural fatigue model, volatility tracking, adaptive training engine, and explainable decisions."
+        />
+      )}
+
+      {dashTab === "intel" && isAtLeastPro && (
         <div className="space-y-6">
 
           {/* Performance Intelligence — Team */}
@@ -5893,7 +6428,15 @@ export default function CoachPage() {
       {/* ══════════════════════════════════════════
           LOAD & RPE TAB
       ══════════════════════════════════════════ */}
-      {dashTab === "load" && (
+      {dashTab === "load" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Load & RPE monitoring"
+          description="Session RPE compliance, daily internal load, yesterday GPS load from Catapult, and load metrics."
+        />
+      )}
+
+      {dashTab === "load" && isAtLeastPro && (
         <div className="space-y-6">
 
           {/* Session RPE Monitoring + Daily Internal Load + Load Metrics */}
@@ -5903,20 +6446,38 @@ export default function CoachPage() {
             <LoadMetricsCard teamId={coachTeamId} />
           </div>
 
-          {/* Yesterday Load — auto from Catapult */}
-          {(ctxDist || ctxHsr || ctxAcc) && (
-            <Card className="shadow-sm border border-slate-100">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Yesterday Load <span className="text-xs font-normal text-slate-400 ml-1">· Catapult team avg</span></CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-sm">
+          {/* Yesterday Load — auto from Catapult GPS */}
+          <Card className="shadow-sm border border-slate-100">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Yesterday Load
+                <span className="text-xs font-normal text-slate-400 ml-1">· Catapult team avg</span>
+                {ctxIntensity && (
+                  <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    ctxIntensity === "HIGH" ? "bg-red-100 text-red-700" :
+                    ctxIntensity === "MEDIUM" ? "bg-amber-100 text-amber-700" :
+                    ctxIntensity === "LOW" ? "bg-blue-100 text-blue-700" :
+                    "bg-slate-100 text-slate-500"
+                  }`}>{ctxIntensity}</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!ctxYesterdayLoaded ? (
+                <div className="text-sm text-slate-400">Loading GPS data…</div>
+              ) : !ctxDist && !ctxHsr && !ctxVelB5 ? (
+                <div className="text-sm text-slate-400">No Catapult data found for yesterday.</div>
+              ) : (
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-3 text-sm">
                   {[
-                    { label: "Distance", value: ctxDist ? `${ctxDist} m` : "—" },
+                    { label: "Total Dist", value: ctxDist ? `${ctxDist} m` : "—" },
+                    { label: "Vel Band 5", value: ctxVelB5 ? `${ctxVelB5} m` : "—" },
+                    { label: "Vel Band 6", value: ctxVelB6 ? `${ctxVelB6} m` : "—" },
                     { label: "HIR Dist", value: ctxHsr ? `${ctxHsr} m` : "—" },
-                    { label: "Acc", value: ctxAcc || "—" },
-                    { label: "Dec", value: ctxDec || "—" },
-                    { label: "Intensity", value: ctxIntensity || "—" },
+                    { label: "Accel B2-3", value: ctxAccB23 || "—" },
+                    { label: "Tot Accels", value: ctxAcc || "—" },
+                    { label: "Decel B2-3", value: ctxDecB23 || "—" },
+                    { label: "Tot Decels", value: ctxDec || "—" },
                   ].map((item) => (
                     <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2">
                       <div className="text-[11px] text-slate-400 uppercase tracking-wide">{item.label}</div>
@@ -5924,9 +6485,9 @@ export default function CoachPage() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           {/* Dev diagnostics · Level 3 */}
           <div>
@@ -5972,7 +6533,15 @@ export default function CoachPage() {
       {/* ══════════════════════════════════════════
           GPS DATA TAB
       ══════════════════════════════════════════ */}
-      {dashTab === "gps" && (() => {
+      {dashTab === "gps" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="GPS Data"
+          description="Total distance, velocity bands, accelerations, decelerations, and 7D/28D/ACWR load monitoring for every player."
+        />
+      )}
+
+      {dashTab === "gps" && isAtLeastPro && (() => {
         const GPS_METRICS: Array<{
           key: string;
           label: string;
@@ -6127,6 +6696,277 @@ export default function CoachPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════
+          VOLATILITY TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "volatility" && !isAtLeastPro && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+          🔒 Volatility tab requires PRO or higher.
+        </div>
+      )}
+      {dashTab === "volatility" && isAtLeastPro && (() => {
+        // Last 10 days window
+        const DAYS = 10;
+        const windowStart = addDaysISO(today, -(DAYS - 1));
+
+        // Build player list with their 10-day monitoring history
+        const playerEntries = Object.entries(recentMonitoringByPlayer)
+          .map(([pid, points]) => {
+            // Filter + sort to last 10 days
+            const window = points
+              .filter((p) => p.date >= windowStart && p.date <= today)
+              .sort((a, b) => a.date.localeCompare(b.date));
+            // Find player name from current rows
+            const row = rowsWithAdaptive.find((r) => String(r.player_id) === pid);
+            return { pid, name: row?.full_name ?? pid, window };
+          })
+          .filter((e) => e.window.length >= 2)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        // Generate date labels for the window
+        const dayLabels: string[] = [];
+        for (let i = 0; i < DAYS; i++) {
+          const d = new Date(`${windowStart}T00:00:00Z`);
+          d.setUTCDate(d.getUTCDate() + i);
+          dayLabels.push(d.toISOString().slice(5, 10)); // MM-DD
+        }
+
+        // SVG multi-line chart helpers
+        const W = 420, H = 130, PAD = { top: 10, right: 38, bottom: 22, left: 30 };
+        const innerW = W - PAD.left - PAD.right;
+        const innerH = H - PAD.top - PAD.bottom;
+
+        function toX(idx: number, total: number) {
+          if (total <= 1) return PAD.left + innerW / 2;
+          return PAD.left + (idx / (total - 1)) * innerW;
+        }
+        function toY(val: number, min: number, max: number) {
+          if (max === min) return PAD.top + innerH / 2;
+          const t = (val - min) / (max - min);
+          return PAD.top + (1 - t) * innerH;
+        }
+        function buildPath(pts: Array<{ x: number; y: number } | null>): string {
+          let d = "";
+          for (const pt of pts) {
+            if (!pt) { d += " "; continue; }
+            d += d ? ` L${pt.x.toFixed(1)},${pt.y.toFixed(1)}` : `M${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+          }
+          return d.trim();
+        }
+
+        // Normalize z-score: -3..+3 → 0..100
+        function normZ(z: number | null | undefined): number | null {
+          if (z == null) return null;
+          return Math.max(0, Math.min(100, ((z + 3) / 6) * 100));
+        }
+        // Normalize check-in: 0..25 → 0..100
+        function normCI(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, (v / 25) * 100));
+        }
+        // Normalize soreness: 1..5 inverted → 0..100 (high soreness = low score)
+        function normSor(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, ((5 - v) / 4) * 100));
+        }
+        // Normalize sleep: 1..5 → 0..100
+        function normSleep(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, ((v - 1) / 4) * 100));
+        }
+
+        function flagColor(v: number | null): string {
+          if (v == null) return "#94A3B8";
+          if (v < 33) return "#EF4444";
+          if (v < 60) return "#F59E0B";
+          return "#22C55E";
+        }
+
+        const SERIES = [
+          { key: "ci",    label: "Check-in",  color: "#3B82F6", fn: (p: VolatilityDailyPoint) => normCI(p.checkInScore) },
+          { key: "z",     label: "Z-score",   color: "#8B5CF6", fn: (p: VolatilityDailyPoint) => normZ(p.zScore) },
+          { key: "sor",   label: "Soreness",  color: "#F97316", fn: (p: VolatilityDailyPoint) => normSor(p.soreness) },
+          { key: "sleep", label: "Sleep",     color: "#14B8A6", fn: (p: VolatilityDailyPoint) => normSleep(p.sleepQuality) },
+        ] as const;
+
+        // Y-axis labels
+        const yLabels = [{ val: 100, label: "100" }, { val: 50, label: "50" }, { val: 0, label: "0" }];
+
+        // X-axis tick positions (show at most 5)
+        const xTickStep = Math.max(1, Math.ceil(DAYS / 5));
+        const xTicks = dayLabels
+          .map((lbl, i) => ({ lbl, x: toX(i, DAYS) }))
+          .filter((_, i) => i % xTickStep === 0 || i === DAYS - 1);
+
+        return (
+          <div className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                  Readiness Volatility — Síðustu {DAYS} dagar
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-500">
+                  Sveiflur per leikmann · Check-in · Z-score · Þreyta · Svefn · 0 = slæmt, 100 = frábært
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Legend */}
+                <div className="mb-4 flex flex-wrap gap-4 text-xs">
+                  {SERIES.map((s) => (
+                    <span key={s.key} className="flex items-center gap-1.5">
+                      <span className="inline-block h-2.5 w-6 rounded-full" style={{ background: s.color }} />
+                      {s.label}
+                    </span>
+                  ))}
+                  <span className="ml-2 text-slate-400">· Soreness er snúin: hærra = minni þreyta</span>
+                </div>
+
+                {playerEntries.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-slate-400">
+                    Engin readiness gögn fundust fyrir síðustu {DAYS} daga. Gakktu úr skugga um að leikmenn hafi gert check-in.
+                  </div>
+                ) : (
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {playerEntries.map(({ pid, name, window: pts }) => {
+                      // Latest composite score (avg of available normalized metrics from latest point)
+                      const last = pts[pts.length - 1];
+                      const latestVals = [normCI(last?.checkInScore), normZ(last?.zScore), normSor(last?.soreness), normSleep(last?.sleepQuality)].filter((v): v is number => v != null);
+                      const latestComposite = latestVals.length ? latestVals.reduce((s, v) => s + v, 0) / latestVals.length : null;
+
+                      // Compute volatility = std dev of check-in scores over window
+                      const ciVals = pts.map((p) => p.checkInScore).filter((v): v is number => v != null);
+                      const ciMean = ciVals.length ? ciVals.reduce((s, v) => s + v, 0) / ciVals.length : null;
+                      const ciStd = ciMean != null && ciVals.length > 1
+                        ? Math.sqrt(ciVals.map((v) => (v - ciMean) ** 2).reduce((s, v) => s + v, 0) / ciVals.length)
+                        : null;
+                      const volLevel = ciStd == null ? null : ciStd > 5 ? "HIGH" : ciStd > 2.5 ? "MODERATE" : "LOW";
+
+                      return (
+                        <div key={pid} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                          {/* Header */}
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="font-semibold text-slate-900 text-sm truncate">{name}</div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {volLevel && (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${volLevel === "HIGH" ? "bg-red-100 text-red-700" : volLevel === "MODERATE" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                  {volLevel === "HIGH" ? "Há sveifla" : volLevel === "MODERATE" ? "Miðlungs" : "Stöðugur"}
+                                </span>
+                              )}
+                              {latestComposite != null && (
+                                <span className="text-xs font-bold" style={{ color: flagColor(latestComposite) }}>
+                                  {Math.round(latestComposite)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* SVG Chart */}
+                          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+                            {/* Grid lines */}
+                            {yLabels.map(({ val }) => {
+                              const y = toY(val, 0, 100);
+                              return (
+                                <line key={val} x1={PAD.left} x2={W - PAD.right} y1={y} y2={y}
+                                  stroke="#E2E8F0" strokeWidth="1" strokeDasharray={val === 50 ? "3,3" : undefined} />
+                              );
+                            })}
+
+                            {/* Y-axis labels */}
+                            {yLabels.map(({ val, label }) => (
+                              <text key={val} x={PAD.left - 4} y={toY(val, 0, 100) + 3.5}
+                                textAnchor="end" fontSize="8" fill="#94A3B8">{label}</text>
+                            ))}
+
+                            {/* X-axis ticks */}
+                            {xTicks.map(({ lbl, x }) => (
+                              <text key={lbl} x={x} y={H - 4} textAnchor="middle" fontSize="8" fill="#94A3B8">{lbl}</text>
+                            ))}
+
+                            {/* Data lines per series */}
+                            {SERIES.map((s) => {
+                              // Map each point in the window to the chart x position
+                              const pathPts = pts.map((p, i) => {
+                                const val = s.fn(p);
+                                if (val == null) return null;
+                                return { x: toX(i, pts.length), y: toY(val, 0, 100), val };
+                              });
+                              // Find the last valid point for the label
+                              const lastPt = [...pathPts].reverse().find(Boolean) ?? null;
+                              return (
+                                <g key={s.key}>
+                                  <path
+                                    d={buildPath(pathPts)}
+                                    fill="none"
+                                    stroke={s.color}
+                                    strokeWidth="1.8"
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                    opacity="0.85"
+                                  />
+                                  {/* Dots on actual data points */}
+                                  {pathPts.map((pt, i) =>
+                                    pt ? (
+                                      <circle key={i} cx={pt.x} cy={pt.y} r="2.5" fill={s.color} opacity="0.9" />
+                                    ) : null
+                                  )}
+                                  {/* Score label at the last data point */}
+                                  {lastPt && (
+                                    <g>
+                                      <rect
+                                        x={lastPt.x + 4}
+                                        y={lastPt.y - 7}
+                                        width={22}
+                                        height={11}
+                                        rx={3}
+                                        fill={s.color}
+                                        opacity={0.15}
+                                      />
+                                      <text
+                                        x={lastPt.x + 15}
+                                        y={lastPt.y + 2.5}
+                                        textAnchor="middle"
+                                        fontSize="8"
+                                        fontWeight="700"
+                                        fill={s.color}
+                                      >
+                                        {Math.round(lastPt.val)}
+                                      </text>
+                                    </g>
+                                  )}
+                                </g>
+                              );
+                            })}
+
+                            {/* Today marker */}
+                            {pts.some((p) => p.date === today) && (() => {
+                              const todayIdx = pts.findIndex((p) => p.date === today);
+                              if (todayIdx < 0) return null;
+                              const x = toX(todayIdx, pts.length);
+                              return (
+                                <line x1={x} x2={x} y1={PAD.top} y2={H - PAD.bottom}
+                                  stroke="#1E293B" strokeWidth="1" strokeDasharray="3,2" opacity="0.4" />
+                              );
+                            })()}
+                          </svg>
+
+                          {/* Latest values */}
+                          <div className="mt-1.5 grid grid-cols-4 gap-1 text-[10px] text-slate-500">
+                            <div>CI: <span className="font-medium text-slate-700">{last?.checkInScore != null ? Math.round(last.checkInScore) : "—"}</span></div>
+                            <div>Z: <span className="font-medium text-slate-700">{last?.zScore != null ? last.zScore.toFixed(1) : "—"}</span></div>
+                            <div>Sor: <span className="font-medium text-slate-700">{last?.soreness != null ? last.soreness : "—"}</span></div>
+                            <div>Svefn: <span className="font-medium text-slate-700">{last?.sleepQuality != null ? last.sleepQuality : "—"}</span></div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

@@ -46,6 +46,9 @@ export function evaluateInjuryRiskRules(
   const sorenessPain = lowSorenessCaution || input.painFlag === true;
   const congestionTravel = input.matchCongestion === true || input.travelLoad === true;
   const gpsSpikeRecovery = input.gpsSpike === true && poorRecovery;
+  const valdHamstring = input.valdHamstringRiskFlag === true;
+  const valdGroin = input.valdGroinRiskFlag === true;
+  const valdNeuromuscular = input.valdNeuromuscularRiskFlag === true;
   const strongReadinessDay =
     hasNumber(input.zScore) &&
     (input.zScore as number) > 1.5 &&
@@ -98,6 +101,18 @@ export function evaluateInjuryRiskRules(
   if (gpsSpikeRecovery) {
     triggeredRules.push("GPS_SPIKE_POOR_RECOVERY");
     riskScore += 2;
+  }
+  if (valdHamstring) {
+    triggeredRules.push("VALD_HAMSTRING_RISK");
+    riskScore += 2;
+  }
+  if (valdGroin) {
+    triggeredRules.push("VALD_GROIN_RISK");
+    riskScore += 2;
+  }
+  if (valdNeuromuscular) {
+    triggeredRules.push("VALD_NEUROMUSCULAR_CAUTION");
+    riskScore += 1;
   }
 
   let injuryRiskLevel: "LOW" | "MODERATE" | "HIGH" = "LOW";

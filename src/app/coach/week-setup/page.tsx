@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { usePlan } from "@/lib/micropulse/product";
+import UpgradeWall from "@/components/micropulse/UpgradeWall";
 
 // shadcn/ui
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,6 +132,7 @@ function getDefaultNoMatchIntents(): NoMatchIntent[] {
 }
 
 export default function WeekSetupPage() {
+  const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -558,6 +561,18 @@ export default function WeekSetupPage() {
           {props.n}
         </span>
         <span className="text-muted-foreground">{props.label}</span>
+      </div>
+    );
+  }
+
+  if (!isAtLeastPro) {
+    return (
+      <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Week setup"
+          description="Set up the training week, assign match days, and configure session intent for each day."
+        />
       </div>
     );
   }

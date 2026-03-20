@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { usePlan } from "@/lib/micropulse/product";
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type Category =
   | "all"
+  | "microdose"
   | "rehab"
   | "prehab"
   | "strength"
@@ -58,6 +60,7 @@ function normalizeCategory(x: any): Category {
 
   // common aliases
   if (s === "focus") return "uncategorized";
+  if (s === "microdose") return "microdose";
   if (s === "rehab") return "rehab";
   if (s === "prehab") return "prehab";
   if (s === "strength") return "strength";
@@ -67,6 +70,7 @@ function normalizeCategory(x: any): Category {
   if (s === "matchday") return "matchday";
 
   // soft matches
+  if (s.includes("micro")) return "microdose";
   if (s.includes("rehab")) return "rehab";
   if (s.includes("prehab")) return "prehab";
   if (s.includes("strength")) return "strength";
@@ -91,6 +95,8 @@ function categoryLabel(c: Category) {
   switch (c) {
     case "all":
       return "All";
+    case "microdose":
+      return "Microdose";
     case "rehab":
       return "Rehab";
     case "prehab":
@@ -113,6 +119,8 @@ function categoryLabel(c: Category) {
 }
 
 export default function TemplatesPage() {
+  const { isAtLeastPro } = usePlan();
+
   const [rows, setRows] = useState<TemplateRow[]>([]);
   const [q, setQ] = useState("");
 
@@ -146,30 +154,37 @@ export default function TemplatesPage() {
   const [openStructureId, setOpenStructureId] = useState<string | null>(null);
 
   async function load() {
-    // Try extended select (if columns exist), otherwise fallback
     const extendedSelect =
       "id, team_id, code, title, description, structure, is_active, created_at, category, intensity_level, md_relevance";
 
-    const r1 = await supabase
+    // Always load global templates (team_id IS NULL / is_global = true)
+    const { data: globalData, error: globalError } = await supabase
       .from("workout_templates")
       .select(extendedSelect)
-      .order("created_at", { ascending: false });
+      .is("team_id", null)
+      .order("created_at", { ascending: true });
 
-    if (r1.error) {
-      const r2 = await supabase
-        .from("workout_templates")
-        .select("id, team_id, code, title, description, structure, is_active, created_at")
-        .order("created_at", { ascending: false });
-
-      if (r2.error) {
-        console.error("load templates error:", r2.error);
-        return;
-      }
-      setRows((r2.data ?? []) as any);
-      return;
+    if (globalError) {
+      console.error("load global templates error:", globalError);
     }
 
-    setRows((r1.data ?? []) as any);
+    const globalRows = (globalData ?? []) as TemplateRow[];
+
+    // Pro users also see their team's custom templates
+    if (isAtLeastPro) {
+      const { data: teamData, error: teamError } = await supabase
+        .from("workout_templates")
+        .select(extendedSelect)
+        .not("team_id", "is", null)
+        .order("created_at", { ascending: false });
+
+      if (!teamError) {
+        setRows([...globalRows, ...(teamData ?? []) as TemplateRow[]]);
+        return;
+      }
+    }
+
+    setRows(globalRows);
   }
 
   useEffect(() => {
@@ -237,6 +252,7 @@ export default function TemplatesPage() {
 
   const categoryButtons: Category[] = [
     "all",
+    "microdose",
     "rehab",
     "prehab",
     "strength",
@@ -253,14 +269,37 @@ export default function TemplatesPage() {
         <CardHeader className="space-y-1">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <CardTitle>Templates</CardTitle>
-              <CardDescription>Æfingabanki – leitaðu, flokkaðu og skoðaðu template (sending fer í Coach Dashboard).</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                Æfingasafn
+                {!isAtLeastPro && (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    Free plan
+                  </span>
+                )}
+              </CardTitle>
+              <CardDescription>
+                {isAtLeastPro
+                  ? "Æfingabanki – leitaðu, skoðaðu og búðu til eignar templates."
+                  : "Þú hefur aðgang að öllum global templates. Uppfærðu í Pro til að búa til eignar."}
+              </CardDescription>
             </div>
 
             <div className="flex items-center gap-2">
-              <Button onClick={() => setShowNew((v) => !v)}>{showNew ? "Close" : "New template"}</Button>
+              {isAtLeastPro ? (
+                <Button onClick={() => setShowNew((v) => !v)}>{showNew ? "Loka" : "Ný template"}</Button>
+              ) : (
+                <a
+                  href="/pricing"
+                  className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+                >
+                  Uppfæra í Pro
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </a>
+              )}
               <Button variant="outline" onClick={load}>
-                Refresh
+                Uppfæra
               </Button>
             </div>
           </div>
@@ -321,40 +360,49 @@ export default function TemplatesPage() {
       <div className="grid gap-3">
         {filtered.map((t) => {
           const title = t.title ?? "Untitled";
-          const code = t.code ?? "—";
           const duration = getDuration(t.structure);
           const desc = t.description ? clampText(t.description, 180) : "";
           const cat = getRowCategory(t);
+          const isGlobal = !t.team_id;
 
           return (
-            <Card key={t.id}>
+            <Card key={t.id} className={isGlobal ? "" : "border-blue-200"}>
               <CardContent className="py-4">
                 <div className="flex items-start gap-4">
                   <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <div className="text-xs rounded-full border px-2 py-0.5 opacity-80">{code}</div>
-                      <div className="text-xs rounded-full border px-2 py-0.5 opacity-80">{categoryLabel(cat)}</div>
-                      <div className="text-xs rounded-full border px-2 py-0.5 opacity-80">{duration}</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {isGlobal ? (
+                        <span className="text-[11px] rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 font-medium">Global</span>
+                      ) : (
+                        <span className="text-[11px] rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-medium">Custom</span>
+                      )}
+                      <div className="text-xs rounded-full border px-2 py-0.5 opacity-70">{categoryLabel(cat)}</div>
+                      <div className="text-xs rounded-full border px-2 py-0.5 opacity-70">{duration}</div>
+                      {(t as any).md_relevance && (
+                        <div className="text-xs rounded-full border px-2 py-0.5 opacity-60">{(t as any).md_relevance}</div>
+                      )}
                     </div>
 
                     <div className="text-base sm:text-lg font-semibold truncate">{title}</div>
 
-                    {desc ? <div className="text-sm opacity-80">{desc}</div> : <div className="text-sm opacity-50">No description</div>}
+                    {desc ? <div className="text-sm opacity-80">{desc}</div> : <div className="text-sm opacity-50">Engin lýsing</div>}
 
                     <div className="flex items-center gap-3 pt-2">
                       <Button variant="outline" onClick={() => setOpenStructureId((prev) => (prev === t.id ? null : t.id))}>
-                        {openStructureId === t.id ? "Hide" : "View"} structure
+                        {openStructureId === t.id ? "Fela" : "Skoða"}
                       </Button>
 
-                      <label className="ml-auto flex items-center gap-2 text-sm">
-                        <span className="opacity-70">Active</span>
-                        <input type="checkbox" checked={!!t.is_active} onChange={(e) => setActive(t.id, e.target.checked)} />
-                      </label>
+                      {isAtLeastPro && !isGlobal && (
+                        <label className="ml-auto flex items-center gap-2 text-sm">
+                          <span className="opacity-70">Virk</span>
+                          <input type="checkbox" checked={!!t.is_active} onChange={(e) => setActive(t.id, e.target.checked)} />
+                        </label>
+                      )}
                     </div>
 
                     {openStructureId === t.id ? (
                       <div className="mt-3 rounded-lg border bg-black/[0.02] p-3">
-                        <div className="text-xs font-semibold opacity-70 mb-2">Structure (JSON)</div>
+                        <div className="text-xs font-semibold opacity-70 mb-2">Uppbygging</div>
                         <pre className="text-xs overflow-auto whitespace-pre-wrap leading-relaxed">{JSON.stringify(t.structure ?? {}, null, 2)}</pre>
                       </div>
                     ) : null}

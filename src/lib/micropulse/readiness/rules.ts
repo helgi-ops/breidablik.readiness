@@ -9,6 +9,7 @@ export type ReadinessRuleResult = {
   triggeredRules: string[];
   missingInputs: string[];
   externalLoadExplanations: string[];
+  valdExplanations: string[];
 };
 
 function hasNumber(v: unknown): boolean {
@@ -172,6 +173,7 @@ function finalizeResult(params: {
   confidenceBias?: -1 | 0 | 1;
   scoreDelta?: number;
   externalLoadExplanations?: string[];
+  valdExplanations?: string[];
 }): ReadinessRuleResult {
   const scoreAdjusted =
     typeof params.score === "number"
@@ -187,6 +189,7 @@ function finalizeResult(params: {
     triggeredRules: Array.from(new Set(params.triggeredRules)),
     missingInputs: params.missingInputs,
     externalLoadExplanations: params.externalLoadExplanations ?? [],
+    valdExplanations: params.valdExplanations ?? [],
   };
 }
 
@@ -252,6 +255,10 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   const catapultExplanations = catapultModifier?.explanations.map((item) => item.message) ?? [];
   const catapultScoreDelta = catapultModifier?.scoreDelta ?? 0;
   const catapultFlags = catapultModifier?.cautionFlags ?? [];
+  const valdAdjustment = input.valdReadinessAdjustment ?? null;
+  const valdExplanations = valdAdjustment?.explanation ?? [];
+  const valdScoreDelta = valdAdjustment?.adjustmentScore ?? 0;
+  const valdFlags = valdAdjustment?.flags ?? [];
   if (!hasNumber(input.zScore)) missingInputs.push("zScore");
   if (!hasNumber(input.deltaZ)) missingInputs.push("deltaZ");
   if (!hasNumber(input.acwr)) missingInputs.push("acwr");
@@ -260,6 +267,7 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   if (!hasNumber(input.sorenessScore)) missingInputs.push("sorenessScore");
   if (!hasNumber(input.stenScore)) missingInputs.push("stenScore");
   if (!hasNumber(input.readinessScore) && !hasNumber(input.checkinScore)) missingInputs.push("readinessScore");
+  if (!input.valdDailySnapshot) missingInputs.push("valdSnapshot");
 
   if (catapultSignals?.externalLoadState === "elevated") triggeredRules.push("CATAPULT_EXTERNAL_LOAD_ELEVATED");
   if (catapultSignals?.externalLoadState === "high") triggeredRules.push("CATAPULT_EXTERNAL_LOAD_HIGH");
@@ -270,7 +278,10 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
   if (catapultFlags.includes("catapult_player_load_spike")) triggeredRules.push("CATAPULT_PLAYER_LOAD_SPIKE");
   if (catapultFlags.includes("catapult_max_velocity")) triggeredRules.push("CATAPULT_MAX_VELOCITY");
   if (catapultFlags.includes("catapult_band6_exposure")) triggeredRules.push("CATAPULT_SPRINT_EXPOSURE_CAUTION");
-  riskFactors.push(...catapultFlags);
+  if (valdFlags.includes("vald_neuromuscular_caution")) triggeredRules.push("VALD_NEUROMUSCULAR_CAUTION");
+  if (valdFlags.includes("vald_neuromuscular_drop")) triggeredRules.push("VALD_NEUROMUSCULAR_DROP");
+  if (valdFlags.includes("vald_missing")) triggeredRules.push("VALD_MISSING");
+  riskFactors.push(...catapultFlags, ...valdFlags);
 
   const lightState = input.lightAteState ?? null;
   if (lightState === "RED") {
@@ -280,11 +291,12 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       sessionMode: "recovery",
       confidence: completeness >= 0.5 ? "high" : "medium",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["low_readiness_state", "ate_red_priority", ...catapultFlags],
+      riskFactors: ["low_readiness_state", "ate_red_priority", ...catapultFlags, ...valdFlags],
       triggeredRules,
       missingInputs,
-      scoreDelta: catapultScoreDelta,
+      scoreDelta: catapultScoreDelta + valdScoreDelta,
       externalLoadExplanations: catapultExplanations,
+      valdExplanations,
     });
   }
   if (lightState === "YELLOW") {
@@ -299,11 +311,12 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       sessionMode: shifted.sessionMode,
       confidence: completeness >= 0.5 ? "high" : "medium",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["moderate_readiness_state", "ate_yellow_priority", ...catapultFlags],
+      riskFactors: ["moderate_readiness_state", "ate_yellow_priority", ...catapultFlags, ...valdFlags],
       triggeredRules,
       missingInputs,
-      scoreDelta: catapultScoreDelta,
+      scoreDelta: catapultScoreDelta + valdScoreDelta,
       externalLoadExplanations: catapultExplanations,
+      valdExplanations,
     });
   }
 
@@ -314,11 +327,12 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       sessionMode: "pending",
       confidence: "low",
       score: input.readinessScore ?? input.checkinScore,
-      riskFactors: ["insufficient_data", ...catapultFlags],
+      riskFactors: ["insufficient_data", ...catapultFlags, ...valdFlags],
       triggeredRules,
       missingInputs,
-      scoreDelta: catapultScoreDelta,
+      scoreDelta: catapultScoreDelta + valdScoreDelta,
       externalLoadExplanations: catapultExplanations,
+      valdExplanations,
     });
   }
 
@@ -417,8 +431,9 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       riskFactors,
       triggeredRules,
       missingInputs,
-      scoreDelta: loadPatch.scoreDelta + catapultScoreDelta,
+      scoreDelta: loadPatch.scoreDelta + catapultScoreDelta + valdScoreDelta,
       externalLoadExplanations: catapultExplanations,
+      valdExplanations,
     });
   }
 
@@ -486,8 +501,9 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
       triggeredRules,
       missingInputs,
       confidenceBias: whoopConfidenceBias === -1 ? 0 : whoopConfidenceBias,
-      scoreDelta: whoopScoreDelta + catapultScoreDelta,
+      scoreDelta: whoopScoreDelta + catapultScoreDelta + valdScoreDelta,
       externalLoadExplanations: catapultExplanations,
+      valdExplanations,
     });
   }
 
@@ -511,7 +527,8 @@ export function evaluateReadinessRules(input: NormalizedPlayerMonitoringInput): 
     triggeredRules,
     missingInputs,
     confidenceBias: whoopConfidenceBias,
-    scoreDelta: whoopScoreDelta + catapultScoreDelta,
+    scoreDelta: whoopScoreDelta + catapultScoreDelta + valdScoreDelta,
     externalLoadExplanations: catapultExplanations,
+    valdExplanations,
   });
 }

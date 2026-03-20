@@ -105,6 +105,8 @@ export function normalizePlayerMonitoringInput(input: NormalizedPlayerMonitoring
     catapultSignals,
     externalLoadState: input.externalLoadState ?? catapultSignals?.externalLoadState ?? null,
     catapultReadinessModifier,
+    valdDailySnapshot: input.valdDailySnapshot ?? null,
+    valdReadinessAdjustment: input.valdReadinessAdjustment ?? null,
     whoop: whoopSection
       ? {
           ...whoopSection,

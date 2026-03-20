@@ -6,6 +6,7 @@ import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import { buildCatapultReadinessContextFromRows, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
+import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
 
 export const runtime = "nodejs";
 
@@ -221,14 +222,15 @@ async function fetchMdContext(
   return (data as { md_day?: string | null } | null)?.md_day ?? null;
 }
 
-function buildPlayerSource(args: {
+async function buildPlayerSource(args: {
   row: CoachRow;
   date: string;
+  teamId: string;
   tmRaw: unknown;
   catapultRows: ReturnType<typeof normalizeCatapultDailyLoadRow>[];
   ydayContext: Record<string, unknown> | null;
   mdDay: string | null;
-}): CoachCommandPlayerSource {
+}): Promise<CoachCommandPlayerSource> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
   const yZ = extractYesterdayZ(tm);
@@ -289,6 +291,12 @@ function buildPlayerSource(args: {
     },
   });
 
+  const [valdReadinessAdjustment, valdDailySnapshot, valdInjurySignals] = await Promise.all([
+    getValdReadinessAdjustment(args.teamId, String(args.row.player_id), args.date).catch(() => null),
+    getValdDailySnapshot(args.teamId, String(args.row.player_id), args.date).catch(() => null),
+    getValdInjuryRiskSignals(args.teamId, String(args.row.player_id), args.date).catch(() => null),
+  ]);
+
   const readinessDecision = buildExplainableReadinessDecision({
     playerId: String(args.row.player_id),
     playerName: String(args.row.full_name ?? ""),
@@ -320,6 +328,8 @@ function buildPlayerSource(args: {
     catapultSignals: catapultContext.signals,
     externalLoadState: catapultContext.signals.externalLoadState,
     catapultReadinessModifier: catapultContext.modifier,
+    valdDailySnapshot,
+    valdReadinessAdjustment,
   });
 
   const injuryRiskDecision = buildInjuryRiskDecision(
@@ -340,6 +350,10 @@ function buildPlayerSource(args: {
       gpsSpike:
         String(args.ydayContext?.intensity ?? "").toUpperCase() !== "OFF" &&
         (toInt(args.ydayContext?.hsr_m) ?? 0) >= 1000,
+      valdHamstringRiskFlag: valdInjurySignals?.hamstringRiskFlag ?? false,
+      valdGroinRiskFlag: valdInjurySignals?.groinRiskFlag ?? false,
+      valdNeuromuscularRiskFlag: valdInjurySignals?.neuromuscularRiskFlag ?? false,
+      valdReasons: valdInjurySignals?.reasons ?? [],
     },
     readinessDecision
   );
@@ -409,9 +423,10 @@ export async function GET(req: Request) {
     for (const row of rows) {
       try {
         players.push(
-          buildPlayerSource({
+          await buildPlayerSource({
             row,
             date,
+            teamId,
             tmRaw: tmByPlayer.get(String(row.player_id))?.training_modifier ?? null,
             catapultRows: (catapultByPlayer.get(String(row.player_id)) ?? []).filter(Boolean),
             ydayContext,

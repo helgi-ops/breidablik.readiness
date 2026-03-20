@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 const operationsLinks = [
   { href: "/coach/week-setup", label: "Week setup" },
@@ -92,6 +93,40 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const isDisplayRoute = pathname?.startsWith("/coach/display");
 
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function fetchPending() {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return;
+
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const teamId = (prof as any)?.team_id;
+      if (!teamId || !alive) return;
+
+      const { count } = await supabase
+        .from("players")
+        .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
+        .eq("status", "PENDING");
+
+      if (alive) setPendingCount(count ?? 0);
+    }
+
+    fetchPending();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPending, 60_000);
+    return () => { alive = false; clearInterval(interval); };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
@@ -119,9 +154,14 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
 
             <Link
               href="/coach/players"
-              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+              className="relative rounded-md px-3 py-2 text-sm hover:bg-muted"
             >
               Players
+              {pendingCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
 
             <Link

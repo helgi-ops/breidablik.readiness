@@ -39,6 +39,10 @@ export async function buildExplainableReadinessDecisionWithCatapult(
       date: input.date,
       teamId: options?.teamId ?? null,
     });
+    // Note: VALD data should be pre-fetched by the caller (API route) and passed
+    // in via input.valdReadinessAdjustment / input.valdDailySnapshot.
+    // Dynamic imports of server-only VALD modules cannot live here because
+    // this module is also imported by client components.
     return buildExplainableReadinessDecision({
       ...input,
       catapultDailyLoad: catapult.today,
@@ -97,6 +101,9 @@ export function buildExplainableReadinessDecision(input: NormalizedPlayerMonitor
     signals: normalized.catapultSignals ?? null,
     modifier: normalized.catapultReadinessModifier ?? null,
   });
+  const valdWhyLines = Array.from(
+    new Set((normalized.valdReadinessAdjustment?.explanation ?? []).map((line) => String(line).trim()).filter(Boolean)),
+  ).slice(0, 2);
   const catapultActionHint = buildCatapultActionHint({
     externalLoadState: normalized.externalLoadState ?? null,
     signals: normalized.catapultSignals ?? null,
@@ -107,7 +114,10 @@ export function buildExplainableReadinessDecision(input: NormalizedPlayerMonitor
     readinessConfidence: rules.confidence,
   });
   const whyLines = mergeWhyLines({
-    baseLines: explainReadinessWhy(rules.triggeredRules, whoopFeatures, rules.externalLoadExplanations),
+    baseLines: [
+      ...explainReadinessWhy(rules.triggeredRules, whoopFeatures, rules.externalLoadExplanations),
+      ...rules.valdExplanations,
+    ],
     catapultLines: catapultWhyLines,
     maxLines: 3,
   });
@@ -130,6 +140,7 @@ export function buildExplainableReadinessDecision(input: NormalizedPlayerMonitor
     catapultWhyLines,
     catapultActionHint,
     catapultConfidenceHint,
+    valdWhyLines,
     supportingMetrics: {
       readinessScore: normalized.readinessScore ?? normalized.checkinScore,
       zScore: normalized.zScore,

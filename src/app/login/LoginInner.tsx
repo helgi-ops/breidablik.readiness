@@ -230,6 +230,28 @@ export default function LoginInner() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // ✅ Coach-check: does selected team have at least one registered coach?
+  const [teamHasCoach, setTeamHasCoach] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function checkCoach() {
+      if (mode !== "signup" || !teamId) {
+        setTeamHasCoach(null);
+        return;
+      }
+      const { count } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
+        .eq("role", "coach");
+      if (!alive) return;
+      setTeamHasCoach((count ?? 0) > 0);
+    }
+    checkCoach();
+    return () => { alive = false; };
+  }, [mode, teamId]);
+
   const canSignup = useMemo(() => {
     if (mode !== "signup") return true;
     return (
@@ -238,9 +260,10 @@ export default function LoginInner() {
       Boolean(password) &&
       Boolean(gender) &&
       Boolean(sport) &&
-      Boolean(teamId)
+      Boolean(teamId) &&
+      teamHasCoach === true
     );
-  }, [mode, fullName, email, password, gender, sport, teamId]);
+  }, [mode, fullName, email, password, gender, sport, teamId, teamHasCoach]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -276,6 +299,10 @@ export default function LoginInner() {
           setErr("Veldu lið áður en þú býrð til aðgang.");
           return;
         }
+        if (!teamHasCoach) {
+          setErr("Þjálfari er ekki skráður hjá þessu liði. Þjálfari þarf að skrá sig fyrst.");
+          return;
+        }
 
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -297,7 +324,7 @@ export default function LoginInner() {
         if (error) throw error;
 
         if (!data.session) {
-          setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn og klára innskráningu.");
+          setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn. Þjálfari þarf að samþykkja skráningu þína áður en þú færð aðgang.");
         } else {
           const landingPath = await getPlayerLandingPath();
           const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
@@ -434,7 +461,7 @@ export default function LoginInner() {
                 <select
                   required
                   value={teamId}
-                  onChange={(e) => setTeamId(e.target.value)}
+                  onChange={(e) => { setTeamId(e.target.value); setTeamHasCoach(null); }}
                   style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
                 >
                   <option value="">Veldu lið…</option>
@@ -444,9 +471,16 @@ export default function LoginInner() {
                     </option>
                   ))}
                 </select>
-                <small style={{ opacity: 0.7 }}>
-                  Ef listinn er tómur þá vantar annaðhvort teams gögn eða RLS leyfi.
-                </small>
+                {teamId && teamHasCoach === false && (
+                  <div style={{ background: "#fff8e1", border: "1px solid #ffd54f", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
+                    ⚠️ Enginn þjálfari er skráður hjá þessu liði enn. Þjálfari þarf að skrá sig áður en leikmaður getur skráð sig.
+                  </div>
+                )}
+                {teamId && teamHasCoach === true && (
+                  <div style={{ background: "#e8f5e9", border: "1px solid #a5d6a7", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
+                    ✓ Þjálfari er skráður — skráning leyfð.
+                  </div>
+                )}
               </label>
             )}
           </>
