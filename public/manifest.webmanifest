@@ -2,7 +2,7 @@
   "id": "/player",
   "name": "Breiðablik Readiness",
   "short_name": "Breiðablik",
-  "start_url": "/player",
+  "start_url": "/login?next=/player",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

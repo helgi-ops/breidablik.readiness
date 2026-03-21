@@ -633,6 +633,26 @@ export default function DevPlayerClient() {
 
   useEffect(() => {
     let cancelled = false;
+
+    async function ensureAuth() {
+      const { data, error } = await supabase.auth.getUser();
+      if (cancelled) return;
+
+      if (error || !data.user) {
+        const qs = searchParams?.toString();
+        const next = `${pathname}${qs ? `?${qs}` : ""}`;
+        router.replace(`/login?next=${encodeURIComponent(next)}`);
+      }
+    }
+
+    ensureAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
     let attempts = 0;
 
     const apply = () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient"; // ✅ NOTA project client
 
 // shadcn/ui
@@ -106,6 +107,7 @@ function friendlySupabaseError(e: any) {
 
 export default function PlayerCheckinPage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
+  const router = useRouter();
 
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -148,7 +150,7 @@ export default function PlayerCheckinPage() {
 
       if (!user) {
         setLoading(false);
-        setError("Þú þarft að vera skráður inn til að skila check-in.");
+        router.replace(`/login?next=${encodeURIComponent("/player/checkin")}`);
         return;
       }
 

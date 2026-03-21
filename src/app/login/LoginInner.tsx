@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  getSupabaseSessionPersistence,
+  setSupabaseSessionPersistence,
+  supabase,
+} from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Mode = "signin" | "signup" | "reset";
@@ -123,6 +127,7 @@ export default function LoginInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
 
   // ✅ NEW: gender + sport flow
   const [gender, setGender] = useState<Gender | null>(genderFromQuery ? (genderFromQuery as Gender) : null);
@@ -234,6 +239,10 @@ export default function LoginInner() {
   const [teamHasCoach, setTeamHasCoach] = useState<boolean | null>(null);
 
   useEffect(() => {
+    setRememberMe(getSupabaseSessionPersistence() !== "session");
+  }, []);
+
+  useEffect(() => {
     let alive = true;
     async function checkCoach() {
       if (mode !== "signup" || !teamId) {
@@ -273,6 +282,7 @@ export default function LoginInner() {
 
     try {
       if (mode === "signin") {
+        setSupabaseSessionPersistence(rememberMe);
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
@@ -366,6 +376,17 @@ export default function LoginInner() {
       </p>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
+        {mode === "signin" && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
+            <span>Keep me logged in</span>
+          </label>
+        )}
+
         {mode === "signup" && (
           <>
             <label style={{ display: "grid", gap: 6 }}>
