@@ -123,3 +123,40 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── PWA-only layout fixes ─────────────────────────────────────────────────
+   Only applies when the app is installed and running in standalone mode.
+   The website in a normal browser tab is completely unaffected.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Grid and flex children default to min-width:auto which lets them bust
+     out of their cell. Force min-width:0 so every card stays within bounds. */
+  .grid > *,
+  .flex > * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* The outer page wrapper — keep it flush to the viewport */
+  .mx-auto.max-w-6xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+
+  /* Two-column grids inside cards (stat boxes etc.) — clamp to available width */
+  .grid.grid-cols-2 > *,
+  .grid.grid-cols-3 > *,
+  .grid.grid-cols-4 > * {
+    min-width: 0;
+    overflow: hidden;
+  }
+}
