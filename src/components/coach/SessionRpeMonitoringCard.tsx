@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { formatLoadBandClass, formatSessionTypeLabel } from "@/lib/session-rpe/formatters";
+import { formatLoadBandClass, formatLoadBandLabel, formatSessionTypeLabel } from "@/lib/session-rpe/formatters";
 
 type SessionRpeSummary = {
   totalExpectedPlayers: number;
@@ -22,7 +22,7 @@ type SessionRpeEntry = {
   rpe: number;
   session_load: number;
   submitted_at: string;
-  load_band: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+  load_band: "VERY_LIGHT" | "LIGHT" | "MEDIUM" | "HIGH" | "VERY_HIGH";
 };
 
 type SessionRpeDailyTotal = {
@@ -33,7 +33,7 @@ type SessionRpeDailyTotal = {
   avg_rpe: number | null;
   total_duration_minutes: number;
   latest_submission_at: string | null;
-  load_band: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+  load_band: "VERY_LIGHT" | "LIGHT" | "MEDIUM" | "HIGH" | "VERY_HIGH";
 };
 
 type MissingPlayer = {
@@ -226,7 +226,7 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
                         <div className="mt-0.5 inline-flex items-center gap-1">
                           <span className="font-semibold tabular-nums text-slate-900">{row.session_load}</span>
                           <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${formatLoadBandClass(row.load_band)}`}>
-                            {row.load_band}
+                            {formatLoadBandLabel(row.load_band)}
                           </span>
                         </div>
                       </div>

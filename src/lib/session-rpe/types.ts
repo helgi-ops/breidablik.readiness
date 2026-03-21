@@ -28,7 +28,7 @@ export type SessionRpePayload = {
   notes?: string;
 };
 
-export type LoadBand = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+export type LoadBand = "VERY_LIGHT" | "LIGHT" | "MEDIUM" | "HIGH" | "VERY_HIGH";
 
 export type PlayerDailyLoad = {
   player_id: string;

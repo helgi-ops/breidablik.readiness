@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { loadBandBadgeClass } from "@/lib/player-load/formatters";
+import { loadBandBadgeClass, loadBandLabel } from "@/lib/player-load/formatters";
 import type { DailyLoadSummaryResponse } from "@/lib/player-load/types";
 
 type DailyInternalLoadResponse = {
@@ -139,7 +139,7 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
                       <td className="py-1 pr-2">
                         <span className="tabular-nums font-semibold text-slate-800">{row.total_load}</span>
                         <span className={`ml-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${loadBandBadgeClass(row.load_band)}`}>
-                          {row.load_band}
+                          {loadBandLabel(row.load_band)}
                         </span>
                       </td>
                       <td className="py-1 text-slate-600">

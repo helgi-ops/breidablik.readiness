@@ -1,4 +1,4 @@
-export type LoadBand = "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH";
+export type LoadBand = "VERY_LIGHT" | "LIGHT" | "MODERATE" | "HIGH" | "VERY_HIGH";
 
 export type PlayerDailyLoadRow = {
   player_id: string;

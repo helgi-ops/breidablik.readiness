@@ -75,6 +75,7 @@ import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
+import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import {
@@ -282,6 +283,11 @@ type PostTrainingReportPlayer = {
   decelB23: number | null;
   maxVelocity: number | null;
   acwr: number | null;
+  // Internal load (RPE)
+  rpe: number | null;
+  sessionLoad: number | null;        // RPE × duration
+  durationMinutes: number | null;
+  rpeSubmitted: boolean;
   attentionFlag: "OK" | "MONITOR" | "ALERT";
   attentionReason: string[];
 };
@@ -299,6 +305,9 @@ type PostTrainingReportData = {
     decelB23: number | null;
     maxVelocity: number | null;
   };
+  rpeTeamAvg: number | null;
+  rpeTotalLoad: number | null;
+  rpeSubmissionCount: number;
   alertCount: number;
   monitorCount: number;
 };
@@ -1125,6 +1134,14 @@ const postStyles = StyleSheet.create({
   colMetric: { width: "9%", padding: 4, fontSize: 9, textAlign: "right" },
   colPct: { width: "7%", padding: 4, fontSize: 9, textAlign: "right" },
   colAttn: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
+  // RPE-specific table columns
+  colRpeName: { width: "19%", padding: 4, fontSize: 9 },
+  colRpePos: { width: "7%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colRpeScore: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
+  colRpeDesc: { width: "12%", padding: 4, fontSize: 9 },
+  colRpeDur: { width: "11%", padding: 4, fontSize: 9, textAlign: "right" },
+  colRpeLoad: { width: "12%", padding: 4, fontSize: 9, textAlign: "right" },
+  colRpeBand: { width: "18%", padding: 4, fontSize: 9 },
   hdr: { fontWeight: 700 },
   attnAlert: { color: "#DC2626", fontWeight: 700 },
   attnMonitor: { color: "#D97706", fontWeight: 700 },
@@ -1151,32 +1168,150 @@ function pctFmt(v: number | null): string {
   return (s >= 0 ? "+" : "") + s + "%";
 }
 
+function rpeInterpretation(avgRpe: number | null, submittedCount: number, totalPlayers: number): string {
+  if (avgRpe == null || submittedCount === 0) {
+    return `Engir leikmenn hafa skilað inn RPE fyrir þessa æfingu (${submittedCount}/${totalPlayers}). Ekki er hægt að meta innri álag liðsins.`;
+  }
+  const score = avgRpe.toFixed(1);
+  const sub = `${submittedCount}/${totalPlayers} leikmenn skildu inn`;
+  if (avgRpe <= 2) {
+    return `Upplifun liðsins á æfingunni var mjög létt (meðal RPE ${score}). Æfingin lítur út sem hlýjunar- eða endurhæfingarþáttur með lítið sem ekkert líkamlegt álag. (${sub})`;
+  }
+  if (avgRpe <= 4) {
+    return `Upplifun liðsins á æfingunni var létt (meðal RPE ${score}). Liðið var vel á sig komið og þoldi æfinguna vel án mikillar fyrirhafnar. (${sub})`;
+  }
+  if (avgRpe <= 6) {
+    return `Upplifun liðsins á æfingunni var í meðallagi (meðal RPE ${score}). Líkamlegt álag var hóflegt — góð jafnvægisæfing milli álags og hvíldar. (${sub})`;
+  }
+  if (avgRpe <= 7.9) {
+    return `Upplifun liðsins á æfingunni var erfið (meðal RPE ${score}). Líkamlegt álag var hátt. Mikilvægt er að tryggja góða hvíld og næringaruppbót fyrir næstu æfingu. (${sub})`;
+  }
+  if (avgRpe <= 8.9) {
+    return `Upplifun liðsins á æfingunni var mjög erfið (meðal RPE ${score}). Álagið var mjög hátt. Nauðsynlegt er að gefa liðinu tíma til að jafna sig og fylgjast vel með ástandi leikmanna næstu daga. (${sub})`;
+  }
+  return `Upplifun liðsins á æfingunni var á hámarki (meðal RPE ${score}). Þetta er mesta mögulega álag sem leikmenn upplifðu. Hvíld og endurhæfing eru sérstaklega mikilvægar næstu 48 klst. (${sub})`;
+}
+
+function rpeScoreLabel(rpe: number | null): string {
+  if (rpe == null) return "—";
+  if (rpe <= 2) return "Very easy";
+  if (rpe <= 4) return "Easy";
+  if (rpe <= 6) return "Moderate";
+  if (rpe <= 8) return "Hard";
+  if (rpe <= 9) return "Very hard";
+  return "Maximal";
+}
+
+function rpeLoadBand(sessionLoad: number | null): string {
+  if (sessionLoad == null) return "—";
+  if (sessionLoad < 200) return "Very light  (<200)";
+  if (sessionLoad < 400) return "Light  (200–399)";
+  if (sessionLoad < 600) return "Moderate  (400–599)";
+  if (sessionLoad < 800) return "Hard  (600–799)";
+  return "Very hard  (≥800)";
+}
+
 function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) {
-  const PLAYERS_PER_PAGE = 15;
+  const PLAYERS_PER_PAGE = 30;
+
+  // GPS page only shows players who actually have GPS data
+  const gpsPlayers = data.players.filter((p) => p.totalDistance != null);
   const pages: PostTrainingReportPlayer[][] = [];
-  for (let i = 0; i < data.players.length; i += PLAYERS_PER_PAGE) {
-    pages.push(data.players.slice(i, i + PLAYERS_PER_PAGE));
+  for (let i = 0; i < gpsPlayers.length; i += PLAYERS_PER_PAGE) {
+    pages.push(gpsPlayers.slice(i, i + PLAYERS_PER_PAGE));
   }
   if (pages.length === 0) pages.push([]);
 
   const alerts = data.players.filter((p) => p.attentionFlag === "ALERT");
   const monitors = data.players.filter((p) => p.attentionFlag === "MONITOR");
 
+  // RPE table: all players who submitted RPE, sorted highest first
+  const rpeTablePlayers = data.players.filter((p) => p.rpeSubmitted).sort((a, b) => (b.rpe ?? -1) - (a.rpe ?? -1));
+  const interpretText = rpeInterpretation(data.rpeTeamAvg, data.rpeSubmissionCount, data.players.length);
+
   return (
     <Document>
-      {/* ── Page 1: Summary + Attention + Table ── */}
+      {/* ══ Page 1: Internal Load — RPE ══ */}
       <Page size="A4" orientation="landscape" style={postStyles.page}>
         {/* Header */}
         <View style={postStyles.section}>
-          <Text style={postStyles.h1}>Post-Training GPS Report</Text>
+          <Text style={postStyles.h1}>Post-Training Report</Text>
           <Text style={postStyles.subtitle}>
             {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
           </Text>
         </View>
 
-        {/* Team averages */}
+        {/* RPE summary boxes */}
         <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>Team Average — Session</Text>
+          <Text style={postStyles.sectionTitle}>Innri álag — Session RPE</Text>
+          <View style={postStyles.summaryRow}>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeTeamAvg != null ? numFmt2(data.rpeTeamAvg, 1) : "—"}</Text>
+              <Text style={postStyles.summaryLabel}>Meðal RPE liðsins</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeTotalLoad != null ? numFmt2(data.rpeTotalLoad, 0) : "—"}</Text>
+              <Text style={postStyles.summaryLabel}>Heildar session load</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeSubmissionCount} / {data.players.length}</Text>
+              <Text style={postStyles.summaryLabel}>Leikmenn skildu inn</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Interpretation text */}
+        <View style={[postStyles.section, { backgroundColor: "#F9FAFB", border: "1 solid #E5E7EB", borderRadius: 4, padding: 10 }]}>
+          <Text style={{ fontSize: 10, color: "#111827", lineHeight: 1.5 }}>{interpretText}</Text>
+          <Text style={{ fontSize: 8, color: "#9CA3AF", marginTop: 6 }}>
+            Session Load = RPE x Mínútur (AU). Flokkur: &lt;200 Very light · 200-399 Light · 400-599 Moderate · 600-799 Hard · &gt;=800 Very hard
+          </Text>
+        </View>
+
+        {/* Per-player RPE table (sorted by RPE desc) */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>RPE eftir leikmann (raðað eftir RPE, hæst fyrst)</Text>
+          <View style={postStyles.table}>
+            <View style={postStyles.tHead}>
+              <Text style={[postStyles.colRpeName, postStyles.hdr]}>Leikmaður</Text>
+              <Text style={[postStyles.colRpePos, postStyles.hdr]}>Staða</Text>
+              <Text style={[postStyles.colRpeScore, postStyles.hdr]}>RPE</Text>
+              <Text style={[postStyles.colRpeDesc, postStyles.hdr]}>Lýsing</Text>
+              <Text style={[postStyles.colRpeDur, postStyles.hdr]}>Tímalengd (mín)</Text>
+              <Text style={[postStyles.colRpeLoad, postStyles.hdr]}>Session Load</Text>
+              <Text style={[postStyles.colRpeBand, postStyles.hdr]}>Session Load flokkur</Text>
+            </View>
+            {rpeTablePlayers.map((p, i) => {
+              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+              const rpeNumStyle = p.rpe != null && p.rpe >= 9 ? postStyles.attnAlert : p.rpe != null && p.rpe >= 7 ? postStyles.attnMonitor : postStyles.attnOk;
+              return (
+                <View key={p.name + "-rpe"} style={rowStyle}>
+                  <Text style={postStyles.colRpeName}>{p.name}</Text>
+                  <Text style={postStyles.colRpePos}>{p.position}</Text>
+                  <Text style={[postStyles.colRpeScore, rpeNumStyle]}>{p.rpeSubmitted ? numFmt2(p.rpe, 1) : "—"}</Text>
+                  <Text style={[postStyles.colRpeDesc, rpeNumStyle]}>{p.rpeSubmitted ? rpeScoreLabel(p.rpe) : "—"}</Text>
+                  <Text style={postStyles.colRpeDur}>{p.rpeSubmitted ? numFmt2(p.durationMinutes, 0) : "—"}</Text>
+                  <Text style={postStyles.colRpeLoad}>{p.rpeSubmitted ? numFmt2(p.sessionLoad, 0) : "—"}</Text>
+                  <Text style={postStyles.colRpeBand}>{p.rpeSubmitted ? rpeLoadBand(p.sessionLoad) : "Ekki skilað"}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </Page>
+
+      {/* ══ Page 2: External Load — GPS ══ */}
+      <Page size="A4" orientation="landscape" style={postStyles.page}>
+        <View style={postStyles.section}>
+          <Text style={postStyles.h1}>Post-Training Report — GPS (Catapult)</Text>
+          <Text style={postStyles.subtitle}>
+            {data.teamName} · {data.sessionDate} · {data.mdDay} · {gpsPlayers.length} players with GPS data
+          </Text>
+        </View>
+
+        {/* GPS team averages */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>Ytra álag — liðsmeðaltal</Text>
           <View style={postStyles.summaryRow}>
             <View style={postStyles.summaryBox}>
               <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.totalDistance, 0)}</Text>
@@ -1215,7 +1350,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
               <View style={{ flex: 1 }}>
                 {alerts.map((p) => (
                   <View key={p.name + "-alert"} style={postStyles.alertBox}>
-                    <Text style={postStyles.alertName}>🔴 {p.name} ({p.position})</Text>
+                    <Text style={postStyles.alertName}>! {p.name} ({p.position})</Text>
                     {p.attentionReason.map((line, i) => (
                       <Text key={i} style={postStyles.alertLine}>· {line}</Text>
                     ))}
@@ -1225,7 +1360,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
               <View style={{ flex: 1 }}>
                 {monitors.map((p) => (
                   <View key={p.name + "-monitor"} style={postStyles.monitorBox}>
-                    <Text style={postStyles.monitorName}>🟡 {p.name} ({p.position})</Text>
+                    <Text style={postStyles.monitorName}>~ {p.name} ({p.position})</Text>
                     {p.attentionReason.map((line, i) => (
                       <Text key={i} style={postStyles.monitorLine}>· {line}</Text>
                     ))}
@@ -1236,13 +1371,13 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
           </View>
         )}
 
-        {/* Player table — first page */}
+        {/* Player GPS table — first GPS page */}
         <View style={postStyles.section}>
-          <Text style={postStyles.sectionTitle}>Player GPS Data (sorted by Total Distance)</Text>
+          <Text style={postStyles.sectionTitle}>GPS gögn eftir leikmann (raðað eftir heildar vegalengd)</Text>
           <View style={postStyles.table}>
             <View style={postStyles.tHead}>
-              <Text style={[postStyles.colName, postStyles.hdr]}>Player</Text>
-              <Text style={[postStyles.colPos, postStyles.hdr]}>Pos</Text>
+              <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
+              <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
               <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
               <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
               <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
@@ -1285,15 +1420,15 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         </View>
       </Page>
 
-      {/* ── Overflow pages if many players ── */}
+      {/* ── GPS overflow pages if many players ── */}
       {pages.slice(1).map((pagePlayers, pgIdx) => (
-        <Page key={`pt-page-${pgIdx + 2}`} size="A4" orientation="landscape" style={postStyles.page}>
-          <Text style={postStyles.h1}>Post-Training GPS Report — {data.sessionDate} (cont.)</Text>
+        <Page key={"pt-page-" + (pgIdx + 3)} size="A4" orientation="landscape" style={postStyles.page}>
+          <Text style={postStyles.h1}>Post-Training Report — GPS (cont.) · {data.sessionDate}</Text>
           <View style={[postStyles.section, { marginTop: 8 }]}>
             <View style={postStyles.table}>
               <View style={postStyles.tHead}>
-                <Text style={[postStyles.colName, postStyles.hdr]}>Player</Text>
-                <Text style={[postStyles.colPos, postStyles.hdr]}>Pos</Text>
+                <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
+                <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
                 <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
                 <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
                 <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
@@ -4244,6 +4379,43 @@ export default function CoachPage() {
         return;
       }
 
+      // ── 2b. Fetch RPE submissions for the session date ────────
+      type RpeRow = {
+        player_id: string;
+        rpe: number | null;
+        session_load: number | null;
+        duration_minutes: number | null;
+      };
+      const { data: rpeRows } = await supabase
+        .from("session_rpe_entries")
+        .select("player_id, rpe, session_load, duration_minutes")
+        .eq("session_date", sessionDate)
+        .in("player_id", playerIds);
+
+      // Sum up session load per player (a player may have submitted multiple sessions)
+      const rpeByPlayer = new Map<string, { rpe: number; sessionLoad: number; durationMinutes: number }>();
+      for (const row of ((rpeRows ?? []) as RpeRow[])) {
+        const pid = String(row.player_id);
+        const cur = rpeByPlayer.get(pid);
+        const load = Number(row.session_load ?? 0);
+        const dur = Number(row.duration_minutes ?? 0);
+        const rpe = Number(row.rpe ?? 0);
+        if (!cur) {
+          rpeByPlayer.set(pid, { rpe, sessionLoad: load, durationMinutes: dur });
+        } else {
+          // Multiple sessions: use weighted avg RPE and sum load
+          const totalDur = cur.durationMinutes + dur;
+          const weightedRpe = totalDur > 0
+            ? (cur.rpe * cur.durationMinutes + rpe * dur) / totalDur
+            : rpe;
+          rpeByPlayer.set(pid, {
+            rpe: weightedRpe,
+            sessionLoad: cur.sessionLoad + load,
+            durationMinutes: totalDur,
+          });
+        }
+      }
+
       // ── 3. Build readiness flag lookup from current rows ─────
       const flagByPlayerId = new Map<string, "GREEN" | "YELLOW" | "RED">();
       for (const r of rowsWithAdaptive) {
@@ -4283,11 +4455,15 @@ export default function CoachPage() {
       }
 
       const reportPlayers: PostTrainingReportPlayer[] = [];
+      const includedPids = new Set<string>();
 
+      // ── Pass 1: players WITH GPS data ────────────────────────
       for (const player of playerData as Array<Record<string, unknown>>) {
         const pid = String(player.id);
         const todayRow = rowsToday.find((r) => r.player_id === pid) ?? null;
-        if (!todayRow) continue; // No GPS data for today — skip
+        if (!todayRow) continue; // handled in pass 2 if they have RPE
+
+        includedPids.add(pid);
 
         const hist = byPlayer.get(pid) ?? [];
         const hist28 = hist.filter((r) => r.date >= chronicStart && r.date <= sessionDate);
@@ -4297,7 +4473,6 @@ export default function CoachPage() {
         const pl28Avg = avgOf(hist28.map((r) => r.total_player_load));
         const dist28Avg = avgOf(hist28.map((r) => r.total_distance));
 
-        // Compute ACWR from fetched rows: acute = 7D avg, chronic = 28D avg of total_distance
         const acuteStart = addDaysISO(sessionDate, -6);
         const acuteRows = hist28.filter((r) => r.date >= acuteStart && r.date <= sessionDate);
         const acute7 = avgOf(acuteRows.map((r) => r.total_distance));
@@ -4306,7 +4481,6 @@ export default function CoachPage() {
 
         const readinessFlag = flagByPlayerId.get(pid) ?? "—" as const;
 
-        // Compute attention signal
         const reasons: string[] = [];
         let attentionFlag: "OK" | "MONITOR" | "ALERT" = "OK";
 
@@ -4340,6 +4514,8 @@ export default function CoachPage() {
           attentionFlag = "MONITOR";
         }
 
+        const rpeEntry = rpeByPlayer.get(pid) ?? null;
+
         reportPlayers.push({
           name: String(player.full_name ?? ""),
           position: String(player.position ?? "—"),
@@ -4355,13 +4531,61 @@ export default function CoachPage() {
           decelB23: todayRow.decel_b2_3_tot_effs_gen2,
           maxVelocity: todayRow.max_vel,
           acwr,
+          rpe: rpeEntry ? rpeEntry.rpe : null,
+          sessionLoad: rpeEntry ? rpeEntry.sessionLoad : null,
+          durationMinutes: rpeEntry ? rpeEntry.durationMinutes : null,
+          rpeSubmitted: rpeEntry != null,
           attentionFlag,
           attentionReason: reasons,
         });
       }
 
-      // Sort by total distance desc
-      reportPlayers.sort((a, b) => (b.totalDistance ?? 0) - (a.totalDistance ?? 0));
+      // ── Pass 2: players WITHOUT GPS but WITH RPE (e.g. goalkeepers) ──
+      for (const player of playerData as Array<Record<string, unknown>>) {
+        const pid = String(player.id);
+        if (includedPids.has(pid)) continue; // already added in pass 1
+        const rpeEntry = rpeByPlayer.get(pid) ?? null;
+        if (!rpeEntry) continue; // no GPS, no RPE — skip entirely
+
+        const readinessFlag = flagByPlayerId.get(pid) ?? "—" as const;
+        const reasons: string[] = [];
+        let attentionFlag: "OK" | "MONITOR" | "ALERT" = "OK";
+        if (readinessFlag === "RED") {
+          reasons.push("RED readiness í dag — fylgjast með líðan á morgun");
+          attentionFlag = "MONITOR";
+        }
+
+        reportPlayers.push({
+          name: String(player.full_name ?? ""),
+          position: String(player.position ?? "—"),
+          readinessFlag,
+          totalDistance: null,
+          totalDistancePct: null,
+          hsd: null,
+          hsdPct: null,
+          playerLoad: null,
+          playerLoadPct: null,
+          playerLoadPerMin: null,
+          accelB23: null,
+          decelB23: null,
+          maxVelocity: null,
+          acwr: null,
+          rpe: rpeEntry.rpe,
+          sessionLoad: rpeEntry.sessionLoad,
+          durationMinutes: rpeEntry.durationMinutes,
+          rpeSubmitted: true,
+          attentionFlag,
+          attentionReason: reasons,
+        });
+      }
+
+      // GPS players sorted by distance desc; RPE-only players sorted by name at the bottom
+      const gpsPlayers = reportPlayers.filter((p) => p.totalDistance != null);
+      const rpeOnlyPlayers = reportPlayers.filter((p) => p.totalDistance == null);
+      gpsPlayers.sort((a, b) => (b.totalDistance ?? 0) - (a.totalDistance ?? 0));
+      rpeOnlyPlayers.sort((a, b) => a.name.localeCompare(b.name));
+      reportPlayers.length = 0;
+      reportPlayers.push(...gpsPlayers, ...rpeOnlyPlayers);
 
       // ── 5. Team averages ─────────────────────────────────────
       const teamAvg = {
@@ -4373,18 +4597,29 @@ export default function CoachPage() {
         maxVelocity: reportPlayers.reduce((max, p) => (p.maxVelocity != null && (max == null || p.maxVelocity > max) ? p.maxVelocity : max), null as number | null),
       };
 
+      const rpeSubmitters = reportPlayers.filter((p) => p.rpeSubmitted);
+      const rpeTeamAvg = rpeSubmitters.length
+        ? rpeSubmitters.reduce((s, p) => s + (p.rpe ?? 0), 0) / rpeSubmitters.length
+        : null;
+      const rpeTotalLoad = rpeSubmitters.length
+        ? rpeSubmitters.reduce((s, p) => s + (p.sessionLoad ?? 0), 0)
+        : null;
+
       const reportData: PostTrainingReportData = {
         teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
         sessionDate,
         mdDay: mdDayToday,
         players: reportPlayers,
         teamAvg,
+        rpeTeamAvg,
+        rpeTotalLoad,
+        rpeSubmissionCount: rpeSubmitters.length,
         alertCount: reportPlayers.filter((p) => p.attentionFlag === "ALERT").length,
         monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
       };
 
       if (reportPlayers.length === 0) {
-        alert("Engin GPS gögn fundust í Catapult. Gakktu úr skugga um að Catapult sync hafi verið keyrt.");
+        alert("Engir leikmenn fundust með GPS eða RPE gögn í dag.");
         return;
       }
 
@@ -4393,7 +4628,7 @@ export default function CoachPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `post-training-gps-report-${sessionDate}.pdf`;
+      a.download = `post-training-report-${sessionDate}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -5585,9 +5820,29 @@ export default function CoachPage() {
                     <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
                     <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
-                    {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
+                      {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadReadinessRiskReport}
+                      disabled={pdfDownloading || loading}
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                    >
+                      {pdfDownloading ? "Generating…" : "⬇ Readiness Risk Report"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadPostTrainingReport}
+                      disabled={pdfPostDownloading || loading}
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    >
+                      {pdfPostDownloading ? "Generating…" : "⬇ Post-Training Report"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -5891,21 +6146,6 @@ export default function CoachPage() {
                     </Button>
                     <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
                       {genLoading ? "Generating…" : "Generate Today Decisions"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={downloadReadinessRiskReport}
-                      disabled={pdfDownloading || loading}
-                    >
-                      {pdfDownloading ? "Generating PDF…" : "Download Readiness Risk Report"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={downloadPostTrainingReport}
-                      disabled={pdfPostDownloading || loading}
-                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    >
-                      {pdfPostDownloading ? "Generating PDF…" : "⬇ Post-Training GPS Report"}
                     </Button>
                   </div>
                 </div>
@@ -6625,8 +6865,132 @@ export default function CoachPage() {
 
         const noData = !gpsLoading && gpsRows.length === 0;
 
+        // ── Today's session overview ──────────────────────────────────────
+        const todayPlayerRows = gpsAllPlayers.map((p) => {
+          const row = p.history.find((r) => String(r.date ?? "").slice(0, 10) === today);
+          if (!row) return null;
+          const vb5 = getVal(row, ["velocity_band5_total_distance", "velocityBand5TotalDistance"]) ?? 0;
+          const vb6 = getVal(row, ["velocity_band6_total_distance", "velocityBand6TotalDistance"]) ?? 0;
+          return {
+            name: p.name,
+            position: p.position,
+            totalDist: getVal(row, ["total_distance", "totalDistance"]),
+            hsDist: vb5 + vb6,
+            accelB23: getVal(row, ["accel_b2_3_tot_effs_gen2", "accelBand2to3Efforts", "accelB23TotEffsGen2"]),
+            decelB23: getVal(row, ["decel_b2_3_tot_effs_gen2", "decelBand2to3Efforts", "decelB23TotEffsGen2"]),
+            totAccels: getVal(row, ["tot_as", "totalAccelerations", "totAs"]),
+            totDecels: getVal(row, ["tot_ds", "totalDecelerations", "totDs"]),
+          };
+        }).filter(Boolean) as Array<{
+          name: string; position: string;
+          totalDist: number | null; hsDist: number;
+          accelB23: number | null; decelB23: number | null;
+          totAccels: number | null; totDecels: number | null;
+        }>;
+
+        function squadAvgToday(vals: (number | null)[]): number | null {
+          const valid = vals.filter((v): v is number => v != null && Number.isFinite(v));
+          return valid.length ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
+        }
+
+        const tAvgDist = squadAvgToday(todayPlayerRows.map((r) => r.totalDist));
+        const tAvgHs   = squadAvgToday(todayPlayerRows.map((r) => r.hsDist));
+        const tAvgAccB = squadAvgToday(todayPlayerRows.map((r) => r.accelB23));
+        const tAvgDecB = squadAvgToday(todayPlayerRows.map((r) => r.decelB23));
+        const todaySorted = [...todayPlayerRows].sort((a, b) => (b.totalDist ?? 0) - (a.totalDist ?? 0));
+
+        const fmtN = (v: number | null, d = 0) => v == null ? "—" : v.toFixed(d);
+
         return (
           <div className="space-y-4">
+
+            {/* ── Today's Training Overview ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                      Æfing Dagsins · {today}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      GPS gögn · Catapult
+                    </CardDescription>
+                  </div>
+                  <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
+                    {todayPlayerRows.length} / {gpsAllPlayers.length} leikmenn
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {gpsLoading ? (
+                  <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
+                ) : todayPlayerRows.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-slate-400">Engin GPS gögn skráð í dag.</div>
+                ) : (
+                  <>
+                    {/* Squad average KPI tiles */}
+                    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {[
+                        { label: "Heildarvegalengd",  value: fmtN(tAvgDist), unit: "m avg" },
+                        { label: "Háhraðavegalengd",   value: fmtN(tAvgHs),   unit: "m avg (VB5+VB6)" },
+                        { label: "Accel B2-3",         value: fmtN(tAvgAccB), unit: "efni avg" },
+                        { label: "Decel B2-3",         value: fmtN(tAvgDecB), unit: "efni avg" },
+                      ].map(({ label, value, unit }) => (
+                        <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+                          <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</div>
+                          <div className="text-[11px] text-slate-400">{unit}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Per-player table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">Leikmaður</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Tot Dist (m)</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">HS Dist (m)</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Accels (#)</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Decels (#)</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Acc B2-3</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Dec B2-3</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* Squad average row */}
+                          <tr className="border-b-2 border-slate-300 bg-slate-100 font-semibold">
+                            <td className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sveit avg</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDist)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgHs)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totAccels)))}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totDecels)))}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgAccB)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDecB)}</td>
+                          </tr>
+                          {todaySorted.map((p, i) => (
+                            <tr key={p.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
+                              <td className="px-4 py-2 whitespace-nowrap">
+                                <div className="font-medium text-slate-900">{p.name}</div>
+                                <div className="text-[11px] text-slate-400">{p.position}</div>
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.totalDist)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.hsDist > 0 ? p.hsDist : null)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totAccels)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totDecels)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.accelB23)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.decelB23)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
@@ -6700,6 +7064,7 @@ export default function CoachPage() {
                 )}
               </CardContent>
             </Card>
+            <MechanicalLoadIndexCard teamId={coachTeamId} />
           </div>
         );
       })()}

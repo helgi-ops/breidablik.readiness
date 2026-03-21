@@ -1,9 +1,10 @@
 import type { LoadBand } from "@/lib/player-load/types";
 
 export function getLoadBand(totalLoad: number): LoadBand {
-  if (totalLoad < 200) return "LOW";
-  if (totalLoad < 400) return "MODERATE";
-  if (totalLoad < 700) return "HIGH";
+  if (totalLoad < 200) return "VERY_LIGHT";
+  if (totalLoad < 400) return "LIGHT";
+  if (totalLoad < 600) return "MODERATE";
+  if (totalLoad < 800) return "HIGH";
   return "VERY_HIGH";
 }
 

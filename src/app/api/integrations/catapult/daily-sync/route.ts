@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
+import { sendTrainingDataReadyNotification } from "@/lib/push/sendTrainingDataReady";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,18 @@ async function runSync(request: Request, explicitDate?: string | null) {
     const url = new URL(request.url);
     const date = explicitDate ?? url.searchParams.get("date");
     const result = await syncCatapultDailyMetrics(date);
-    return NextResponse.json({ ok: true, result });
+
+    // Send push notification to all players that today's training data is ready.
+    // We fire-and-forget: a push failure should not break the sync response.
+    const dateKey = (date ?? new Date().toISOString().slice(0, 10));
+    let pushResult: Awaited<ReturnType<typeof sendTrainingDataReadyNotification>> | null = null;
+    try {
+      pushResult = await sendTrainingDataReadyNotification(dateKey);
+    } catch {
+      // Intentionally ignored – push is best-effort
+    }
+
+    return NextResponse.json({ ok: true, result, push: pushResult });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catapult sync failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
