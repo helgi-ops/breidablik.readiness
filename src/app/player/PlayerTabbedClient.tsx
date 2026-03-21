@@ -852,7 +852,8 @@ export default function DevPlayerClient() {
             continue;
           }
           if (rpeCard && card === rpeCard) {
-            card.style.display = showRpe ? "" : "none";
+            // Always hide — DevPlayerRPETab renders its own UI in the portal
+            card.style.display = "none";
             continue;
           }
           if (valdCard && card === valdCard) {
