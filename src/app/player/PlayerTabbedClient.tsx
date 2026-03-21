@@ -8,6 +8,7 @@ import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement"
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
+import DevPlayerRPETab from "./dev-player-dashboard/DevPlayerRPETab";
 import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import {
@@ -565,6 +566,116 @@ function AteCommandCardPortal({ activeTab }: { activeTab: DevPlayerTab }) {
   );
 }
 
+// ── PWA detection ────────────────────────────────────────────────────────────
+
+function usePwaMode(): boolean {
+  const [isPwa, setIsPwa] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(display-mode: standalone)");
+    const update = () => setIsPwa(mq.matches || !!(navigator as any).standalone);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isPwa;
+}
+
+// ── PWA bottom nav icons ──────────────────────────────────────────────────────
+
+function IconHome({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12L12 4l9 8" />
+      <path d="M9 21V12h6v9" />
+    </svg>
+  );
+}
+function IconActivity({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+function IconBarChart({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="12" width="4" height="9" />
+      <rect x="10" y="7" width="4" height="14" />
+      <rect x="17" y="3" width="4" height="18" />
+    </svg>
+  );
+}
+function IconClock({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 15" />
+    </svg>
+  );
+}
+function IconZap({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+// ── PWA bottom navigation bar ────────────────────────────────────────────────
+
+const PWA_NAV_TABS = [
+  { key: "today"     as DevPlayerTab, label: "Today",     Icon: IconHome,     minTier: "free"  as const },
+  { key: "rpe"       as DevPlayerTab, label: "RPE",       Icon: IconActivity, minTier: "pro"   as const },
+  { key: "dashboard" as DevPlayerTab, label: "Dashboard", Icon: IconBarChart, minTier: "pro"   as const },
+  { key: "history"   as DevPlayerTab, label: "History",   Icon: IconClock,    minTier: "free"  as const },
+  { key: "vald"      as DevPlayerTab, label: "VALD",      Icon: IconZap,      minTier: "elite" as const },
+];
+
+function PWABottomNav({
+  activeTab,
+  onChange,
+  planTier,
+}: {
+  activeTab: DevPlayerTab;
+  onChange: (tab: DevPlayerTab) => void;
+  planTier: PlanTier;
+}) {
+  const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
+  const isElite = planTier === "ELITE";
+
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="flex">
+        {PWA_NAV_TABS.map(({ key, label, Icon, minTier }) => {
+          const locked =
+            (minTier === "pro" && !isAtLeastPro) ||
+            (minTier === "elite" && !isElite);
+          const isActive = activeTab === key;
+          return (
+            <button
+              key={key}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"
+              }`}
+              onClick={() => !locked && onChange(key)}
+              aria-label={label}
+            >
+              <Icon active={isActive} />
+              <span className={`text-[9px] font-semibold tracking-wide ${isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"}`}>
+                {label.toUpperCase()}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export default function DevPlayerClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -606,6 +717,7 @@ export default function DevPlayerClient() {
 
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
   const isElite = planTier === "ELITE";
+  const isPwa = usePwaMode();
 
   // If on a locked tab, redirect to today
   useEffect(() => {
@@ -681,6 +793,11 @@ export default function DevPlayerClient() {
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
       setPanelMountNode((prev) => (prev === panelSlot ? prev : panelSlot));
 
+      // PWA: hide top tabs slot (bottom nav handles navigation), add body padding
+      if (tabsSlot) tabsSlot.style.display = isPwa ? "none" : "";
+      const pageRoot = mainGrid?.closest(".min-h-screen") as HTMLElement | null;
+      if (pageRoot) pageRoot.style.paddingBottom = isPwa ? "calc(68px + env(safe-area-inset-bottom))" : "";
+
       const showToday = activeTab === "today";
       const showHistory = activeTab === "history";
       const showDashboard = activeTab === "dashboard";
@@ -692,7 +809,8 @@ export default function DevPlayerClient() {
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
-      if (rpeCard) rpeCard.style.display = showRpe ? "" : "none";
+      // Always hide old RPE card — DevPlayerRPETab renders its own UI in the portal
+      if (rpeCard) rpeCard.style.display = "none";
       // Hide the existing VALD card from Today — it lives in the Neuromuscular Testing tab now
       if (valdCard) valdCard.style.display = "none";
       if (rightColumn) rightColumn.style.display = showToday ? "" : "none";
@@ -766,7 +884,7 @@ export default function DevPlayerClient() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, [activeTab, isPwa]);
 
   function setTab(tab: DevPlayerTab) {
     // Block navigation to locked tabs
@@ -790,17 +908,24 @@ export default function DevPlayerClient() {
     <>
       <PlayerClient />
       <AteCommandCardPortal activeTab={activeTab} />
-      {tabsMountNode ? createPortal(<DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />, tabsMountNode) : null}
+      {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
+      {!isPwa && tabsMountNode
+        ? createPortal(<DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />, tabsMountNode)
+        : null}
+      {/* Tab panel content */}
       {panelMountNode
         ? createPortal(
             <div className="mt-3">
               {activeTab === "history" && <DevPlayerHistoryTab />}
+              {activeTab === "rpe" && <DevPlayerRPETab />}
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
             </div>,
             panelMountNode
           )
         : null}
+      {/* PWA bottom navigation bar */}
+      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} />}
     </>
   );
 }
