@@ -2,6 +2,31 @@ import "server-only";
 
 import type { CatapultActivity, CatapultAthlete } from "./types";
 
+// These are the exact display-name strings that Catapult Stats API v6 recognises.
+// DO NOT add snake_case or gen2_ variants — those cause "The given data was invalid" errors.
+const CATAPULT_IMA_PARAMETERS = [
+  "IMA Accel High",
+  "IMA Accel Medium",
+  "IMA Accel Low",
+  "IMA Decel High",
+  "IMA Decel Medium",
+  "IMA Decel Low",
+  "IMA CoD Left High",
+  "IMA CoD Left Medium",
+  "IMA CoD Left Low",
+  "IMA CoD Right High",
+  "IMA CoD Right Medium",
+  "IMA CoD Right Low",
+  "IMA Impacts Band 1 Count",
+  "IMA Impacts Band 2 Count",
+  "IMA Impacts Band 3 Count",
+  "IMA Impacts Band 4 Count",
+  "IMA Impacts Band 5 Count",
+  "IMA Impacts Band 6 Count",
+  "IMA Impacts Band 7 Count",
+  "IMA Impacts Band 8 Count",
+];
+
 type CatapultConfig = {
   baseUrl: string;
   apiKey: string;
@@ -256,6 +281,7 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
       "gen2_acceleration_band3plus_average_effort_count",
       "total_player_load",
       "player_load_per_minute",
+      ...CATAPULT_IMA_PARAMETERS,
     ],
     requested_only: false,
   });

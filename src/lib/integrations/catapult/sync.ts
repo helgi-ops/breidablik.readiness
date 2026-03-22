@@ -70,6 +70,12 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.playerLoadPerMinute = Math.max(current.externalLoad.playerLoadPerMinute ?? 0, row.externalLoad.playerLoadPerMinute ?? 0);
     current.externalLoad.metabolicPower = (current.externalLoad.metabolicPower ?? 0) + (row.externalLoad.metabolicPower ?? 0);
     current.externalLoad.explosiveDistance = (current.externalLoad.explosiveDistance ?? 0) + (row.externalLoad.explosiveDistance ?? 0);
+    current.externalLoad.imaAccel = (current.externalLoad.imaAccel ?? 0) + (row.externalLoad.imaAccel ?? 0);
+    current.externalLoad.imaDecel = (current.externalLoad.imaDecel ?? 0) + (row.externalLoad.imaDecel ?? 0);
+    current.externalLoad.imaCod = (current.externalLoad.imaCod ?? 0) + (row.externalLoad.imaCod ?? 0);
+    current.externalLoad.imaTotal = (current.externalLoad.imaTotal ?? 0) + (row.externalLoad.imaTotal ?? 0);
+    current.externalLoad.codEvents = (current.externalLoad.codEvents ?? 0) + (row.externalLoad.codEvents ?? 0);
+    current.externalLoad.impacts = (current.externalLoad.impacts ?? 0) + (row.externalLoad.impacts ?? 0);
   }
 
   return Array.from(merged.values());
@@ -111,6 +117,12 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     player_load_per_minute: row.externalLoad.playerLoadPerMinute ?? null,
     metabolic_power: row.externalLoad.metabolicPower ?? null,
     explosive_distance: row.externalLoad.explosiveDistance ?? null,
+    ima_accel: row.externalLoad.imaAccel ?? null,
+    ima_decel: row.externalLoad.imaDecel ?? null,
+    ima_cod: row.externalLoad.imaCod ?? null,
+    ima_total: row.externalLoad.imaTotal ?? null,
+    cod_events: row.externalLoad.codEvents ?? null,
+    impacts: row.externalLoad.impacts ?? null,
     source: "catapult",
     external_athlete_id: row.externalAthleteId,
     activity_count: row.activityCount ?? 1,
@@ -126,8 +138,12 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
   return payload.length;
 }
 
-export async function syncCatapultDailyMetrics(inputDate?: string | null): Promise<CatapultSyncResult> {
+export async function syncCatapultDailyMetrics(
+  inputDate?: string | null,
+  options?: { debugIma?: boolean }
+): Promise<CatapultSyncResult> {
   const targetDate = dateKey(inputDate);
+  const debugImaEnabled = options?.debugIma || process.env.CATAPULT_DEBUG_IMA === "true";
   const warnings: string[] = [];
   const athleteDirectory = await loadAthleteDirectory();
   const activities = await fetchActivitiesForDate(targetDate);
@@ -181,6 +197,7 @@ export async function syncCatapultDailyMetrics(inputDate?: string | null): Promi
 
   const aggregated = aggregateCatapultMetrics(perActivityMetrics);
   const normalizedRows = [];
+  const imaDebug: NonNullable<CatapultSyncResult["imaDebug"]> = [];
   let unmatchedCount = 0;
 
   for (const metric of aggregated) {
@@ -206,10 +223,50 @@ export async function syncCatapultDailyMetrics(inputDate?: string | null): Promi
 
     await upsertCatapultAthleteMapping(mapped);
     normalizedRows.push(toNormalizedExternalLoad(metric, mapped.micropulsePlayerId));
+    if (debugImaEnabled && metric.imaDebug) {
+      imaDebug.push({
+        athleteId: metric.athleteId,
+        activityId: metric.activityId ?? null,
+        matchedFields: metric.imaDebug,
+        normalized: {
+          ima_accel: metric.imaAccel ?? null,
+          ima_decel: metric.imaDecel ?? null,
+          ima_cod: metric.imaCod ?? null,
+          ima_total: metric.imaTotal ?? null,
+          cod_events: metric.codEvents ?? null,
+          impacts: metric.impacts ?? null,
+          playerload_per_min: metric.playerLoadPerMinute ?? null,
+        },
+      });
+    }
   }
 
   const mergedRows = mergeNormalizedRows(normalizedRows);
   const storedCount = await storeExternalLoadRows(mergedRows);
+
+  if (debugImaEnabled) {
+    const sampleDebug = imaDebug.slice(0, 3);
+    const noImaFound = sampleDebug.length > 0 && sampleDebug.every((item) => item.matchedFields?.interestingKeys.length === 0);
+    console.info(
+      JSON.stringify({
+        scope: "catapult_sync_ima_debug",
+        date: targetDate,
+        playersProcessed: aggregated.length,
+        sampleSize: sampleDebug.length,
+        noImaFound,
+        samples: sampleDebug,
+      })
+    );
+    if (!sampleDebug.length) {
+      console.info(
+        JSON.stringify({
+          scope: "catapult_sync_ima_debug",
+          date: targetDate,
+          message: "No IMA-related fields found in Catapult payload for this activity/date",
+        })
+      );
+    }
+  }
 
   await logIntegrationEvent({
     provider: "catapult",
@@ -236,5 +293,6 @@ export async function syncCatapultDailyMetrics(inputDate?: string | null): Promi
     storedCount,
     unmatchedCount,
     warnings,
+    imaDebug: debugImaEnabled ? imaDebug : undefined,
   };
 }

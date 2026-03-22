@@ -33,6 +33,29 @@ export type CatapultSessionMetric = {
   playerLoadPerMinute?: number | null;
   metabolicPower?: number | null;
   explosiveDistance?: number | null;
+  imaAccel?: number | null;
+  imaDecel?: number | null;
+  imaCod?: number | null;
+  imaTotal?: number | null;
+  codEvents?: number | null;
+  impacts?: number | null;
+  imaDebug?: {
+    interestingKeys: string[];
+    matched: {
+      accel: string[];
+      decel: string[];
+      cod: string[];
+      impacts: string[];
+      playerloadPerMin: string[];
+      imaTotal: string[];
+      codEvents: string[];
+    };
+    derived: {
+      imaTotal: "direct" | "fallback_sum" | "missing";
+      codEvents: "direct" | "fallback_from_ima_cod" | "missing";
+      playerloadPerMin: "direct" | "derived_from_playerload_duration" | "missing";
+    };
+  };
   activityId?: string | null;
 };
 
@@ -61,6 +84,12 @@ export type NormalizedExternalLoad = {
     playerLoadPerMinute?: number | null;
     metabolicPower?: number | null;
     explosiveDistance?: number | null;
+    imaAccel?: number | null;
+    imaDecel?: number | null;
+    imaCod?: number | null;
+    imaTotal?: number | null;
+    codEvents?: number | null;
+    impacts?: number | null;
   };
   rawPayload?: unknown;
   activityCount?: number;
@@ -84,4 +113,18 @@ export type CatapultSyncResult = {
   storedCount: number;
   unmatchedCount: number;
   warnings: string[];
+  imaDebug?: Array<{
+    athleteId: string;
+    activityId?: string | null;
+    matchedFields: CatapultSessionMetric["imaDebug"];
+    normalized: {
+      ima_accel: number | null;
+      ima_decel: number | null;
+      ima_cod: number | null;
+      ima_total: number | null;
+      cod_events: number | null;
+      impacts: number | null;
+      playerload_per_min: number | null;
+    };
+  }>;
 };

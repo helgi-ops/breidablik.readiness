@@ -25,12 +25,24 @@ type ExternalLoadRow = {
   decel_b2_3_tot_effs_gen2: number | null;
   tot_ds: number | null;
   decelerations: number | null;
+  ima_decel: number | null;
   accel_b2_3_tot_effs_gen2: number | null;
   tot_as: number | null;
   accelerations: number | null;
+  ima_accel: number | null;
+  cod_events: number | null;
+  ima_cod: number | null;
+  ima_total: number | null;
   player_load_per_minute: number | null;
+  impacts: number | null;
   source: string | null;
 };
+
+const BASE_SELECT =
+  "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source";
+
+const IMA_SELECT =
+  "ima_decel, ima_accel, cod_events, ima_cod, ima_total, impacts";
 
 type ResponseRow = {
   player_id: string;
@@ -85,16 +97,85 @@ function mapSourceRow(row: ExternalLoadRow): MechanicalLoadSourceRow {
     date: row.date,
     high_decels: row.decel_b2_3_tot_effs_gen2,
     total_decels: row.tot_ds ?? row.decelerations,
-    ima_decel: null,
+    ima_decel: row.ima_decel,
     high_accels: row.accel_b2_3_tot_effs_gen2,
     total_accels: row.tot_as ?? row.accelerations,
+    ima_accel: row.ima_accel,
+    cod_events: row.cod_events,
+    ima_cod: row.ima_cod,
+    ima_total: row.ima_total,
+    playerload_per_min: row.player_load_per_minute,
+    impacts: row.impacts,
+  };
+}
+
+async function fetchExternalLoadRows(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  teamId: string | null,
+  startDate: string,
+  dateKey: string
+): Promise<ExternalLoadRow[]> {
+  const buildQuery = (selectClause: string) => {
+    let query = sb
+      .from("player_external_load_daily")
+      .select(selectClause)
+      .eq("source", "catapult")
+      .gte("date", startDate)
+      .lte("date", dateKey)
+      .order("date", { ascending: true });
+    if (teamId) query = query.eq("team_id", teamId);
+    return query;
+  };
+
+  const primary = await buildQuery(`${BASE_SELECT}, ${IMA_SELECT}`);
+  if (!primary.error) {
+    return (((primary.data ?? []) as unknown) as ExternalLoadRow[]).map((row) => ({
+      ...row,
+      ima_decel: row.ima_decel ?? null,
+      ima_accel: row.ima_accel ?? null,
+      cod_events: row.cod_events ?? null,
+      ima_cod: row.ima_cod ?? null,
+      ima_total: row.ima_total ?? null,
+      impacts: row.impacts ?? null,
+    }));
+  }
+
+  const missingColumnError =
+    primary.error.message.includes("column player_external_load_daily.") &&
+    (
+      primary.error.message.includes(".ima_decel") ||
+      primary.error.message.includes(".ima_accel") ||
+      primary.error.message.includes(".cod_events") ||
+      primary.error.message.includes(".ima_cod") ||
+      primary.error.message.includes(".ima_total") ||
+      primary.error.message.includes(".impacts")
+    );
+
+  if (!missingColumnError) {
+    throw new Error(primary.error.message);
+  }
+
+  const fallback = await buildQuery(BASE_SELECT);
+  if (fallback.error) throw new Error(fallback.error.message);
+
+  return ((((fallback.data ?? []) as unknown) as Array<Record<string, unknown>>)).map((row) => ({
+    player_id: String(row.player_id),
+    date: String(row.date),
+    decel_b2_3_tot_effs_gen2: (row.decel_b2_3_tot_effs_gen2 as number | null) ?? null,
+    tot_ds: (row.tot_ds as number | null) ?? null,
+    decelerations: (row.decelerations as number | null) ?? null,
+    ima_decel: null,
+    accel_b2_3_tot_effs_gen2: (row.accel_b2_3_tot_effs_gen2 as number | null) ?? null,
+    tot_as: (row.tot_as as number | null) ?? null,
+    accelerations: (row.accelerations as number | null) ?? null,
     ima_accel: null,
     cod_events: null,
     ima_cod: null,
     ima_total: null,
-    playerload_per_min: row.player_load_per_minute,
+    player_load_per_minute: (row.player_load_per_minute as number | null) ?? null,
     impacts: null,
-  };
+    source: (row.source as string | null) ?? null,
+  }));
 }
 
 function buildFlags(row: ReturnType<typeof computeMechanicalLoad>): string[] {
@@ -127,21 +208,7 @@ export async function GET(req: Request) {
     const rosterById = new Map(roster.map((p) => [p.id, p]));
 
     const startDate = dateMinusDays(dateKey, 30);
-    let query = sb
-      .from("player_external_load_daily")
-      .select(
-        "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, accel_b2_3_tot_effs_gen2, tot_as, accelerations, player_load_per_minute, source"
-      )
-      .eq("source", "catapult")
-      .gte("date", startDate)
-      .lte("date", dateKey)
-      .order("date", { ascending: true });
-    if (teamId) query = query.eq("team_id", teamId);
-
-    const { data: loadData, error: loadErr } = await query;
-    if (loadErr) return NextResponse.json({ ok: false, error: loadErr.message }, { status: 500 });
-
-    const rows = (loadData ?? []) as ExternalLoadRow[];
+    const rows = await fetchExternalLoadRows(sb, teamId, startDate, dateKey);
     const grouped = new Map<string, MechanicalLoadSourceRow[]>();
     for (const row of rows) {
       const mapped = mapSourceRow(row);
@@ -216,4 +283,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: message }, { status });
   }
 }
-

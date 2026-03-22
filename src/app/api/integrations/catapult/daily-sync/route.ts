@@ -53,7 +53,8 @@ async function runSync(request: Request, explicitDate?: string | null) {
   try {
     const url = new URL(request.url);
     const date = explicitDate ?? url.searchParams.get("date");
-    const result = await syncCatapultDailyMetrics(date);
+    const debugIma = url.searchParams.get("debugIma") === "1";
+    const result = await syncCatapultDailyMetrics(date, { debugIma });
 
     // Send push notification to all players that today's training data is ready.
     // We fire-and-forget: a push failure should not break the sync response.

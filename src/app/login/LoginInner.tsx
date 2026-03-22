@@ -108,6 +108,29 @@ export default function LoginInner() {
 
   const [mode, setMode] = useState<Mode>("signin");
 
+  // ✅ Auto-redirect if already logged in (critical for PWA keep-me-logged-in)
+  useEffect(() => {
+    let cancelled = false;
+    async function checkExistingSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (!session) { setCheckingSession(false); return; }
+        // Valid session exists — skip login form and go straight to the right page
+        const landingPath = await getPlayerLandingPath();
+        if (cancelled) return;
+        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
+        const finalNext = nextIsPlayerFlow ? landingPath : next;
+        router.replace(finalNext);
+      } catch {
+        if (!cancelled) setCheckingSession(false);
+      }
+    }
+    checkExistingSession();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ✅ Password recovery redirect
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -231,6 +254,7 @@ export default function LoginInner() {
     };
   }, [mode, gender, sport]); // intentionally not depending on teamId to avoid loops
 
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -361,6 +385,14 @@ export default function LoginInner() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <div style={{ maxWidth: 420, margin: "40px auto", padding: 16, textAlign: "center", opacity: 0.6 }}>
+        <p>Hleð…</p>
+      </div>
+    );
   }
 
   return (
