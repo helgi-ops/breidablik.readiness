@@ -362,29 +362,45 @@ function applyDashboardMetricsLayout(metricsCard: HTMLElement, expanded: boolean
 }
 
 function applyStickyPlayerHeroLayout(header: HTMLElement, activeTab: DevPlayerTab) {
-  const topOffset = 12;
-  const headerHeight = header.getBoundingClientRect().height || header.offsetHeight || 0;
+  const rail = document.getElementById("dev-player-sticky-rail") as HTMLElement | null;
+  const tabsSlot = document.getElementById("dev-player-tabs-slot") as HTMLElement | null;
   const commandSlot = document.getElementById("dev-ate-command-card-slot") as HTMLElement | null;
+  const topOffset = 0;
 
-  header.style.position = "sticky";
-  header.style.top = `${topOffset}px`;
-  header.style.zIndex = "30";
-  header.style.backdropFilter = "blur(10px)";
-  (header.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "blur(10px)";
+  if (rail) {
+    rail.style.position = "sticky";
+    rail.style.top = `${topOffset}px`;
+    rail.style.zIndex = "30";
+    rail.style.background = "rgba(255,255,255,0.94)";
+    rail.style.backdropFilter = "blur(10px)";
+    (rail.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "blur(10px)";
+    rail.style.paddingBottom = activeTab === "today" ? "8px" : "0px";
+  }
+
+  header.style.position = "";
+  header.style.top = "";
+  header.style.zIndex = "";
+  header.style.background = "";
+  header.style.backdropFilter = "";
+  (header.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "";
+
+  if (tabsSlot) {
+    tabsSlot.style.position = "";
+    tabsSlot.style.top = "";
+    tabsSlot.style.zIndex = "";
+    tabsSlot.style.background = "";
+    tabsSlot.style.paddingBottom = "6px";
+  }
 
   if (!commandSlot) return;
 
-  if (activeTab === "today") {
-    commandSlot.style.position = "sticky";
-    commandSlot.style.top = `${Math.round(topOffset + headerHeight + 12)}px`;
-    commandSlot.style.zIndex = "25";
-    commandSlot.style.background = "transparent";
-  } else {
-    commandSlot.style.position = "";
-    commandSlot.style.top = "";
-    commandSlot.style.zIndex = "";
-    commandSlot.style.background = "";
-  }
+  commandSlot.style.position = "";
+  commandSlot.style.top = "";
+  commandSlot.style.zIndex = "";
+  commandSlot.style.background = "";
+  commandSlot.style.paddingTop = activeTab === "today" ? "4px" : "";
+  commandSlot.style.paddingBottom = activeTab === "today" ? "4px" : "";
+  commandSlot.style.marginBottom = activeTab === "today" ? "4px" : "";
 }
 
 function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | null {
@@ -403,6 +419,61 @@ function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | nu
   } else if (slot.previousElementSibling !== anchor) {
     anchor.parentElement.insertBefore(slot, anchor.nextSibling);
   }
+  return slot;
+}
+
+function ensureStickyRail(header: HTMLElement): HTMLElement | null {
+  const parent = header.parentElement;
+  if (!parent) return null;
+
+  let rail = document.getElementById("dev-player-sticky-rail") as HTMLElement | null;
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.id = "dev-player-sticky-rail";
+    rail.style.width = "100%";
+  }
+
+  if (rail.parentElement !== parent) {
+    parent.insertBefore(rail, header);
+  }
+
+  if (header.parentElement !== rail) {
+    rail.appendChild(header);
+  }
+
+  return rail;
+}
+
+function ensureRailChildSlot(id: string, rail: HTMLElement): HTMLElement | null {
+  let slot = document.getElementById(id) as HTMLElement | null;
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.id = id;
+  }
+  if (slot.parentElement !== rail) {
+    rail.appendChild(slot);
+  }
+  return slot;
+}
+
+function ensurePanelSlotOutsideRail(id: string, rail: HTMLElement): HTMLElement | null {
+  const parent = rail.parentElement;
+  if (!parent) return null;
+
+  let slot = document.getElementById(id) as HTMLElement | null;
+  if (!slot) {
+    slot = document.createElement("div");
+    slot.id = id;
+    slot.className = "mt-3";
+    slot.style.width = "100%";
+  }
+
+  if (slot.parentElement !== parent) {
+    parent.insertBefore(slot, rail.nextSibling);
+  } else if (slot.previousElementSibling !== rail) {
+    parent.insertBefore(slot, rail.nextSibling);
+  }
+
   return slot;
 }
 
@@ -828,10 +899,13 @@ export default function DevPlayerClient() {
       const nextDecision = buildNormalizedDailyDecision();
       setDailyDecision(nextDecision);
 
-      const tabsSlot = ensureTabSlot("dev-player-tabs-slot", header);
-      const panelSlot = tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null;
+      const stickyRail = ensureStickyRail(header);
+      const tabsSlot = stickyRail ? ensureRailChildSlot("dev-player-tabs-slot", stickyRail) : ensureTabSlot("dev-player-tabs-slot", header);
+      const commandSlot = stickyRail ? ensureRailChildSlot("dev-ate-command-card-slot", stickyRail) : null;
+      const panelSlot = stickyRail ? ensurePanelSlotOutsideRail("dev-player-tab-panel-slot", stickyRail) : (tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null);
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
       setPanelMountNode((prev) => (prev === panelSlot ? prev : panelSlot));
+      void commandSlot;
 
       applyStickyPlayerHeroLayout(header, activeTab);
 

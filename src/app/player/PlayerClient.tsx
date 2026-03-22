@@ -66,6 +66,10 @@ import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails
 import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionView";
 import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
 import ValdStatusCard from "@/components/player/ValdStatusCard";
+import { getExerciseRecommendation } from "@/lib/exercise-recommendations/recommend";
+import { getSupportedExerciseLabel, normalizeExerciseNameToId } from "@/lib/exercise-recommendations/normalize";
+import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
+import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
 
 type ProfileRow = {
   id: string;
@@ -819,6 +823,8 @@ type ParsedExercise = {
   note: string | null;
 };
 
+type ExerciseRecommendationContext = Omit<ExerciseRecommendationInput, "originalExerciseName">;
+
 function parseExerciseItem(raw: string): ParsedExercise {
   const s = (raw ?? "").trim();
 
@@ -1054,23 +1060,90 @@ function ExerciseInfoModal({
   );
 }
 
+function recommendationBadgeToneClass(tone: "neutral" | "warning" | "success"): string {
+  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-zinc-200 bg-zinc-50 text-zinc-600";
+}
+
+function exerciseMethodForId(id: SupportedExerciseId | null, fallbackMethod: string | null): string | null {
+  if (id === "ISO_MID_THIGH_PULL" || id === "ISOMETRIC_SPLIT_SQUAT_HOLD") return "ISO";
+  return fallbackMethod;
+}
+
+function findParsedExerciseForSupportedId(
+  exercises: ParsedExercise[] | null | undefined,
+  id: SupportedExerciseId | null
+): ParsedExercise | null {
+  if (!id || !Array.isArray(exercises)) return null;
+  for (const exercise of exercises) {
+    if (!exercise || exercise.isHeader) continue;
+    if (normalizeExerciseNameToId(exercise.name) === id) return exercise;
+  }
+  return null;
+}
+
 /* ---- ExerciseCard ---- */
-function ExerciseCard({ ex, accent, blockLabel, dimmed }: { ex: ParsedExercise; accent: ReturnType<typeof blockAccent>; blockLabel?: string; dimmed?: boolean }) {
+function ExerciseCard({
+  ex,
+  accent,
+  blockLabel,
+  dimmed,
+  recommendationContext,
+  availableExercises,
+  onSelectRecommendedExerciseId,
+  disableInternalExerciseSwap,
+}: {
+  ex: ParsedExercise;
+  accent: ReturnType<typeof blockAccent>;
+  blockLabel?: string;
+  dimmed?: boolean;
+  recommendationContext?: ExerciseRecommendationContext | null;
+  availableExercises?: ParsedExercise[] | null;
+  onSelectRecommendedExerciseId?: ((id: SupportedExerciseId | null) => void) | null;
+  disableInternalExerciseSwap?: boolean;
+}) {
   const [infoOpen, setInfoOpen] = useState(false);
+  const recommendation = useMemo(
+    () =>
+      getExerciseRecommendation({
+        ...(recommendationContext ?? {}),
+        originalExerciseName: ex.name,
+      }),
+    [ex.name, recommendationContext]
+  );
+  const uiInfo = useMemo(() => getExerciseRecommendationUiInfo(recommendation), [recommendation]);
+  const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
+
+  const selectedExerciseId = overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
+  const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
+  const matchedExercise = findParsedExerciseForSupportedId(availableExercises, selectedExerciseId);
+  const internallySwappedExercise: ParsedExercise = matchedExercise
+    ? matchedExercise
+    : selectedExerciseId && selectedExerciseLabel !== ex.name
+      ? { ...ex, name: selectedExerciseLabel, method: exerciseMethodForId(selectedExerciseId, ex.method) }
+      : ex;
+  const effectiveExercise: ParsedExercise = disableInternalExerciseSwap ? ex : internallySwappedExercise;
+
+  const allowedAlternativeIds = recommendation.allowedExerciseIds.filter((id) => id !== selectedExerciseId);
+  const restrictedLabels = recommendation.restrictedExerciseIds
+    .map((id) => getSupportedExerciseLabel(id))
+    .filter((label): label is string => !!label);
+
   return (
     <>
       <div className={cx("rounded-xl border px-3 py-2", accent.itemBorder, accent.itemBg)}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-1.5 min-w-0">
-            <span className="text-sm font-semibold text-zinc-900 leading-snug">{ex.name}</span>
-            {ex.setsReps ? (
-              <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">{ex.setsReps}</span>
+            <span className="text-sm font-semibold text-zinc-900 leading-snug">{effectiveExercise.name}</span>
+            {effectiveExercise.setsReps ? (
+              <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">{effectiveExercise.setsReps}</span>
             ) : null}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {ex.method ? (
+            {effectiveExercise.method ? (
               <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-bold", accent.methodBadge)}>
-                {ex.method}
+                {effectiveExercise.method}
               </span>
             ) : null}
             {/* Info button — only on non-dimmed cards */}
@@ -1085,27 +1158,111 @@ function ExerciseCard({ ex, accent, blockLabel, dimmed }: { ex: ParsedExercise; 
             ) : null}
           </div>
         </div>
-        {ex.note ? <div className="mt-0.5 text-xs text-zinc-500">{ex.note}</div> : null}
+        {effectiveExercise.note ? <div className="mt-0.5 text-xs text-zinc-500">{effectiveExercise.note}</div> : null}
+
+        {!dimmed && recommendation.shouldRenderRecommendation && uiInfo.badgeLabel ? (
+          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/80 p-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(uiInfo.badgeTone))}>
+                {uiInfo.badgeLabel}
+              </span>
+              {uiInfo.shortReason ? (
+                <span className="text-[11px] font-medium text-zinc-600">{uiInfo.shortReason}</span>
+              ) : null}
+            </div>
+            {uiInfo.playerReason ? <div className="mt-1 text-xs text-zinc-600">{uiInfo.playerReason}</div> : null}
+            {selectedExerciseLabel !== ex.name ? (
+              <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {ex.name}</div>
+            ) : null}
+            {allowedAlternativeIds.length ? (
+              <div className="mt-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {allowedAlternativeIds.map((id) => {
+                    const label = getSupportedExerciseLabel(id);
+                    if (!label) return null;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setOverrideExerciseId(id);
+                          onSelectRecommendedExerciseId?.(id);
+                        }}
+                        className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100"
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {overrideExerciseId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverrideExerciseId(null);
+                        onSelectRecommendedExerciseId?.(recommendation.recommendedExerciseId ?? recommendation.originalExerciseId);
+                      }}
+                      className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-200"
+                    >
+                      Nota mælt með
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {restrictedLabels.length ? (
+              <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {infoOpen && blockLabel ? (
-        <ExerciseInfoModal ex={ex} blockLabel={blockLabel} onClose={() => setInfoOpen(false)} />
+        <ExerciseInfoModal ex={effectiveExercise} blockLabel={blockLabel} onClose={() => setInfoOpen(false)} />
       ) : null}
     </>
   );
 }
 
 /* ---- ChoiceGroup: header + multiple exercise options with dropdown ---- */
-function ChoiceGroup({ header, options, accent, blockLabel }: {
+function ChoiceGroup({ header, options, accent, blockLabel, recommendationContext }: {
   header: string;
   options: ParsedExercise[];
   accent: ReturnType<typeof blockAccent>;
   blockLabel?: string;
+  recommendationContext?: ExerciseRecommendationContext | null;
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [open, setOpen] = useState(false);
+  const [hasManualSelection, setHasManualSelection] = useState(false);
   const [lang] = useLang();
   const t = PLAYER_COPY[lang];
   const selected = options[selectedIdx];
+  const defaultRecommendedExerciseId = useMemo(() => {
+    const original = options[0];
+    if (!original) return null;
+    return getExerciseRecommendation({
+      ...(recommendationContext ?? {}),
+      originalExerciseName: original.name,
+    }).recommendedExerciseId;
+  }, [options, recommendationContext]);
+
+  useEffect(() => {
+    if (hasManualSelection || !defaultRecommendedExerciseId) return;
+    const nextIdx = options.findIndex((option) => normalizeExerciseNameToId(option.name) === defaultRecommendedExerciseId);
+    if (nextIdx >= 0 && nextIdx !== selectedIdx) {
+      setSelectedIdx(nextIdx);
+    }
+  }, [defaultRecommendedExerciseId, hasManualSelection, options, selectedIdx]);
+
+  const handleRecommendedExerciseSelect = (id: SupportedExerciseId | null) => {
+    if (!id) return;
+    const nextIdx = options.findIndex((option) => normalizeExerciseNameToId(option.name) === id);
+    if (nextIdx >= 0) {
+      setHasManualSelection(true);
+      setSelectedIdx(nextIdx);
+      setOpen(false);
+    }
+  };
   return (
     <div>
       {/* Choice header */}
@@ -1113,7 +1270,19 @@ function ChoiceGroup({ header, options, accent, blockLabel }: {
         <span className="text-[13px] font-bold leading-snug">▸ {header.replace(/:$/, "")}</span>
       </div>
       {/* Selected exercise */}
-      {selected ? <div className="mt-1.5"><ExerciseCard ex={selected} accent={accent} blockLabel={blockLabel} /></div> : null}
+      {selected ? (
+        <div className="mt-1.5">
+          <ExerciseCard
+            ex={selected}
+            accent={accent}
+            blockLabel={blockLabel}
+            recommendationContext={recommendationContext}
+            availableExercises={options}
+            onSelectRecommendedExerciseId={handleRecommendedExerciseSelect}
+            disableInternalExerciseSwap
+          />
+        </div>
+      ) : null}
       {/* Toggle button — prominent */}
       {options.length > 1 ? (
         <button
@@ -1131,7 +1300,11 @@ function ChoiceGroup({ header, options, accent, blockLabel }: {
             i === selectedIdx ? null : (
               <button
                 key={i}
-                onClick={() => { setSelectedIdx(i); setOpen(false); }}
+                onClick={() => {
+                  setHasManualSelection(true);
+                  setSelectedIdx(i);
+                  setOpen(false);
+                }}
                 className="w-full text-left"
               >
                 <ExerciseCard ex={opt} accent={accent} dimmed />
@@ -1166,7 +1339,16 @@ function groupIntoSegments(parsed: ParsedExercise[]): ExSegment[] {
   return segments;
 }
 
-function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string; t?: (typeof PLAYER_COPY)["IS"] }) {
+function renderStructureBlocks(
+  structure: any,
+  opts?: {
+    headerTitle?: string | null;
+    headerDesc?: string | null;
+    lockLabel?: string;
+    t?: (typeof PLAYER_COPY)["IS"];
+    recommendationContext?: ExerciseRecommendationContext | null;
+  }
+) {
   const blocks = Array.isArray(structure) ? structure : [];
   if (!blocks.length) return null;
 
@@ -1226,12 +1408,12 @@ function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | n
                 {segments.length ? (
                   <div className="space-y-2">
                     {segments.map((seg, i) => {
-                      if (seg.kind === "choice") {
+                  if (seg.kind === "choice") {
                         return (
-                          <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} />
+                          <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} recommendationContext={opts?.recommendationContext} />
                         );
                       }
-                      return <ExerciseCard key={i} ex={seg.ex} accent={accent} blockLabel={accent.label} />;
+                      return <ExerciseCard key={i} ex={seg.ex} accent={accent} blockLabel={accent.label} recommendationContext={opts?.recommendationContext} />;
                     })}
                   </div>
                 ) : (
@@ -3084,6 +3266,34 @@ export default function PlayerClient() {
 
   const whyText = plan?.why || genericMsg?.why || (ui as any).why;
 
+  const exerciseRecommendationContext: ExerciseRecommendationContext = {
+    readinessState: flag === "GREEN" || flag === "YELLOW" || flag === "RED" ? flag : null,
+    riskState:
+      finalRecommendationDecision?.finalRecommendation.action === "RECOVERY" || finalRecommendationDecision?.finalRecommendation.action === "HOLD"
+        ? "HIGH"
+        : finalRecommendationDecision?.finalRecommendation.action === "MODIFIED"
+          ? "MODERATE"
+          : finalRecommendationDecision?.finalRecommendation.action === "FULL"
+            ? "LOW"
+            : null,
+    trainingMode:
+      finalRecommendationDecision?.finalRecommendation.action === "RECOVERY"
+        ? "REGENERATE"
+        : finalRecommendationDecision?.finalRecommendation.action === "HOLD"
+          ? "PROTECT"
+          : finalRecommendationDecision?.finalRecommendation.action === "MODIFIED"
+            ? "MODIFY"
+            : finalRecommendationDecision?.finalRecommendation.action === "FULL"
+              ? "PUSH"
+              : null,
+    neuralSuppressionFlag:
+      neuralVolatilityDecision?.collapseRisk.band === "HIGH" ||
+      neuralVolatilityDecision?.collapseRisk.band === "CRITICAL" ||
+      neuralVolatilityDecision?.fatigueAccumulation.band === "HEAVY",
+    modifiedOnlyFlag: decisionType === "REDUCED" || finalRecommendationDecision?.finalRecommendation.action === "MODIFIED",
+    kneeIrritationFlag: false,
+  };
+
   const debugLine =
     `day=${today} | ` +
     `plan_entry_date=${plan.entry_date ?? "-"} | ` +
@@ -3102,9 +3312,9 @@ export default function PlayerClient() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      {/* ✅ Fixed header — always visible at top */}
-      <div className="fixed top-0 left-0 right-0 z-30 px-4 pt-2 pb-1 bg-zinc-50/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+        {/* ✅ Sticky header — sticks to top of viewport when scrolling */}
+        <div className="sticky top-0 z-20 mb-5">
           <div data-player-card="header" className={cx("rounded-2xl border bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/70", (ui as any).panel)}>
             <div className="p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3152,10 +3362,7 @@ export default function PlayerClient() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Scrollable content — padded to clear the fixed header */}
-      <div className="mx-auto max-w-6xl px-4 pt-44 pb-6 sm:pt-32 sm:pb-8">
         {today === todayISO() && !metrics?.created_at ? (
           <div className="mb-5">
             <MissingCheckinBanner />
@@ -3671,6 +3878,7 @@ export default function PlayerClient() {
               headerDesc: sessionHeaderDesc,
               lockLabel,
               t,
+              recommendationContext: exerciseRecommendationContext,
             })}
 
             {renderPostTraining(postTraining)}
