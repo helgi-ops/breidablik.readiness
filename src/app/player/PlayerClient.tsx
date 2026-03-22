@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useLang } from "@/lib/lang";
+import { PLAYER_COPY } from "./playerCopy";
+import { lookupExercise } from "./exerciseDatabase";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -743,28 +746,434 @@ function selectTemplateOverrideCandidate(
 function blockAccent(titleRaw: string) {
   const t = (titleRaw ?? "").toLowerCase();
 
-  let label = "Partur";
-
-  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) label = "Upphitun";
-  else if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) label = "Primer";
-  else if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) label = "Main";
-  else if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) label = "Accessory";
-
+  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) {
+    return {
+      wrap: "border-amber-200 bg-amber-50/70",
+      badge: "bg-amber-100 text-amber-800 border-amber-200",
+      dot: "bg-amber-400",
+      bar: "bg-amber-400",
+      itemBorder: "border-amber-100",
+      itemBg: "bg-white",
+      methodBadge: "bg-amber-100 text-amber-700 border-amber-200",
+      choiceHeader: "bg-amber-100/80 border-amber-200 text-amber-900",
+      label: "Upphitun",
+    };
+  }
+  if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) {
+    return {
+      wrap: "border-violet-200 bg-violet-50/70",
+      badge: "bg-violet-100 text-violet-800 border-violet-200",
+      dot: "bg-violet-500",
+      bar: "bg-violet-400",
+      itemBorder: "border-violet-100",
+      itemBg: "bg-white",
+      methodBadge: "bg-violet-100 text-violet-700 border-violet-200",
+      choiceHeader: "bg-violet-100/80 border-violet-200 text-violet-900",
+      label: "Primer",
+    };
+  }
+  if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) {
+    return {
+      wrap: "border-blue-200 bg-blue-50/70",
+      badge: "bg-blue-100 text-blue-800 border-blue-200",
+      dot: "bg-blue-500",
+      bar: "bg-blue-400",
+      itemBorder: "border-blue-100",
+      itemBg: "bg-white",
+      methodBadge: "bg-blue-100 text-blue-700 border-blue-200",
+      choiceHeader: "bg-blue-100/80 border-blue-200 text-blue-900",
+      label: "Main",
+    };
+  }
+  if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) {
+    return {
+      wrap: "border-emerald-200 bg-emerald-50/70",
+      badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      dot: "bg-emerald-500",
+      bar: "bg-emerald-400",
+      itemBorder: "border-emerald-100",
+      itemBg: "bg-white",
+      methodBadge: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      choiceHeader: "bg-emerald-100/80 border-emerald-200 text-emerald-900",
+      label: "Accessory",
+    };
+  }
   return {
     wrap: "border-zinc-200 bg-zinc-50/60",
     badge: "bg-zinc-50 text-zinc-700 border-zinc-200",
     dot: "bg-zinc-400",
-    label,
+    bar: "bg-zinc-300",
+    itemBorder: "border-zinc-100",
+    itemBg: "bg-white",
+    methodBadge: "bg-zinc-100 text-zinc-600 border-zinc-200",
+    choiceHeader: "bg-zinc-100 border-zinc-200 text-zinc-700",
+    label: "Partur",
   };
 }
 
-function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string }) {
+type ParsedExercise = {
+  isHeader: boolean;
+  name: string;
+  method: string | null;
+  setsReps: string | null;
+  note: string | null;
+};
+
+function parseExerciseItem(raw: string): ParsedExercise {
+  const s = (raw ?? "").trim();
+
+  // Header/instruction lines: end with ":" or are choice prompts
+  if (s.endsWith(":") || /^(veldu|choose|complete|nota|hér|þetta)/i.test(s)) {
+    return { isHeader: true, name: s, method: null, setsReps: null, note: null };
+  }
+
+  // Remove leading index like "1) " or "1. " and bullet characters
+  let working = s.replace(/^\d+[\)\.\-]\s*/, "").replace(/^[•\-\*]\s*/, "");
+
+  // Extract method badge
+  let method: string | null = null;
+  if (/\bCLUSTER\b/i.test(working)) method = "CLUSTER";
+  else if (/\bISO\b/i.test(working)) method = "ISO";
+  else if (/\bEMOM\b/i.test(working)) method = "EMOM";
+  else if (/\bAMRAP\b/i.test(working)) method = "AMRAP";
+
+  // Extract trailing note in parentheses
+  const noteMatch = working.match(/\(([^)]+)\)\s*$/);
+  const note = noteMatch ? noteMatch[1] : null;
+  if (noteMatch) working = working.slice(0, noteMatch.index).trim();
+
+  // Extract sets×reps pattern — handles "2×3", "2 reps/arm × 3 sett", "1 rep each arm × 5 sets", "2×5 / fót", "1 sek × 8"
+  const setsRepsMatch = working.match(/\d+(?:\s+(?:reps?(?:\/\w+)?|sek|min))?(?:\s+each\s+\w+)?\s*[×xX]\s*\d+(?:\s*\/\s*\w+)?(?:\s+(?:sett|sets?|reps?|sek|min))?/i);
+  const rawSetsReps = setsRepsMatch ? setsRepsMatch[0].trim() : null;
+  // Add labels if missing — "2 × 3" → "2 × 3 sett", "2 reps × 3 sett" preserved as-is
+  let setsReps = rawSetsReps;
+  if (rawSetsReps && !/sett|sets|reps?/i.test(rawSetsReps)) {
+    // plain "2 × 3" or "2 × 3 / fót" — add sett label
+    setsReps = rawSetsReps.replace(/(\d+\s*[×xX]\s*\d+)/, "$1 sett");
+  }
+
+  // Extract name: everything before "—", ":", or the sets info
+  let name = working;
+  if (name.includes("—")) {
+    name = name.split("—")[0].trim();
+  } else if (setsReps) {
+    const idx = name.indexOf(setsReps);
+    if (idx > 0) name = name.slice(0, idx).trim().replace(/[-—:,]+$/, "").trim();
+  }
+  // Remove any leftover leading index
+  name = name.replace(/^\d+[\)\.\-]\s*/, "").trim();
+
+  return { isHeader: false, name, method, setsReps, note };
+}
+
+/* ---- Exercise info content (method guides + block goals) ---- */
+const METHOD_GUIDE: Record<string, { IS: string; EN: string }> = {
+  CLUSTER: {
+    IS: "Cluster uppsetning þýðir að þú framkvæmir allar endurtekningarnar saman í hvert skipti og hvílir síðan á milli setta.\n\nDæmi — 2 reps × 3 sett (20 sek hvíld):\n2 reps → hvíl 20 sek → 2 reps → hvíl 20 sek → 2 reps = lokið.\n\nÞetta gerir þér kleift að nota meiri þyngd og halda betri tækni í gegnum öll settin.",
+    EN: "Cluster setup means you perform all reps together each time, then rest between sets.\n\nExample — 2 reps × 3 sets (20 sec rest):\n2 reps → rest 20 sec → 2 reps → rest 20 sec → 2 reps = complete.\n\nThis allows you to use heavier loads and maintain better technique across all sets.",
+  },
+  ISO: {
+    IS: "Isometric æfing — haltu stöðunni í tilgreindan tíma. Einbeittu þér að að spenna vöðvana að fullu og halda jafnri líkamsstöðu í gegnum allt tímabilið.\n\nÞetta þróar styrk á ákveðnum punkti á hreyfisviðinu og örvar taugavöðvasamband.",
+    EN: "Isometric exercise — hold the position for the specified time. Focus on fully contracting the muscles and maintaining a steady position throughout.\n\nThis develops strength at a specific point in the range of motion and enhances neuromuscular control.",
+  },
+  EMOM: {
+    IS: "EMOM (Every Minute On the Minute) — framkvæmdu tilgreindar endurtekningar í upphafi hvers mínútu. Restartaðu á næstu mínútu. Hvíldin er það sem eftir er af hverri mínútu.",
+    EN: "EMOM (Every Minute On the Minute) — complete the specified reps at the start of each minute. Rest for whatever time remains before the next minute begins.",
+  },
+  AMRAP: {
+    IS: "AMRAP (As Many Reps/Rounds As Possible) — framkvæmdu eins margar endurtekningar eða hringi og mögulegt er á tilgreindum tíma. Haltu gæðum hreyfinganna.",
+    EN: "AMRAP (As Many Reps/Rounds As Possible) — complete as many reps or rounds as possible in the allotted time. Maintain movement quality throughout.",
+  },
+};
+
+const BLOCK_GOAL: Record<string, { IS: string; EN: string }> = {
+  Upphitun: {
+    IS: "Hækka líkamshita, auka blóðflæði og virkja vöðva og taugakerfi fyrir eftirfarandi æfingar. Taktu þér tíma og einbeittu þér að gæðum hreyfinganna.",
+    EN: "Raise body temperature, increase blood flow and activate muscles and the nervous system for the exercises ahead. Take your time and focus on movement quality.",
+  },
+  "Warm-up": {
+    IS: "Hækka líkamshita, auka blóðflæði og virkja vöðva og taugakerfi fyrir eftirfarandi æfingar.",
+    EN: "Raise body temperature, increase blood flow and activate muscles and the nervous system for the exercises ahead.",
+  },
+  Primer: {
+    IS: "Virkja taugarnar og undirbúa líkamann sérstaklega fyrir kraftæfingar. Primer æfingar þjálfa explosive power og samhæfingu — þær undirbúa þig til að framkvæma aðalæfingarnar með meiri krafti og betri tækni.",
+    EN: "Activate the nervous system and specifically prepare the body for strength work. Primer exercises train explosive power and coordination — priming you to perform the main exercises with more force and better technique.",
+  },
+  Main: {
+    IS: "Þróa force production og styrk í neðri líkama með því að para saman þungar styrktaræfingar og sprengikraftsæfingar (contrast). Þetta eykur neural drive, power output og flutning yfir í hlaup og stökk.",
+    EN: "Develop force production and lower body strength by pairing heavy strength exercises with explosive plyometrics (contrast). This increases neural drive, power output and transfer to running and jumping.",
+  },
+  Accessory: {
+    IS: "Bæta stöðugleika í liðum, sinastyrk og neural control. Isometric æfingar hjálpa sérstaklega við meiðslavarnir (ACL, groin) og auka kraftflutning í hreyfingum. Low fatigue — high neural output.",
+    EN: "Improve joint stability, tendon strength and neural control. Isometric exercises are especially effective for injury prevention (ACL, groin) and enhancing force transfer in movement. Low fatigue — high neural output.",
+  },
+};
+
+/* ---- ExerciseInfoModal ---- */
+function ExerciseInfoModal({
+  ex,
+  blockLabel,
+  onClose,
+}: {
+  ex: ParsedExercise;
+  blockLabel: string;
+  onClose: () => void;
+}) {
+  const [lang] = useLang();
+  const isIS = lang === "IS";
+
+  const methodGuide = ex.method ? METHOD_GUIDE[ex.method] : null;
+  const blockGoal = BLOCK_GOAL[blockLabel];
+  const exInfo = lookupExercise(ex.name);
+  const desc = exInfo ? (isIS ? exInfo.IS : exInfo.EN) : null;
+
+  const hasContent = !!(ex.note || desc || methodGuide || blockGoal);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      {/* Sheet */}
+      <div
+        className="relative rounded-t-2xl bg-white shadow-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full bg-zinc-200" />
+        </div>
+
+        <div className="px-5 pb-8 pt-2 space-y-5">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-lg font-bold text-zinc-900 leading-snug">{ex.name}</div>
+              {ex.setsReps ? (
+                <div className="mt-1 text-sm font-semibold text-zinc-500">{ex.setsReps}</div>
+              ) : null}
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Note */}
+          {ex.note ? (
+            <div className="rounded-xl bg-zinc-50 border border-zinc-100 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-400 mb-1">
+                {isIS ? "Athugasemd" : "Note"}
+              </div>
+              <div className="text-sm text-zinc-700 leading-relaxed">{ex.note}</div>
+            </div>
+          ) : null}
+
+          {/* Exercise-specific: Execution steps */}
+          {desc ? (
+            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-500 mb-2">
+                📋 {isIS ? "Framkvæmd" : "Execution"}
+              </div>
+              <ol className="space-y-1.5">
+                {desc.execution.map((step, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm text-zinc-700 leading-snug">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600">{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+
+          {/* Exercise-specific: Focus points */}
+          {desc?.focus?.length ? (
+            <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-amber-600 mb-2">
+                🎯 {isIS ? "Fókuspunktar" : "Focus points"}
+              </div>
+              <ul className="space-y-1">
+                {desc.focus.map((pt, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-amber-900 leading-snug">
+                    <span className="mt-0.5 text-amber-400 shrink-0">▸</span>
+                    <span>{pt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Exercise-specific: Goal */}
+          {desc?.goal ? (
+            <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-green-600 mb-1">
+                ✅ {isIS ? "Markmið æfingar" : "Exercise goal"}
+              </div>
+              <div className="text-sm text-green-900 leading-relaxed">{desc.goal}</div>
+            </div>
+          ) : null}
+
+          {/* Method guide */}
+          {methodGuide ? (
+            <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-violet-500 mb-2">
+                ⚙ {ex.method} — {isIS ? "Hvernig á að framkvæma" : "How to perform"}
+              </div>
+              {(isIS ? methodGuide.IS : methodGuide.EN).split("\n").map((line, i) =>
+                line.trim() === "" ? (
+                  <div key={i} className="h-2" />
+                ) : (
+                  <div key={i} className="text-sm text-violet-900 leading-relaxed">{line}</div>
+                )
+              )}
+            </div>
+          ) : null}
+
+          {/* Block goal */}
+          {blockGoal ? (
+            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-blue-500 mb-2">
+                🏋 {isIS ? `Markmið hlutans — ${blockLabel}` : `Block goal — ${blockLabel}`}
+              </div>
+              <div className="text-sm text-blue-900 leading-relaxed">
+                {isIS ? blockGoal.IS : blockGoal.EN}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Fallback if no extra info */}
+          {!hasContent ? (
+            <div className="text-sm text-zinc-400 text-center py-4">
+              {isIS ? "Engar frekari upplýsingar tiltækar." : "No additional information available."}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- ExerciseCard ---- */
+function ExerciseCard({ ex, accent, blockLabel, dimmed }: { ex: ParsedExercise; accent: ReturnType<typeof blockAccent>; blockLabel?: string; dimmed?: boolean }) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  return (
+    <>
+      <div className={cx("rounded-xl border px-3 py-2", accent.itemBorder, accent.itemBg)}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 min-w-0">
+            <span className="text-sm font-semibold text-zinc-900 leading-snug">{ex.name}</span>
+            {ex.setsReps ? (
+              <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">{ex.setsReps}</span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {ex.method ? (
+              <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-bold", accent.methodBadge)}>
+                {ex.method}
+              </span>
+            ) : null}
+            {/* Info button — only on non-dimmed cards */}
+            {!dimmed ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); setInfoOpen(true); }}
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-400 text-xs hover:border-zinc-300 hover:text-zinc-600 transition-colors"
+                aria-label="Info"
+              >
+                ⓘ
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {ex.note ? <div className="mt-0.5 text-xs text-zinc-500">{ex.note}</div> : null}
+      </div>
+      {infoOpen && blockLabel ? (
+        <ExerciseInfoModal ex={ex} blockLabel={blockLabel} onClose={() => setInfoOpen(false)} />
+      ) : null}
+    </>
+  );
+}
+
+/* ---- ChoiceGroup: header + multiple exercise options with dropdown ---- */
+function ChoiceGroup({ header, options, accent, blockLabel }: {
+  header: string;
+  options: ParsedExercise[];
+  accent: ReturnType<typeof blockAccent>;
+  blockLabel?: string;
+}) {
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [lang] = useLang();
+  const t = PLAYER_COPY[lang];
+  const selected = options[selectedIdx];
+  return (
+    <div>
+      {/* Choice header */}
+      <div className={cx("mt-1 rounded-lg border px-3 py-2 flex items-center gap-2", accent.choiceHeader)}>
+        <span className="text-[13px] font-bold leading-snug">▸ {header.replace(/:$/, "")}</span>
+      </div>
+      {/* Selected exercise */}
+      {selected ? <div className="mt-1.5"><ExerciseCard ex={selected} accent={accent} blockLabel={blockLabel} /></div> : null}
+      {/* Toggle button — prominent */}
+      {options.length > 1 ? (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="mt-2 w-full flex items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 transition-colors shadow-sm"
+        >
+          <span>{t.training.changeExercise}</span>
+          <span className="text-zinc-400 text-xs">{open ? "▴" : "▾"}</span>
+        </button>
+      ) : null}
+      {/* Other options */}
+      {open ? (
+        <div className="mt-1.5 space-y-1.5 pl-3 border-l-2 border-zinc-200">
+          {options.map((opt, i) =>
+            i === selectedIdx ? null : (
+              <button
+                key={i}
+                onClick={() => { setSelectedIdx(i); setOpen(false); }}
+                className="w-full text-left"
+              >
+                <ExerciseCard ex={opt} accent={accent} dimmed />
+              </button>
+            )
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---- Segment helpers for grouping parsed items ---- */
+type ExSegment =
+  | { kind: "exercise"; ex: ParsedExercise }
+  | { kind: "choice"; header: string; options: ParsedExercise[] };
+
+function groupIntoSegments(parsed: ParsedExercise[]): ExSegment[] {
+  const segments: ExSegment[] = [];
+  for (const item of parsed) {
+    if (item.isHeader) {
+      segments.push({ kind: "choice", header: item.name, options: [] });
+    } else {
+      const last = segments[segments.length - 1];
+      if (last && last.kind === "choice") {
+        last.options.push(item);
+      } else {
+        segments.push({ kind: "exercise", ex: item });
+      }
+    }
+  }
+  return segments;
+}
+
+function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | null; headerDesc?: string | null; lockLabel?: string; t?: (typeof PLAYER_COPY)["IS"] }) {
   const blocks = Array.isArray(structure) ? structure : [];
   if (!blocks.length) return null;
 
   const headerTitle = String(opts?.headerTitle ?? "").trim();
   const headerDesc = String(opts?.headerDesc ?? "").trim();
   const lockLabel = opts?.lockLabel ?? "";
+  const t = opts?.t ?? PLAYER_COPY.IS;
 
   return (
     <div className="space-y-3">
@@ -772,16 +1181,16 @@ function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | n
         <div className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Æfing dagsins</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{t.training.sectionTitle}</div>
               <div className="mt-2 flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />
-                <div className="truncate text-base font-semibold text-zinc-900">{headerTitle || "Æfing dagsins"}</div>
+                <div className="truncate text-base font-semibold text-zinc-900">{headerTitle || t.training.sectionTitle}</div>
               </div>
               {headerDesc ? <div className="mt-1 text-sm text-zinc-600">{headerDesc}</div> : null}
             </div>
 
             <div className="text-right">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Staða</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{t.training.status}</div>
               <div className="mt-1 text-sm font-semibold text-zinc-900">{lockLabel || "—"}</div>
             </div>
           </div>
@@ -793,31 +1202,42 @@ function renderStructureBlocks(structure: any, opts?: { headerTitle?: string | n
           const title = String(b?.block ?? `Block ${idx + 1}`);
           const items = safeStringList(b?.items);
           const accent = blockAccent(title);
+          const parsed = items.map(parseExerciseItem);
+          const segments = groupIntoSegments(parsed);
 
           return (
-            <div key={`${title}-${idx}`} className={cx("rounded-2xl border p-4", accent.wrap)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={cx("h-2.5 w-2.5 rounded-full", accent.dot)} />
+            <div key={`${title}-${idx}`} className={cx("rounded-2xl border overflow-hidden", accent.wrap)}>
+              {/* Colored top bar */}
+              <div className={cx("h-1 w-full", accent.bar)} />
+
+              <div className="p-4">
+                {/* Block header */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", accent.dot)} />
                     <div className="text-sm font-semibold text-zinc-900">{title}</div>
                   </div>
+                  <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)}>
+                    {accent.label}
+                  </span>
                 </div>
 
-                <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)}>
-                  {accent.label}
-                </span>
+                {/* Exercise segments */}
+                {segments.length ? (
+                  <div className="space-y-2">
+                    {segments.map((seg, i) => {
+                      if (seg.kind === "choice") {
+                        return (
+                          <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} />
+                        );
+                      }
+                      return <ExerciseCard key={i} ex={seg.ex} accent={accent} blockLabel={accent.label} />;
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-sm text-zinc-600">{t.training.noItems}</div>
+                )}
               </div>
-
-              {items.length ? (
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-800">
-                  {items.map((it, i) => (
-                    <li key={i}>{it}</li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="mt-3 text-sm text-zinc-600">Engin atriði í þessum hluta.</div>
-              )}
             </div>
           );
         })}
@@ -1293,6 +1713,9 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
 }
 
 export default function PlayerClient() {
+  const [lang, setLang] = useLang();
+  const t = PLAYER_COPY[lang];
+
   const supabase = useMemo(() => getSupabaseClient(), []);
   const searchParams = useSearchParams();
 
@@ -2594,7 +3017,7 @@ export default function PlayerClient() {
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-800" />
-          <div className="text-sm text-zinc-400">Hleð gögnum...</div>
+          <div className="text-sm text-zinc-400">{PLAYER_COPY.IS.training.loading}</div>
         </div>
       </div>
     );
@@ -2679,14 +3102,14 @@ export default function PlayerClient() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
-        {/* ✅ Mobile-optimized sticky header */}
-        <div className="sticky top-2 z-20 mb-5">
-          <div className={cx("rounded-2xl border bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/70", (ui as any).panel)}>
+      {/* ✅ Fixed header — always visible at top */}
+      <div className="fixed top-0 left-0 right-0 z-30 px-4 pt-2 pb-1 bg-zinc-50/80 backdrop-blur">
+        <div className="mx-auto max-w-6xl">
+          <div data-player-card="header" className={cx("rounded-2xl border bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/70", (ui as any).panel)}>
             <div className="p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-xs font-medium text-zinc-500">Player · {today}</div>
+                  <div className="text-xs font-medium text-zinc-500">{t.header.label} · {today}</div>
                   <div className="mt-1 truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{name}</div>
                   <div className="mt-1 text-sm text-zinc-600">
                     {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
@@ -2694,6 +3117,17 @@ export default function PlayerClient() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* Language toggle */}
+                  <div className="flex items-center rounded-full border border-zinc-200 bg-white p-0.5 text-xs font-semibold">
+                    <button
+                      onClick={() => setLang("IS")}
+                      className={cx("rounded-full px-2.5 py-1 transition-colors", lang === "IS" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-700")}
+                    >IS</button>
+                    <button
+                      onClick={() => setLang("EN")}
+                      className={cx("rounded-full px-2.5 py-1 transition-colors", lang === "EN" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-700")}
+                    >EN</button>
+                  </div>
                   <Link
                     href="/player/settings/integrations"
                     className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
@@ -2718,7 +3152,10 @@ export default function PlayerClient() {
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Scrollable content — padded to clear the fixed header */}
+      <div className="mx-auto max-w-6xl px-4 pt-44 pb-6 sm:pt-32 sm:pb-8">
         {today === todayISO() && !metrics?.created_at ? (
           <div className="mb-5">
             <MissingCheckinBanner />
@@ -2730,12 +3167,12 @@ export default function PlayerClient() {
           {/* LEFT */}
           <div className="space-y-6">
             {/* Decision hero */}
-            <div className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
-              <SectionTitle kicker="Í dag" title={`Ákvörðun: ${decisionType}`} />
+            <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
+              <SectionTitle kicker={t.decision.kicker} title={`${t.decision.prefix}: ${decisionType}`} />
 
               {coachMsg ? (
                 <div className="mt-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
-                  Skilaboð frá þjálfara
+                  {t.decision.coachMsg}
                 </div>
               ) : null}
 
@@ -2743,7 +3180,7 @@ export default function PlayerClient() {
 
               {whyText ? (
                 <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-zinc-700">
-                  <span className="font-semibold text-zinc-900">Af hverju:</span> {whyText}
+                  <span className="font-semibold text-zinc-900">{t.decision.why}</span> {whyText}
                 </div>
               ) : null}
 
@@ -2760,7 +3197,7 @@ export default function PlayerClient() {
               <details className="group" open>
                 <summary className="cursor-pointer select-none p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
-                    <SectionTitle kicker="Readiness" title="Mælingar dagsins" sub="Aðeins til upplýsingar — notað fyrir ákvörðunarlógík." />
+                    <SectionTitle kicker="Readiness" title={t.readiness.title} sub={t.readiness.sub} />
                     <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</div>
                     <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</div>
                   </div>
@@ -2975,7 +3412,7 @@ export default function PlayerClient() {
             {/* Post-session RPE */}
             <CardShell data-player-card="rpe">
               <div className="p-4 sm:p-5">
-                <SectionTitle kicker="Eftir æfingu" title="Post-Session RPE" sub="Rate how hard the full session felt overall." />
+                <SectionTitle kicker={t.rpe.kicker} title={t.rpe.title} sub={t.rpe.sub} />
 
                 <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3233,6 +3670,7 @@ export default function PlayerClient() {
               headerTitle: sessionHeaderTitle,
               headerDesc: sessionHeaderDesc,
               lockLabel,
+              t,
             })}
 
             {renderPostTraining(postTraining)}

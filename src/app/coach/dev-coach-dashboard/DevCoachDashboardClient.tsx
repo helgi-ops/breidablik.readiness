@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useLang } from "@/lib/lang";
+import { COACH_COPY } from "../coachCopy";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -1619,6 +1621,8 @@ function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
  * ----------------------------- */
 export default function CoachPage() {
   const router = useRouter();
+  const [lang, setLang] = useLang();
+  const ct = COACH_COPY[lang];
 
   const PAGE_SIZE = 100;
 
@@ -5765,18 +5769,12 @@ export default function CoachPage() {
     <div className="space-y-6">
       <CoachHubCards weeklyOutlook={weeklyPerformanceOutlook} />
 
-      {/* ── Tab navigation ── */}
+      {/* ── Tab navigation + lang toggle ── */}
       <div className="border-b border-slate-200">
-        <nav className="-mb-px flex">
+        <nav className="-mb-px flex items-center justify-between">
+          <div className="-mb-px flex flex-1">
           {(["today", "squad", "intel", "load", "gps", "volatility"] as const).map((tabId) => {
-            const labels: Record<string, string> = {
-              today: "Today",
-              squad: "Squad",
-              intel: "Intelligence",
-              load: "Load & RPE",
-              gps: "GPS Data",
-              volatility: "Volatility",
-            };
+            const labels = ct.tabs as Record<string, string>;
             const proTabs = new Set(["squad", "intel", "load", "gps", "volatility"]);
             const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
             return (
@@ -5798,6 +5796,18 @@ export default function CoachPage() {
               </button>
             );
           })}
+          </div>
+          {/* Language toggle */}
+          <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
+            <button
+              onClick={() => setLang("IS")}
+              className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >IS</button>
+            <button
+              onClick={() => setLang("EN")}
+              className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+            >EN</button>
+          </div>
         </nav>
       </div>
 
@@ -5811,8 +5821,8 @@ export default function CoachPage() {
             <CardHeader className="pb-2">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">Today Command Center</CardTitle>
-                  <CardDescription className="mt-1 text-sm text-slate-500">Today&apos;s coaching decision summary</CardDescription>
+                  <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">{ct.header.commandCenter}</CardTitle>
+                  <CardDescription className="mt-1 text-sm text-slate-500">{ct.header.decisionSummary}</CardDescription>
                   {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
                 </div>
                 <div className="flex flex-col items-start gap-2 md:items-end">
@@ -5822,7 +5832,7 @@ export default function CoachPage() {
                   </div>
                   <div className="flex flex-wrap gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
-                      {catapultSyncing ? "Syncing Catapult..." : "Sync Catapult"}
+                      {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
                     </Button>
                     <Button
                       variant="outline"
@@ -6145,7 +6155,7 @@ export default function CoachPage() {
                       {loading ? "Hleð..." : "Refresh"}
                     </Button>
                     <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading}>
-                      {genLoading ? "Generating…" : "Generate Today Decisions"}
+                      {genLoading ? ct.actions.generating : ct.actions.generateDecisions}
                     </Button>
                   </div>
                 </div>

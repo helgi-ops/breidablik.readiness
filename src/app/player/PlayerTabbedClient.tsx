@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLang } from "@/lib/lang";
+import { PLAYER_COPY } from "./playerCopy";
 import { createPortal } from "react-dom";
 import PlayerClient from "./PlayerClient";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
@@ -56,11 +58,16 @@ function detectFinalActionFromPage(): FinalAction | null {
 }
 
 function detectHeaderCard(): HTMLElement | null {
+  // Primary: data attribute (language-agnostic)
+  const byKey = document.querySelector('[data-player-card="header"]') as HTMLElement | null;
+  if (byKey) return byKey;
+  // Fallback: text-based (IS and EN)
   const cards = Array.from(document.querySelectorAll("div.rounded-xl, div.rounded-2xl")) as HTMLElement[];
   return (
     cards.find((el) => {
       const txt = el.textContent ?? "";
-      return txt.includes("Player ·") && (txt.includes("FULL") || txt.includes("REDUCED") || txt.includes("RECOVERY"));
+      return (txt.includes("Player ·") || txt.includes("Leikmaður ·")) &&
+        (txt.includes("FULL") || txt.includes("REDUCED") || txt.includes("RECOVERY"));
     }) ?? null
   );
 }
@@ -149,7 +156,7 @@ function enforceRenderedWorkoutBlocks(decision: NormalizedPlayerDailyDecision): 
   const trainingRoot =
     sectionRoots.find((root) => {
       const txt = root.textContent ?? "";
-      return txt.includes("Æfing dagsins") && root.querySelector("div.rounded-2xl.border.p-4");
+      return (txt.includes("Æfing dagsins") || txt.includes("Today's Session")) && root.querySelector("div.rounded-2xl.border.p-4");
     }) ?? null;
   if (!trainingRoot) return;
 
@@ -312,11 +319,15 @@ function detectValdCard(): HTMLElement | null {
 }
 
 function detectDecisionHeroCard(): HTMLElement | null {
+  // Primary: data attribute (language-agnostic)
+  const byKey = document.querySelector('[data-player-card="decision"]') as HTMLElement | null;
+  if (byKey) return byKey;
+  // Fallback: text-based (IS and EN)
   const cards = Array.from(document.querySelectorAll("div.rounded-2xl.border")) as HTMLElement[];
   return (
     cards.find((el) => {
       const txt = el.textContent ?? "";
-      return txt.includes("Ákvörðun:") || txt.includes("Training Context");
+      return txt.includes("Ákvörðun:") || txt.includes("Decision:") || txt.includes("Training Context");
     }) ?? null
   );
 }
@@ -347,6 +358,32 @@ function applyDashboardMetricsLayout(metricsCard: HTMLElement, expanded: boolean
       grid.style.gridTemplateColumns = "";
       grid.style.alignItems = "";
     }
+  }
+}
+
+function applyStickyPlayerHeroLayout(header: HTMLElement, activeTab: DevPlayerTab) {
+  const topOffset = 12;
+  const headerHeight = header.getBoundingClientRect().height || header.offsetHeight || 0;
+  const commandSlot = document.getElementById("dev-ate-command-card-slot") as HTMLElement | null;
+
+  header.style.position = "sticky";
+  header.style.top = `${topOffset}px`;
+  header.style.zIndex = "30";
+  header.style.backdropFilter = "blur(10px)";
+  (header.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "blur(10px)";
+
+  if (!commandSlot) return;
+
+  if (activeTab === "today") {
+    commandSlot.style.position = "sticky";
+    commandSlot.style.top = `${Math.round(topOffset + headerHeight + 12)}px`;
+    commandSlot.style.zIndex = "25";
+    commandSlot.style.background = "transparent";
+  } else {
+    commandSlot.style.position = "";
+    commandSlot.style.top = "";
+    commandSlot.style.zIndex = "";
+    commandSlot.style.background = "";
   }
 }
 
@@ -624,12 +661,12 @@ function IconZap({ active }: { active: boolean }) {
 
 // ── PWA bottom navigation bar ────────────────────────────────────────────────
 
-const PWA_NAV_TABS = [
-  { key: "today"     as DevPlayerTab, label: "Today",     Icon: IconHome,     minTier: "free"  as const },
-  { key: "rpe"       as DevPlayerTab, label: "RPE",       Icon: IconActivity, minTier: "pro"   as const },
-  { key: "dashboard" as DevPlayerTab, label: "Dashboard", Icon: IconBarChart, minTier: "pro"   as const },
-  { key: "history"   as DevPlayerTab, label: "History",   Icon: IconClock,    minTier: "free"  as const },
-  { key: "vald"      as DevPlayerTab, label: "VALD",      Icon: IconZap,      minTier: "elite" as const },
+const PWA_NAV_TAB_KEYS = [
+  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free"  as const },
+  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const },
+  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const },
+  { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const },
+  { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const },
 ];
 
 function PWABottomNav({
@@ -643,6 +680,8 @@ function PWABottomNav({
 }) {
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
   const isElite = planTier === "ELITE";
+  const [lang] = useLang();
+  const tabs = PLAYER_COPY[lang].tabs;
 
   return (
     <nav
@@ -650,7 +689,8 @@ function PWABottomNav({
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="flex">
-        {PWA_NAV_TABS.map(({ key, label, Icon, minTier }) => {
+        {PWA_NAV_TAB_KEYS.map(({ key, tabKey, Icon, minTier }) => {
+          const label = tabs[tabKey];
           const locked =
             (minTier === "pro" && !isAtLeastPro) ||
             (minTier === "elite" && !isElite);
@@ -772,7 +812,7 @@ export default function DevPlayerClient() {
       attempts += 1;
       const header = detectHeaderCard();
       const decisionCard = detectDecisionHeroCard();
-      const metricsCard = detectCardByKey("metrics") ?? detectCardByTitle("Mælingar dagsins");
+      const metricsCard = detectCardByKey("metrics") ?? detectCardByTitle("Mælingar dagsins") ?? detectCardByTitle("Today's Measurements");
       const riskCard = detectCardByKey("risk") ?? detectCardByTitle("Player Risk Trend");
       const rpeCard = detectRpeCard();
       const valdCard = detectValdCard();
@@ -792,6 +832,8 @@ export default function DevPlayerClient() {
       const panelSlot = tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null;
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
       setPanelMountNode((prev) => (prev === panelSlot ? prev : panelSlot));
+
+      applyStickyPlayerHeroLayout(header, activeTab);
 
       // PWA: hide top tabs slot (bottom nav handles navigation), add body padding
       if (tabsSlot) tabsSlot.style.display = isPwa ? "none" : "";
