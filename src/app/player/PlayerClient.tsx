@@ -69,6 +69,7 @@ import ValdStatusCard from "@/components/player/ValdStatusCard";
 import { getExerciseRecommendation } from "@/lib/exercise-recommendations/recommend";
 import { getSupportedExerciseLabel, normalizeExerciseNameToId } from "@/lib/exercise-recommendations/normalize";
 import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
+import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
 
 type ProfileRow = {
@@ -744,6 +745,28 @@ function selectTemplateOverrideCandidate(
   return byMdOrAll[0] ?? rows[0] ?? null;
 }
 
+/**
+ * Returns a canonical sort priority for a training block based on its title.
+ * Lower number = shown earlier in the session.
+ *   0 – warm-up (upphitun)
+ *   1 – primer / ballistic / explosive  ← must come before contrast
+ *   2 – contrast / strength (main block)
+ *   3 – iso / isometric / accessory
+ *   9 – everything else
+ *
+ * This ensures "Ballistic Readiness Check" (priority 1) always renders before
+ * "Contrast" / "French Contrast" (priority 2) even when the template data
+ * stores them in a different order.
+ */
+function blockSortPriority(titleRaw: string): number {
+  const t = (titleRaw ?? "").toLowerCase();
+  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) return 0;
+  if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) return 1;
+  if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) return 2;
+  if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) return 3;
+  return 9;
+}
+
 /** =========
  *  Block accents (NEUTRAL / GRÁTT fyrir player)
  *  ========= */
@@ -1071,16 +1094,81 @@ function exerciseMethodForId(id: SupportedExerciseId | null, fallbackMethod: str
   return fallbackMethod;
 }
 
+function applySupportedExerciseDisplayOverride(
+  exercise: ParsedExercise,
+  id: SupportedExerciseId | null
+): ParsedExercise {
+  if (!id) return exercise;
+
+  if (id === "ISO_MID_THIGH_PULL") {
+    return {
+      ...exercise,
+      name: "ISO Mid-Thigh Pull",
+      method: "ISO",
+      setsReps: "1 sek all out effort x 8-10 reps",
+      note: null,
+    };
+  }
+
+  return exercise;
+}
+
+function scoreParsedExerciseForSupportedId(exercise: ParsedExercise, id: SupportedExerciseId): number {
+  const normalizedId = normalizeExerciseNameToId(exercise.name);
+  if (normalizedId !== id) return -1;
+
+  let score = 1;
+  const method = (exercise.method ?? "").toUpperCase();
+  const setsReps = (exercise.setsReps ?? "").toLowerCase();
+  const name = exercise.name.toLowerCase();
+
+  if (id === "ISO_MID_THIGH_PULL") {
+    if (method === "ISO") score += 5;
+    if (setsReps.includes("sek") || setsReps.includes("sec")) score += 3;
+    if (setsReps.includes("rep")) score += 1;
+    if (name.includes("iso")) score += 2;
+  }
+
+  if (id === "ISOMETRIC_SPLIT_SQUAT_HOLD") {
+    if (method === "ISO") score += 5;
+    if (setsReps.includes("sek") || setsReps.includes("sec")) score += 3;
+    if (name.includes("isometric")) score += 2;
+  }
+
+  if (id === "JUMP_SHRUGS" || id === "DB_SNATCH" || id === "MID_THIGH_PULL" || id === "SPLIT_STANCE_TRAP_BAR_DEADLIFT" || id === "RFESS") {
+    if (method !== "ISO") score += 2;
+  }
+
+  return score;
+}
+
+function findParsedExerciseIndexForSupportedId(
+  exercises: ParsedExercise[] | null | undefined,
+  id: SupportedExerciseId | null
+): number {
+  if (!id || !Array.isArray(exercises)) return -1;
+
+  let bestIdx = -1;
+  let bestScore = -1;
+
+  exercises.forEach((exercise, idx) => {
+    if (!exercise || exercise.isHeader) return;
+    const score = scoreParsedExerciseForSupportedId(exercise, id);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = idx;
+    }
+  });
+
+  return bestIdx;
+}
+
 function findParsedExerciseForSupportedId(
   exercises: ParsedExercise[] | null | undefined,
   id: SupportedExerciseId | null
 ): ParsedExercise | null {
-  if (!id || !Array.isArray(exercises)) return null;
-  for (const exercise of exercises) {
-    if (!exercise || exercise.isHeader) continue;
-    if (normalizeExerciseNameToId(exercise.name) === id) return exercise;
-  }
-  return null;
+  const idx = findParsedExerciseIndexForSupportedId(exercises, id);
+  return idx >= 0 && exercises ? exercises[idx] ?? null : null;
 }
 
 /* ---- ExerciseCard ---- */
@@ -1093,6 +1181,7 @@ function ExerciseCard({
   availableExercises,
   onSelectRecommendedExerciseId,
   disableInternalExerciseSwap,
+  planExerciseName,
 }: {
   ex: ParsedExercise;
   accent: ReturnType<typeof blockAccent>;
@@ -1102,8 +1191,12 @@ function ExerciseCard({
   availableExercises?: ParsedExercise[] | null;
   onSelectRecommendedExerciseId?: ((id: SupportedExerciseId | null) => void) | null;
   disableInternalExerciseSwap?: boolean;
+  /** The name of the exercise as originally written in the training plan (for the "Upprunalegt plan:" label) */
+  planExerciseName?: string;
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
+  const [lang] = useLang();
+  const tCard = PLAYER_COPY[lang];
   const recommendation = useMemo(
     () =>
       getExerciseRecommendation({
@@ -1118,12 +1211,19 @@ function ExerciseCard({
   const selectedExerciseId = overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
   const matchedExercise = findParsedExerciseForSupportedId(availableExercises, selectedExerciseId);
-  const internallySwappedExercise: ParsedExercise = matchedExercise
+  const internallySwappedExerciseBase: ParsedExercise = matchedExercise
     ? matchedExercise
     : selectedExerciseId && selectedExerciseLabel !== ex.name
       ? { ...ex, name: selectedExerciseLabel, method: exerciseMethodForId(selectedExerciseId, ex.method) }
       : ex;
-  const effectiveExercise: ParsedExercise = disableInternalExerciseSwap ? ex : internallySwappedExercise;
+  const internallySwappedExercise = applySupportedExerciseDisplayOverride(
+    internallySwappedExerciseBase,
+    selectedExerciseId
+  );
+  const effectiveExercise: ParsedExercise = applySupportedExerciseDisplayOverride(
+    disableInternalExerciseSwap ? ex : internallySwappedExercise,
+    selectedExerciseId
+  );
 
   const allowedAlternativeIds = recommendation.allowedExerciseIds.filter((id) => id !== selectedExerciseId);
   const restrictedLabels = recommendation.restrictedExerciseIds
@@ -1172,7 +1272,7 @@ function ExerciseCard({
             </div>
             {uiInfo.playerReason ? <div className="mt-1 text-xs text-zinc-600">{uiInfo.playerReason}</div> : null}
             {selectedExerciseLabel !== ex.name ? (
-              <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {ex.name}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {planExerciseName ?? ex.name}</div>
             ) : null}
             {allowedAlternativeIds.length ? (
               <div className="mt-2">
@@ -1232,10 +1332,9 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
   recommendationContext?: ExerciseRecommendationContext | null;
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [open, setOpen] = useState(false);
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [lang] = useLang();
-  const t = PLAYER_COPY[lang];
+  void lang;
   const selected = options[selectedIdx];
   const defaultRecommendedExerciseId = useMemo(() => {
     const original = options[0];
@@ -1248,7 +1347,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
 
   useEffect(() => {
     if (hasManualSelection || !defaultRecommendedExerciseId) return;
-    const nextIdx = options.findIndex((option) => normalizeExerciseNameToId(option.name) === defaultRecommendedExerciseId);
+    const nextIdx = findParsedExerciseIndexForSupportedId(options, defaultRecommendedExerciseId);
     if (nextIdx >= 0 && nextIdx !== selectedIdx) {
       setSelectedIdx(nextIdx);
     }
@@ -1256,11 +1355,10 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
 
   const handleRecommendedExerciseSelect = (id: SupportedExerciseId | null) => {
     if (!id) return;
-    const nextIdx = options.findIndex((option) => normalizeExerciseNameToId(option.name) === id);
+    const nextIdx = findParsedExerciseIndexForSupportedId(options, id);
     if (nextIdx >= 0) {
       setHasManualSelection(true);
       setSelectedIdx(nextIdx);
-      setOpen(false);
     }
   };
   return (
@@ -1280,37 +1378,8 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
             availableExercises={options}
             onSelectRecommendedExerciseId={handleRecommendedExerciseSelect}
             disableInternalExerciseSwap
+            planExerciseName={options[0]?.name}
           />
-        </div>
-      ) : null}
-      {/* Toggle button — prominent */}
-      {options.length > 1 ? (
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="mt-2 w-full flex items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 transition-colors shadow-sm"
-        >
-          <span>{t.training.changeExercise}</span>
-          <span className="text-zinc-400 text-xs">{open ? "▴" : "▾"}</span>
-        </button>
-      ) : null}
-      {/* Other options */}
-      {open ? (
-        <div className="mt-1.5 space-y-1.5 pl-3 border-l-2 border-zinc-200">
-          {options.map((opt, i) =>
-            i === selectedIdx ? null : (
-              <button
-                key={i}
-                onClick={() => {
-                  setHasManualSelection(true);
-                  setSelectedIdx(i);
-                  setOpen(false);
-                }}
-                className="w-full text-left"
-              >
-                <ExerciseCard ex={opt} accent={accent} dimmed />
-              </button>
-            )
-          )}
         </div>
       ) : null}
     </div>
@@ -1349,8 +1418,16 @@ function renderStructureBlocks(
     recommendationContext?: ExerciseRecommendationContext | null;
   }
 ) {
-  const blocks = Array.isArray(structure) ? structure : [];
-  if (!blocks.length) return null;
+  const rawBlocks = Array.isArray(structure) ? structure : [];
+  if (!rawBlocks.length) return null;
+
+  // Sort blocks by canonical session order (warm-up → primer/ballistic → contrast/strength → accessory).
+  // Uses a stable sort so blocks within the same priority category keep their original template order.
+  const blocks = [...rawBlocks].sort(
+    (a, b) =>
+      blockSortPriority(String(a?.block ?? "")) -
+      blockSortPriority(String(b?.block ?? ""))
+  );
 
   const headerTitle = String(opts?.headerTitle ?? "").trim();
   const headerDesc = String(opts?.headerDesc ?? "").trim();
@@ -3292,6 +3369,27 @@ export default function PlayerClient() {
       neuralVolatilityDecision?.fatigueAccumulation.band === "HEAVY",
     modifiedOnlyFlag: decisionType === "REDUCED" || finalRecommendationDecision?.finalRecommendation.action === "MODIFIED",
     kneeIrritationFlag: false,
+
+    // ── Phase 3 flags ───────────────────────────────────────────────────────
+    // Post-match residual: MD+1 and MD+2 are the acute recovery window where
+    // explosive CNS stimulus should be down-regulated regardless of wellness score.
+    postMatchResidualFlag: plan.md_day === "MD+1" || plan.md_day === "MD+2",
+
+    // Lower body soreness: muscle_soreness is scored 1–5; ≤ 2 indicates high soreness.
+    lowerBodySorenessFlag:
+      typeof metrics?.muscle_soreness === "number" && metrics.muscle_soreness <= 2,
+
+    // TODO: derive from fixture calendar density when schedule data is available
+    scheduleCongestionFlag: false,
+
+    // TODO: derive from granular muscle-group soreness data when available
+    posteriorChainSorenessFlag: false,
+
+    // TODO: derive from granular muscle-group soreness data when available
+    quadDominantSorenessFlag: false,
+
+    // TODO: derive from bilateral force-plate or performance testing data when available
+    unilateralDeficitFlag: false,
   };
 
   const debugLine =

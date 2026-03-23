@@ -362,34 +362,17 @@ function applyDashboardMetricsLayout(metricsCard: HTMLElement, expanded: boolean
 }
 
 function applyStickyPlayerHeroLayout(header: HTMLElement, activeTab: DevPlayerTab) {
-  const rail = document.getElementById("dev-player-sticky-rail") as HTMLElement | null;
   const tabsSlot = document.getElementById("dev-player-tabs-slot") as HTMLElement | null;
   const commandSlot = document.getElementById("dev-ate-command-card-slot") as HTMLElement | null;
-  const topOffset = 0;
-
-  if (rail) {
-    rail.style.position = "sticky";
-    rail.style.top = `${topOffset}px`;
-    rail.style.zIndex = "30";
-    rail.style.background = "rgba(255,255,255,0.94)";
-    rail.style.backdropFilter = "blur(10px)";
-    (rail.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "blur(10px)";
-    rail.style.paddingBottom = activeTab === "today" ? "8px" : "0px";
-  }
-
-  header.style.position = "";
-  header.style.top = "";
-  header.style.zIndex = "";
-  header.style.background = "";
-  header.style.backdropFilter = "";
-  (header.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "";
+  void header;
+  void activeTab;
 
   if (tabsSlot) {
     tabsSlot.style.position = "";
     tabsSlot.style.top = "";
     tabsSlot.style.zIndex = "";
     tabsSlot.style.background = "";
-    tabsSlot.style.paddingBottom = "6px";
+    tabsSlot.style.paddingBottom = "";
   }
 
   if (!commandSlot) return;
@@ -398,9 +381,9 @@ function applyStickyPlayerHeroLayout(header: HTMLElement, activeTab: DevPlayerTa
   commandSlot.style.top = "";
   commandSlot.style.zIndex = "";
   commandSlot.style.background = "";
-  commandSlot.style.paddingTop = activeTab === "today" ? "4px" : "";
-  commandSlot.style.paddingBottom = activeTab === "today" ? "4px" : "";
-  commandSlot.style.marginBottom = activeTab === "today" ? "4px" : "";
+  commandSlot.style.paddingTop = "";
+  commandSlot.style.paddingBottom = "";
+  commandSlot.style.marginBottom = "";
 }
 
 function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | null {
@@ -419,61 +402,6 @@ function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | nu
   } else if (slot.previousElementSibling !== anchor) {
     anchor.parentElement.insertBefore(slot, anchor.nextSibling);
   }
-  return slot;
-}
-
-function ensureStickyRail(header: HTMLElement): HTMLElement | null {
-  const parent = header.parentElement;
-  if (!parent) return null;
-
-  let rail = document.getElementById("dev-player-sticky-rail") as HTMLElement | null;
-  if (!rail) {
-    rail = document.createElement("div");
-    rail.id = "dev-player-sticky-rail";
-    rail.style.width = "100%";
-  }
-
-  if (rail.parentElement !== parent) {
-    parent.insertBefore(rail, header);
-  }
-
-  if (header.parentElement !== rail) {
-    rail.appendChild(header);
-  }
-
-  return rail;
-}
-
-function ensureRailChildSlot(id: string, rail: HTMLElement): HTMLElement | null {
-  let slot = document.getElementById(id) as HTMLElement | null;
-  if (!slot) {
-    slot = document.createElement("div");
-    slot.id = id;
-  }
-  if (slot.parentElement !== rail) {
-    rail.appendChild(slot);
-  }
-  return slot;
-}
-
-function ensurePanelSlotOutsideRail(id: string, rail: HTMLElement): HTMLElement | null {
-  const parent = rail.parentElement;
-  if (!parent) return null;
-
-  let slot = document.getElementById(id) as HTMLElement | null;
-  if (!slot) {
-    slot = document.createElement("div");
-    slot.id = id;
-    slot.className = "mt-3";
-    slot.style.width = "100%";
-  }
-
-  if (slot.parentElement !== parent) {
-    parent.insertBefore(slot, rail.nextSibling);
-  } else if (slot.previousElementSibling !== rail) {
-    parent.insertBefore(slot, rail.nextSibling);
-  }
-
   return slot;
 }
 
@@ -794,6 +722,7 @@ export default function DevPlayerClient() {
   const activeTab = useMemo(() => normalizeDevPlayerTab(searchParams?.get("tab")), [searchParams]);
   const [tabsMountNode, setTabsMountNode] = useState<HTMLElement | null>(null);
   const [panelMountNode, setPanelMountNode] = useState<HTMLElement | null>(null);
+  const [layoutReady, setLayoutReady] = useState(false);
 
   // ── Plan tier ──────────────────────────────────────────────
   const [planTier, setPlanTier] = useState<PlanTier>("FREE");
@@ -877,6 +806,8 @@ export default function DevPlayerClient() {
   useEffect(() => {
     let cancelled = false;
     let attempts = 0;
+    let observer: MutationObserver | null = null;
+    setLayoutReady(false);
 
     const apply = () => {
       if (cancelled) return;
@@ -899,13 +830,10 @@ export default function DevPlayerClient() {
       const nextDecision = buildNormalizedDailyDecision();
       setDailyDecision(nextDecision);
 
-      const stickyRail = ensureStickyRail(header);
-      const tabsSlot = stickyRail ? ensureRailChildSlot("dev-player-tabs-slot", stickyRail) : ensureTabSlot("dev-player-tabs-slot", header);
-      const commandSlot = stickyRail ? ensureRailChildSlot("dev-ate-command-card-slot", stickyRail) : null;
-      const panelSlot = stickyRail ? ensurePanelSlotOutsideRail("dev-player-tab-panel-slot", stickyRail) : (tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null);
+      const tabsSlot = ensureTabSlot("dev-player-tabs-slot", header);
+      const panelSlot = tabsSlot ? ensureTabSlot("dev-player-tab-panel-slot", tabsSlot) : null;
       setTabsMountNode((prev) => (prev === tabsSlot ? prev : tabsSlot));
       setPanelMountNode((prev) => (prev === panelSlot ? prev : panelSlot));
-      void commandSlot;
 
       applyStickyPlayerHeroLayout(header, activeTab);
 
@@ -975,8 +903,8 @@ export default function DevPlayerClient() {
             card.style.display = "none";
             continue;
           }
-          // History tab: hide all legacy cards (History renders its own content)
-          card.style.display = (showToday || showHistory) ? "" : "none";
+          // Default: hide unknown legacy cards so tabs stay focused.
+          card.style.display = "none";
         }
       }
 
@@ -991,13 +919,20 @@ export default function DevPlayerClient() {
 
       refineLegacyDecisionCard(nextDecision);
       enforceRenderedWorkoutBlocks(nextDecision);
+      setLayoutReady(true);
 
       if (attempts < 10) window.setTimeout(apply, 250);
     };
 
+    observer = new MutationObserver(() => {
+      if (!cancelled) apply();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
     apply();
     return () => {
       cancelled = true;
+      observer?.disconnect();
     };
   }, [activeTab, isPwa]);
 
@@ -1018,14 +953,79 @@ export default function DevPlayerClient() {
     why: dailyDecision.why,
     mdContext: dailyDecision.mdContext,
   });
+  const tabsElement = <DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />;
+
+  const tabbedShellCss = `
+        .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="today"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="dashboard"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="dashboard"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="dashboard"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="dashboard"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="dashboard"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="risk"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="risk"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="risk"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="risk"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="risk"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="rpe"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="rpe"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="rpe"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="rpe"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="rpe"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="vald"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="vald"] {
+          display: none !important;
+        }
+      `;
 
   return (
     <>
-      <PlayerClient />
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: tabbedShellCss }} />
+      {!isPwa && !tabsMountNode ? (
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-4">
+          {tabsElement}
+        </div>
+      ) : null}
+      <div
+        className="dev-player-tabbed-shell"
+        data-player-active-tab={activeTab}
+        style={{ visibility: layoutReady ? "visible" : "hidden" }}
+      >
+        <PlayerClient />
+      </div>
       <AteCommandCardPortal activeTab={activeTab} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
-        ? createPortal(<DevPlayerTabs activeTab={activeTab} onChange={setTab} planTier={planTier} />, tabsMountNode)
+        ? createPortal(tabsElement, tabsMountNode)
         : null}
       {/* Tab panel content */}
       {panelMountNode
