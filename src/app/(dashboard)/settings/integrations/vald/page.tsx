@@ -29,12 +29,14 @@ export default function ValdSettingsPage() {
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
   const [form, setForm] = useState({
-    baseUrl: process.env.NEXT_PUBLIC_VALD_BASE_URL ?? "https://api.valdperformance.com",
-    authMode: "unknown" as "api_key" | "oauth" | "unknown",
+    baseUrl: "",
+    authMode: "oauth" as "api_key" | "oauth" | "unknown",
     clientId: "",
     clientSecret: "",
     apiKey: "",
     orgId: "",
+    region: "euw",
+    tenantId: "",
     isEnabled: false,
   });
 
@@ -62,9 +64,11 @@ export default function ValdSettingsPage() {
       if (syncData.account) {
         setForm((prev) => ({
           ...prev,
-          baseUrl: String(syncData.account.base_url ?? prev.baseUrl),
-          authMode: (String(syncData.account.auth_mode ?? prev.authMode) as typeof prev.authMode),
+          baseUrl: String(syncData.account.base_url ?? ""),
+          authMode: (String(syncData.account.auth_mode ?? "oauth") as typeof prev.authMode),
           orgId: String(syncData.account.org_id ?? ""),
+          region: String(syncData.account.region ?? "euw"),
+          tenantId: String(syncData.account.tenant_id ?? ""),
           isEnabled: syncData.account.is_enabled === true,
         }));
       }

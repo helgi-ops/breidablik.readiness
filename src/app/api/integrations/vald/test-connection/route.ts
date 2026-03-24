@@ -29,10 +29,11 @@ export async function POST(req: Request) {
     const { teamId } = await requireCoach(req);
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const persist = body.persist === true;
+    const defaults = getDefaultValdConnectionConfig();
     const config = {
-      ...getDefaultValdConnectionConfig(),
-      baseUrl: typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : getDefaultValdConnectionConfig().baseUrl,
-      authMode: (typeof body.authMode === "string" ? body.authMode : getDefaultValdConnectionConfig().authMode) as
+      ...defaults,
+      baseUrl: typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : defaults.baseUrl,
+      authMode: (typeof body.authMode === "string" ? body.authMode : defaults.authMode) as
         | "api_key"
         | "oauth"
         | "unknown",
@@ -41,7 +42,10 @@ export async function POST(req: Request) {
       apiKey: typeof body.apiKey === "string" ? body.apiKey : null,
       accessToken: typeof body.accessToken === "string" ? body.accessToken : null,
       refreshToken: typeof body.refreshToken === "string" ? body.refreshToken : null,
-      orgId: typeof body.orgId === "string" ? body.orgId : null,
+      orgId: typeof body.orgId === "string" ? body.orgId : (defaults.orgId ?? null),
+      region: typeof body.region === "string" ? body.region as import("@/lib/integrations/vald/types").ValdRegion : (defaults.region ?? null),
+      tenantId: typeof body.tenantId === "string" ? body.tenantId : (defaults.tenantId ?? null),
+      tokenUrl: typeof body.tokenUrl === "string" ? body.tokenUrl : (defaults.tokenUrl ?? null),
     };
     const provider = createValdProvider(config);
     const result = await provider.testConnection();
@@ -57,6 +61,9 @@ export async function POST(req: Request) {
         apiKey: config.apiKey ?? null,
         accessToken: config.accessToken ?? null,
         refreshToken: config.refreshToken ?? null,
+        region: config.region ?? null,
+        tenantId: config.tenantId ?? null,
+        tokenUrl: config.tokenUrl ?? null,
         isEnabled: body.isEnabled === true,
       });
     }

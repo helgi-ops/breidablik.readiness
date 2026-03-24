@@ -8,6 +8,8 @@ type Props = {
     clientSecret: string;
     apiKey: string;
     orgId: string;
+    region: string;
+    tenantId: string;
     isEnabled: boolean;
   };
   onChange: (next: Props["value"]) => void;
@@ -34,16 +36,30 @@ export default function ValdConnectionForm({ value, onChange, onSaveAndTest, bus
           >
             <option value="unknown">Unknown</option>
             <option value="api_key">API key</option>
-            <option value="oauth">OAuth</option>
+            <option value="oauth">OAuth (client credentials)</option>
           </select>
         </label>
-        <label className="text-xs text-zinc-700 md:col-span-2">
-          <div className="mb-1 font-medium">Base URL</div>
-          <input className="w-full rounded-lg border px-3 py-2 text-sm" value={value.baseUrl} onChange={(e) => onChange({ ...value, baseUrl: e.target.value })} />
+        <label className="text-xs text-zinc-700">
+          <div className="mb-1 font-medium">Region</div>
+          <select
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            value={value.region}
+            onChange={(e) => onChange({ ...value, region: e.target.value })}
+          >
+            <option value="">Auto</option>
+            <option value="euw">Europe West (euw)</option>
+            <option value="use">US East (use)</option>
+            <option value="aue">Asia-Pacific (aue)</option>
+          </select>
         </label>
         <label className="text-xs text-zinc-700">
-          <div className="mb-1 font-medium">Org ID</div>
-          <input className="w-full rounded-lg border px-3 py-2 text-sm" value={value.orgId} onChange={(e) => onChange({ ...value, orgId: e.target.value })} />
+          <div className="mb-1 font-medium">Tenant ID</div>
+          <input
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            value={value.tenantId}
+            placeholder="Required for ForceDecks / NordBord"
+            onChange={(e) => onChange({ ...value, tenantId: e.target.value })}
+          />
         </label>
         <label className="text-xs text-zinc-700">
           <div className="mb-1 font-medium">Client ID</div>
@@ -54,8 +70,21 @@ export default function ValdConnectionForm({ value, onChange, onSaveAndTest, bus
           <input type="password" className="w-full rounded-lg border px-3 py-2 text-sm" value={value.clientSecret} onChange={(e) => onChange({ ...value, clientSecret: e.target.value })} />
         </label>
         <label className="text-xs text-zinc-700">
-          <div className="mb-1 font-medium">API key</div>
+          <div className="mb-1 font-medium">Org ID (optional)</div>
+          <input className="w-full rounded-lg border px-3 py-2 text-sm" value={value.orgId} onChange={(e) => onChange({ ...value, orgId: e.target.value })} />
+        </label>
+        <label className="text-xs text-zinc-700">
+          <div className="mb-1 font-medium">API key (legacy)</div>
           <input type="password" className="w-full rounded-lg border px-3 py-2 text-sm" value={value.apiKey} onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
+        </label>
+        <label className="text-xs text-zinc-700 md:col-span-2">
+          <div className="mb-1 font-medium">Base URL (optional override)</div>
+          <input
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            value={value.baseUrl}
+            placeholder="Leave blank to use region-based URL"
+            onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
+          />
         </label>
       </div>
       <div className="mt-4">

@@ -1,6 +1,9 @@
 export type ValdAuthMode = "api_key" | "oauth" | "unknown";
 export type ValdProduct = "forcedecks" | "nordbord" | "forceframe" | "unknown";
 
+/** VALD data-centre region — determines the product API base URL. */
+export type ValdRegion = "aue" | "use" | "euw";
+
 export type ValdConnectionConfig = {
   baseUrl: string;
   authMode: ValdAuthMode;
@@ -11,6 +14,12 @@ export type ValdConnectionConfig = {
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
   orgId?: string | null;
+  /** VALD tenant ID — required for ForceDecks/NordBord API requests. */
+  tenantId?: string | null;
+  /** Data-centre region. Determines the product API base URL when baseUrl is not overridden. */
+  region?: ValdRegion | null;
+  /** Token endpoint URL. Defaults to VALD_TOKEN_URL constant. */
+  tokenUrl?: string | null;
   timeoutMs?: number;
   defaultHeaders?: Record<string, string>;
   endpointOverrides?: Partial<{

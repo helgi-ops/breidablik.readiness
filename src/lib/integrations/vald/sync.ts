@@ -28,6 +28,10 @@ type ValdAccountRow = {
   encrypted_refresh_token: string | null;
   token_expires_at: string | null;
   is_enabled: boolean;
+  // March 2026 additions
+  region: string | null;
+  token_url: string | null;
+  tenant_id: string | null;
 };
 
 type SyncSummary = {
@@ -73,6 +77,10 @@ function toConfig(row: ValdAccountRow): ValdConnectionConfig {
     refreshToken: decryptValdSecret(row.encrypted_refresh_token),
     tokenExpiresAt: row.token_expires_at,
     orgId: row.org_id ?? fallback.orgId,
+    // March 2026: region, tokenUrl, tenantId for client_credentials flow
+    region: (row.region as ValdConnectionConfig["region"]) ?? fallback.region,
+    tokenUrl: row.token_url ?? fallback.tokenUrl,
+    tenantId: row.tenant_id ?? fallback.tenantId,
   };
 }
 
@@ -478,6 +486,9 @@ export async function saveValdAccount(args: {
   accessToken?: string | null;
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
+  region?: string | null;
+  tokenUrl?: string | null;
+  tenantId?: string | null;
   isEnabled: boolean;
 }) {
   const sb = getSupabaseServer();
@@ -495,6 +506,9 @@ export async function saveValdAccount(args: {
     encrypted_access_token: args.accessToken ? encryptValdSecret(args.accessToken) : existing?.encrypted_access_token ?? null,
     encrypted_refresh_token: args.refreshToken ? encryptValdSecret(args.refreshToken) : existing?.encrypted_refresh_token ?? null,
     token_expires_at: args.tokenExpiresAt ?? existing?.token_expires_at ?? null,
+    region: args.region ?? existing?.region ?? null,
+    token_url: args.tokenUrl ?? existing?.token_url ?? null,
+    tenant_id: args.tenantId ?? existing?.tenant_id ?? null,
     is_enabled: args.isEnabled,
   };
   const { data, error } = existing

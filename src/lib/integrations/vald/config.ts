@@ -1,7 +1,23 @@
 import "server-only";
 
 import crypto from "node:crypto";
-import type { ValdAuthMode, ValdConnectionConfig } from "./types";
+import type { ValdAuthMode, ValdConnectionConfig, ValdRegion } from "./types";
+
+// ── VALD token endpoint (March 2026) ─────────────────────────────────────────
+export const VALD_TOKEN_URL = "https://security.valdperformance.com/connect/token";
+
+/**
+ * Returns the product-specific API base URL for the given region.
+ *
+ * Format: https://prd-{region}-api-ext{product}.valdperformance.com
+ *
+ * @example
+ *   getValdProductBaseUrl("euw", "forcedecks")
+ *   // → "https://prd-euw-api-extforcedecks.valdperformance.com"
+ */
+export function getValdProductBaseUrl(region: ValdRegion, product: "forcedecks" | "nordbord" | "forceframe"): string {
+  return `https://prd-${region}-api-ext${product}.valdperformance.com`;
+}
 
 function env(name: string, fallback?: string): string {
   const value = process.env[name];
@@ -49,14 +65,21 @@ export const VALD_RUNTIME = {
 };
 
 export function getDefaultValdConnectionConfig(): ValdConnectionConfig {
+  const region = (optionalEnv("VALD_REGION") ?? null) as ValdRegion | null;
   const authMode = (optionalEnv("VALD_API_KEY") ? "api_key" : optionalEnv("VALD_CLIENT_ID") ? "oauth" : "unknown") as ValdAuthMode;
+  // Use region-based ForceDecks URL when a region is configured; fall back to the legacy generic base.
+  const defaultBase =
+    region ? getValdProductBaseUrl(region, "forcedecks") : "https://prd-euw-api-extforcedecks.valdperformance.com";
   return {
-    baseUrl: optionalEnv("VALD_BASE_URL") ?? "https://api.valdperformance.com",
+    baseUrl: optionalEnv("VALD_BASE_URL") ?? defaultBase,
     authMode,
     clientId: optionalEnv("VALD_CLIENT_ID"),
     clientSecret: optionalEnv("VALD_CLIENT_SECRET"),
     apiKey: optionalEnv("VALD_API_KEY"),
     orgId: optionalEnv("VALD_DEFAULT_ORG_ID"),
+    tenantId: optionalEnv("VALD_TENANT_ID"),
+    region,
+    tokenUrl: optionalEnv("VALD_TOKEN_URL"),
     timeoutMs: 15000,
   };
 }
