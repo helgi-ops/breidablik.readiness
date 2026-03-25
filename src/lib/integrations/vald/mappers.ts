@@ -11,6 +11,19 @@ function firstString(...values: unknown[]): string | null {
   return null;
 }
 
+function nestedString(record: Record<string, unknown> | null, ...paths: string[]): string | null {
+  if (!record) return null;
+  for (const path of paths) {
+    const segments = path.split(".");
+    let current: unknown = record;
+    for (const segment of segments) {
+      current = current && typeof current === "object" ? (current as Record<string, unknown>)[segment] : null;
+    }
+    if (typeof current === "string" && current.trim()) return current.trim();
+  }
+  return null;
+}
+
 export function mapValdTokenResponse(payload: unknown): ValdTokenResponse {
   const record = asRecord(payload) ?? {};
   // VALD (March 2026) returns expires_in (integer seconds), not expires_at.
@@ -86,11 +99,45 @@ export function mapValdAthleteSummary(payload: unknown): ValdAthleteSummary | nu
   // AthleteItemDTO provides givenName/familyName; internal APIs used firstName/lastName
   const firstName = firstString(record.givenName, record.firstName, record.first_name);
   const lastName = firstString(record.familyName, record.lastName, record.last_name);
+  const teamName = firstString(
+    record.teamName,
+    record.team_name,
+    record.squadName,
+    record.squad_name,
+    record.clubName,
+    record.club_name,
+    nestedString(record, "team.name"),
+    nestedString(record, "teamName.value"),
+  );
+  const groupName = firstString(
+    record.groupName,
+    record.group_name,
+    record.group,
+    record.groupLabel,
+    record.group_label,
+    record.organisationUnitName,
+    record.organizationUnitName,
+    record.organisationalUnitName,
+    record.teamPath,
+    record.team_path,
+    nestedString(record, "group.name"),
+    nestedString(record, "organisationUnit.name"),
+    nestedString(record, "organizationUnit.name"),
+  );
+  const genderLabel = firstString(
+    record.gender,
+    record.genderLabel,
+    record.gender_label,
+    nestedString(record, "gender.name"),
+  );
   return {
     athleteId,
     fullName: firstString(record.name, record.fullName, record.full_name) ?? ([firstName, lastName].filter(Boolean).join(" ") || null),
     email: firstString(record.email),
     externalRef: firstString(record.externalId, record.external_ref, record.externalRef, record.reference),
+    teamName,
+    groupName,
+    genderLabel,
     raw: payload,
   };
 }
