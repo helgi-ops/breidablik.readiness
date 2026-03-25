@@ -46,6 +46,7 @@ export async function POST(req: Request) {
       region: typeof body.region === "string" ? body.region as import("@/lib/integrations/vald/types").ValdRegion : (defaults.region ?? null),
       tenantId: typeof body.tenantId === "string" ? body.tenantId : (defaults.tenantId ?? null),
       tokenUrl: typeof body.tokenUrl === "string" ? body.tokenUrl : (defaults.tokenUrl ?? null),
+      valdTeamId: typeof body.valdTeamId === "string" && body.valdTeamId.trim() ? body.valdTeamId.trim() : null,
     };
     const provider = createValdProvider(config);
     const result = await provider.testConnection();
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
         region: config.region ?? null,
         tenantId: config.tenantId ?? null,
         tokenUrl: config.tokenUrl ?? null,
+        valdTeamId: config.valdTeamId ?? null,
         isEnabled: body.isEnabled === true,
       });
     }

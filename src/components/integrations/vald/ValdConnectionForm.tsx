@@ -1,5 +1,7 @@
 "use client";
 
+type ValdTeam = { id: string; name: string };
+
 type Props = {
   value: {
     baseUrl: string;
@@ -10,14 +12,18 @@ type Props = {
     orgId: string;
     region: string;
     tenantId: string;
+    valdTeamId: string;
     isEnabled: boolean;
   };
   onChange: (next: Props["value"]) => void;
   onSaveAndTest: () => void;
+  onLoadTeams?: () => void;
+  teams?: ValdTeam[];
+  loadingTeams?: boolean;
   busy?: boolean;
 };
 
-export default function ValdConnectionForm({ value, onChange, onSaveAndTest, busy = false }: Props) {
+export default function ValdConnectionForm({ value, onChange, onSaveAndTest, onLoadTeams, teams, loadingTeams, busy = false }: Props) {
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="text-sm font-semibold text-zinc-900">Connection</div>
@@ -86,6 +92,40 @@ export default function ValdConnectionForm({ value, onChange, onSaveAndTest, bus
             onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
           />
         </label>
+
+        {/* ── Team selector ─────────────────────────────────────────────────── */}
+        <div className="text-xs text-zinc-700 md:col-span-2">
+          <div className="mb-1 font-medium">
+            Squad filter
+            <span className="ml-1 font-normal text-zinc-500">— only sync athletes from this team</span>
+          </div>
+          <div className="flex gap-2">
+            <select
+              className="flex-1 rounded-lg border px-3 py-2 text-sm"
+              value={value.valdTeamId}
+              onChange={(e) => onChange({ ...value, valdTeamId: e.target.value })}
+            >
+              <option value="">All teams (no filter)</option>
+              {(teams ?? []).map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+              {/* If a team is saved but not in the loaded list yet, keep it visible */}
+              {value.valdTeamId && !(teams ?? []).find((t) => t.id === value.valdTeamId) && (
+                <option value={value.valdTeamId}>{value.valdTeamId}</option>
+              )}
+            </select>
+            {onLoadTeams && (
+              <button
+                type="button"
+                onClick={onLoadTeams}
+                disabled={loadingTeams || busy}
+                className="rounded-lg border px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+              >
+                {loadingTeams ? "Loading…" : "Load teams"}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       <div className="mt-4">
         <button type="button" onClick={onSaveAndTest} disabled={busy} className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">

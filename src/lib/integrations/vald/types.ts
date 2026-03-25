@@ -16,6 +16,13 @@ export type ValdConnectionConfig = {
   orgId?: string | null;
   /** VALD tenant ID — required for ForceDecks/NordBord API requests. */
   tenantId?: string | null;
+  /**
+   * VALD squad/team ID — the specific team within the tenant to sync.
+   * Used as the {teamId} path parameter in /v2019q3/teams/{teamId}/athletes.
+   * When set this overrides tenantId for athlete/test endpoints, allowing
+   * you to sync only one squad (e.g. men's team) instead of all athletes.
+   */
+  valdTeamId?: string | null;
   /** Data-centre region. Determines the product API base URL when baseUrl is not overridden. */
   region?: ValdRegion | null;
   /** Token endpoint URL. Defaults to VALD_TOKEN_URL constant. */
@@ -42,6 +49,9 @@ export type ValdAthleteSummary = {
   fullName?: string | null;
   email?: string | null;
   externalRef?: string | null;
+  teamName?: string | null;
+  groupName?: string | null;
+  genderLabel?: string | null;
   raw?: unknown;
 };
 

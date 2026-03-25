@@ -37,12 +37,12 @@ function getProfilesEndpoint(config: ValdConnectionConfig): string {
   if (config.endpointOverrides?.athletes) {
     return config.endpointOverrides.athletes;
   }
-  const tenantId = config.tenantId ?? config.orgId;
+  // valdTeamId = specific squad (e.g. men's team); tenantId = whole org fallback
+  const squadId = config.valdTeamId ?? config.tenantId ?? config.orgId;
   const base = productBaseUrl(config, "forcedecks");
-  if (tenantId) {
-    return new URL(`/v2019q3/teams/${encodeURIComponent(tenantId)}/athletes`, base).toString();
+  if (squadId) {
+    return new URL(`/v2019q3/teams/${encodeURIComponent(squadId)}/athletes`, base).toString();
   }
-  // Fallback: cursor-based profiles endpoint (requires TenantId query param)
   return new URL("/profiles", base).toString();
 }
 
@@ -65,11 +65,11 @@ function getTestsBaseUrl(config: ValdConnectionConfig): string {
  */
 function getAthleteTestsUrl(config: ValdConnectionConfig, athleteId: string): string {
   if (config.endpointOverrides?.athleteTests) return config.endpointOverrides.athleteTests;
-  const tenantId = config.tenantId ?? config.orgId;
+  const squadId = config.valdTeamId ?? config.tenantId ?? config.orgId;
   const base = productBaseUrl(config, "forcedecks");
-  if (tenantId) {
+  if (squadId) {
     return new URL(
-      `/v2019q3/teams/${encodeURIComponent(tenantId)}/athletes/${encodeURIComponent(athleteId)}/tests`,
+      `/v2019q3/teams/${encodeURIComponent(squadId)}/athletes/${encodeURIComponent(athleteId)}/tests`,
       base,
     ).toString();
   }

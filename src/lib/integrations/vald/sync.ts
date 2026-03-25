@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 import { createValdProvider } from "./provider";
 import { getDefaultValdConnectionConfig, decryptValdSecret, encryptValdSecret, VALD_RUNTIME } from "./config";
 import { buildValdIngestionKey, hashPayload, shouldReingestValdPayload } from "./idempotency";
+import { filterValdAthletesToMicroPulseRoster } from "./filters";
 import { inferValdProductFromPayload, mapValdAthleteSummary } from "./mappers";
 import type {
   ValdAthleteMatchCandidate,
@@ -81,6 +82,8 @@ function toConfig(row: ValdAccountRow): ValdConnectionConfig {
     region: (row.region as ValdConnectionConfig["region"]) ?? fallback.region,
     tokenUrl: row.token_url ?? fallback.tokenUrl,
     tenantId: row.tenant_id ?? fallback.tenantId,
+    // Squad filter: sync only athletes from this specific VALD team (e.g. men's team)
+    valdTeamId: (row as Record<string, unknown>).vald_team_id as string | null ?? null,
   };
 }
 
@@ -226,6 +229,31 @@ async function resolveMicroplayerId(teamId: string, valdAthleteId: string): Prom
   return (data as { microplayer_id?: string } | null)?.microplayer_id ?? null;
 }
 
+async function getTeamPlayers(teamId: string): Promise<Array<{ id: string; name: string }>> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("players")
+    .select("id, full_name")
+    .eq("team_id", teamId)
+    .order("full_name", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    name: String(row.full_name ?? ""),
+  }));
+}
+
+async function getMappedValdAthleteIds(teamId: string): Promise<Set<string>> {
+  const sb = getSupabaseServer();
+  const { data, error } = await sb
+    .from("integrations_vald_athlete_map")
+    .select("vald_athlete_id")
+    .eq("team_id", teamId)
+    .eq("is_active", true);
+  if (error) throw error;
+  return new Set(((data ?? []) as Array<Record<string, unknown>>).map((row) => String(row.vald_athlete_id)));
+}
+
 async function upsertNormalized(args: {
   teamId: string;
   microplayerId: string | null;
@@ -323,12 +351,22 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
 
   try {
     const provider = createValdProvider(toConfig(account));
-    const athletes = await provider.fetchAthletes();
+    const [players, mappedValdAthleteIds, fetchedAthletes] = await Promise.all([
+      getTeamPlayers(teamId),
+      getMappedValdAthleteIds(teamId),
+      provider.fetchAthletes(),
+    ]);
+    const athletes = filterValdAthletesToMicroPulseRoster(fetchedAthletes, players);
+    const allowedAthleteIds = new Set<string>([
+      ...athletes.map((athlete) => athlete.athleteId),
+      ...mappedValdAthleteIds,
+    ]);
     summary.athletes_seen = athletes.length;
 
-    const tests = request.athleteIds?.length
+    const allTests = request.athleteIds?.length
       ? (await Promise.all(request.athleteIds.map((athleteId) => provider.fetchTestsForAthlete(athleteId, dateFrom, dateTo)))).flat()
       : await provider.fetchTestsByDateRange(dateFrom, dateTo);
+    const tests = allTests.filter((test) => allowedAthleteIds.has(test.athleteId));
     summary.tests_seen = tests.length;
 
     for (const test of tests) {
@@ -407,19 +445,23 @@ export async function listValdUnmatchedAthletes(teamId: string): Promise<ValdAth
   const provider = createValdProvider(toConfig(account));
   const athletes = await provider.fetchAthletes();
   const sb = getSupabaseServer();
+  const menPlayers = await getTeamPlayers(teamId);
+  const filteredAthletes = filterValdAthletesToMicroPulseRoster(athletes, menPlayers);
   const { data: mappings } = await sb
     .from("integrations_vald_athlete_map")
     .select("vald_athlete_id, microplayer_id, match_source, confidence")
     .eq("team_id", teamId)
     .eq("is_active", true);
   const mapped = new Map<string, Record<string, unknown>>((mappings ?? []).map((row) => [String((row as Record<string, unknown>).vald_athlete_id), row as Record<string, unknown>]));
-  return athletes
+  return filteredAthletes
     .filter((athlete) => !mapped.has(athlete.athleteId))
     .map((athlete) => ({
       valdAthleteId: athlete.athleteId,
       valdAthleteName: athlete.fullName ?? null,
       valdEmail: athlete.email ?? null,
       valdExternalRef: athlete.externalRef ?? null,
+      teamName: athlete.teamName ?? null,
+      groupName: athlete.groupName ?? null,
       microplayerId: null,
       microplayerName: null,
       confidence: null,
@@ -489,6 +531,7 @@ export async function saveValdAccount(args: {
   region?: string | null;
   tokenUrl?: string | null;
   tenantId?: string | null;
+  valdTeamId?: string | null;
   isEnabled: boolean;
 }) {
   const sb = getSupabaseServer();
@@ -509,6 +552,7 @@ export async function saveValdAccount(args: {
     region: args.region ?? existing?.region ?? null,
     token_url: args.tokenUrl ?? existing?.token_url ?? null,
     tenant_id: args.tenantId ?? existing?.tenant_id ?? null,
+    vald_team_id: args.valdTeamId !== undefined ? (args.valdTeamId ?? null) : ((existing as Record<string, unknown> | null)?.vald_team_id as string | null ?? null),
     is_enabled: args.isEnabled,
   };
   const { data, error } = existing
