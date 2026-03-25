@@ -3,7 +3,8 @@
 type Props = {
   onSyncLatest: () => void;
   onResync: () => void;
-  busy?: "sync" | "resync" | null;
+  onBackfill?: () => void;
+  busy?: "sync" | "resync" | "backfill" | null;
   dateFrom: string;
   dateTo: string;
   onDateFromChange: (value: string) => void;
@@ -14,6 +15,7 @@ type Props = {
 export default function ValdSyncPanel({
   onSyncLatest,
   onResync,
+  onBackfill,
   busy = null,
   dateFrom,
   dateTo,
@@ -47,6 +49,11 @@ export default function ValdSyncPanel({
         <button type="button" onClick={onResync} disabled={!isEnabled || busy !== null} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-60">
           {busy === "resync" ? "Re-syncing..." : "Re-sync date range"}
         </button>
+        {onBackfill ? (
+          <button type="button" onClick={onBackfill} disabled={!isEnabled || busy !== null} className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 disabled:opacity-60" title="Re-normalize all raw tests already in the database (fast — no VALD API calls)">
+            {busy === "backfill" ? "Backfilling..." : "Backfill existing tests"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

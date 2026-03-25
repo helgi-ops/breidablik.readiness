@@ -23,7 +23,7 @@ export default function ValdSettingsPage() {
   const supabase = getSupabaseClient();
   const [state, setState] = useState<ValdPageState>({ account: null, history: [], unmatched: [], players: [] });
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"test" | "sync" | "resync" | null>(null);
+  const [busy, setBusy] = useState<"test" | "sync" | "resync" | "backfill" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -179,6 +179,30 @@ export default function ValdSettingsPage() {
     }
   }, [authHeaders, dateFrom, dateTo, loadState]);
 
+  const backfillNormalized = useCallback(async () => {
+    setBusy("backfill");
+    setError(null);
+    setInfo(null);
+    setSyncStatus("Backfilling existing raw tests…");
+    try {
+      const response = await fetch("/api/integrations/vald/backfill-normalized", {
+        method: "POST",
+        headers: await authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Backfill failed.");
+      const s = data.summary as Record<string, number> ?? {};
+      setInfo(`Backfill complete: ${s.forcedecks ?? 0} ForceDecks, ${s.nordbord ?? 0} NordBord, ${s.forceframe ?? 0} ForceFrame (${s.errors ?? 0} errors)`);
+      setSyncStatus(null);
+      await loadState();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Backfill failed.");
+      setSyncStatus(null);
+    } finally {
+      setBusy(null);
+    }
+  }, [authHeaders, loadState]);
+
   const mapAthlete = useCallback(async (args: { valdAthleteId: string; microplayerId: string; valdAthleteName?: string | null; valdEmail?: string | null; valdExternalRef?: string | null }) => {
     setError(null);
     setInfo(null);
@@ -225,7 +249,8 @@ export default function ValdSettingsPage() {
         <ValdSyncPanel
           onSyncLatest={syncLatest}
           onResync={resync}
-          busy={busy === "sync" ? "sync" : busy === "resync" ? "resync" : null}
+          onBackfill={backfillNormalized}
+          busy={busy === "sync" ? "sync" : busy === "resync" ? "resync" : busy === "backfill" ? "backfill" : null}
           dateFrom={dateFrom}
           dateTo={dateTo}
           onDateFromChange={setDateFrom}
