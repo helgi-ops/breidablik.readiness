@@ -4,6 +4,7 @@ import { getValdAccountState, listValdSyncHistory, listValdUnmatchedAthletes, sy
 import { maskSecret } from "@/lib/integrations/vald/config";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 async function requireCoach(req: Request): Promise<{ teamId: string; userId: string }> {
   const auth = req.headers.get("authorization") || "";

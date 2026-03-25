@@ -23,7 +23,7 @@ function safeJsonParse(value: string): unknown {
 
 export async function valdRequestJson<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
   const maxAttempts = 3;
-  const timeoutMs = options.timeoutMs ?? 15000;
+  const timeoutMs = options.timeoutMs ?? 8000;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -59,8 +59,8 @@ export async function valdRequestJson<T = unknown>(url: string, options: Request
       lastError = error instanceof Error ? error : new Error(String(error));
       const retryable =
         lastError instanceof ValdRateLimitError ||
-        (lastError instanceof ValdApiError && ((lastError.status ?? 0) >= 500)) ||
-        lastError.name === "AbortError";
+        (lastError instanceof ValdApiError && ((lastError.status ?? 0) >= 500));
+      // AbortError means the request timed out — don't retry, fail fast
       if (!retryable || attempt === maxAttempts) break;
       await delay(250 * 2 ** (attempt - 1));
     }
