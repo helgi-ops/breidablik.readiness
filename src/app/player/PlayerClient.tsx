@@ -67,7 +67,11 @@ import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionV
 import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
 import ValdStatusCard from "@/components/player/ValdStatusCard";
 import { getExerciseRecommendation } from "@/lib/exercise-recommendations/recommend";
-import { getSupportedExerciseLabel, normalizeExerciseNameToId } from "@/lib/exercise-recommendations/normalize";
+import {
+  getRecommendationGroupForExercise,
+  getSupportedExerciseLabel,
+  normalizeExerciseNameToId,
+} from "@/lib/exercise-recommendations/normalize";
 import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
 import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
@@ -713,9 +717,54 @@ function inferSprintExposure(sessionTypeRaw: string | null | undefined) {
   return s.includes("SPRINT") || s.includes("SPEED") || s.includes("HSS");
 }
 
+function blockItemToRawString(item: any): string | null {
+  if (typeof item === "string") {
+    const trimmed = item.trim();
+    return trimmed || null;
+  }
+
+  if (!item || typeof item !== "object") return null;
+
+  const name = String(item?.name ?? item?.title ?? item?.exercise ?? item?.label ?? "").trim();
+  if (!name) return null;
+
+  const directDose = String(
+    item?.dose ??
+      item?.sets_reps ??
+      item?.setsReps ??
+      item?.prescription ??
+      item?.volume ??
+      ""
+  ).trim();
+
+  const sets = item?.sets != null ? String(item.sets).trim() : "";
+  const reps = item?.reps != null ? String(item.reps).trim() : "";
+  const hold = item?.hold != null ? String(item.hold).trim() : "";
+  const duration = item?.duration != null ? String(item.duration).trim() : "";
+  const time = item?.time != null ? String(item.time).trim() : "";
+  const rest = item?.rest != null ? String(item.rest).trim() : "";
+  const note = String(item?.note ?? item?.notes ?? "").trim();
+  const method = String(item?.method ?? "").trim();
+
+  const fallbackDoseParts = [
+    sets && reps ? `${sets}×${reps}` : "",
+    hold,
+    duration,
+    time,
+    rest,
+  ].filter(Boolean);
+  const dose = directDose || fallbackDoseParts.join(" ");
+
+  const bits = [name, dose, method].filter(Boolean).join(" ");
+  if (!bits) return null;
+  return note ? `${bits} (${note})` : bits;
+}
+
 function safeStringList(x: any): string[] {
-  if (Array.isArray(x)) return x.map((v) => String(v));
-  return [];
+  if (!Array.isArray(x)) return [];
+  return x
+    .map((v) => blockItemToRawString(v))
+    .filter((v): v is string => !!v);
 }
 
 function selectTemplateOverrideCandidate(
@@ -871,8 +920,21 @@ function parseExerciseItem(raw: string): ParsedExercise {
   const note = noteMatch ? noteMatch[1] : null;
   if (noteMatch) working = working.slice(0, noteMatch.index).trim();
 
-  // Extract sets×reps pattern — handles "2×3", "2 reps/arm × 3 sett", "1 rep each arm × 5 sets", "2×5 / fót", "1 sek × 8"
-  const setsRepsMatch = working.match(/\d+(?:\s+(?:reps?(?:\/\w+)?|sek|min))?(?:\s+each\s+\w+)?\s*[×xX]\s*\d+(?:\s*\/\s*\w+)?(?:\s+(?:sett|sets?|reps?|sek|min))?/i);
+  // Extract common training variable patterns.
+  // Supports:
+  // - "2×3"
+  // - "2 reps/arm × 3–5 sett"
+  // - "1 sek × 10 reps"
+  // - "2–4 reps / hlið"
+  // - "3 × 3 @ 0.7 - 0.75 m/s"
+  const setsRepsPatterns = [
+    /\d+(?:\s+(?:reps?(?:\/\w+)?|sek|min))?(?:\s+each\s+\w+)?\s*[×xX]\s*\d+(?:[–-]\d+)?(?:\s*\/\s*\w+)?(?:\s+(?:sett|sets?|reps?|sek|min))?(?:\s*@\s*[^()]+)?/i,
+    /\d+(?:[–-]\d+)?\s*reps?(?:\s*\/\s*\w+)?/i,
+    /\d+(?:[–-]\d+)?\s*sek(?:\s*\/\s*\w+)?/i,
+  ];
+  const setsRepsMatch = setsRepsPatterns
+    .map((pattern) => working.match(pattern))
+    .find((match): match is RegExpMatchArray => !!match);
   const rawSetsReps = setsRepsMatch ? setsRepsMatch[0].trim() : null;
   // Add labels if missing — "2 × 3" → "2 × 3 sett", "2 reps × 3 sett" preserved as-is
   let setsReps = rawSetsReps;
@@ -885,6 +947,8 @@ function parseExerciseItem(raw: string): ParsedExercise {
   let name = working;
   if (name.includes("—")) {
     name = name.split("—")[0].trim();
+  } else if (name.includes(":")) {
+    name = name.split(":")[0].trim();
   } else if (setsReps) {
     const idx = name.indexOf(setsReps);
     if (idx > 0) name = name.slice(0, idx).trim().replace(/[-—:,]+$/, "").trim();
@@ -1089,6 +1153,10 @@ function recommendationBadgeToneClass(tone: "neutral" | "warning" | "success"): 
   return "border-zinc-200 bg-zinc-50 text-zinc-600";
 }
 
+function recommendationPanelClass(accent: ReturnType<typeof blockAccent>): string {
+  return cx("rounded-xl border px-3 py-2.5", accent.itemBorder, accent.itemBg);
+}
+
 function exerciseMethodForId(id: SupportedExerciseId | null, fallbackMethod: string | null): string | null {
   if (id === "ISO_MID_THIGH_PULL" || id === "ISOMETRIC_SPLIT_SQUAT_HOLD") return "ISO";
   return fallbackMethod;
@@ -1182,6 +1250,8 @@ function ExerciseCard({
   onSelectRecommendedExerciseId,
   disableInternalExerciseSwap,
   planExerciseName,
+  hideRecommendationUi,
+  forcedExerciseId,
 }: {
   ex: ParsedExercise;
   accent: ReturnType<typeof blockAccent>;
@@ -1193,6 +1263,8 @@ function ExerciseCard({
   disableInternalExerciseSwap?: boolean;
   /** The name of the exercise as originally written in the training plan (for the "Upprunalegt plan:" label) */
   planExerciseName?: string;
+  hideRecommendationUi?: boolean;
+  forcedExerciseId?: SupportedExerciseId | null;
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
   const [lang] = useLang();
@@ -1208,7 +1280,7 @@ function ExerciseCard({
   const uiInfo = useMemo(() => getExerciseRecommendationUiInfo(recommendation), [recommendation]);
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
 
-  const selectedExerciseId = overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
+  const selectedExerciseId = forcedExerciseId ?? overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
   const matchedExercise = findParsedExerciseForSupportedId(availableExercises, selectedExerciseId);
   const internallySwappedExerciseBase: ParsedExercise = matchedExercise
@@ -1260,7 +1332,7 @@ function ExerciseCard({
         </div>
         {effectiveExercise.note ? <div className="mt-0.5 text-xs text-zinc-500">{effectiveExercise.note}</div> : null}
 
-        {!dimmed && recommendation.shouldRenderRecommendation && uiInfo.badgeLabel ? (
+        {!dimmed && !hideRecommendationUi && recommendation.shouldRenderRecommendation && uiInfo.badgeLabel ? (
           <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/80 p-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(uiInfo.badgeTone))}>
@@ -1336,14 +1408,39 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
   const [lang] = useLang();
   void lang;
   const selected = options[selectedIdx];
+  const original = options[0];
+  const recommendationSeedExercise = useMemo(
+    () => options.find((option) => !!normalizeExerciseNameToId(option?.name ?? "")) ?? null,
+    [options]
+  );
   const defaultRecommendedExerciseId = useMemo(() => {
-    const original = options[0];
-    if (!original) return null;
+    if (!recommendationSeedExercise) return null;
     return getExerciseRecommendation({
       ...(recommendationContext ?? {}),
-      originalExerciseName: original.name,
+      originalExerciseName: recommendationSeedExercise.name,
     }).recommendedExerciseId;
-  }, [options, recommendationContext]);
+  }, [recommendationContext, recommendationSeedExercise]);
+  const groupRecommendation = useMemo(() => {
+    if (!recommendationSeedExercise) return null;
+    return getExerciseRecommendation({
+      ...(recommendationContext ?? {}),
+      originalExerciseName: recommendationSeedExercise.name,
+    });
+  }, [recommendationContext, recommendationSeedExercise]);
+  const groupRecommendationUi = useMemo(
+    () => (groupRecommendation ? getExerciseRecommendationUiInfo(groupRecommendation) : null),
+    [groupRecommendation]
+  );
+  const selectedExerciseId = useMemo(
+    () => normalizeExerciseNameToId(selected?.name ?? ""),
+    [selected]
+  );
+  const allowedAlternativeIds =
+    groupRecommendation?.allowedExerciseIds.filter((id) => id !== selectedExerciseId) ?? [];
+  const restrictedLabels =
+    groupRecommendation?.restrictedExerciseIds
+      .map((id) => getSupportedExerciseLabel(id))
+      .filter((label): label is string => !!label) ?? [];
 
   useEffect(() => {
     if (hasManualSelection || !defaultRecommendedExerciseId) return;
@@ -1353,13 +1450,16 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
     }
   }, [defaultRecommendedExerciseId, hasManualSelection, options, selectedIdx]);
 
-  const handleRecommendedExerciseSelect = (id: SupportedExerciseId | null) => {
+  const selectExerciseId = (id: SupportedExerciseId | null, manual: boolean) => {
     if (!id) return;
     const nextIdx = findParsedExerciseIndexForSupportedId(options, id);
     if (nextIdx >= 0) {
-      setHasManualSelection(true);
+      setHasManualSelection(manual);
       setSelectedIdx(nextIdx);
     }
+  };
+  const handleRecommendedExerciseSelect = (id: SupportedExerciseId | null) => {
+    selectExerciseId(id, true);
   };
   return (
     <div>
@@ -1378,10 +1478,165 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
             availableExercises={options}
             onSelectRecommendedExerciseId={handleRecommendedExerciseSelect}
             disableInternalExerciseSwap
-            planExerciseName={options[0]?.name}
+            planExerciseName={recommendationSeedExercise?.name ?? options[0]?.name}
+            hideRecommendationUi
           />
         </div>
       ) : null}
+      {groupRecommendation &&
+      groupRecommendationUi?.badgeLabel &&
+      groupRecommendation.shouldRenderRecommendation &&
+      selected ? (
+        <div className={cx("mt-1.5", recommendationPanelClass(accent))}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(groupRecommendationUi.badgeTone))}>
+              {groupRecommendationUi.badgeLabel}
+            </span>
+            {groupRecommendationUi.shortReason ? (
+              <span className="text-[11px] font-medium text-zinc-600">{groupRecommendationUi.shortReason}</span>
+            ) : null}
+          </div>
+          {groupRecommendationUi.playerReason ? (
+            <div className="mt-1 text-xs text-zinc-600">{groupRecommendationUi.playerReason}</div>
+          ) : null}
+          {recommendationSeedExercise && selected.name !== recommendationSeedExercise.name ? (
+            <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {recommendationSeedExercise.name}</div>
+          ) : null}
+          {allowedAlternativeIds.length ? (
+            <div className="mt-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {allowedAlternativeIds.map((id) => {
+                  const label = getSupportedExerciseLabel(id);
+                  if (!label) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleRecommendedExerciseSelect(id)}
+                      className="rounded-full border border-zinc-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-white"
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                {hasManualSelection ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      selectExerciseId(
+                        groupRecommendation.recommendedExerciseId ?? groupRecommendation.originalExerciseId,
+                        false
+                      );
+                    }}
+                    className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-white"
+                  >
+                    Nota mælt með
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {restrictedLabels.length ? (
+            <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RecommendedExerciseBlockCard({
+  ex,
+  accent,
+  blockLabel,
+  recommendationContext,
+}: {
+  ex: ParsedExercise;
+  accent: ReturnType<typeof blockAccent>;
+  blockLabel?: string;
+  recommendationContext?: ExerciseRecommendationContext | null;
+}) {
+  const recommendation = useMemo(
+    () =>
+      getExerciseRecommendation({
+        ...(recommendationContext ?? {}),
+        originalExerciseName: ex.name,
+      }),
+    [ex.name, recommendationContext]
+  );
+  const uiInfo = useMemo(() => getExerciseRecommendationUiInfo(recommendation), [recommendation]);
+  const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
+  const selectedExerciseId = overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
+  const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
+  const allowedAlternativeIds = recommendation.allowedExerciseIds.filter((id) => id !== selectedExerciseId);
+  const restrictedLabels = recommendation.restrictedExerciseIds
+    .map((id) => getSupportedExerciseLabel(id))
+    .filter((label): label is string => !!label);
+
+  if (!recommendation.shouldRenderRecommendation || !uiInfo.badgeLabel) {
+    return <ExerciseCard ex={ex} accent={accent} blockLabel={blockLabel} recommendationContext={recommendationContext} />;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <ExerciseCard
+        ex={ex}
+        accent={accent}
+        blockLabel={blockLabel}
+        recommendationContext={recommendationContext}
+        hideRecommendationUi
+        forcedExerciseId={selectedExerciseId}
+        planExerciseName={ex.name}
+      />
+
+      <div className={recommendationPanelClass(accent)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(uiInfo.badgeTone))}>
+            {uiInfo.badgeLabel}
+          </span>
+          {uiInfo.shortReason ? (
+            <span className="text-[11px] font-medium text-zinc-600">{uiInfo.shortReason}</span>
+          ) : null}
+        </div>
+        {uiInfo.playerReason ? <div className="mt-1 text-xs text-zinc-600">{uiInfo.playerReason}</div> : null}
+        {selectedExerciseLabel !== ex.name ? (
+          <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {ex.name}</div>
+        ) : null}
+        {allowedAlternativeIds.length ? (
+          <div className="mt-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {allowedAlternativeIds.map((id) => {
+                const label = getSupportedExerciseLabel(id);
+                if (!label) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setOverrideExerciseId(id)}
+                    className="rounded-full border border-zinc-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-white"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              {overrideExerciseId ? (
+                <button
+                  type="button"
+                  onClick={() => setOverrideExerciseId(null)}
+                  className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-white"
+                >
+                  Nota mælt með
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {restrictedLabels.length ? (
+          <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1408,6 +1663,150 @@ function groupIntoSegments(parsed: ParsedExercise[]): ExSegment[] {
   return segments;
 }
 
+function isRulesBlockTitle(title: string): boolean {
+  const normalized = title.trim().toLowerCase();
+  return normalized === "rules" || normalized === "reglur" || normalized === "partur";
+}
+
+function splitMigratableRuleItems(items: string[]): {
+  retainedItems: string[];
+  migratedItems: string[];
+} {
+  const retainedItems: string[] = [];
+  const migratedItems: string[] = [];
+
+  for (const rawItem of items) {
+    const parsed = parseExerciseItem(rawItem);
+    const supportedId = !parsed.isHeader ? normalizeExerciseNameToId(parsed.name) : null;
+    if (supportedId) {
+      migratedItems.push(rawItem);
+    } else {
+      retainedItems.push(rawItem);
+    }
+  }
+
+  return { retainedItems, migratedItems };
+}
+
+function findPreferredTargetBlockIndex(
+  blocks: Array<{ block?: string; items?: string[] }>,
+  fromIdx: number,
+  migratedItems: string[]
+): number {
+  const migratedIds = migratedItems
+    .map((rawItem) => {
+      const parsed = parseExerciseItem(rawItem);
+      return parsed.isHeader ? null : normalizeExerciseNameToId(parsed.name);
+    })
+    .filter((id): id is SupportedExerciseId => !!id);
+
+  const groups = new Set(migratedIds.map((id) => getRecommendationGroupForExercise(id)).filter(Boolean));
+
+  for (let targetIdx = fromIdx - 1; targetIdx >= 0; targetIdx -= 1) {
+    const prevTitle = String(blocks[targetIdx]?.block ?? "").trim();
+    if (isRulesBlockTitle(prevTitle)) continue;
+
+    const priority = blockSortPriority(prevTitle);
+    if (
+      groups.has("EXPLOSIVE_ACCESSORY") &&
+      priority === 1
+    ) {
+      return targetIdx;
+    }
+    if (
+      groups.has("UNILATERAL_STRENGTH_ACCESSORY") &&
+      (priority === 2 || priority === 3)
+    ) {
+      return targetIdx;
+    }
+  }
+
+  for (let targetIdx = fromIdx - 1; targetIdx >= 0; targetIdx -= 1) {
+    const prevTitle = String(blocks[targetIdx]?.block ?? "").trim();
+    if (!isRulesBlockTitle(prevTitle)) return targetIdx;
+  }
+
+  return -1;
+}
+
+function rebalanceRulesBlocks(rawBlocks: any[]): any[] {
+  const blocks = rawBlocks.map((block) => ({
+    ...block,
+    items: safeStringList(block?.items),
+  }));
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const title = String(blocks[i]?.block ?? "").trim();
+    if (!isRulesBlockTitle(title)) continue;
+
+    const { retainedItems, migratedItems } = splitMigratableRuleItems(blocks[i]?.items ?? []);
+    if (!migratedItems.length) continue;
+
+    const targetIdx = findPreferredTargetBlockIndex(blocks, i, migratedItems);
+    if (targetIdx < 0) continue;
+
+    blocks[targetIdx] = {
+      ...blocks[targetIdx],
+      items: [...safeStringList(blocks[targetIdx]?.items), ...migratedItems],
+    };
+    blocks[i] = {
+      ...blocks[i],
+      items: retainedItems,
+    };
+  }
+
+  return blocks.filter((block) => {
+    const title = String(block?.block ?? "").trim();
+    const items = safeStringList(block?.items);
+    if (!isRulesBlockTitle(title)) return true;
+    return items.length > 0;
+  });
+}
+
+function rebalanceSupportedExerciseBlocks(rawBlocks: any[]): any[] {
+  const blocks = rawBlocks.map((block) => ({
+    ...block,
+    items: safeStringList(block?.items),
+  }));
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const currentTitle = String(blocks[i]?.block ?? "").trim();
+    const currentPriority = blockSortPriority(currentTitle);
+    if (currentPriority === 1) continue;
+
+    const retainedItems: string[] = [];
+    const explosiveItemsToMove: string[] = [];
+
+    for (const rawItem of blocks[i]?.items ?? []) {
+      const parsed = parseExerciseItem(rawItem);
+      const supportedId = !parsed.isHeader ? normalizeExerciseNameToId(parsed.name) : null;
+      const group = supportedId ? getRecommendationGroupForExercise(supportedId) : null;
+
+      if (group === "EXPLOSIVE_ACCESSORY") {
+        explosiveItemsToMove.push(rawItem);
+      } else {
+        retainedItems.push(rawItem);
+      }
+    }
+
+    if (!explosiveItemsToMove.length) continue;
+
+    const targetIdx = findPreferredTargetBlockIndex(blocks, i, explosiveItemsToMove);
+    if (targetIdx < 0 || targetIdx === i) continue;
+
+    blocks[targetIdx] = {
+      ...blocks[targetIdx],
+      items: [...safeStringList(blocks[targetIdx]?.items), ...explosiveItemsToMove],
+    };
+    blocks[i] = {
+      ...blocks[i],
+      items: retainedItems,
+    };
+  }
+
+  return blocks.filter((block) => safeStringList(block?.items).length > 0);
+}
+
 function renderStructureBlocks(
   structure: any,
   opts?: {
@@ -1421,9 +1820,11 @@ function renderStructureBlocks(
   const rawBlocks = Array.isArray(structure) ? structure : [];
   if (!rawBlocks.length) return null;
 
+  const normalizedBlocks = rebalanceSupportedExerciseBlocks(rebalanceRulesBlocks(rawBlocks));
+
   // Sort blocks by canonical session order (warm-up → primer/ballistic → contrast/strength → accessory).
   // Uses a stable sort so blocks within the same priority category keep their original template order.
-  const blocks = [...rawBlocks].sort(
+  const blocks = [...normalizedBlocks].sort(
     (a, b) =>
       blockSortPriority(String(a?.block ?? "")) -
       blockSortPriority(String(b?.block ?? ""))
@@ -1490,7 +1891,15 @@ function renderStructureBlocks(
                           <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} recommendationContext={opts?.recommendationContext} />
                         );
                       }
-                      return <ExerciseCard key={i} ex={seg.ex} accent={accent} blockLabel={accent.label} recommendationContext={opts?.recommendationContext} />;
+                      return (
+                        <RecommendedExerciseBlockCard
+                          key={i}
+                          ex={seg.ex}
+                          accent={accent}
+                          blockLabel={accent.label}
+                          recommendationContext={opts?.recommendationContext}
+                        />
+                      );
                     })}
                   </div>
                 ) : (
@@ -2329,6 +2738,48 @@ export default function PlayerClient() {
     if (resolved) {
       setPlanIsFallback(false);
 
+      const resolvedTeamId = (resolved as any).team_id ?? null;
+      const resolvedMdDay = (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null;
+      const resolvedReadiness =
+        (resolved as any).readiness_resolved ?? (resolved as any).readiness_flag ?? null;
+      const resolvedVariant = (resolved as any).variant ?? null;
+
+      let templateRow: {
+        title: string | null;
+        description: string | null;
+        structure: any;
+        readiness_level: string | null;
+        md_day?: string | null;
+        variant?: string | null;
+      } | null = null;
+
+      if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
+        const { data: templateRows, error: templateErr } = await supabase
+          .from("microdose_templates")
+          .select("title, description, structure, readiness_level, md_day, variant")
+          .eq("team_id", resolvedTeamId)
+          .eq("md_day", resolvedMdDay)
+          .eq("readiness_level", resolvedReadiness)
+          .order("variant", { ascending: true });
+
+        if (templateErr) {
+          console.error("microdose_templates resolved plan error:", templateErr.message);
+        } else {
+          templateRow = selectTemplateOverrideCandidate(
+            (((templateRows as any[]) ?? []) as Array<{
+              title: string | null;
+              description: string | null;
+              structure: any;
+              readiness_level: string | null;
+              md_day?: string | null;
+              variant?: string | null;
+            }>),
+            resolvedVariant,
+            resolvedMdDay
+          );
+        }
+      }
+
       const merged: any = {
         decision_id: (resolved as any).decision_id ?? null,
         team_id: (resolved as any).team_id ?? null,
@@ -2347,9 +2798,9 @@ export default function PlayerClient() {
         training_system: (resolved as any).training_system ?? null,
 
         variant: (resolved as any).variant ?? null,
-        title: (resolved as any).plan_title ?? null,
-        description: (resolved as any).plan_description ?? null,
-        structure: (resolved as any).plan_structure ?? null,
+        title: templateRow?.title ?? (resolved as any).plan_title ?? null,
+        description: templateRow?.description ?? (resolved as any).plan_description ?? null,
+        structure: templateRow?.structure ?? (resolved as any).plan_structure ?? null,
       };
 
       return merged as Stage4PlanRow;

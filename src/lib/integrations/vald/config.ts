@@ -3,8 +3,10 @@ import "server-only";
 import crypto from "node:crypto";
 import type { ValdAuthMode, ValdConnectionConfig, ValdRegion } from "./types";
 
-// ── VALD token endpoint (March 2026) ─────────────────────────────────────────
-export const VALD_TOKEN_URL = "https://security.valdperformance.com/connect/token";
+// ── VALD token endpoint ───────────────────────────────────────────────────────
+// VALD uses Auth0 at auth.prd.vald.com (confirmed March 2026 via Hub session).
+// Override via VALD_TOKEN_URL env var if needed.
+export const VALD_TOKEN_URL = process.env.VALD_TOKEN_URL ?? "https://auth.prd.vald.com/oauth/token";
 
 /**
  * Returns the product-specific API base URL for the given region.

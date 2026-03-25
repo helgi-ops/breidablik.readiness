@@ -15,18 +15,17 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
   "trap bar deadlift": {
     IS: {
       execution: [
-        "Stattu inni í trap bar með fætur í axlabreidd",
-        "Beygðu hnén og mjaðmir — haltu bakinu beinu (neutral)",
-        "Gríptu þangana og festustu",
+        "Stattu inni í trap bar",
+        "Hné og mjaðmir beygð (neutral bak)",
         "Lyftu með því að þrýsta fótum í gólfið",
-        "Haltu bringu uppi og öxlum aftur",
-        "Stjórnaðu niður aftur með hægum hraða",
+        "Haltu bringu uppi og bakinu beinu",
+        "Stjórnað niður aftur",
       ],
       focus: [
         "Hámarks kraftur í upphafi lyftu",
-        "Sprengja upp — ekki hæg, stöðug lyfta",
+        "Sprengja upp (ekki hæg lyfta)",
       ],
-      goal: "Byggja upp hráan styrk og force production í mjöðmum og lærum.",
+      goal: "👉 Byggja upp hráan styrk og force production í mjöðmum og lærum",
     },
     EN: {
       execution: [
@@ -48,18 +47,11 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
   "split stance trap bar deadlift": {
     IS: {
       execution: [
-        "Stattu inni í trap bar",
-        "Annar fótur aðeins framar (70–80% þyngdar á framfót)",
-        "Lyftu eins og í deadlift",
-        "Haltu jafnvægi og stjórn í gegnum alla lyftuna",
-        "Haltu bolnum stöðugum — enginn snúningur",
+        "Einn fótur aðeins framar (split stance)",
+        "Sama lyftuhreyfing og í trap bar deadlift",
+        "Meiri áhersla á framfót",
       ],
-      focus: [
-        "Ýta í gegnum framfót",
-        "Stöðugur bolur — ekki snúast",
-        "⚖️ Jafnvægi — ekki detta",
-      ],
-      goal: "Auka unilateral strength, jafna út hliðamun milli fóta og bæta stöðugleika í leik.",
+      goal: "👉 Auka einbeittan styrk og stöðugleika (unilateral strength)",
     },
     EN: {
       execution: [
@@ -81,18 +73,12 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
   "rfess": {
     IS: {
       execution: [
-        "Settu aftari fót upp á bekk",
+        "Aftari fótur upp á bekk",
         "Framfótur tekur mest álag",
-        "Lækkaðu niður og ýttu svo upp aftur",
-        "Haltu bolnum uppréttum í gegnum alla hreyfinguna",
-        "Hreyfingin á að vera djúp og stjórnuð",
+        "Lækka niður þar til hné nálgast gólf",
+        "Ýta upp í gegnum framfót",
       ],
-      focus: [
-        "Djúp og stjórnuð hreyfing",
-        "Ekki detta fram",
-        "🧱 Haltu bol stöðugum",
-      ],
-      goal: "Styrkja quadriceps og glutes, auka single-leg control og minnka meiðslahættu í hné og nára.",
+      goal: "👉 Styrkja:\nQuadriceps og glutes\nJafnvægi og stöðugleika milli fóta",
     },
     EN: {
       execution: [
