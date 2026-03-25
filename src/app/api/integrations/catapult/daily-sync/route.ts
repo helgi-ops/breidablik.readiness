@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
 import { sendTrainingDataReadyNotification } from "@/lib/push/sendTrainingDataReady";
+import { sendRpeReminderToMissingPlayers } from "@/lib/notifications/sendRpeReminder";
+import { getOperationalTimezone } from "@/lib/notifications/schedule";
 
 export const runtime = "nodejs";
 
@@ -56,9 +58,13 @@ async function runSync(request: Request, explicitDate?: string | null) {
     const debugIma = url.searchParams.get("debugIma") === "1";
     const result = await syncCatapultDailyMetrics(date, { debugIma });
 
-    // Send push notification to all players that today's training data is ready.
-    // We fire-and-forget: a push failure should not break the sync response.
+    // After a successful sync, send two push notifications (both fire-and-forget):
+    //   1. "Training data ready" — informs players that GPS data is available to review
+    //   2. RPE reminder — prompts players who haven't yet rated their session to do so
     const dateKey = (date ?? new Date().toISOString().slice(0, 10));
+    const sb = getAdminClient();
+    const timeZone = getOperationalTimezone();
+
     let pushResult: Awaited<ReturnType<typeof sendTrainingDataReadyNotification>> | null = null;
     try {
       pushResult = await sendTrainingDataReadyNotification(dateKey);
@@ -66,7 +72,22 @@ async function runSync(request: Request, explicitDate?: string | null) {
       // Intentionally ignored – push is best-effort
     }
 
-    return NextResponse.json({ ok: true, result, push: pushResult });
+    let rpeReminderResult: Awaited<ReturnType<typeof sendRpeReminderToMissingPlayers>> | null = null;
+    try {
+      // Use "catapult_<dateKey>" as the slot key so we deduplicate: one RPE reminder per
+      // sync day, not once per scheduled cron slot.
+      rpeReminderResult = await sendRpeReminderToMissingPlayers(sb, {
+        reminderType: "first",
+        scheduledSlot: `catapult_${dateKey}`,
+        dateKey,
+        timeZone,
+        teamId: null, // notify all eligible players
+      });
+    } catch {
+      // Intentionally ignored – push is best-effort
+    }
+
+    return NextResponse.json({ ok: true, result, push: pushResult, rpeReminder: rpeReminderResult });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catapult sync failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

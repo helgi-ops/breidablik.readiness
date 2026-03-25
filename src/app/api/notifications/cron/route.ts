@@ -19,14 +19,22 @@ type CronBody = {
 };
 
 function isAuthorized(req: Request): boolean {
-  const secret = process.env.REMINDER_CRON_SECRET || "";
-  if (!secret) return false;
+  // Vercel automatically sends "Authorization: Bearer <CRON_SECRET>" for scheduled cron jobs.
+  // CRON_SECRET is the built-in Vercel env var; REMINDER_CRON_SECRET is our custom secret for
+  // manual/external calls. We accept either.
+  const cronSecret = process.env.CRON_SECRET || "";
+  const reminderSecret = process.env.REMINDER_CRON_SECRET || "";
 
   const auth = req.headers.get("authorization") || "";
-  if (auth === `Bearer ${secret}`) return true;
 
+  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
+  if (reminderSecret && auth === `Bearer ${reminderSecret}`) return true;
+
+  // Query-param fallback for manual calls (e.g. curl testing)
   const querySecret = new URL(req.url).searchParams.get("secret") || "";
-  return querySecret === secret;
+  if (reminderSecret && querySecret === reminderSecret) return true;
+
+  return false;
 }
 
 export async function POST(req: Request) {

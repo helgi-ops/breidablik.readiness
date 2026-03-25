@@ -13,14 +13,18 @@ type Body = {
 };
 
 function isAuthorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET || process.env.REMINDER_CRON_SECRET || "";
-  if (!secret) return false;
+  // Vercel automatically sends "Authorization: Bearer <CRON_SECRET>" for scheduled cron jobs.
+  const cronSecret = process.env.CRON_SECRET || "";
+  const reminderSecret = process.env.REMINDER_CRON_SECRET || "";
 
   const auth = req.headers.get("authorization") || "";
-  if (auth === `Bearer ${secret}`) return true;
+  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
+  if (reminderSecret && auth === `Bearer ${reminderSecret}`) return true;
 
   const querySecret = new URL(req.url).searchParams.get("secret") || "";
-  return querySecret === secret;
+  if (reminderSecret && querySecret === reminderSecret) return true;
+
+  return false;
 }
 
 function validDateKey(input: string | undefined): string | null {

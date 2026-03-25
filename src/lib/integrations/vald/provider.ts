@@ -59,17 +59,19 @@ function getTestsBaseUrl(config: ValdConnectionConfig): string {
 }
 
 /**
- * Per-athlete tests endpoint.
- * VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athletes/{athleteId}/tests
- * Falls back to cursor endpoint with ProfileId filter if no tenantId is available.
+ * Per-athlete tests base endpoint.
+ * VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athlete/{athleteId}/tests/{page}
+ * Note: "athlete" is singular in the path (not "athletes").
+ * Falls back to cursor endpoint with ProfileId filter if no squadId is available.
  */
 function getAthleteTestsUrl(config: ValdConnectionConfig, athleteId: string): string {
   if (config.endpointOverrides?.athleteTests) return config.endpointOverrides.athleteTests;
   const squadId = config.valdTeamId ?? config.tenantId ?? config.orgId;
   const base = productBaseUrl(config, "forcedecks");
   if (squadId) {
+    // Return page-1 URL; callers can increment {page} themselves for pagination
     return new URL(
-      `/v2019q3/teams/${encodeURIComponent(squadId)}/athletes/${encodeURIComponent(athleteId)}/tests`,
+      `/v2019q3/teams/${encodeURIComponent(squadId)}/athlete/${encodeURIComponent(athleteId)}/tests/1`,
       base,
     ).toString();
   }
@@ -187,22 +189,42 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
         .filter((item): item is ValdAthleteSummary => !!item);
     },
 
-    async fetchTestsByDateRange(dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
-      // VALD External API v2019q3: GET /v2019q3/teams/{teamId}/tests/{page}?modifiedFrom=...
-      // Page-based pagination; returns tests with proper param/extParams metric values.
-      // Falls back to cursor-based /tests endpoint if the versioned route returns 404.
+    async fetchTestsByDateRange(dateFrom: string, dateTo: string): Promise<ValdTestSummary[]> {
+      // VALD External API v2019q3 endpoints (from Swagger):
+      //   GET /v2019q3/teams/{teamId}/tests/detailed/{dateFrom}/{dateTo}  ← full data with params
+      //   GET /v2019q3/teams/{teamId}/tests/{dateFrom}/{dateTo}/{page}    ← paginated, dates in PATH
+      //   GET /tests?TenantId=...&ModifiedFromUtc=...                     ← legacy cursor fallback
       const headers = await authHeaders();
       const squadId = config.valdTeamId ?? tenantId;
       const base = productBaseUrl(config, "forcedecks");
 
       if (squadId) {
+        // 1. Try detailed endpoint first — returns full test objects with param/extParams fields
+        try {
+          const detailedUrl = new URL(
+            `/v2019q3/teams/${encodeURIComponent(squadId)}/tests/detailed/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}`,
+            base,
+          );
+          const payload = await valdRequestJson<unknown>(detailedUrl.toString(), { headers, timeoutMs: config.timeoutMs });
+          if (payload != null) {
+            const batch = listFromPayload(payload);
+            if (batch.length > 0) {
+              return batch.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Only swallow 404 (endpoint unavailable) — anything else is a real error
+          if (!msg.includes("404")) throw err;
+        }
+
+        // 2. Paginated date-range endpoint — dates in PATH, page increments
         const all: unknown[] = [];
         for (let page = 1; page <= 500; page += 1) {
           const url = new URL(
-            `/v2019q3/teams/${encodeURIComponent(squadId)}/tests/${page}`,
+            `/v2019q3/teams/${encodeURIComponent(squadId)}/tests/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/${page}`,
             base,
           );
-          url.searchParams.set("modifiedFrom", dateFrom);
           try {
             const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
             if (payload == null) break;
@@ -221,7 +243,7 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
         }
       }
 
-      // Fallback: legacy cursor-based endpoint
+      // 3. Fallback: legacy cursor-based endpoint (returns tests WITHOUT parameters)
       const rawTests = await fetchAllTestsWithCursor(
         getTestsBaseUrl(config),
         tenantId,
@@ -233,13 +255,43 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     },
 
     async fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
-      const url = new URL(getAthleteTestsUrl(config, valdAthleteId));
-      // Versioned endpoint uses modifiedFrom; cursor endpoint uses ModifiedFromUtc
-      url.searchParams.set("modifiedFrom", dateFrom);
-      const payload = await valdRequestJson(url.toString(), {
-        headers: await authHeaders(),
-        timeoutMs: config.timeoutMs,
-      });
+      // VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athlete/{athleteId}/tests/{page}
+      // Note: "athlete" is singular in the path (Swagger-confirmed).
+      const headers = await authHeaders();
+      const squadId = config.valdTeamId ?? tenantId;
+      const base = productBaseUrl(config, "forcedecks");
+
+      if (squadId) {
+        const all: unknown[] = [];
+        for (let page = 1; page <= 500; page += 1) {
+          const url = new URL(
+            `/v2019q3/teams/${encodeURIComponent(squadId)}/athlete/${encodeURIComponent(valdAthleteId)}/tests/${page}`,
+            base,
+          );
+          url.searchParams.set("modifiedFrom", dateFrom);
+          try {
+            const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+            if (payload == null) break;
+            const batch = listFromPayload(payload);
+            if (batch.length === 0) break;
+            all.push(...batch);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("404")) break;
+            throw err;
+          }
+        }
+        if (all.length > 0) {
+          return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        }
+      }
+
+      // Fallback: cursor endpoint filtered by ProfileId
+      const fallbackUrl = new URL(getTestsBaseUrl(config));
+      if (tenantId) fallbackUrl.searchParams.set("TenantId", tenantId);
+      fallbackUrl.searchParams.set("ProfileId", valdAthleteId);
+      fallbackUrl.searchParams.set("ModifiedFromUtc", dateFrom);
+      const payload = await valdRequestJson(fallbackUrl.toString(), { headers, timeoutMs: config.timeoutMs });
       if (payload == null) return [];
       return listFromPayload(payload)
         .map(mapValdTestSummary)
