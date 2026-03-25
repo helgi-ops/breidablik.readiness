@@ -363,17 +363,9 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
     ]);
     summary.athletes_seen = athletes.length;
 
-    // Always use per-athlete v2019q3 endpoint which returns param/extParams with
-    // actual metric values. The cursor-based /tests endpoint returns empty
-    // extendedParameters and should be avoided for real syncs.
-    const athleteIdsToSync = request.athleteIds?.length
-      ? request.athleteIds
-      : Array.from(allowedAthleteIds);
-    const allTests = (
-      await Promise.all(
-        athleteIdsToSync.map((athleteId) => provider.fetchTestsForAthlete(athleteId, dateFrom, dateTo))
-      )
-    ).flat();
+    const allTests = request.athleteIds?.length
+      ? (await Promise.all(request.athleteIds.map((athleteId) => provider.fetchTestsForAthlete(athleteId, dateFrom, dateTo)))).flat()
+      : await provider.fetchTestsByDateRange(dateFrom, dateTo);
     const tests = allTests.filter((test) => allowedAthleteIds.has(test.athleteId));
     summary.tests_seen = tests.length;
 

@@ -188,9 +188,40 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     },
 
     async fetchTestsByDateRange(dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
-      // VALD ForceDecks API uses cursor pagination via modifiedFromUtc.
-      // dateTo is not a supported parameter — we filter client-side if needed.
+      // VALD External API v2019q3: GET /v2019q3/teams/{teamId}/tests/{page}?modifiedFrom=...
+      // Page-based pagination; returns tests with proper param/extParams metric values.
+      // Falls back to cursor-based /tests endpoint if the versioned route returns 404.
       const headers = await authHeaders();
+      const squadId = config.valdTeamId ?? tenantId;
+      const base = productBaseUrl(config, "forcedecks");
+
+      if (squadId) {
+        const all: unknown[] = [];
+        for (let page = 1; page <= 500; page += 1) {
+          const url = new URL(
+            `/v2019q3/teams/${encodeURIComponent(squadId)}/tests/${page}`,
+            base,
+          );
+          url.searchParams.set("modifiedFrom", dateFrom);
+          try {
+            const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+            if (payload == null) break;
+            const batch = listFromPayload(payload);
+            if (batch.length === 0) break;
+            all.push(...batch);
+          } catch (err) {
+            // 404 means no more pages (or endpoint unavailable) — stop pagination
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("404")) break;
+            throw err;
+          }
+        }
+        if (all.length > 0) {
+          return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        }
+      }
+
+      // Fallback: legacy cursor-based endpoint
       const rawTests = await fetchAllTestsWithCursor(
         getTestsBaseUrl(config),
         tenantId,
