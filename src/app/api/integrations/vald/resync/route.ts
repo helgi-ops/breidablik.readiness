@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 import { syncValdData } from "@/lib/integrations/vald";
 
 export const runtime = "nodejs";
+export const maxDuration = 300; // Allow up to 5 min for large historical re-syncs
 
 async function requireCoach(req: Request): Promise<{ teamId: string; userId: string }> {
   const auth = req.headers.get("authorization") || "";
