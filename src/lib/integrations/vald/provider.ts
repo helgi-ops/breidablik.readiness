@@ -28,24 +28,29 @@ function productBaseUrl(config: ValdConnectionConfig, product: "forcedecks" | "n
 }
 
 /**
- * Profiles endpoint — returns athletes/profiles for the tenant.
- * VALD API: GET /profiles?tenantId={tenantId}
+ * Athletes endpoint — returns athletes for the tenant.
+ * VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athletes
+ *
+ * The teamId path parameter corresponds to the tenant/org ID (VALD_TENANT_ID or VALD_DEFAULT_ORG_ID).
  */
 function getProfilesEndpoint(config: ValdConnectionConfig): string {
   if (config.endpointOverrides?.athletes) {
     return config.endpointOverrides.athletes;
   }
-  const base = productBaseUrl(config, "forcedecks");
-  const url = new URL("/profiles", base);
   const tenantId = config.tenantId ?? config.orgId;
-  if (tenantId) url.searchParams.set("tenantId", tenantId);
-  return url.toString();
+  const base = productBaseUrl(config, "forcedecks");
+  if (tenantId) {
+    return new URL(`/v2019q3/teams/${encodeURIComponent(tenantId)}/athletes`, base).toString();
+  }
+  // Fallback: cursor-based profiles endpoint (requires TenantId query param)
+  return new URL("/profiles", base).toString();
 }
 
 /**
  * Tests base endpoint — VALD ForceDecks cursor-paginated test listing.
- * VALD API: GET /tests?tenantId={tenantId}&modifiedFromUtc={cursor}
+ * VALD External API: GET /tests?TenantId={tenantId}&ModifiedFromUtc={cursor}
  *
+ * Note: VALD uses PascalCase query parameters (TenantId, ModifiedFromUtc).
  * Returns the base URL without query params so callers can add pagination args.
  */
 function getTestsBaseUrl(config: ValdConnectionConfig): string {
@@ -55,14 +60,22 @@ function getTestsBaseUrl(config: ValdConnectionConfig): string {
 
 /**
  * Per-athlete tests endpoint.
- * VALD API: GET /profiles/{profileId}/tests?tenantId={tenantId}
+ * VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athletes/{athleteId}/tests
+ * Falls back to cursor endpoint with ProfileId filter if no tenantId is available.
  */
 function getAthleteTestsUrl(config: ValdConnectionConfig, athleteId: string): string {
   if (config.endpointOverrides?.athleteTests) return config.endpointOverrides.athleteTests;
-  const base = productBaseUrl(config, "forcedecks");
-  const url = new URL(`/profiles/${encodeURIComponent(athleteId)}/tests`, base);
   const tenantId = config.tenantId ?? config.orgId;
-  if (tenantId) url.searchParams.set("tenantId", tenantId);
+  const base = productBaseUrl(config, "forcedecks");
+  if (tenantId) {
+    return new URL(
+      `/v2019q3/teams/${encodeURIComponent(tenantId)}/athletes/${encodeURIComponent(athleteId)}/tests`,
+      base,
+    ).toString();
+  }
+  // Fallback: cursor endpoint with ProfileId filter
+  const url = new URL("/tests", base);
+  url.searchParams.set("ProfileId", athleteId);
   return url.toString();
 }
 
@@ -101,8 +114,9 @@ async function fetchAllTestsWithCursor(
 
   for (let page = 0; page < 500; page += 1) {
     const url = new URL(baseTestsUrl);
-    if (tenantId) url.searchParams.set("tenantId", tenantId);
-    url.searchParams.set("modifiedFromUtc", cursor);
+    // VALD External API uses PascalCase query parameters
+    if (tenantId) url.searchParams.set("TenantId", tenantId);
+    url.searchParams.set("ModifiedFromUtc", cursor);
 
     const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs });
 
@@ -115,13 +129,14 @@ async function fetchAllTestsWithCursor(
     let newCursor: string | null = null;
     for (const item of batch) {
       const rec = item && typeof item === "object" ? (item as Record<string, unknown>) : null;
-      // Deduplicate by testId in case of overlapping pages
-      const testId = typeof rec?.testId === "string" ? rec.testId : null;
+      // Deduplicate by id (VALD External API TestDTO uses "id", not "testId")
+      const testId = typeof rec?.id === "string" ? rec.id : typeof rec?.testId === "string" ? rec.testId : null;
       if (testId && seen.has(testId)) continue;
       if (testId) seen.add(testId);
       all.push(item);
-      // Track the latest modifiedDateUtc as the next cursor
-      const mod = typeof rec?.modifiedDateUtc === "string" ? rec.modifiedDateUtc : null;
+      // Track the latest lastModifiedUTC as the next cursor (VALD External API field)
+      const mod = typeof rec?.lastModifiedUTC === "string" ? rec.lastModifiedUTC
+        : typeof rec?.modifiedDateUtc === "string" ? rec.modifiedDateUtc : null;
       if (mod && (!newCursor || mod > newCursor)) newCursor = mod;
     }
 
@@ -188,7 +203,8 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
 
     async fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
       const url = new URL(getAthleteTestsUrl(config, valdAthleteId));
-      url.searchParams.set("modifiedFromUtc", dateFrom);
+      // Versioned endpoint uses modifiedFrom; cursor endpoint uses ModifiedFromUtc
+      url.searchParams.set("modifiedFrom", dateFrom);
       const payload = await valdRequestJson(url.toString(), {
         headers: await authHeaders(),
         timeoutMs: config.timeoutMs,

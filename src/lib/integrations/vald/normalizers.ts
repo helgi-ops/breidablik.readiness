@@ -35,33 +35,68 @@ function firstString(...values: unknown[]): string | null {
   return null;
 }
 
-// ── VALD REST API v2 parameter extraction ─────────────────────────────────────
+// ── VALD parameter extraction ──────────────────────────────────────────────────
 //
-// VALD ForceDecks (and other products) return test results as arrays of
-// { resultId: string, value: number } objects under two keys:
-//   "parameter"          — primary results (jump height, peak power, etc.)
-//   "extendedParameters" — additional / computed results
+// VALD External API v2019q3 TestDTO returns test parameters as:
+//   "param"     — single TestParameterDTO { resultId: integer, value: number, definition?: ResultDefinition }
+//   "extParams" — array of TestParameterDTO
 //
-// This helper builds a Map<resultId, value> for fast lookup.
+// Older / internal APIs may use:
+//   "parameter" / "parameters"    — array of the same shape
+//   "extendedParameters"          — array of the same shape
+//
+// The definition sub-object (if present) may carry a human-readable name/shortName
+// that maps to our lookup keys (e.g. "JumpHeightMO", "PeakPower").
+//
+// This helper builds a Map<key, value> where key is:
+//   1. definition.name or definition.shortName (preferred — matches our string keys)
+//   2. String(resultId) as numeric fallback
 
-type ParamEntry = { resultId?: unknown; value?: unknown };
+type ParamEntry = { resultId?: unknown; value?: unknown; definition?: unknown };
 
 function buildParamMap(payload: unknown): Map<string, number> {
   const record = asRecord(payload);
   if (!record) return new Map();
   const map = new Map<string, number>();
 
-  function addEntries(arr: unknown) {
-    if (!Array.isArray(arr)) return;
-    for (const item of arr) {
-      const entry = asRecord(item) as ParamEntry | null;
-      if (!entry) continue;
-      const id = typeof entry.resultId === "string" ? entry.resultId : null;
-      const val = toNumber(entry.value);
-      if (id && val != null) map.set(id, val);
+  function addEntry(item: unknown) {
+    const entry = asRecord(item) as ParamEntry | null;
+    if (!entry) return;
+    const val = toNumber(entry.value);
+    if (val == null) return;
+
+    // Prefer named key from definition (matches our resultId string constants)
+    const def = asRecord(entry.definition);
+    const namedKey =
+      (typeof def?.name === "string" && def.name.trim() ? def.name.trim() : null) ??
+      (typeof def?.shortName === "string" && def.shortName.trim() ? def.shortName.trim() : null) ??
+      (typeof def?.key === "string" && def.key.trim() ? def.key.trim() : null);
+
+    if (namedKey) {
+      map.set(namedKey, val);
+    }
+
+    // Also store by resultId (string or numeric-as-string) as a universal fallback
+    if (typeof entry.resultId === "string" && entry.resultId.trim()) {
+      map.set(entry.resultId.trim(), val);
+    } else if (typeof entry.resultId === "number") {
+      map.set(String(entry.resultId), val);
     }
   }
 
+  function addEntries(arr: unknown) {
+    if (Array.isArray(arr)) {
+      for (const item of arr) addEntry(item);
+    } else if (arr && typeof arr === "object") {
+      // Single object (VALD External API "param" field)
+      addEntry(arr);
+    }
+  }
+
+  // VALD External API v2019q3 fields
+  addEntries(record.param);
+  addEntries(record.extParams);
+  // Older / internal API fields (kept for backwards compatibility)
   addEntries(record.parameter);
   addEntries(record.parameters);
   addEntries(record.extendedParameters);
@@ -166,7 +201,7 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     product: "forcedecks",
     testType: firstString(record.testType, record.test_type, record.protocol, record.name),
     testTimestamp:
-      firstString(record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+      firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
     jumpHeightCm,
     rsiMod:
@@ -229,7 +264,7 @@ export function normalizeNordBordResult(rawPayload: unknown): ValdNordBordNormal
     product: "nordbord",
     testType: firstString(record.testType, record.test_type, record.protocol, record.name),
     testTimestamp:
-      firstString(record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+      firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
     leftPeakForceN: leftPeak,
     rightPeakForceN: rightPeak,
@@ -275,7 +310,7 @@ export function normalizeForceFrameResult(rawPayload: unknown): ValdForceFrameNo
     product: "forceframe",
     testType: firstString(record.testType, record.test_type, record.protocol, record.name),
     testTimestamp:
-      firstString(record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+      firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
     bodyRegion: firstString(record.bodyRegion, record.body_region),
     movementPattern: firstString(record.movementPattern, record.movement_pattern, record.pattern),

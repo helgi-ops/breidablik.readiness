@@ -79,14 +79,16 @@ export function inferValdProductFromPayload(payload: unknown): ValdProduct {
 export function mapValdAthleteSummary(payload: unknown): ValdAthleteSummary | null {
   const record = asRecord(payload);
   if (!record) return null;
-  // VALD Profiles API: profileId is the primary identifier (not athleteId / id)
-  const athleteId = firstString(record.profileId, record.id, record.athlete_id, record.athleteId);
+  // VALD External API v2019q3 AthleteItemDTO uses "id" as primary identifier.
+  // Older/internal APIs used "profileId" — keep as fallback.
+  const athleteId = firstString(record.id, record.profileId, record.athlete_id, record.athleteId);
   if (!athleteId) return null;
-  const firstName = firstString(record.firstName, record.first_name);
-  const lastName = firstString(record.lastName, record.last_name);
+  // AthleteItemDTO provides givenName/familyName; internal APIs used firstName/lastName
+  const firstName = firstString(record.givenName, record.firstName, record.first_name);
+  const lastName = firstString(record.familyName, record.lastName, record.last_name);
   return {
     athleteId,
-    fullName: firstString(record.fullName, record.full_name) ?? ([firstName, lastName].filter(Boolean).join(" ") || null),
+    fullName: firstString(record.name, record.fullName, record.full_name) ?? ([firstName, lastName].filter(Boolean).join(" ") || null),
     email: firstString(record.email),
     externalRef: firstString(record.externalId, record.external_ref, record.externalRef, record.reference),
     raw: payload,
@@ -96,12 +98,13 @@ export function mapValdAthleteSummary(payload: unknown): ValdAthleteSummary | nu
 export function mapValdTestSummary(payload: unknown): ValdTestSummary | null {
   const record = asRecord(payload);
   if (!record) return null;
-  // VALD ForceDecks API (March 2026): testId, profileId, recordedDateUtc, modifiedDateUtc
-  const testId = firstString(record.testId, record.id, record.test_id);
-  // profileId is the athlete identifier in VALD ForceDecks REST API
-  const athleteId = firstString(record.profileId, record.athlete_id, record.athleteId);
+  // VALD External API v2019q3 TestDTO: id (uuid), athleteId (uuid), recordedUTC, lastModifiedUTC
+  // Older/cursor API may use testId, profileId, recordedDateUtc, modifiedDateUtc — kept as fallbacks
+  const testId = firstString(record.id, record.testId, record.test_id);
+  const athleteId = firstString(record.athleteId, record.profileId, record.athlete_id);
   const testTimestamp = firstString(
-    record.recordedDateUtc,
+    record.recordedUTC,       // VALD External API v2019q3
+    record.recordedDateUtc,   // older cursor API fallback
     record.test_timestamp,
     record.testTimestamp,
     record.performed_at,
@@ -114,8 +117,8 @@ export function mapValdTestSummary(payload: unknown): ValdTestSummary | null {
     product: inferValdProductFromPayload(payload),
     testType: firstString(record.testType, record.test_type, record.protocol, record.name),
     testTimestamp,
-    // modifiedDateUtc is the cursor field for incremental sync
-    sourceUpdatedAt: firstString(record.modifiedDateUtc, record.updated_at, record.source_updated_at, record.sourceUpdatedAt),
+    // lastModifiedUTC is the cursor field for incremental sync (VALD External API v2019q3)
+    sourceUpdatedAt: firstString(record.lastModifiedUTC, record.modifiedDateUtc, record.updated_at, record.source_updated_at, record.sourceUpdatedAt),
     raw: payload,
   };
 }
