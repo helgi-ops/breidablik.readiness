@@ -900,11 +900,6 @@ type ExerciseRecommendationContext = Omit<ExerciseRecommendationInput, "original
 function parseExerciseItem(raw: string): ParsedExercise {
   const s = (raw ?? "").trim();
 
-  // Header/instruction lines: end with ":" or are choice prompts
-  if (s.endsWith(":") || /^(veldu|choose|complete|nota|hér|þetta)/i.test(s)) {
-    return { isHeader: true, name: s, method: null, setsReps: null, note: null };
-  }
-
   // Remove leading index like "1) " or "1. " and bullet characters
   let working = s.replace(/^\d+[\)\.\-]\s*/, "").replace(/^[•\-\*]\s*/, "");
 
@@ -956,7 +951,19 @@ function parseExerciseItem(raw: string): ParsedExercise {
   // Remove any leftover leading index
   name = name.replace(/^\d+[\)\.\-]\s*/, "").trim();
 
-  return { isHeader: false, name, method, setsReps, note };
+  // Header / choice lines that can still carry shared variables for the following options.
+  const isChoiceHeader =
+    s.endsWith(":") ||
+    /^(veldu|choose|complete|nota|hér|þetta)/i.test(s) ||
+    /\bveldu\b/i.test(s) ||
+    /^(strength|plyo)\b/i.test(name);
+
+  return { isHeader: isChoiceHeader, name, method, setsReps, note };
+}
+
+function stripVelocityQualifier(value: string | null) {
+  if (!value) return null;
+  return value.replace(/\s*@\s*.+$/i, "").trim();
 }
 
 /* ---- Exercise info content (method guides + block goals) ---- */
@@ -1441,6 +1448,10 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
     groupRecommendation?.restrictedExerciseIds
       .map((id) => getSupportedExerciseLabel(id))
       .filter((label): label is string => !!label) ?? [];
+  const genericAlternativeOptions = useMemo(
+    () => options.filter((_, idx) => idx !== selectedIdx),
+    [options, selectedIdx]
+  );
 
   useEffect(() => {
     if (hasManualSelection || !defaultRecommendedExerciseId) return;
@@ -1540,6 +1551,26 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
           {restrictedLabels.length ? (
             <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
           ) : null}
+        </div>
+      ) : selected && genericAlternativeOptions.length ? (
+        <div className={cx("mt-1.5", recommendationPanelClass(accent))}>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {genericAlternativeOptions.map((option, idx) => (
+              <button
+                key={`${option.name}-${idx}`}
+                type="button"
+                onClick={() => {
+                  setHasManualSelection(true);
+                  const nextIdx = options.findIndex((candidate) => candidate === option);
+                  if (nextIdx >= 0) setSelectedIdx(nextIdx);
+                }}
+                className="rounded-full border border-zinc-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-white"
+              >
+                {option.name}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
@@ -1644,17 +1675,38 @@ function RecommendedExerciseBlockCard({
 /* ---- Segment helpers for grouping parsed items ---- */
 type ExSegment =
   | { kind: "exercise"; ex: ParsedExercise }
-  | { kind: "choice"; header: string; options: ParsedExercise[] };
+  | { kind: "choice"; header: string; options: ParsedExercise[]; shared?: Pick<ParsedExercise, "setsReps" | "method" | "note"> };
 
 function groupIntoSegments(parsed: ParsedExercise[]): ExSegment[] {
   const segments: ExSegment[] = [];
+  let previousChoiceShared: Pick<ParsedExercise, "setsReps" | "method" | "note"> | null = null;
   for (const item of parsed) {
     if (item.isHeader) {
-      segments.push({ kind: "choice", header: item.name, options: [] });
+      const isPlyoHeader = /^plyo$/i.test(item.name) || /^plyo\b/i.test(item.name);
+      const shared: Pick<ParsedExercise, "setsReps" | "method" | "note"> = {
+        setsReps:
+          item.setsReps ??
+          (isPlyoHeader
+            ? stripVelocityQualifier(previousChoiceShared?.setsReps ?? null)
+            : null),
+        method: item.method ?? null,
+        note:
+          item.note ??
+          (isPlyoHeader
+            ? previousChoiceShared?.note ?? null
+            : null),
+      };
+      segments.push({ kind: "choice", header: item.name, options: [], shared });
+      previousChoiceShared = shared;
     } else {
       const last = segments[segments.length - 1];
       if (last && last.kind === "choice") {
-        last.options.push(item);
+        last.options.push({
+          ...item,
+          setsReps: item.setsReps ?? last.shared?.setsReps ?? null,
+          method: item.method ?? last.shared?.method ?? null,
+          note: item.note ?? last.shared?.note ?? null,
+        });
       } else {
         segments.push({ kind: "exercise", ex: item });
       }
