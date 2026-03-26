@@ -260,9 +260,11 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
+          const isAbort = err instanceof Error && err.name === "AbortError";
           note(`fetchTestsByDateRange scope=${scopeId} detailed: error ${msg}`);
-          // 404 = endpoint unavailable, 400 = date range too large/unsupported — fall through to paginated
-          if (!msg.includes("404") && !msg.includes("400")) throw err;
+          // 404 = endpoint unavailable, 400 = date range too large/unsupported,
+          // AbortError = timed out — all fall through to paginated endpoint
+          if (!msg.includes("404") && !msg.includes("400") && !isAbort) throw err;
         }
 
         // 2. Paginated date-range endpoint — dates in PATH, page increments
@@ -283,9 +285,11 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
             all.push(...batch);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
+            const isAbort = err instanceof Error && err.name === "AbortError";
             note(`fetchTestsByDateRange scope=${scopeId} page=${page}: error ${msg}`);
-            // 404 = no more pages, 400 = invalid range — stop pagination, fall through to cursor
-            if (msg.includes("404") || msg.includes("400")) break;
+            // 404 = no more pages, 400 = invalid range, AbortError = timed out
+            // All break out of page loop so we fall through to cursor fallback
+            if (msg.includes("404") || msg.includes("400") || isAbort) break;
             throw err;
           }
         }

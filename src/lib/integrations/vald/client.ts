@@ -23,7 +23,7 @@ function safeJsonParse(value: string): unknown {
 
 export async function valdRequestJson<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
   const maxAttempts = 3;
-  const timeoutMs = options.timeoutMs ?? 8000;
+  const timeoutMs = options.timeoutMs ?? 30000;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
