@@ -160,6 +160,7 @@ export interface ValdProvider {
   fetchAthletes(): Promise<ValdAthleteSummary[]>;
   fetchTestsByDateRange(dateFrom: string, dateTo: string): Promise<ValdTestSummary[]>;
   fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, dateTo: string): Promise<ValdTestSummary[]>;
+  getDiagnostics(): string[];
   normalizeRawTest(payload: unknown): Promise<
     ValdForceDecksNormalizedResult | ValdNordBordNormalizedResult | ValdForceFrameNormalizedResult | null
   >;
