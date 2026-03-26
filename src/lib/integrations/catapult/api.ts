@@ -229,20 +229,128 @@ function mergeStatsRow(base: JsonObject, extra: JsonObject): JsonObject {
   return { ...base, ...extra };
 }
 
+function normalizedToken(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  return normalized || null;
+}
+
 function extractStatsRows(payload: unknown): JsonObject[] {
   return resolveList(payload, ["stats", "athletes", "data", "results", "items"])
     .map((row) => asRecord(row))
     .filter((row): row is JsonObject => row != null);
 }
 
+function athleteNameKeyForStatsRow(row: JsonObject): string | null {
+  const athlete = asRecord(row.athlete);
+  const first =
+    asString(row.first_name) ??
+    asString(row.firstName) ??
+    asString(athlete?.first_name) ??
+    asString(athlete?.firstName);
+  const last =
+    asString(row.last_name) ??
+    asString(row.lastName) ??
+    asString(athlete?.last_name) ??
+    asString(athlete?.lastName);
+  const full =
+    asString(row.full_name) ??
+    asString(row.fullName) ??
+    asString(row.athlete_name) ??
+    asString(row.athleteName) ??
+    asString(athlete?.full_name) ??
+    asString(athlete?.fullName) ??
+    asString(athlete?.name);
+  const email = asString(row.email) ?? asString(athlete?.email);
+
+  const fullKey = normalizedToken(full);
+  if (fullKey) return `name:${fullKey}`;
+
+  const combined = normalizedToken([first, last].filter(Boolean).join(" "));
+  if (combined) return `name:${combined}`;
+
+  const emailKey = normalizedToken(email);
+  return emailKey ? `email:${emailKey}` : null;
+}
+
 function athleteKeyForStatsRow(row: JsonObject): string | null {
   return (
     asString(row.athlete_id) ??
     asString(row.athleteId) ??
+    asString(row.player_id) ??
+    asString(row.playerId) ??
     asString(row.id) ??
     asString(asRecord(row.athlete)?.id) ??
-    null
+    athleteNameKeyForStatsRow(row)
   );
+}
+
+function replaceStatsRowsAtKnownPath(payload: unknown, rows: JsonObject[]): unknown {
+  const record = asRecord(payload);
+  if (!record) return rows;
+
+  if (Array.isArray(record.stats)) {
+    return { ...record, stats: rows };
+  }
+
+  const statsRecord = asRecord(record.stats);
+  if (statsRecord && Array.isArray(statsRecord.athletes)) {
+    return { ...record, stats: { ...statsRecord, athletes: rows } };
+  }
+
+  if (statsRecord) {
+    const athletesRecord = asRecord(statsRecord.athletes);
+    if (athletesRecord && Array.isArray(athletesRecord.data)) {
+      return {
+        ...record,
+        stats: { ...statsRecord, athletes: { ...athletesRecord, data: rows } },
+      };
+    }
+  }
+
+  if (Array.isArray(record.athletes)) {
+    return { ...record, athletes: rows };
+  }
+
+  if (Array.isArray(record.data)) {
+    return { ...record, data: rows };
+  }
+
+  const dataRecord = asRecord(record.data);
+  if (dataRecord && Array.isArray(dataRecord.results)) {
+    return { ...record, data: { ...dataRecord, results: rows } };
+  }
+
+  if (dataRecord) {
+    const resultsRecord = asRecord(dataRecord.results);
+    if (resultsRecord && Array.isArray(resultsRecord.items)) {
+      return {
+        ...record,
+        data: { ...dataRecord, results: { ...resultsRecord, items: rows } },
+      };
+    }
+  }
+
+  if (Array.isArray(record.results)) {
+    return { ...record, results: rows };
+  }
+
+  const resultsRecord = asRecord(record.results);
+  if (resultsRecord && Array.isArray(resultsRecord.items)) {
+    return { ...record, results: { ...resultsRecord, items: rows } };
+  }
+
+  if (Array.isArray(record.items)) {
+    return { ...record, items: rows };
+  }
+
+  return { ...record, data: rows };
 }
 
 function mergeStatsPayloads(basePayload: unknown, extraPayload: unknown): unknown {
@@ -252,32 +360,26 @@ function mergeStatsPayloads(basePayload: unknown, extraPayload: unknown): unknow
     return basePayload;
   }
 
-  const mergedRows = new Map<string, JsonObject>();
-  for (const row of baseRows) {
+  const mergedRows = baseRows.map((row) => ({ ...row }));
+  const keyedBaseIndexes = new Map<string, number>();
+
+  for (const [index, row] of mergedRows.entries()) {
     const key = athleteKeyForStatsRow(row);
     if (!key) continue;
-    mergedRows.set(key, { ...row });
+    keyedBaseIndexes.set(key, index);
   }
 
-  for (const row of extraRows) {
+  for (const [index, row] of extraRows.entries()) {
     const key = athleteKeyForStatsRow(row);
-    if (!key) continue;
-    const existing = mergedRows.get(key);
-    mergedRows.set(key, existing ? mergeStatsRow(existing, row) : { ...row });
+    const targetIndex =
+      (key ? keyedBaseIndexes.get(key) : undefined) ??
+      (index < mergedRows.length ? index : undefined);
+
+    if (targetIndex == null) continue;
+    mergedRows[targetIndex] = mergeStatsRow(mergedRows[targetIndex], row);
   }
 
-  const baseRecord = asRecord(basePayload);
-  if (!baseRecord) {
-    return Array.from(mergedRows.values());
-  }
-
-  for (const key of ["stats", "athletes", "data", "results", "items"]) {
-    if (Array.isArray(baseRecord[key])) {
-      return { ...baseRecord, [key]: Array.from(mergedRows.values()) };
-    }
-  }
-
-  return { ...baseRecord, data: Array.from(mergedRows.values()) };
+  return replaceStatsRowsAtKnownPath(basePayload, mergedRows);
 }
 
 async function fetchPaginated(path: string, listKeys: string[], query?: Record<string, string | number | null | undefined>): Promise<unknown[]> {
@@ -316,9 +418,13 @@ export async function fetchCatapultAthletes(): Promise<CatapultAthlete[]> {
 }
 
 export async function fetchActivitiesForDate(date: string): Promise<CatapultActivity[]> {
+  // Catapult activities use epoch-second timestamps — pass numeric epoch values,
+  // not ISO strings, so the filter is actually applied server-side.
+  const startEpoch = Math.floor(new Date(`${date}T00:00:00.000Z`).getTime() / 1000);
+  const endEpoch = Math.floor(new Date(`${date}T23:59:59.999Z`).getTime() / 1000);
   const rows = await fetchPaginated("/api/v6/activities", ["activities", "data", "results", "items"], {
-    start_time: `${date}T00:00:00Z`,
-    end_time: `${date}T23:59:59Z`,
+    start_time: startEpoch,
+    end_time: endEpoch,
   });
   const activities: CatapultActivity[] = [];
   for (const row of rows) {
@@ -372,6 +478,54 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     return mergeStatsPayloads(basePayload, imaOnlyPayload);
   } catch {
     return basePayload;
+  }
+}
+
+export async function fetchActivityStatsDetailed(activityId: string): Promise<{
+  basePayload: unknown;
+  imaOnlyPayload: unknown | null;
+  mergedPayload: unknown;
+  imaOnlyError: string | null;
+}> {
+  const basePayload = await catapultPost("/api/v6/stats", {
+    group_by: ["athlete"],
+    filters: [
+      {
+        name: "activity_id",
+        comparison: "=",
+        values: [activityId],
+      },
+    ],
+    parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
+    requested_only: false,
+  });
+
+  try {
+    const imaOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [
+        {
+          name: "activity_id",
+          comparison: "=",
+          values: [activityId],
+        },
+      ],
+      parameters: CATAPULT_IMA_PARAMETERS,
+      requested_only: true,
+    });
+    return {
+      basePayload,
+      imaOnlyPayload,
+      mergedPayload: mergeStatsPayloads(basePayload, imaOnlyPayload),
+      imaOnlyError: null,
+    };
+  } catch (error) {
+    return {
+      basePayload,
+      imaOnlyPayload: null,
+      mergedPayload: basePayload,
+      imaOnlyError: error instanceof Error ? error.message : "Unknown IMA-only fetch error",
+    };
   }
 }
 

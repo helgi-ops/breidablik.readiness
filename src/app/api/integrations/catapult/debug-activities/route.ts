@@ -59,11 +59,13 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
   const config = getConfig();
 
-  // Try 1: with start_time / end_time GET params
+  // Try 1: with epoch-second start_time / end_time GET params
+  const startEpoch = Math.floor(new Date(`${date}T00:00:00.000Z`).getTime() / 1000);
+  const endEpoch = Math.floor(new Date(`${date}T23:59:59.999Z`).getTime() / 1000);
   const withFilter = new URL(`${config.baseUrl}/api/v6/activities`);
   withFilter.searchParams.set("org_id", config.orgId);
-  withFilter.searchParams.set("start_time", `${date}T00:00:00Z`);
-  withFilter.searchParams.set("end_time", `${date}T23:59:59Z`);
+  withFilter.searchParams.set("start_time", String(startEpoch));
+  withFilter.searchParams.set("end_time", String(endEpoch));
 
   // Try 2: without any date filter (just first page)
   const noFilter = new URL(`${config.baseUrl}/api/v6/activities`);
@@ -99,22 +101,35 @@ export async function GET(request: Request) {
     };
   }
 
+  function paginationInfo(payload: unknown) {
+    const rec = payload as Record<string, unknown> | null;
+    if (!rec) return null;
+    return {
+      next: rec.next ?? (rec.pagination as Record<string, unknown>)?.next ?? null,
+      total: rec.total ?? rec.count ?? (rec.pagination as Record<string, unknown>)?.total ?? null,
+      page: rec.page ?? (rec.pagination as Record<string, unknown>)?.page ?? null,
+      per_page: rec.per_page ?? (rec.pagination as Record<string, unknown>)?.per_page ?? null,
+      topLevelKeys: Object.keys(rec).sort(),
+    };
+  }
+
   return NextResponse.json({
     date,
+    epochRange: { startEpoch, endEpoch },
     withFilter: {
       status: r1.status,
-      totalCount: (p1 as Record<string, unknown>)?.total ?? (p1 as Record<string, unknown>)?.count ?? null,
+      pagination: paginationInfo(p1),
       arrayLength: Array.isArray(p1)
         ? p1.length
-        : Object.values(p1 as object ?? {}).find(Array.isArray)?.length ?? null,
+        : Object.values((p1 as object) ?? {}).find(Array.isArray)?.length ?? null,
       ...firstItemKeys(p1),
     },
     noFilter: {
       status: r2.status,
-      totalCount: (p2 as Record<string, unknown>)?.total ?? (p2 as Record<string, unknown>)?.count ?? null,
+      pagination: paginationInfo(p2),
       arrayLength: Array.isArray(p2)
         ? p2.length
-        : Object.values(p2 as object ?? {}).find(Array.isArray)?.length ?? null,
+        : Object.values((p2 as object) ?? {}).find(Array.isArray)?.length ?? null,
       ...firstItemKeys(p2),
     },
   });
