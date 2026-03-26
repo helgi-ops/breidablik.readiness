@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchStatsByDate } from "@/lib/integrations/catapult/api";
+import { fetchActivitiesForDateRange, fetchActivityStats } from "@/lib/integrations/catapult/api";
 import { normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type ProfileRoleRow = { role: string | null };
-type PatchEntry = { date: string; status: string; patched?: number; athletes?: number; warning?: string };
+type PatchEntry = { date: string; status: string; patched?: number; athletes?: number; noActivities?: boolean; warning?: string };
 
 function env(name: string) {
   const value = process.env[name];
@@ -59,58 +59,6 @@ function eachDateInRange(dateFrom: string, dateTo: string): string[] {
   return dates;
 }
 
-async function patchImaForDate(date: string): Promise<{ patched: number; athletes: number }> {
-  const sb = getAdminClient();
-
-  // Fetch IMA stats from Catapult directly by date (no activity IDs needed)
-  const payload = await fetchStatsByDate(date);
-  const metrics = normalizeCatapultActivityStats({ date, payload });
-
-  // Keep only athletes that have at least one non-null IMA value
-  const imaMetrics = metrics.filter(
-    (m) => m.imaAccel != null || m.imaDecel != null || m.imaCod != null || m.impacts != null,
-  );
-
-  if (!imaMetrics.length) return { patched: 0, athletes: metrics.length };
-
-  // Resolve Catapult athlete IDs → MicroPulse player IDs
-  const athleteIds = imaMetrics.map((m) => m.athleteId);
-  const { data: mappings } = await sb
-    .from("catapult_athlete_map")
-    .select("catapult_athlete_id, micropulse_player_id")
-    .in("catapult_athlete_id", athleteIds);
-
-  const playerByAthlete = new Map(
-    (mappings ?? []).map((m) => [
-      m.catapult_athlete_id as string,
-      m.micropulse_player_id as string,
-    ]),
-  );
-
-  let patched = 0;
-  for (const metric of imaMetrics) {
-    const playerId = playerByAthlete.get(metric.athleteId);
-    if (!playerId) continue;
-
-    const { error } = await sb
-      .from("player_external_load_daily")
-      .update({
-        ima_accel: metric.imaAccel,
-        ima_decel: metric.imaDecel,
-        ima_cod: metric.imaCod,
-        ima_total: metric.imaTotal,
-        impacts: metric.impacts,
-      })
-      .eq("player_id", playerId)
-      .eq("date", date)
-      .eq("source", "catapult");
-
-    if (!error) patched++;
-  }
-
-  return { patched, athletes: imaMetrics.length };
-}
-
 async function handle(request: Request) {
   if (!isAuthorizedByCronSecret(request) && !(await isAuthorizedCoach(request))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -129,17 +77,68 @@ async function handle(request: Request) {
 
   const dates = eachDateInRange(dateFrom, dateTo);
   if (dates.length > 90) {
-    return NextResponse.json(
-      { ok: false, error: "Max 90 days per run" },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: "Max 90 days per run" }, { status: 400 });
   }
 
+  // Fetch ALL Catapult activities for the date range in one paginated scan
+  // (the activities API ignores server-side date filters, so we scan all and filter client-side)
+  const activitiesByDate = await fetchActivitiesForDateRange(dateFrom, dateTo);
+
+  // Load athlete→player mapping once
+  const sb = getAdminClient();
+  const { data: mappings } = await sb
+    .from("catapult_athlete_map")
+    .select("catapult_athlete_id, micropulse_player_id");
+
+  const playerByAthlete = new Map(
+    (mappings ?? []).map((m) => [
+      m.catapult_athlete_id as string,
+      m.micropulse_player_id as string,
+    ]),
+  );
+
   const results: PatchEntry[] = [];
+
   for (const date of dates) {
+    const activities = activitiesByDate.get(date) ?? [];
+
+    if (!activities.length) {
+      results.push({ date, status: "ok", patched: 0, athletes: 0, noActivities: true });
+      continue;
+    }
+
     try {
-      const { patched, athletes } = await patchImaForDate(date);
-      results.push({ date, status: "ok", patched, athletes });
+      // Fetch stats for all activities on this date and merge
+      const statsPayloads = await Promise.all(activities.map((a) => fetchActivityStats(a.id)));
+      const mergedPayload = statsPayloads.flatMap((p) => (Array.isArray(p) ? p : [p]));
+
+      const metrics = normalizeCatapultActivityStats({ date, payload: mergedPayload });
+      const imaMetrics = metrics.filter(
+        (m) => m.imaAccel != null || m.imaDecel != null || m.imaCod != null || m.impacts != null,
+      );
+
+      let patched = 0;
+      for (const metric of imaMetrics) {
+        const playerId = playerByAthlete.get(metric.athleteId);
+        if (!playerId) continue;
+
+        const { error } = await sb
+          .from("player_external_load_daily")
+          .update({
+            ima_accel: metric.imaAccel,
+            ima_decel: metric.imaDecel,
+            ima_cod: metric.imaCod,
+            ima_total: metric.imaTotal,
+            impacts: metric.impacts,
+          })
+          .eq("player_id", playerId)
+          .eq("date", date)
+          .eq("source", "catapult");
+
+        if (!error) patched++;
+      }
+
+      results.push({ date, status: "ok", patched, athletes: imaMetrics.length });
     } catch (err) {
       const warning = err instanceof Error ? err.message : String(err);
       results.push({ date, status: "error", warning });
@@ -148,10 +147,12 @@ async function handle(request: Request) {
 
   const errors = results.filter((r) => r.status === "error");
   const totalPatched = results.reduce((s, r) => s + (r.patched ?? 0), 0);
+  const datesWithActivities = results.filter((r) => !r.noActivities).length;
 
   return NextResponse.json({
     ok: errors.length === 0,
     datesProcessed: results.length,
+    datesWithActivities,
     totalPatched,
     errors: errors.length,
     results,

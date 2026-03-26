@@ -417,35 +417,58 @@ export async function fetchCatapultAthletes(): Promise<CatapultAthlete[]> {
   return athletes;
 }
 
+/**
+ * Parse a single activity record into a CatapultActivity, or null if invalid.
+ * The Catapult activities endpoint ignores server-side date filters, so all
+ * date filtering is done client-side here.
+ */
+function parseActivityRecord(row: unknown): (CatapultActivity & { date: string }) | null {
+  const record = asRecord(row);
+  if (!record) return null;
+  const id = asString(record.id) ?? asString(record.activity_id);
+  const activityDate =
+    toDateKey(record.date) ??
+    toDateKey(record.activity_date) ??
+    toDateKey(record.start_date) ??
+    toDateKey(record.start_time) ??
+    toDateKey(record.end_time);
+  if (!id || !activityDate) return null;
+  return {
+    id,
+    date: activityDate,
+    name: asString(record.name) ?? asString(record.title) ?? null,
+  };
+}
+
 export async function fetchActivitiesForDate(date: string): Promise<CatapultActivity[]> {
-  // Catapult activities use epoch-second timestamps — pass numeric epoch values,
-  // not ISO strings, so the filter is actually applied server-side.
-  const startEpoch = Math.floor(new Date(`${date}T00:00:00.000Z`).getTime() / 1000);
-  const endEpoch = Math.floor(new Date(`${date}T23:59:59.999Z`).getTime() / 1000);
-  const rows = await fetchPaginated("/api/v6/activities", ["activities", "data", "results", "items"], {
-    start_time: startEpoch,
-    end_time: endEpoch,
-  });
-  const activities: CatapultActivity[] = [];
+  // NOTE: The Catapult /api/v6/activities endpoint ignores start_time/end_time
+  // query params regardless of format (ISO or epoch). We fetch all activities
+  // and filter client-side by date.
+  const rows = await fetchPaginated("/api/v6/activities", ["activities", "data", "results", "items"]);
+  return rows
+    .map(parseActivityRecord)
+    .filter((a): a is CatapultActivity & { date: string } => a !== null && a.date === date);
+}
+
+/**
+ * Fetch all Catapult activities within a date range in one paginated scan.
+ * Returns a map of date → activity IDs, useful for batch backfill operations.
+ */
+export async function fetchActivitiesForDateRange(
+  dateFrom: string,
+  dateTo: string,
+): Promise<Map<string, CatapultActivity[]>> {
+  const rows = await fetchPaginated("/api/v6/activities", ["activities", "data", "results", "items"]);
+  const byDate = new Map<string, CatapultActivity[]>();
   for (const row of rows) {
-    const record = asRecord(row);
-    if (!record) continue;
-    const id = asString(record.id) ?? asString(record.activity_id);
-    const activityDate =
-      toDateKey(record.date) ??
-      toDateKey(record.activity_date) ??
-      toDateKey(record.start_date) ??
-      toDateKey(record.start_time) ??
-      toDateKey(record.end_time);
-    if (!id || !activityDate) continue;
-    if (activityDate !== date) continue;
-    activities.push({
-      id,
-      date: activityDate,
-      name: asString(record.name) ?? asString(record.title) ?? null,
-    });
+    const activity = parseActivityRecord(row);
+    if (!activity) continue;
+    if (activity.date < dateFrom || activity.date > dateTo) continue;
+    const existing = byDate.get(activity.date) ?? [];
+    existing.push(activity);
+    byDate.set(activity.date, existing);
   }
-  return activities;
+  return byDate;
 }
 
 export async function fetchActivityStats(activityId: string): Promise<unknown> {
