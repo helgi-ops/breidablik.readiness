@@ -140,7 +140,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
               Coach · Readiness
             </div>
             <div className="hidden text-xs text-muted-foreground sm:block">
-              Breiðablik Readiness
+              MicroPulse
             </div>
           </div>
 

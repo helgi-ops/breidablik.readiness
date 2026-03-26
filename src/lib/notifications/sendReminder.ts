@@ -27,14 +27,14 @@ function isMissingScheduledSlotColumnError(error: { message?: string; details?: 
 function reminderCopy(type: ReminderType) {
   if (type === "second") {
     return {
-      title: "Breiðablik Readiness",
+      title: "MicroPulse",
       body: "Reminder: today's readiness check-in is still missing.",
     };
   }
 
   if (type === "manual") {
     return {
-      title: "Breiðablik Readiness",
+      title: "MicroPulse",
       body: "Coach reminder: please complete today's readiness check-in.",
     };
   }

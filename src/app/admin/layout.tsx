@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold tracking-tight">⚙️ Admin</span>
-            <span className="hidden text-xs text-muted-foreground sm:block">Breiðablik Readiness</span>
+            <span className="hidden text-xs text-muted-foreground sm:block">MicroPulse</span>
           </div>
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <a href="/coach" className="hover:text-foreground transition-colors">← Þjálfari</a>

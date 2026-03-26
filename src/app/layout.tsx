@@ -3,13 +3,13 @@ import "./globals.css";
 import RegisterServiceWorker from "@/components/pwa/RegisterServiceWorker";
 
 export const metadata: Metadata = {
-  title: "Breiðablik Readiness",
-  description: "Dagleg líðansskráning og þjálfanaálag fyrir leikmenn Breiðabliks.",
+  title: "MicroPulse",
+  description: "Dagleg líðansskráning og þjálfanaálag.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Breiðablik",
+    title: "MicroPulse",
   },
   icons: {
     icon: "/icons/icon-192.png",
