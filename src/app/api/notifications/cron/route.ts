@@ -47,10 +47,12 @@ export async function POST(req: Request) {
     const timeZone = getOperationalTimezone();
     const dateKey = getDateKeyInTimezone(new Date(), timeZone);
     const now = new Date();
-    const checkinSlot = getCurrentScheduledSlot({ timeZone, toleranceMinutes: 6 });
-    const rpeSlot = getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 6 });
-    const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 6 });
-    const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 6 });
+    // Use a wide tolerance so the cron still matches even if Vercel fires it
+    // several minutes late (common — Pro plan can be 5–15 min off schedule).
+    const checkinSlot = getCurrentScheduledSlot({ timeZone, toleranceMinutes: 30 });
+    const rpeSlot = getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 30 });
+    const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
+    const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
 
     if (!checkinSlot && !rpeSlot && !readinessEmailSlot && !rpeEmailSlot) {
       return NextResponse.json({
