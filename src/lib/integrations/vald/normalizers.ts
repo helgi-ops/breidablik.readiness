@@ -100,6 +100,47 @@ function buildParamMap(payload: unknown): Map<string, number> {
   addEntries(record.parameter);
   addEntries(record.parameters);
   addEntries(record.extendedParameters);
+
+  // VALD per-athlete endpoint format: trials[].results[]
+  // Each result has: { resultId, value, limb, definition: { result, unit, name } }
+  // We store with keys prefixed "TRIAL_<RESULT_CODE>" (and "_LEFT", "_RIGHT" for bilateral).
+  // Unit conversion: Meter→×100 cm, Second→×1000 ms; others stored as-is.
+  const trials = record.trials;
+  if (Array.isArray(trials)) {
+    const groups = new Map<string, number[]>();
+    for (const trial of trials) {
+      const t = asRecord(trial);
+      if (!t) continue;
+      const results = t.results;
+      if (!Array.isArray(results)) continue;
+      for (const res of results) {
+        const r = asRecord(res);
+        if (!r) continue;
+        const val = toNumber(r.value);
+        if (val == null) continue;
+        const def = asRecord(r.definition);
+        if (!def) continue;
+        const resultCode = typeof def.result === "string" ? def.result.trim() : null;
+        if (!resultCode) continue;
+        // Unit-aware conversion to canonical units
+        const unit = typeof def.unit === "string" ? def.unit.trim().toLowerCase() : "";
+        let converted = val;
+        if (unit === "meter" || unit === "m") converted = val * 100; // m → cm
+        else if (unit === "second" || unit === "s") converted = val * 1000; // s → ms
+        // Newton, Watt, Centimeter, % — stored as-is
+        const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
+        const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
+        const key = `TRIAL_${resultCode}${suffix}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(converted);
+      }
+    }
+    // For each metric, use the max value across all trials
+    for (const [key, values] of groups) {
+      if (!map.has(key)) map.set(key, Math.max(...values));
+    }
+  }
+
   return map;
 }
 
@@ -167,20 +208,26 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
 
   const params = buildParamMap(rawPayload);
 
-  // Jump height: prefer momentum-offset method, fall back to flight-time
+  // Jump height: prefer momentum-offset, fall back to flight-time.
+  // TRIAL_JUMP_HEIGHT_MO / TRIAL_JUMP_HEIGHT come from trials[].results[] — already in cm.
+  // JumpHeightMO / JumpHeight come from param/extParams — in meters, need ×100.
   const jumpHeightCm =
+    paramValue(params, ["TRIAL_JUMP_HEIGHT_MO", "TRIAL_JUMP_HEIGHT"]) ??
     paramValue(params, ["JumpHeightMO", "JumpHeight"], 100) ??
     firstNumber(record.jump_height_cm, record.jumpHeightCm, record.jump_height);
 
   const peakPowerW =
+    paramValue(params, ["TRIAL_PEAK_TAKEOFF_POWER", "TRIAL_PEAK_POWER"]) ??
     paramValue(params, ["PeakPower"]) ??
     firstNumber(record.peak_power_w, record.peakPowerW, record.peak_power);
 
-  // Bilateral values
+  // Bilateral values — prefer concentric peak/mean force from trials
   const leftValue =
+    paramValue(params, ["TRIAL_CONCENTRIC_PEAK_FORCE_LEFT", "TRIAL_MEAN_TAKEOFF_FORCE_LEFT", "TRIAL_PEAK_FORCE_LEFT"]) ??
     paramValue(params, ["LeftPeakForce", "LeftForce"]) ??
     firstNumber(record.left_value, record.leftValue, record.left);
   const rightValue =
+    paramValue(params, ["TRIAL_CONCENTRIC_PEAK_FORCE_RIGHT", "TRIAL_MEAN_TAKEOFF_FORCE_RIGHT", "TRIAL_PEAK_FORCE_RIGHT"]) ??
     paramValue(params, ["RightPeakForce", "RightForce"]) ??
     firstNumber(record.right_value, record.rightValue, record.right);
 
@@ -205,25 +252,33 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
       new Date().toISOString(),
     jumpHeightCm,
     rsiMod:
+      paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]) ??
       paramValue(params, ["RSIMod", "RSIModified"]) ??
       firstNumber(record.rsi_mod, record.rsiMod),
     eccentricDurationMs:
+      // TRIAL keys already in ms (unit="Second" converted ×1000 in buildParamMap)
+      paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]) ??
       paramValue(params, ["EccentricDuration"], 1000) ??
       firstNumber(record.eccentric_duration_ms, record.eccentricDurationMs),
     concentricDurationMs:
+      paramValue(params, ["TRIAL_CONCENTRIC_DURATION", "TRIAL_PROPULSION_DURATION"]) ??
       paramValue(params, ["ConcentricDuration"], 1000) ??
       firstNumber(record.concentric_duration_ms, record.concentricDurationMs),
     peakPowerW,
     relativePeakPowerWKg:
+      paramValue(params, ["TRIAL_PEAK_TAKEOFF_POWER_BW"]) ??
       paramValue(params, ["PeakPowerBW", "PeakPowerRelative"]) ??
       firstNumber(record.relative_peak_power_w_kg, record.relativePeakPowerWKg),
     peakForceN:
+      paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]) ??
       paramValue(params, ["PeakForce"]) ??
       firstNumber(record.peak_force_n, record.peakForceN),
     concentricImpulseNS:
+      paramValue(params, ["TRIAL_CONCENTRIC_IMPULSE"]) ??
       paramValue(params, ["ConcentricImpulse"]) ??
       firstNumber(record.concentric_impulse_n_s, record.concentricImpulseNS),
     timeToTakeoffMs:
+      paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]) ??
       paramValue(params, ["TimeToTakeoff"], 1000) ??
       firstNumber(record.time_to_takeoff_ms, record.timeToTakeoffMs),
     leftValue,
