@@ -441,6 +441,14 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
 
     await rebuildSnapshots(teamId, impactedPlayers, dateFrom, dateTo);
 
+    // Always rebuild today's snapshot for every team player so the coach view
+    // stays current even for players who haven't been tested recently.
+    const today = todayIso();
+    const allPlayerIds = players.map((p) => p.id);
+    for (const playerId of allPlayerIds) {
+      await buildValdDailySnapshot(teamId, playerId, today);
+    }
+
     await completeSyncRun(syncRun.id, warnings.length ? "partial" : "success", {
       ...summary,
       warnings: warnings.length,
