@@ -8,9 +8,15 @@ const CATAPULT_IMA_PARAMETERS = [
   "IMA Accel High",
   "IMA Accel Medium",
   "IMA Accel Low",
+  "IMA Average ACCEL High (Session) 1.0",
+  "IMA Average ACCEL Medium (Session) 1.0",
+  "IMA Average ACCEL Low (Session) 1.0",
   "IMA Decel High",
   "IMA Decel Medium",
   "IMA Decel Low",
+  "IMA Average DECEL High (Session) 1.0",
+  "IMA Average DECEL Medium (Session) 1.0",
+  "IMA Average DECEL Low (Session) 1.0",
   "IMA CoD Left High",
   "IMA CoD Left Medium",
   "IMA CoD Left Low",
@@ -25,6 +31,28 @@ const CATAPULT_IMA_PARAMETERS = [
   "IMA Impacts Band 6 Count",
   "IMA Impacts Band 7 Count",
   "IMA Impacts Band 8 Count",
+  "IMA Impacts Band 1 Average Count (Session)",
+  "IMA Impacts Band 2 Average Count (Session)",
+  "IMA Impacts Band 3 Average Count (Session)",
+  "IMA Impacts Band 4 Average Count (Session)",
+  "IMA Impacts Band 5 Average Count (Session)",
+  "IMA Impacts Band 6 Average Count (Session)",
+  "IMA Impacts Band 7 Average Count (Session)",
+  "IMA Impacts Band 8 Average Count (Session)",
+];
+
+const CATAPULT_BASE_PARAMETERS = [
+  "total_distance",
+  "velocity_band5_total_distance",
+  "velocity_band6_total_distance",
+  "hir_dist",
+  "max_vel",
+  "gen2_acceleration_band7plus_total_effort_count",
+  "gen2_acceleration_band6plus_average_effort_count",
+  "gen2_acceleration_band2plus_total_effort_count",
+  "gen2_acceleration_band3plus_average_effort_count",
+  "total_player_load",
+  "player_load_per_minute",
 ];
 
 type CatapultConfig = {
@@ -197,6 +225,61 @@ async function catapultPost(path: string, body: Record<string, unknown>): Promis
   return payload;
 }
 
+function mergeStatsRow(base: JsonObject, extra: JsonObject): JsonObject {
+  return { ...base, ...extra };
+}
+
+function extractStatsRows(payload: unknown): JsonObject[] {
+  return resolveList(payload, ["stats", "athletes", "data", "results", "items"])
+    .map((row) => asRecord(row))
+    .filter((row): row is JsonObject => row != null);
+}
+
+function athleteKeyForStatsRow(row: JsonObject): string | null {
+  return (
+    asString(row.athlete_id) ??
+    asString(row.athleteId) ??
+    asString(row.id) ??
+    asString(asRecord(row.athlete)?.id) ??
+    null
+  );
+}
+
+function mergeStatsPayloads(basePayload: unknown, extraPayload: unknown): unknown {
+  const baseRows = extractStatsRows(basePayload);
+  const extraRows = extractStatsRows(extraPayload);
+  if (!baseRows.length || !extraRows.length) {
+    return basePayload;
+  }
+
+  const mergedRows = new Map<string, JsonObject>();
+  for (const row of baseRows) {
+    const key = athleteKeyForStatsRow(row);
+    if (!key) continue;
+    mergedRows.set(key, { ...row });
+  }
+
+  for (const row of extraRows) {
+    const key = athleteKeyForStatsRow(row);
+    if (!key) continue;
+    const existing = mergedRows.get(key);
+    mergedRows.set(key, existing ? mergeStatsRow(existing, row) : { ...row });
+  }
+
+  const baseRecord = asRecord(basePayload);
+  if (!baseRecord) {
+    return Array.from(mergedRows.values());
+  }
+
+  for (const key of ["stats", "athletes", "data", "results", "items"]) {
+    if (Array.isArray(baseRecord[key])) {
+      return { ...baseRecord, [key]: Array.from(mergedRows.values()) };
+    }
+  }
+
+  return { ...baseRecord, data: Array.from(mergedRows.values()) };
+}
+
 async function fetchPaginated(path: string, listKeys: string[], query?: Record<string, string | number | null | undefined>): Promise<unknown[]> {
   const items: unknown[] = [];
   let nextPath: string | null = path;
@@ -260,7 +343,7 @@ export async function fetchActivitiesForDate(date: string): Promise<CatapultActi
 }
 
 export async function fetchActivityStats(activityId: string): Promise<unknown> {
-  return catapultPost("/api/v6/stats", {
+  const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
     filters: [
       {
@@ -269,22 +352,27 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
         values: [activityId],
       },
     ],
-    parameters: [
-      "total_distance",
-      "velocity_band5_total_distance",
-      "velocity_band6_total_distance",
-      "hir_dist",
-      "max_vel",
-      "gen2_acceleration_band7plus_total_effort_count",
-      "gen2_acceleration_band6plus_average_effort_count",
-      "gen2_acceleration_band2plus_total_effort_count",
-      "gen2_acceleration_band3plus_average_effort_count",
-      "total_player_load",
-      "player_load_per_minute",
-      ...CATAPULT_IMA_PARAMETERS,
-    ],
+    parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
     requested_only: false,
   });
+
+  try {
+    const imaOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [
+        {
+          name: "activity_id",
+          comparison: "=",
+          values: [activityId],
+        },
+      ],
+      parameters: CATAPULT_IMA_PARAMETERS,
+      requested_only: true,
+    });
+    return mergeStatsPayloads(basePayload, imaOnlyPayload);
+  } catch {
+    return basePayload;
+  }
 }
 
 export async function fetchActivityStatsBatch(activityIds: string[]): Promise<unknown> {

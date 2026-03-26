@@ -39,6 +39,20 @@ async function loadAthleteDirectory(): Promise<Map<string, CatapultAthlete>> {
 
 type AggregatedRow = ReturnType<typeof toNormalizedExternalLoad>;
 
+function sumNullable(a?: number | null, b?: number | null): number | null {
+  const hasA = typeof a === "number";
+  const hasB = typeof b === "number";
+  if (!hasA && !hasB) return null;
+  return (a ?? 0) + (b ?? 0);
+}
+
+function maxNullable(a?: number | null, b?: number | null): number | null {
+  const hasA = typeof a === "number";
+  const hasB = typeof b === "number";
+  if (!hasA && !hasB) return null;
+  return Math.max(a ?? Number.NEGATIVE_INFINITY, b ?? Number.NEGATIVE_INFINITY);
+}
+
 function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
   const merged = new Map<string, AggregatedRow>();
 
@@ -51,31 +65,46 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     }
 
     current.activityCount = (current.activityCount ?? 1) + (row.activityCount ?? 1);
-    current.externalLoad.totalDistance = (current.externalLoad.totalDistance ?? 0) + (row.externalLoad.totalDistance ?? 0);
-    current.externalLoad.highSpeedDistance = (current.externalLoad.highSpeedDistance ?? 0) + (row.externalLoad.highSpeedDistance ?? 0);
-    current.externalLoad.sprintDistance = (current.externalLoad.sprintDistance ?? 0) + (row.externalLoad.sprintDistance ?? 0);
-    current.externalLoad.accelerations = (current.externalLoad.accelerations ?? 0) + (row.externalLoad.accelerations ?? 0);
-    current.externalLoad.decelerations = (current.externalLoad.decelerations ?? 0) + (row.externalLoad.decelerations ?? 0);
-    current.externalLoad.playerLoad = (current.externalLoad.playerLoad ?? 0) + (row.externalLoad.playerLoad ?? 0);
-    current.externalLoad.maxVelocity = Math.max(current.externalLoad.maxVelocity ?? 0, row.externalLoad.maxVelocity ?? 0);
-    current.externalLoad.velocityBand5TotalDistance = (current.externalLoad.velocityBand5TotalDistance ?? 0) + (row.externalLoad.velocityBand5TotalDistance ?? 0);
-    current.externalLoad.velocityBand6TotalDistance = (current.externalLoad.velocityBand6TotalDistance ?? 0) + (row.externalLoad.velocityBand6TotalDistance ?? 0);
-    current.externalLoad.hirDist = (current.externalLoad.hirDist ?? 0) + (row.externalLoad.hirDist ?? 0);
-    current.externalLoad.maxVel = Math.max(current.externalLoad.maxVel ?? 0, row.externalLoad.maxVel ?? 0);
-    current.externalLoad.accelB23TotEffsGen2 = (current.externalLoad.accelB23TotEffsGen2 ?? 0) + (row.externalLoad.accelB23TotEffsGen2 ?? 0);
-    current.externalLoad.totAs = (current.externalLoad.totAs ?? 0) + (row.externalLoad.totAs ?? 0);
-    current.externalLoad.decelB23TotEffsGen2 = (current.externalLoad.decelB23TotEffsGen2 ?? 0) + (row.externalLoad.decelB23TotEffsGen2 ?? 0);
-    current.externalLoad.totDs = (current.externalLoad.totDs ?? 0) + (row.externalLoad.totDs ?? 0);
-    current.externalLoad.totalPlayerLoad = (current.externalLoad.totalPlayerLoad ?? 0) + (row.externalLoad.totalPlayerLoad ?? 0);
-    current.externalLoad.playerLoadPerMinute = Math.max(current.externalLoad.playerLoadPerMinute ?? 0, row.externalLoad.playerLoadPerMinute ?? 0);
-    current.externalLoad.metabolicPower = (current.externalLoad.metabolicPower ?? 0) + (row.externalLoad.metabolicPower ?? 0);
-    current.externalLoad.explosiveDistance = (current.externalLoad.explosiveDistance ?? 0) + (row.externalLoad.explosiveDistance ?? 0);
-    current.externalLoad.imaAccel = (current.externalLoad.imaAccel ?? 0) + (row.externalLoad.imaAccel ?? 0);
-    current.externalLoad.imaDecel = (current.externalLoad.imaDecel ?? 0) + (row.externalLoad.imaDecel ?? 0);
-    current.externalLoad.imaCod = (current.externalLoad.imaCod ?? 0) + (row.externalLoad.imaCod ?? 0);
-    current.externalLoad.imaTotal = (current.externalLoad.imaTotal ?? 0) + (row.externalLoad.imaTotal ?? 0);
-    current.externalLoad.codEvents = (current.externalLoad.codEvents ?? 0) + (row.externalLoad.codEvents ?? 0);
-    current.externalLoad.impacts = (current.externalLoad.impacts ?? 0) + (row.externalLoad.impacts ?? 0);
+    current.externalLoad.totalDistance = sumNullable(current.externalLoad.totalDistance, row.externalLoad.totalDistance);
+    current.externalLoad.highSpeedDistance = sumNullable(current.externalLoad.highSpeedDistance, row.externalLoad.highSpeedDistance);
+    current.externalLoad.sprintDistance = sumNullable(current.externalLoad.sprintDistance, row.externalLoad.sprintDistance);
+    current.externalLoad.accelerations = sumNullable(current.externalLoad.accelerations, row.externalLoad.accelerations);
+    current.externalLoad.decelerations = sumNullable(current.externalLoad.decelerations, row.externalLoad.decelerations);
+    current.externalLoad.playerLoad = sumNullable(current.externalLoad.playerLoad, row.externalLoad.playerLoad);
+    current.externalLoad.maxVelocity = maxNullable(current.externalLoad.maxVelocity, row.externalLoad.maxVelocity);
+    current.externalLoad.velocityBand5TotalDistance = sumNullable(
+      current.externalLoad.velocityBand5TotalDistance,
+      row.externalLoad.velocityBand5TotalDistance
+    );
+    current.externalLoad.velocityBand6TotalDistance = sumNullable(
+      current.externalLoad.velocityBand6TotalDistance,
+      row.externalLoad.velocityBand6TotalDistance
+    );
+    current.externalLoad.hirDist = sumNullable(current.externalLoad.hirDist, row.externalLoad.hirDist);
+    current.externalLoad.maxVel = maxNullable(current.externalLoad.maxVel, row.externalLoad.maxVel);
+    current.externalLoad.accelB23TotEffsGen2 = sumNullable(
+      current.externalLoad.accelB23TotEffsGen2,
+      row.externalLoad.accelB23TotEffsGen2
+    );
+    current.externalLoad.totAs = sumNullable(current.externalLoad.totAs, row.externalLoad.totAs);
+    current.externalLoad.decelB23TotEffsGen2 = sumNullable(
+      current.externalLoad.decelB23TotEffsGen2,
+      row.externalLoad.decelB23TotEffsGen2
+    );
+    current.externalLoad.totDs = sumNullable(current.externalLoad.totDs, row.externalLoad.totDs);
+    current.externalLoad.totalPlayerLoad = sumNullable(current.externalLoad.totalPlayerLoad, row.externalLoad.totalPlayerLoad);
+    current.externalLoad.playerLoadPerMinute = maxNullable(
+      current.externalLoad.playerLoadPerMinute,
+      row.externalLoad.playerLoadPerMinute
+    );
+    current.externalLoad.metabolicPower = sumNullable(current.externalLoad.metabolicPower, row.externalLoad.metabolicPower);
+    current.externalLoad.explosiveDistance = sumNullable(current.externalLoad.explosiveDistance, row.externalLoad.explosiveDistance);
+    current.externalLoad.imaAccel = sumNullable(current.externalLoad.imaAccel, row.externalLoad.imaAccel);
+    current.externalLoad.imaDecel = sumNullable(current.externalLoad.imaDecel, row.externalLoad.imaDecel);
+    current.externalLoad.imaCod = sumNullable(current.externalLoad.imaCod, row.externalLoad.imaCod);
+    current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
+    current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
+    current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
   }
 
   return Array.from(merged.values());

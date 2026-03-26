@@ -347,6 +347,16 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
   return normalized;
 }
 
+function sumNullable(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null && b == null) return null;
+  return (a ?? 0) + (b ?? 0);
+}
+
+function maxNullable(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null && b == null) return null;
+  return Math.max(a ?? Number.NEGATIVE_INFINITY, b ?? Number.NEGATIVE_INFINITY);
+}
+
 export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): CatapultSessionMetric[] {
   const byAthleteDate = new Map<string, CatapultSessionMetric>();
   const seenActivityAthlete = new Set<string>();
@@ -370,24 +380,27 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.decelerations += metric.decelerations;
     current.playerLoad += metric.playerLoad;
     current.maxVelocity = Math.max(current.maxVelocity, metric.maxVelocity);
-    current.velocityBand5TotalDistance = (current.velocityBand5TotalDistance ?? 0) + (metric.velocityBand5TotalDistance ?? 0);
-    current.velocityBand6TotalDistance = (current.velocityBand6TotalDistance ?? 0) + (metric.velocityBand6TotalDistance ?? 0);
-    current.hirDist = (current.hirDist ?? 0) + (metric.hirDist ?? 0);
-    current.maxVel = Math.max(current.maxVel ?? 0, metric.maxVel ?? 0);
-    current.accelB23TotEffsGen2 = (current.accelB23TotEffsGen2 ?? 0) + (metric.accelB23TotEffsGen2 ?? 0);
-    current.totAs = (current.totAs ?? 0) + (metric.totAs ?? 0);
-    current.decelB23TotEffsGen2 = (current.decelB23TotEffsGen2 ?? 0) + (metric.decelB23TotEffsGen2 ?? 0);
-    current.totDs = (current.totDs ?? 0) + (metric.totDs ?? 0);
-    current.totalPlayerLoad = (current.totalPlayerLoad ?? 0) + (metric.totalPlayerLoad ?? 0);
-    current.playerLoadPerMinute = Math.max(current.playerLoadPerMinute ?? 0, metric.playerLoadPerMinute ?? 0);
-    current.metabolicPower = (current.metabolicPower ?? 0) + (metric.metabolicPower ?? 0);
-    current.explosiveDistance = (current.explosiveDistance ?? 0) + (metric.explosiveDistance ?? 0);
-    current.imaAccel = (current.imaAccel ?? 0) + (metric.imaAccel ?? 0);
-    current.imaDecel = (current.imaDecel ?? 0) + (metric.imaDecel ?? 0);
-    current.imaCod = (current.imaCod ?? 0) + (metric.imaCod ?? 0);
-    current.imaTotal = (current.imaTotal ?? 0) + (metric.imaTotal ?? 0);
-    current.codEvents = (current.codEvents ?? 0) + (metric.codEvents ?? 0);
-    current.impacts = (current.impacts ?? 0) + (metric.impacts ?? 0);
+    current.velocityBand5TotalDistance = sumNullable(current.velocityBand5TotalDistance, metric.velocityBand5TotalDistance);
+    current.velocityBand6TotalDistance = sumNullable(current.velocityBand6TotalDistance, metric.velocityBand6TotalDistance);
+    current.hirDist = sumNullable(current.hirDist, metric.hirDist);
+    current.maxVel = maxNullable(current.maxVel, metric.maxVel);
+    current.accelB23TotEffsGen2 = sumNullable(current.accelB23TotEffsGen2, metric.accelB23TotEffsGen2);
+    current.totAs = sumNullable(current.totAs, metric.totAs);
+    current.decelB23TotEffsGen2 = sumNullable(current.decelB23TotEffsGen2, metric.decelB23TotEffsGen2);
+    current.totDs = sumNullable(current.totDs, metric.totDs);
+    current.totalPlayerLoad = sumNullable(current.totalPlayerLoad, metric.totalPlayerLoad);
+    current.playerLoadPerMinute = maxNullable(current.playerLoadPerMinute, metric.playerLoadPerMinute);
+    current.metabolicPower = sumNullable(current.metabolicPower, metric.metabolicPower);
+    current.explosiveDistance = sumNullable(current.explosiveDistance, metric.explosiveDistance);
+    current.imaAccel = sumNullable(current.imaAccel, metric.imaAccel);
+    current.imaDecel = sumNullable(current.imaDecel, metric.imaDecel);
+    current.imaCod = sumNullable(current.imaCod, metric.imaCod);
+    current.imaTotal = sumNullable(current.imaTotal, metric.imaTotal);
+    current.codEvents = sumNullable(current.codEvents, metric.codEvents);
+    current.impacts = sumNullable(current.impacts, metric.impacts);
+    if (metric.imaDebug?.interestingKeys?.length) {
+      current.imaDebug = metric.imaDebug;
+    }
   }
 
   return Array.from(byAthleteDate.values());

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchActivitiesForDate } from "@/lib/integrations/catapult/api";
+import { fetchActivitiesForDate, fetchActivityStats } from "@/lib/integrations/catapult/api";
+import { normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
 
 export const runtime = "nodejs";
 
@@ -32,46 +33,6 @@ async function isAuthorizedCoach(request: Request): Promise<boolean> {
   return role === "COACH" || role === "ADMIN" || role === "STAFF";
 }
 
-async function statsCall(activityId: string, parameters: string[], requestedOnly: boolean): Promise<unknown> {
-  const config = {
-    baseUrl: (process.env.CATAPULT_API_BASE?.trim() || "https://backend-eu.openfield.catapultsports.com").replace(/\/+$/, ""),
-    apiKey: env("CATAPULT_API_KEY"),
-    orgId: env("CATAPULT_ORG_ID"),
-  };
-
-  const url = new URL(`${config.baseUrl}/api/v6/stats`);
-  url.searchParams.set("org_id", config.orgId);
-
-  const body: Record<string, unknown> = {
-    group_by: ["athlete"],
-    filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
-    requested_only: requestedOnly,
-  };
-  if (parameters.length > 0) {
-    body.parameters = parameters;
-  }
-
-  const response = await fetch(url.toString(), {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-      "x-api-key": config.apiKey,
-      "x-org-id": config.orgId,
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-
-  const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { rawText: text.slice(0, 2000) };
-  }
-}
-
 function extractRows(payload: unknown): Record<string, unknown>[] {
   if (Array.isArray(payload)) return payload as Record<string, unknown>[];
   if (payload && typeof payload === "object") {
@@ -101,20 +62,13 @@ export async function GET(request: Request) {
     }
 
     const activity = activities[0];
-
-    // Call 1: known-good params only, requested_only: false → should return ALL fields Catapult has
-    const payloadAll = await statsCall(activity.id, ["total_distance"], false);
+    const payloadAll = await fetchActivityStats(activity.id);
     const rowsAll = extractRows(payloadAll);
-
-    // Call 2: just IMA display names, requested_only: true → see if display names work
-    const payloadIma = await statsCall(
-      activity.id,
-      ["IMA Accel High", "IMA Accel Medium", "IMA Accel Low",
-       "IMA Decel High", "IMA Decel Medium", "IMA Decel Low",
-       "IMA CoD Left High", "IMA CoD Right High"],
-      true,
-    );
-    const rowsIma = extractRows(payloadIma);
+    const normalized = normalizeCatapultActivityStats({
+      activityId: activity.id,
+      date,
+      payload: payloadAll,
+    });
 
     // Extract all field names from call 1 (the "all fields" call)
     const firstRow = rowsAll[0] ?? {};
@@ -127,14 +81,7 @@ export async function GET(request: Request) {
       imaValues[k] = firstRow[k];
     }
 
-    // From call 2 — what came back for display name params?
-    const imaDisplayValues: Record<string, unknown> = {};
-    const firstImaRow = rowsIma[0] ?? {};
-    for (const k of Object.keys(firstImaRow)) {
-      if (k.toLowerCase().includes("ima") || k.startsWith("IMA")) {
-        imaDisplayValues[k] = firstImaRow[k];
-      }
-    }
+    const normalizedFirst = normalized[0] ?? null;
 
     return NextResponse.json({
       ok: true,
@@ -147,8 +94,8 @@ export async function GET(request: Request) {
       imaKeys,
       // IMA key→value for first athlete
       imaValues,
-      // What came back when requesting display names
-      imaDisplayValues,
+      normalizedFirst,
+      normalizedImaDebug: normalizedFirst?.imaDebug ?? null,
       // Raw first row (truncated to 50 keys for readability)
       sampleRow: Object.fromEntries(Object.entries(firstRow).slice(0, 50)),
     });
