@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type ProfileRoleRow = { role: string | null };
+type BackfillEntry = { date: string; status: string; stored?: number; warning?: string };
 
 function env(name: string) {
   const value = process.env[name];
@@ -59,12 +60,12 @@ function eachDateInRange(dateFrom: string, dateTo: string): string[] {
 
 async function runBackfill(dateFrom: string, dateTo: string) {
   const dates = eachDateInRange(dateFrom, dateTo);
-  const results: Array<{ date: string; status: string; warning?: string }> = [];
+  const results: BackfillEntry[] = [];
 
   for (const date of dates) {
     try {
       const result = await syncCatapultDailyMetrics(date);
-      results.push({ date, status: result.status ?? "ok" });
+      results.push({ date, status: "ok", stored: result.storedCount });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       results.push({ date, status: "error", warning: message });
