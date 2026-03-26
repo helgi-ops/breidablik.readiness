@@ -102,12 +102,25 @@ export default function DevPlayerVALDTab() {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id;
       if (!userId) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("player_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const mappedPlayerId =
+        ((profile as { player_id?: string | null } | null)?.player_id ?? null);
+      if (mappedPlayerId) {
+        setPlayerId(mappedPlayerId);
+        return;
+      }
+
       const { data: player } = await supabase
         .from("players")
         .select("id")
         .eq("user_id", userId)
         .maybeSingle();
-      if (player) setPlayerId((player as any).id);
+      if (player) setPlayerId(String((player as { id?: string | null } | null)?.id ?? ""));
     }
     loadPlayer();
   }, []);

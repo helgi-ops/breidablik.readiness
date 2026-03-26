@@ -1921,7 +1921,9 @@ function renderStructureBlocks(
   const rawBlocks = Array.isArray(structure) ? structure : [];
   if (!rawBlocks.length) return null;
 
-  const normalizedBlocks = rebalanceSupportedExerciseBlocks(rebalanceRulesBlocks(rawBlocks));
+  // Keep the published microdose template block order intact and only lift
+  // supported explosive items out of generic Rules blocks.
+  const normalizedBlocks = rebalanceRulesBlocks(rawBlocks);
 
   // Sort blocks by canonical session order (warm-up → primer/ballistic → contrast/strength → accessory).
   // Uses a stable sort so blocks within the same priority category keep their original template order.
