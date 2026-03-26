@@ -381,3 +381,38 @@ export async function fetchActivityStatsBatch(activityIds: string[]): Promise<un
   const payloads = await Promise.all(ids.map((id) => fetchActivityStats(id)));
   return payloads.flatMap((payload) => (Array.isArray(payload) ? payload : [payload]));
 }
+
+/**
+ * Fetch stats for all athletes on a given date by filtering on period_start_time.
+ * Used by the IMA patch backfill to avoid the need for activity IDs.
+ */
+export async function fetchStatsByDate(date: string): Promise<unknown> {
+  const startTime = `${date}T00:00:00.000Z`;
+  const endTime = `${date}T23:59:59.999Z`;
+
+  const basePayload = await catapultPost("/api/v6/stats", {
+    group_by: ["athlete"],
+    filters: [
+      { name: "period_start_time", comparison: ">=", values: [startTime] },
+      { name: "period_start_time", comparison: "<", values: [endTime] },
+    ],
+    parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
+    requested_only: false,
+  });
+
+  // Also request IMA-only with requested_only:true for better coverage
+  try {
+    const imaPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [
+        { name: "period_start_time", comparison: ">=", values: [startTime] },
+        { name: "period_start_time", comparison: "<", values: [endTime] },
+      ],
+      parameters: CATAPULT_IMA_PARAMETERS,
+      requested_only: true,
+    });
+    return mergeStatsPayloads(basePayload, imaPayload);
+  } catch {
+    return basePayload;
+  }
+}
