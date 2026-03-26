@@ -47,6 +47,9 @@ type SyncSummary = {
   mapping_missing: number;
   invalid_payloads: number;
   warnings: number;
+  athlete_scope_note?: string | null;
+  test_scope_note?: string | null;
+  provider_diagnostics?: string | null;
 };
 
 function emptySummary(): SyncSummary {
@@ -357,6 +360,16 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
       provider.fetchAthletes(),
     ]);
     const athletes = filterValdAthletesToMicroPulseRoster(fetchedAthletes, players);
+    if (fetchedAthletes.length === 0) {
+      summary.athlete_scope_note = "VALD returned no athletes for the current team/tenant scope.";
+      warnings.push(summary.athlete_scope_note);
+    } else if (athletes.length === 0) {
+      summary.athlete_scope_note = `VALD returned ${fetchedAthletes.length} athletes, but none matched the current MicroPulse roster.`;
+      warnings.push(summary.athlete_scope_note);
+    } else if (athletes.length < fetchedAthletes.length) {
+      summary.athlete_scope_note = `VALD returned ${fetchedAthletes.length} athletes; ${athletes.length} matched the current MicroPulse roster.`;
+      warnings.push(summary.athlete_scope_note);
+    }
     const allowedAthleteIds = new Set<string>([
       ...athletes.map((athlete) => athlete.athleteId),
       ...mappedValdAthleteIds,
@@ -367,6 +380,20 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
       ? (await Promise.all(request.athleteIds.map((athleteId) => provider.fetchTestsForAthlete(athleteId, dateFrom, dateTo)))).flat()
       : await provider.fetchTestsByDateRange(dateFrom, dateTo);
     const tests = allTests.filter((test) => allowedAthleteIds.has(test.athleteId));
+    if (allTests.length === 0) {
+      summary.test_scope_note = "VALD returned no tests for the selected date range.";
+      warnings.push(summary.test_scope_note);
+    } else if (tests.length === 0) {
+      summary.test_scope_note = `VALD returned ${allTests.length} tests, but none matched the allowed athlete roster/mappings.`;
+      warnings.push(summary.test_scope_note);
+    } else if (tests.length < allTests.length) {
+      summary.test_scope_note = `VALD returned ${allTests.length} tests; ${tests.length} matched the allowed athlete roster/mappings.`;
+      warnings.push(summary.test_scope_note);
+    }
+    const diagnostics = provider.getDiagnostics();
+    if (diagnostics.length > 0) {
+      summary.provider_diagnostics = diagnostics.join(" | ");
+    }
     summary.tests_seen = tests.length;
 
     for (const test of tests) {

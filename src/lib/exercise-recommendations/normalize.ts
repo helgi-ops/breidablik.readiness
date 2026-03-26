@@ -27,7 +27,15 @@ export function normalizeExerciseNameToId(name: string): SupportedExerciseId | n
   if (normalized.includes("mid thigh pull") || normalized.includes("mid-thigh pull")) return "MID_THIGH_PULL";
   if (normalized.includes("split stance trap bar deadlift")) return "SPLIT_STANCE_TRAP_BAR_DEADLIFT";
   if (normalized === "rfess" || normalized.includes("rear foot elevated split squat")) return "RFESS";
-  if (normalized.includes("isometric split squat hold")) return "ISOMETRIC_SPLIT_SQUAT_HOLD";
+  if (
+    normalized.includes("isometric split squat hold") ||
+    normalized.includes("isometric split squat") ||
+    normalized.includes("iso split squat hold") ||
+    normalized.includes("split squat iso") ||
+    normalized.includes("split squat hold")
+  ) {
+    return "ISOMETRIC_SPLIT_SQUAT_HOLD";
+  }
 
   return null;
 }

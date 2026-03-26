@@ -40,7 +40,7 @@ function reminderCopy(type: ReminderType) {
   }
 
   return {
-    title: "Breiðablik Readiness",
+    title: "MicroPulse",
     body: "Please complete today's readiness check-in.",
   };
 }

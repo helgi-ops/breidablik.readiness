@@ -19,6 +19,16 @@ function todayIso() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Atlantic/Reykjavik" }).format(new Date());
 }
 
+async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(text.slice(0, 300));
+  }
+}
+
 export default function ValdSettingsPage() {
   const supabase = getSupabaseClient();
   const [state, setState] = useState<ValdPageState>({ account: null, history: [], unmatched: [], players: [] });
@@ -58,23 +68,29 @@ export default function ValdSettingsPage() {
         fetch("/api/integrations/vald/sync", { cache: "no-store", headers: await authHeaders() }),
         supabase.from("players").select("id, full_name").order("full_name", { ascending: true }),
       ]);
-      const syncData = await syncRes.json();
-      if (!syncRes.ok || !syncData.ok) throw new Error(syncData.error || "Unable to load VALD state.");
+      const syncData = await readJsonResponse(syncRes);
+      if (!syncRes.ok || syncData.ok !== true) throw new Error(typeof syncData.error === "string" ? syncData.error : "Unable to load VALD state.");
       const players = ((playersRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
         id: String(row.id),
         name: String(row.full_name ?? row.id),
       }));
-      setState({ account: syncData.account ?? null, history: syncData.history ?? [], unmatched: syncData.unmatched ?? [], players });
-      if (syncData.account) {
+      setState({
+        account: (syncData.account as Record<string, unknown> | null | undefined) ?? null,
+        history: (syncData.history as Array<Record<string, unknown>> | undefined) ?? [],
+        unmatched: (syncData.unmatched as Array<{ valdAthleteId: string; valdAthleteName?: string | null; valdEmail?: string | null; valdExternalRef?: string | null; teamName?: string | null; groupName?: string | null }> | undefined) ?? [],
+        players,
+      });
+      const account = (syncData.account as Record<string, unknown> | null | undefined) ?? null;
+      if (account) {
         setForm((prev) => ({
           ...prev,
-          baseUrl: String(syncData.account.base_url ?? ""),
-          authMode: (String(syncData.account.auth_mode ?? "oauth") as typeof prev.authMode),
-          orgId: String(syncData.account.org_id ?? ""),
-          region: String(syncData.account.region ?? "euw"),
-          tenantId: String(syncData.account.tenant_id ?? ""),
-          valdTeamId: String(syncData.account.vald_team_id ?? ""),
-          isEnabled: syncData.account.is_enabled === true,
+          baseUrl: String(account.base_url ?? ""),
+          authMode: (String(account.auth_mode ?? "oauth") as typeof prev.authMode),
+          orgId: String(account.org_id ?? ""),
+          region: String(account.region ?? "euw"),
+          tenantId: String(account.tenant_id ?? ""),
+          valdTeamId: String(account.vald_team_id ?? ""),
+          isEnabled: account.is_enabled === true,
         }));
       }
     } catch (err) {
@@ -99,8 +115,8 @@ export default function ValdSettingsPage() {
         headers: await authHeaders(),
         body: JSON.stringify({ ...form, persist: true }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "VALD test failed.");
+      const data = await readJsonResponse(response);
+      if (!response.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "VALD test failed.");
       setInfo("VALD connection saved and tested successfully.");
       await loadState();
     } catch (err) {
@@ -115,9 +131,9 @@ export default function ValdSettingsPage() {
     setError(null);
     try {
       const response = await fetch("/api/integrations/vald/teams", { headers: await authHeaders() });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Unable to load VALD teams.");
-      setValdTeams(data.teams ?? []);
+      const data = await readJsonResponse(response);
+      if (!response.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "Unable to load VALD teams.");
+      setValdTeams((data.teams as Array<{ id: string; name: string }> | undefined) ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load VALD teams.");
     } finally {
@@ -136,12 +152,12 @@ export default function ValdSettingsPage() {
         headers: await authHeaders(),
         body: JSON.stringify({ dateFrom, dateTo }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || !data.ok) {
         const message =
           data.error === "VALD sync failed."
             ? "VALD sync failed. Check that the VALD connection is enabled before syncing."
-            : data.error || "VALD sync failed.";
+            : typeof data.error === "string" ? data.error : "VALD sync failed.";
         throw new Error(message);
       }
       setInfo(`VALD sync finished: ${JSON.stringify(data.summary ?? {})}`);
@@ -166,8 +182,8 @@ export default function ValdSettingsPage() {
         headers: await authHeaders(),
         body: JSON.stringify({ dateFrom, dateTo }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "VALD re-sync failed.");
+      const data = await readJsonResponse(response);
+      if (!response.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "VALD re-sync failed.");
       setInfo(`VALD re-sync finished: ${JSON.stringify(data.summary ?? {})}`);
       setSyncStatus(null);
       await loadState();
@@ -189,8 +205,8 @@ export default function ValdSettingsPage() {
         method: "POST",
         headers: await authHeaders(),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Backfill failed.");
+      const data = await readJsonResponse(response);
+      if (!response.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "Backfill failed.");
       const s = data.summary as Record<string, number> ?? {};
       setInfo(`Backfill complete: ${s.forcedecks ?? 0} ForceDecks, ${s.nordbord ?? 0} NordBord, ${s.forceframe ?? 0} ForceFrame (${s.errors ?? 0} errors)`);
       setSyncStatus(null);
@@ -216,8 +232,8 @@ export default function ValdSettingsPage() {
         headers: await authHeaders(),
         body: JSON.stringify({ ...args, matchSource: "manual", confidence: 1 }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Unable to save mapping.");
+      const data = await readJsonResponse(response);
+      if (!response.ok || data.ok !== true) throw new Error(typeof data.error === "string" ? data.error : "Unable to save mapping.");
       setInfo("VALD athlete mapped successfully.");
       await loadState();
     } catch (err) {

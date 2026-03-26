@@ -1185,6 +1185,16 @@ function applySupportedExerciseDisplayOverride(
     };
   }
 
+  if (id === "ISOMETRIC_SPLIT_SQUAT_HOLD") {
+    return {
+      ...exercise,
+      name: "Isometric Split Squat Hold",
+      method: "ISO",
+      setsReps: "3-5 sec x 3 reps each leg",
+      note: null,
+    };
+  }
+
   return exercise;
 }
 
@@ -1207,7 +1217,8 @@ function scoreParsedExerciseForSupportedId(exercise: ParsedExercise, id: Support
   if (id === "ISOMETRIC_SPLIT_SQUAT_HOLD") {
     if (method === "ISO") score += 5;
     if (setsReps.includes("sek") || setsReps.includes("sec")) score += 3;
-    if (name.includes("isometric")) score += 2;
+    if (setsReps.includes("hlid") || setsReps.includes("hlið") || setsReps.includes("each leg")) score += 2;
+    if (name.includes("isometric") || name.includes("split squat iso") || name.includes("iso split squat")) score += 2;
   }
 
   if (id === "JUMP_SHRUGS" || id === "DB_SNATCH" || id === "MID_THIGH_PULL" || id === "SPLIT_STANCE_TRAP_BAR_DEADLIFT" || id === "RFESS") {
@@ -1276,18 +1287,29 @@ function ExerciseCard({
   const [infoOpen, setInfoOpen] = useState(false);
   const [lang] = useLang();
   const tCard = PLAYER_COPY[lang];
+  const hasRecommendationContext = !!recommendationContext;
   const recommendation = useMemo(
     () =>
-      getExerciseRecommendation({
-        ...(recommendationContext ?? {}),
-        originalExerciseName: ex.name,
-      }),
-    [ex.name, recommendationContext]
+      hasRecommendationContext
+        ? getExerciseRecommendation({
+            ...(recommendationContext ?? {}),
+            originalExerciseName: ex.name,
+          })
+        : null,
+    [ex.name, hasRecommendationContext, recommendationContext]
   );
-  const uiInfo = useMemo(() => getExerciseRecommendationUiInfo(recommendation), [recommendation]);
+  const uiInfo = useMemo(
+    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
+    [recommendation]
+  );
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
 
-  const selectedExerciseId = forcedExerciseId ?? overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
+  const selectedExerciseId =
+    forcedExerciseId ??
+    overrideExerciseId ??
+    recommendation?.recommendedExerciseId ??
+    recommendation?.originalExerciseId ??
+    null;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
   const matchedExercise = findParsedExerciseForSupportedId(availableExercises, selectedExerciseId);
   const internallySwappedExerciseBase: ParsedExercise = matchedExercise
@@ -1304,10 +1326,12 @@ function ExerciseCard({
     selectedExerciseId
   );
 
-  const allowedAlternativeIds = recommendation.allowedExerciseIds.filter((id) => id !== selectedExerciseId);
-  const restrictedLabels = recommendation.restrictedExerciseIds
-    .map((id) => getSupportedExerciseLabel(id))
-    .filter((label): label is string => !!label);
+  const allowedAlternativeIds = (recommendation?.allowedExerciseIds ?? []).filter((id) => id !== selectedExerciseId);
+  const restrictedLabels = recommendation?.restrictedExerciseIds
+    ? recommendation.restrictedExerciseIds
+        .map((id) => getSupportedExerciseLabel(id))
+        .filter((label): label is string => !!label)
+    : [];
 
   return (
     <>
@@ -1339,7 +1363,7 @@ function ExerciseCard({
         </div>
         {effectiveExercise.note ? <div className="mt-0.5 text-xs text-zinc-500">{effectiveExercise.note}</div> : null}
 
-        {!dimmed && !hideRecommendationUi && recommendation.shouldRenderRecommendation && uiInfo.badgeLabel ? (
+        {!dimmed && !hideRecommendationUi && recommendation?.shouldRenderRecommendation && uiInfo.badgeLabel ? (
           <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/80 p-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(uiInfo.badgeTone))}>
@@ -1379,7 +1403,7 @@ function ExerciseCard({
                       type="button"
                       onClick={() => {
                         setOverrideExerciseId(null);
-                        onSelectRecommendedExerciseId?.(recommendation.recommendedExerciseId ?? recommendation.originalExerciseId);
+                        onSelectRecommendedExerciseId?.(recommendation?.recommendedExerciseId ?? recommendation?.originalExerciseId ?? null);
                       }}
                       className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-200"
                     >
@@ -1414,6 +1438,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [lang] = useLang();
   void lang;
+  const hasRecommendationContext = !!recommendationContext;
   const selected = options[selectedIdx];
   const original = options[0];
   const recommendationSeedExercise = useMemo(
@@ -1421,19 +1446,19 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
     [options]
   );
   const defaultRecommendedExerciseId = useMemo(() => {
-    if (!recommendationSeedExercise) return null;
+    if (!hasRecommendationContext || !recommendationSeedExercise) return null;
     return getExerciseRecommendation({
       ...(recommendationContext ?? {}),
       originalExerciseName: recommendationSeedExercise.name,
     }).recommendedExerciseId;
-  }, [recommendationContext, recommendationSeedExercise]);
+  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise]);
   const groupRecommendation = useMemo(() => {
-    if (!recommendationSeedExercise) return null;
+    if (!hasRecommendationContext || !recommendationSeedExercise) return null;
     return getExerciseRecommendation({
       ...(recommendationContext ?? {}),
       originalExerciseName: recommendationSeedExercise.name,
     });
-  }, [recommendationContext, recommendationSeedExercise]);
+  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise]);
   const groupRecommendationUi = useMemo(
     () => (groupRecommendation ? getExerciseRecommendationUiInfo(groupRecommendation) : null),
     [groupRecommendation]
@@ -1590,22 +1615,33 @@ function RecommendedExerciseBlockCard({
 }) {
   const recommendation = useMemo(
     () =>
-      getExerciseRecommendation({
-        ...(recommendationContext ?? {}),
-        originalExerciseName: ex.name,
-      }),
+      recommendationContext
+        ? getExerciseRecommendation({
+            ...(recommendationContext ?? {}),
+            originalExerciseName: ex.name,
+          })
+        : null,
     [ex.name, recommendationContext]
   );
-  const uiInfo = useMemo(() => getExerciseRecommendationUiInfo(recommendation), [recommendation]);
+  const uiInfo = useMemo(
+    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
+    [recommendation]
+  );
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
-  const selectedExerciseId = overrideExerciseId ?? recommendation.recommendedExerciseId ?? recommendation.originalExerciseId;
+  const selectedExerciseId =
+    overrideExerciseId ??
+    recommendation?.recommendedExerciseId ??
+    recommendation?.originalExerciseId ??
+    null;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
-  const allowedAlternativeIds = recommendation.allowedExerciseIds.filter((id) => id !== selectedExerciseId);
-  const restrictedLabels = recommendation.restrictedExerciseIds
-    .map((id) => getSupportedExerciseLabel(id))
-    .filter((label): label is string => !!label);
+  const allowedAlternativeIds = (recommendation?.allowedExerciseIds ?? []).filter((id) => id !== selectedExerciseId);
+  const restrictedLabels = recommendation?.restrictedExerciseIds
+    ? recommendation.restrictedExerciseIds
+        .map((id) => getSupportedExerciseLabel(id))
+        .filter((label): label is string => !!label)
+    : [];
 
-  if (!recommendation.shouldRenderRecommendation || !uiInfo.badgeLabel) {
+  if (!recommendationContext || !recommendation?.shouldRenderRecommendation || !uiInfo.badgeLabel) {
     return <ExerciseCard ex={ex} accent={accent} blockLabel={blockLabel} recommendationContext={recommendationContext} />;
   }
 
@@ -1730,7 +1766,8 @@ function splitMigratableRuleItems(items: string[]): {
   for (const rawItem of items) {
     const parsed = parseExerciseItem(rawItem);
     const supportedId = !parsed.isHeader ? normalizeExerciseNameToId(parsed.name) : null;
-    if (supportedId) {
+    const group = supportedId ? getRecommendationGroupForExercise(supportedId) : null;
+    if (group === "EXPLOSIVE_ACCESSORY") {
       migratedItems.push(rawItem);
     } else {
       retainedItems.push(rawItem);
@@ -1767,10 +1804,17 @@ function findPreferredTargetBlockIndex(
     }
     if (
       groups.has("UNILATERAL_STRENGTH_ACCESSORY") &&
-      (priority === 2 || priority === 3)
+      priority === 2
     ) {
       return targetIdx;
     }
+  }
+
+  const hasSupportedGroups =
+    groups.has("EXPLOSIVE_ACCESSORY") || groups.has("UNILATERAL_STRENGTH_ACCESSORY");
+
+  if (hasSupportedGroups) {
+    return -1;
   }
 
   for (let targetIdx = fromIdx - 1; targetIdx >= 0; targetIdx -= 1) {
@@ -1824,7 +1868,7 @@ function rebalanceSupportedExerciseBlocks(rawBlocks: any[]): any[] {
   for (let i = 0; i < blocks.length; i += 1) {
     const currentTitle = String(blocks[i]?.block ?? "").trim();
     const currentPriority = blockSortPriority(currentTitle);
-    if (currentPriority === 1) continue;
+    if (currentPriority === 1 || currentPriority === 2) continue;
 
     const retainedItems: string[] = [];
     const explosiveItemsToMove: string[] = [];
@@ -1841,18 +1885,23 @@ function rebalanceSupportedExerciseBlocks(rawBlocks: any[]): any[] {
       }
     }
 
-    if (!explosiveItemsToMove.length) continue;
+    let nextItems = retainedItems;
 
-    const targetIdx = findPreferredTargetBlockIndex(blocks, i, explosiveItemsToMove);
-    if (targetIdx < 0 || targetIdx === i) continue;
+    if (explosiveItemsToMove.length) {
+      const targetIdx = findPreferredTargetBlockIndex(blocks, i, explosiveItemsToMove);
+      if (targetIdx >= 0 && targetIdx !== i) {
+        blocks[targetIdx] = {
+          ...blocks[targetIdx],
+          items: [...safeStringList(blocks[targetIdx]?.items), ...explosiveItemsToMove],
+        };
+      } else {
+        nextItems = [...nextItems, ...explosiveItemsToMove];
+      }
+    }
 
-    blocks[targetIdx] = {
-      ...blocks[targetIdx],
-      items: [...safeStringList(blocks[targetIdx]?.items), ...explosiveItemsToMove],
-    };
     blocks[i] = {
       ...blocks[i],
-      items: retainedItems,
+      items: nextItems,
     };
   }
 
@@ -1914,6 +1963,9 @@ function renderStructureBlocks(
           const title = String(b?.block ?? `Block ${idx + 1}`);
           const items = safeStringList(b?.items);
           const accent = blockAccent(title);
+          const blockPriority = blockSortPriority(title);
+          const blockRecommendationContext =
+            blockPriority === 1 || blockPriority === 2 ? opts?.recommendationContext ?? null : null;
           const parsed = items.map(parseExerciseItem);
           const segments = groupIntoSegments(parsed);
 
@@ -1940,7 +1992,7 @@ function renderStructureBlocks(
                     {segments.map((seg, i) => {
                   if (seg.kind === "choice") {
                         return (
-                          <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} recommendationContext={opts?.recommendationContext} />
+                          <ChoiceGroup key={i} header={seg.header} options={seg.options} accent={accent} blockLabel={accent.label} recommendationContext={blockRecommendationContext} />
                         );
                       }
                       return (
@@ -1949,7 +2001,7 @@ function renderStructureBlocks(
                           ex={seg.ex}
                           accent={accent}
                           blockLabel={accent.label}
-                          recommendationContext={opts?.recommendationContext}
+                          recommendationContext={blockRecommendationContext}
                         />
                       );
                     })}

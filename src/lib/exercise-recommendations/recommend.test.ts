@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { getExerciseRecommendation } from "./recommend";
 import { REASON_CODES } from "./reasons";
+import { normalizeExerciseNameToId } from "./normalize";
 
 // ── Phase 1 / 2 tests (existing, unchanged) ──────────────────────────────────
 
@@ -102,6 +103,11 @@ test("Jump Shrugs normalizes correctly", () => {
     riskState: "LOW",
   });
   assert.equal(result.originalExerciseId, "JUMP_SHRUGS");
+});
+
+test("Split Squat ISO normalizes correctly", () => {
+  assert.equal(normalizeExerciseNameToId("Split Squat ISO"), "ISOMETRIC_SPLIT_SQUAT_HOLD");
+  assert.equal(normalizeExerciseNameToId("Iso Split Squat Hold"), "ISOMETRIC_SPLIT_SQUAT_HOLD");
 });
 
 // ── Phase 3 tests — Explosive accessory ──────────────────────────────────────
