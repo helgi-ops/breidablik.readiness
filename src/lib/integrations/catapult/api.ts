@@ -425,7 +425,10 @@ export async function fetchCatapultAthletes(): Promise<CatapultAthlete[]> {
 function parseActivityRecord(row: unknown): (CatapultActivity & { date: string }) | null {
   const record = asRecord(row);
   if (!record) return null;
-  const id = asString(record.id) ?? asString(record.activity_id);
+  // The /api/v6/activities endpoint returns period objects that have both `id`
+  // (the period UUID) and `activity_id` (the parent session UUID). The stats API
+  // expects the SESSION id, so prefer activity_id over id.
+  const id = asString(record.activity_id) ?? asString(record.id);
   const activityDate =
     toDateKey(record.date) ??
     toDateKey(record.activity_date) ??
@@ -460,10 +463,14 @@ export async function fetchActivitiesForDateRange(
 ): Promise<Map<string, CatapultActivity[]>> {
   const rows = await fetchPaginated("/api/v6/activities", ["activities", "data", "results", "items"]);
   const byDate = new Map<string, CatapultActivity[]>();
+  // Deduplicate by activity id — the same session may appear as multiple period rows
+  const seenIds = new Set<string>();
   for (const row of rows) {
     const activity = parseActivityRecord(row);
     if (!activity) continue;
     if (activity.date < dateFrom || activity.date > dateTo) continue;
+    if (seenIds.has(activity.id)) continue;
+    seenIds.add(activity.id);
     const existing = byDate.get(activity.date) ?? [];
     existing.push(activity);
     byDate.set(activity.date, existing);
