@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchActivitiesForDate, fetchActivityStats } from "@/lib/integrations/catapult/api";
+import { fetchActivitiesForDate, fetchActivityStatsDetailed } from "@/lib/integrations/catapult/api";
 import { normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
 
 export const runtime = "nodejs";
@@ -34,18 +34,51 @@ async function isAuthorizedCoach(request: Request): Promise<boolean> {
 }
 
 function extractRows(payload: unknown): Record<string, unknown>[] {
-  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item) => extractRows(item));
+  }
   if (payload && typeof payload === "object") {
     const rec = payload as Record<string, unknown>;
-    for (const key of ["data", "stats", "athletes", "results", "items"]) {
-      if (Array.isArray(rec[key])) return rec[key] as Record<string, unknown>[];
+    if (Array.isArray(rec.stats)) return rec.stats as Record<string, unknown>[];
+    const statsRecord = rec.stats && typeof rec.stats === "object" ? (rec.stats as Record<string, unknown>) : null;
+    if (statsRecord?.athletes && Array.isArray(statsRecord.athletes)) return statsRecord.athletes as Record<string, unknown>[];
+    const athletesRecord =
+      statsRecord?.athletes && typeof statsRecord.athletes === "object"
+        ? (statsRecord.athletes as Record<string, unknown>)
+        : null;
+    if (athletesRecord?.data && Array.isArray(athletesRecord.data)) return athletesRecord.data as Record<string, unknown>[];
+
+    if (Array.isArray(rec.data)) return rec.data as Record<string, unknown>[];
+    const dataRecord = rec.data && typeof rec.data === "object" ? (rec.data as Record<string, unknown>) : null;
+    if (dataRecord?.results && Array.isArray(dataRecord.results)) return dataRecord.results as Record<string, unknown>[];
+    const resultsRecord =
+      dataRecord?.results && typeof dataRecord.results === "object"
+        ? (dataRecord.results as Record<string, unknown>)
+        : null;
+    if (resultsRecord?.items && Array.isArray(resultsRecord.items)) return resultsRecord.items as Record<string, unknown>[];
+
+    if (Array.isArray(rec.results)) return rec.results as Record<string, unknown>[];
+    if (rec.results && typeof rec.results === "object" && Array.isArray((rec.results as Record<string, unknown>).items)) {
+      return (rec.results as Record<string, unknown>).items as Record<string, unknown>[];
     }
   }
   return [];
 }
 
+function isAuthorizedByCronSecret(request: Request): boolean {
+  const expected = process.env.CATAPULT_CRON_SECRET?.trim();
+  if (!expected) return true;
+  const url = new URL(request.url);
+  const provided =
+    request.headers.get("x-cron-secret") ||
+    url.searchParams.get("secret") ||
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return provided?.trim() === expected;
+}
+
 export async function GET(request: Request) {
-  if (!(await isAuthorizedCoach(request))) {
+  const authed = isAuthorizedByCronSecret(request) || (await isAuthorizedCoach(request));
+  if (!authed) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -62,23 +95,27 @@ export async function GET(request: Request) {
     }
 
     const activity = activities[0];
-    const payloadAll = await fetchActivityStats(activity.id);
-    const rowsAll = extractRows(payloadAll);
+    const details = await fetchActivityStatsDetailed(activity.id);
+    const rowsBase = extractRows(details.basePayload);
+    const rowsImaOnly = extractRows(details.imaOnlyPayload);
+    const rowsMerged = extractRows(details.mergedPayload);
     const normalized = normalizeCatapultActivityStats({
       activityId: activity.id,
       date,
-      payload: payloadAll,
+      payload: details.mergedPayload,
     });
 
-    // Extract all field names from call 1 (the "all fields" call)
-    const firstRow = rowsAll[0] ?? {};
-    const allRawKeys = Object.keys(firstRow).sort();
-    const imaKeys = allRawKeys.filter((k) => k.toLowerCase().includes("ima"));
+    const firstBaseRow = rowsBase[0] ?? {};
+    const firstImaOnlyRow = rowsImaOnly[0] ?? {};
+    const firstMergedRow = rowsMerged[0] ?? {};
+    const allRawKeys = Object.keys(firstMergedRow).sort();
+    const imaKeys = allRawKeys.filter((k) =>
+      ["ima", "accel", "decel", "cod", "impact", "playerload"].some((token) => k.toLowerCase().includes(token)),
+    );
 
-    // Show first athlete values for IMA keys
     const imaValues: Record<string, unknown> = {};
     for (const k of imaKeys) {
-      imaValues[k] = firstRow[k];
+      imaValues[k] = firstMergedRow[k];
     }
 
     const normalizedFirst = normalized[0] ?? null;
@@ -87,17 +124,18 @@ export async function GET(request: Request) {
       ok: true,
       date,
       activity: { id: activity.id, name: activity.name },
-      athleteCount: rowsAll.length,
-      // All field names returned by Catapult
+      athleteCount: rowsMerged.length,
+      baseRowCount: rowsBase.length,
+      imaOnlyRowCount: rowsImaOnly.length,
+      imaOnlyError: details.imaOnlyError,
       allRawKeys,
-      // Only IMA-related keys
       imaKeys,
-      // IMA key→value for first athlete
       imaValues,
       normalizedFirst,
       normalizedImaDebug: normalizedFirst?.imaDebug ?? null,
-      // Raw first row (truncated to 50 keys for readability)
-      sampleRow: Object.fromEntries(Object.entries(firstRow).slice(0, 50)),
+      sampleBaseRow: Object.fromEntries(Object.entries(firstBaseRow).slice(0, 50)),
+      sampleImaOnlyRow: Object.fromEntries(Object.entries(firstImaOnlyRow).slice(0, 50)),
+      sampleMergedRow: Object.fromEntries(Object.entries(firstMergedRow).slice(0, 80)),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Debug failed";
