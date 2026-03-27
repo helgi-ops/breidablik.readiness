@@ -171,7 +171,9 @@ const METABOLIC_AVG_POWER_KEYS = [
 ];
 
 const METABOLIC_PEAK_POWER_KEYS = [
-  // Catapult OpenField display-name variants
+  // Exact Catapult OpenField display-name (confirmed from Reporting_Parameters)
+  "Peak Meta Power",
+  // Other display-name variants
   "Metabolic Power Max",
   "Max Metabolic Power",
   "Peak Metabolic Power",
@@ -199,9 +201,12 @@ const HMLD_KEYS = [
 ];
 
 const METABOLIC_ENERGY_KEYS = [
-  // Catapult OpenField display-name variants
+  // Exact Catapult OpenField display-name (confirmed from Reporting_Parameters)
+  "Meta Energy (KJ/kg)",
+  // Other display-name variants
   "Metabolic Energy",
   "Energy Expenditure",
+  "Meta Energy",
   // snake_case / camelCase variants
   "metabolic_energy",
   "energy_kj",

@@ -9,9 +9,13 @@ import type { CatapultActivity, CatapultAthlete } from "./types";
 // These must be added to Reporting_Parameters in OpenField for the org.
 // Using display names (not snake_case) — same pattern as IMA parameters.
 const CATAPULT_METABOLIC_PARAMETERS = [
+  // Exact display names as they appear in Catapult OpenField Reporting_Parameters
+  "Peak Meta Power",            // peak metabolic power (W/kg)
+  "High Metabolic Load Distance", // HMLD (m)
+  "Meta Energy (KJ/kg)",        // metabolic energy expenditure
+  // Additional names that may exist depending on Catapult version / org config
   "Metabolic Power Avg",
   "Metabolic Power Max",
-  "High Metabolic Load Distance",
   "Time In High Metabolic Zone",
   "Metabolic Energy",
 ];
