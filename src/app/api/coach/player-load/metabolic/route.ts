@@ -15,15 +15,18 @@ import { getDateKeyInTimezone, getOperationalTimezone } from "@/lib/notification
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import {
   computeMetabolicLoad,
-  classifyFatigueType,
-  getMetabolicRecommendationCode,
   getMetabolicRecommendationHints,
   type MetabolicLoadBand,
   type MetabolicLoadConfidence,
   type CompositeFatigueType,
   type MetabolicRecommendationCode,
   type MetabolicLoadSourceRow,
+  type RpeSourceRow,
 } from "@/lib/micropulse/metabolicLoad";
+import {
+  computeMechanicalLoad,
+  type MechanicalLoadSourceRow,
+} from "@/lib/micropulse/mechanicalLoad";
 
 export const runtime = "nodejs";
 
@@ -66,6 +69,14 @@ type ResponseRow = {
   metabolic_power_gen: string | null;
   confidence: MetabolicLoadConfidence;
   data_confidence: number;
+  /** RPE z-score on this date vs. athlete's 28-day rolling baseline. */
+  rpe_z: number | null;
+  /** Score today minus score ~5 days ago. Positive = rising, negative = recovering. */
+  delta_score: number | null;
+  /** Std deviation of metabolic scores over the last 7 days. High = volatile load. */
+  volatility7d: number | null;
+  /** Session type from the RPE submission on this date (match / team_training / etc). */
+  session_type: string | null;
 };
 
 type ResponsePayload = {
@@ -175,6 +186,95 @@ async function fetchMetabolicRows(
   }));
 }
 
+/**
+ * Fetch RPE entries (including session_type) for all players over a date window.
+ * Falls back to empty map on error — RPE is additive, never blocks GPS response.
+ */
+async function fetchRpeRows(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  teamId: string | null,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, RpeSourceRow[]>> {
+  const result = new Map<string, RpeSourceRow[]>();
+  try {
+    let query = sb
+      .from("session_rpe")
+      .select("player_id, session_date, rpe, session_type")
+      .gte("session_date", startDate)
+      .lte("session_date", endDate)
+      .order("session_date", { ascending: true });
+
+    if (teamId) query = query.eq("team_id", teamId);
+
+    const { data, error } = await query;
+    if (error || !data) return result;
+
+    for (const row of data as Array<{ player_id: string; session_date: string; rpe: number; session_type: string | null }>) {
+      const existing = result.get(row.player_id) ?? [];
+      existing.push({ date: row.session_date, rpe: row.rpe, session_type: row.session_type });
+      result.set(row.player_id, existing);
+    }
+  } catch {
+    // RPE is additive — never block the main response on RPE fetch failure
+  }
+  return result;
+}
+
+/**
+ * Fetch mechanical load rows for MLI computation.
+ * Mirrors the query in /api/coach/player-load/mli/route.ts.
+ * Falls back to empty map on error — mechanical is additive.
+ */
+async function fetchMechanicalRows(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  teamId: string | null,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, MechanicalLoadSourceRow[]>> {
+  const result = new Map<string, MechanicalLoadSourceRow[]>();
+  try {
+    const SELECT =
+      "player_id, date, decel_b2_3_tot_effs_gen2, tot_ds, decelerations, ima_decel, accel_b2_3_tot_effs_gen2, tot_as, accelerations, ima_accel, cod_events, ima_cod, ima_total, player_load_per_minute, impacts, source";
+
+    let query = sb
+      .from("player_external_load_daily")
+      .select(SELECT)
+      .eq("source", "catapult")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: true });
+
+    if (teamId) query = query.eq("team_id", teamId);
+
+    const { data, error } = await query;
+    if (error || !data) return result;
+
+    for (const row of data as Array<Record<string, unknown>>) {
+      const playerId = String(row.player_id);
+      const existing = result.get(playerId) ?? [];
+      existing.push({
+        date: String(row.date),
+        high_decels: (row.decel_b2_3_tot_effs_gen2 as number | null) ?? null,
+        total_decels: ((row.tot_ds ?? row.decelerations) as number | null) ?? null,
+        ima_decel: (row.ima_decel as number | null) ?? null,
+        high_accels: (row.accel_b2_3_tot_effs_gen2 as number | null) ?? null,
+        total_accels: ((row.tot_as ?? row.accelerations) as number | null) ?? null,
+        ima_accel: (row.ima_accel as number | null) ?? null,
+        cod_events: (row.cod_events as number | null) ?? null,
+        ima_cod: (row.ima_cod as number | null) ?? null,
+        ima_total: (row.ima_total as number | null) ?? null,
+        playerload_per_min: (row.player_load_per_minute as number | null) ?? null,
+        impacts: (row.impacts as number | null) ?? null,
+      });
+      result.set(playerId, existing);
+    }
+  } catch {
+    // Mechanical is additive — never block the response
+  }
+  return result;
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> {
@@ -186,7 +286,8 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
 
     const timeZone = getOperationalTimezone();
     const dateKey = validDateKey(url.searchParams.get("date")) ?? getDateKeyInTimezone(new Date(), timeZone);
-    const startDate = dateMinusDays(dateKey, 32); // extra 2-day buffer beyond 30-day baseline window
+    // 42 days: 28-day baseline + 7-day volatility window + 7-day buffer
+    const startDate = dateMinusDays(dateKey, 42);
 
     // Roster
     let rosterQuery = sb.from("players").select("id, full_name, team_id, user_id").not("user_id", "is", null);
@@ -196,8 +297,12 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
     const roster = (rosterData ?? []) as PlayerRow[];
     const rosterById = new Map(roster.map((p) => [p.id, p]));
 
-    // External load rows (metabolic columns)
-    const dbRows = await fetchMetabolicRows(sb, teamId, startDate, dateKey);
+    // Fetch GPS, RPE and mechanical in parallel
+    const [dbRows, rpeByPlayer, mechByPlayer] = await Promise.all([
+      fetchMetabolicRows(sb, teamId, startDate, dateKey),
+      fetchRpeRows(sb, teamId, startDate, dateKey),
+      fetchMechanicalRows(sb, teamId, startDate, dateKey),
+    ]);
 
     // Group by player
     const grouped = new Map<string, DBExternalLoadRow[]>();
@@ -212,7 +317,16 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
 
     for (const [playerId, playerRows] of grouped.entries()) {
       const sourceRows = playerRows.map(mapDBRowToSourceRow);
-      const result = computeMetabolicLoad(sourceRows, dateKey);
+      const playerRpeRows = rpeByPlayer.get(playerId) ?? [];
+
+      // Compute MLI for this player so classifyFatigueType can detect global_fatigue
+      const playerMechRows = mechByPlayer.get(playerId) ?? [];
+      const mechResult = playerMechRows.length > 0
+        ? computeMechanicalLoad(playerMechRows, dateKey)
+        : null;
+      const mechanicalLoadScore = mechResult?.mli ?? null;
+
+      const result = computeMetabolicLoad(sourceRows, dateKey, mechanicalLoadScore, playerRpeRows);
       if (!result) continue;
 
       const todayRow = playerRows.find((r) => r.date === dateKey);
@@ -236,6 +350,10 @@ export async function GET(req: Request): Promise<NextResponse<ResponsePayload>> 
         metabolic_power_gen: todayRow.metabolic_power_gen,
         confidence: result.confidence,
         data_confidence: result.dataConfidenceMetabolic,
+        rpe_z: result.rpeZScore,
+        delta_score: result.deltaScore,
+        volatility7d: result.volatility7d,
+        session_type: playerRpeRows.find((r) => r.date === dateKey)?.session_type ?? null,
       });
     }
 

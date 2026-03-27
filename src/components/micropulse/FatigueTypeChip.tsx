@@ -58,6 +58,12 @@ const TYPE_CONFIG: Record<
     text: "text-amber-700",
     dot: "bg-amber-400",
   },
+  perceived_mismatch: {
+    label: "Perceived mismatch",
+    bg: "bg-violet-50",
+    text: "text-violet-700",
+    dot: "bg-violet-400",
+  },
 };
 
 const SIZE_CLASSES = {

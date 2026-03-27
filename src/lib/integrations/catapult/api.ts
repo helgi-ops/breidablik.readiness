@@ -4,6 +4,18 @@ import type { CatapultActivity, CatapultAthlete } from "./types";
 
 // These are the exact display-name strings that Catapult Stats API v6 recognises.
 // DO NOT add snake_case or gen2_ variants — those cause "The given data was invalid" errors.
+
+// Metabolic power display-name parameters for Catapult Stats API v6.
+// These must be added to Reporting_Parameters in OpenField for the org.
+// Using display names (not snake_case) — same pattern as IMA parameters.
+const CATAPULT_METABOLIC_PARAMETERS = [
+  "Metabolic Power Avg",
+  "Metabolic Power Max",
+  "High Metabolic Load Distance",
+  "Time In High Metabolic Zone",
+  "Metabolic Energy",
+];
+
 const CATAPULT_IMA_PARAMETERS = [
   "IMA Accel High",
   "IMA Accel Medium",
@@ -478,30 +490,45 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     requested_only: false,
   });
 
+  // Fetch IMA and metabolic display-name parameters with requested_only:true so they
+  // are returned even when not in the org's default Reporting_Parameters group.
+  // Both are fire-and-forget — a failure falls back to the base payload.
+  let mergedPayload = basePayload;
+
   try {
     const imaOnlyPayload = await catapultPost("/api/v6/stats", {
       group_by: ["athlete"],
-      filters: [
-        {
-          name: "activity_id",
-          comparison: "=",
-          values: [activityId],
-        },
-      ],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
       parameters: CATAPULT_IMA_PARAMETERS,
       requested_only: true,
     });
-    return mergeStatsPayloads(basePayload, imaOnlyPayload);
+    mergedPayload = mergeStatsPayloads(mergedPayload, imaOnlyPayload);
   } catch {
-    return basePayload;
+    // IMA fetch failed — continue with base payload
   }
+
+  try {
+    const metabolicOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_METABOLIC_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, metabolicOnlyPayload);
+  } catch {
+    // Metabolic fetch failed — continue without metabolic data
+  }
+
+  return mergedPayload;
 }
 
 export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   basePayload: unknown;
   imaOnlyPayload: unknown | null;
+  metabolicOnlyPayload: unknown | null;
   mergedPayload: unknown;
   imaOnlyError: string | null;
+  metabolicOnlyError: string | null;
 }> {
   const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
@@ -516,33 +543,44 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     requested_only: false,
   });
 
+  let mergedPayload: unknown = basePayload;
+  let imaOnlyPayload: unknown | null = null;
+  let imaOnlyError: string | null = null;
+  let metabolicOnlyPayload: unknown | null = null;
+  let metabolicOnlyError: string | null = null;
+
   try {
-    const imaOnlyPayload = await catapultPost("/api/v6/stats", {
+    imaOnlyPayload = await catapultPost("/api/v6/stats", {
       group_by: ["athlete"],
-      filters: [
-        {
-          name: "activity_id",
-          comparison: "=",
-          values: [activityId],
-        },
-      ],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
       parameters: CATAPULT_IMA_PARAMETERS,
       requested_only: true,
     });
-    return {
-      basePayload,
-      imaOnlyPayload,
-      mergedPayload: mergeStatsPayloads(basePayload, imaOnlyPayload),
-      imaOnlyError: null,
-    };
+    mergedPayload = mergeStatsPayloads(mergedPayload, imaOnlyPayload);
   } catch (error) {
-    return {
-      basePayload,
-      imaOnlyPayload: null,
-      mergedPayload: basePayload,
-      imaOnlyError: error instanceof Error ? error.message : "Unknown IMA-only fetch error",
-    };
+    imaOnlyError = error instanceof Error ? error.message : "Unknown IMA-only fetch error";
   }
+
+  try {
+    metabolicOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_METABOLIC_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, metabolicOnlyPayload);
+  } catch (error) {
+    metabolicOnlyError = error instanceof Error ? error.message : "Unknown metabolic-only fetch error";
+  }
+
+  return {
+    basePayload,
+    imaOnlyPayload,
+    metabolicOnlyPayload,
+    mergedPayload,
+    imaOnlyError,
+    metabolicOnlyError,
+  };
 }
 
 export async function fetchActivityStatsBatch(activityIds: string[]): Promise<unknown> {
@@ -560,29 +598,45 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
   const startTime = `${date}T00:00:00.000Z`;
   const endTime = `${date}T23:59:59.999Z`;
 
+  const baseFilters = [
+    { name: "period_start_time", comparison: ">=", values: [startTime] },
+    { name: "period_start_time", comparison: "<", values: [endTime] },
+  ];
+
   const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
-    filters: [
-      { name: "period_start_time", comparison: ">=", values: [startTime] },
-      { name: "period_start_time", comparison: "<", values: [endTime] },
-    ],
+    filters: baseFilters,
     parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
     requested_only: false,
   });
 
-  // Also request IMA-only with requested_only:true for better coverage
+  let mergedPayload: unknown = basePayload;
+
+  // IMA display-name fetch with requested_only:true for better coverage
   try {
     const imaPayload = await catapultPost("/api/v6/stats", {
       group_by: ["athlete"],
-      filters: [
-        { name: "period_start_time", comparison: ">=", values: [startTime] },
-        { name: "period_start_time", comparison: "<", values: [endTime] },
-      ],
+      filters: baseFilters,
       parameters: CATAPULT_IMA_PARAMETERS,
       requested_only: true,
     });
-    return mergeStatsPayloads(basePayload, imaPayload);
+    mergedPayload = mergeStatsPayloads(mergedPayload, imaPayload);
   } catch {
-    return basePayload;
+    // IMA fetch failed — continue without
   }
+
+  // Metabolic display-name fetch with requested_only:true
+  try {
+    const metabolicPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: baseFilters,
+      parameters: CATAPULT_METABOLIC_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, metabolicPayload);
+  } catch {
+    // Metabolic fetch failed — continue without
+  }
+
+  return mergedPayload;
 }

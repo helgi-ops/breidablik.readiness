@@ -155,6 +155,11 @@ export function extractInterestingMetricKeys(record: Record<string, unknown>): s
 // ─── Metabolic metrics extraction ──────────────────────────────────────────
 
 const METABOLIC_AVG_POWER_KEYS = [
+  // Catapult OpenField display-name variants (as returned by Stats API v6)
+  "Metabolic Power Avg",
+  "Avg Metabolic Power",
+  "Average Metabolic Power",
+  // snake_case / camelCase variants
   "metabolic_power_avg",
   "average_metabolic_power",
   "avg_metabolic_power",
@@ -166,6 +171,11 @@ const METABOLIC_AVG_POWER_KEYS = [
 ];
 
 const METABOLIC_PEAK_POWER_KEYS = [
+  // Catapult OpenField display-name variants
+  "Metabolic Power Max",
+  "Max Metabolic Power",
+  "Peak Metabolic Power",
+  // snake_case / camelCase variants
   "metabolic_power_peak",
   "peak_metabolic_power",
   "max_metabolic_power",
@@ -175,6 +185,10 @@ const METABOLIC_PEAK_POWER_KEYS = [
 ];
 
 const HMLD_KEYS = [
+  // Catapult OpenField display-name variants
+  "High Metabolic Load Distance",
+  "High Metabolic Power Distance",
+  // snake_case / camelCase variants
   "high_metabolic_load_distance",
   "hmld",
   "hml_distance",
@@ -185,6 +199,10 @@ const HMLD_KEYS = [
 ];
 
 const METABOLIC_ENERGY_KEYS = [
+  // Catapult OpenField display-name variants
+  "Metabolic Energy",
+  "Energy Expenditure",
+  // snake_case / camelCase variants
   "metabolic_energy",
   "energy_kj",
   "energy_expenditure_kj",
@@ -193,11 +211,18 @@ const METABOLIC_ENERGY_KEYS = [
 ];
 
 const TIME_ABOVE_HML_KEYS = [
+  // Catapult OpenField display-name variants
+  "Time In High Metabolic Zone",
+  "Time In HML Zone",
+  "High Metabolic Load Duration",
+  "Time Above HML Threshold",
+  // snake_case / camelCase variants
   "time_above_hml_threshold",
   "hml_time",
   "time_above_25_5_w_kg",
   "high_metabolic_load_time",
   "timeAboveHmlThreshold",
+  "time_in_high_metabolic_zone",
 ];
 
 const METABOLIC_GEN_KEYS = [

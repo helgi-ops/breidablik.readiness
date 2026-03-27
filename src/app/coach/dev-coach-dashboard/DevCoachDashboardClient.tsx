@@ -78,6 +78,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
+import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import {
@@ -7075,6 +7076,7 @@ export default function CoachPage() {
               </CardContent>
             </Card>
             <MechanicalLoadIndexCard teamId={coachTeamId} />
+            <TeamMetabolicSummary teamId={coachTeamId} />
           </div>
         );
       })()}

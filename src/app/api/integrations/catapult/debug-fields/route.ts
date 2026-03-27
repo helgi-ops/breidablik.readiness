@@ -98,6 +98,7 @@ export async function GET(request: Request) {
     const details = await fetchActivityStatsDetailed(activity.id);
     const rowsBase = extractRows(details.basePayload);
     const rowsImaOnly = extractRows(details.imaOnlyPayload);
+    const rowsMetabolicOnly = extractRows(details.metabolicOnlyPayload);
     const rowsMerged = extractRows(details.mergedPayload);
     const normalized = normalizeCatapultActivityStats({
       activityId: activity.id,
@@ -107,16 +108,21 @@ export async function GET(request: Request) {
 
     const firstBaseRow = rowsBase[0] ?? {};
     const firstImaOnlyRow = rowsImaOnly[0] ?? {};
+    const firstMetabolicOnlyRow = rowsMetabolicOnly[0] ?? {};
     const firstMergedRow = rowsMerged[0] ?? {};
     const allRawKeys = Object.keys(firstMergedRow).sort();
     const imaKeys = allRawKeys.filter((k) =>
       ["ima", "accel", "decel", "cod", "impact", "playerload"].some((token) => k.toLowerCase().includes(token)),
     );
+    const metabolicKeys = allRawKeys.filter((k) =>
+      ["metabolic", "hmld", "hml", "energy"].some((token) => k.toLowerCase().includes(token)),
+    );
 
     const imaValues: Record<string, unknown> = {};
-    for (const k of imaKeys) {
-      imaValues[k] = firstMergedRow[k];
-    }
+    for (const k of imaKeys) imaValues[k] = firstMergedRow[k];
+
+    const metabolicValues: Record<string, unknown> = {};
+    for (const k of metabolicKeys) metabolicValues[k] = firstMergedRow[k];
 
     const normalizedFirst = normalized[0] ?? null;
 
@@ -127,14 +133,19 @@ export async function GET(request: Request) {
       athleteCount: rowsMerged.length,
       baseRowCount: rowsBase.length,
       imaOnlyRowCount: rowsImaOnly.length,
+      metabolicOnlyRowCount: rowsMetabolicOnly.length,
       imaOnlyError: details.imaOnlyError,
+      metabolicOnlyError: details.metabolicOnlyError,
       allRawKeys,
       imaKeys,
       imaValues,
+      metabolicKeys,
+      metabolicValues,
       normalizedFirst,
       normalizedImaDebug: normalizedFirst?.imaDebug ?? null,
       sampleBaseRow: Object.fromEntries(Object.entries(firstBaseRow).slice(0, 50)),
       sampleImaOnlyRow: Object.fromEntries(Object.entries(firstImaOnlyRow).slice(0, 50)),
+      sampleMetabolicOnlyRow: Object.fromEntries(Object.entries(firstMetabolicOnlyRow).slice(0, 20)),
       sampleMergedRow: Object.fromEntries(Object.entries(firstMergedRow).slice(0, 80)),
     });
   } catch (error) {

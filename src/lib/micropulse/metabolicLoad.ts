@@ -108,13 +108,24 @@ export type CompositeFatigueType =
   | "mechanical_fatigue"
   | "metabolic_fatigue"
   | "global_fatigue"
-  | "recovery_mismatch";
+  | "recovery_mismatch"
+  | "perceived_mismatch";
 
 export type FatigueTypeInput = {
   mechanicalLoadScore: number | null;
   metabolicLoadScore: number | null;
   /** Internal stress/recovery markers poor despite low external load */
   recoveryMismatch?: boolean;
+  /**
+   * RPE z-score for this date (athlete's own 28-day rolling baseline).
+   * When RPE is elevated but GPS load is not, signals perceived_mismatch.
+   */
+  rpeZScore?: number | null;
+  /**
+   * Session type for this date — adjusts perceived_mismatch threshold.
+   * "match" raises the bar (high RPE is expected); "recovery" lowers it.
+   */
+  sessionType?: string | null;
 };
 
 /** Recommendation code for Decision Engine consumption. */
@@ -123,7 +134,28 @@ export type MetabolicRecommendationCode =
   | "REDUCE_TOTAL_LOAD"
   | "RECOVERY_EMPHASIS"
   | "MONITOR_RESPONSE"
+  | "INVESTIGATE_PERCEIVED_LOAD"
   | "NO_METABOLIC_FLAG";
+
+// ─── RPE source row ─────────────────────────────────────────────────────────
+
+/**
+ * One row of raw RPE data for a player (from session_rpe table).
+ * Used to compute athlete-specific RPE baseline and z-score.
+ */
+export type RpeSourceRow = {
+  date: string;
+  /** Borg CR10 RPE value (1–10) */
+  rpe: number;
+  /**
+   * Session type from the RPE submission.
+   * Used to adjust perceived_mismatch threshold:
+   *   match    → threshold 1.5  (high RPE expected on match days)
+   *   recovery → threshold 0.5  (any elevation is a concern on recovery days)
+   *   other    → threshold 1.0  (default)
+   */
+  session_type?: string | null;
+};
 
 // ─── Math helpers ──────────────────────────────────────────────────────────
 
@@ -220,6 +252,51 @@ export function computeMetabolicBaseline(
     timeAboveThresholdStd: time.std,
     sampleCount: relevant.length,
   };
+}
+
+// ─── RPE baseline + z-score ────────────────────────────────────────────────
+
+/**
+ * Minimum RPE sessions needed before computing a meaningful RPE z-score.
+ * Lower than metabolic baseline because RPE is submitted more frequently.
+ */
+const RPE_MIN_SAMPLES = 4;
+
+/**
+ * Compute athlete-specific rolling RPE baseline for a target date.
+ * Uses the preceding `baselineWindowDays` days (not including target date).
+ */
+export function computeRpeBaseline(
+  rows: RpeSourceRow[],
+  dateKey: string,
+): { mean: number | null; std: number | null; sampleCount: number } {
+  const windowStart = dateMinusDays(dateKey, METABOLIC_CONFIG.baselineWindowDays);
+  const relevant = rows
+    .filter((r) => r.date < dateKey && r.date >= windowStart)
+    .map((r) => r.rpe)
+    .filter((v): v is number => isFiniteNumber(v) && v > 0);
+
+  const mean = meanOf(relevant);
+  if (mean == null) return { mean: null, std: null, sampleCount: 0 };
+  return {
+    mean,
+    std: stdOf(relevant, mean),
+    sampleCount: relevant.length,
+  };
+}
+
+/**
+ * Compute RPE z-score for a given date.
+ * Returns null if not enough baseline samples or no RPE on target date.
+ */
+export function computeRpeZScore(rows: RpeSourceRow[], dateKey: string): number | null {
+  const today = rows.find((r) => r.date === dateKey);
+  if (!today || !isFiniteNumber(today.rpe)) return null;
+
+  const baseline = computeRpeBaseline(rows, dateKey);
+  if (baseline.sampleCount < RPE_MIN_SAMPLES) return null;
+
+  return computeZScore(today.rpe, baseline.mean, baseline.std);
 }
 
 // ─── Confidence ────────────────────────────────────────────────────────────
@@ -345,23 +422,46 @@ function classifyMetabolicFlag(score: number | null): MetabolicFlag {
 }
 
 /**
- * Classify composite fatigue type from mechanical + metabolic scores.
- * Thresholds from v1 spec:
- *   mechanical ≥ 65 AND metabolic < 55 → mechanical_fatigue
- *   metabolic ≥ 65 AND mechanical < 55 → metabolic_fatigue
- *   both ≥ 65                          → global_fatigue
- *   recovery mismatch flag              → recovery_mismatch
- *   else                               → normal
+ * Classify composite fatigue type from mechanical + metabolic scores + RPE.
+ *
+ * Priority order:
+ *   1. global_fatigue      – both GPS scores ≥ 65 (most critical)
+ *   2. perceived_mismatch  – RPE z ≥ 1.0 but neither GPS score is elevated
+ *                            (athlete feeling the work more than GPS shows)
+ *   3. mechanical_fatigue  – mechanical ≥ 65, metabolic < 55
+ *   4. metabolic_fatigue   – metabolic ≥ 65, mechanical < 55
+ *   5. recovery_mismatch   – ACWR / stress-recovery flag
+ *   6. normal
+ *
+ * perceived_mismatch threshold: RPE z-score ≥ 1.0 is one standard deviation
+ * above the athlete's own rolling mean — a reliable signal that perceived
+ * effort is elevated relative to their norm, even when GPS says otherwise.
  */
 export function classifyFatigueType(input: FatigueTypeInput): CompositeFatigueType {
-  const { mechanicalLoadScore, metabolicLoadScore, recoveryMismatch } = input;
+  const { mechanicalLoadScore, metabolicLoadScore, recoveryMismatch, rpeZScore, sessionType } = input;
   const mechHigh = isFiniteNumber(mechanicalLoadScore) && mechanicalLoadScore >= 65;
   const metaHigh = isFiniteNumber(metabolicLoadScore) && metabolicLoadScore >= 65;
 
+  // 1. Both GPS streams are elevated — highest priority
   if (mechHigh && metaHigh) return "global_fatigue";
+
+  // 2. RPE elevated but GPS is not.
+  //    Threshold is session-type aware:
+  //      match    → 1.5  (elevated RPE is expected after matches)
+  //      recovery → 0.5  (any elevation on a recovery day is a signal)
+  //      other    → 1.0  (default)
+  const mismatchThreshold =
+    sessionType === "match" ? 1.5 : sessionType === "recovery" ? 0.5 : 1.0;
+  const rpeElevated = isFiniteNumber(rpeZScore) && (rpeZScore as number) >= mismatchThreshold;
+  if (rpeElevated && !mechHigh && !metaHigh) return "perceived_mismatch";
+
+  // 3–4. Single-stream GPS fatigue
   if (mechHigh && !metaHigh) return "mechanical_fatigue";
   if (metaHigh && !mechHigh) return "metabolic_fatigue";
+
+  // 5. Recovery / ACWR mismatch
   if (recoveryMismatch) return "recovery_mismatch";
+
   return "normal";
 }
 
@@ -382,6 +482,8 @@ export function getMetabolicRecommendationCode(
       return "RECOVERY_EMPHASIS";
     case "mechanical_fatigue":
       return "MONITOR_RESPONSE";
+    case "perceived_mismatch":
+      return "INVESTIGATE_PERCEIVED_LOAD";
     default:
       return "NO_METABOLIC_FLAG";
   }
@@ -418,24 +520,115 @@ export function getMetabolicRecommendationHints(
         "Lower intensity if subjective symptoms persist",
         "Monitor response to today's session",
       ];
+    case "perceived_mismatch":
+      return [
+        "GPS load is normal but player is rating effort above their baseline",
+        "Check for early fatigue, illness, or poor sleep",
+        "Reduce session complexity — keep volume low today",
+        "Follow up with player directly",
+      ];
     default:
       return [];
   }
+}
+
+// ─── Delta and volatility ──────────────────────────────────────────────────
+
+/**
+ * Compute metabolic load scores for the last `windowDays` days before and
+ * including `dateKey`. Returns [{date, score}] sorted ascending.
+ * Used as input for delta and volatility calculations.
+ */
+export function computeMetabolicScoresWindow(
+  rows: MetabolicLoadSourceRow[],
+  dateKey: string,
+  windowDays = 7,
+): Array<{ date: string; score: number | null }> {
+  const windowStart = dateMinusDays(dateKey, windowDays - 1);
+  const dates: string[] = [];
+  for (let i = windowDays - 1; i >= 0; i--) {
+    dates.push(dateMinusDays(dateKey, i));
+  }
+  return dates
+    .filter((d) => d >= windowStart)
+    .map((d) => {
+      const current = rows.find((r) => r.date === d);
+      if (!current) return { date: d, score: null };
+      const baseline = computeMetabolicBaseline(rows, d);
+      const computed = computeMetabolicLoadScore({
+        metabolicPowerAvg: current.metabolic_power,
+        metabolicPowerPeak: current.metabolic_power_peak,
+        hmlDistance: current.high_metabolic_load_distance_m,
+        timeAboveThreshold: current.time_above_hml_threshold_s,
+        metabolicDataValid: current.metabolic_data_valid,
+        baseline,
+      });
+      return { date: d, score: computed.metabolicLoadScore };
+    });
+}
+
+/**
+ * Delta score: today's score minus the most recent valid score N days ago.
+ * Returns null if no valid comparison point is available.
+ *
+ *   > +5  → rising load
+ *  -5–+5  → stable
+ *   < -5  → falling / recovering
+ */
+export function computeMetabolicDelta(
+  scoresWindow: Array<{ date: string; score: number | null }>,
+  dateKey: string,
+  lookbackDays = 5,
+): number | null {
+  const today = scoresWindow.find((s) => s.date === dateKey);
+  if (!today || today.score == null) return null;
+
+  const cutoff = dateMinusDays(dateKey, lookbackDays);
+  const past = scoresWindow
+    .filter((s) => s.date < dateKey && s.date >= cutoff && s.score != null)
+    .sort((a, b) => b.date.localeCompare(a.date)); // most recent first
+
+  if (!past.length || past[0].score == null) return null;
+  return roundTo(today.score - past[0].score, 1);
+}
+
+/**
+ * Volatility: population standard deviation of valid scores over a window.
+ * High volatility (>15 points) = unpredictable load pattern.
+ *
+ * Returns null if fewer than 3 valid days exist in the window.
+ */
+export function computeMetabolicVolatility(
+  scoresWindow: Array<{ date: string; score: number | null }>,
+): number | null {
+  const valid = scoresWindow.map((s) => s.score).filter((s): s is number => s != null);
+  if (valid.length < 3) return null;
+  const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
+  const variance = valid.reduce((sum, v) => sum + (v - mean) ** 2, 0) / valid.length;
+  return roundTo(Math.sqrt(variance), 1);
 }
 
 // ─── Full pipeline helper ──────────────────────────────────────────────────
 
 /**
  * Convenience: given a player's historical rows + target date + mechanical
- * score, computes the full metabolic load output for that date.
+ * score + optional RPE rows, computes the full metabolic load output.
  *
- * Returns null if no row exists for the target date.
+ * Returns null if no GPS row exists for the target date.
+ * rpeRows are optional — omitting them disables perceived_mismatch detection.
  */
 export function computeMetabolicLoad(
   rows: MetabolicLoadSourceRow[],
   dateKey: string,
   mechanicalLoadScore: number | null = null,
-): (MetabolicLoadComputedRow & { fatigueType: CompositeFatigueType; recommendationCode: MetabolicRecommendationCode }) | null {
+  rpeRows: RpeSourceRow[] = [],
+): (MetabolicLoadComputedRow & {
+  fatigueType: CompositeFatigueType;
+  recommendationCode: MetabolicRecommendationCode;
+  rpeZScore: number | null;
+  deltaScore: number | null;
+  volatility7d: number | null;
+}) | null {
   const current = rows.find((row) => row.date === dateKey);
   if (!current) return null;
 
@@ -449,12 +642,23 @@ export function computeMetabolicLoad(
     baseline,
   });
 
+  const rpeZScore = rpeRows.length > 0 ? computeRpeZScore(rpeRows, dateKey) : null;
+  const todayRpe = rpeRows.find((r) => r.date === dateKey);
+  const sessionType = todayRpe?.session_type ?? null;
+
   const fatigueType = classifyFatigueType({
     mechanicalLoadScore,
     metabolicLoadScore: computed.metabolicLoadScore,
+    rpeZScore,
+    sessionType,
   });
 
   const recommendationCode = getMetabolicRecommendationCode(fatigueType);
 
-  return { ...computed, fatigueType, recommendationCode };
+  // Delta and volatility — computed over a 7-day window
+  const scoresWindow = computeMetabolicScoresWindow(rows, dateKey, 7);
+  const deltaScore = computeMetabolicDelta(scoresWindow, dateKey, 5);
+  const volatility7d = computeMetabolicVolatility(scoresWindow);
+
+  return { ...computed, fatigueType, recommendationCode, rpeZScore, deltaScore, volatility7d };
 }
