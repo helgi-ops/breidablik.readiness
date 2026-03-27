@@ -152,6 +152,131 @@ export function extractInterestingMetricKeys(record: Record<string, unknown>): s
     .sort((a, b) => a.localeCompare(b));
 }
 
+// ─── Metabolic metrics extraction ──────────────────────────────────────────
+
+const METABOLIC_AVG_POWER_KEYS = [
+  "metabolic_power_avg",
+  "average_metabolic_power",
+  "avg_metabolic_power",
+  "metabolic_power_average",
+  "metabolic_power_w_kg_avg",
+  "metabolic_power",
+  "metabolicPower",
+  "meta_power_avg",
+];
+
+const METABOLIC_PEAK_POWER_KEYS = [
+  "metabolic_power_peak",
+  "peak_metabolic_power",
+  "max_metabolic_power",
+  "metabolic_power_w_kg_peak",
+  "peak_meta_power",
+  "peakMetaPower",
+];
+
+const HMLD_KEYS = [
+  "high_metabolic_load_distance",
+  "hmld",
+  "hml_distance",
+  "high_metabolic_power_distance",
+  "distance_above_25_5_w_kg",
+  "highMetabolicLoadDistance",
+  "hml_dist",
+];
+
+const METABOLIC_ENERGY_KEYS = [
+  "metabolic_energy",
+  "energy_kj",
+  "energy_expenditure_kj",
+  "meta_energy",
+  "metaEnergy",
+];
+
+const TIME_ABOVE_HML_KEYS = [
+  "time_above_hml_threshold",
+  "hml_time",
+  "time_above_25_5_w_kg",
+  "high_metabolic_load_time",
+  "timeAboveHmlThreshold",
+];
+
+const METABOLIC_GEN_KEYS = [
+  "metabolic_power_gen",
+  "metabolic_power_version",
+  "gen2_metabolic_power",
+  "metabolic_power_model",
+];
+
+/** Returns the first matching string value for generation tag, else null. */
+function extractStringField(record: Record<string, unknown>, keys: string[]): string | null {
+  const canonicalMap = buildCanonicalMap(record);
+  for (const key of keys) {
+    const raw = record[key] ?? canonicalMap.get(canonicalKey(key));
+    if (typeof raw === "string" && raw.trim().length) return raw.trim();
+  }
+  return null;
+}
+
+/**
+ * Clamps a value to a plausible range and returns null for obviously corrupt inputs.
+ * Metabolic power for field sport athletes: 0–60 W/kg is generous.
+ * HMLD: 0–15 000 m per session is generous.
+ * Energy: 0–8 000 kJ per session is generous.
+ * Time above threshold: 0–7 200 s (2 h) per session.
+ */
+function sanitiseMetabolicValue(value: number | null, min: number, max: number): number | null {
+  if (value == null) return null;
+  if (value < min || value > max) return null; // outside realistic range → treat as corrupt
+  return value;
+}
+
+export function extractMetabolicMetrics(record: Record<string, unknown>): {
+  metabolicPower: number | null;
+  metabolicPowerPeak: number | null;
+  highMetabolicLoadDistanceM: number | null;
+  metabolicEnergyKj: number | null;
+  timeAboveHmlThresholdS: number | null;
+  metabolicPowerGen: string | null;
+  metabolicDataValid: boolean;
+} {
+  const rawAvg = extractMetric(record, METABOLIC_AVG_POWER_KEYS);
+  const rawPeak = extractMetric(record, METABOLIC_PEAK_POWER_KEYS);
+  const rawHmld = extractMetric(record, HMLD_KEYS);
+  const rawEnergy = extractMetric(record, METABOLIC_ENERGY_KEYS);
+  const rawTime = extractMetric(record, TIME_ABOVE_HML_KEYS);
+  const rawGen = extractStringField(record, METABOLIC_GEN_KEYS);
+
+  const metabolicPower = sanitiseMetabolicValue(rawAvg, 0, 60);
+  const metabolicPowerPeak = sanitiseMetabolicValue(rawPeak, 0, 60);
+  const highMetabolicLoadDistanceM = sanitiseMetabolicValue(rawHmld, 0, 15_000);
+  const metabolicEnergyKj = sanitiseMetabolicValue(rawEnergy, 0, 8_000);
+  const timeAboveHmlThresholdS = sanitiseMetabolicValue(rawTime, 0, 7_200);
+
+  // Infer generation from key names found in record or explicit gen field
+  let metabolicPowerGen: string | null = rawGen ?? null;
+  if (!metabolicPowerGen) {
+    const allKeys = Object.keys(record).join(" ").toLowerCase();
+    if (allKeys.includes("gen2") || allKeys.includes("gen_2")) metabolicPowerGen = "gen2";
+    else if (metabolicPower != null || metabolicPowerPeak != null) metabolicPowerGen = "gen1";
+  }
+
+  // Valid if at least one major metabolic field contains a positive value
+  const metabolicDataValid =
+    (metabolicPower != null && metabolicPower > 0) ||
+    (highMetabolicLoadDistanceM != null && highMetabolicLoadDistanceM > 0) ||
+    (metabolicEnergyKj != null && metabolicEnergyKj > 0);
+
+  return {
+    metabolicPower,
+    metabolicPowerPeak,
+    highMetabolicLoadDistanceM,
+    metabolicEnergyKj,
+    timeAboveHmlThresholdS,
+    metabolicPowerGen,
+    metabolicDataValid,
+  };
+}
+
 function extractAthleteId(record: Record<string, unknown>): string | null {
   const direct = record.athleteId ?? record.athlete_id ?? record.player_id ?? record.id;
   return typeof direct === "string" && direct.trim().length ? direct.trim() : null;
@@ -268,6 +393,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
     const activityId = extractActivityId(record) ?? args.activityId ?? null;
     const playerLoad = extractMetric(flattenedRecord, ["total_player_load", "player_load", "playerLoad", "load"]) ?? 0;
     const normalizedIma = normalizeImaMetrics(flattenedRecord, playerLoad);
+    const normalizedMetabolic = extractMetabolicMetrics(flattenedRecord);
 
     normalized.push({
       athleteId,
@@ -332,7 +458,13 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ),
       totalPlayerLoad: extractMetric(flattenedRecord, ["total_player_load"]),
       playerLoadPerMinute: normalizedIma.playerLoadPerMin,
-      metabolicPower: extractMetric(flattenedRecord, ["metabolic_power", "metabolicPower"]),
+      metabolicPower: normalizedMetabolic.metabolicPower,
+      metabolicPowerPeak: normalizedMetabolic.metabolicPowerPeak,
+      highMetabolicLoadDistanceM: normalizedMetabolic.highMetabolicLoadDistanceM,
+      metabolicEnergyKj: normalizedMetabolic.metabolicEnergyKj,
+      timeAboveHmlThresholdS: normalizedMetabolic.timeAboveHmlThresholdS,
+      metabolicPowerGen: normalizedMetabolic.metabolicPowerGen,
+      metabolicDataValid: normalizedMetabolic.metabolicDataValid,
       explosiveDistance: extractMetric(flattenedRecord, ["explosive_distance", "explosiveDistance"]),
       imaAccel: normalizedIma.imaAccel,
       imaDecel: normalizedIma.imaDecel,
@@ -391,6 +523,15 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.totalPlayerLoad = sumNullable(current.totalPlayerLoad, metric.totalPlayerLoad);
     current.playerLoadPerMinute = maxNullable(current.playerLoadPerMinute, metric.playerLoadPerMinute);
     current.metabolicPower = sumNullable(current.metabolicPower, metric.metabolicPower);
+    current.metabolicPowerPeak = maxNullable(current.metabolicPowerPeak, metric.metabolicPowerPeak);
+    current.highMetabolicLoadDistanceM = sumNullable(current.highMetabolicLoadDistanceM, metric.highMetabolicLoadDistanceM);
+    current.metabolicEnergyKj = sumNullable(current.metabolicEnergyKj, metric.metabolicEnergyKj);
+    current.timeAboveHmlThresholdS = sumNullable(current.timeAboveHmlThresholdS, metric.timeAboveHmlThresholdS);
+    // gen: prefer gen2 if any activity reports it
+    if (metric.metabolicPowerGen === "gen2") current.metabolicPowerGen = "gen2";
+    else if (!current.metabolicPowerGen && metric.metabolicPowerGen) current.metabolicPowerGen = metric.metabolicPowerGen;
+    // valid: true if ANY activity has valid metabolic data
+    if (metric.metabolicDataValid) current.metabolicDataValid = true;
     current.explosiveDistance = sumNullable(current.explosiveDistance, metric.explosiveDistance);
     current.imaAccel = sumNullable(current.imaAccel, metric.imaAccel);
     current.imaDecel = sumNullable(current.imaDecel, metric.imaDecel);
@@ -432,6 +573,12 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       totalPlayerLoad: metric.totalPlayerLoad ?? null,
       playerLoadPerMinute: metric.playerLoadPerMinute ?? null,
       metabolicPower: metric.metabolicPower ?? null,
+      metabolicPowerPeak: metric.metabolicPowerPeak ?? null,
+      highMetabolicLoadDistanceM: metric.highMetabolicLoadDistanceM ?? null,
+      metabolicEnergyKj: metric.metabolicEnergyKj ?? null,
+      timeAboveHmlThresholdS: metric.timeAboveHmlThresholdS ?? null,
+      metabolicPowerGen: metric.metabolicPowerGen ?? null,
+      metabolicDataValid: metric.metabolicDataValid ?? false,
       explosiveDistance: metric.explosiveDistance ?? null,
       imaAccel: metric.imaAccel ?? null,
       imaDecel: metric.imaDecel ?? null,

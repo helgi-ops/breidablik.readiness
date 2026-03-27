@@ -31,7 +31,13 @@ export type CatapultSessionMetric = {
   totDs?: number | null;
   totalPlayerLoad?: number | null;
   playerLoadPerMinute?: number | null;
-  metabolicPower?: number | null;
+  metabolicPower?: number | null;       // avg metabolic power W/kg
+  metabolicPowerPeak?: number | null;   // peak metabolic power W/kg
+  highMetabolicLoadDistanceM?: number | null; // HMLD metres
+  metabolicEnergyKj?: number | null;    // energy expenditure kJ
+  timeAboveHmlThresholdS?: number | null; // seconds above HML threshold
+  metabolicPowerGen?: string | null;    // 'gen1' | 'gen2' | 'unknown'
+  metabolicDataValid?: boolean;         // true only when ≥1 major field present + GNSS valid
   explosiveDistance?: number | null;
   imaAccel?: number | null;
   imaDecel?: number | null;
@@ -83,6 +89,12 @@ export type NormalizedExternalLoad = {
     totalPlayerLoad?: number | null;
     playerLoadPerMinute?: number | null;
     metabolicPower?: number | null;
+    metabolicPowerPeak?: number | null;
+    highMetabolicLoadDistanceM?: number | null;
+    metabolicEnergyKj?: number | null;
+    timeAboveHmlThresholdS?: number | null;
+    metabolicPowerGen?: string | null;
+    metabolicDataValid?: boolean;
     explosiveDistance?: number | null;
     imaAccel?: number | null;
     imaDecel?: number | null;

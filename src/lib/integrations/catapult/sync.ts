@@ -145,6 +145,13 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     total_player_load: row.externalLoad.totalPlayerLoad ?? null,
     player_load_per_minute: row.externalLoad.playerLoadPerMinute ?? null,
     metabolic_power: row.externalLoad.metabolicPower ?? null,
+    metabolic_power_peak: row.externalLoad.metabolicPowerPeak ?? null,
+    high_metabolic_load_distance_m: row.externalLoad.highMetabolicLoadDistanceM ?? null,
+    metabolic_energy_kj: row.externalLoad.metabolicEnergyKj ?? null,
+    time_above_hml_threshold_s: row.externalLoad.timeAboveHmlThresholdS ?? null,
+    metabolic_power_gen: row.externalLoad.metabolicPowerGen ?? null,
+    metabolic_data_valid: row.externalLoad.metabolicDataValid ?? false,
+    metabolic_data_source: row.externalLoad.metabolicDataValid ? "catapult" : null,
     explosive_distance: row.externalLoad.explosiveDistance ?? null,
     ima_accel: row.externalLoad.imaAccel ?? null,
     ima_decel: row.externalLoad.imaDecel ?? null,
@@ -273,6 +280,24 @@ export async function syncCatapultDailyMetrics(
   const mergedRows = mergeNormalizedRows(normalizedRows);
   const storedCount = await storeExternalLoadRows(mergedRows);
 
+  // Log metabolic data quality
+  const metabolicValid = mergedRows.filter((r) => r.externalLoad.metabolicDataValid).length;
+  const metabolicMissing = mergedRows.filter((r) => !r.externalLoad.metabolicDataValid).length;
+  const metabolicPartial = mergedRows.filter(
+    (r) => r.externalLoad.metabolicDataValid && (r.externalLoad.metabolicPower == null || r.externalLoad.highMetabolicLoadDistanceM == null)
+  ).length;
+  if (mergedRows.length > 0) {
+    console.info(
+      JSON.stringify({
+        scope: "catapult_sync_metabolic",
+        date: targetDate,
+        metabolicValid,
+        metabolicMissing,
+        metabolicPartial,
+      })
+    );
+  }
+
   if (debugImaEnabled) {
     const sampleDebug = imaDebug.slice(0, 3);
     const noImaFound = sampleDebug.length > 0 && sampleDebug.every((item) => item.matchedFields?.interestingKeys.length === 0);
@@ -310,6 +335,9 @@ export async function syncCatapultDailyMetrics(
       storedCount,
       unmatchedCount,
       warnings,
+      metabolicValid,
+      metabolicMissing,
+      metabolicPartial,
     },
   });
 
