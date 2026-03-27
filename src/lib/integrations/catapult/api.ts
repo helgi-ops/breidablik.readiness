@@ -230,8 +230,30 @@ async function catapultPost(path: string, body: Record<string, unknown>): Promis
   return payload;
 }
 
+function isPlainJsonObject(value: unknown): value is JsonObject {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
 function mergeStatsRow(base: JsonObject, extra: JsonObject): JsonObject {
-  return { ...base, ...extra };
+  const merged: JsonObject = { ...base };
+
+  for (const [key, extraValue] of Object.entries(extra)) {
+    const baseValue = merged[key];
+
+    if (Array.isArray(baseValue) && Array.isArray(extraValue)) {
+      merged[key] = extraValue.length ? extraValue : baseValue;
+      continue;
+    }
+
+    if (isPlainJsonObject(baseValue) && isPlainJsonObject(extraValue)) {
+      merged[key] = mergeStatsRow(baseValue, extraValue);
+      continue;
+    }
+
+    merged[key] = extraValue ?? baseValue;
+  }
+
+  return merged;
 }
 
 function normalizedToken(value: string | null | undefined): string | null {

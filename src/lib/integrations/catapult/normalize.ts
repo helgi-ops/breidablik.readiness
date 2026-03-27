@@ -3,7 +3,24 @@ import type { CatapultSessionMetric, NormalizedExternalLoad } from "./types";
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim().length) {
-    const parsed = Number(value);
+    const trimmed = value.trim();
+    const direct = Number(trimmed);
+    if (Number.isFinite(direct)) return direct;
+
+    const normalizedThousands = trimmed.replace(/\s+/g, "").replace(/,(?=\d{3}\b)/g, "");
+    const thousandsParsed = Number(normalizedThousands);
+    if (Number.isFinite(thousandsParsed)) return thousandsParsed;
+
+    const normalizedDecimal =
+      normalizedThousands.includes(",") && !normalizedThousands.includes(".")
+        ? normalizedThousands.replace(",", ".")
+        : normalizedThousands;
+    const decimalParsed = Number(normalizedDecimal);
+    if (Number.isFinite(decimalParsed)) return decimalParsed;
+
+    const numericFragment = normalizedDecimal.match(/-?\d+(?:[.,]\d+)?/);
+    if (!numericFragment) return null;
+    const parsed = Number(numericFragment[0].replace(",", "."));
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
@@ -30,11 +47,59 @@ function firstNonEmptyArray(record: Record<string, unknown>, keys: string[]): un
   return [];
 }
 
-const LABEL_KEYS = ["name", "label", "parameter", "parameter_name", "metric", "metric_name", "key", "title"] as const;
-const VALUE_KEYS = ["value", "result", "stat", "count", "total", "amount", "metric_value"] as const;
+const LABEL_KEYS = ["name", "label", "parameter", "parameter_name", "metric", "metric_name", "key", "title", "display_name"] as const;
+const VALUE_KEYS = [
+  "value",
+  "result",
+  "stat",
+  "count",
+  "total",
+  "amount",
+  "metric_value",
+  "display_value",
+  "formatted_value",
+  "displayValue",
+  "formattedValue",
+] as const;
 
 function canonicalKey(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function findStringByKeys(value: unknown, keys: readonly string[], depth = 0): string | null {
+  if (depth > 3) return null;
+  const record = asRecord(value);
+  if (!record) return null;
+
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim().length) return candidate.trim();
+  }
+
+  for (const candidate of Object.values(record)) {
+    const nested = findStringByKeys(candidate, keys, depth + 1);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+function findNumberByKeys(value: unknown, keys: readonly string[], depth = 0): number | null {
+  if (depth > 3) return null;
+  const record = asRecord(value);
+  if (!record) return null;
+
+  for (const key of keys) {
+    const candidate = toNumber(record[key]);
+    if (candidate != null) return candidate;
+  }
+
+  for (const candidate of Object.values(record)) {
+    const nested = findNumberByKeys(candidate, keys, depth + 1);
+    if (nested != null) return nested;
+  }
+
+  return null;
 }
 
 function flattenMetricRecord(input: Record<string, unknown>, prefix = "", depth = 0, out?: Record<string, unknown>): Record<string, unknown> {
@@ -58,8 +123,8 @@ function flattenMetricRecord(input: Record<string, unknown>, prefix = "", depth 
 
     const nestedRecord = asRecord(value);
     if (nestedRecord) {
-      const label = LABEL_KEYS.map((labelKey) => nestedRecord[labelKey]).find((candidate) => typeof candidate === "string" && candidate.trim().length);
-      const metricValue = VALUE_KEYS.map((valueKey) => toNumber(nestedRecord[valueKey])).find((candidate) => candidate != null);
+      const label = findStringByKeys(nestedRecord, LABEL_KEYS);
+      const metricValue = findNumberByKeys(nestedRecord, VALUE_KEYS);
       if (typeof label === "string" && metricValue != null) {
         target[label] = metricValue;
         target[`${path}.${label}`] = metricValue;
@@ -80,8 +145,8 @@ function flattenMetricRecord(input: Record<string, unknown>, prefix = "", depth 
         }
         const itemRecord = asRecord(item);
         if (!itemRecord) return;
-        const label = LABEL_KEYS.map((labelKey) => itemRecord[labelKey]).find((candidate) => typeof candidate === "string" && candidate.trim().length);
-        const metricValue = VALUE_KEYS.map((valueKey) => toNumber(itemRecord[valueKey])).find((candidate) => candidate != null);
+        const label = findStringByKeys(itemRecord, LABEL_KEYS);
+        const metricValue = findNumberByKeys(itemRecord, VALUE_KEYS);
         if (typeof label === "string" && metricValue != null) {
           target[label] = metricValue;
           target[`${itemPath}.${label}`] = metricValue;
@@ -120,11 +185,18 @@ function buildCanonicalMap(record: Record<string, unknown>): Map<string, unknown
 
 function extractMetric(record: Record<string, unknown>, keys: string[]): number | null {
   const canonicalMap = buildCanonicalMap(record);
+  let zeroCandidate: number | null = null;
+
   for (const key of keys) {
     const value = toNumber(record[key] ?? canonicalMap.get(canonicalKey(key)));
-    if (value != null) return value;
+    if (value == null) continue;
+    if (value !== 0) return value;
+    if (zeroCandidate == null) {
+      zeroCandidate = 0;
+    }
   }
-  return null;
+
+  return zeroCandidate;
 }
 
 function findMatchingEntries(record: Record<string, unknown>, matcher: (entry: MetricEntry) => boolean): MetricEntry[] {
@@ -148,7 +220,7 @@ function sumEntries(entries: MetricEntry[]): number | null {
 
 export function extractInterestingMetricKeys(record: Record<string, unknown>): string[] {
   return Object.keys(record)
-    .filter((key) => /(ima|accel|decel|cod|impact|playerload|duration)/i.test(key))
+    .filter((key) => /(ima|accel|decel|cod|impact|playerload|duration|metabolic|hml|energy)/i.test(key))
     .sort((a, b) => a.localeCompare(b));
 }
 

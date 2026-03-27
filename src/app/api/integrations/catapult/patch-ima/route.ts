@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { fetchActivitiesForDateRange, fetchActivityStats } from "@/lib/integrations/catapult/api";
-import { normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
+import { aggregateCatapultMetrics, normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -113,12 +113,25 @@ async function handle(request: Request) {
       const mergedPayload = statsPayloads.flatMap((p) => (Array.isArray(p) ? p : [p]));
 
       const metrics = normalizeCatapultActivityStats({ date, payload: mergedPayload });
-      const imaMetrics = metrics.filter(
-        (m) => m.imaAccel != null || m.imaDecel != null || m.imaCod != null || m.impacts != null,
+      const aggregated = aggregateCatapultMetrics(metrics);
+      const loadMetrics = aggregated.filter(
+        (m) =>
+          m.imaAccel != null ||
+          m.imaDecel != null ||
+          m.imaCod != null ||
+          m.imaTotal != null ||
+          m.codEvents != null ||
+          m.impacts != null ||
+          m.metabolicPower != null ||
+          m.metabolicPowerPeak != null ||
+          m.highMetabolicLoadDistanceM != null ||
+          m.metabolicEnergyKj != null ||
+          m.timeAboveHmlThresholdS != null ||
+          m.metabolicDataValid,
       );
 
       let patched = 0;
-      for (const metric of imaMetrics) {
+      for (const metric of loadMetrics) {
         const playerId = playerByAthlete.get(metric.athleteId);
         if (!playerId) continue;
 
@@ -129,7 +142,16 @@ async function handle(request: Request) {
             ima_decel: metric.imaDecel,
             ima_cod: metric.imaCod,
             ima_total: metric.imaTotal,
+            cod_events: metric.codEvents,
             impacts: metric.impacts,
+            metabolic_power: metric.metabolicPower,
+            metabolic_power_peak: metric.metabolicPowerPeak,
+            high_metabolic_load_distance_m: metric.highMetabolicLoadDistanceM,
+            metabolic_energy_kj: metric.metabolicEnergyKj,
+            time_above_hml_threshold_s: metric.timeAboveHmlThresholdS,
+            metabolic_power_gen: metric.metabolicPowerGen,
+            metabolic_data_valid: metric.metabolicDataValid ?? false,
+            metabolic_data_source: metric.metabolicDataValid ? "catapult" : null,
           })
           .eq("player_id", playerId)
           .eq("date", date)
@@ -138,7 +160,7 @@ async function handle(request: Request) {
         if (!error) patched++;
       }
 
-      results.push({ date, status: "ok", patched, athletes: imaMetrics.length });
+      results.push({ date, status: "ok", patched, athletes: loadMetrics.length });
     } catch (err) {
       const warning = err instanceof Error ? err.message : String(err);
       results.push({ date, status: "error", warning });
