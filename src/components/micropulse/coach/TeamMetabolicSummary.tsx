@@ -39,7 +39,6 @@ type PlayerMetabolicRow = {
   delta_score: number | null;
   volatility7d: number | null;
   session_type: string | null;
-  recommendation_hints: string[];
 };
 
 type MissingPlayer = {
