@@ -187,8 +187,10 @@ const METABOLIC_PEAK_POWER_KEYS = [
 ];
 
 const HMLD_KEYS = [
-  // Catapult OpenField display-name variants
-  "High Metabolic Load Distance",
+  // Exact Catapult OpenField display-names (confirmed from Timeline 27 Mar 2026)
+  "High Metabolic Load Dist (m)",  // exact UI label including unit suffix
+  "High Metabolic Load Dist",      // without unit suffix
+  "High Metabolic Load Distance",  // longer variant
   "High Metabolic Power Distance",
   // snake_case / camelCase variants
   "high_metabolic_load_distance",
@@ -201,8 +203,9 @@ const HMLD_KEYS = [
 ];
 
 const METABOLIC_ENERGY_KEYS = [
-  // Exact Catapult OpenField display-name (confirmed from Reporting_Parameters)
-  "Meta Energy (KJ/kg)",
+  // Exact Catapult OpenField display-names (confirmed from Reporting_Parameters)
+  "Meta Energy (KJ/kg)",        // primary — confirmed in Reporting_Parameters settings
+  "Meta Energy (Cal/kg)",       // fallback in case of unit display preference
   // Other display-name variants
   "Metabolic Energy",
   "Energy Expenditure",
