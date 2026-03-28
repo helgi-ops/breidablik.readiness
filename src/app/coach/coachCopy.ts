@@ -9,6 +9,7 @@ export const COACH_COPY = {
       load: "Álag & RPE",
       gps: "GPS gögn",
       volatility: "Sveiflur",
+      vald: "VALD / CMJ",
     },
     header: {
       title: "Þjálfari",
@@ -48,6 +49,7 @@ export const COACH_COPY = {
       load: "Load & RPE",
       gps: "GPS Data",
       volatility: "Volatility",
+      vald: "VALD / CMJ",
     },
     header: {
       title: "Coach",

@@ -1630,7 +1630,7 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility">("today");
+  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald">("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -5774,9 +5774,9 @@ export default function CoachPage() {
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex items-center justify-between">
           <div className="-mb-px flex flex-1">
-          {(["today", "squad", "intel", "load", "gps", "volatility"] as const).map((tabId) => {
+          {(["today", "squad", "intel", "load", "gps", "volatility", "vald"] as const).map((tabId) => {
             const labels = ct.tabs as Record<string, string>;
-            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility"]);
+            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald"]);
             const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
             return (
               <button
@@ -6052,8 +6052,6 @@ export default function CoachPage() {
               {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
             </CardContent>
           </Card>
-
-          <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
 
         </div>
       )}
@@ -7351,6 +7349,22 @@ export default function CoachPage() {
           </div>
         );
       })()}
+
+      {/* ══════════════════════════════════════════
+          VALD / CMJ TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "vald" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="VALD / CMJ testing"
+          description="See which players need a CMJ test today, track neuromuscular flags, and monitor force plate data alongside readiness scores."
+        />
+      )}
+      {dashTab === "vald" && isAtLeastPro && (
+        <div className="space-y-4">
+          <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
+        </div>
+      )}
 
       <ExplainabilityDrawer
         open={!!piDrawerDecision}
