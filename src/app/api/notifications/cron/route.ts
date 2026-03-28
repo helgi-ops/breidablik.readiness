@@ -11,6 +11,7 @@ import { sendRpeReminderToMissingPlayers } from "@/lib/notifications/sendRpeRemi
 import { getCurrentScheduledSlot as getCurrentRpeScheduledSlot } from "@/lib/session-rpe/reminderConfig";
 import { matchReadinessEmailSchedule, matchRpeEmailSchedule } from "@/lib/reminders/emailSchedule";
 import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminders/emailReminders";
+import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
 
 export const runtime = "nodejs";
 
@@ -54,7 +55,13 @@ export async function POST(req: Request) {
     const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
     const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
 
-    if (!checkinSlot && !rpeSlot && !readinessEmailSlot && !rpeEmailSlot) {
+    // CMJ reminder fires at the second checkin reminder window (10:00 Mon/Wed/Fri/Sat/Sun,
+    // 13:00 Tue/Thu) — right around when players are completing their checkin.
+    // This means it arrives as players are already looking at the app, so the message
+    // to "hop á ForceDecks" lands at a useful moment.
+    const isCmjSlot = checkinSlot?.reminderType === "second";
+
+    if (!checkinSlot && !rpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot) {
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -94,6 +101,7 @@ export async function POST(req: Request) {
               slotKey: rpeEmailSlot.slotKey,
             }
           : null,
+        cmj: isCmjSlot ? { slot: "07:00", active: true } : null,
       });
     }
 
@@ -128,6 +136,19 @@ export async function POST(req: Request) {
         })
       : null;
 
+    // CMJ reminder: fetch all team IDs and send to each team
+    let cmjResults: Awaited<ReturnType<typeof sendCmjReminderToTeam>>[] = [];
+    if (isCmjSlot) {
+      const { data: teams } = await sb
+        .from("profiles")
+        .select("team_id")
+        .not("team_id", "is", null);
+      const teamIds = [...new Set(((teams ?? []) as Array<{ team_id: string }>).map((r) => r.team_id).filter(Boolean))];
+      cmjResults = await Promise.all(
+        teamIds.map((teamId) => sendCmjReminderToTeam(sb, { teamId, dateKey }))
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       dateKey,
@@ -158,6 +179,15 @@ export async function POST(req: Request) {
             localTime: rpeEmailSlot.localTime,
             slotKey: rpeEmailSlot.slotKey,
             result: rpeEmailResult,
+          }
+        : null,
+      cmj: isCmjSlot
+        ? {
+            slot: "07:00",
+            teams: cmjResults.length,
+            sent: cmjResults.reduce((s, r) => s + r.sent, 0),
+            playersNeedingCmj: cmjResults.reduce((s, r) => s + r.playersNeedingCmj, 0),
+            results: cmjResults,
           }
         : null,
     });
