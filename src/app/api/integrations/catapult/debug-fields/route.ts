@@ -139,7 +139,7 @@ export async function GET(request: Request) {
       ["ima", "accel", "decel", "cod", "impact", "playerload"].some((token) => k.toLowerCase().includes(token)),
     );
     const metabolicKeys = allRawKeys.filter((k) =>
-      ["metabolic", "hmld", "hml", "energy"].some((token) => k.toLowerCase().includes(token)),
+      ["metabolic", "hmld", "hml", "energy", "fmp", "meta"].some((token) => k.toLowerCase().includes(token)),
     );
 
     const imaValues: Record<string, unknown> = {};
@@ -147,6 +147,18 @@ export async function GET(request: Request) {
 
     const metabolicValues: Record<string, unknown> = {};
     for (const k of metabolicKeys) metabolicValues[k] = firstMergedFlat[k];
+
+    // Unlimited fmp_* key scan across all payloads (not capped by sample limits)
+    const allBaseKeys = Object.keys(firstBaseRow).sort();
+    const allMetabolicOnlyKeys = Object.keys(firstMetabolicOnlyRow).sort();
+    const allMergedKeys = Object.keys(firstMergedRow).sort();
+    const fmpBaseKeys = allBaseKeys.filter((k) => k.toLowerCase().startsWith("fmp"));
+    const fmpMetabolicKeys = allMetabolicOnlyKeys.filter((k) => k.toLowerCase().startsWith("fmp"));
+    const fmpMergedKeys = allMergedKeys.filter((k) => k.toLowerCase().startsWith("fmp"));
+    const fmpMergedValues: Record<string, unknown> = {};
+    for (const k of fmpMergedKeys) fmpMergedValues[k] = firstMergedRow[k];
+    const fmpMetabolicValues: Record<string, unknown> = {};
+    for (const k of fmpMetabolicKeys) fmpMetabolicValues[k] = firstMetabolicOnlyRow[k];
 
     const normalizedFirst = normalized[0] ?? null;
 
@@ -171,6 +183,14 @@ export async function GET(request: Request) {
       imaValues,
       metabolicKeys,
       metabolicValues,
+      fmpBaseKeys,
+      fmpMetabolicKeys,
+      fmpMergedKeys,
+      fmpMergedValues,
+      fmpMetabolicValues,
+      allBaseKeyCount: allBaseKeys.length,
+      allMetabolicOnlyKeyCount: allMetabolicOnlyKeys.length,
+      allMergedKeyCount: allMergedKeys.length,
       normalizedFirst,
       normalizedImaDebug: normalizedFirst?.imaDebug ?? null,
       sampleBaseFlat: Object.fromEntries(Object.entries(firstBaseFlat).slice(0, 80)),
