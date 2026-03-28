@@ -38,9 +38,23 @@ async function isAuthorizedCoach(request: Request): Promise<boolean> {
 }
 
 function extractRows(payload: unknown): Record<string, unknown>[] {
+  // If the payload itself is an array, each item may be a row directly,
+  // or a wrapper that contains rows at a known sub-path.
   if (Array.isArray(payload)) {
-    return payload.flatMap((item) => extractRows(item));
+    // Try to dig into each array item for a known sub-structure first.
+    const nested = payload.flatMap((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+      const rec = item as Record<string, unknown>;
+      // Item already looks like an athlete row (has athlete_id / id)
+      if (rec.athlete_id || rec.id || rec.athleteId) return [rec];
+      // Item is a wrapper — try sub-paths
+      const sub = extractRows(rec);
+      return sub.length ? sub : [rec];
+    });
+    if (nested.length) return nested;
+    return [];
   }
+
   if (payload && typeof payload === "object") {
     const rec = payload as Record<string, unknown>;
     if (Array.isArray(rec.stats)) return rec.stats as Record<string, unknown>[];
@@ -52,6 +66,7 @@ function extractRows(payload: unknown): Record<string, unknown>[] {
         : null;
     if (athletesRecord?.data && Array.isArray(athletesRecord.data)) return athletesRecord.data as Record<string, unknown>[];
 
+    if (Array.isArray(rec.athletes)) return rec.athletes as Record<string, unknown>[];
     if (Array.isArray(rec.data)) return rec.data as Record<string, unknown>[];
     const dataRecord = rec.data && typeof rec.data === "object" ? (rec.data as Record<string, unknown>) : null;
     if (dataRecord?.results && Array.isArray(dataRecord.results)) return dataRecord.results as Record<string, unknown>[];
