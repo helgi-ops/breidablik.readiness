@@ -42,6 +42,7 @@ export function mapPlayerRecommendationToListItem(player: CoachCommandPlayerSour
     constraints: player.recommendation.constraints,
     focus: player.recommendation.focus,
     riskFlags: player.recommendation.riskFlags,
+    cmjRequired: player.cmjRequired ?? false,
   };
 }
 

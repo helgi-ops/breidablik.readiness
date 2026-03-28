@@ -366,10 +366,25 @@ async function buildPlayerSource(args: {
     hardBlock: false,
   });
 
+  // CMJ required today if:
+  // 1. Today is a high-load protocol day (MD-2 or MD+1)
+  // 2. OR neuromuscular flag is yellow/red (reactive trigger)
+  // 3. OR CMJ data is stale/missing (baseline maintenance, >7 days since last test)
+  const isProtocolDay = args.mdDay === "MD-2" || args.mdDay === "MD+1";
+  const neuromuscularConcern =
+    valdDailySnapshot?.neuromuscularFlag === "yellow" ||
+    valdDailySnapshot?.neuromuscularFlag === "red";
+  const cmjStaleOrMissing =
+    !valdDailySnapshot ||
+    valdDailySnapshot.cmjFreshnessStatus === "stale" ||
+    valdDailySnapshot.cmjFreshnessStatus === "missing";
+  const cmjRequired = isProtocolDay || neuromuscularConcern || cmjStaleOrMissing;
+
   return {
     athleteId: String(args.row.player_id),
     athleteName: String(args.row.full_name ?? ""),
     readinessScore: toFinite(args.row.readiness) ?? toFinite(args.row.total_score),
+    cmjRequired,
     recommendation:
       athleteDecision.trainingRecommendation ??
       {

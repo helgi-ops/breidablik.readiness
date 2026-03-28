@@ -65,6 +65,8 @@ export type PlayerDecisionListItem = {
   constraints: string[];
   focus: string[];
   riskFlags: string[];
+  /** True when a CMJ test is recommended before training today */
+  cmjRequired?: boolean;
 };
 
 export type TeamDecisionResponse = {
@@ -80,6 +82,8 @@ export type CoachCommandPlayerSource = {
   athleteId: string;
   athleteName: string;
   readinessScore?: number | null;
+  /** True when a CMJ test is recommended before training today */
+  cmjRequired?: boolean;
   recommendation: {
     state: "GREEN" | "YELLOW" | "RED" | "GRAY";
     sessionMode: "full" | "modified" | "recovery" | "pending";
