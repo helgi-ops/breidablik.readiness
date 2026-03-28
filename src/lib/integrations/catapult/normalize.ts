@@ -235,7 +235,13 @@ const METABOLIC_AVG_POWER_KEYS = [
   "Metabolic Power Avg",
   "Avg Metabolic Power",
   "Average Metabolic Power",
-  // snake_case / camelCase variants
+  // Catapult fmp_* snake_case keys (returned by Stats API v6 with requested_only:false)
+  "fmp_average_power",
+  "fmp_w_kg_average",
+  "fmp_avg_power",
+  "fmp_average",
+  "fmp_power_average",
+  // Other snake_case / camelCase variants
   "metabolic_power_avg",
   "average_metabolic_power",
   "avg_metabolic_power",
@@ -253,7 +259,14 @@ const METABOLIC_PEAK_POWER_KEYS = [
   "Metabolic Power Max",
   "Max Metabolic Power",
   "Peak Metabolic Power",
-  // snake_case / camelCase variants
+  // Catapult fmp_* snake_case keys (returned by Stats API v6 with requested_only:false)
+  "fmp_peak_power",
+  "fmp_w_kg_peak",
+  "fmp_peak",
+  "fmp_max_power",
+  "fmp_w_kg_max",
+  "fmp_maximum_power",
+  // Other snake_case / camelCase variants
   "metabolic_power_peak",
   "peak_metabolic_power",
   "max_metabolic_power",
@@ -268,7 +281,13 @@ const HMLD_KEYS = [
   "High Metabolic Load Dist",      // without unit suffix
   "High Metabolic Load Distance",  // longer variant
   "High Metabolic Power Distance",
-  // snake_case / camelCase variants
+  // Catapult fmp_* snake_case keys (returned by Stats API v6 with requested_only:false)
+  "fmp_dynamic_high_total_distance",
+  "fmp_high_total_distance",
+  "fmp_distance_high",
+  "fmp_high_distance",
+  "fmp_dynamic_high_distance",
+  // Other snake_case / camelCase variants
   "high_metabolic_load_distance",
   "hmld",
   "hml_distance",
@@ -286,7 +305,13 @@ const METABOLIC_ENERGY_KEYS = [
   "Metabolic Energy",
   "Energy Expenditure",
   "Meta Energy",
-  // snake_case / camelCase variants
+  // Catapult fmp_* snake_case keys (returned by Stats API v6 with requested_only:false)
+  "fmp_energy_kj_kg",
+  "fmp_energy",
+  "fmp_energy_kj",
+  "fmp_energy_expenditure",
+  "fmp_energy_cal_kg",
+  // Other snake_case / camelCase variants
   "metabolic_energy",
   "energy_kj",
   "energy_expenditure_kj",
@@ -300,7 +325,12 @@ const TIME_ABOVE_HML_KEYS = [
   "Time In HML Zone",
   "High Metabolic Load Duration",
   "Time Above HML Threshold",
-  // snake_case / camelCase variants
+  // Catapult fmp_* snake_case keys (confirmed in metabolic-only row: 371.07s)
+  "fmp_dynamic_high_duration",
+  "fmp_high_duration",
+  "fmp_dynamic_high_total_duration",
+  "fmp_high_total_duration",
+  // Other snake_case / camelCase variants
   "time_above_hml_threshold",
   "hml_time",
   "time_above_25_5_w_kg",

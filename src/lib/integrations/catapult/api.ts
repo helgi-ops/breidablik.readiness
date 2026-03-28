@@ -281,6 +281,15 @@ function normalizedToken(value: string | null | undefined): string | null {
 
 function extractStatsRows(payload: unknown): JsonObject[] {
   if (Array.isArray(payload)) {
+    // If items look like direct athlete rows (have athlete_id / athleteId / player_id at the
+    // top level), return them directly instead of recursing into sub-paths.
+    const records = payload.map((item) => asRecord(item)).filter((r): r is JsonObject => r != null);
+    if (
+      records.length > 0 &&
+      records.some((r) => asString(r.athlete_id) || asString(r.athleteId) || asString(r.player_id))
+    ) {
+      return records;
+    }
     return payload.flatMap((item) => extractStatsRows(item));
   }
 
