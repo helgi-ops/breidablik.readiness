@@ -8,22 +8,33 @@ import type { CatapultActivity, CatapultAthlete } from "./types";
 // Metabolic power display-name parameters for Catapult Stats API v6.
 // These must be added to Reporting_Parameters in OpenField for the org.
 // Using display names (not snake_case) — same pattern as IMA parameters.
-const CATAPULT_METABOLIC_PARAMETERS = [
+export const CATAPULT_METABOLIC_PARAMETERS = [
   // Exact display names confirmed in OpenField Timeline (27 Mar 2026)
   "Peak Meta Power",              // peak metabolic power (W/kg)
+  "Peak Metabolic Power",
+  "Max Metabolic Power",
   "High Metabolic Load Dist (m)", // HMLD — exact UI name including unit suffix
+  "High Metabolic Load Distance (m)",
   "Meta Energy (KJ/kg)",          // metabolic energy — KJ/kg (confirmed from Reporting_Parameters)
+  "Meta Energy (Cal/kg)",
   // Fallback variants without unit suffixes (API may strip them)
   "High Metabolic Load Dist",
   "High Metabolic Load Distance",
   "Meta Energy",
+  "Metabolic Energy",
+  "Energy Expenditure",
   // Other possible names depending on Catapult version
   "Metabolic Power Avg",
+  "Avg Metabolic Power",
+  "Average Metabolic Power",
   "Metabolic Power Max",
   "Time In High Metabolic Zone",
+  "Time In HML Zone",
+  "High Metabolic Load Duration",
+  "Time Above HML Threshold",
 ];
 
-const CATAPULT_IMA_PARAMETERS = [
+export const CATAPULT_IMA_PARAMETERS = [
   "IMA Accel High",
   "IMA Accel Medium",
   "IMA Accel Low",
@@ -269,9 +280,63 @@ function normalizedToken(value: string | null | undefined): string | null {
 }
 
 function extractStatsRows(payload: unknown): JsonObject[] {
-  return resolveList(payload, ["stats", "athletes", "data", "results", "items"])
-    .map((row) => asRecord(row))
-    .filter((row): row is JsonObject => row != null);
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item) => extractStatsRows(item));
+  }
+
+  const record = asRecord(payload);
+  if (!record) return [];
+
+  if (Array.isArray(record.stats)) {
+    return record.stats.map((row) => asRecord(row)).filter((row): row is JsonObject => row != null);
+  }
+
+  const statsRecord = asRecord(record.stats);
+  if (statsRecord?.athletes && Array.isArray(statsRecord.athletes)) {
+    return statsRecord.athletes
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  const athletesRecord = asRecord(statsRecord?.athletes);
+  if (athletesRecord?.data && Array.isArray(athletesRecord.data)) {
+    return athletesRecord.data
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  if (Array.isArray(record.data)) {
+    return record.data.map((row) => asRecord(row)).filter((row): row is JsonObject => row != null);
+  }
+
+  const dataRecord = asRecord(record.data);
+  if (dataRecord?.results && Array.isArray(dataRecord.results)) {
+    return dataRecord.results
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  const resultsRecord = asRecord(dataRecord?.results);
+  if (resultsRecord?.items && Array.isArray(resultsRecord.items)) {
+    return resultsRecord.items
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  if (Array.isArray(record.results)) {
+    return record.results
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  const topResultsRecord = asRecord(record.results);
+  if (topResultsRecord?.items && Array.isArray(topResultsRecord.items)) {
+    return topResultsRecord.items
+      .map((row) => asRecord(row))
+      .filter((row): row is JsonObject => row != null);
+  }
+
+  return [];
 }
 
 function athleteNameKeyForStatsRow(row: JsonObject): string | null {
@@ -541,7 +606,7 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
       group_by: ["athlete"],
       filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
       parameters: CATAPULT_METABOLIC_PARAMETERS,
-      requested_only: true,
+      requested_only: false,
     });
     mergedPayload = mergeStatsPayloads(mergedPayload, metabolicOnlyPayload);
   } catch {
@@ -558,6 +623,8 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   mergedPayload: unknown;
   imaOnlyError: string | null;
   metabolicOnlyError: string | null;
+  imaOnlyParameters: string[];
+  metabolicOnlyParameters: string[];
 }> {
   const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
@@ -595,7 +662,7 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
       group_by: ["athlete"],
       filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
       parameters: CATAPULT_METABOLIC_PARAMETERS,
-      requested_only: true,
+      requested_only: false,
     });
     mergedPayload = mergeStatsPayloads(mergedPayload, metabolicOnlyPayload);
   } catch (error) {
@@ -609,6 +676,8 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     mergedPayload,
     imaOnlyError,
     metabolicOnlyError,
+    imaOnlyParameters: CATAPULT_IMA_PARAMETERS,
+    metabolicOnlyParameters: CATAPULT_METABOLIC_PARAMETERS,
   };
 }
 
@@ -660,7 +729,7 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
       group_by: ["athlete"],
       filters: baseFilters,
       parameters: CATAPULT_METABOLIC_PARAMETERS,
-      requested_only: true,
+      requested_only: false,
     });
     mergedPayload = mergeStatsPayloads(mergedPayload, metabolicPayload);
   } catch {
