@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { fetchActivitiesForDate, fetchActivityStatsDetailed } from "@/lib/integrations/catapult/api";
-import { normalizeCatapultActivityStats } from "@/lib/integrations/catapult/normalize";
+import {
+  extractInterestingMetricKeys,
+  flattenMetricRecord,
+  normalizeCatapultActivityStats,
+} from "@/lib/integrations/catapult/normalize";
 
 export const runtime = "nodejs";
 
@@ -110,7 +114,12 @@ export async function GET(request: Request) {
     const firstImaOnlyRow = rowsImaOnly[0] ?? {};
     const firstMetabolicOnlyRow = rowsMetabolicOnly[0] ?? {};
     const firstMergedRow = rowsMerged[0] ?? {};
-    const allRawKeys = Object.keys(firstMergedRow).sort();
+    const firstBaseFlat = Object.keys(firstBaseRow).length ? flattenMetricRecord(firstBaseRow) : {};
+    const firstImaOnlyFlat = Object.keys(firstImaOnlyRow).length ? flattenMetricRecord(firstImaOnlyRow) : {};
+    const firstMetabolicOnlyFlat = Object.keys(firstMetabolicOnlyRow).length ? flattenMetricRecord(firstMetabolicOnlyRow) : {};
+    const firstMergedFlat = Object.keys(firstMergedRow).length ? flattenMetricRecord(firstMergedRow) : {};
+    const allRawKeys = Object.keys(firstMergedFlat).sort();
+    const interestingKeys = extractInterestingMetricKeys(firstMergedFlat);
     const imaKeys = allRawKeys.filter((k) =>
       ["ima", "accel", "decel", "cod", "impact", "playerload"].some((token) => k.toLowerCase().includes(token)),
     );
@@ -119,10 +128,10 @@ export async function GET(request: Request) {
     );
 
     const imaValues: Record<string, unknown> = {};
-    for (const k of imaKeys) imaValues[k] = firstMergedRow[k];
+    for (const k of imaKeys) imaValues[k] = firstMergedFlat[k];
 
     const metabolicValues: Record<string, unknown> = {};
-    for (const k of metabolicKeys) metabolicValues[k] = firstMergedRow[k];
+    for (const k of metabolicKeys) metabolicValues[k] = firstMergedFlat[k];
 
     const normalizedFirst = normalized[0] ?? null;
 
@@ -136,13 +145,23 @@ export async function GET(request: Request) {
       metabolicOnlyRowCount: rowsMetabolicOnly.length,
       imaOnlyError: details.imaOnlyError,
       metabolicOnlyError: details.metabolicOnlyError,
+      imaOnlyParameters: details.imaOnlyParameters,
+      metabolicOnlyParameters: details.metabolicOnlyParameters,
+      basePayloadTopKeys: Object.keys((details.basePayload as Record<string, unknown>) ?? {}).sort(),
+      imaOnlyPayloadTopKeys: Object.keys((details.imaOnlyPayload as Record<string, unknown>) ?? {}).sort(),
+      metabolicOnlyPayloadTopKeys: Object.keys((details.metabolicOnlyPayload as Record<string, unknown>) ?? {}).sort(),
       allRawKeys,
+      interestingKeys,
       imaKeys,
       imaValues,
       metabolicKeys,
       metabolicValues,
       normalizedFirst,
       normalizedImaDebug: normalizedFirst?.imaDebug ?? null,
+      sampleBaseFlat: Object.fromEntries(Object.entries(firstBaseFlat).slice(0, 80)),
+      sampleImaOnlyFlat: Object.fromEntries(Object.entries(firstImaOnlyFlat).slice(0, 80)),
+      sampleMetabolicOnlyFlat: Object.fromEntries(Object.entries(firstMetabolicOnlyFlat).slice(0, 80)),
+      sampleMergedFlat: Object.fromEntries(Object.entries(firstMergedFlat).slice(0, 120)),
       sampleBaseRow: Object.fromEntries(Object.entries(firstBaseRow).slice(0, 50)),
       sampleImaOnlyRow: Object.fromEntries(Object.entries(firstImaOnlyRow).slice(0, 50)),
       sampleMetabolicOnlyRow: Object.fromEntries(Object.entries(firstMetabolicOnlyRow).slice(0, 20)),

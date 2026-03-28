@@ -98,6 +98,30 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
       row.externalLoad.playerLoadPerMinute
     );
     current.externalLoad.metabolicPower = sumNullable(current.externalLoad.metabolicPower, row.externalLoad.metabolicPower);
+    current.externalLoad.metabolicPowerPeak = maxNullable(
+      current.externalLoad.metabolicPowerPeak,
+      row.externalLoad.metabolicPowerPeak
+    );
+    current.externalLoad.highMetabolicLoadDistanceM = sumNullable(
+      current.externalLoad.highMetabolicLoadDistanceM,
+      row.externalLoad.highMetabolicLoadDistanceM
+    );
+    current.externalLoad.metabolicEnergyKj = sumNullable(
+      current.externalLoad.metabolicEnergyKj,
+      row.externalLoad.metabolicEnergyKj
+    );
+    current.externalLoad.timeAboveHmlThresholdS = sumNullable(
+      current.externalLoad.timeAboveHmlThresholdS,
+      row.externalLoad.timeAboveHmlThresholdS
+    );
+    if (row.externalLoad.metabolicPowerGen === "gen2") {
+      current.externalLoad.metabolicPowerGen = "gen2";
+    } else if (!current.externalLoad.metabolicPowerGen && row.externalLoad.metabolicPowerGen) {
+      current.externalLoad.metabolicPowerGen = row.externalLoad.metabolicPowerGen;
+    }
+    if (row.externalLoad.metabolicDataValid) {
+      current.externalLoad.metabolicDataValid = true;
+    }
     current.externalLoad.explosiveDistance = sumNullable(current.externalLoad.explosiveDistance, row.externalLoad.explosiveDistance);
     current.externalLoad.imaAccel = sumNullable(current.externalLoad.imaAccel, row.externalLoad.imaAccel);
     current.externalLoad.imaDecel = sumNullable(current.externalLoad.imaDecel, row.externalLoad.imaDecel);

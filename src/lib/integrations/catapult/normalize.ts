@@ -102,7 +102,7 @@ function findNumberByKeys(value: unknown, keys: readonly string[], depth = 0): n
   return null;
 }
 
-function flattenMetricRecord(input: Record<string, unknown>, prefix = "", depth = 0, out?: Record<string, unknown>): Record<string, unknown> {
+export function flattenMetricRecord(input: Record<string, unknown>, prefix = "", depth = 0, out?: Record<string, unknown>): Record<string, unknown> {
   const target = out ?? {};
   if (depth > 4) return target;
 
@@ -216,6 +216,10 @@ function preferCountLike(entries: MetricEntry[]): MetricEntry[] {
 function sumEntries(entries: MetricEntry[]): number | null {
   if (!entries.length) return null;
   return entries.reduce((sum, entry) => sum + entry.value, 0);
+}
+
+function nullIfZero(value: number | null): number | null {
+  return value === 0 ? null : value;
 }
 
 export function extractInterestingMetricKeys(record: Record<string, unknown>): string[] {
@@ -344,22 +348,32 @@ export function extractMetabolicMetrics(record: Record<string, unknown>): {
   metabolicPowerGen: string | null;
   metabolicDataValid: boolean;
 } {
-  const rawAvg = extractMetric(record, METABOLIC_AVG_POWER_KEYS);
-  const rawPeak = extractMetric(record, METABOLIC_PEAK_POWER_KEYS);
-  const rawHmld = extractMetric(record, HMLD_KEYS);
-  const rawEnergy = extractMetric(record, METABOLIC_ENERGY_KEYS);
-  const rawTime = extractMetric(record, TIME_ABOVE_HML_KEYS);
+  const rawAvg = nullIfZero(extractMetric(record, METABOLIC_AVG_POWER_KEYS));
+  const rawPeak = nullIfZero(extractMetric(record, METABOLIC_PEAK_POWER_KEYS));
+  const rawHmld = nullIfZero(extractMetric(record, HMLD_KEYS));
+  const rawEnergy = nullIfZero(extractMetric(record, METABOLIC_ENERGY_KEYS));
+  const rawTime = nullIfZero(extractMetric(record, TIME_ABOVE_HML_KEYS));
   const rawGen = extractStringField(record, METABOLIC_GEN_KEYS);
 
-  const metabolicPower = sanitiseMetabolicValue(rawAvg, 0, 60);
-  const metabolicPowerPeak = sanitiseMetabolicValue(rawPeak, 0, 60);
+  // Average metabolic power for a field-sport session: typically 5–25 W/kg.
+  // Peak metabolic power during sprint efforts: commonly 60–150 W/kg.
+  // Use generous ceilings to avoid silently dropping real data.
+  const metabolicPower = sanitiseMetabolicValue(rawAvg, 0, 150);
+  const metabolicPowerPeak = sanitiseMetabolicValue(rawPeak, 0, 300);
   const highMetabolicLoadDistanceM = sanitiseMetabolicValue(rawHmld, 0, 15_000);
   const metabolicEnergyKj = sanitiseMetabolicValue(rawEnergy, 0, 8_000);
   const timeAboveHmlThresholdS = sanitiseMetabolicValue(rawTime, 0, 7_200);
 
+  const hasAnyMetabolicValue =
+    metabolicPower != null ||
+    metabolicPowerPeak != null ||
+    highMetabolicLoadDistanceM != null ||
+    metabolicEnergyKj != null ||
+    timeAboveHmlThresholdS != null;
+
   // Infer generation from key names found in record or explicit gen field
   let metabolicPowerGen: string | null = rawGen ?? null;
-  if (!metabolicPowerGen) {
+  if (!metabolicPowerGen && hasAnyMetabolicValue) {
     const allKeys = Object.keys(record).join(" ").toLowerCase();
     if (allKeys.includes("gen2") || allKeys.includes("gen_2")) metabolicPowerGen = "gen2";
     else if (metabolicPower != null || metabolicPowerPeak != null) metabolicPowerGen = "gen1";
@@ -418,25 +432,29 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     findMatchingEntries(record, (entry) => entry.canonical.includes("ima") && entry.canonical.includes("impact")),
   );
 
-  const directImaTotal = extractMetric(record, ["ima_total_efforts", "ima_total", "ima_efforts_total"]);
-  const directCodEvents = extractMetric(record, ["cod_events", "change_of_direction_events", "change_of_direction_count"]);
+  const directImaTotal = nullIfZero(extractMetric(record, ["ima_total_efforts", "ima_total", "ima_efforts_total"]));
+  const directCodEvents = nullIfZero(
+    extractMetric(record, ["cod_events", "change_of_direction_events", "change_of_direction_count"]),
+  );
   const directPlayerLoadPerMin = extractMetric(record, ["player_load_per_minute", "playerload_per_min", "playerloadperminute"]);
   const durationMinutes = extractMetric(record, ["duration_minutes", "durationminutes", "session_duration_minutes"]);
 
-  const imaAccel = toInteger(sumEntries(accelEntries));
-  const imaDecel = toInteger(sumEntries(decelEntries));
-  const imaCod = toInteger(sumEntries(codEntries));
-  const impacts = toInteger(sumEntries(impactEntries));
+  const imaAccel = nullIfZero(toInteger(sumEntries(accelEntries)));
+  const imaDecel = nullIfZero(toInteger(sumEntries(decelEntries)));
+  const imaCod = nullIfZero(toInteger(sumEntries(codEntries)));
+  const impacts = nullIfZero(toInteger(sumEntries(impactEntries)));
 
-  const imaTotal = toInteger(
-    directImaTotal ??
-      [imaAccel, imaDecel, imaCod, impacts].reduce<number | null>((sum, value) => {
-        if (value == null) return sum;
-        return (sum ?? 0) + value;
-      }, null),
+  const imaTotal = nullIfZero(
+    toInteger(
+      directImaTotal ??
+        [imaAccel, imaDecel, imaCod, impacts].reduce<number | null>((sum, value) => {
+          if (value == null) return sum;
+          return (sum ?? 0) + value;
+        }, null),
+    ),
   );
 
-  const codEvents = toInteger(directCodEvents ?? imaCod);
+  const codEvents = nullIfZero(toInteger(directCodEvents ?? imaCod));
   const playerLoadPerMin =
     directPlayerLoadPerMin ?? (playerLoad != null && durationMinutes != null && durationMinutes > 0 ? playerLoad / durationMinutes : null);
 
