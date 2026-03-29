@@ -15,7 +15,7 @@ type Props = {
 
 const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboard" | "history" | "vald"; fullLabelIS: string; fullLabelEN: string; minTier: MinTier }> = [
   { key: "today",     labelKey: "today",     fullLabelIS: "Í dag",                   fullLabelEN: "Today",                   minTier: "free"  },
-  { key: "rpe",       labelKey: "rpe",       fullLabelIS: "Post Session RPE",         fullLabelEN: "Post Session RPE",         minTier: "pro"   },
+  { key: "rpe",       labelKey: "rpe",       fullLabelIS: "RPE skráning",             fullLabelEN: "Post Session RPE",         minTier: "pro"   },
   { key: "dashboard", labelKey: "dashboard", fullLabelIS: "Yfirlit",                  fullLabelEN: "Dashboard",                minTier: "pro"   },
   { key: "risk",      labelKey: "today",     fullLabelIS: "Áhætta",                   fullLabelEN: "Risk",                     minTier: "pro"   },
   { key: "vald",      labelKey: "vald",      fullLabelIS: "Taugavöðvaprófun",         fullLabelEN: "Neuromuscular Testing",    minTier: "elite" },

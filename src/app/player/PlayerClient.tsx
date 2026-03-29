@@ -4019,7 +4019,6 @@ export default function PlayerClient() {
                   <Chip>{lockLabel}</Chip>
                   <Chip className="border-zinc-200">{decisionType}</Chip>
                   <Chip>{mdLabel}</Chip>
-                  <Chip>{trainingSystemLabel}</Chip>
 
                   {String(stage4Final?.final_source ?? "").toUpperCase() === "COACH" ? (
                     <Chip className="border-amber-200 bg-amber-50 text-amber-800">Override</Chip>
@@ -4047,28 +4046,19 @@ export default function PlayerClient() {
           <div className="space-y-6">
             {/* Decision hero */}
             <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
-              <SectionTitle kicker={t.decision.kicker} title={`${t.decision.prefix}: ${decisionType}`} />
-
               {coachMsg ? (
-                <div className="mt-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
                   {t.decision.coachMsg}
                 </div>
               ) : null}
 
-              <div className="mt-3 text-sm leading-relaxed text-zinc-800">{message}</div>
+              <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
 
               {whyText ? (
                 <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-zinc-700">
                   <span className="font-semibold text-zinc-900">{t.decision.why}</span> {whyText}
                 </div>
               ) : null}
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <Stat label="Ákvörðun" value={decisionType} />
-                <Stat label="MD context" value={mdLabel} />
-                <Stat label="Kerfi" value={trainingSystemLabel} />
-                <Stat label="Plan date" value={plan.entry_date ?? "—"} />
-              </div>
             </div>
 
             {/* Metrics */}
