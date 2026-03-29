@@ -92,6 +92,24 @@ export async function registerPushSubscription(): Promise<RegisterPushSubscripti
     }
 
     let subscription = await registration.pushManager.getSubscription();
+
+    // Detect VAPID key rotation: if the key used for the existing subscription
+    // differs from the current one, unsubscribe so we re-subscribe below with
+    // the new key. Without this, key rotations would silently keep using the
+    // old (now invalid) subscription endpoint.
+    if (subscription) {
+      const STORAGE_KEY = "push_vapid_public_key";
+      try {
+        const storedKey = localStorage.getItem(STORAGE_KEY);
+        if (storedKey && storedKey !== vapidPublicKey) {
+          await subscription.unsubscribe();
+          subscription = null;
+        }
+      } catch {
+        // localStorage unavailable — proceed without rotation check
+      }
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -119,6 +137,9 @@ export async function registerPushSubscription(): Promise<RegisterPushSubscripti
     if (!res.ok || !responseJson?.ok) {
       throw new RegisterPushSubscriptionError("REGISTER_API_FAILED", responseJson?.error || "Failed to register subscription");
     }
+
+    // Persist the VAPID key used so we can detect rotation on the next visit
+    try { localStorage.setItem("push_vapid_public_key", vapidPublicKey); } catch { /* ignore */ }
 
     return { endpoint: json.endpoint };
   } catch (error: unknown) {

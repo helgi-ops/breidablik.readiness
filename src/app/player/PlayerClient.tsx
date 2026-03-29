@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
+import { usePushAutoResubscribe } from "@/lib/push/usePushAutoResubscribe";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
@@ -2490,6 +2491,10 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
 export default function PlayerClient() {
   const [lang, setLang] = useLang();
   const t = PLAYER_COPY[lang];
+
+  // Silently re-register push subscription on every load.
+  // Handles both missing subscriptions and VAPID key rotation.
+  usePushAutoResubscribe();
 
   const supabase = useMemo(() => getSupabaseClient(), []);
   const searchParams = useSearchParams();
