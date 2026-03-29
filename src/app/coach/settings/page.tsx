@@ -12,6 +12,7 @@ import {
   type AdminConfigSnapshot,
   type RecommendationAuditView,
 } from "@/lib/micropulse/adminConfig";
+import ClubBrandingSettings from "@/components/settings/ClubBrandingSettings";
 import RulesManager from "@/components/admin/RulesManager";
 import ProtectedPlayersManager from "@/components/admin/ProtectedPlayersManager";
 import TeamPolicySettings from "@/components/admin/TeamPolicySettings";
@@ -204,6 +205,12 @@ export default function CoachSettingsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+
+      {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
+      {effectivePlan === "ELITE" && (
+        <ClubBrandingSettings />
+      )}
+
       <section className="rounded-2xl border bg-gradient-to-b from-white to-zinc-50 p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

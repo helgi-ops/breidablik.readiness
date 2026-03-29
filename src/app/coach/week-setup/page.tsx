@@ -16,6 +16,22 @@ import { Badge } from "@/components/ui/badge";
 
 type WeekType = "NO_MATCH" | "ONE_MATCH" | "TWO_MATCHES";
 
+type SeasonPhase = "preseason" | "inseason" | "playoffs" | "offseason";
+
+const SEASON_PHASES: {
+  id: SeasonPhase;
+  label: string;
+  sublabel: string;
+  icon: string;
+  activeClass: string;
+  baseClass: string;
+}[] = [
+  { id: "preseason",  label: "Preseason",            sublabel: "Undirbúningur",    icon: "🌱", activeClass: "border-amber-500 bg-amber-100 ring-1 ring-amber-400",   baseClass: "border-amber-200 bg-amber-50" },
+  { id: "inseason",   label: "In-season",             sublabel: "Keppnistímabil",   icon: "⚡", activeClass: "border-emerald-500 bg-emerald-100 ring-1 ring-emerald-400", baseClass: "border-emerald-200 bg-emerald-50" },
+  { id: "playoffs",   label: "Playoffs",              sublabel: "Úrslitakeppni",    icon: "🔥", activeClass: "border-red-500 bg-red-100 ring-1 ring-red-400",         baseClass: "border-red-200 bg-red-50" },
+  { id: "offseason",  label: "Off-season",            sublabel: "Frítímabil",       icon: "🌙", activeClass: "border-slate-500 bg-slate-100 ring-1 ring-slate-400",   baseClass: "border-slate-200 bg-slate-50" },
+];
+
 type MatchInput = {
   match_id: string;
   date: string; // YYYY-MM-DD
@@ -131,6 +147,9 @@ function getDefaultNoMatchIntents(): NoMatchIntent[] {
   return ["FORCE", "NEURAL_VELOCITY", "RECOVERY", "ACTIVATION", "POLISH_CALM", "RECOVERY", "OFF"];
 }
 
+const WEEKDAYS_SHORT = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
+const WEEKDAYS_LONG  = ["Mánudagur", "Þriðjudagur", "Miðvikudagur", "Fimmtudagur", "Föstudagur", "Laugardagur", "Sunnudagur"];
+
 export default function WeekSetupPage() {
   const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);
@@ -139,6 +158,7 @@ export default function WeekSetupPage() {
 
   const [weekStart, setWeekStart] = useState<string>(() => isoMondayOf(new Date()));
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
+  const [seasonPhase, setSeasonPhase] = useState<SeasonPhase | null>(null);
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
 
   // ✅ PRESEASON fix: manual override jafnvel þó 1–2 leikir
@@ -240,7 +260,7 @@ export default function WeekSetupPage() {
 
       const { data, error } = await supabase
         .from("coach_week_setup")
-        .select("id, team_id, week_start_date, week_type, matches, no_match_intents")
+        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase")
         .eq("team_id", tid)
         .eq("week_start_date", weekStart)
         .maybeSingle();
@@ -262,6 +282,11 @@ export default function WeekSetupPage() {
         const arr = (data as any)?.no_match_intents;
         if (Array.isArray(arr) && arr.length === 7) setNoMatchIntents(arr as NoMatchIntent[]);
         else setNoMatchIntents(getDefaultNoMatchIntents());
+
+        // Hlaða season_phase
+        const sp = (data as any)?.season_phase;
+        const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
+        setSeasonPhase(validPhases.includes(sp) ? (sp as SeasonPhase) : null);
 
         const safeMatches = row.matches?.length > 0 ? row.matches : DEFAULT_MATCHES;
         const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
@@ -357,6 +382,7 @@ export default function WeekSetupPage() {
       p_week_type: weekType,
       p_matches: trimmed, // jsonb
       p_no_match_intents: safeNoMatchIntents, // ✅ alltaf 7 stök
+      p_season_phase: seasonPhase ?? null,
     });
 
     if (error) {
@@ -550,18 +576,28 @@ export default function WeekSetupPage() {
     setApplying(false);
   }
 
-  function StepPill(props: { n: 1 | 2 | 3; label: string; active: boolean }) {
+  function StepPill(props: { n: 1 | 2 | 3; label: string; active: boolean; done: boolean; onClick: () => void }) {
     return (
-      <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${props.active ? "bg-muted" : ""}`}>
+      <button
+        type="button"
+        onClick={props.onClick}
+        className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
+          props.active ? "bg-muted border-foreground/20" : "hover:bg-muted/50"
+        }`}
+      >
         <span
           className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-            props.active ? "bg-foreground text-background" : "bg-muted text-foreground"
+            props.active
+              ? "bg-foreground text-background"
+              : props.done
+              ? "bg-emerald-500 text-white"
+              : "bg-muted text-foreground"
           }`}
         >
-          {props.n}
+          {props.done && !props.active ? "✓" : props.n}
         </span>
-        <span className="text-muted-foreground">{props.label}</span>
-      </div>
+        <span className={props.active ? "text-foreground font-medium" : "text-muted-foreground"}>{props.label}</span>
+      </button>
     );
   }
 
@@ -591,9 +627,9 @@ export default function WeekSetupPage() {
               <span className="font-medium text-foreground">{weekEnd}</span>
             </div>
             <div className="mt-1 flex justify-end gap-2">
-              <StepPill n={1} label="Vikugerð" active={step === 1} />
-              <StepPill n={2} label="Uppsetning" active={step === 2} />
-              <StepPill n={3} label="Preview" active={step === 3} />
+              <StepPill n={1} label="Vikugerð" active={step === 1} done={step > 1} onClick={() => setStep(1)} />
+              <StepPill n={2} label="Uppsetning" active={step === 2} done={step > 2} onClick={() => setStep(2)} />
+              <StepPill n={3} label="Preview" active={step === 3} done={false} onClick={() => setStep(3)} />
             </div>
           </div>
         </div>
@@ -612,10 +648,25 @@ export default function WeekSetupPage() {
 
       {/* STEP 1 */}
       <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Skref 1 — Vikugerð</CardTitle>
-          <CardDescription>Veldu vikudagsetningu og hvort það séu leikir í vikunni.</CardDescription>
+        <CardHeader
+          className={step !== 1 ? "cursor-pointer" : ""}
+          onClick={() => step !== 1 && setStep(1)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Skref 1 — Vikugerð</CardTitle>
+              {step !== 1 && (
+                <CardDescription className="mt-0.5">
+                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? "Enginn leikur" : weekType === "ONE_MATCH" ? "1 leikur" : "2 leikir"}
+                  {isManualWeek && weekType !== "NO_MATCH" ? " · Manual" : ""}
+                </CardDescription>
+              )}
+              {step === 1 && <CardDescription>Veldu vikudagsetningu og hvort það séu leikir í vikunni.</CardDescription>}
+            </div>
+            {step !== 1 && <span className="text-xs text-emerald-600 font-medium">✓ Lokið</span>}
+          </div>
         </CardHeader>
+        {step === 1 && (
         <CardContent className="grid gap-4">
           {(!teamId || teamId.trim().length === 0) && (
             <div className="grid gap-2">
@@ -626,7 +677,7 @@ export default function WeekSetupPage() {
           )}
 
           <div className="grid gap-2">
-            <Label>Week start (Monday)</Label>
+            <Label>Vikuupphaf (mánudagur)</Label>
             <Input
               type="date"
               value={weekStart}
@@ -636,6 +687,30 @@ export default function WeekSetupPage() {
                 setError(null);
               }}
             />
+          </div>
+
+          {/* Season phase */}
+          <div className="grid gap-2">
+            <Label>Tímabil</Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {SEASON_PHASES.map((phase) => (
+                <button
+                  key={phase.id}
+                  type="button"
+                  disabled={loading || saving || applying}
+                  onClick={() => setSeasonPhase((p) => p === phase.id ? null : phase.id)}
+                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-sm transition-all ${
+                    seasonPhase === phase.id ? phase.activeClass : `${phase.baseClass} hover:opacity-80`
+                  } disabled:opacity-50`}
+                >
+                  <span className="text-base leading-none">{phase.icon}</span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-xs leading-tight truncate">{phase.label}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug truncate">{phase.sublabel}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid gap-2">
@@ -676,60 +751,64 @@ export default function WeekSetupPage() {
             </div>
           </div>
 
-          <Separator />
-
-          <div className="grid gap-3">
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="text-sm font-medium">Intensity target</div>
-                <div className="text-xs text-muted-foreground">1 = mjög létt · 10 = mjög erfitt</div>
-              </div>
-              <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
-            </div>
-            <input className="w-full" type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))} />
-          </div>
-
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={loading || saving || applying}>
               Næsta →
             </Button>
           </div>
         </CardContent>
+        )}
       </Card>
 
       {/* STEP 2 */}
       <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Skref 2 — Uppsetning</CardTitle>
-          <CardDescription>
-            {isManualWeek ? "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir)." : "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun)."}
-          </CardDescription>
+        <CardHeader
+          className={step !== 2 ? "cursor-pointer" : ""}
+          onClick={() => step !== 2 && setStep(2)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Skref 2 — Uppsetning</CardTitle>
+              {step !== 2 && (
+                <CardDescription className="mt-0.5">
+                  {isManualWeek ? "Manual vikustýring" : "Auto MD röðun"} · Intensity {intensityTarget}/10
+                </CardDescription>
+              )}
+              {step === 2 && (
+                <CardDescription>
+                  {isManualWeek ? "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir)." : "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun)."}
+                </CardDescription>
+              )}
+            </div>
+            {step > 2 && <span className="text-xs text-emerald-600 font-medium">✓ Lokið</span>}
+          </div>
         </CardHeader>
+        {step === 2 && (
         <CardContent className="grid gap-4">
           {weekType !== "NO_MATCH" && (
             <div className="grid gap-3">
               {visibleMatches.map((m, idx) => (
                 <div key={idx} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center">
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Match</Label>
-                    <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`M${idx + 1}`} />
+                    <Label className="text-xs text-muted-foreground">Leikur</Label>
+                    <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`L${idx + 1}`} />
                   </div>
 
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Date</Label>
+                    <Label className="text-xs text-muted-foreground">Dagsetning</Label>
                     <Input type="date" value={m.date} onChange={(e) => setMatch(idx, { date: e.target.value })} />
                   </div>
 
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Kickoff (optional)</Label>
+                    <Label className="text-xs text-muted-foreground">Byrjunartími (valfrjáls)</Label>
                     <Input value={m.kickoff_time ?? ""} onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })} placeholder="19:15" />
                   </div>
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">H/A</Label>
                     <select className="h-10 rounded-md border bg-background px-3 text-sm" value={m.home_away ?? "H"} onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}>
-                      <option value="H">Home</option>
-                      <option value="A">Away</option>
+                      <option value="H">Heimavöllur</option>
+                      <option value="A">Leikavöllur</option>
                     </select>
                   </div>
                 </div>
@@ -740,27 +819,25 @@ export default function WeekSetupPage() {
           {isManualWeek && (
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Manual vika (mán → sun)</div>
+                <div className="text-sm font-medium">Dagleg áhersla (mán → sun)</div>
                 <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
-                  Reset í default
+                  Endurstilla
                 </Button>
               </div>
 
               <div className="grid gap-2 md:grid-cols-7">
                 {Array.from({ length: 7 }).map((_, i) => {
-                  const dayIndex = i + 1;
                   const date = addDays(weekStart, i);
                   const value = noMatchIntents[i] ?? "OFF";
 
                   return (
                     <div key={date} className="rounded-xl border p-3">
-                      <div className="text-xs text-muted-foreground">Day {dayIndex}</div>
-                      <div className="mt-1 text-sm font-medium">{date}</div>
+                      <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{date.slice(5)}</div>
 
                       <div className="mt-2 grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Áhersla</Label>
                         <select
-                          className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                          className="h-9 w-full rounded-md border bg-background px-2 text-xs"
                           value={value}
                           onChange={(e) => {
                             const v = e.target.value as NoMatchIntent;
@@ -778,9 +855,10 @@ export default function WeekSetupPage() {
                           ))}
                         </select>
 
-                        <div className="mt-2 flex items-center justify-between">
-                          <Badge variant={dayBadgeVariant(intentToDayType(value))}>{intentToDayType(value)}</Badge>
-                          <span className="text-[11px] text-muted-foreground">{intentToFocusLabel(value)}</span>
+                        <div className="mt-1.5 flex items-center justify-center">
+                          <Badge variant={dayBadgeVariant(intentToDayType(value))} className="text-[10px]">
+                            {intentToDayType(value)}
+                          </Badge>
                         </div>
                       </div>
                     </div>
@@ -796,6 +874,19 @@ export default function WeekSetupPage() {
             </div>
           )}
 
+          <Separator />
+
+          <div className="grid gap-3">
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-sm font-medium">Intensity target</div>
+                <div className="text-xs text-muted-foreground">1 = mjög létt · 10 = mjög erfitt</div>
+              </div>
+              <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
+            </div>
+            <input className="w-full" type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))} />
+          </div>
+
           <div className="flex justify-between gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading || saving || applying}>
               ← Til baka
@@ -805,40 +896,45 @@ export default function WeekSetupPage() {
             </Button>
           </div>
         </CardContent>
+        )}
       </Card>
 
       {/* STEP 3 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Skref 3 — Preview & Apply</CardTitle>
+          <CardTitle className="text-base">Skref 3 — Yfirlit & Virkja</CardTitle>
           <CardDescription>Svona mun vikan líta út fyrir leikmenn (þetta er það sem verður sent).</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2 md:grid-cols-7">
-            {previewDays.map((d) => (
-              <div key={d.day_index} title={d.notes ?? ""} className="rounded-xl border p-3 text-center">
-                <div className="text-xs text-muted-foreground">Day {d.day_index}</div>
-                <div className="mt-1">
-                  <Badge variant={dayBadgeVariant(d.day_type)}>{d.day_type}</Badge>
+            {previewDays.map((d, i) => {
+              const date = addDays(weekStart, i);
+              return (
+                <div key={d.day_index} title={d.notes ?? ""} className="rounded-xl border p-3 text-center">
+                  <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
+                  <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
+                  <div className="mt-2">
+                    <Badge variant={dayBadgeVariant(d.day_type)} className="text-[10px]">{d.day_type}</Badge>
+                  </div>
+                  <div className="mt-1.5 text-[11px] font-medium leading-snug text-muted-foreground">{d.focus ?? ""}</div>
                 </div>
-                <div className="mt-2 text-xs font-medium leading-snug">{d.focus ?? ""}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Separator />
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void handleSave()} disabled={loading || saving || applying}>
-              {saving ? "Saving..." : loading ? "Loading..." : "Save week"}
+              {saving ? "Vista..." : loading ? "Hleður..." : "Vista viku"}
             </Button>
 
             <Button onClick={() => void handleApplyPlan()} disabled={loading || saving || applying}>
-              {applying ? "Applying..." : "Apply → senda leikmönnum"}
+              {applying ? "Virkjar..." : "Virkja → senda leikmönnum"}
             </Button>
 
             <div className="ml-auto text-xs text-muted-foreground">
-              {isManualWeek ? "Manual week" : "Auto MD week"} · system_key:{" "}
+              {isManualWeek ? "Manual vika" : "Auto MD vika"} · system_key:{" "}
               <span className="font-medium text-foreground">MICRODOSING_PLAYBOOK</span>
             </div>
           </div>

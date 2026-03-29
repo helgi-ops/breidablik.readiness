@@ -220,6 +220,7 @@ export default function DisplayClient() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   // ✅ md_day dropdown
   const [mdDayOptions, setMdDayOptions] = useState<string[]>([]);
@@ -267,13 +268,35 @@ export default function DisplayClient() {
   }, [autorotate, intervalSec]);
 
   /* =========================
-     LOAD MD OPTIONS
+     LOAD TEAM ID
   ========================= */
 
   useEffect(() => {
     (async () => {
+      const { data: uRes } = await supabase.auth.getUser();
+      if (!uRes.user) return;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", uRes.user.id)
+        .maybeSingle();
+      if ((prof as any)?.team_id) setTeamId((prof as any).team_id);
+    })();
+  }, []);
+
+  /* =========================
+     LOAD MD OPTIONS
+  ========================= */
+
+  useEffect(() => {
+    if (!teamId) return;
+    (async () => {
       try {
-        const { data, error } = await supabase.from("microdose_templates").select("md_day").not("md_day", "is", null);
+        const { data, error } = await supabase
+          .from("microdose_templates")
+          .select("md_day")
+          .eq("team_id", teamId)
+          .not("md_day", "is", null);
         if (error) throw error;
 
         const set = new Set<string>();
@@ -293,7 +316,7 @@ export default function DisplayClient() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [teamId]);
 
   /* =========================
      LOAD TEMPLATES FOR MD
@@ -314,6 +337,7 @@ export default function DisplayClient() {
       const { data, error } = await supabase
         .from("microdose_templates")
         .select("md_day, readiness_level, title, description, structure, variant")
+        .eq("team_id", teamId)
         .eq("md_day", md);
 
       if (error) throw error;

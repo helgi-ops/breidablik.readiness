@@ -32,6 +32,9 @@ const FEATURE_LABELS: Record<MicroPulseFeatureKey, string> = {
   AUTOMATION_ALERTS: "Automation and smart alerts",
   ADVANCED_INTEGRATIONS: "Advanced integrations",
   MULTI_TEAM_MANAGEMENT: "Multi-team management",
+  MECHANICAL_LOAD_INDEX: "Mechanical Load Index (MLI)",
+  METABOLIC_LOAD_SCORE: "Metabolic Load Score",
+  VALD_CMJ_MONITORING: "VALD / CMJ monitoring",
 };
 
 const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {

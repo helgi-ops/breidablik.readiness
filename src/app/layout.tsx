@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import RegisterServiceWorker from "@/components/pwa/RegisterServiceWorker";
+import DynamicManifest from "@/components/pwa/DynamicManifest";
 
 export const metadata: Metadata = {
   title: "MicroPulse",
   description: "Dagleg líðansskráning og þjálfanaálag.",
-  manifest: "/manifest.webmanifest",
+  // Static fallback — DynamicManifest (client) will swap this to
+  // /api/manifest?team_id=... once the user's team is known.
+  manifest: "/api/manifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -34,6 +37,7 @@ export default function RootLayout({
     <html lang="is">
       <body className="antialiased">
         <RegisterServiceWorker />
+        <DynamicManifest />
         {children}
       </body>
     </html>

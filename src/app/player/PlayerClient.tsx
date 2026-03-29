@@ -67,6 +67,7 @@ import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionV
 import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
 import ValdStatusCard from "@/components/player/ValdStatusCard";
 import { getExerciseRecommendation } from "@/lib/exercise-recommendations/recommend";
+import { hasFeature } from "@/lib/micropulse/product";
 import {
   getRecommendationGroupForExercise,
   getSupportedExerciseLabel,
@@ -2563,6 +2564,7 @@ export default function PlayerClient() {
   const [assignmentRecord, setAssignmentRecord] = useState<SessionAssignmentRecord | null>(null);
   const [playerSessionStatusView, setPlayerSessionStatusView] = useState<PlayerSessionStatusView | null>(null);
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+  const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
 
   const todayVsTeamMetrics = useMemo(() => {
     return getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
@@ -3256,6 +3258,18 @@ export default function PlayerClient() {
         if (pErr) throw new Error(pErr.message);
         setProfile((prof as any) ?? null);
 
+        // Fetch plan_tier from teams to gate Adaptive Training Engine
+        if (prof?.team_id) {
+          const { data: teamRow } = await supabase
+            .from("teams")
+            .select("plan_tier")
+            .eq("id", prof.team_id)
+            .maybeSingle();
+          const tier = (teamRow as any)?.plan_tier;
+          if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
+          else setTeamPlanTier("FREE");
+        }
+
         if (!prof?.player_id) {
           const { data: list, error: lErr } = await supabase
             .from("players")
@@ -3758,9 +3772,11 @@ export default function PlayerClient() {
         return;
       }
 
+      const overrideTeamId = (profile as any)?.team_id ?? null;
       const { data, error } = await supabase
         .from("microdose_templates")
         .select("title, description, structure, readiness_level, md_day, variant")
+        .eq("team_id", overrideTeamId)
         .eq("readiness_level", desiredReadiness)
         .eq("md_day", mdDay)
         .order("variant", { ascending: true });
@@ -3786,6 +3802,7 @@ export default function PlayerClient() {
         const { data: fallbackRows, error: fallbackErr } = await supabase
           .from("microdose_templates")
           .select("title, description, structure, readiness_level, md_day, variant")
+          .eq("team_id", overrideTeamId)
           .eq("readiness_level", desiredReadiness)
           .order("md_day", { ascending: true })
           .order("variant", { ascending: true })
@@ -4533,7 +4550,9 @@ export default function PlayerClient() {
               headerDesc: sessionHeaderDesc,
               lockLabel,
               t,
-              recommendationContext: exerciseRecommendationContext,
+              recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
+            ? exerciseRecommendationContext
+            : null,
             })}
 
             {renderPostTraining(postTraining)}

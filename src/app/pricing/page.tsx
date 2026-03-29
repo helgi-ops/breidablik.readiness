@@ -25,6 +25,12 @@ const COPY = {
       line1: "MicroPulse is more than monitoring.",
       line2: "It converts monitoring data into training decisions.",
     },
+    sportToggle: {
+      label: "Sport environment",
+      outdoor: "Outdoor (Football, Rugby…)",
+      indoor: "Indoor (Basketball, Handball, Volleyball…)",
+      indoorNote: "GPS monitoring requires outdoor GPS hardware. Indoor sports skip GPS and save €70/month.",
+    },
     plans: {
       title: "Choose the MicroPulse plan that fits your team",
       sub: "MicroPulse scales from simple daily monitoring to full performance intelligence for coaching, performance, and medical staff.",
@@ -57,7 +63,9 @@ const COPY = {
           "Adaptive Training Engine",
           "Neural Fatigue Model",
           "GPS Load Monitoring — 7D / 28D / ACWR",
-          "GPS integration",
+          "Mechanical Load Index (MLI) — decel, accel, CoD, PlayerLoad density",
+          "Metabolic Load Score — metabolic power, HML distance, fatigue type",
+          "GPS integration (Catapult)",
           "Yesterday Load — auto-populated from Catapult",
           "Match-week operations (Week setup, TV view, Messages)",
           "Player volatility tracking",
@@ -66,6 +74,31 @@ const COPY = {
           "Team workflow tools",
         ],
         cta: "Start Pro",
+      },
+      proIndoor: {
+        name: "Pro Indoor",
+        pricePrimary: "€279 / month",
+        priceLocal: "39.990 kr / mánuð",
+        priceSecondary: "Best for indoor sports — basketball, handball, volleyball",
+        savings: "Save €70/month — GPS not applicable for indoor sports",
+        note: "Everything in Pro, optimised for sports without outdoor GPS tracking.",
+        bullets: [
+          "Everything in Free plus:",
+          "Unlimited squad size",
+          "Coach dashboard & team readiness overview",
+          "Adaptive Training Engine",
+          "Neural Fatigue Model",
+          "VALD / CMJ monitoring tab",
+          "CMJ Required alerts — per player with reason",
+          "VALD force plate data in readiness & risk scores",
+          "Smart push notifications — check-in, RPE & CMJ",
+          "Match-week operations (Week setup, TV view, Messages)",
+          "Player volatility tracking",
+          "Explainable readiness decisions",
+          "Session adjustment suggestions",
+          "Team workflow tools",
+        ],
+        cta: "Start Pro Indoor",
       },
       elite: {
         name: "Elite",
@@ -83,7 +116,7 @@ const COPY = {
           "Organization dashboards",
           "Executive reporting",
           "Automation and smart alerts",
-          "Multiple GPS provider integrations",
+          "Multiple data source integrations (GPS, VALD, internal load, and more)",
           "Medical + performance oversight",
           "Multi-team management",
           "Dedicated onboarding & priority support",
@@ -98,9 +131,14 @@ const COPY = {
         ["Daily player check-in", "✅", "✅", "✅"],
         ["Coach dashboard", "—", "✅", "✅"],
         ["Adaptive Training Engine", "—", "✅", "✅"],
-        ["GPS Load Monitoring — ACWR", "—", "✅", "✅"],
-        ["GPS integration", "—", "✅", "✅"],
         ["Neural fatigue model", "—", "✅", "✅"],
+        ["VALD / CMJ monitoring", "—", "✅", "✅"],
+        ["CMJ Required alerts", "—", "✅", "✅"],
+        ["Smart push notifications", "—", "✅", "✅"],
+        ["GPS Load Monitoring — ACWR", "—", "Outdoor only", "✅"],
+        ["Mechanical Load Index (MLI)", "—", "Outdoor only", "✅"],
+        ["Metabolic Load Score", "—", "Outdoor only", "✅"],
+        ["GPS integration (Catapult)", "—", "Outdoor only", "✅"],
         ["Explainable readiness decisions", "—", "✅", "✅"],
         ["Performance intelligence", "—", "—", "✅"],
         ["Injury risk modelling", "—", "—", "✅"],
@@ -155,6 +193,12 @@ const COPY = {
       line1: "MicroPulse er meira en monitoring.",
       line2: "Kerfið breytir monitoring gögnum í æfingaákvarðanir.",
     },
+    sportToggle: {
+      label: "Umhverfi íþróttar",
+      outdoor: "Utandyra (Fótbolti, Rugby…)",
+      indoor: "Innanhúss (Körfubolti, Handbolti, Blak…)",
+      indoorNote: "GPS monitoring krefst utandyra GPS búnaðar. Innanhúss íþróttir sleppa GPS og spara €70/mánuð.",
+    },
     plans: {
       title: "Leiðir",
       sub: "Skipulagt eftir þroska teymis: monitoring, decision support og organization-level intelligence.",
@@ -187,7 +231,9 @@ const COPY = {
           "Adaptive Training Engine",
           "Neural Fatigue Model",
           "GPS Load Monitoring — 7D / 28D / ACWR",
-          "GPS tenging",
+          "Mechanical Load Index (MLI) — hæðnun, hægðun, snúningur, PlayerLoad",
+          "Metabolic Load Score — metabolic power, HML distance, þreytugerð",
+          "GPS tenging (Catapult)",
           "Yesterday Load — sótt sjálfkrafa frá Catapult",
           "Leikjaviku rekstur (Week setup, TV view, Messages)",
           "Player volatility tracking",
@@ -196,6 +242,31 @@ const COPY = {
           "Team workflow tools",
         ],
         cta: "Bóka demo",
+      },
+      proIndoor: {
+        name: "Pro Innanhúss",
+        pricePrimary: "€279 / month",
+        priceLocal: "39.990 kr / mánuð",
+        priceSecondary: "Fyrir innanhúss íþróttir — körfubolti, handbolti, blak",
+        savings: "Sparar €70/mánuð — GPS á ekki við innanhúss íþróttir",
+        note: "Allt í Pro, stillt fyrir íþróttir án utandyra GPS.",
+        bullets: [
+          "Allt í Free +",
+          "Ótakmarkaður hópur",
+          "Coach dashboard & liðsyfirsýn readiness",
+          "Adaptive Training Engine",
+          "Neural Fatigue Model",
+          "VALD / CMJ monitoring flipi",
+          "CMJ Required tilkynningar — per leikmann með ástæðu",
+          "VALD kraftplata gögn í readiness & risk scores",
+          "Snjall push notifications — check-in, RPE & CMJ",
+          "Leikjaviku rekstur (Week setup, TV view, Messages)",
+          "Player volatility tracking",
+          "Útskýranleg readiness decisions",
+          "Session adjustment suggestions",
+          "Team workflow tools",
+        ],
+        cta: "Byrja Pro Innanhúss",
       },
       elite: {
         name: "Elite",
@@ -213,7 +284,7 @@ const COPY = {
           "Organization dashboards",
           "Executive reporting",
           "Automation and smart alerts",
-          "Margar GPS tengingar (Catapult, STATSports o.fl.)",
+          "Margar gagnauppsprettur (GPS, VALD, internal load o.fl.)",
           "Medical + performance oversight",
           "Multi-team management",
           "Sérsniðin innleiðing & forgangsþjónusta",
@@ -228,9 +299,14 @@ const COPY = {
         ["Daglegt player check-in", "✅", "✅", "✅"],
         ["Coach dashboard", "—", "✅", "✅"],
         ["Adaptive Training Engine", "—", "✅", "✅"],
-        ["GPS Load Monitoring — ACWR", "—", "✅", "✅"],
-        ["GPS tenging", "—", "✅", "✅"],
         ["Neural fatigue model", "—", "✅", "✅"],
+        ["VALD / CMJ monitoring", "—", "✅", "✅"],
+        ["CMJ Required tilkynningar", "—", "✅", "✅"],
+        ["Snjall push notifications", "—", "✅", "✅"],
+        ["GPS Load Monitoring — ACWR", "—", "Utandyra", "✅"],
+        ["Mechanical Load Index (MLI)", "—", "Utandyra", "✅"],
+        ["Metabolic Load Score", "—", "Utandyra", "✅"],
+        ["GPS tenging (Catapult)", "—", "Utandyra", "✅"],
         ["Útskýranleg readiness decisions", "—", "✅", "✅"],
         ["Performance intelligence", "—", "—", "✅"],
         ["Injury risk modelling", "—", "—", "✅"],
@@ -311,6 +387,7 @@ export default function PricingPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [plan, setPlan] = React.useState<PlanKey>("pro");
+  const [sportEnv, setSportEnv] = React.useState<"outdoor" | "indoor">("outdoor");
 
   const [form, setForm] = React.useState<{
     name: string;
@@ -356,6 +433,7 @@ export default function PricingPage() {
   }
 
   const Plans = React.useMemo(() => {
+    const proPlan = sportEnv === "indoor" ? t.plans.proIndoor : t.plans.pro;
     return [
       {
         key: "free" as const,
@@ -372,13 +450,14 @@ export default function PricingPage() {
         key: "pro" as const,
         dark: true,
         recommended: true,
-        name: t.plans.pro.name,
-        pricePrimary: t.plans.pro.pricePrimary,
-        priceLocal: t.plans.pro.priceLocal,
-        priceSecondary: t.plans.pro.priceSecondary,
-        note: t.plans.pro.note,
-        bullets: t.plans.pro.bullets,
-        cta: { label: t.plans.pro.cta, href: "#demo" },
+        name: proPlan.name,
+        pricePrimary: proPlan.pricePrimary,
+        priceLocal: proPlan.priceLocal,
+        priceSecondary: proPlan.priceSecondary,
+        savings: sportEnv === "indoor" ? t.plans.proIndoor.savings : undefined,
+        note: proPlan.note,
+        bullets: proPlan.bullets,
+        cta: { label: proPlan.cta, href: "#demo" },
       },
       {
         key: "elite" as const,
@@ -389,11 +468,12 @@ export default function PricingPage() {
         priceLocal: t.plans.elite.priceLocal,
         priceSecondary: t.plans.elite.priceSecondary,
         note: t.plans.elite.note,
+        indoorNote: sportEnv === "indoor" ? (lang === "IS" ? "GPS tengingar eiga ekki við innanhúss — allir aðrir Elite eiginleikar að fullu tiltækir." : "GPS provider integrations not applicable for indoor sports — all other Elite features fully available.") : undefined,
         bullets: t.plans.elite.bullets,
         cta: { label: t.plans.elite.cta, href: "#demo" },
       },
     ];
-  }, [t]);
+  }, [t, sportEnv, lang]);
 
   return (
     <main className="min-h-screen bg-white text-neutral-900">
@@ -525,10 +605,38 @@ export default function PricingPage() {
       {/* Plans */}
       <section id="plans" className="bg-white">
         <div className="mx-auto max-w-6xl px-6 py-14">
-          <div className="flex items-end justify-between gap-6">
+          <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <h2 className="text-2xl font-semibold md:text-3xl">{t.plans.title}</h2>
               <p className="mt-2 text-sm text-neutral-600">{t.plans.sub}</p>
+            </div>
+
+            {/* Sport environment toggle */}
+            <div className="flex flex-col items-end gap-1.5">
+              <span className="text-xs text-neutral-500">{t.sportToggle.label}</span>
+              <div className="flex items-center rounded-xl border bg-neutral-50 p-1 text-sm">
+                <button
+                  onClick={() => setSportEnv("outdoor")}
+                  className={classNames(
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    sportEnv === "outdoor" ? "bg-white shadow-sm text-neutral-900 border" : "text-neutral-500 hover:text-neutral-700"
+                  )}
+                >
+                  {t.sportToggle.outdoor}
+                </button>
+                <button
+                  onClick={() => setSportEnv("indoor")}
+                  className={classNames(
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    sportEnv === "indoor" ? "bg-white shadow-sm text-neutral-900 border" : "text-neutral-500 hover:text-neutral-700"
+                  )}
+                >
+                  {t.sportToggle.indoor}
+                </button>
+              </div>
+              {sportEnv === "indoor" && (
+                <p className="max-w-xs text-right text-xs text-emerald-700">{t.sportToggle.indoorNote}</p>
+              )}
             </div>
           </div>
 
@@ -557,13 +665,24 @@ export default function PricingPage() {
                     {p.priceLocal}
                   </div>
                 ) : null}
-                <div className={classNames("text-sm", p.dark ? "text-white/70" : "text-neutral-500")}>
+                {"savings" in p && p.savings ? (
+                  <div className="mt-1.5 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-0.5 text-xs font-semibold text-white">
+                    {p.savings}
+                  </div>
+                ) : null}
+                <div className={classNames("mt-1 text-sm", p.dark ? "text-white/70" : "text-neutral-500")}>
                   {p.priceSecondary}
                 </div>
 
                 <div className={classNames("mt-3 text-sm", p.dark ? "text-white/70" : "text-neutral-600")}>
                   {p.note}
                 </div>
+
+                {"indoorNote" in p && p.indoorNote ? (
+                  <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    {p.indoorNote}
+                  </div>
+                ) : null}
 
                 <ul className={classNames("mt-6 space-y-2 text-sm", p.dark ? "text-white/90" : "text-neutral-700")}>
                   {p.bullets.map((b) => (

@@ -11,6 +11,7 @@ const operationsLinks = [
   { href: "/coach/match-minutes", label: "Match minutes" },
   { href: "/coach/session-workflow", label: "Session workflow" },
   { href: "/coach/templates", label: "Templates" },
+  { href: "/coach/custom-templates", label: "Custom templates" },
 ];
 
 const adminLinks = [
