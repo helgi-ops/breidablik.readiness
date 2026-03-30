@@ -487,7 +487,7 @@ function refineLegacyDecisionCard(decision: NormalizedPlayerDailyDecision): void
   }
 }
 
-function AteCommandCardPortal({ activeTab }: { activeTab: DevPlayerTab }) {
+function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPlayerTab; clubThemeColor?: string | null }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [dailyDecision, setDailyDecision] = useState<NormalizedPlayerDailyDecision>({
     playerState: "GRAY",
@@ -569,10 +569,14 @@ function AteCommandCardPortal({ activeTab }: { activeTab: DevPlayerTab }) {
     dailyDecision.playerState === "RED" ? "RED" :
     "PENDING";
 
+  // Use the team colour directly as the card background (white text stays readable
+  // on typical dark/medium sports-team colours). Falls back to slate-900 when unset.
+  const cardBg = clubThemeColor ?? "#0f172a";
+
   return createPortal(
     <div
       className="mt-3 rounded-xl p-4"
-      style={{ background: "#0f172a" }}
+      style={{ background: cardBg }}
     >
       <div className="text-[10px] uppercase tracking-[0.1em] text-slate-400">Today</div>
       <div className="mt-1 text-base font-bold tracking-tight text-white">{copy.title}</div>
@@ -724,8 +728,9 @@ export default function DevPlayerClient() {
   const [panelMountNode, setPanelMountNode] = useState<HTMLElement | null>(null);
   const [layoutReady, setLayoutReady] = useState(false);
 
-  // ── Plan tier ──────────────────────────────────────────────
+  // ── Plan tier + club branding ──────────────────────────────
   const [planTier, setPlanTier] = useState<PlanTier>("FREE");
+  const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -745,11 +750,14 @@ export default function DevPlayerClient() {
 
       const { data: team } = await supabase
         .from("teams")
-        .select("plan_tier")
+        .select("plan_tier, club_theme_color")
         .eq("id", teamId)
         .maybeSingle();
 
-      if (alive && team) setPlanTier(((team as any).plan_tier as PlanTier) ?? "FREE");
+      if (alive && team) {
+        setPlanTier(((team as any).plan_tier as PlanTier) ?? "FREE");
+        setClubThemeColor((team as any).club_theme_color ?? null);
+      }
     }
     loadPlanTier();
     return () => { alive = false; };
@@ -1022,7 +1030,7 @@ export default function DevPlayerClient() {
       >
         <PlayerClient />
       </div>
-      <AteCommandCardPortal activeTab={activeTab} />
+      <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)
