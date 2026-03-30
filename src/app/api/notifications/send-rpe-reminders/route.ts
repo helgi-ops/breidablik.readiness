@@ -15,12 +15,18 @@ type RpeReminderBody = {
 };
 
 function isAuthorized(req: Request): boolean {
-  const secret = process.env.REMINDER_CRON_SECRET || "";
-  if (!secret) return false;
+  const reminderSecret = process.env.REMINDER_CRON_SECRET || "";
+  const catapultSecret = process.env.CATAPULT_CRON_SECRET || "";
+
   const auth = req.headers.get("authorization") || "";
-  if (auth === `Bearer ${secret}`) return true;
+  if (reminderSecret && auth === `Bearer ${reminderSecret}`) return true;
+  if (catapultSecret && auth === `Bearer ${catapultSecret}`) return true;
+
   const querySecret = new URL(req.url).searchParams.get("secret") || "";
-  return querySecret === secret;
+  if (reminderSecret && querySecret === reminderSecret) return true;
+  if (catapultSecret && querySecret === catapultSecret) return true;
+
+  return false;
 }
 
 function validDateKey(input: string | undefined): string | null {
