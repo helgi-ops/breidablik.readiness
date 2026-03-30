@@ -2497,6 +2497,7 @@ export default function PlayerClient() {
   usePushAutoResubscribe();
 
   const supabase = useMemo(() => getSupabaseClient(), []);
+
   const searchParams = useSearchParams();
 
   const day = useMemo(() => {
@@ -3694,6 +3695,23 @@ export default function PlayerClient() {
 
     run();
   }, [supabase, day, adminConfigSnapshot]);
+
+  // App icon badge: show a dot when today's check-in is missing, clear it once done.
+  // Works on iOS 16.4+ PWA, Android Chrome, desktop Chromium.
+  useEffect(() => {
+    if (loading) return;
+    const isToday = day === todayISO();
+    const hasMissingCheckin = isToday && !metrics?.created_at;
+    try {
+      if (hasMissingCheckin) {
+        navigator.setAppBadge?.(1);
+      } else {
+        navigator.clearAppBadge?.();
+      }
+    } catch {
+      // Badge API not supported — silently ignore
+    }
+  }, [loading, day, metrics]);
 
   function handleAcknowledgePublishedSession() {
     if (!assignmentRecord) return;
