@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { useLang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { lookupExercise } from "./exerciseDatabase";
@@ -818,11 +818,77 @@ function blockSortPriority(titleRaw: string): number {
   return 9;
 }
 
+/** Converts a 6-digit hex colour (e.g. "#005a2b") to { r, g, b }. Returns null if invalid. */
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex ?? "").trim());
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+}
+
+type BlockAccentResult = {
+  wrap: string;
+  wrapStyle?: CSSProperties;
+  badge: string;
+  badgeStyle?: CSSProperties;
+  dot: string;
+  dotStyle?: CSSProperties;
+  bar: string;
+  barStyle?: CSSProperties;
+  itemBorder: string;
+  itemBorderStyle?: CSSProperties;
+  itemBg: string;
+  methodBadge: string;
+  methodBadgeStyle?: CSSProperties;
+  choiceHeader: string;
+  choiceHeaderStyle?: CSSProperties;
+  label: string;
+};
+
 /** =========
- *  Block accents (NEUTRAL / GRÁTT fyrir player)
+ *  Block accents — uses team brand colour when available, falls back to default palette
  *  ========= */
-function blockAccent(titleRaw: string) {
+function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentResult {
   const t = (titleRaw ?? "").toLowerCase();
+
+  // When a team brand colour is set, use it for all block accents
+  if (themeColor) {
+    const rgb = hexToRgb(themeColor);
+    if (rgb) {
+      const { r, g, b } = rgb;
+      const a = (alpha: number) => `rgba(${r},${g},${b},${alpha})`;
+      // Darker shade for text — readable on the very light tinted backgrounds
+      const dr = Math.round(r * 0.45);
+      const dg = Math.round(g * 0.45);
+      const db = Math.round(b * 0.45);
+      const darkText = `rgb(${dr},${dg},${db})`;
+
+      const getLabel = () => {
+        if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) return "Upphitun";
+        if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) return "Primer";
+        if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) return "Main";
+        if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) return "Accessory";
+        return "Partur";
+      };
+
+      return {
+        wrap: "",
+        wrapStyle: { borderColor: a(0.22), backgroundColor: a(0.06) },
+        badge: "",
+        badgeStyle: { backgroundColor: a(0.12), color: darkText, borderColor: a(0.28) },
+        dot: "",
+        dotStyle: { backgroundColor: a(0.70) },
+        bar: "",
+        barStyle: { backgroundColor: a(0.55) },
+        itemBorder: "",
+        itemBorderStyle: { borderColor: a(0.14) },
+        itemBg: "bg-white",
+        methodBadge: "",
+        methodBadgeStyle: { backgroundColor: a(0.10), color: darkText, borderColor: a(0.22) },
+        choiceHeader: "",
+        choiceHeaderStyle: { backgroundColor: a(0.08), borderColor: a(0.18), color: darkText },
+        label: getLabel(),
+      };
+    }
+  }
 
   if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) {
     return {
@@ -1162,8 +1228,11 @@ function recommendationBadgeToneClass(tone: "neutral" | "warning" | "success"): 
   return "border-zinc-200 bg-zinc-50 text-zinc-600";
 }
 
-function recommendationPanelClass(accent: ReturnType<typeof blockAccent>): string {
-  return cx("rounded-xl border px-3 py-2.5", accent.itemBorder, accent.itemBg);
+function recommendationPanelClass(accent: BlockAccentResult): { cls: string; style?: CSSProperties } {
+  return {
+    cls: cx("rounded-xl border px-3 py-2.5", accent.itemBorder, accent.itemBg),
+    style: accent.itemBorderStyle,
+  };
 }
 
 function exerciseMethodForId(id: SupportedExerciseId | null, fallbackMethod: string | null): string | null {
@@ -1337,7 +1406,7 @@ function ExerciseCard({
 
   return (
     <>
-      <div className={cx("rounded-xl border px-3 py-2", accent.itemBorder, accent.itemBg)}>
+      <div className={cx("rounded-xl border px-3 py-2", accent.itemBorder, accent.itemBg)} style={accent.itemBorderStyle}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-1.5 min-w-0">
             <span className="text-sm font-semibold text-zinc-900 leading-snug">{effectiveExercise.name}</span>
@@ -1347,7 +1416,7 @@ function ExerciseCard({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {effectiveExercise.method ? (
-              <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-bold", accent.methodBadge)}>
+              <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-bold", accent.methodBadge)} style={accent.methodBadgeStyle}>
                 {effectiveExercise.method}
               </span>
             ) : null}
@@ -1502,7 +1571,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
   return (
     <div>
       {/* Choice header */}
-      <div className={cx("mt-1 rounded-lg border px-3 py-2 flex items-center gap-2", accent.choiceHeader)}>
+      <div className={cx("mt-1 rounded-lg border px-3 py-2 flex items-center gap-2", accent.choiceHeader)} style={accent.choiceHeaderStyle}>
         <span className="text-[13px] font-bold leading-snug">▸ {header.replace(/:$/, "")}</span>
       </div>
       {/* Selected exercise */}
@@ -1525,7 +1594,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
       groupRecommendationUi?.badgeLabel &&
       groupRecommendation.shouldRenderRecommendation &&
       selected ? (
-        <div className={cx("mt-1.5", recommendationPanelClass(accent))}>
+        <div className={cx("mt-1.5", recommendationPanelClass(accent).cls)} style={recommendationPanelClass(accent).style}>
           <div className="flex flex-wrap items-center gap-2">
             <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(groupRecommendationUi.badgeTone))}>
               {groupRecommendationUi.badgeLabel}
@@ -1580,7 +1649,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
           ) : null}
         </div>
       ) : selected && genericAlternativeOptions.length ? (
-        <div className={cx("mt-1.5", recommendationPanelClass(accent))}>
+        <div className={cx("mt-1.5", recommendationPanelClass(accent).cls)} style={recommendationPanelClass(accent).style}>
           <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {genericAlternativeOptions.map((option, idx) => (
@@ -1659,7 +1728,7 @@ function RecommendedExerciseBlockCard({
         planExerciseName={ex.name}
       />
 
-      <div className={recommendationPanelClass(accent)}>
+      <div className={recommendationPanelClass(accent).cls} style={recommendationPanelClass(accent).style ?? undefined}>
         <div className="flex flex-wrap items-center gap-2">
           <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", recommendationBadgeToneClass(uiInfo.badgeTone))}>
             {uiInfo.badgeLabel}
@@ -1918,6 +1987,7 @@ function renderStructureBlocks(
     lockLabel?: string;
     t?: (typeof PLAYER_COPY)["IS"];
     recommendationContext?: ExerciseRecommendationContext | null;
+    themeColor?: string | null;
   }
 ) {
   const rawBlocks = Array.isArray(structure) ? structure : [];
@@ -1966,7 +2036,7 @@ function renderStructureBlocks(
         {blocks.map((b: any, idx: number) => {
           const title = String(b?.block ?? `Block ${idx + 1}`);
           const items = safeStringList(b?.items);
-          const accent = blockAccent(title);
+          const accent = blockAccent(title, opts?.themeColor);
           const blockPriority = blockSortPriority(title);
           const blockRecommendationContext =
             blockPriority === 1 || blockPriority === 2 ? opts?.recommendationContext ?? null : null;
@@ -1974,18 +2044,18 @@ function renderStructureBlocks(
           const segments = groupIntoSegments(parsed);
 
           return (
-            <div key={`${title}-${idx}`} className={cx("rounded-2xl border overflow-hidden", accent.wrap)}>
+            <div key={`${title}-${idx}`} className={cx("rounded-2xl border overflow-hidden", accent.wrap)} style={accent.wrapStyle}>
               {/* Colored top bar */}
-              <div className={cx("h-1 w-full", accent.bar)} />
+              <div className={cx("h-1 w-full", accent.bar)} style={accent.barStyle} />
 
               <div className="p-4">
                 {/* Block header */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", accent.dot)} />
+                    <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", accent.dot)} style={accent.dotStyle} />
                     <div className="text-sm font-semibold text-zinc-900">{title}</div>
                   </div>
-                  <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)}>
+                  <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)} style={accent.badgeStyle}>
                     {accent.label}
                   </span>
                 </div>
@@ -2571,6 +2641,7 @@ export default function PlayerClient() {
   const [playerSessionStatusView, setPlayerSessionStatusView] = useState<PlayerSessionStatusView | null>(null);
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
   const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
+  const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
 
   const todayVsTeamMetrics = useMemo(() => {
     return getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
@@ -3264,16 +3335,17 @@ export default function PlayerClient() {
         if (pErr) throw new Error(pErr.message);
         setProfile((prof as any) ?? null);
 
-        // Fetch plan_tier from teams to gate Adaptive Training Engine
+        // Fetch plan_tier and club_theme_color from teams
         if (prof?.team_id) {
           const { data: teamRow } = await supabase
             .from("teams")
-            .select("plan_tier")
+            .select("plan_tier, club_theme_color")
             .eq("id", prof.team_id)
             .maybeSingle();
           const tier = (teamRow as any)?.plan_tier;
           if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
           else setTeamPlanTier("FREE");
+          setClubThemeColor((teamRow as any)?.club_theme_color ?? null);
         }
 
         if (!prof?.player_id) {
@@ -4566,6 +4638,7 @@ export default function PlayerClient() {
               recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
             ? exerciseRecommendationContext
             : null,
+              themeColor: clubThemeColor,
             })}
 
             {renderPostTraining(postTraining)}
