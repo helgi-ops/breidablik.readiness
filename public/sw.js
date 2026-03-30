@@ -10,7 +10,20 @@ self.addEventListener('push', (event) => {
   const body = payload.body || 'You have a new reminder.';
   const url = payload.url || '/player/checkin';
   const icon = payload.icon || '/icons/icon-192.png';
-  const badge = payload.badge || '/icons/icon-96.png';
+  const badge = payload.badge || '/icons/icon-192.png';
+
+  // Set app icon badge (red dot on home screen) — Badge API v2
+  // In service worker context the API lives on self.navigator (WorkerNavigator)
+  const setBadge = () => {
+    try {
+      if (self.navigator && 'setAppBadge' in self.navigator) {
+        return self.navigator.setAppBadge(1);
+      }
+    } catch {
+      // Not supported — silently ignore
+    }
+    return Promise.resolve();
+  };
 
   event.waitUntil(
     Promise.all([
@@ -20,10 +33,7 @@ self.addEventListener('push', (event) => {
         badge,
         data: { url },
       }),
-      // Set the app icon badge (the red dot on the home screen icon)
-      self.registration.setAppBadge
-        ? self.registration.setAppBadge(1)
-        : Promise.resolve(),
+      setBadge(),
     ])
   );
 });
@@ -31,9 +41,13 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  // Clear the app icon badge when the user acts on the notification
-  if (self.registration.clearAppBadge) {
-    self.registration.clearAppBadge();
+  // Clear the app icon badge when the user taps the notification
+  try {
+    if (self.navigator && 'clearAppBadge' in self.navigator) {
+      self.navigator.clearAppBadge();
+    }
+  } catch {
+    // Not supported — silently ignore
   }
 
   const targetUrl =
