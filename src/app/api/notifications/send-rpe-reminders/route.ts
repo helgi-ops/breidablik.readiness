@@ -40,13 +40,27 @@ export async function POST(req: Request) {
   }
 
   try {
+    const url = new URL(req.url);
     const body = (await req.json().catch(() => ({}))) as RpeReminderBody;
     const timeZone = getOperationalTimezone();
-    const dateKey = validDateKey(body.dateKey) ?? getDateKeyInTimezone(new Date(), timeZone);
+    // Query params act as fallback for GET requests (no body)
+    const dateKey =
+      validDateKey(body.dateKey) ??
+      validDateKey(url.searchParams.get("dateKey") ?? undefined) ??
+      getDateKeyInTimezone(new Date(), timeZone);
 
     const slotFromClock = getCurrentScheduledSlot({ timeZone, toleranceMinutes: 6 });
-    const scheduledSlot = body.scheduledSlot || slotFromClock?.slotKey || null;
-    const reminderType = body.reminderType || slotFromClock?.reminderType || null;
+    const scheduledSlot =
+      body.scheduledSlot ||
+      url.searchParams.get("scheduledSlot") ||
+      slotFromClock?.slotKey ||
+      null;
+    const reminderType = (
+      body.reminderType ||
+      url.searchParams.get("reminderType") ||
+      slotFromClock?.reminderType ||
+      null
+    ) as RpeReminderBody["reminderType"] | null;
     if (!scheduledSlot || !reminderType) {
       return NextResponse.json({
         ok: true,
