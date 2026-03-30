@@ -93,20 +93,26 @@ export async function registerPushSubscription(): Promise<RegisterPushSubscripti
 
     let subscription = await registration.pushManager.getSubscription();
 
-    // Detect VAPID key rotation: if the key used for the existing subscription
-    // differs from the current one, unsubscribe so we re-subscribe below with
-    // the new key. Without this, key rotations would silently keep using the
-    // old (now invalid) subscription endpoint.
+    // Detect VAPID key rotation by comparing the key embedded in the existing
+    // browser subscription against the current public key. This works on first
+    // run (no localStorage needed) and across all modern browsers.
     if (subscription) {
-      const STORAGE_KEY = "push_vapid_public_key";
       try {
-        const storedKey = localStorage.getItem(STORAGE_KEY);
-        if (storedKey && storedKey !== vapidPublicKey) {
-          await subscription.unsubscribe();
-          subscription = null;
+        const existingKey = subscription.options?.applicationServerKey;
+        if (existingKey) {
+          const currentKeyBuffer = urlBase64ToArrayBuffer(vapidPublicKey);
+          const isMismatch =
+            existingKey.byteLength !== currentKeyBuffer.byteLength ||
+            !new Uint8Array(existingKey).every(
+              (byte, i) => byte === new Uint8Array(currentKeyBuffer)[i]
+            );
+          if (isMismatch) {
+            await subscription.unsubscribe();
+            subscription = null;
+          }
         }
       } catch {
-        // localStorage unavailable — proceed without rotation check
+        // Comparison failed — proceed, worst case we keep the old subscription
       }
     }
 
@@ -137,9 +143,6 @@ export async function registerPushSubscription(): Promise<RegisterPushSubscripti
     if (!res.ok || !responseJson?.ok) {
       throw new RegisterPushSubscriptionError("REGISTER_API_FAILED", responseJson?.error || "Failed to register subscription");
     }
-
-    // Persist the VAPID key used so we can detect rotation on the next visit
-    try { localStorage.setItem("push_vapid_public_key", vapidPublicKey); } catch { /* ignore */ }
 
     return { endpoint: json.endpoint };
   } catch (error: unknown) {
