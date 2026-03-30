@@ -1,3 +1,35 @@
+// Force immediate activation so badge fixes take effect without waiting
+// for the user to close and reopen all tabs.
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+// ── Badge helper ────────────────────────────────────────────────────────────
+// Try every known path for the Badge API across browsers and contexts.
+function setAppBadge(count) {
+  try {
+    // Standard: WorkerNavigator (Chrome 81+, iOS 16.4+ in SW context)
+    if (self.navigator && 'setAppBadge' in self.navigator) {
+      return self.navigator.setAppBadge(count);
+    }
+  } catch { /* ignore */ }
+  return Promise.resolve();
+}
+
+function clearAppBadge() {
+  try {
+    if (self.navigator && 'clearAppBadge' in self.navigator) {
+      return self.navigator.clearAppBadge();
+    }
+  } catch { /* ignore */ }
+  return Promise.resolve();
+}
+
+// ── Push handler ────────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
@@ -7,23 +39,10 @@ self.addEventListener('push', (event) => {
   }
 
   const title = payload.title || 'MicroPulse';
-  const body = payload.body || 'You have a new reminder.';
-  const url = payload.url || '/player/checkin';
-  const icon = payload.icon || '/icons/icon-192.png';
+  const body  = payload.body  || 'You have a new reminder.';
+  const url   = payload.url   || '/player/checkin';
+  const icon  = payload.icon  || '/icons/icon-192.png';
   const badge = payload.badge || '/icons/icon-192.png';
-
-  // Set app icon badge (red dot on home screen) — Badge API v2
-  // In service worker context the API lives on self.navigator (WorkerNavigator)
-  const setBadge = () => {
-    try {
-      if (self.navigator && 'setAppBadge' in self.navigator) {
-        return self.navigator.setAppBadge(1);
-      }
-    } catch {
-      // Not supported — silently ignore
-    }
-    return Promise.resolve();
-  };
 
   event.waitUntil(
     Promise.all([
@@ -33,22 +52,15 @@ self.addEventListener('push', (event) => {
         badge,
         data: { url },
       }),
-      setBadge(),
+      setAppBadge(1),
     ])
   );
 });
 
+// ── Notification click ──────────────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  // Clear the app icon badge when the user taps the notification
-  try {
-    if (self.navigator && 'clearAppBadge' in self.navigator) {
-      self.navigator.clearAppBadge();
-    }
-  } catch {
-    // Not supported — silently ignore
-  }
+  clearAppBadge();
 
   const targetUrl =
     (event.notification && event.notification.data && event.notification.data.url) ||
@@ -66,11 +78,7 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
 
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
-
-        return undefined;
+        return clients.openWindow ? clients.openWindow(targetUrl) : undefined;
       })
   );
 });
