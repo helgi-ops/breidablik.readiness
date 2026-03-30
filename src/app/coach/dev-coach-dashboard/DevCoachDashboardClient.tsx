@@ -78,6 +78,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
+import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
@@ -5932,6 +5933,11 @@ export default function CoachPage() {
               })()}
             </CardContent>
           </Card>
+
+          {/* Decision Summary — per-player today */}
+          {rows.length > 0 && (
+            <DecisionSummaryCard rows={rows as any} />
+          )}
 
           {/* Readiness Today — team signal summary */}
           <Card className="shadow-sm">
