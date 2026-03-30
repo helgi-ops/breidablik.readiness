@@ -34,6 +34,10 @@ type PrescriptionDecision = {
 type FinalRecommendationDecision = {
   finalRecommendation: PrescriptionDecision;
   confidence: number;
+  riskFlags?: string[];
+  debug?: {
+    matchedRules?: string[];
+  };
 };
 
 type TrendDirection = "IMPROVING" | "STABLE" | "WORSENING" | "SHARPLY_WORSENING";
@@ -365,6 +369,61 @@ const UNKNOWN_STATE: StateConfig = {
   sortPriority: 9,
 };
 
+// ── Risk flag labels ──────────────────────────────────────────────────────
+// Maps the engine's internal riskFlags to coach-friendly English.
+
+const RISK_FLAG_LABEL: Record<string, string> = {
+  high_acwr:                  "ACWR above 1.5 — acute load far exceeds chronic",
+  acwr_spike:                 "ACWR elevated (1.3–1.5) — load rising fast",
+  load_spike:                 "Session load >20% above 7-day average",
+  recent_load_drop:           "Significant load drop recently",
+  high_soreness:              "High soreness reported (≤ 2/5)",
+  low_sleep:                  "Poor sleep quality reported (≤ 2/5)",
+  low_recovery:               "Low recovery score reported (≤ 2/5)",
+  high_fatigue:               "High fatigue reported (≥ 4/5)",
+  injury_risk_high:           "Injury risk system flagged HIGH",
+  injury_risk_elevated:       "Injury risk system flagged ELEVATED",
+  high_hsr_exposure:          "High-speed running exposure spike",
+  high_accel_decel_exposure:  "High acceleration/deceleration load",
+  high_mechanical_load:       "High total mechanical load",
+  missing_load_data:          "Load data unavailable",
+  missing_wellness:           "Wellness data unavailable",
+  manual_review:              "Manually flagged for review",
+};
+
+// Maps matchedRules to a one-line explanation of the combination that fired.
+const MATCHED_RULE_LABEL: Record<string, string> = {
+  force_red:                 "RED: critical combination of risk factors",
+  force_yellow:              "YELLOW: one or more elevated risk flags",
+  insufficient_core_inputs:  "Insufficient data — GRAY pending",
+};
+
+/**
+ * Returns an array of human-readable strings explaining WHY the decision
+ * was triggered, based on the engine's riskFlags and matchedRules.
+ */
+function buildDecisionReasons(final: FinalRecommendationDecision | null, displayAction: string | null): string[] {
+  if (!final) return [];
+  // Only show for RED / YELLOW — FULL doesn't need an explanation
+  if (displayAction !== "RECOVERY" && displayAction !== "HOLD" && displayAction !== "MODIFIED") return [];
+
+  const reasons: string[] = [];
+
+  // Leading summary from matchedRules (e.g. "force_red")
+  for (const rule of (final.debug?.matchedRules ?? [])) {
+    const label = MATCHED_RULE_LABEL[rule];
+    if (label) { reasons.push(label); break; }
+  }
+
+  // Individual risk flags
+  for (const flag of (final.riskFlags ?? [])) {
+    const label = RISK_FLAG_LABEL[flag];
+    if (label) reasons.push(label);
+  }
+
+  return reasons;
+}
+
 // ── Player Detail Modal ───────────────────────────────────────────────────
 
 const RECOVERY_FOCUS_LABEL: Record<string, string> = {
@@ -394,6 +453,10 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
   const primarySentence = buildPrimaryDriverSentence(primaryDriver, zText, trendText);
   const allSecondary = buildSecondaryLabels(final?.primaryDrivers, primaryDriver?.key);
   const actionBlock = buildCoachActionBlock(displayAction, final);
+  const decisionReasons = buildDecisionReasons(
+    row._final_recommendation_decision ?? null,
+    displayAction
+  );
 
   // Close on Escape key
   useEffect(() => {
@@ -455,6 +518,30 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
               <div className="space-y-2">
                 {allSecondary.map((d, i) => (
                   <p key={i} className="text-base text-slate-600 leading-snug">· {d}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Why this decision? */}
+          {decisionReasons.length > 0 && (
+            <div className={`rounded-xl border px-5 py-4 ${
+              displayAction === "RECOVERY" || displayAction === "HOLD"
+                ? "bg-rose-50 border-rose-200"
+                : "bg-amber-50 border-amber-200"
+            }`}>
+              <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Why this decision?</p>
+              <div className="space-y-1.5">
+                {decisionReasons.map((r, i) => (
+                  <p key={i} className={`text-sm leading-snug font-medium ${
+                    i === 0 && (displayAction === "RECOVERY" || displayAction === "HOLD")
+                      ? "text-rose-800"
+                      : i === 0
+                      ? "text-amber-800"
+                      : "text-slate-700"
+                  }`}>
+                    {i === 0 ? r : `· ${r}`}
+                  </p>
                 ))}
               </div>
             </div>
