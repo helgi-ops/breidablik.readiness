@@ -14,9 +14,8 @@ type WeekdaySlotConfig = Record<number, readonly string[]>;
 const DAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 // RPE reminder windows — sent AFTER training so players can rate the session.
-// Mon/Wed/Fri/Sat: training at 11:00, ends ~12:30 → first reminder 14:00, second 15:00
+// Mon/Wed/Fri/Sat/Sun: training at 11:00, ends ~12:30 → first reminder 14:00, second 15:00
 // Tue/Thu: training at 14:00, ends ~15:30 → first reminder 16:00, second 17:00
-// Sun: no training (empty)
 export const rpeReminderConfig: {
   weekendEnabled: boolean;
   weekdaySlots: WeekdaySlotConfig;
@@ -30,7 +29,7 @@ export const rpeReminderConfig: {
     4: ["16:00", "17:00"], // Thu
     5: ["14:00", "15:00"], // Fri
     6: ["14:00", "15:00"], // Sat — after 11:00 training
-    0: [],                  // Sun — no training
+    0: ["14:00", "15:00"], // Sun — same pattern as Mon/Wed/Fri/Sat
   },
   copy: {
     first: {
