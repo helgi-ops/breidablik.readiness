@@ -46,9 +46,27 @@ export function normalizeSleepQuality(value: number | null | undefined): Wellnes
 
 export function normalizeFatigue(value: number | null | undefined): WellnessBand {
   if (!isFiniteNumber(value)) return "unknown";
-  if (value >= DECISION_THRESHOLDS.HIGH_FATIGUE_BAD) return "poor";
-  if (value >= DECISION_THRESHOLDS.MODERATE_FATIGUE_BAD) return "moderate";
+  // Energy/fatigue uses 1–5 scale (1=very tired, 5=very fresh): lower value = worse
+  if (value <= DECISION_THRESHOLDS.HIGH_FATIGUE_BAD) return "poor";
+  if (value <= DECISION_THRESHOLDS.MODERATE_FATIGUE_BAD) return "moderate";
   return "good";
+}
+
+export function normalizeStress(value: number | null | undefined): WellnessBand {
+  if (!isFiniteNumber(value)) return "unknown";
+  // Stress/mood uses 1–5 scale (1=very stressed/bad mood, 5=calm/good mood): lower value = worse
+  if (value <= DECISION_THRESHOLDS.HIGH_STRESS_BAD) return "poor";
+  if (value <= DECISION_THRESHOLDS.MODERATE_STRESS_BAD) return "moderate";
+  return "good";
+}
+
+export function normalizeZScore(value: number | null | undefined): WellnessBand {
+  if (!isFiniteNumber(value)) return "unknown";
+  // Z-score: 0 = at own mean; negative = below baseline; more negative = worse
+  // Thresholds based on Thornton et al. (2019), Int J Sports Physiol Perform
+  if (value <= DECISION_THRESHOLDS.LOW_Z_RED) return "poor";    // < −2.0 (red flag)
+  if (value <= DECISION_THRESHOLDS.LOW_Z_YELLOW) return "moderate"; // −1.5 to −2.0 (yellow flag)
+  return "good"; // > −1.5: within acceptable range
 }
 
 export function computeLoadDeltaVs7dAvg(load?: {

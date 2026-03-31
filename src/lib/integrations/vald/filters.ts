@@ -1,6 +1,10 @@
 import type { ValdAthleteSummary } from "./types";
 
-const MEN_SCOPE_MATCHES = [
+// ---------------------------------------------------------------------------
+// Legacy team-scope constants (Breiðablik-specific, kept for reference only).
+// Production sync no longer uses these — see filterValdAthletesToMicroPulseRoster.
+// ---------------------------------------------------------------------------
+const _LEGACY_MENS_SCOPE_MATCHES = [
   "breiðablik fc - men's teams",
   "breidablik fc - men's teams",
   "breiðablik fc mens teams",
@@ -11,7 +15,7 @@ const MEN_SCOPE_MATCHES = [
   "breidablik mens teams",
 ];
 
-const WOMEN_SCOPE_MATCHES = [
+const _LEGACY_WOMENS_SCOPE_MATCHES = [
   "women",
   "women's",
   "womens",
@@ -37,19 +41,29 @@ function athleteSearchText(athlete: ValdAthleteSummary): string {
   ].filter(Boolean).join(" | "));
 }
 
+// ---------------------------------------------------------------------------
+// Legacy exports — not called by production sync, preserved for compatibility.
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use filterValdAthletesToMicroPulseRoster instead. */
 export function isBreidablikMensTeamAthlete(athlete: ValdAthleteSummary): boolean {
   const haystack = athleteSearchText(athlete);
   if (!haystack) return true;
-  const matchesMensScope = MEN_SCOPE_MATCHES.some((pattern) => haystack.includes(pattern));
+  const matchesMensScope = _LEGACY_MENS_SCOPE_MATCHES.some((pattern) => haystack.includes(pattern));
   if (matchesMensScope) return true;
-  const matchesWomenScope = WOMEN_SCOPE_MATCHES.some((pattern) => haystack.includes(pattern));
+  const matchesWomenScope = _LEGACY_WOMENS_SCOPE_MATCHES.some((pattern) => haystack.includes(pattern));
   if (matchesWomenScope) return false;
   return true;
 }
 
+/** @deprecated Use filterValdAthletesToMicroPulseRoster instead. */
 export function filterBreidablikMensTeamAthletes(athletes: ValdAthleteSummary[]): ValdAthleteSummary[] {
   return athletes.filter(isBreidablikMensTeamAthlete);
 }
+
+// ---------------------------------------------------------------------------
+// Name-matching utilities (sport-agnostic)
+// ---------------------------------------------------------------------------
 
 function slugifyName(value: string): string {
   return value
@@ -69,6 +83,10 @@ function sharedTokenCount(a: string[], b: string[]): number {
   return a.filter((token) => setB.has(token)).length;
 }
 
+/**
+ * Returns true if the VALD athlete name probably matches one of the
+ * MicroPulse players by fuzzy name comparison. Sport-agnostic.
+ */
 export function probablyMatchesMicroPulsePlayer(
   athlete: ValdAthleteSummary,
   players: Array<{ id: string; name: string }>
@@ -87,6 +105,7 @@ export function probablyMatchesMicroPulsePlayer(
   });
 }
 
+/** @deprecated Use filterValdAthletesToMicroPulseRoster instead. */
 export function filterBreidablikMensTeamCandidates(
   athletes: ValdAthleteSummary[],
   players: Array<{ id: string; name: string }>
@@ -94,6 +113,10 @@ export function filterBreidablikMensTeamCandidates(
   return athletes.filter((athlete) => probablyMatchesMicroPulsePlayer(athlete, players) || isBreidablikMensTeamAthlete(athlete));
 }
 
+/**
+ * Primary filter for VALD → MicroPulse sync.
+ * Matches athletes to the team roster by name — works for any sport or club.
+ */
 export function filterValdAthletesToMicroPulseRoster(
   athletes: ValdAthleteSummary[],
   players: Array<{ id: string; name: string }>
