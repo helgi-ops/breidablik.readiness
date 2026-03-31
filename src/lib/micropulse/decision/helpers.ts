@@ -46,8 +46,17 @@ export function normalizeSleepQuality(value: number | null | undefined): Wellnes
 
 export function normalizeFatigue(value: number | null | undefined): WellnessBand {
   if (!isFiniteNumber(value)) return "unknown";
-  if (value >= DECISION_THRESHOLDS.HIGH_FATIGUE_BAD) return "poor";
-  if (value >= DECISION_THRESHOLDS.MODERATE_FATIGUE_BAD) return "moderate";
+  // Energy/fatigue uses 1–5 scale (1=very tired, 5=very fresh): lower value = worse
+  if (value <= DECISION_THRESHOLDS.HIGH_FATIGUE_BAD) return "poor";
+  if (value <= DECISION_THRESHOLDS.MODERATE_FATIGUE_BAD) return "moderate";
+  return "good";
+}
+
+export function normalizeStress(value: number | null | undefined): WellnessBand {
+  if (!isFiniteNumber(value)) return "unknown";
+  // Stress/mood uses 1–5 scale (1=very stressed/bad mood, 5=calm/good mood): lower value = worse
+  if (value <= DECISION_THRESHOLDS.HIGH_STRESS_BAD) return "poor";
+  if (value <= DECISION_THRESHOLDS.MODERATE_STRESS_BAD) return "moderate";
   return "good";
 }
 

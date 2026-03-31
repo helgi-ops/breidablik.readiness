@@ -147,12 +147,20 @@ export function buildDecisionInputFromDailyPlayerRecord(args: BuildDecisionInput
     lightAteState: coerceState(args.lightAteState),
     wellness: {
       soreness: isFiniteNumber(monitoring?.sorenessScore) ? monitoring?.sorenessScore ?? null : null,
-      fatigue: isFiniteNumber(monitoring?.checkinScore) ? monitoring?.checkinScore ?? null : null,
+      // Use raw fatigue_energy (1–5: 1=very tired, 5=very fresh) from snapshot.subjective.motivation.
+      // Fallback to checkinScore only when snapshot motivation is absent.
+      fatigue: isFiniteNumber(args.snapshot?.subjective?.motivation)
+        ? args.snapshot?.subjective?.motivation ?? null
+        : isFiniteNumber(monitoring?.checkinScore) ? monitoring?.checkinScore ?? null : null,
       sleepQuality: isFiniteNumber(monitoring?.sleepScore) ? monitoring?.sleepScore ?? null : null,
-      mood: null,
-      stress: null,
+      mood: isFiniteNumber(args.snapshot?.subjective?.mood) ? args.snapshot?.subjective?.mood ?? null : null,
+      // stress_mood (1–5: 1=very stressed, 5=calm) — from check-in
+      stress: isFiniteNumber(args.snapshot?.subjective?.stress) ? args.snapshot?.subjective?.stress ?? null : null,
       motivation: null,
-      recovery: isFiniteNumber(monitoring?.sleepScore) ? monitoring?.sleepScore ?? null : null,
+      // Use stress/mood as recovery proxy — more meaningful than duplicating sleepScore
+      recovery: isFiniteNumber(args.snapshot?.subjective?.stress)
+        ? args.snapshot?.subjective?.stress ?? null
+        : isFiniteNumber(monitoring?.sleepScore) ? monitoring?.sleepScore ?? null : null,
       sessionRpePrevious: isFiniteNumber(monitoring?.sessionRpeLoad) ? monitoring?.sessionRpeLoad ?? null : null,
       missing: !isFiniteNumber(monitoring?.sorenessScore) && !isFiniteNumber(monitoring?.sleepScore) && !isFiniteNumber(monitoring?.checkinScore),
     },

@@ -18,8 +18,11 @@ export const DECISION_THRESHOLDS = {
   LOW_RECOVERY_BAD: 2,
   MODERATE_RECOVERY_BAD: 3,
 
-  HIGH_FATIGUE_BAD: 4,
-  MODERATE_FATIGUE_BAD: 3,
+  HIGH_FATIGUE_BAD: 2,     // energy ≤ 2 on 1–5 scale (1=very tired, 5=very fresh)
+  MODERATE_FATIGUE_BAD: 3, // energy ≤ 3 on 1–5 scale
+
+  HIGH_STRESS_BAD: 2,      // stress/mood ≤ 2 on 1–5 scale (1=very stressed, 5=calm)
+  MODERATE_STRESS_BAD: 3,
 
   HIGH_RISK_SCORE: 0.75,
   MODERATE_RISK_SCORE: 0.5,
