@@ -10,7 +10,6 @@ export type RiskFlag =
   | "low_sleep"
   | "low_recovery"
   | "high_fatigue"
-  | "high_stress"
   | "high_neural_strain"
   | "high_mechanical_load"
   | "injury_risk_elevated"
