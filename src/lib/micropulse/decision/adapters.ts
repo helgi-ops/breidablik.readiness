@@ -87,8 +87,8 @@ function buildLoadSection(args: {
         ? ((accelTotal ?? 0) + (decelTotal ?? 0)) / Math.max(1, isFiniteNumber(today?.playerLoad) ? today!.playerLoad! : 1)
         : null,
     // Z-score and delta-Z from snapshot (readiness deviation from own baseline)
-    zScore: isFiniteNumber(snapshot?.load.zScore) ? snapshot!.load.zScore! : null,
-    deltaZ: isFiniteNumber(snapshot?.load.deltaZ) ? snapshot!.load.deltaZ! : null,
+    zScore: isFiniteNumber(snapshot?.stability.zScore) ? snapshot!.stability.zScore! : null,
+    deltaZ: isFiniteNumber(snapshot?.stability.deltaZ) ? snapshot!.stability.deltaZ! : null,
     missing: !today && !isFiniteNumber(monitoring?.acuteLoad) && !isFiniteNumber(monitoring?.acwr),
   };
 
