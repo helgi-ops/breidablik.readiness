@@ -381,6 +381,7 @@ const RISK_FLAG_LABEL: Record<string, string> = {
   low_sleep:                  "Poor sleep quality reported (≤ 2/5)",
   low_recovery:               "Low recovery score reported (≤ 2/5)",
   high_fatigue:               "Low energy reported (≤ 2/5)",
+  high_stress:                "High stress / poor mood reported (≤ 2/5)",
   injury_risk_high:           "Injury risk system flagged HIGH",
   injury_risk_elevated:       "Injury risk system flagged ELEVATED",
   high_hsr_exposure:          "High-speed running exposure spike",
