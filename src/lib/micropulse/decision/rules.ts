@@ -8,8 +8,6 @@ import {
   normalizeRecovery,
   normalizeSleepQuality,
   normalizeSoreness,
-  normalizeStress,
-  normalizeZScore,
 } from "./helpers";
 import { buildCoachSummary, buildExplanationFactors, buildPlayerSummary } from "./explanations";
 import type {
@@ -58,7 +56,6 @@ function resolveRiskFlags(input: DecisionInput): { flags: RiskFlag[]; derived: R
   const recoveryBand = normalizeRecovery(input.wellness?.recovery);
   const sleepBand = normalizeSleepQuality(input.wellness?.sleepQuality);
   const fatigueBand = normalizeFatigue(input.wellness?.fatigue);
-  const stressBand = normalizeStress(input.wellness?.stress);
   const acwr = input.load?.acwr ?? null;
   const loadDelta = input.load?.loadDeltaVs7dAvg ?? null;
   const hsr = input.load?.highSpeedRunningDistance ?? null;
@@ -81,12 +78,6 @@ function resolveRiskFlags(input: DecisionInput): { flags: RiskFlag[]; derived: R
   if (sleepBand === "poor") flags.push("low_sleep");
   if (recoveryBand === "poor") flags.push("low_recovery");
   if (fatigueBand === "poor") flags.push("high_fatigue");
-  if (stressBand === "poor") flags.push("high_stress");
-
-  // Z-score: flag when athlete is significantly below own baseline
-  // Thresholds: Thornton et al. (2019) — ≤ −1.5 yellow, ≤ −2.0 red
-  const zScoreBand = normalizeZScore(input.load?.zScore);
-  if (zScoreBand === "poor" || zScoreBand === "moderate") flags.push("low_z");
 
   if (input.injuryRiskState === "YELLOW" || (input.injuryRiskScore ?? 0) >= DECISION_THRESHOLDS.MODERATE_RISK_SCORE) {
     flags.push("injury_risk_elevated");
@@ -157,8 +148,6 @@ function resolveFinalState(input: DecisionInput, baseState: DecisionState, riskF
     riskFlags.includes("high_soreness") ||
     riskFlags.includes("low_sleep") ||
     riskFlags.includes("high_fatigue") ||
-    riskFlags.includes("high_stress") ||
-    riskFlags.includes("low_z") ||
     riskFlags.includes("recent_load_drop") ||
     riskFlags.includes("missing_load_data") ||
     riskFlags.includes("missing_wellness") ||

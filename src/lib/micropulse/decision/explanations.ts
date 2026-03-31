@@ -7,8 +7,6 @@ import {
   normalizeRecovery,
   normalizeSleepQuality,
   normalizeSoreness,
-  normalizeStress,
-  normalizeZScore,
   sortExplanationFactors,
 } from "./helpers";
 import type {
@@ -167,44 +165,6 @@ export function buildExplanationFactors({ input, finalState, matchedRules, riskF
           : fatigue === "moderate"
           ? "Fatigue is slightly elevated."
           : "Fatigue appears manageable.",
-    });
-  }
-
-  if (typeof input.wellness?.stress === "number") {
-    const stress = normalizeStress(input.wellness.stress);
-    factors.push({
-      key: "stress",
-      label: "Stress / mood",
-      value: input.wellness.stress,
-      impactScore: stress === "poor" ? EXPLANATION_IMPACT.MODERATE : EXPLANATION_IMPACT.LOW,
-      direction: stress === "good" ? "positive" : stress === "unknown" ? "neutral" : "negative",
-      summary:
-        stress === "poor"
-          ? "Stress or mood is poor and reduces the athlete's capacity to absorb training."
-          : stress === "moderate"
-          ? "Stress or mood is slightly elevated."
-          : "Stress and mood are not a concern today.",
-    });
-  }
-
-  if (typeof input.load?.zScore === "number") {
-    const zBand = normalizeZScore(input.load.zScore);
-    const stenScore = Math.round((2 * input.load.zScore + 5.5) * 10) / 10;
-    factors.push({
-      key: "z_score",
-      label: "Readiness vs. own baseline (Z-score)",
-      value: input.load.zScore,
-      impactScore:
-        zBand === "poor" ? EXPLANATION_IMPACT.HIGH :
-        zBand === "moderate" ? EXPLANATION_IMPACT.MODERATE :
-        EXPLANATION_IMPACT.LOW,
-      direction: zBand === "good" ? "positive" : zBand === "unknown" ? "neutral" : "negative",
-      summary:
-        zBand === "poor"
-          ? `Athlete is significantly below own baseline (Z=${formatNullableNumber(input.load.zScore)}, STEN≈${stenScore}). This is a red-flag level deviation.`
-          : zBand === "moderate"
-          ? `Athlete is below own baseline (Z=${formatNullableNumber(input.load.zScore)}, STEN≈${stenScore}). Monitor closely.`
-          : `Athlete is at or above own baseline (Z=${formatNullableNumber(input.load.zScore)}, STEN≈${stenScore}). No concern.`,
     });
   }
 

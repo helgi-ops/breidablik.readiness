@@ -150,68 +150,6 @@ function confidenceToBand(c: number | null | undefined): "High" | "Medium" | "Lo
   return "Low";
 }
 
-// ── STEN score helpers ────────────────────────────────────────────────────
-// STEN = (2 × Z) + 5.5 — converts Z-score to 1–10 scale.
-// Thornton et al. (2019): Z ≤ −2 = red flag; Z ≤ −1.5 = yellow flag.
-// STEN bands: 1–2 = Very low, 3–4 = Low, 5–6 = Normal, 7–8 = High, 9–10 = Very high.
-
-function zToSten(z: number): number {
-  const raw = 2 * z + 5.5;
-  return Math.round(Math.max(1, Math.min(10, raw)) * 10) / 10;
-}
-
-type StenBand = {
-  label: string;
-  shortLabel: string;
-  chipBg: string;
-  chipText: string;
-  textColor: string;
-  readinessText: string;
-};
-
-function stenToBand(sten: number): StenBand {
-  if (sten <= 2) return {
-    label: "Very low",
-    shortLabel: "Very low",
-    chipBg: "bg-rose-100",
-    chipText: "text-rose-800",
-    textColor: "text-rose-700",
-    readinessText: "Significantly below own baseline — consider recovery or reduced session",
-  };
-  if (sten <= 4) return {
-    label: "Below baseline",
-    shortLabel: "Below baseline",
-    chipBg: "bg-amber-100",
-    chipText: "text-amber-800",
-    textColor: "text-amber-700",
-    readinessText: "Below own baseline — monitor and consider reducing training load",
-  };
-  if (sten <= 6) return {
-    label: "Normal",
-    shortLabel: "Normal",
-    chipBg: "bg-slate-100",
-    chipText: "text-slate-600",
-    textColor: "text-slate-600",
-    readinessText: "Within normal range for this player — no concerns from baseline",
-  };
-  if (sten <= 8) return {
-    label: "Above baseline",
-    shortLabel: "Above baseline",
-    chipBg: "bg-emerald-100",
-    chipText: "text-emerald-800",
-    textColor: "text-emerald-700",
-    readinessText: "Above own baseline — player is in good form",
-  };
-  return {
-    label: "Peak form",
-    shortLabel: "Peak",
-    chipBg: "bg-emerald-200",
-    chipText: "text-emerald-900",
-    textColor: "text-emerald-800",
-    readinessText: "Player is at peak readiness — very high form relative to own baseline",
-  };
-}
-
 function buildPrimaryDriverSentence(
   driver: DriverContribution | null | undefined,
   zText: string | null,
@@ -442,9 +380,7 @@ const RISK_FLAG_LABEL: Record<string, string> = {
   high_soreness:              "High soreness reported (≤ 2/5)",
   low_sleep:                  "Poor sleep quality reported (≤ 2/5)",
   low_recovery:               "Low recovery score reported (≤ 2/5)",
-  high_fatigue:               "Low energy reported (≤ 2/5)",
-  high_stress:                "High stress / poor mood reported (≤ 2/5)",
-  low_z:                      "Below own baseline (Z ≤ −1.5 / STEN ≤ 3.5)",
+  high_fatigue:               "High fatigue reported (≥ 4/5)",
   injury_risk_high:           "Injury risk system flagged HIGH",
   injury_risk_elevated:       "Injury risk system flagged ELEVATED",
   high_hsr_exposure:          "High-speed running exposure spike",
@@ -611,64 +547,16 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
             </div>
           )}
 
-          {/* Neural signal — STEN score + baseline comparison */}
-          {(row._z_today != null || trendText) && (() => {
-            const hasSten = row._z_today != null && Number.isFinite(row._z_today);
-            const sten = hasSten ? zToSten(row._z_today!) : null;
-            const band = sten != null ? stenToBand(sten) : null;
-            return (
-              <div className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-4">
-                <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">Baseline readiness (STEN)</p>
-
-                {hasSten && sten != null && band != null && (
-                  <div className="flex items-start gap-4 mb-3">
-                    {/* Big STEN number */}
-                    <div className={`rounded-xl px-4 py-2 ${band.chipBg} flex flex-col items-center min-w-[5rem]`}>
-                      <span className={`text-3xl font-black leading-none ${band.chipText}`}>{sten}</span>
-                      <span className={`text-[10px] font-bold mt-0.5 uppercase tracking-wider ${band.chipText}`}>/ 10</span>
-                    </div>
-                    {/* Band label + explanation */}
-                    <div className="flex flex-col gap-1 justify-center">
-                      <span className={`text-base font-bold ${band.textColor}`}>{band.label}</span>
-                      <p className="text-sm text-slate-600 leading-snug">{band.readinessText}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* STEN scale reference */}
-                {hasSten && (
-                  <div className="flex items-center gap-0.5 mb-3">
-                    {[1,2,3,4,5,6,7,8,9,10].map((n) => {
-                      const isActive = sten != null && Math.round(sten) === n;
-                      return (
-                        <div
-                          key={n}
-                          className={`h-2 flex-1 rounded-sm transition-all ${
-                            isActive
-                              ? (n <= 2 ? "bg-rose-500" : n <= 4 ? "bg-amber-400" : n <= 6 ? "bg-slate-400" : "bg-emerald-500")
-                              : "bg-slate-200"
-                          }`}
-                          title={`STEN ${n}`}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-                {hasSten && (
-                  <div className="flex justify-between text-[10px] text-slate-400 mb-3 px-0.5">
-                    <span>Very low</span>
-                    <span>Normal</span>
-                    <span>Peak form</span>
-                  </div>
-                )}
-
-                <div className="space-y-1.5 pt-1 border-t border-slate-200">
-                  {zText && <p className="text-sm text-slate-600">Load is <span className="font-semibold text-slate-800">{zText}</span> vs. this player's own average</p>}
-                  {trendText && <p className="text-sm text-slate-600">Trajectory: <span className="font-semibold text-slate-800">{trendText}</span></p>}
-                </div>
+          {/* Neural signal */}
+          {(row._z_today != null || trendText) && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-4">
+              <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Neural signal</p>
+              <div className="space-y-1.5">
+                {zText && <p className="text-base text-slate-700">Load: <span className="font-semibold">{zText}</span> compared to this player's baseline</p>}
+                {trendText && <p className="text-base text-slate-700">Trajectory: <span className="font-semibold">{trendText}</span></p>}
               </div>
-            );
-          })()}
+            </div>
+          )}
 
           {/* Action */}
           <div className={`rounded-xl border ${cfg.actionBgClass} px-5 py-5`}>
@@ -782,20 +670,6 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
             </div>
           )}
         </div>
-
-        {/* STEN score chip */}
-        {row._z_today != null && Number.isFinite(row._z_today) && (() => {
-          const sten = zToSten(row._z_today!);
-          const band = stenToBand(sten);
-          return (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ${band.chipBg} ${band.chipText}`}>
-                STEN {sten}
-              </span>
-              <span className={`text-[10px] font-medium ${band.textColor}`}>{band.shortLabel}</span>
-            </div>
-          );
-        })()}
       </div>
     </div>
   );

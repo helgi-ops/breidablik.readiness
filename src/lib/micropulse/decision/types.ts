@@ -10,7 +10,6 @@ export type RiskFlag =
   | "low_sleep"
   | "low_recovery"
   | "high_fatigue"
-  | "high_stress"
   | "high_neural_strain"
   | "high_mechanical_load"
   | "injury_risk_elevated"
@@ -20,8 +19,7 @@ export type RiskFlag =
   | "recent_load_drop"
   | "high_hsr_exposure"
   | "high_accel_decel_exposure"
-  | "manual_review"
-  | "low_z";
+  | "manual_review";
 
 export type DecisionConstraint =
   | "avoid_eccentric_overload"
@@ -102,8 +100,6 @@ export type DecisionInput = {
     totalAccelerations?: number | null;
     totalDecelerations?: number | null;
     accelDecelDensity?: number | null;
-    zScore?: number | null;
-    deltaZ?: number | null;
     missing?: boolean;
   } | null;
 

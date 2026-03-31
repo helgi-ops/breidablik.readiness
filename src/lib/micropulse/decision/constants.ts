@@ -18,16 +18,8 @@ export const DECISION_THRESHOLDS = {
   LOW_RECOVERY_BAD: 2,
   MODERATE_RECOVERY_BAD: 3,
 
-  HIGH_FATIGUE_BAD: 2,     // energy ≤ 2 on 1–5 scale (1=very tired, 5=very fresh)
-  MODERATE_FATIGUE_BAD: 3, // energy ≤ 3 on 1–5 scale
-
-  HIGH_STRESS_BAD: 2,      // stress/mood ≤ 2 on 1–5 scale (1=very stressed, 5=calm)
-  MODERATE_STRESS_BAD: 3,
-
-  // Z-score thresholds — based on Thornton et al. (2019), Int J Sports Physiol Perform
-  // Z = 0 means at own mean; negative = below baseline; lower = worse
-  LOW_Z_YELLOW: -1.5,   // yellow flag threshold (Thornton: −1.5 to −1.99 = yellow flag)
-  LOW_Z_RED: -2.0,      // red flag threshold   (Thornton: < −2 = red flag)
+  HIGH_FATIGUE_BAD: 4,
+  MODERATE_FATIGUE_BAD: 3,
 
   HIGH_RISK_SCORE: 0.75,
   MODERATE_RISK_SCORE: 0.5,

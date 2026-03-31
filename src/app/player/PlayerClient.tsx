@@ -4079,9 +4079,9 @@ export default function PlayerClient() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
-        {/* ✅ Sticky header — sticks to top of viewport when scrolling */}
-        <div className="sticky top-0 z-20 mb-5">
+      {/* Sticky header — outside padded container so it sticks flush to top-0 */}
+      <div className="sticky top-0 z-20 bg-zinc-50/95 backdrop-blur-sm supports-[backdrop-filter]:bg-zinc-50/80 border-b border-zinc-200/60 shadow-sm">
+        <div className="mx-auto max-w-6xl px-4 pt-4 sm:pt-5 pb-3">
           <div data-player-card="header" className={cx("rounded-2xl border bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/70", (ui as any).panel)}>
             <div className="p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -4128,6 +4128,8 @@ export default function PlayerClient() {
             </div>
           </div>
         </div>
+      </div>
+      <div className="mx-auto max-w-6xl px-4 pt-3 pb-6 sm:pb-8">
 
         {today === todayISO() && !metrics?.created_at ? (
           <div className="mb-5">
