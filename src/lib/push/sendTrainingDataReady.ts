@@ -66,7 +66,7 @@ export async function sendTrainingDataReadyNotification(
 
   const payload = {
     title: "MicroPulse",
-    body: "Gögn frá tæfingu dagsins eru komin inn. Skoðaðu GPS.",
+    body: "Gögn frá æfingu dagsins eru komin inn. Skoðaðu GPS.",
     url: "/player",
     type: "training_data_ready",
     screen: "dashboard",

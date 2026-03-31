@@ -981,79 +981,25 @@ function acwrFmt(x: number | null) {
 }
 
 const reportStyles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
-  header: { marginBottom: 14, paddingBottom: 10, borderBottom: "2 solid #E5E7EB" },
-  h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
-  headerMeta: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  headerMetaText: { fontSize: 10, color: "#4B5563" },
-  muted: { color: "#6B7280", fontSize: 9 },
-  // Player card
-  playerCard: { marginBottom: 14, border: "1 solid #D1D5DB", borderRadius: 6, overflow: "hidden" },
-  playerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: "8 10", backgroundColor: "#F9FAFB" },
-  playerName: { fontSize: 13, fontWeight: 700 },
-  badgeYellow: { fontSize: 11, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "2 8", borderRadius: 4 },
-  badgeRed: { fontSize: 11, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "2 8", borderRadius: 4 },
-  // Coach action box
-  actionBoxRecovery: { backgroundColor: "#FEE2E2", padding: "8 10", borderBottom: "1 solid #FECACA" },
-  actionBoxModified: { backgroundColor: "#FEF3C7", padding: "8 10", borderBottom: "1 solid #FDE68A" },
-  actionBoxFull: { backgroundColor: "#DCFCE7", padding: "8 10", borderBottom: "1 solid #BBF7D0" },
-  actionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", marginBottom: 2, textTransform: "uppercase" },
-  actionTextRecovery: { fontSize: 12, fontWeight: 700, color: "#991B1B" },
-  actionTextModified: { fontSize: 12, fontWeight: 700, color: "#92400E" },
-  actionTextFull: { fontSize: 12, fontWeight: 700, color: "#166534" },
-  actionNote: { fontSize: 9, color: "#4B5563", marginTop: 2 },
-  // Body sections
-  cardBody: { padding: "8 10" },
-  sectionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
-  reasonItem: { fontSize: 10, color: "#1F2937", marginBottom: 3, paddingLeft: 8 },
-  // Injury risk
-  injuryRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  injuryLabelLow: { fontSize: 10, fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "1 6", borderRadius: 3 },
-  injuryLabelModerate: { fontSize: 10, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "1 6", borderRadius: 3 },
-  injuryLabelHigh: { fontSize: 10, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "1 6", borderRadius: 3 },
-  injuryRec: { fontSize: 9, color: "#374151", marginBottom: 2, paddingLeft: 8 },
-  // Reference table
-  refTableWrap: { marginTop: 8, borderTop: "1 solid #E5E7EB", paddingTop: 6 },
-  refTableLabel: { fontSize: 8, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 },
-  table: { border: "1 solid #E5E7EB", borderRadius: 3 },
+  page: { padding: 24, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  h1: { fontSize: 16, fontWeight: 700, marginBottom: 8 },
+  section: { marginBottom: 12, paddingBottom: 8, borderBottom: "1 solid #E5E7EB" },
+  sectionTitle: { fontSize: 12, fontWeight: 700, marginBottom: 6 },
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
+  muted: { color: "#4B5563" },
+  playerCard: { marginBottom: 10, padding: 8, border: "1 solid #E5E7EB", borderRadius: 6 },
+  playerHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  badgeYellow: { color: "#92400E" },
+  badgeRed: { color: "#991B1B" },
+  whyList: { marginTop: 2, marginBottom: 6 },
+  whyItem: { marginBottom: 2 },
+  table: { border: "1 solid #D1D5DB", borderRadius: 4, overflow: "hidden", marginTop: 4 },
   tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
   tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
-  cellH: { flex: 1, padding: "3 4", fontSize: 8, fontWeight: 700, color: "#6B7280" },
-  cell: { flex: 1, padding: "3 4", fontSize: 8, color: "#374151" },
-  // Footer
-  footerBar: { marginTop: 12, paddingTop: 8, borderTop: "1 solid #E5E7EB", flexDirection: "row", justifyContent: "space-between" },
-  footerCount: { fontSize: 10 },
-  footerGreen: { color: "#166534", fontWeight: 700 },
-  footerYellow: { color: "#92400E", fontWeight: 700 },
-  footerRed: { color: "#991B1B", fontWeight: 700 },
+  cellH: { flex: 1, padding: 4, fontSize: 9, fontWeight: 700 },
+  cell: { flex: 1, padding: 4, fontSize: 9 },
+  footerSummary: { marginTop: 8, fontSize: 11, fontWeight: 700 },
 });
-
-function coachAction(mode: "full" | "modified" | "recovery"): { boxStyle: any; textStyle: any; title: string; note: string } {
-  if (mode === "recovery") return {
-    boxStyle: reportStyles.actionBoxRecovery,
-    textStyle: reportStyles.actionTextRecovery,
-    title: "RECOVERY — Do not train today",
-    note: "Athlete's body is under significant stress. Rest or light recovery work only.",
-  };
-  if (mode === "modified") return {
-    boxStyle: reportStyles.actionBoxModified,
-    textStyle: reportStyles.actionTextModified,
-    title: "REDUCE LOAD — Modified session",
-    note: "Reduce intensity or volume. Monitor closely during training.",
-  };
-  return {
-    boxStyle: reportStyles.actionBoxFull,
-    textStyle: reportStyles.actionTextFull,
-    title: "FULL PARTICIPATION — Monitor closely",
-    note: "Can train normally. Flag is precautionary — keep an eye on this player.",
-  };
-}
-
-function injuryBadgeStyle(level: "LOW" | "MODERATE" | "HIGH") {
-  if (level === "HIGH") return reportStyles.injuryLabelHigh;
-  if (level === "MODERATE") return reportStyles.injuryLabelModerate;
-  return reportStyles.injuryLabelLow;
-}
 
 function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }) {
   const playersPerPage = 2;
@@ -1067,103 +1013,104 @@ function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }
     <Document>
       {flaggedPages.map((pagePlayers, pageIdx) => (
         <Page key={`risk-report-page-${pageIdx}`} size="A4" style={reportStyles.page}>
-          {/* Header — only on first page */}
-          {pageIdx === 0 && (
-            <View style={reportStyles.header}>
-              <Text style={reportStyles.h1}>Daily Readiness Report</Text>
-              <View style={reportStyles.headerMeta}>
-                <Text style={reportStyles.headerMetaText}>{data.teamName || "—"}</Text>
-                <Text style={reportStyles.headerMetaText}>{data.date}</Text>
-              </View>
-              <Text style={reportStyles.muted}>
-                Players requiring attention: {data.flaggedPlayers.length} of {data.summary.green + data.summary.yellow + data.summary.red}
-              </Text>
+          <View style={reportStyles.section}>
+            <Text style={reportStyles.h1}>Readiness Risk Report</Text>
+            <View style={reportStyles.row}>
+              <Text>Team: {data.teamName || "—"}</Text>
+              <Text>Date: {data.date}</Text>
             </View>
-          )}
+            <Text style={reportStyles.muted}>
+              Flagged players (YELLOW/RED): {data.flaggedPlayers.length} · Page {pageIdx + 1}/{flaggedPages.length}
+            </Text>
+          </View>
 
-          {/* Player cards */}
-          {pagePlayers.length ? (
-            pagePlayers.map((p, i) => {
-              const action = coachAction(p.ateSessionMode);
-              const reasons = p.why.length ? p.why : ["No specific reasons available."];
-              const injRecs = p.injuryRecommendation.length ? p.injuryRecommendation : ["Continue with planned load and routine monitoring."];
-              return (
+          <View style={reportStyles.section}>
+            <Text style={reportStyles.sectionTitle}>Flagged Players</Text>
+            {pagePlayers.length ? (
+              pagePlayers.map((p, i) => (
                 <View key={`${p.name}-${pageIdx}-${i}`} style={reportStyles.playerCard}>
-                  {/* Player name + status */}
                   <View style={reportStyles.playerHeader}>
-                    <Text style={reportStyles.playerName}>{p.name}</Text>
+                    <Text>{p.name}</Text>
                     <Text style={p.readinessStatus === "RED" ? reportStyles.badgeRed : reportStyles.badgeYellow}>
-                      {p.readinessStatus === "RED" ? "🔴 RED" : "🟡 YELLOW"}
+                      {p.readinessStatus}
                     </Text>
                   </View>
-
-                  {/* Coach action — prominent */}
-                  <View style={action.boxStyle}>
-                    <Text style={reportStyles.actionLabel}>Today&apos;s recommendation</Text>
-                    <Text style={action.textStyle}>{action.title}</Text>
-                    <Text style={reportStyles.actionNote}>{action.note}</Text>
+                  <View style={reportStyles.row}>
+                    <Text>Score: {scoreFmt(p.score)}</Text>
+                    <Text>Confidence: {confidenceFmt(p.confidence)}</Text>
+                  </View>
+                  <Text style={reportStyles.sectionTitle}>WHY</Text>
+                  <View style={reportStyles.whyList}>
+                    {(p.why.length ? p.why : ["No ATE reasons available."]).map((reason, idx) => (
+                      <Text key={`${p.name}-${pageIdx}-why-${idx}`} style={reportStyles.whyItem}>
+                        - {reason}
+                      </Text>
+                    ))}
                   </View>
 
-                  {/* Reasons */}
-                  <View style={reportStyles.cardBody}>
-                    <Text style={reportStyles.sectionLabel}>Why this player is flagged</Text>
-                    {reasons.map((r, idx) => (
-                      <Text key={`${p.name}-reason-${idx}`} style={reportStyles.reasonItem}>• {r}</Text>
-                    ))}
-
-                    {/* Injury risk */}
-                    <Text style={reportStyles.sectionLabel}>Injury risk</Text>
-                    <View style={reportStyles.injuryRow}>
-                      <Text style={injuryBadgeStyle(p.injuryRiskLevel)}>{p.injuryRiskLevel}</Text>
+                  <Text style={reportStyles.sectionTitle}>Data Breakdown</Text>
+                  <View style={reportStyles.table}>
+                    <View style={reportStyles.tHead}>
+                      <Text style={reportStyles.cellH}>Check-in</Text>
+                      <Text style={reportStyles.cellH}>Z score</Text>
+                      <Text style={reportStyles.cellH}>Delta Z</Text>
+                      <Text style={reportStyles.cellH}>ACWR</Text>
+                      <Text style={reportStyles.cellH}>Sleep</Text>
+                      <Text style={reportStyles.cellH}>HRV</Text>
+                      <Text style={reportStyles.cellH}>Volatility</Text>
                     </View>
-                    {injRecs.map((r, idx) => (
-                      <Text key={`${p.name}-injrec-${idx}`} style={reportStyles.injuryRec}>• {r}</Text>
-                    ))}
-
-                    {/* Reference numbers — compact, for staff use */}
-                    <View style={reportStyles.refTableWrap}>
-                      <Text style={reportStyles.refTableLabel}>Reference data</Text>
-                      <View style={reportStyles.table}>
-                        <View style={reportStyles.tHead}>
-                          <Text style={reportStyles.cellH}>Wellness score</Text>
-                          <Text style={reportStyles.cellH}>Sleep (1–5)</Text>
-                          <Text style={reportStyles.cellH}>Load ratio</Text>
-                          <Text style={reportStyles.cellH}>HRV</Text>
-                          <Text style={reportStyles.cellH}>Load index</Text>
-                          <Text style={reportStyles.cellH}>vs. baseline</Text>
-                        </View>
-                        <View style={reportStyles.tRow}>
-                          <Text style={reportStyles.cell}>{scoreFmt(p.checkInScore)}</Text>
-                          <Text style={reportStyles.cell}>{p.sleepScore != null ? `${p.sleepScore}/5` : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.acwr != null ? numFmt(p.acwr) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.hrv != null ? numFmt(p.hrv) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.zScore != null ? numFmt(p.zScore) : "—"}</Text>
-                          <Text style={reportStyles.cell}>{p.deltaZ != null ? numFmt(p.deltaZ) : "—"}</Text>
-                        </View>
-                      </View>
+                    <View style={reportStyles.tRow}>
+                      <Text style={reportStyles.cell}>{scoreFmt(p.checkInScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.zScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.deltaZ)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.acwr)}</Text>
+                      <Text style={reportStyles.cell}>{scoreFmt(p.sleepScore)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.hrv)}</Text>
+                      <Text style={reportStyles.cell}>{numFmt(p.volatility)}</Text>
                     </View>
+                  </View>
+
+                  <View style={[reportStyles.row, { marginTop: 6 }]}>
+                    <Text>ATE recommendation</Text>
+                    <Text>{p.ateSessionMode}</Text>
+                  </View>
+                  <View style={[reportStyles.row, { marginTop: 4 }]}>
+                    <Text>Injury risk</Text>
+                    <Text>
+                      {p.injuryRiskLevel} ({p.injuryConfidence})
+                    </Text>
+                  </View>
+                  <View style={reportStyles.whyList}>
+                    {(p.injuryWhy.length ? p.injuryWhy : ["No additional injury-risk pattern identified."]).map((line, idx) => (
+                      <Text key={`${p.name}-${pageIdx}-inj-why-${idx}`} style={reportStyles.whyItem}>
+                        - {line}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={reportStyles.whyList}>
+                    {(p.injuryRecommendation.length ? p.injuryRecommendation : ["Maintain planned loading with routine monitoring."]).map(
+                      (line, idx) => (
+                        <Text key={`${p.name}-${pageIdx}-inj-rec-${idx}`} style={reportStyles.whyItem}>
+                          - {line}
+                        </Text>
+                      )
+                    )}
                   </View>
                 </View>
-              );
-            })
-          ) : (
-            <Text style={reportStyles.muted}>No players requiring attention today.</Text>
-          )}
+              ))
+            ) : (
+              <Text style={reportStyles.muted}>No YELLOW/RED players on current data.</Text>
+            )}
+          </View>
 
-          {/* Footer summary — last page only */}
-          {pageIdx === flaggedPages.length - 1 && (
-            <View style={reportStyles.footerBar}>
-              <Text style={reportStyles.footerCount}>
-                Team status:{"  "}
-                <Text style={reportStyles.footerGreen}>● {data.summary.green} ready</Text>
-                {"   "}
-                <Text style={reportStyles.footerYellow}>● {data.summary.yellow} monitor</Text>
-                {"   "}
-                <Text style={reportStyles.footerRed}>● {data.summary.red} at risk</Text>
+          {pageIdx === flaggedPages.length - 1 ? (
+            <View>
+              <Text style={reportStyles.sectionTitle}>Team Summary</Text>
+              <Text style={reportStyles.footerSummary}>
+                GREEN: {data.summary.green} · YELLOW: {data.summary.yellow} · RED: {data.summary.red}
               </Text>
-              <Text style={reportStyles.muted}>Page {pageIdx + 1} / {flaggedPages.length}</Text>
             </View>
-          )}
+          ) : null}
         </Page>
       ))}
     </Document>
@@ -5246,12 +5193,6 @@ export default function CoachPage() {
                     Neural bias
                   </span>
                 ) : null}
-                {r.notes && r.notes.trim().length ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
-                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
-                    Athugasemd
-                  </span>
-                ) : null}
               </div>
             </div>
 
@@ -5259,13 +5200,6 @@ export default function CoachPage() {
               {renderActionPills(pid, r.is_locked)}
             </div>
           </div>
-
-          {r.notes && r.notes.trim().length ? (
-            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-              <svg className="mt-0.5 shrink-0 text-blue-500" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
-              <p className="text-sm text-blue-900 leading-snug">{r.notes.trim()}</p>
-            </div>
-          ) : null}
 
           <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="grid flex-1 gap-3 md:grid-cols-3">
