@@ -147,7 +147,11 @@ export function buildDecisionInputFromDailyPlayerRecord(args: BuildDecisionInput
     lightAteState: coerceState(args.lightAteState),
     wellness: {
       soreness: isFiniteNumber(monitoring?.sorenessScore) ? monitoring?.sorenessScore ?? null : null,
-      fatigue: isFiniteNumber(monitoring?.checkinScore) ? monitoring?.checkinScore ?? null : null,
+      // Use raw fatigue_energy (1–5: 1=very tired, 5=very fresh) from snapshot.subjective.motivation.
+      // Fallback to checkinScore only when snapshot motivation is absent.
+      fatigue: isFiniteNumber(args.snapshot?.subjective?.motivation)
+        ? args.snapshot?.subjective?.motivation ?? null
+        : isFiniteNumber(monitoring?.checkinScore) ? monitoring?.checkinScore ?? null : null,
       sleepQuality: isFiniteNumber(monitoring?.sleepScore) ? monitoring?.sleepScore ?? null : null,
       mood: null,
       stress: null,
