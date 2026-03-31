@@ -7,6 +7,7 @@ import {
   normalizeRecovery,
   normalizeSleepQuality,
   normalizeSoreness,
+  normalizeStress,
   sortExplanationFactors,
 } from "./helpers";
 import type {
@@ -165,6 +166,23 @@ export function buildExplanationFactors({ input, finalState, matchedRules, riskF
           : fatigue === "moderate"
           ? "Fatigue is slightly elevated."
           : "Fatigue appears manageable.",
+    });
+  }
+
+  if (typeof input.wellness?.stress === "number") {
+    const stress = normalizeStress(input.wellness.stress);
+    factors.push({
+      key: "stress",
+      label: "Stress / mood",
+      value: input.wellness.stress,
+      impactScore: stress === "poor" ? EXPLANATION_IMPACT.MODERATE : EXPLANATION_IMPACT.LOW,
+      direction: stress === "good" ? "positive" : stress === "unknown" ? "neutral" : "negative",
+      summary:
+        stress === "poor"
+          ? "Stress or mood is poor and reduces the athlete's capacity to absorb training."
+          : stress === "moderate"
+          ? "Stress or mood is slightly elevated."
+          : "Stress and mood are not a concern today.",
     });
   }
 
