@@ -541,7 +541,7 @@ export function RtpTab({ coachTeamId, lang }: Props) {
       .order("full_name")
       .then(({ data }) => {
         setPlayers(
-          ((data ?? []) as Array<{ id: number; full_name: string; position: string | null }>)
+          ((data ?? []) as Array<{ id: string; full_name: string; position: string | null }>)
             .map((p) => ({ player_id: p.id, full_name: p.full_name, position: p.position }))
         );
       });
