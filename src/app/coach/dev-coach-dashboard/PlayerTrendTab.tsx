@@ -278,6 +278,7 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
   const [window, setWindow]         = useState<30 | 60 | 90>(30);
   const [loading, setLoading]       = useState(false);
   const [entries, setEntries]       = useState<DayEntry[]>([]);
+  const [showTable, setShowTable]   = useState(false);
 
   // Fetch player list
   useEffect(() => {
@@ -419,7 +420,15 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
   const latestLoad  = [...loadValues].reverse().find((v): v is number => v != null) ?? null;
 
   const selectedPlayer = players.find((p) => p.player_id === selectedId);
-  const tableEntries   = [...entries].reverse();
+  // Only show days that have at least one data point
+  const tableEntries = [...entries]
+    .reverse()
+    .filter((e) =>
+      e.readinessScore != null ||
+      e.trainingAction != null ||
+      e.totalDistance != null ||
+      e.playerLoad != null
+    );
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -551,46 +560,56 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
             />
           </div>
 
-          {/* Daily history */}
+          {/* Daily history — collapsible */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div>
+            <button
+              onClick={() => setShowTable((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors"
+            >
+              <div className="text-left">
                 <div className="font-semibold text-slate-900 text-sm tracking-wide">
                   {selectedPlayer?.full_name?.toUpperCase()} · {ct.dailyHistory.toUpperCase()}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">{ct.historyDesc(window)}</div>
               </div>
-              <div className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
-                {ct.checkinOf(checkedIn.length, entries.length)}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-slate-400 bg-slate-100 rounded-full px-3 py-1">
+                  {ct.checkinOf(checkedIn.length, entries.length)}
+                </span>
+                <svg
+                  className={`w-4 h-4 text-slate-400 transition-transform ${showTable ? "rotate-180" : ""}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
-            </div>
+            </button>
 
-            <div className="overflow-x-auto">
+            {showTable && (
+            <div className="border-t border-slate-100">
+              <div className="overflow-x-auto">
+              <div className="max-h-80 overflow-y-auto">
               <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.date}</th>
-                    <th className="px-3 py-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.readiness}</th>
-                    <th className="px-3 py-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">STEN</th>
-                    <th className="px-3 py-3 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.decision}</th>
-                    <th className="px-3 py-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.date}</th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.readiness}</th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">STEN</th>
+                    <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{ct.decision}</th>
+                    <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {isBasketball ? ct.playerLoad : ct.dist}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {tableEntries.map((e) => {
-                    const hasData =
-                      e.readinessScore != null ||
-                      e.trainingAction != null ||
-                      (isBasketball ? e.playerLoad : e.totalDistance) != null;
                     const loadVal = isBasketball ? e.playerLoad : e.totalDistance;
                     const sc = stenChip(e.sten);
 
                     return (
                       <tr
                         key={e.date}
-                        className={`border-t border-slate-100 hover:bg-slate-50/70 transition-colors ${!hasData ? "opacity-35" : ""}`}
+                        className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors"
                       >
                         <td className="px-5 py-3 whitespace-nowrap">
                           <div className="font-semibold text-slate-800 text-sm">{e.date}</div>
@@ -631,7 +650,10 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
                   })}
                 </tbody>
               </table>
+              </div>
+              </div>
             </div>
+            )}
           </div>
         </>
       )}
