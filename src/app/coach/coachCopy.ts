@@ -10,6 +10,8 @@ export const COACH_COPY = {
       gps: "GPS gögn",
       volatility: "Sveiflur",
       vald: "VALD / CMJ",
+      trend: "Þróun",
+      rtp: "Meiðsli / RTP",
     },
     header: {
       title: "Þjálfari",
@@ -50,6 +52,8 @@ export const COACH_COPY = {
       gps: "GPS Data",
       volatility: "Volatility",
       vald: "VALD / CMJ",
+      trend: "Trends",
+      rtp: "Injuries / RTP",
     },
     header: {
       title: "Coach",

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { useLang } from "@/lib/lang";
+import type { Lang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { lookupExercise } from "./exerciseDatabase";
 import Link from "next/link";
@@ -195,6 +196,7 @@ type PostTrainingTemplateRow = {
   tags: string[];
   structure: any; // jsonb
   is_active: boolean;
+  lang?: string;
 };
 
 function riskTrendLinePoints(values: number[], width = 320, height = 80, padding = 8): string {
@@ -1365,13 +1367,14 @@ function ExerciseCard({
         ? getExerciseRecommendation({
             ...(recommendationContext ?? {}),
             originalExerciseName: ex.name,
+            lang,
           })
         : null,
-    [ex.name, hasRecommendationContext, recommendationContext]
+    [ex.name, hasRecommendationContext, recommendationContext, lang]
   );
   const uiInfo = useMemo(
-    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
-    [recommendation]
+    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation, lang) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
+    [recommendation, lang]
   );
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
 
@@ -1446,11 +1449,11 @@ function ExerciseCard({
             </div>
             {uiInfo.playerReason ? <div className="mt-1 text-xs text-zinc-600">{uiInfo.playerReason}</div> : null}
             {selectedExerciseLabel !== ex.name ? (
-              <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {planExerciseName ?? ex.name}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">{tCard.training.origPlan} {planExerciseName ?? ex.name}</div>
             ) : null}
             {allowedAlternativeIds.length ? (
               <div className="mt-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{tCard.training.otherOptions}</div>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {allowedAlternativeIds.map((id) => {
                     const label = getSupportedExerciseLabel(id);
@@ -1478,14 +1481,14 @@ function ExerciseCard({
                       }}
                       className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-200"
                     >
-                      Nota mælt með
+                      {tCard.training.useRecommended}
                     </button>
                   ) : null}
                 </div>
               </div>
             ) : null}
             {restrictedLabels.length ? (
-              <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+              <div className="mt-2 text-[11px] text-zinc-500">{tCard.training.notRecommended} {restrictedLabels.join(", ")}</div>
             ) : null}
           </div>
         ) : null}
@@ -1508,7 +1511,7 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [lang] = useLang();
-  void lang;
+  const tCG = PLAYER_COPY[lang];
   const hasRecommendationContext = !!recommendationContext;
   const selected = options[selectedIdx];
   const original = options[0];
@@ -1521,18 +1524,20 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
     return getExerciseRecommendation({
       ...(recommendationContext ?? {}),
       originalExerciseName: recommendationSeedExercise.name,
+      lang,
     }).recommendedExerciseId;
-  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise]);
+  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise, lang]);
   const groupRecommendation = useMemo(() => {
     if (!hasRecommendationContext || !recommendationSeedExercise) return null;
     return getExerciseRecommendation({
       ...(recommendationContext ?? {}),
       originalExerciseName: recommendationSeedExercise.name,
+      lang,
     });
-  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise]);
+  }, [hasRecommendationContext, recommendationContext, recommendationSeedExercise, lang]);
   const groupRecommendationUi = useMemo(
-    () => (groupRecommendation ? getExerciseRecommendationUiInfo(groupRecommendation) : null),
-    [groupRecommendation]
+    () => (groupRecommendation ? getExerciseRecommendationUiInfo(groupRecommendation, lang) : null),
+    [groupRecommendation, lang]
   );
   const selectedExerciseId = useMemo(
     () => normalizeExerciseNameToId(selected?.name ?? ""),
@@ -1572,7 +1577,11 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
     <div>
       {/* Choice header */}
       <div className={cx("mt-1 rounded-lg border px-3 py-2 flex items-center gap-2", accent.choiceHeader)} style={accent.choiceHeaderStyle}>
-        <span className="text-[13px] font-bold leading-snug">▸ {header.replace(/:$/, "")}</span>
+        <span className="text-[13px] font-bold leading-snug">
+          ▸ {lang === "EN"
+            ? header.replace(/:$/, "").replace(/veldu\s+(\d+)\s+leið\w*/i, "Choose $1").replace(/veldu/i, "Choose")
+            : header.replace(/:$/, "")}
+        </span>
       </div>
       {/* Selected exercise */}
       {selected ? (
@@ -1607,11 +1616,11 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
             <div className="mt-1 text-xs text-zinc-600">{groupRecommendationUi.playerReason}</div>
           ) : null}
           {recommendationSeedExercise && selected.name !== recommendationSeedExercise.name ? (
-            <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {recommendationSeedExercise.name}</div>
+            <div className="mt-1 text-[11px] text-zinc-500">{tCG.training.origPlan} {recommendationSeedExercise.name}</div>
           ) : null}
           {allowedAlternativeIds.length ? (
             <div className="mt-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{tCG.training.otherOptions}</div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {allowedAlternativeIds.map((id) => {
                   const label = getSupportedExerciseLabel(id);
@@ -1638,19 +1647,19 @@ function ChoiceGroup({ header, options, accent, blockLabel, recommendationContex
                     }}
                     className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-white"
                   >
-                    Nota mælt með
+                    {tCG.training.useRecommended}
                   </button>
                 ) : null}
               </div>
             </div>
           ) : null}
           {restrictedLabels.length ? (
-            <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+            <div className="mt-2 text-[11px] text-zinc-500">{tCG.training.notRecommended} {restrictedLabels.join(", ")}</div>
           ) : null}
         </div>
       ) : selected && genericAlternativeOptions.length ? (
         <div className={cx("mt-1.5", recommendationPanelClass(accent).cls)} style={recommendationPanelClass(accent).style}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{tCG.training.otherOptions}</div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {genericAlternativeOptions.map((option, idx) => (
               <button
@@ -1684,19 +1693,22 @@ function RecommendedExerciseBlockCard({
   blockLabel?: string;
   recommendationContext?: ExerciseRecommendationContext | null;
 }) {
+  const [lang] = useLang();
+  const tREC = PLAYER_COPY[lang];
   const recommendation = useMemo(
     () =>
       recommendationContext
         ? getExerciseRecommendation({
             ...(recommendationContext ?? {}),
             originalExerciseName: ex.name,
+            lang,
           })
         : null,
-    [ex.name, recommendationContext]
+    [ex.name, recommendationContext, lang]
   );
   const uiInfo = useMemo(
-    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
-    [recommendation]
+    () => (recommendation ? getExerciseRecommendationUiInfo(recommendation, lang) : { badgeLabel: null, badgeTone: "neutral" as const, shortReason: null, playerReason: null }),
+    [recommendation, lang]
   );
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
   const selectedExerciseId =
@@ -1739,11 +1751,11 @@ function RecommendedExerciseBlockCard({
         </div>
         {uiInfo.playerReason ? <div className="mt-1 text-xs text-zinc-600">{uiInfo.playerReason}</div> : null}
         {selectedExerciseLabel !== ex.name ? (
-          <div className="mt-1 text-[11px] text-zinc-500">Upprunalegt plan: {ex.name}</div>
+          <div className="mt-1 text-[11px] text-zinc-500">{tREC.training.origPlan} {ex.name}</div>
         ) : null}
         {allowedAlternativeIds.length ? (
           <div className="mt-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Aðrir valkostir</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{tREC.training.otherOptions}</div>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {allowedAlternativeIds.map((id) => {
                 const label = getSupportedExerciseLabel(id);
@@ -1765,14 +1777,14 @@ function RecommendedExerciseBlockCard({
                   onClick={() => setOverrideExerciseId(null)}
                   className="rounded-full border border-zinc-200 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-white"
                 >
-                  Nota mælt með
+                  {tREC.training.useRecommended}
                 </button>
               ) : null}
             </div>
           </div>
         ) : null}
         {restrictedLabels.length ? (
-          <div className="mt-2 text-[11px] text-zinc-500">Ekki ráðlagt í dag: {restrictedLabels.join(", ")}</div>
+          <div className="mt-2 text-[11px] text-zinc-500">{tREC.training.notRecommended} {restrictedLabels.join(", ")}</div>
         ) : null}
       </div>
     </div>
@@ -2006,6 +2018,32 @@ function renderStructureBlocks(
   );
 
   const headerTitle = String(opts?.headerTitle ?? "").trim();
+
+  // Translate block accent badge labels using the copy object
+  function localizeBlockLabel(raw: string): string {
+    if (!opts?.t) return raw;
+    const tb = opts.t.blocks;
+    const lo = raw.toLowerCase();
+    if (lo.includes("warm") || lo.includes("upphit")) return tb.warmup;
+    if (lo.includes("primer") || lo.includes("ballistic") || lo.includes("explosive")) return tb.primer;
+    if (lo.includes("main") || lo.includes("contrast") || lo.includes("strength")) return tb.main;
+    if (lo.includes("accessory") || lo.includes("iso") || lo.includes("isometric")) return tb.accessory;
+    if (lo === "partur" || lo === "rules" || lo === "reglur") return tb.part;
+    return raw;
+  }
+
+  // Translate IS block titles stored in DB (e.g. "Upphitun" → "Warm-up", "(veldu 1)" → "(choose 1)")
+  function localizeBlockTitle(title: string): string {
+    if (!opts?.t) return title;
+    const tb = opts.t.blocks;
+    const lo = title.toLowerCase();
+    // Exact IS block names
+    if (lo === "upphitun") return tb.warmup;
+    if (lo === "reglur") return tb.part;
+    // "(veldu N)" → "(choose N)" for EN
+    if (opts.t === PLAYER_COPY.IS) return title;
+    return title.replace(/\(veldu\s+(\d+)(?:\s+leið\w*)?\)/gi, "(choose $1)");
+  }
   const headerDesc = String(opts?.headerDesc ?? "").trim();
   const lockLabel = opts?.lockLabel ?? "";
   const t = opts?.t ?? PLAYER_COPY.IS;
@@ -2053,10 +2091,10 @@ function renderStructureBlocks(
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", accent.dot)} style={accent.dotStyle} />
-                    <div className="text-sm font-semibold text-zinc-900">{title}</div>
+                    <div className="text-sm font-semibold text-zinc-900">{localizeBlockTitle(title)}</div>
                   </div>
                   <span className={cx("shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold", accent.badge)} style={accent.badgeStyle}>
-                    {accent.label}
+                    {localizeBlockLabel(accent.label)}
                   </span>
                 </div>
 
@@ -2397,7 +2435,8 @@ function extractPostTrainingSections(structure: any): PTSection[] {
   return [];
 }
 
-function renderPostTraining(templates: PostTrainingTemplateRow[]) {
+function renderPostTraining(templates: PostTrainingTemplateRow[], lang: Lang = "IS") {
+  const pt = PLAYER_COPY[lang].postTraining;
   function isTendonTemplate(t: PostTrainingTemplateRow) {
     const id = (t?.id ?? "").toLowerCase();
     const tags = (t?.tags ?? []).map((x) => String(x).toLowerCase());
@@ -2434,16 +2473,16 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <SectionTitle
-          kicker="Eftir æfingu"
-          title="Mælt með"
-          sub="5–10 mínútur til að styðja sinar og taugakerfi eftir æfingu."
+          kicker={pt.kicker}
+          title={pt.title}
+          sub={pt.sub}
         />
-        <div className="text-xs font-semibold text-zinc-500">{count ? `${count} rútín${count === 1 ? "a" : "ur"}` : ""}</div>
+        <div className="text-xs font-semibold text-zinc-500">{count ? pt.count(count) : ""}</div>
       </div>
 
       {!orderedTemplates.length ? (
         <CardShell>
-          <div className="p-4 sm:p-5 text-sm text-zinc-600">Engar tillögur í dag.</div>
+          <div className="p-4 sm:p-5 text-sm text-zinc-600">{pt.empty}</div>
         </CardShell>
       ) : (
         <div className="grid grid-cols-1 gap-3">
@@ -2460,7 +2499,7 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-base font-semibold text-zinc-900">{t.title}</div>
-                        <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? `${t.duration_min} mín` : ""}</div>
+                        <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? pt.durationMin(t.duration_min) : ""}</div>
                       </div>
 
                       {/* ✅ Mobile: hide tags (keeps cards compact). Desktop: show tags */}
@@ -2473,8 +2512,8 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
                           ))}
                         </div>
 
-                        <span className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</span>
-                        <span className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</span>
+                        <span className="text-xs font-semibold text-zinc-500 group-open:hidden">{pt.open}</span>
+                        <span className="hidden text-xs font-semibold text-zinc-500 group-open:block">{pt.close}</span>
                       </div>
                     </div>
                   </summary>
@@ -2483,7 +2522,7 @@ function renderPostTraining(templates: PostTrainingTemplateRow[]) {
 
                   <div className="p-4 sm:p-5">
                     {!sections.length ? (
-                      <div className="text-sm text-zinc-600">Engin skref í template.</div>
+                      <div className="text-sm text-zinc-600">{pt.noSteps}</div>
                     ) : (
                       <div className="space-y-3">
                         {sections.map((sec, si) => (
@@ -2819,14 +2858,15 @@ export default function PlayerClient() {
     return (data as any) as Stage4DecisionFinalRow;
   }
 
-  async function loadGenericMessage(teamId: string | null, flag: Flag) {
+  async function loadGenericMessage(teamId: string | null, flag: Flag, msgLang: Lang = "IS") {
+    const dbLang = msgLang === "EN" ? "en" : "is";
     if (teamId) {
       const { data: teamRows, error: teamErr } = await supabase
         .from("player_flag_messages")
         .select("title, message, why")
         .eq("team_id", teamId)
         .eq("flag", flag)
-        .eq("lang", "is")
+        .eq("lang", dbLang)
         .eq("is_active", true)
         .order("id", { ascending: false })
         .limit(1);
@@ -2842,7 +2882,7 @@ export default function PlayerClient() {
       .select("title, message, why")
       .is("team_id", null)
       .eq("flag", flag)
-      .eq("lang", "is")
+      .eq("lang", dbLang)
       .eq("is_active", true)
       .order("id", { ascending: false })
       .limit(1);
@@ -2933,6 +2973,7 @@ export default function PlayerClient() {
         title: string | null;
         description: string | null;
         structure: any;
+        structure_en?: any;
         readiness_level: string | null;
         md_day?: string | null;
         variant?: string | null;
@@ -2941,7 +2982,7 @@ export default function PlayerClient() {
       if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
         const { data: templateRows, error: templateErr } = await supabase
           .from("microdose_templates")
-          .select("title, description, structure, readiness_level, md_day, variant")
+          .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", resolvedTeamId)
           .eq("md_day", resolvedMdDay)
           .eq("readiness_level", resolvedReadiness)
@@ -2955,6 +2996,7 @@ export default function PlayerClient() {
               title: string | null;
               description: string | null;
               structure: any;
+              structure_en?: any;
               readiness_level: string | null;
               md_day?: string | null;
               variant?: string | null;
@@ -2985,7 +3027,7 @@ export default function PlayerClient() {
         variant: (resolved as any).variant ?? null,
         title: templateRow?.title ?? (resolved as any).plan_title ?? null,
         description: templateRow?.description ?? (resolved as any).plan_description ?? null,
-        structure: templateRow?.structure ?? (resolved as any).plan_structure ?? null,
+        structure: (lang === "EN" && templateRow?.structure_en) ? templateRow.structure_en : (templateRow?.structure ?? (resolved as any).plan_structure ?? null),
       };
 
       return merged as Stage4PlanRow;
@@ -3085,7 +3127,7 @@ export default function PlayerClient() {
     if (teamId && mdDay && lvl) {
       const { data: tr, error: trErr } = await supabase
         .from("microdose_templates")
-        .select("id, title, description, structure")
+        .select("id, title, description, structure, structure_en")
         .eq("team_id", teamId)
         .eq("md_day", mdDay)
         .eq("readiness_level", lvl)
@@ -3116,13 +3158,13 @@ export default function PlayerClient() {
 
       title: templateRow?.title ?? null,
       description: templateRow?.description ?? null,
-      structure: templateRow?.structure ?? null,
+      structure: (lang === "EN" && templateRow?.structure_en) ? templateRow.structure_en : (templateRow?.structure ?? null),
     };
 
     return merged as Stage4PlanRow;
   }
 
-  async function loadPostTrainingRecommendations(ctx: PostTrainingContext) {
+  async function loadPostTrainingRecommendations(ctx: PostTrainingContext, tmplLang: Lang = "IS") {
     try {
       setPostTrainingErr("");
 
@@ -3142,18 +3184,31 @@ export default function PlayerClient() {
         return;
       }
 
+      const dbLang = tmplLang === "EN" ? "en" : "is";
+
+      // Fetch both IS and EN rows so we can prefer the user's language,
+      // falling back to IS for templates that don't have an EN version yet.
       const { data: tmpls, error: tErr } = await supabase
         .from("post_training_templates")
-        .select("id, title, duration_min, tags, structure, is_active")
+        .select("id, title, duration_min, tags, structure, is_active, lang")
         .in("id", ids)
+        .in("lang", dbLang === "en" ? ["en", "is"] : ["is"])
         .eq("is_active", true);
 
       if (tErr) throw new Error(tErr.message);
 
       const list = ((tmpls as any) ?? []) as PostTrainingTemplateRow[];
-      const map = new Map(list.map((t) => [t.id, t]));
-      const ordered = ids.map((id) => map.get(id)).filter(Boolean) as PostTrainingTemplateRow[];
 
+      // Build map preferring dbLang, falling back to 'is'
+      const byId = new Map<string, PostTrainingTemplateRow>();
+      for (const t of list) {
+        const existing = byId.get(t.id);
+        if (!existing || t.lang === dbLang) {
+          byId.set(t.id, t);
+        }
+      }
+
+      const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as PostTrainingTemplateRow[];
       setPostTraining(ordered);
     } catch (e: any) {
       console.error("post-training load error:", e?.message ?? e);
@@ -3811,18 +3866,18 @@ export default function PlayerClient() {
     if (fromSystemDecision) return fromSystemDecision;
     return readinessToFlag(plan?.readiness_level);
   }, [coachFinalFlag?.final_flag, plan?.readiness_level, stage4Final?.system_decision]);
-  const ui = useMemo(() => flagUi(normalizeFlag(flag)), [flag]);
+  const ui = useMemo(() => flagUi(normalizeFlag(flag), lang), [flag, lang]);
 
   useEffect(() => {
     const run = async () => {
       if (!profile) return;
       const teamId = (profile as any)?.team_id ?? null;
-      const msg = await loadGenericMessage(teamId, flag);
+      const msg = await loadGenericMessage(teamId, flag, lang);
       setGenericMsg(msg);
     };
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id, flag]);
+  }, [profile?.id, flag, lang]);
 
   useEffect(() => {
     const run = async () => {
@@ -3839,12 +3894,12 @@ export default function PlayerClient() {
         matchLike,
       };
 
-      await loadPostTrainingRecommendations(ctx);
+      await loadPostTrainingRecommendations(ctx, lang);
     };
 
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan?.md_day, session?.session_type, session?.md_day_resolved]);
+  }, [plan?.md_day, session?.session_type, session?.md_day_resolved, lang]);
 
   useEffect(() => {
     const run = async () => {
@@ -3870,7 +3925,7 @@ export default function PlayerClient() {
       const overrideTeamId = (profile as any)?.team_id ?? null;
       const { data, error } = await supabase
         .from("microdose_templates")
-        .select("title, description, structure, readiness_level, md_day, variant")
+        .select("title, description, structure, structure_en, readiness_level, md_day, variant")
         .eq("team_id", overrideTeamId)
         .eq("readiness_level", desiredReadiness)
         .eq("md_day", mdDay)
@@ -3886,6 +3941,7 @@ export default function PlayerClient() {
         title: string | null;
         description: string | null;
         structure: any;
+        structure_en?: any;
         readiness_level: string | null;
         md_day?: string | null;
         variant?: string | null;
@@ -3896,7 +3952,7 @@ export default function PlayerClient() {
       if (!rows.length) {
         const { data: fallbackRows, error: fallbackErr } = await supabase
           .from("microdose_templates")
-          .select("title, description, structure, readiness_level, md_day, variant")
+          .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", overrideTeamId)
           .eq("readiness_level", desiredReadiness)
           .order("md_day", { ascending: true })
@@ -3912,13 +3968,20 @@ export default function PlayerClient() {
           title: string | null;
           description: string | null;
           structure: any;
+          structure_en?: any;
           readiness_level: string | null;
           md_day?: string | null;
           variant?: string | null;
         }>;
       }
 
-      const chosen = selectTemplateOverrideCandidate(rows, plan?.variant ?? null, mdDay);
+      // Apply language preference: use structure_en when available in EN mode
+      const localisedRows = rows.map((r) => ({
+        ...r,
+        structure: (lang === "EN" && r.structure_en) ? r.structure_en : r.structure,
+      }));
+
+      const chosen = selectTemplateOverrideCandidate(localisedRows, plan?.variant ?? null, mdDay);
       setPlanTemplateOverride((chosen as PlanTemplateOverrideRow) ?? null);
     };
 
@@ -3961,15 +4024,15 @@ export default function PlayerClient() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
               </svg>
             </div>
-            <div className="text-base font-semibold text-zinc-900">Engar líðansgögn í dag</div>
+            <div className="text-base font-semibold text-zinc-900">{t.misc.noDataTitle}</div>
             <div className="mt-2 text-sm text-zinc-500 leading-relaxed">
-              Þú hefur ekki skráð líðan þína í dag enn. Skráðu líðan til að fá dagleg ráð og þjálfunaráætlun.
+              {t.misc.noDataBody}
             </div>
             <a
               href="/player/checkin"
               className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors"
             >
-              Skrá líðan núna
+              {t.misc.noDataBtn}
             </a>
             <div className="mt-3 text-xs text-zinc-400">{sanitizeDay(day)}</div>
           </div>
@@ -3980,7 +4043,7 @@ export default function PlayerClient() {
 
   const today = sanitizeDay(day);
 
-  const name = playerMeta?.full_name ?? "Leikmaður";
+  const name = playerMeta?.full_name ?? t.misc.playerFallback;
   const position = (playerMeta?.position ?? "").toUpperCase();
   const team = playerMeta?.team ?? "";
 
@@ -3999,7 +4062,7 @@ export default function PlayerClient() {
   const mdLabel = mdContextLabel(plan.md_day || session?.md_day_resolved || null);
 
   const lockedBool = !!(stage4Final?.locked ?? plan.locked);
-  const lockLabel = lockedBool ? "Læst" : "Ólæst";
+  const lockLabel = lockedBool ? t.misc.locked : t.misc.unlocked;
 
   const trainingSystemLabel = plan.training_system ? String(plan.training_system) : "—";
   const planStructureForRender = planTemplateOverride?.structure ?? plan.structure;
@@ -4133,7 +4196,7 @@ export default function PlayerClient() {
 
         {today === todayISO() && !metrics?.created_at ? (
           <div className="mb-5">
-            <MissingCheckinBanner />
+            <MissingCheckinBanner lang={lang} />
           </div>
         ) : null}
 
@@ -4164,8 +4227,8 @@ export default function PlayerClient() {
                 <summary className="cursor-pointer select-none p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
                     <SectionTitle kicker="Readiness" title={t.readiness.title} sub={t.readiness.sub} />
-                    <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</div>
-                    <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</div>
+                    <div className="text-xs font-semibold text-zinc-500 group-open:hidden">{t.misc.open}</div>
+                    <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">{t.misc.close}</div>
                   </div>
 
                   {/* ✅ Mobile: 2 cols, Desktop: 3 cols */}
@@ -4643,7 +4706,7 @@ export default function PlayerClient() {
               themeColor: clubThemeColor,
             })}
 
-            {renderPostTraining(postTraining)}
+            {renderPostTraining(postTraining, lang)}
 
             {staffMode ? (
               <CardShell>
@@ -4651,8 +4714,8 @@ export default function PlayerClient() {
                   <summary className="cursor-pointer select-none p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
                       <SectionTitle kicker="Staff" title="Tæknilegar upplýsingar" sub="Debug view (staff only)" />
-                      <div className="text-xs font-semibold text-zinc-500 group-open:hidden">Opna</div>
-                      <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">Loka</div>
+                      <div className="text-xs font-semibold text-zinc-500 group-open:hidden">{t.misc.open}</div>
+                      <div className="hidden text-xs font-semibold text-zinc-500 group-open:block">{t.misc.close}</div>
                     </div>
                   </summary>
                   <Divider />

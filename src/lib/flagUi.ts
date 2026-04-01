@@ -1,3 +1,5 @@
+import type { Lang } from "@/lib/lang";
+
 export type Flag = "GREEN" | "YELLOW" | "RED";
 
 /**
@@ -25,37 +27,42 @@ export function normalizeFlag(input: unknown): Flag {
  * - labels
  * - generic skilaboð til leikmanna
  */
-export function flagUi(flag: Flag) {
+export function flagUi(flag: Flag, lang: Lang = "IS") {
+  const isEN = lang === "EN";
   switch (flag) {
     case "GREEN":
       return {
         label: "FULL",
-        title: "Full æfing",
+        title: isEN ? "Full training" : "Full æfing",
         pill: "bg-green-100 text-green-800 border-green-200",
         dot: "bg-green-500",
         panel: "border-green-200",
 
         // 👇 Generic skilaboð til leikmanns
-        playerMessage:
-          "Í dag ert þú grænn. Haltu þér í planinu og keyrðu fulla æfingu. Hitaðu vel upp og haltu gæðum í framkvæmd.",
+        playerMessage: isEN
+          ? "You are green today. Follow the training plan and go at full intensity. Warm up well and focus on quality execution."
+          : "Í dag ert þú grænn. Haltu þér í planinu og keyrðu fulla æfingu. Hitaðu vel upp og haltu gæðum í framkvæmd.",
 
-        why:
-          "Merki um góða endurheimt og stöðugt álagsþol. Engin þörf á að draga úr álagi í dag.",
+        why: isEN
+          ? "Signs of good recovery and steady training load. No need to reduce intensity today."
+          : "Merki um góða endurheimt og stöðugt álagsþol. Engin þörf á að draga úr álagi í dag.",
       };
 
     case "YELLOW":
       return {
         label: "MODIFIED",
-        title: "Aðlagað álag",
+        title: isEN ? "Modified load" : "Aðlagað álag",
         pill: "bg-yellow-100 text-yellow-800 border-yellow-200",
         dot: "bg-yellow-500",
         panel: "border-yellow-200",
 
-        playerMessage:
-          "Í dag ert þú gulur. Æfðu, en aðlagaðu álag. Haltu ákefð í skefjum og forðastu að fara í hámarksálag.",
+        playerMessage: isEN
+          ? "You are yellow today. Train, but adjust the load. Keep intensity in check and avoid going to maximum effort."
+          : "Í dag ert þú gulur. Æfðu, en aðlagaðu álag. Haltu ákefð í skefjum og forðastu að fara í hámarksálag.",
 
-        why:
-          "Merki um væga þreytu eða álag. Markmiðið er að viðhalda gæðum án þess að bæta við óþarfa stressi.",
+        why: isEN
+          ? "Signs of mild fatigue or accumulated load. The goal is to maintain quality without adding unnecessary stress."
+          : "Merki um væga þreytu eða álag. Markmiðið er að viðhalda gæðum án þess að bæta við óþarfa stressi.",
       };
 
     case "RED":
@@ -66,11 +73,13 @@ export function flagUi(flag: Flag) {
         dot: "bg-red-500",
         panel: "border-red-200",
 
-        playerMessage:
-          "Í dag ert þú rauður. Recovery dagur. Haltu þig við létta hreyfingu og settu fókus á svefn, næringu og vökvun.",
+        playerMessage: isEN
+          ? "You are red today. Recovery day. Stick to light movement and focus on sleep, nutrition, and hydration."
+          : "Í dag ert þú rauður. Recovery dagur. Haltu þig við létta hreyfingu og settu fókus á svefn, næringu og vökvun.",
 
-        why:
-          "Merki um skerta endurheimt. Best er að jafna sig í dag til að vera tilbúinn næstu daga.",
+        why: isEN
+          ? "Signs of reduced recovery capacity. Best to let the body recover today to be ready for upcoming sessions."
+          : "Merki um skerta endurheimt. Best er að jafna sig í dag til að vera tilbúinn næstu daga.",
       };
   }
 }

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,6 +21,71 @@ import {
 
 // Checkbox
 import { Checkbox } from "@/components/ui/checkbox";
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+
+const COPY = {
+  IS: {
+    pendingTitle:       "Bíður samþykkis",
+    pendingDesc:        "Eftirfarandi leikmenn skráðu sig og bíða samþykkis þíns.",
+    pendingLoading:     "Hleð...",
+    pendingEmpty:       "Engir leikmenn í bið.",
+    registeredOn:       (date: string) => `Skráði sig ${date}`,
+    approve:            "Samþykkja",
+    reject:             "Hafna",
+    assignTitle:        "Úthluta einingum",
+    assignDesc:         (sport: string, unit: string) =>
+                          `Settu ${sport} og ${unit} á leikmenn.`,
+    unassigned:         (n: number) => `Óúthlutað: ${n}`,
+    noPermission:       "Þú ert ekki með coach/admin réttindi til að breyta leikmönnum.",
+    searchPlaceholder:  "Leita að leikmanni...",
+    bulkSport:          "Bulk íþrótt",
+    bulkUnit:           "Bulk eining",
+    applySelected:      (n: number) => `Nota á valda (${n})`,
+    saveChanges:        "Vista breytingar",
+    saving:             "Vista...",
+    playersHeader:      "Leikmenn",
+    refresh:            "Uppfæra",
+    loading:            "Hleð...",
+    noPlayers:          "Engir leikmenn fundust.",
+    setSport:           "Velja íþrótt",
+    setUnit:            "Velja einingu",
+    ok:                 "OK",
+    tip:                "Ábending: Byrjaðu á að velja alla → setja íþrótt → Nota → velja viðeigandi einingu í bulk (eða handvirkt á einstaka).",
+    locale:             "is-IS",
+  },
+  EN: {
+    pendingTitle:       "Pending approval",
+    pendingDesc:        "The following players have registered and are awaiting your approval.",
+    pendingLoading:     "Loading...",
+    pendingEmpty:       "No players awaiting approval.",
+    registeredOn:       (date: string) => `Registered ${date}`,
+    approve:            "Approve",
+    reject:             "Reject",
+    assignTitle:        "Assign units",
+    assignDesc:         (sport: string, unit: string) =>
+                          `Assign ${sport} and ${unit} to players.`,
+    unassigned:         (n: number) => `Unassigned: ${n}`,
+    noPermission:       "You do not have coach/admin permissions to edit players.",
+    searchPlaceholder:  "Search players...",
+    bulkSport:          "Bulk sport",
+    bulkUnit:           "Bulk unit",
+    applySelected:      (n: number) => `Apply to selected (${n})`,
+    saveChanges:        "Save changes",
+    saving:             "Saving...",
+    playersHeader:      "Players",
+    refresh:            "Refresh",
+    loading:            "Loading...",
+    noPlayers:          "No players found.",
+    setSport:           "Set sport",
+    setUnit:            "Set unit",
+    ok:                 "OK",
+    tip:                "Tip: Start by selecting all → set sport → Apply → then choose the appropriate unit in bulk (or adjust individually).",
+    locale:             "en-GB",
+  },
+} as const;
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type ProfileRow = {
   id: string;
@@ -41,44 +107,53 @@ type PlayerRow = {
   requested_at?: string | null;
 };
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 const SPORT_OPTIONS = [
-  { value: "football", label: "Football" },
+  { value: "football",   label: "Football" },
   { value: "basketball", label: "Basketball" },
 ] as const;
 
 const UNIT_OPTIONS: Record<string, { value: string; label: string }[]> = {
   football: [
     { value: "goalkeeper", label: "Goalkeeper" },
-    { value: "defense", label: "Defense" },
-    { value: "midfield", label: "Midfield" },
-    { value: "attack", label: "Attack" },
+    { value: "defense",    label: "Defense" },
+    { value: "midfield",   label: "Midfield" },
+    { value: "attack",     label: "Attack" },
   ],
   basketball: [
     { value: "guards", label: "Guards" },
-    { value: "wings", label: "Wings" },
-    { value: "bigs", label: "Bigs" },
+    { value: "wings",  label: "Wings" },
+    { value: "bigs",   label: "Bigs" },
   ],
 };
 
-function norm(v: any) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function norm(v: unknown) {
   const s = String(v ?? "").trim();
   return s.length ? s : null;
 }
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | null | undefined, locale: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function CoachPlayersPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [lang] = useLang();
+  const ct = COPY[lang];
+
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
   const [approving, setApproving] = useState<string | null>(null);
 
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [profile, setProfile]               = useState<ProfileRow | null>(null);
+  const [players, setPlayers]               = useState<PlayerRow[]>([]);
   const [pendingPlayers, setPendingPlayers] = useState<PlayerRow[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ]                           = useState("");
 
   // selection
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -89,7 +164,7 @@ export default function CoachPlayersPage() {
 
   // bulk controls
   const [bulkSport, setBulkSport] = useState<string | null>(null);
-  const [bulkUnit, setBulkUnit] = useState<string | null>(null);
+  const [bulkUnit, setBulkUnit]   = useState<string | null>(null);
 
   // inline edits draft
   const [draft, setDraft] = useState<Record<string, { sport?: string | null; unit?: string | null }>>({});
@@ -124,9 +199,9 @@ export default function CoachPlayersPage() {
         .maybeSingle();
 
       if (profErr) throw profErr;
-      setProfile(prof as any);
+      setProfile(prof as ProfileRow);
 
-      const tId = (prof as any)?.team_id ?? null;
+      const tId = (prof as ProfileRow)?.team_id ?? null;
       if (!tId) {
         setPlayers([]);
         setPendingPlayers([]);
@@ -149,7 +224,7 @@ export default function CoachPlayersPage() {
     if (error) throw error;
 
     const all = (data ?? []) as PlayerRow[];
-    const active = all.filter((p) => (p.status ?? "ACTIVE") !== "PENDING" && (p.status ?? "ACTIVE") !== "REJECTED");
+    const active  = all.filter((p) => (p.status ?? "ACTIVE") !== "PENDING" && (p.status ?? "ACTIVE") !== "REJECTED");
     const pending = all.filter((p) => p.status === "PENDING");
 
     setPlayers(active);
@@ -159,7 +234,7 @@ export default function CoachPlayersPage() {
     const dr: Record<string, { sport?: string | null; unit?: string | null }> = {};
     for (const p of active) {
       sel[p.id] = false;
-      dr[p.id] = { sport: p.sport ?? null, unit: p.unit ?? null };
+      dr[p.id]  = { sport: p.sport ?? null, unit: p.unit ?? null };
     }
     setSelected(sel);
     setDraft(dr);
@@ -238,8 +313,7 @@ export default function CoachPlayersPage() {
   }
 
   async function saveChanges() {
-    if (!canEdit) return;
-    if (!teamId) return;
+    if (!canEdit || !teamId) return;
 
     setSaving(true);
     try {
@@ -248,7 +322,7 @@ export default function CoachPlayersPage() {
       for (const p of players) {
         const d = draft[p.id] ?? {};
         const sport = norm(d.sport);
-        const unit = norm(d.unit);
+        const unit  = norm(d.unit);
         if (sport !== norm(p.sport) || unit !== norm(p.unit)) {
           updates.push({ id: p.id, sport, unit });
         }
@@ -267,7 +341,7 @@ export default function CoachPlayersPage() {
         )
       );
 
-      const firstErr = results.find((r) => (r as any)?.error)?.error;
+      const firstErr = results.find((r) => (r as { error?: unknown })?.error)?.error;
       if (firstErr) throw firstErr;
 
       await loadPlayers(teamId);
@@ -276,9 +350,10 @@ export default function CoachPlayersPage() {
     }
   }
 
-  const unknownCount = useMemo(() => {
-    return players.filter((p) => !norm(p.unit) || norm(p.unit) === "unknown").length;
-  }, [players]);
+  const unknownCount = useMemo(
+    () => players.filter((p) => !norm(p.unit) || norm(p.unit) === "unknown").length,
+    [players]
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
@@ -288,29 +363,32 @@ export default function CoachPlayersPage() {
         <Card className="border-amber-200 bg-amber-50">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-base">Bíður samþykkis</CardTitle>
+              <CardTitle className="text-base">{ct.pendingTitle}</CardTitle>
               {pendingPlayers.length > 0 && (
                 <Badge variant="secondary" className="bg-amber-200 text-amber-900">
                   {pendingPlayers.length}
                 </Badge>
               )}
             </div>
-            <CardDescription>
-              Eftirfarandi leikmenn skráðu sig og bíða samþykkis þíns.
-            </CardDescription>
+            <CardDescription>{ct.pendingDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="py-2 text-sm text-slate-500">Hleð...</div>
+              <div className="py-2 text-sm text-slate-500">{ct.pendingLoading}</div>
             ) : pendingPlayers.length === 0 ? (
-              <div className="py-2 text-sm text-slate-500">Engir leikmenn í bið.</div>
+              <div className="py-2 text-sm text-slate-500">{ct.pendingEmpty}</div>
             ) : (
               <div className="divide-y rounded-xl border bg-white">
                 {pendingPlayers.map((p) => (
-                  <div key={p.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    key={p.id}
+                    className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div>
                       <div className="font-medium">{p.full_name ?? "—"}</div>
-                      <div className="text-xs text-slate-500">Skráði sig {formatDate(p.requested_at)}</div>
+                      <div className="text-xs text-slate-500">
+                        {ct.registeredOn(formatDate(p.requested_at, ct.locale))}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -319,7 +397,7 @@ export default function CoachPlayersPage() {
                         disabled={approving === p.id}
                         className="bg-green-600 hover:bg-green-700"
                       >
-                        {approving === p.id ? "..." : "Samþykkja"}
+                        {approving === p.id ? "…" : ct.approve}
                       </Button>
                       <Button
                         size="sm"
@@ -328,7 +406,7 @@ export default function CoachPlayersPage() {
                         disabled={approving === p.id}
                         className="border-red-300 text-red-600 hover:bg-red-50"
                       >
-                        {approving === p.id ? "..." : "Hafna"}
+                        {approving === p.id ? "…" : ct.reject}
                       </Button>
                     </div>
                   </div>
@@ -342,25 +420,25 @@ export default function CoachPlayersPage() {
       {/* ── Active players ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Assign Units</CardTitle>
+          <CardTitle>{ct.assignTitle}</CardTitle>
           <CardDescription>
-            Settu <span className="font-medium">sport</span> og <span className="font-medium">unit</span> á leikmenn.
-            {unknownCount > 0 ? (
-              <span className="ml-2 text-xs text-slate-500">Óúthlutað: {unknownCount}</span>
-            ) : null}
+            {ct.assignDesc("sport", "unit")}
+            {unknownCount > 0 && (
+              <span className="ml-2 text-xs text-slate-500">{ct.unassigned(unknownCount)}</span>
+            )}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           {!canEdit && (
             <div className="rounded-lg border bg-yellow-50 p-3 text-sm">
-              Þú ert ekki með coach/admin réttindi til að breyta leikmönnum.
+              {ct.noPermission}
             </div>
           )}
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <Input
-              placeholder="Leita að leikmanni..."
+              placeholder={ct.searchPlaceholder}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="md:max-w-sm"
@@ -369,13 +447,11 @@ export default function CoachPlayersPage() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
               <Select value={bulkSport ?? ""} onValueChange={(v) => setBulkSport(v || null)}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Bulk sport" />
+                  <SelectValue placeholder={ct.bulkSport} />
                 </SelectTrigger>
                 <SelectContent>
                   {SPORT_OPTIONS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -386,23 +462,25 @@ export default function CoachPlayersPage() {
                 disabled={!bulkSport}
               >
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Bulk unit" />
+                  <SelectValue placeholder={ct.bulkUnit} />
                 </SelectTrigger>
                 <SelectContent>
                   {(bulkSport ? UNIT_OPTIONS[bulkSport] ?? [] : []).map((u) => (
-                    <SelectItem key={u.value} value={u.value}>
-                      {u.label}
-                    </SelectItem>
+                    <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              <Button variant="secondary" onClick={applyBulk} disabled={!canEdit || selectedIds.length === 0}>
-                Apply to selected ({selectedIds.length})
+              <Button
+                variant="secondary"
+                onClick={applyBulk}
+                disabled={!canEdit || selectedIds.length === 0}
+              >
+                {ct.applySelected(selectedIds.length)}
               </Button>
 
               <Button onClick={saveChanges} disabled={!canEdit || saving}>
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? ct.saving : ct.saveChanges}
               </Button>
             </div>
           </div>
@@ -414,51 +492,57 @@ export default function CoachPlayersPage() {
                   checked={filtered.length > 0 && filtered.every((p) => selected[p.id])}
                   onCheckedChange={(v) => toggleAll(Boolean(v))}
                 />
-                <span className="font-medium">Players</span>
+                <span className="font-medium">{ct.playersHeader}</span>
                 <span className="text-slate-500">({filtered.length})</span>
               </div>
-
               <Button variant="ghost" onClick={() => bootstrap()} disabled={loading}>
-                Refresh
+                {ct.refresh}
               </Button>
             </div>
 
             <div className="divide-y">
               {loading ? (
-                <div className="p-4 text-sm text-slate-500">Loading...</div>
+                <div className="p-4 text-sm text-slate-500">{ct.loading}</div>
               ) : filtered.length === 0 ? (
-                <div className="p-4 text-sm text-slate-500">Engir leikmenn fundust.</div>
+                <div className="p-4 text-sm text-slate-500">{ct.noPlayers}</div>
               ) : (
                 filtered.map((p) => {
-                  const d = draft[p.id] ?? {};
+                  const d    = draft[p.id] ?? {};
                   const sport = norm(d.sport);
-                  const unit = norm(d.unit);
+                  const unit  = norm(d.unit);
 
                   return (
-                    <div key={p.id} className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between">
+                    <div
+                      key={p.id}
+                      className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between"
+                    >
                       <div className="flex items-start gap-3">
                         <Checkbox
                           checked={Boolean(selected[p.id])}
-                          onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [p.id]: Boolean(v) }))}
+                          onCheckedChange={(v) =>
+                            setSelected((prev) => ({ ...prev, [p.id]: Boolean(v) }))
+                          }
                         />
                         <div>
                           <div className="font-medium">{p.full_name ?? "—"}</div>
                           <div className="text-xs text-slate-500">
-                            {p.team ?? "—"} {p.position ? `· ${p.position}` : ""}
+                            {p.team ?? "—"}{p.position ? ` · ${p.position}` : ""}
                           </div>
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                        <Select value={sport ?? ""} onValueChange={(v) => setRowSport(p.id, v || null)} disabled={!canEdit}>
+                        <Select
+                          value={sport ?? ""}
+                          onValueChange={(v) => setRowSport(p.id, v || null)}
+                          disabled={!canEdit}
+                        >
                           <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="Sport" />
                           </SelectTrigger>
                           <SelectContent>
                             {SPORT_OPTIONS.map((s) => (
-                              <SelectItem key={s.value} value={s.value}>
-                                {s.label}
-                              </SelectItem>
+                              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -473,15 +557,13 @@ export default function CoachPlayersPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {(sport ? UNIT_OPTIONS[sport] ?? [] : []).map((u) => (
-                              <SelectItem key={u.value} value={u.value}>
-                                {u.label}
-                              </SelectItem>
+                              <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
 
                         <div className="w-[120px] text-xs text-slate-500">
-                          {!sport ? "Set sport" : !unit ? "Set unit" : "OK"}
+                          {!sport ? ct.setSport : !unit ? ct.setUnit : ct.ok}
                         </div>
                       </div>
                     </div>
@@ -492,7 +574,7 @@ export default function CoachPlayersPage() {
           </div>
 
           <div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
-            Tips: Byrjaðu á að velja alla → setja sport → Apply → velja viðeigandi unit í bulk (eða handvirkt á einstaka).
+            {ct.tip}
           </div>
         </CardContent>
       </Card>

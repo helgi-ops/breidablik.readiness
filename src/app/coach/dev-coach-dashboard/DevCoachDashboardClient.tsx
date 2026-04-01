@@ -3,6 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
+import { PlayerTrendTab } from "./PlayerTrendTab";
+import { RtpTab } from "./RtpTab";
+import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -814,13 +817,32 @@ function actionToPlannedIntensity(action: TrainingAction | null | undefined): "l
   return "high";
 }
 
-function computeTeamRisk(signal: TeamSignal | null) {
+const TEAM_RISK_COPY = {
+  IS: {
+    noDataWhy:   "Engin team-samantekt tiltæk fyrir daginn.",
+    noDataRec:   "Refresh eða keyrðu Generate Today Decisions.",
+    highRec:     "Breytðu æfingu: minnkaðu heildarálag (volume/intensity), forðastu mikla eccentrics/contacts, aukið recovery blocks. Haltu gæðum á lykilatriðum en skera niður magn.",
+    cautionRec:  "Aðlaga daginn: halda gæðum en lækka magn (t.d. -20–30% sets/reps), velja minni árekstra, lengri hvíld, og fylgjast með þeim sem eru REDUCED/RECOVERY.",
+    stableRec:   "Keyra plan að mestu: normal session, með sértækri áherslu á þá sem eru REDUCED/RECOVERY (individual mods).",
+  },
+  EN: {
+    noDataWhy:   "No team summary available for today.",
+    noDataRec:   "Refresh or run Generate Today Decisions.",
+    highRec:     "Modify session: reduce total load (volume/intensity), avoid heavy eccentrics/contacts, increase recovery blocks. Maintain quality on key actions but cut volume.",
+    cautionRec:  "Adjust the day: maintain quality but lower volume (e.g. -20–30% sets/reps), choose lower-contact options, extend rest periods, and monitor REDUCED/RECOVERY players.",
+    stableRec:   "Run plan as normal: standard session, with individual focus on players flagged REDUCED/RECOVERY.",
+  },
+} as const;
+
+function computeTeamRisk(signal: TeamSignal | null, lang: "IS" | "EN" = "IS") {
+  const rc = TEAM_RISK_COPY[lang];
+
   if (!signal || !signal.n_players) {
     return {
       level: "UNKNOWN" as const,
       label: "No data",
-      why: "Engin team-samantekt tiltæk fyrir daginn.",
-      recommendation: "Refresh eða keyrðu Generate Today Decisions.",
+      why: rc.noDataWhy,
+      recommendation: rc.noDataRec,
     };
   }
 
@@ -834,8 +856,7 @@ function computeTeamRisk(signal: TeamSignal | null) {
       level: "HIGH" as const,
       label: "HIGH RISK",
       why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
-      recommendation:
-        "Breytðu æfingu: minnkaðu heildarálag (volume/intensity), forðastu mikla eccentrics/contacts, aukið recovery blocks. Haltu gæðum á lykilatriðum en skera niður magn.",
+      recommendation: rc.highRec,
     };
   }
 
@@ -844,8 +865,7 @@ function computeTeamRisk(signal: TeamSignal | null) {
       level: "CAUTION" as const,
       label: "CAUTION",
       why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
-      recommendation:
-        "Aðlaga daginn: halda gæðum en lækka magn (t.d. -20–30% sets/reps), velja minni árekstra, lengri hvíld, og fylgjast með þeim sem eru REDUCED/RECOVERY.",
+      recommendation: rc.cautionRec,
     };
   }
 
@@ -853,7 +873,7 @@ function computeTeamRisk(signal: TeamSignal | null) {
     level: "STABLE" as const,
     label: "STABLE",
     why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
-    recommendation: "Keyra plan að mestu: normal session, með sértækri áherslu á þá sem eru REDUCED/RECOVERY (individual mods).",
+    recommendation: rc.stableRec,
   };
 }
 
@@ -1684,7 +1704,7 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald">("today");
+  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald" | "trend" | "rtp">("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -4773,21 +4793,21 @@ export default function CoachPage() {
 
   const teamIntelEmptyMessage =
     dayStateInfo.state === "OFF_DAY"
-      ? "OFF day detected. Team intelligence input is intentionally de-emphasized."
+      ? (lang === "EN" ? "OFF day detected. Team intelligence input is intentionally de-emphasized." : "OFF dagur greinst. Team intelligence inntak er vísvitandi dregið saman.")
       : dayStateInfo.state === "NO_INPUT_EXPECTED"
-      ? "No input expected for this day context. Team intelligence will populate when inputs are expected."
+      ? (lang === "EN" ? "No input expected for this day context. Team intelligence will populate when inputs are expected." : "Ekkert inntak gert ráð fyrir í þessum dagasamhengi. Team intelligence mun fylla upp þegar inntak er gert ráð fyrir.")
       : dayStateInfo.state === "MISSING_INPUT"
-      ? "Missing readiness inputs for expected players today. Team intelligence may be incomplete."
-      : "Engin team intelligence færsla fannst í dag.";
+      ? (lang === "EN" ? "Missing readiness inputs for expected players today. Team intelligence may be incomplete." : "Vantar readiness gögn frá leikmönnum sem gert er ráð fyrir. Team intelligence gæti verið ófullkomið.")
+      : (lang === "EN" ? "No team intelligence record found for today." : "Engin team intelligence færsla fannst í dag.");
 
   const queueEmptyMessage =
     dayStateInfo.state === "OFF_DAY"
-      ? "OFF day: no player review queue expected."
+      ? (lang === "EN" ? "OFF day: no player review queue expected." : "OFF dagur: ekkert gert ráð fyrir leikmannaendurskoðun.")
       : dayStateInfo.state === "NO_INPUT_EXPECTED"
-      ? "No input expected today; player review queue is intentionally empty."
+      ? (lang === "EN" ? "No input expected today; player review queue is intentionally empty." : "Ekkert inntak gert ráð fyrir í dag; leikmannaröð er vísvitandi tóm.")
       : dayStateInfo.state === "MISSING_INPUT"
-      ? "Expected player inputs are missing. Trigger reminders or wait for check-ins."
-      : "Engin readiness gögn í dag.";
+      ? (lang === "EN" ? "Expected player inputs are missing. Trigger reminders or wait for check-ins." : "Vantar inntak frá leikmönnum. Sendum áminningar eða biðum eftir check-ins.")
+      : (lang === "EN" ? "No readiness data for today." : "Engin readiness gögn í dag.");
 
   const complianceMessage =
     dayStateInfo.state === "OFF_DAY"
@@ -5889,9 +5909,9 @@ export default function CoachPage() {
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex items-center justify-between">
           <div className="-mb-px flex flex-1">
-          {(["today", "squad", "intel", "load", "gps", "volatility", "vald"] as const).map((tabId) => {
+          {(["today", "squad", "intel", "load", "gps", "volatility", "vald", "trend", "rtp"] as const).map((tabId) => {
             const labels = ct.tabs as Record<string, string>;
-            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald"]);
+            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald", "trend", "rtp"]);
             const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
             return (
               <button
@@ -5932,6 +5952,16 @@ export default function CoachPage() {
       ══════════════════════════════════════════ */}
       {dashTab === "today" && (
         <div className="space-y-6">
+          {/* Onboarding checklist — only shown to new clubs */}
+          <OnboardingChecklist
+            teamId={coachTeamId}
+            lang={lang}
+            playerCount={rows.length}
+            hasCheckIn={rows.some((r) => r.total_score != null)}
+            hasGpsData={gpsAllPlayers.length > 0}
+            hasDecision={rows.some((r) => (r as Record<string, unknown>).training_action != null)}
+            hasSport={teamSport != null && teamSport.length > 0}
+          />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
@@ -5974,7 +6004,7 @@ export default function CoachPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {(() => {
-                const risk = computeTeamRisk(teamSignal);
+                const risk = computeTeamRisk(teamSignal, lang);
                 const ui = riskUi(risk.level);
                 const leadingAction = dominantTeamAction(teamSignal);
                 const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
@@ -6066,7 +6096,7 @@ export default function CoachPage() {
             <CardContent className="space-y-3">
               {teamSignal
                 ? (() => {
-                    const risk = computeTeamRisk(teamSignal);
+                    const risk = computeTeamRisk(teamSignal, lang);
                     const ui = riskUi(risk.level);
                     const recLines = summaryLines(risk.recommendation, 3);
                     return (
@@ -6291,7 +6321,9 @@ export default function CoachPage() {
                           disabled={saveAllLoading || loading}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
-                          {saveAllLoading ? "Vistandi..." : `Vista allar breytingar (${dirtyCount})`}
+                          {saveAllLoading
+                            ? (lang === "EN" ? "Saving…" : "Vistandi…")
+                            : (lang === "EN" ? `Save all changes (${dirtyCount})` : `Vista allar breytingar (${dirtyCount})`)}
                         </Button>
                       );
                     })()}
@@ -7106,7 +7138,7 @@ export default function CoachPage() {
                 {gpsLoading ? (
                   <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
                 ) : todayPlayerRows.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-slate-400">Engin GPS gögn skráð í dag.</div>
+                  <div className="py-6 text-center text-sm text-slate-400">{lang === "EN" ? "No GPS data recorded today." : "Engin GPS gögn skráð í dag."}</div>
                 ) : (
                   <>
                     {/* Squad average KPI tiles */}
@@ -7117,10 +7149,10 @@ export default function CoachPage() {
                         { label: "IMA COD",          value: fmtN(tAvgImaCod,     0), unit: "avg" },
                         { label: "IMA Accelerations",value: fmtN(tAvgImaAccel,   0), unit: "avg" },
                       ] : [
-                        { label: "Heildarvegalengd", value: fmtN(tAvgDist),    unit: "m avg" },
-                        { label: "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: "m avg (VB5+VB6)" },
-                        { label: "Accel B2-3",       value: fmtN(tAvgAccB),    unit: "efni avg" },
-                        { label: "Decel B2-3",       value: fmtN(tAvgDecB),    unit: "efni avg" },
+                        { label: lang === "EN" ? "Total Distance" : "Heildarvegalengd", value: fmtN(tAvgDist),    unit: "m avg" },
+                        { label: lang === "EN" ? "High-speed Dist" : "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: "m avg (VB5+VB6)" },
+                        { label: "Accel B2-3",       value: fmtN(tAvgAccB),    unit: lang === "EN" ? "count avg" : "efni avg" },
+                        { label: "Decel B2-3",       value: fmtN(tAvgDecB),    unit: lang === "EN" ? "count avg" : "efni avg" },
                       ]).map(({ label, value, unit }) => (
                         <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
@@ -7135,7 +7167,7 @@ export default function CoachPage() {
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50">
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">Leikmaður</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Player" : "Leikmaður"}</th>
                             {isBasketball ? <>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Player Load</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">PL/min</th>
@@ -7568,6 +7600,39 @@ export default function CoachPage() {
         <div className="space-y-4">
           <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          TREND TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "trend" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Player Trends"
+          description="30, 60 and 90-day readiness, STEN, training action history and GPS load per player."
+        />
+      )}
+      {dashTab === "trend" && isAtLeastPro && (
+        <PlayerTrendTab
+          coachTeamId={coachTeamId}
+          today={today}
+          teamSport={teamSport}
+          lang={lang}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════
+          INJURIES / RTP TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "rtp" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Injuries / Return-to-Play"
+          description="Record injuries, track rehabilitation stages, and manage return-to-play progression per player."
+        />
+      )}
+      {dashTab === "rtp" && isAtLeastPro && (
+        <RtpTab coachTeamId={coachTeamId} lang={lang} />
       )}
 
       <ExplainabilityDrawer

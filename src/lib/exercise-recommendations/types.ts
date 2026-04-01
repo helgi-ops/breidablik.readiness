@@ -1,3 +1,5 @@
+import type { Lang } from "@/lib/lang";
+
 export type ReadinessState = "GREEN" | "YELLOW" | "RED";
 export type RiskState = "LOW" | "MODERATE" | "HIGH";
 export type TrainingMode = "PUSH" | "MAINTAIN" | "MODIFY" | "PROTECT" | "REGENERATE";
@@ -43,6 +45,9 @@ export interface ExerciseRecommendationInput {
   unilateralDeficitFlag?: boolean;
 
   originalExerciseName?: string | null;
+
+  /** Display language — controls playerText and UI label language */
+  lang?: Lang;
 }
 
 /**

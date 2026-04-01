@@ -296,9 +296,9 @@ const COPY: Record<Lang, CopyShape> = {
     testimonials: {
       title: "Built for daily staff decisions",
       items: [
-        { q: "We used to spend 20 minutes before training figuring out who needs what. Now it takes two minutes.", a: "Head Coach, Breiðablik" },
-        { q: "The GPS ACWR view tells me instantly who's underloaded going into a match week.", a: "S&C Coach, Breiðablik" },
-        { q: "ATE helps us keep S&C programming consistent with the day context.", a: "Strength & Conditioning Staff" },
+        { q: "We used to spend 20 minutes before training figuring out who needs what. Now it takes two minutes.", a: "Head Coach, Professional Football Club" },
+        { q: "The GPS ACWR view tells me instantly who's underloaded going into a match week.", a: "S&C Coach, Elite Academy" },
+        { q: "ATE helps us keep S&C programming consistent with the day context.", a: "Strength & Conditioning Coach, Pro Club" },
       ],
     },
     faq: {
@@ -580,9 +580,9 @@ const COPY: Record<Lang, CopyShape> = {
     testimonials: {
       title: "Byggt fyrir daglegar staff ákvarðanir",
       items: [
-        { q: "Við vorum áður að eyða 20 mínútum fyrir æfingu í að finna út hverjir þurfa hvað. Núna tekur það tvær mínútur.", a: "Aðalþjálfari, Breiðablik" },
-        { q: "GPS ACWR yfirlitið sýnir mér samstundis hverjir eru underloaded þegar við förum inn í leikjavikuna.", a: "S&C þjálfari, Breiðablik" },
-        { q: "ATE hjálpar okkur að halda S&C skipulagningu samræmdri við samhengi dagsins.", a: "Strength & Conditioning Staff" },
+        { q: "Við vorum áður að eyða 20 mínútum fyrir æfingu í að finna út hverjir þurfa hvað. Núna tekur það tvær mínútur.", a: "Aðalþjálfari, Atvinnumannaliðs-klúbbur" },
+        { q: "GPS ACWR yfirlitið sýnir mér samstundis hverjir eru underloaded þegar við förum inn í leikjavikuna.", a: "S&C þjálfari, Elite Akademía" },
+        { q: "ATE hjálpar okkur að halda S&C skipulagningu samræmdri við samhengi dagsins.", a: "Strength & Conditioning þjálfari, Pro klúbbur" },
       ],
     },
     faq: {
