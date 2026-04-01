@@ -7,7 +7,6 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 const operationsLinks = [
-  { href: "/coach/week-setup", label: "Week setup" },
   { href: "/coach/match-minutes", label: "Match minutes" },
   { href: "/coach/session-workflow", label: "Session workflow" },
   { href: "/coach/templates", label: "Templates" },
@@ -148,14 +147,14 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
           <nav className="flex items-center gap-1">
             <Link
               href="/coach"
-              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/coach" ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
               Dashboard
             </Link>
 
             <Link
               href="/coach/players"
-              className="relative rounded-md px-3 py-2 text-sm hover:bg-muted"
+              className={`relative rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/players") ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
               Players
               {pendingCount > 0 && (
@@ -166,10 +165,26 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
             </Link>
 
             <Link
+              href="/coach/week-setup"
+              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/week-setup") ? "font-medium text-foreground" : "text-muted-foreground"}`}
+            >
+              Week setup
+            </Link>
+
+            <Link
               href="/coach/messages"
-              className="rounded-md px-3 py-2 text-sm hover:bg-muted"
+              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/messages") ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
               Messages
+            </Link>
+
+            <Link
+              href="/coach/display?refresh=15"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+            >
+              TV ↗
             </Link>
 
             <NavDropdown

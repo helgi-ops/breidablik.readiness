@@ -1636,57 +1636,45 @@ function buildDecisionConfidence(params: {
  * ----------------------------- */
 function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
   return (
-    <div className="grid gap-3 md:grid-cols-4">
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Messages</CardTitle>
-          <CardDescription>Stjórna coach skilaboðum og templates.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild className="w-full">
-            <Link href="/coach/messages">Opna Messages</Link>
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5">
+      <Link
+        href="/coach/week-setup"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        <span>Week setup</span>
+        {weeklyOutlook ? (
+          <span className="ml-1 text-xs font-normal text-slate-400">{weeklyOutlook}</span>
+        ) : null}
+      </Link>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Week setup</CardTitle>
-          <CardDescription>Æfingavika, match-plan og álag.</CardDescription>
-          {weeklyOutlook ? <div className="text-xs text-slate-600">{weeklyOutlook}</div> : null}
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="secondary" className="w-full">
-            <Link href="/coach/week-setup">Opna Week setup</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="h-4 w-px bg-slate-200" />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Match minutes</CardTitle>
-          <CardDescription>Mínútur, byrjun/varamaður og “load context”.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="secondary" className="w-full">
-            <Link href="/coach/match-minutes">Opna Match minutes</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <Link
+        href="/coach/match-minutes"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        Match minutes
+      </Link>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">TV view</CardTitle>
-          <CardDescription>Sýnir 4 uppsetningar á skjá (fyrir sal/sjónvarp).</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild className="w-full">
-            <Link href="/coach/display?refresh=15" target="_blank" rel="noreferrer">
-              Opna TV view
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="h-4 w-px bg-slate-200" />
+
+      <Link
+        href="/coach/messages"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        Messages
+      </Link>
+
+      <div className="h-4 w-px bg-slate-200" />
+
+      <Link
+        href="/coach/display?refresh=15"
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        TV view ↗
+      </Link>
     </div>
   );
 }
@@ -5903,8 +5891,6 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-6">
-      <CoachHubCards weeklyOutlook={weeklyPerformanceOutlook} />
-
       {/* ── Tab navigation + lang toggle ── */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex items-center justify-between">
