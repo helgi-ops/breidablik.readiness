@@ -2620,6 +2620,7 @@ export default function PlayerClient() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [playerStatus, setPlayerStatus] = useState<"PENDING" | "ACTIVE" | "REJECTED" | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
 
   const [playerMeta, setPlayerMeta] = useState<PlayerRow | null>(null);
@@ -3404,6 +3405,23 @@ export default function PlayerClient() {
         }
 
         if (!prof?.player_id) {
+          // Edge case: profile exists but player_id was never linked.
+          // Try to auto-link via user_id on the players table (created by trigger).
+          const { data: playerByUser } = await supabase
+            .from("players")
+            .select("id, full_name, position, team, status")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (playerByUser?.id) {
+            // Repair the link silently so future loads work automatically
+            await supabase.from("profiles").update({ player_id: playerByUser.id }).eq("id", userId);
+            setPlayerMeta(playerByUser as any);
+            setPlayerStatus((playerByUser as any).status ?? "PENDING");
+            return;
+          }
+
+          // No player row at all — load list so the coach can manually link
           const { data: list, error: lErr } = await supabase
             .from("players")
             .select("id, full_name, position, team")
@@ -3415,11 +3433,20 @@ export default function PlayerClient() {
 
         const safeDay = sanitizeDay(day);
 
-        await ensureStage4Decision(prof.player_id, safeDay);
-
-        const { data: pm, error: pmErr } = await supabase.from("players").select("id, full_name, position, team").eq("id", prof.player_id).maybeSingle();
+        const { data: pm, error: pmErr } = await supabase
+          .from("players")
+          .select("id, full_name, position, team, status")
+          .eq("id", prof.player_id)
+          .maybeSingle();
         if (pmErr) console.error("players meta error:", pmErr.message);
         setPlayerMeta((pm as any) ?? null);
+
+        // If player is still pending approval, show waiting screen — skip heavy data load
+        const status = (pm as any)?.status ?? "ACTIVE";
+        setPlayerStatus(status as "PENDING" | "ACTIVE" | "REJECTED");
+        if (status === "PENDING" || status === "REJECTED") return;
+
+        await ensureStage4Decision(prof.player_id, safeDay);
 
         const { data: srow, error: sErr } = await supabase
           .from("v_player_session_today_v2")
@@ -4008,7 +4035,75 @@ export default function PlayerClient() {
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-800" />
-          <div className="text-sm text-zinc-400">{PLAYER_COPY.IS.training.loading}</div>
+          <div className="text-sm text-zinc-400">{t.training.loading}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (playerStatus === "PENDING") {
+    const isPendingCopy = lang === "EN"
+      ? {
+          icon: "⏳",
+          title: "Waiting for coach approval",
+          body: "Your registration has been received. Your coach needs to approve your account before you can start checking in.",
+          sub: "You will be notified once approved.",
+          name: playerMeta?.full_name ?? "",
+        }
+      : {
+          icon: "⏳",
+          title: "Bíður samþykkis þjálfara",
+          body: "Skráning þín er móttekin. Þjálfari þarf að samþykkja aðganginn þinn áður en þú getur byrjað að skrá þig inn.",
+          sub: "Þú verður látinn/látin vita þegar þú ert samþykkt/ur.",
+          name: playerMeta?.full_name ?? "",
+        };
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-start justify-center pt-16 px-4">
+        <div className="w-full max-w-sm">
+          <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm p-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-3xl">
+              {isPendingCopy.icon}
+            </div>
+            {isPendingCopy.name ? (
+              <div className="text-sm font-medium text-zinc-500 mb-1">{isPendingCopy.name}</div>
+            ) : null}
+            <div className="text-base font-semibold text-zinc-900">{isPendingCopy.title}</div>
+            <div className="mt-2 text-sm text-zinc-500 leading-relaxed">{isPendingCopy.body}</div>
+            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
+              {isPendingCopy.sub}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              {lang === "EN" ? "Refresh" : "Uppfæra"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (playerStatus === "REJECTED") {
+    const isRejectedCopy = lang === "EN"
+      ? {
+          title: "Registration not approved",
+          body: "Your registration was not approved by the coach. Please contact your coach or team administrator.",
+        }
+      : {
+          title: "Skráning hafnað",
+          body: "Skráning þín var ekki samþykkt af þjálfara. Hafðu samband við þjálfara eða stjórnanda liðsins.",
+        };
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-start justify-center pt-16 px-4">
+        <div className="w-full max-w-sm">
+          <div className="rounded-2xl border border-red-200 bg-white shadow-sm p-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-3xl">
+              ✗
+            </div>
+            <div className="text-base font-semibold text-zinc-900">{isRejectedCopy.title}</div>
+            <div className="mt-2 text-sm text-zinc-500 leading-relaxed">{isRejectedCopy.body}</div>
+          </div>
         </div>
       </div>
     );

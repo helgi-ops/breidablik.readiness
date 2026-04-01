@@ -94,6 +94,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const isDisplayRoute = pathname?.startsWith("/coach/display");
 
   const [pendingCount, setPendingCount] = useState(0);
+  const [notesCount, setNotesCount] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -112,6 +113,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
       const teamId = (prof as any)?.team_id;
       if (!teamId || !alive) return;
 
+      // Pending player approvals
       const { count } = await supabase
         .from("players")
         .select("id", { count: "exact", head: true })
@@ -119,6 +121,18 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
         .eq("status", "PENDING");
 
       if (alive) setPendingCount(count ?? 0);
+
+      // Player notes written today
+      const today = new Date().toISOString().slice(0, 10);
+      const { count: nc } = await supabase
+        .from("readiness_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
+        .eq("entry_date", today)
+        .not("notes", "is", null)
+        .neq("notes", "");
+
+      if (alive) setNotesCount(nc ?? 0);
     }
 
     fetchPending();
@@ -147,9 +161,14 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
           <nav className="flex items-center gap-1">
             <Link
               href="/coach"
-              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/coach" ? "font-medium text-foreground" : "text-muted-foreground"}`}
+              className={`relative rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/coach" ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
               Dashboard
+              {notesCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                  {notesCount}
+                </span>
+              )}
             </Link>
 
             <Link

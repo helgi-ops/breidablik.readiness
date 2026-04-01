@@ -244,12 +244,31 @@ export default function CoachPlayersPage() {
     if (!teamId) return;
     setApproving(playerId);
     try {
+      // 1. Activate the player row
       const { error } = await supabase
         .from("players")
         .update({ status: "ACTIVE", is_active: true })
         .eq("id", playerId)
         .eq("team_id", teamId);
       if (error) throw error;
+
+      // 2. Look up the user_id on this player row so we can link the profile
+      const { data: playerRow } = await supabase
+        .from("players")
+        .select("user_id")
+        .eq("id", playerId)
+        .maybeSingle();
+
+      const linkedUserId = (playerRow as any)?.user_id ?? null;
+      if (linkedUserId) {
+        // 3. Make sure profiles.player_id is set (handles retroactive data pre-trigger-fix)
+        await supabase
+          .from("profiles")
+          .update({ player_id: playerId, team_id: teamId })
+          .eq("id", linkedUserId)
+          .is("player_id", null); // only patch if not yet linked
+      }
+
       await loadPlayers(teamId);
     } finally {
       setApproving(null);
