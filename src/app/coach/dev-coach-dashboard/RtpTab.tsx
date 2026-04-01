@@ -109,14 +109,14 @@ const COPY = {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type PlayerRow = {
-  player_id: string | number;
+  player_id: string;
   full_name: string;
   position?: string | null;
 };
 
 type Injury = {
   id: string;
-  player_id: number;
+  player_id: string;
   player_name?: string;
   injury_date: string;
   body_part: string;
@@ -230,7 +230,7 @@ function NewInjuryForm({ players, teamId, lang, onSaved, onCancel }: NewInjuryFo
     setError("");
 
     const { error: err } = await supabase.from("player_injuries").insert({
-      player_id: Number(playerId),
+      player_id: playerId,
       team_id: teamId,
       injury_date: injuryDate,
       body_part: bodyPart,
@@ -558,7 +558,7 @@ export function RtpTab({ coachTeamId, lang }: Props) {
       .order("injury_date", { ascending: false });
 
     // Attach player names using live player list
-    const playerMap = new Map(players.map(p => [Number(p.player_id), p.full_name]));
+    const playerMap = new Map(players.map(p => [p.player_id, p.full_name]));
     const withNames = ((data ?? []) as Injury[]).map(inj => ({
       ...inj,
       player_name: playerMap.get(inj.player_id) ?? `#${inj.player_id}`,
