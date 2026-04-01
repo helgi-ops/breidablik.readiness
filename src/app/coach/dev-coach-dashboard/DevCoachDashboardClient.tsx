@@ -81,6 +81,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
+import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
@@ -6851,6 +6852,7 @@ export default function CoachPage() {
             <SessionRpeMonitoringCard teamId={coachTeamId} />
             <DailyInternalLoadCard teamId={coachTeamId} />
             <LoadMetricsCard teamId={coachTeamId} />
+            <InternalAcwrCard teamId={coachTeamId} />
           </div>
 
           {/* Yesterday Load — auto from Catapult GPS */}
