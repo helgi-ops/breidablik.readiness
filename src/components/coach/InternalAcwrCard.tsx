@@ -88,8 +88,8 @@ function AcwrBar({ acwr }: { acwr: number | null }) {
 function ZoneBadge({ zone }: { zone: AcwrZone }) {
   const m = ZONE_META[zone];
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.bg} ${m.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
+    <span className={`inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[11px] font-medium whitespace-nowrap ${m.bg} ${m.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${m.dot}`} />
       {m.label}
     </span>
   );
@@ -178,75 +178,69 @@ export default function InternalAcwrCard({ teamId }: { teamId?: string | null })
       </div>
 
       {/* Body */}
-      <div className="p-4">
+      <div className="px-3 py-2">
         {loading && (
-          <div className="flex items-center justify-center py-10">
-            <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-t-indigo-600 animate-spin" />
+          <div className="flex items-center justify-center py-8">
+            <div className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-indigo-600 animate-spin" />
           </div>
         )}
 
         {!loading && error && (
-          <p className="text-sm text-red-600 py-4 text-center">{error}</p>
+          <p className="text-sm text-red-600 py-3 text-center">{error}</p>
         )}
 
         {!loading && !error && players.length === 0 && (
-          <p className="text-sm text-slate-400 py-4 text-center">No active players found.</p>
+          <p className="text-sm text-slate-400 py-3 text-center">No active players found.</p>
         )}
 
         {!loading && !error && players.length > 0 && (
-          <div className="space-y-4">
-            {/* Zone summary */}
-            <ZoneSummary players={players} />
+          <div className="space-y-2">
+            {/* Zone summary + alert — single compact row */}
+            <div className="flex flex-wrap items-center gap-2 py-1">
+              <ZoneSummary players={players} />
+            </div>
 
-            {/* Alert strip for at-risk players */}
             {riskPlayers.length > 0 && (
-              <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
-                <p className="text-xs font-semibold text-red-700 mb-1">
-                  {riskPlayers.length} player{riskPlayers.length > 1 ? "s" : ""} need attention
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {riskPlayers.map((p) => (
-                    <span key={p.player_id} className={`text-xs px-2 py-0.5 rounded-full font-medium ${ZONE_META[p.zone].bg} ${ZONE_META[p.zone].text}`}>
-                      {p.full_name.split(" ")[0]} {p.acwr != null ? `(${p.acwr.toFixed(2)})` : ""}
-                    </span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-red-50 border border-red-100 rounded-md px-2.5 py-1.5">
+                <span className="text-[11px] font-semibold text-red-700 whitespace-nowrap">
+                  {riskPlayers.length} need attention:
+                </span>
+                {riskPlayers.map((p) => (
+                  <span key={p.player_id} className={`text-[11px] font-medium ${ZONE_META[p.zone].text}`}>
+                    {p.full_name.split(" ")[0]}{p.acwr != null ? ` ${p.acwr.toFixed(2)}` : ""}
+                  </span>
+                ))}
               </div>
             )}
 
             {/* Player table */}
             <div className="overflow-hidden rounded-lg border border-slate-100">
               {/* Table header */}
-              <div className="grid grid-cols-[1fr_56px_80px_72px_44px] gap-2 items-center px-3 py-2 bg-slate-50 border-b border-slate-100">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Player</span>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide text-right">Acute</span>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ACWR</span>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Zone</span>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide text-center">4wk</span>
+              <div className="grid grid-cols-[1fr_52px_76px_70px_40px] gap-2 items-center px-3 py-1.5 bg-slate-50 border-b border-slate-100">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Player</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Acute</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">ACWR</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Zone</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-center">4wk</span>
               </div>
 
-              {/* Rows */}
-              <div className="divide-y divide-slate-50">
+              {/* Scrollable rows — max ~10 visible */}
+              <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
                 {players.map((p, idx) => (
                   <div
                     key={p.player_id}
-                    className={`grid grid-cols-[1fr_56px_80px_72px_44px] gap-2 items-center px-3 py-2.5 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-indigo-50/30 transition-colors`}
+                    className={`grid grid-cols-[1fr_52px_76px_70px_40px] gap-2 items-center px-3 py-1 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-indigo-50/30 transition-colors`}
                   >
-                    {/* Name + position + session count */}
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-800 truncate">{p.full_name}</p>
-                      <p className="text-[11px] text-slate-400">
-                        {p.position ?? "—"} · {p.sessionCount28} session{p.sessionCount28 !== 1 ? "s" : ""}
-                      </p>
-                    </div>
+                    {/* Name · sessions — single line */}
+                    <p className="text-xs font-medium text-slate-800 truncate leading-snug">
+                      {p.full_name}
+                      <span className="font-normal text-slate-400 ml-1">· {p.sessionCount28}s</span>
+                    </p>
 
-                    {/* Acute load (last 7 days) */}
-                    <div className="text-right">
-                      <span className="text-xs font-mono font-semibold text-slate-700">
-                        {p.acute7 > 0 ? p.acute7.toLocaleString() : "—"}
-                      </span>
-                      <p className="text-[10px] text-slate-400">AU</p>
-                    </div>
+                    {/* Acute load */}
+                    <p className="text-xs font-mono font-semibold text-slate-700 text-right leading-snug">
+                      {p.acute7 > 0 ? p.acute7.toLocaleString() : "—"}
+                    </p>
 
                     {/* ACWR bar */}
                     <AcwrBar acwr={p.acwr} />
@@ -264,12 +258,12 @@ export default function InternalAcwrCard({ teamId }: { teamId?: string | null })
             </div>
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-1">
-              <span><strong className="text-blue-500">Undertrain</strong> · ACWR &lt; 0.8</span>
-              <span><strong className="text-emerald-600">Optimal</strong> · 0.8 – 1.3</span>
-              <span><strong className="text-amber-500">Caution</strong> · 1.3 – 1.5</span>
-              <span><strong className="text-red-500">High risk</strong> · &gt; 1.5</span>
-              <span className="ml-auto text-slate-300">Acute = 7-day sRPE · Chronic = 28-day avg/wk</span>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-400 pt-0.5 pb-1">
+              <span><strong className="text-blue-500">Undertrain</strong> &lt;0.8</span>
+              <span><strong className="text-emerald-600">Optimal</strong> 0.8–1.3</span>
+              <span><strong className="text-amber-500">Caution</strong> 1.3–1.5</span>
+              <span><strong className="text-red-500">High risk</strong> &gt;1.5</span>
+              <span className="ml-auto text-slate-300">Acute = 7-day sRPE</span>
             </div>
           </div>
         )}
