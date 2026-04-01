@@ -6869,14 +6869,6 @@ export default function CoachPage() {
           </section>
 
           {/* ── 7/28d Load Metrics ───────────────────────────── */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">7 / 28-day Metrics</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-            <LoadMetricsCard teamId={coachTeamId} />
-          </section>
-
           {/* ── External Load (GPS) ───────────────────────────── */}
           <section>
             <div className="flex items-center gap-2 mb-3">
