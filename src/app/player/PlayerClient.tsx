@@ -4362,65 +4362,79 @@ export default function PlayerClient() {
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Catapult</div>
                     {catapultToday || catapultHistory.length ? (
                       <div className="mt-3 space-y-4">
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Today vs Team</div>
-                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            {todayVsTeamMetrics.map((item) => {
-                              const tone = externalLoadTone(item.value, item.teamAverage);
-                              return (
-                                <div key={`player-catapult-team-${item.key}`} className={cx("rounded-xl border px-3 py-3", tone.tone)}>
-                                  <div className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</div>
-                                  <div className="mt-2 text-lg font-semibold tabular-nums">{metricFmt(item.value, item.digits)}</div>
-                                  <div className="mt-1 text-[11px]">
-                                    Team {metricFmt(item.teamAverage, item.digits)} · {tone.label}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">GPS Load Monitoring</div>
-                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-400" /> &lt;0.8</span>
-                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> 0.8–1.3</span>
-                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> 1.3–1.5</span>
-                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> &gt;1.5</span>
+                        {(() => {
+                          const todayTiles = todayVsTeamMetrics.filter(
+                            (item) => item.value != null || (item.teamAverage != null && item.teamAverage > 0)
+                          );
+                          return todayTiles.length > 0 ? (
+                            <div>
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Today vs Team</div>
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                {todayTiles.map((item) => {
+                                  const tone = externalLoadTone(item.value, item.teamAverage);
+                                  return (
+                                    <div key={`player-catapult-team-${item.key}`} className={cx("rounded-xl border px-3 py-3", tone.tone)}>
+                                      <div className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</div>
+                                      <div className="mt-2 text-lg font-semibold tabular-nums">{metricFmt(item.value, item.digits)}</div>
+                                      <div className="mt-1 text-[11px]">
+                                        Team {metricFmt(item.teamAverage, item.digits)} · {tone.label}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            {weeklyLoadMetrics.map((item) => {
-                              const zone = item.acwrSupported ? acwrZone(item.weekly.acwr) : acwrZone(null);
-                              return (
-                                <div key={`player-catapult-weekly-${item.key}`} className={cx("rounded-xl border px-3 py-3", zone.bg)}>
-                                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{item.label}</div>
-                                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-                                    <div>
-                                      <div className="uppercase tracking-wide text-zinc-400">7D</div>
-                                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
-                                        {metricFmt(item.weekly.acute7Avg, item.digits)}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="uppercase tracking-wide text-zinc-400">28D</div>
-                                      <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
-                                        {metricFmt(item.weekly.chronic28Avg, item.digits)}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="uppercase tracking-wide text-zinc-400">ACWR</div>
-                                      <div className={cx("mt-1 text-sm font-semibold tabular-nums", item.acwrSupported ? zone.text : "text-zinc-400")}>
-                                        {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
-                                      </div>
-                                    </div>
-                                  </div>
+                          ) : null;
+                        })()}
+
+                        {(() => {
+                          const loadTiles = weeklyLoadMetrics.filter(
+                            (item) => (item.weekly.acute7Avg ?? 0) > 0 || (item.weekly.chronic28Avg ?? 0) > 0
+                          );
+                          return loadTiles.length > 0 ? (
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">GPS Load Monitoring</div>
+                                <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-400" /> &lt;0.8</span>
+                                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> 0.8–1.3</span>
+                                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> 1.3–1.5</span>
+                                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> &gt;1.5</span>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+                              </div>
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                {loadTiles.map((item) => {
+                                  const zone = item.acwrSupported ? acwrZone(item.weekly.acwr) : acwrZone(null);
+                                  return (
+                                    <div key={`player-catapult-weekly-${item.key}`} className={cx("rounded-xl border px-3 py-3", zone.bg)}>
+                                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{item.label}</div>
+                                      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                                        <div>
+                                          <div className="uppercase tracking-wide text-zinc-400">7D</div>
+                                          <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
+                                            {metricFmt(item.weekly.acute7Avg, item.digits)}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="uppercase tracking-wide text-zinc-400">28D</div>
+                                          <div className="mt-1 text-sm font-semibold tabular-nums text-zinc-800">
+                                            {metricFmt(item.weekly.chronic28Avg, item.digits)}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="uppercase tracking-wide text-zinc-400">ACWR</div>
+                                          <div className={cx("mt-1 text-sm font-semibold tabular-nums", item.acwrSupported ? zone.text : "text-zinc-400")}>
+                                            {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     ) : (
                       <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
