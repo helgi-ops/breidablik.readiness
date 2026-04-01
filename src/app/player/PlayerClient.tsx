@@ -3821,7 +3821,7 @@ export default function PlayerClient() {
     };
 
     run();
-  }, [supabase, day, adminConfigSnapshot]);
+  }, [supabase, day, adminConfigSnapshot, lang]);
 
   // App icon badge: show a dot when today's check-in is missing, clear it once done.
   // Works on iOS 16.4+ PWA, Android Chrome, desktop Chromium.
@@ -3986,7 +3986,7 @@ export default function PlayerClient() {
     };
 
     run();
-  }, [supabase, plan?.md_day, plan?.variant, plan?.readiness_level, session?.md_day_resolved, flag]);
+  }, [supabase, plan?.md_day, plan?.variant, plan?.readiness_level, session?.md_day_resolved, flag, lang]);
 
   async function linkPlayer() {
     try {
