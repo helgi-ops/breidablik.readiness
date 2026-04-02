@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Lang = "IS" | "EN";
@@ -74,7 +75,11 @@ const COPY = {
 };
 
 export default function SignupPage() {
-  const [lang, setLang] = useState<Lang>("EN");
+  const searchParams = useSearchParams();
+  const presetTeamId = searchParams.get("team_id") ?? "";
+  const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
+
+  const [lang, setLang] = useState<Lang>("IS");
   const t = COPY[lang];
 
   // Sync with home page language preference
@@ -94,12 +99,28 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [sport, setSport] = useState<Sport | null>(null);
+  const [sport, setSport] = useState<Sport | null>(presetSport as Sport || null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [teamId, setTeamId] = useState("");
+  const [teamId, setTeamId] = useState(presetTeamId);
+  const [presetTeamName, setPresetTeamName] = useState<string | null>(null);
 
-  // Load teams when sport is selected
+  // If team_id is preset, look up its name and sport immediately
   useEffect(() => {
+    if (!presetTeamId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("teams").select("id, name, sport").eq("id", presetTeamId).maybeSingle();
+      if (data) {
+        setPresetTeamName((data as TeamRow).name);
+        setSport((data as TeamRow).sport as Sport);
+        setTeamId(presetTeamId);
+      }
+    })();
+  }, [presetTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load teams when sport is selected (only when no preset)
+  useEffect(() => {
+    if (presetTeamId) return; // locked to preset team
     let alive = true;
     async function loadTeams() {
       if (!sport) { setTeams([]); setTeamId(""); return; }
@@ -112,7 +133,7 @@ export default function SignupPage() {
     }
     loadTeams();
     return () => { alive = false; };
-  }, [sport]);
+  }, [sport, presetTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -193,24 +214,35 @@ export default function SignupPage() {
             />
           </label>
 
-          {/* Sport */}
-          <label className="grid gap-1.5 text-sm">
-            <span className="text-neutral-700">{t.sport}</span>
-            <select
-              value={sport ?? ""}
-              onChange={(e) => setSport((e.target.value as Sport) || null)}
-              className="rounded-xl border px-3 py-2"
-              required
-            >
-              <option value="">{t.sportPlaceholder}</option>
-              <option value="football">{t.sports.football}</option>
-              <option value="basketball">{t.sports.basketball}</option>
-              <option value="handball">{t.sports.handball}</option>
-            </select>
-          </label>
+          {/* Sport — hidden when team is preset (sport auto-detected) */}
+          {!presetTeamId && (
+            <label className="grid gap-1.5 text-sm">
+              <span className="text-neutral-700">{t.sport}</span>
+              <select
+                value={sport ?? ""}
+                onChange={(e) => setSport((e.target.value as Sport) || null)}
+                className="rounded-xl border px-3 py-2"
+                required
+              >
+                <option value="">{t.sportPlaceholder}</option>
+                <option value="football">{t.sports.football}</option>
+                <option value="basketball">{t.sports.basketball}</option>
+                <option value="handball">{t.sports.handball}</option>
+              </select>
+            </label>
+          )}
 
-          {/* Team — appears after sport is chosen */}
-          {sport && (
+          {/* Team — locked banner when preset, otherwise dropdown */}
+          {presetTeamId ? (
+            <div className="grid gap-1.5 text-sm">
+              <span className="text-neutral-700">{t.team}</span>
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                <span className="text-emerald-600">✓</span>
+                <span className="font-medium text-emerald-800">{presetTeamName ?? "…"}</span>
+                <span className="ml-auto text-xs text-emerald-500">Tengt við link</span>
+              </div>
+            </div>
+          ) : sport && (
             <label className="grid gap-1.5 text-sm">
               <span className="text-neutral-700">{t.team}</span>
               <select
