@@ -221,6 +221,9 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     paramValue(params, ["PeakPower"]) ??
     firstNumber(record.peak_power_w, record.peakPowerW, record.peak_power);
 
+  // Athlete body weight (kg) — used to compute relative power when VALD doesn't return it directly
+  const bodyWeightKg = firstNumber(record.weight, record.bodyWeightKg, record.body_weight_kg);
+
   // Bilateral values — prefer concentric peak/mean force from trials
   const leftValue =
     paramValue(params, ["TRIAL_CONCENTRIC_PEAK_FORCE_LEFT", "TRIAL_MEAN_TAKEOFF_FORCE_LEFT", "TRIAL_PEAK_FORCE_LEFT"]) ??
@@ -268,7 +271,11 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     relativePeakPowerWKg:
       paramValue(params, ["TRIAL_PEAK_TAKEOFF_POWER_BW"]) ??
       paramValue(params, ["PeakPowerBW", "PeakPowerRelative"]) ??
-      firstNumber(record.relative_peak_power_w_kg, record.relativePeakPowerWKg),
+      firstNumber(record.relative_peak_power_w_kg, record.relativePeakPowerWKg) ??
+      // Compute from peak power + body weight when VALD doesn't return it directly
+      (peakPowerW != null && bodyWeightKg != null && bodyWeightKg > 0
+        ? peakPowerW / bodyWeightKg
+        : null),
     peakForceN:
       paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]) ??
       paramValue(params, ["PeakForce"]) ??
