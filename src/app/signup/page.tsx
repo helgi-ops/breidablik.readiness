@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -76,7 +76,7 @@ const COPY = {
   },
 };
 
-export default function SignupPage() {
+function SignupForm() {
   const searchParams = useSearchParams();
   const presetTeamId = searchParams.get("team_id") ?? "";
   const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
@@ -331,5 +331,13 @@ export default function SignupPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }
