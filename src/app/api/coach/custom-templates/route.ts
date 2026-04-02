@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
   const { error: saveErr } = await supabase.rpc("save_custom_template_records", {
     p_table_name: table_name,
     p_team_id:    auth.teamId,
-    p_records:    JSON.stringify(records),
+    p_records:    records as unknown as string,
   });
   if (saveErr) return NextResponse.json({ ok: false, error: saveErr.message }, { status: 500 });
 
