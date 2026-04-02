@@ -23,7 +23,11 @@ type ValdSnapshotRow = {
 type CmjResult = {
   playerId: string;
   jumpHeightCm: number;
+  rsiMod: number | null;
+  relativePeakPowerWkg: number | null;
+  timeToTakeoffMs: number | null;
   asymmetryPct: number | null;
+  asymmetrySide: string | null;
   testTimestamp: string;
 };
 
@@ -89,7 +93,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       // Fetch best CMJ per player for today directly from ForceDecks results
       supabase
         .from("vald_forcedecks_results")
-        .select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp")
+        .select("microplayer_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, time_to_takeoff_ms, asymmetry_percent, asymmetry_side, test_timestamp")
         .eq("team_id", teamId)
         .eq("test_type", "CMJ")
         .gte("test_timestamp", `${date}T00:00:00`)
@@ -120,7 +124,11 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       bestPerPlayer.set(pid, {
         playerId: pid,
         jumpHeightCm: Number(row.jump_height_cm),
+        rsiMod: row.rsi_mod != null ? Number(row.rsi_mod) : null,
+        relativePeakPowerWkg: row.relative_peak_power_w_kg != null ? Number(row.relative_peak_power_w_kg) : null,
+        timeToTakeoffMs: row.time_to_takeoff_ms != null ? Number(row.time_to_takeoff_ms) : null,
         asymmetryPct: row.asymmetry_percent != null ? Number(row.asymmetry_percent) : null,
+        asymmetrySide: row.asymmetry_side ? String(row.asymmetry_side) : null,
         testTimestamp: String(row.test_timestamp ?? ""),
       });
     }
@@ -282,32 +290,50 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
             const snapshotMap = new Map(snapshots.map((s) => [s.playerId, s]));
             return (
               <div>
-                <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5 mb-2">
                   <span className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500" />
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">CMJ Niðurstöður í dag</span>
                   <span className="ml-1 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-px text-[10px] font-bold">{cmjResults.length}</span>
                 </div>
-                <div className="grid gap-1">
-                  {cmjResults.map((r) => {
-                    const snap = snapshotMap.get(r.playerId);
-                    const name = snap?.playerName ?? r.playerId;
-                    const asymColor = r.asymmetryPct != null && r.asymmetryPct > 10
-                      ? "text-amber-600"
-                      : "text-slate-400";
-                    return (
-                      <div key={r.playerId} className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5">
-                        <span className="text-xs font-medium text-slate-700">{name}</span>
-                        <div className="flex items-center gap-3">
-                          {r.asymmetryPct != null && (
-                            <span className={`text-[11px] ${asymColor}`}>
-                              ±{r.asymmetryPct.toFixed(1)}%
-                            </span>
-                          )}
-                          <span className="text-xs font-bold text-emerald-700">{r.jumpHeightCm.toFixed(1)} cm</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400">Leikmaður</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stökk</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">RSI-mod ⭐</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Rel. Power</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Take-Off ⭐</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Asym</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {cmjResults.map((r) => {
+                        const snap = snapshotMap.get(r.playerId);
+                        const name = snap?.playerName ?? r.playerId;
+                        const asymAbs = r.asymmetryPct != null ? Math.abs(r.asymmetryPct) : null;
+                        const asymColor = asymAbs != null && asymAbs > 10 ? "text-amber-600 font-semibold" : "text-slate-500";
+                        return (
+                          <tr key={r.playerId} className="hover:bg-slate-50/60">
+                            <td className="px-3 py-2 font-medium text-slate-700">{name}</td>
+                            <td className="px-3 py-2 text-right font-bold text-emerald-700 tabular-nums">{r.jumpHeightCm.toFixed(1)} cm</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                              {r.rsiMod != null ? r.rsiMod.toFixed(2) : "–"}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                              {r.relativePeakPowerWkg != null ? `${r.relativePeakPowerWkg.toFixed(1)} W/kg` : "–"}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                              {r.timeToTakeoffMs != null ? `${r.timeToTakeoffMs.toFixed(0)} ms` : "–"}
+                            </td>
+                            <td className={`px-3 py-2 text-right tabular-nums ${asymColor}`}>
+                              {asymAbs != null ? `${asymAbs.toFixed(1)}%${r.asymmetrySide ? ` ${r.asymmetrySide[0]}` : ""}` : "–"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             );

@@ -235,14 +235,10 @@ export default function DevPlayerVALDTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <MetricCard label="Stökkhæð" value={fmt(latestFD?.jump_height_cm, 1, " cm")} />
-              <MetricCard label="RSI-mod" value={fmt(latestFD?.rsi_mod, 2)} sub="RSI Modified" />
-              <MetricCard label="Peak Power" value={fmt(latestFD?.peak_power_w, 0, " W")} sub={fmt(latestFD?.relative_peak_power_w_kg, 2, " W/kg")} />
-              <MetricCard label="Peak Force" value={fmt(latestFD?.peak_force_n, 0, " N")} />
-              <MetricCard label="Concentric" value={fmt(latestFD?.concentric_duration_ms, 0, " ms")} sub="Duration" />
-              <MetricCard label="Eccentric" value={fmt(latestFD?.eccentric_duration_ms, 0, " ms")} sub="Duration" />
-              <MetricCard label="Impulse" value={fmt(latestFD?.concentric_impulse_n_s, 1, " Ns")} sub="Concentric" />
+              <MetricCard label="Peak Power" value={fmt(latestFD?.peak_power_w, 0, " W")} sub={latestFD?.relative_peak_power_w_kg != null ? `${latestFD.relative_peak_power_w_kg.toFixed(1)} W/kg` : undefined} />
+              <MetricCard label="RSI-mod" value={fmt(latestFD?.rsi_mod, 2)} sub="Reactive Strength" />
               <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
                 <AsymmetryBar pct={latestFD?.asymmetry_percent ?? null} side={latestFD?.asymmetry_side ?? null} />
