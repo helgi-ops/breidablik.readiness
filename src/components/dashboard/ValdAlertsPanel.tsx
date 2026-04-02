@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Props = {
@@ -16,6 +17,7 @@ type ValdSnapshotRow = {
   groinFlag: string | null;
   cmjFreshnessStatus: string | null;
   latestCmjAt: string | null;
+  cmjScore: number | null;
 };
 
 type ActivePlayer = {
@@ -51,58 +53,80 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   const [mdDay, setMdDay]               = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
+  const [syncing, setSyncing]           = useState(false);
+  const [syncMsg, setSyncMsg]           = useState<string | null>(null);
 
-  useEffect(() => {
+  async function fetchData() {
     if (!teamId) { setLoading(false); return; }
-
     const supabase = getSupabaseClient();
     setLoading(true);
-
-    Promise.all([
+    const [snapshotRes, mdRes, playersRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
-        .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, players!inner(full_name)")
+        .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, players!inner(full_name)")
         .eq("team_id", teamId)
         .eq("snapshot_date", date),
-
       supabase
         .from("v_training_day_context_team")
         .select("md_day")
         .eq("team_id", teamId)
         .eq("date", date)
         .maybeSingle(),
-
       supabase
         .from("players")
         .select("id, full_name")
         .eq("team_id", teamId)
         .eq("is_active", true)
         .order("full_name"),
-    ]).then(([snapshotRes, mdRes, playersRes]) => {
-      const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
-        const player = (row.players as Record<string, unknown> | null) ?? null;
-        return {
-          playerId: String(row.microplayer_id ?? ""),
-          playerName: String(player?.full_name ?? "Player"),
-          neuromuscularFlag: row.neuromuscular_flag ? String(row.neuromuscular_flag) : null,
-          hamstringFlag: row.hamstring_flag ? String(row.hamstring_flag) : null,
-          groinFlag: row.groin_flag ? String(row.groin_flag) : null,
-          cmjFreshnessStatus: row.cmj_freshness_status ? String(row.cmj_freshness_status) : null,
-          latestCmjAt: row.latest_cmj_at ? String(row.latest_cmj_at) : null,
-        };
-      });
-
-      setSnapshots(mapped);
-      setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
-      setActivePlayers(
-        ((playersRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
-          id: String(p.id ?? ""),
-          name: String(p.full_name ?? ""),
-        }))
-      );
-      setLoading(false);
+    ]);
+    const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const player = (row.players as Record<string, unknown> | null) ?? null;
+      return {
+        playerId: String(row.microplayer_id ?? ""),
+        playerName: String(player?.full_name ?? "Player"),
+        neuromuscularFlag: row.neuromuscular_flag ? String(row.neuromuscular_flag) : null,
+        hamstringFlag: row.hamstring_flag ? String(row.hamstring_flag) : null,
+        groinFlag: row.groin_flag ? String(row.groin_flag) : null,
+        cmjFreshnessStatus: row.cmj_freshness_status ? String(row.cmj_freshness_status) : null,
+        latestCmjAt: row.latest_cmj_at ? String(row.latest_cmj_at) : null,
+        cmjScore: row.cmj_score != null ? Number(row.cmj_score) : null,
+      };
     });
-  }, [date, teamId]);
+    setSnapshots(mapped);
+    setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
+    setActivePlayers(
+      ((playersRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
+        id: String(p.id ?? ""),
+        name: String(p.full_name ?? ""),
+      }))
+    );
+    setLoading(false);
+  }
+
+  useEffect(() => { void fetchData(); }, [date, teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setSyncMsg("Ekki innskráður."); setSyncing(false); return; }
+      const res = await fetch("/api/integrations/vald/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ dateFrom: date, dateTo: date, triggerSource: "MANUAL" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Sync mistókst");
+      setSyncMsg("✓ Sync tókst — gögnin eru uppfærð");
+      await fetchData();
+    } catch (e: any) {
+      setSyncMsg(`Villa: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   // ── Build CMJ Required list ─────────────────────────────────────────────
   const isProtocolDay = mdDay === "MD-2" || mdDay === "MD+1";
@@ -171,11 +195,33 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">{mdDay}</span>
             )}
           </div>
-          {!loading && urgentCount > 0 && (
-            <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
-              {urgentCount} required
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {!loading && urgentCount > 0 && (
+              <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
+                {urgentCount} required
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing}
+              title="Sync VALD gögn núna"
+              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+            >
+              {syncing ? (
+                <><span className="inline-block w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" /> Syncing…</>
+              ) : (
+                <>↻ Sync VALD</>
+              )}
+            </button>
+            <Link
+              href="/settings/integrations/vald"
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              title="VALD stillingar"
+            >
+              Stillingar →
+            </Link>
+          </div>
         </div>
 
         <div className="px-4 py-3 space-y-3">
@@ -189,6 +235,38 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           {!loading && !teamId && (
             <p className="text-sm text-slate-400">No team context.</p>
           )}
+
+          {/* Sync message */}
+          {syncMsg && (
+            <div className={`rounded-lg px-3 py-2 text-xs font-medium ${syncMsg.startsWith("Villa") ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+              {syncMsg}
+            </div>
+          )}
+
+          {/* CMJ Results — players with fresh data */}
+          {!loading && (() => {
+            const fresh = snapshots
+              .filter((s) => s.cmjFreshnessStatus === "fresh" && s.cmjScore != null)
+              .sort((a, b) => (b.cmjScore ?? 0) - (a.cmjScore ?? 0));
+            if (!fresh.length) return null;
+            return (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">CMJ Niðurstöður</span>
+                  <span className="ml-1 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-px text-[10px] font-bold">{fresh.length}</span>
+                </div>
+                <div className="grid gap-1">
+                  {fresh.map((s) => (
+                    <div key={s.playerId} className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                      <span className="text-xs font-medium text-slate-700">{s.playerName}</span>
+                      <span className="text-xs font-bold text-emerald-700">{s.cmjScore?.toFixed(1)} cm</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* No VALD data at all — friendly setup state */}
           {!loading && noValdData && (
