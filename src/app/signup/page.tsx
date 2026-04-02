@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Lang = "IS" | "EN";
 type Sport = "football" | "basketball" | "handball";
-type TeamRow = { id: string; name: string; sport: string | null };
+type TeamRow = { id: string; name: string; sport: string | null; gender: string | null };
 
 const COPY = {
   EN: {
@@ -19,6 +19,7 @@ const COPY = {
     sport: "Sport",
     sportPlaceholder: "Select sport…",
     sports: { football: "Football", basketball: "Basketball", handball: "Handball" },
+    genders: { M: "Men", F: "Women" },
     team: "Team",
     teamPlaceholder: "Select team…",
     noTeams: "No teams found for this sport.",
@@ -50,6 +51,7 @@ const COPY = {
     sport: "Íþróttagrein",
     sportPlaceholder: "Veldu íþróttagrein…",
     sports: { football: "Fótbolti", basketball: "Körfubolti", handball: "Handbolti" },
+    genders: { M: "Karlar", F: "Konur" },
     team: "Lið",
     teamPlaceholder: "Veldu lið…",
     noTeams: "Engin lið fundust fyrir þessa íþróttagrein.",
@@ -103,15 +105,17 @@ export default function SignupPage() {
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamId, setTeamId] = useState(presetTeamId);
   const [presetTeamName, setPresetTeamName] = useState<string | null>(null);
+  const [presetTeamGender, setPresetTeamGender] = useState<string | null>(null);
 
   // If team_id is preset, look up its name and sport immediately
   useEffect(() => {
     if (!presetTeamId) return;
     (async () => {
       const { data } = await supabase
-        .from("teams").select("id, name, sport").eq("id", presetTeamId).maybeSingle();
+        .from("teams").select("id, name, sport, gender").eq("id", presetTeamId).maybeSingle();
       if (data) {
         setPresetTeamName((data as TeamRow).name);
+        setPresetTeamGender((data as TeamRow).gender ?? null);
         setSport((data as TeamRow).sport as Sport);
         setTeamId(presetTeamId);
       }
@@ -125,7 +129,7 @@ export default function SignupPage() {
     async function loadTeams() {
       if (!sport) { setTeams([]); setTeamId(""); return; }
       const { data, error: fetchError } = await supabase
-        .from("teams").select("id, name, sport").eq("sport", sport).order("name");
+        .from("teams").select("id, name, sport, gender").eq("sport", sport).order("name");
       if (!alive) return;
       if (fetchError) { console.warn("loadTeams error:", fetchError); setTeams([]); return; }
       setTeams((data ?? []) as TeamRow[]);
@@ -169,6 +173,11 @@ export default function SignupPage() {
   }
 
   const canSubmit = Boolean(fullName.trim() && email.trim() && password && sport && teamId);
+
+  function teamLabel(team: TeamRow) {
+    const genderStr = team.gender ? (t.genders as Record<string, string>)[team.gender] : null;
+    return genderStr ? `${team.name} — ${genderStr}` : team.name;
+  }
 
   return (
     <main className="min-h-screen bg-white px-6 py-12 text-neutral-900">
@@ -238,7 +247,11 @@ export default function SignupPage() {
               <span className="text-neutral-700">{t.team}</span>
               <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <span className="text-emerald-600">✓</span>
-                <span className="font-medium text-emerald-800">{presetTeamName ?? "…"}</span>
+                <span className="font-medium text-emerald-800">
+                  {presetTeamName
+                    ? teamLabel({ id: presetTeamId, name: presetTeamName, sport, gender: presetTeamGender })
+                    : "…"}
+                </span>
                 <span className="ml-auto text-xs text-emerald-500">Tengt við link</span>
               </div>
             </div>
@@ -253,7 +266,7 @@ export default function SignupPage() {
               >
                 <option value="">{t.teamPlaceholder}</option>
                 {teams.map((team) => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
+                  <option key={team.id} value={team.id}>{teamLabel(team)}</option>
                 ))}
               </select>
               {teams.length === 0 && (
