@@ -7,6 +7,7 @@ import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import { buildCatapultReadinessContextFromRows, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
+import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
 
@@ -222,6 +223,51 @@ async function fetchMdContext(
   return (data as { md_day?: string | null } | null)?.md_day ?? null;
 }
 
+async function fetchWhoopSnapshots(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[]
+): Promise<Map<string, NormalizedMonitoringSnapshot>> {
+  if (!playerIds.length) return new Map();
+  try {
+    const { data, error } = await sb
+      .from("athlete_monitoring_snapshots")
+      .select("athlete_id, date, recovery_score, hrv, resting_hr, respiratory_rate, sleep_performance, sleep_consistency, sleep_efficiency, total_sleep_millis, workout_strain, average_hr, max_hr, raw_payload_json")
+      .eq("source", "whoop")
+      .in("athlete_id", playerIds)
+      .order("date", { ascending: false });
+
+    if (error || !data) return new Map();
+
+    // Keep only the most recent snapshot per player
+    const map = new Map<string, NormalizedMonitoringSnapshot>();
+    for (const row of data as Array<Record<string, unknown>>) {
+      const athleteId = String(row.athlete_id ?? "");
+      if (!map.has(athleteId)) {
+        map.set(athleteId, {
+          athleteId,
+          source: "whoop",
+          date: String(row.date ?? ""),
+          recoveryScore: (row.recovery_score as number | null) ?? undefined,
+          hrv: (row.hrv as number | null) ?? undefined,
+          restingHr: (row.resting_hr as number | null) ?? undefined,
+          respiratoryRate: (row.respiratory_rate as number | null) ?? undefined,
+          sleepPerformance: (row.sleep_performance as number | null) ?? undefined,
+          sleepConsistency: (row.sleep_consistency as number | null) ?? undefined,
+          sleepEfficiency: (row.sleep_efficiency as number | null) ?? undefined,
+          totalSleepMillis: (row.total_sleep_millis as number | null) ?? undefined,
+          workoutStrain: (row.workout_strain as number | null) ?? undefined,
+          averageHr: (row.average_hr as number | null) ?? undefined,
+          maxHr: (row.max_hr as number | null) ?? undefined,
+          raw: row.raw_payload_json,
+        });
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
 async function buildPlayerSource(args: {
   row: CoachRow;
   date: string;
@@ -230,6 +276,7 @@ async function buildPlayerSource(args: {
   catapultRows: ReturnType<typeof normalizeCatapultDailyLoadRow>[];
   ydayContext: Record<string, unknown> | null;
   mdDay: string | null;
+  whoopSnapshot?: NormalizedMonitoringSnapshot | null;
 }): Promise<CoachCommandPlayerSource> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -289,6 +336,12 @@ async function buildPlayerSource(args: {
       source: externalToday ? "catapult" : null,
       sourceDate: args.date,
     },
+    whoop: args.whoopSnapshot ? {
+      snapshot: args.whoopSnapshot,
+      connected: true,
+      lastSyncAt: args.whoopSnapshot.date ?? null,
+      sourceDate: args.whoopSnapshot.date ?? args.date,
+    } : undefined,
   });
 
   const [valdReadinessAdjustment, valdDailySnapshot, valdInjurySignals] = await Promise.all([
@@ -427,11 +480,12 @@ export async function GET(req: Request) {
     }
 
     const playerIds = rows.map((row) => String(row.player_id));
-    const [tmByPlayer, catapultByPlayer, ydayContext, mdDay] = await Promise.all([
+    const [tmByPlayer, catapultByPlayer, ydayContext, mdDay, whoopByPlayer] = await Promise.all([
       fetchTrainingModifiers(sb, playerIds, date),
       fetchCatapultRows(sb, playerIds, date),
       fetchYesterdayContext(sb, teamId, date),
       fetchMdContext(sb, teamId, date),
+      fetchWhoopSnapshots(sb, playerIds),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -446,6 +500,7 @@ export async function GET(req: Request) {
             catapultRows: (catapultByPlayer.get(String(row.player_id)) ?? []).filter(Boolean),
             ydayContext,
             mdDay,
+            whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {
