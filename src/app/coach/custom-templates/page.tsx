@@ -1327,6 +1327,9 @@ export default function CustomTemplatesPage() {
   const [saveOk, setSaveOk] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
+  // Which existing set is being edited (null = creating new)
+  const [editingSet, setEditingSet] = useState<TemplateSet | null>(null);
+
   // Days that already have records in DB (for the current set being edited)
   const [existingDays, setExistingDays] = useState<string[]>([]);
 
@@ -1546,16 +1549,18 @@ export default function CustomTemplatesPage() {
     setStep(1); setSeasonPhase(null);
     setSelectedDays(["GENERIC"]); setCurrentDayIdx(0);
     setGreenTemplates({}); setExistingDays([]);
+    setEditingSet(null);
     // setName/sport/gender are derived from selectedTeam — no reset needed
   }
 
-  // Load an existing set into the builder (for adding days / editing)
+  // Load an existing set into the builder (for editing)
   async function loadExistingSet(s: TemplateSet) {
     const supabase = getSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
     // setName/sport/gender are derived from selected team — not overridden from the set record
+    setEditingSet(s);
     setSeasonPhase((s.season_phase as SeasonPhase | null) ?? null);
     setExistingDays(s.md_days ?? []);
     // Start with existing days selected, coach can add more
@@ -1670,7 +1675,7 @@ export default function CustomTemplatesPage() {
                       className="text-xs"
                       onClick={() => void loadExistingSet(s)}
                     >
-                      + Bæta við dögum
+                      ✏️ Breyta
                     </Button>
                   </div>
                 </CardContent>
@@ -1712,6 +1717,20 @@ export default function CustomTemplatesPage() {
               Hætta við
             </Button>
           </div>
+
+          {/* Edit mode banner */}
+          {editingSet && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              <span className="text-base">✏️</span>
+              <div>
+                <span className="font-semibold">{editingSet.set_name}</span>
+                {editingSet.season_phase && (
+                  <span className="ml-1 text-amber-600">({editingSet.season_phase})</span>
+                )}
+                <span className="ml-2 text-amber-700">— breytingar yfirskrifa núverandi færslur. Þú getur líka bætt við nýjum dögum.</span>
+              </div>
+            </div>
+          )}
 
           {/* ── Step 1: Name & sport ─────────────────────────────────────────── */}
           {step === 1 && (
@@ -1844,10 +1863,12 @@ export default function CustomTemplatesPage() {
               <CardHeader>
                 <CardTitle className="text-base">Skref 2 — Veldu æfingadaga</CardTitle>
                 <CardDescription>
-                  Hvaða microdose daga viltu skilgreina í þínu kerfi?
+                  {editingSet
+                    ? "Veldu hvaða daga þú vilt breyta. Valdir dagar yfirskrifa núverandi gögn. Þú getur líka bætt við nýjum dögum."
+                    : "Hvaða microdose daga viltu skilgreina í þínu kerfi?"}
                   {existingDays.length > 0 && (
-                    <span className="ml-1 text-emerald-600 font-medium">
-                      ({existingDays.length} dagur þegar til í gagnagrunni)
+                    <span className="ml-1 text-amber-600 font-medium">
+                      — {existingDays.length} dagur þegar til.
                     </span>
                   )}
                 </CardDescription>
@@ -1878,8 +1899,12 @@ export default function CustomTemplatesPage() {
                           <div className="text-xs text-muted-foreground">{MD_DAY_LABELS[day]}</div>
                         </div>
                         {alreadySaved && (
-                          <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 shrink-0">
-                            ✓ Í gagnagrunni
+                          <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${
+                            selected
+                              ? "text-amber-700 bg-amber-50 border border-amber-200"
+                              : "text-emerald-600 bg-emerald-50 border border-emerald-200"
+                          }`}>
+                            {selected ? "✏️ Uppfærist" : "✓ Í gagnagrunni"}
                           </span>
                         )}
                       </button>
@@ -1901,20 +1926,25 @@ export default function CustomTemplatesPage() {
             <div className="space-y-4">
               {/* Day tabs */}
               <div className="flex flex-wrap gap-2">
-                {selectedDays.map((day, i) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => setCurrentDayIdx(i)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      currentDayIdx === i
-                        ? "bg-foreground text-background border-foreground"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
+                {selectedDays.map((day, i) => {
+                  const isExisting = existingDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setCurrentDayIdx(i)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        currentDayIdx === i
+                          ? "bg-foreground text-background border-foreground"
+                          : isExisting
+                          ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      {isExisting ? "✏️ " : ""}{day}
+                    </button>
+                  );
+                })}
               </div>
 
               <Card>
@@ -1922,8 +1952,19 @@ export default function CustomTemplatesPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">🟢</span>
                     <div>
-                      <CardTitle className="text-base">{currentDay} — GREEN (aðalútgáfa)</CardTitle>
-                      <CardDescription>Þetta er þjálfunarkerfið þitt. Gul og rauð útgáfa verður búin til sjálfkrafa.</CardDescription>
+                      <CardTitle className="text-base">
+                        {currentDay} — GREEN
+                        {existingDays.includes(currentDay) && (
+                          <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                            ✏️ Breyting
+                          </span>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        {existingDays.includes(currentDay)
+                          ? "Þetta er núverandi GREEN template — breyttu og vistaðu til að uppfæra."
+                          : "Þetta er þjálfunarkerfið þitt. Gul og rauð útgáfa verður búin til sjálfkrafa."}
+                      </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
