@@ -1104,15 +1104,33 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
 
 // ─── Block editor ─────────────────────────────────────────────────────────────
 
+function MoveBtn({ onClick, disabled, title, children }: { onClick: () => void; disabled?: boolean; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+
 function BlockEditor({
   block,
   onChange,
   onRemove,
+  onMoveUp,
+  onMoveDown,
   structureId,
 }: {
   block: TemplateBlock;
   onChange: (b: TemplateBlock) => void;
   onRemove: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   structureId?: string | null;
 }) {
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
@@ -1128,6 +1146,15 @@ function BlockEditor({
     setPickerOpenIdx(null);
     onChange({ ...block, items: block.items.filter((_, idx) => idx !== i) });
   }
+  function moveItem(i: number, dir: -1 | 1) {
+    const items = [...block.items];
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    [items[i], items[j]] = [items[j], items[i]];
+    if (pickerOpenIdx === i) setPickerOpenIdx(j);
+    else if (pickerOpenIdx === j) setPickerOpenIdx(i);
+    onChange({ ...block, items });
+  }
   function insertExercise(i: number, line: string) {
     setItem(i, line);
     setPickerOpenIdx(null);
@@ -1135,7 +1162,17 @@ function BlockEditor({
 
   return (
     <div className="rounded-xl border bg-white p-3 shadow-sm">
-      <div className="flex items-center gap-2">
+      {/* Block header */}
+      <div className="flex items-center gap-1.5">
+        {/* Block reorder */}
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <MoveBtn onClick={onMoveUp ?? (() => {})} disabled={!onMoveUp} title="Færa blokk upp">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
+          </MoveBtn>
+          <MoveBtn onClick={onMoveDown ?? (() => {})} disabled={!onMoveDown} title="Færa blokk niður">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+          </MoveBtn>
+        </div>
         <Input
           value={block.block}
           onChange={(e) => setName(e.target.value)}
@@ -1146,11 +1183,21 @@ function BlockEditor({
           ✕
         </Button>
       </div>
+
+      {/* Exercise rows */}
       <div className="mt-2 space-y-1.5">
         {block.items.map((item, i) => (
           <div key={i} className="space-y-1">
-            <div className="flex gap-1.5">
-              <span className="mt-2 text-xs text-muted-foreground shrink-0">·</span>
+            <div className="flex gap-1.5 items-center">
+              {/* Exercise reorder */}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <MoveBtn onClick={() => moveItem(i, -1)} disabled={i === 0} title="Færa upp">
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
+                </MoveBtn>
+                <MoveBtn onClick={() => moveItem(i, 1)} disabled={i === block.items.length - 1} title="Færa niður">
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                </MoveBtn>
+              </div>
               <Input
                 value={item}
                 onChange={(e) => setItem(i, e.target.value)}
@@ -1423,6 +1470,15 @@ export default function CustomTemplatesPage() {
   function removeBlock(day: string, i: number) {
     const t = getOrInitGreen(day);
     updateGreen(day, { structure: t.structure.filter((_, idx) => idx !== i) });
+  }
+
+  function moveBlock(day: string, i: number, dir: -1 | 1) {
+    const t = getOrInitGreen(day);
+    const s = [...t.structure];
+    const j = i + dir;
+    if (j < 0 || j >= s.length) return;
+    [s[i], s[j]] = [s[j], s[i]];
+    updateGreen(day, { structure: s });
   }
 
   // Replace everything after the first (warmup) block with the chosen structure's blocks
@@ -1918,6 +1974,8 @@ export default function CustomTemplatesPage() {
                         block={block}
                         onChange={(b) => updateBlock(currentDay, i, b)}
                         onRemove={() => removeBlock(currentDay, i)}
+                        onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
+                        onMoveDown={i < currentGreen.structure.length - 1 ? () => moveBlock(currentDay, i, 1) : undefined}
                         structureId={dayStructureIds[currentDay] ?? null}
                       />
                     ))}
