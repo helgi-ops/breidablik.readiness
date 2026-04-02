@@ -1795,6 +1795,16 @@ export default function CoachPage() {
   const [catapultSyncing, setCatapultSyncing] = useState(false);
   const [catapultSyncMessage, setCatapultSyncMessage] = useState("");
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  // Compliance / imputation
+  const [complianceSummary, setComplianceSummary] = useState<{
+    checkin: { submitted: number; imputed: number; missing: number };
+    rpe:     { submitted: number; imputed: number; missing: number };
+  } | null>(null);
+  const [complianceMissing, setComplianceMissing] = useState<Array<{
+    player_id: string; full_name: string; missing_checkin: boolean; missing_rpe: boolean;
+  }>>([]);
+  const [imputing, setImputing] = useState(false);
+  const [imputeMessage, setImputeMessage] = useState("");
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
 
   // Auto-fill zeros when OFF
@@ -2043,6 +2053,45 @@ export default function CoachPage() {
       setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");
     } finally {
       setCatapultSyncing(false);
+    }
+  }
+
+  async function fetchCompliance(date?: string) {
+    try {
+      const headers = await getCoachAuthHeaders();
+      const d = date ?? today;
+      const res = await fetch(`/api/coach/impute?date=${d}`, { headers });
+      const json = await res.json().catch(() => ({}));
+      if (json?.ok) {
+        setComplianceSummary(json.summary ?? null);
+        setComplianceMissing(json.missing ?? []);
+      }
+    } catch {
+      // non-critical — ignore
+    }
+  }
+
+  async function runImputation() {
+    try {
+      setImputing(true);
+      setImputeMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/coach/impute", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date: today }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Imputation failed.");
+      const ri = Number(json.readiness_imputed ?? 0);
+      const rpe = Number(json.rpe_imputed ?? 0);
+      setImputeMessage(`Fyllt inn: ${ri} check-in${ri !== 1 ? "s" : ""} · ${rpe} RPE`);
+      await fetchCompliance();
+      await loadToday();
+    } catch (e: unknown) {
+      setImputeMessage((e instanceof Error ? e.message : null) ?? "Villa við imputation.");
+    } finally {
+      setImputing(false);
     }
   }
 
@@ -3176,6 +3225,7 @@ export default function CoachPage() {
   useEffect(() => {
     if (!coachVerified) return;
     loadToday();
+    fetchCompliance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, teamFilter, filter, search, coachVerified]);
 
@@ -5957,6 +6007,7 @@ export default function CoachPage() {
                   <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">{ct.header.commandCenter}</CardTitle>
                   <CardDescription className="mt-1 text-sm text-slate-500">{ct.header.decisionSummary}</CardDescription>
                   {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
+                  {imputeMessage ? <div className="mt-1 text-xs text-indigo-700">{imputeMessage}</div> : null}
                 </div>
                 <div className="flex flex-col items-start gap-2 md:items-end">
                   <div className="text-right text-xs text-slate-500">
@@ -5966,6 +6017,16 @@ export default function CoachPage() {
                   <div className="flex flex-wrap gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
                       {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={runImputation}
+                      disabled={imputing || loading}
+                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      title="Fyll inn check-in og RPE fyrir leikmenn sem hafa ekki skilað inn"
+                    >
+                      {imputing ? "Fyllir inn…" : "↻ Fylla inn missing"}
                     </Button>
                     <Button
                       variant="outline"
@@ -5990,6 +6051,50 @@ export default function CoachPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* ── Compliance strip ── */}
+              {complianceSummary && (() => {
+                const ci = complianceSummary.checkin;
+                const rp = complianceSummary.rpe;
+                const totalCi = ci.submitted + ci.imputed + ci.missing;
+                const totalRpe = rp.submitted + rp.imputed + rp.missing;
+                const ciMissingPct = totalCi > 0 ? Math.round((ci.missing / totalCi) * 100) : 0;
+                const rpeMissingPct = totalRpe > 0 ? Math.round((rp.missing / totalRpe) * 100) : 0;
+                const hasAnyMissing = ci.missing > 0 || rp.missing > 0;
+                return (
+                  <div className={`rounded-xl border px-4 py-2.5 ${hasAnyMissing ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
+                      <span className="font-semibold text-slate-700">Skil:</span>
+                      {/* Check-in */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-600">Check-in</span>
+                        <span className="text-emerald-700">✓ {ci.submitted}</span>
+                        {ci.imputed > 0 && <span className="text-indigo-600">~ {ci.imputed}</span>}
+                        {ci.missing > 0 && <span className="font-semibold text-amber-700">✗ {ci.missing} ({ciMissingPct}%)</span>}
+                      </span>
+                      <span className="text-slate-300">|</span>
+                      {/* RPE */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-600">RPE</span>
+                        <span className="text-emerald-700">✓ {rp.submitted}</span>
+                        {rp.imputed > 0 && <span className="text-indigo-600">~ {rp.imputed}</span>}
+                        {rp.missing > 0 && <span className="font-semibold text-amber-700">✗ {rp.missing} ({rpeMissingPct}%)</span>}
+                      </span>
+                      {complianceMissing.length > 0 && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-slate-500 italic">
+                            {complianceMissing.slice(0, 3).map((m) => m.full_name).join(", ")}
+                            {complianceMissing.length > 3 ? ` +${complianceMissing.length - 3}` : ""}
+                          </span>
+                        </>
+                      )}
+                      {!hasAnyMissing && (
+                        <span className="font-semibold text-emerald-700">Allir hafa skilað inn ✓</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               {(() => {
                 const risk = computeTeamRisk(teamSignal, lang);
                 const ui = riskUi(risk.level);
