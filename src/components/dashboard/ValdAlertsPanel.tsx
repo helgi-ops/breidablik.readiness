@@ -20,6 +20,13 @@ type ValdSnapshotRow = {
   cmjScore: number | null;
 };
 
+type CmjResult = {
+  playerId: string;
+  jumpHeightCm: number;
+  asymmetryPct: number | null;
+  testTimestamp: string;
+};
+
 type ActivePlayer = {
   id: string;
   name: string;
@@ -50,6 +57,7 @@ const PRIORITY_GROUPS: CmjRequiredEntry["reason"][] = ["neuromuscular", "protoco
 
 export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [snapshots, setSnapshots]       = useState<ValdSnapshotRow[]>([]);
+  const [cmjResults, setCmjResults]     = useState<CmjResult[]>([]);
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   const [mdDay, setMdDay]               = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
@@ -60,7 +68,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     if (!teamId) { setLoading(false); return; }
     const supabase = getSupabaseClient();
     setLoading(true);
-    const [snapshotRes, mdRes, playersRes] = await Promise.all([
+    const [snapshotRes, mdRes, playersRes, cmjRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
         .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, players!inner(full_name)")
@@ -78,7 +86,18 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .eq("team_id", teamId)
         .eq("is_active", true)
         .order("full_name"),
+      // Fetch best CMJ per player for today directly from ForceDecks results
+      supabase
+        .from("vald_forcedecks_results")
+        .select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp")
+        .eq("team_id", teamId)
+        .eq("test_type", "CMJ")
+        .gte("test_timestamp", `${date}T00:00:00`)
+        .lte("test_timestamp", `${date}T23:59:59`)
+        .not("microplayer_id", "is", null)
+        .order("jump_height_cm", { ascending: false }),
     ]);
+
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
       const player = (row.players as Record<string, unknown> | null) ?? null;
       return {
@@ -92,6 +111,21 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         cmjScore: row.cmj_score != null ? Number(row.cmj_score) : null,
       };
     });
+
+    // Best jump per player today (first row = highest due to ordering)
+    const bestPerPlayer = new Map<string, CmjResult>();
+    for (const row of ((cmjRes.data ?? []) as Array<Record<string, unknown>>)) {
+      const pid = String(row.microplayer_id ?? "");
+      if (!pid || bestPerPlayer.has(pid)) continue;
+      bestPerPlayer.set(pid, {
+        playerId: pid,
+        jumpHeightCm: Number(row.jump_height_cm),
+        asymmetryPct: row.asymmetry_percent != null ? Number(row.asymmetry_percent) : null,
+        testTimestamp: String(row.test_timestamp ?? ""),
+      });
+    }
+    setCmjResults(Array.from(bestPerPlayer.values()).sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
+
     setSnapshots(mapped);
     setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
     setActivePlayers(
@@ -243,26 +277,37 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
             </div>
           )}
 
-          {/* CMJ Results — players with fresh data */}
-          {!loading && (() => {
-            const fresh = snapshots
-              .filter((s) => s.cmjFreshnessStatus === "fresh" && s.cmjScore != null)
-              .sort((a, b) => (b.cmjScore ?? 0) - (a.cmjScore ?? 0));
-            if (!fresh.length) return null;
+          {/* CMJ Results — today's best jump per player from ForceDecks */}
+          {!loading && cmjResults.length > 0 && (() => {
+            const snapshotMap = new Map(snapshots.map((s) => [s.playerId, s]));
             return (
               <div>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500" />
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">CMJ Niðurstöður</span>
-                  <span className="ml-1 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-px text-[10px] font-bold">{fresh.length}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">CMJ Niðurstöður í dag</span>
+                  <span className="ml-1 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-px text-[10px] font-bold">{cmjResults.length}</span>
                 </div>
                 <div className="grid gap-1">
-                  {fresh.map((s) => (
-                    <div key={s.playerId} className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5">
-                      <span className="text-xs font-medium text-slate-700">{s.playerName}</span>
-                      <span className="text-xs font-bold text-emerald-700">{s.cmjScore?.toFixed(1)} cm</span>
-                    </div>
-                  ))}
+                  {cmjResults.map((r) => {
+                    const snap = snapshotMap.get(r.playerId);
+                    const name = snap?.playerName ?? r.playerId;
+                    const asymColor = r.asymmetryPct != null && r.asymmetryPct > 10
+                      ? "text-amber-600"
+                      : "text-slate-400";
+                    return (
+                      <div key={r.playerId} className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                        <span className="text-xs font-medium text-slate-700">{name}</span>
+                        <div className="flex items-center gap-3">
+                          {r.asymmetryPct != null && (
+                            <span className={`text-[11px] ${asymColor}`}>
+                              ±{r.asymmetryPct.toFixed(1)}%
+                            </span>
+                          )}
+                          <span className="text-xs font-bold text-emerald-700">{r.jumpHeightCm.toFixed(1)} cm</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
