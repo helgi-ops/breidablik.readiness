@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
         md_days:      mergedDays,
         created_by:   auth.userId,
       },
-      { onConflict: "team_id,set_name,sport" }
+      { onConflict: "team_id,table_name" }
     );
   if (metaErr) return NextResponse.json({ ok: false, error: metaErr.message }, { status: 500 });
 
