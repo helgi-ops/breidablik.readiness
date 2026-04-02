@@ -3215,7 +3215,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds")
+          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
           .eq("source", "catapult")
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -7093,6 +7093,8 @@ export default function CoachPage() {
             imaAccel:         getVal(row, ["ima_accel", "imaAccel"]),
             imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
             maxVel:           getVal(row, ["max_vel", "maxVel", "max_velocity"]),
+            avgHr:            getVal(row, ["avg_heart_rate", "avgHeartRate"]),
+            maxHr:            getVal(row, ["max_heart_rate", "maxHeartRate"]),
           };
         }).filter(Boolean) as Array<{
           name: string; position: string;
@@ -7104,6 +7106,8 @@ export default function CoachPage() {
           playerLoad: number | null; playerLoadPerMin: number | null;
           imaCod: number | null; imaAccel: number | null; imaDecel: number | null;
           maxVel: number | null;
+          // heart rate (both sports)
+          avgHr: number | null; maxHr: number | null;
         }>;
 
         function squadAvgToday(vals: (number | null)[]): number | null {
@@ -7189,6 +7193,8 @@ export default function CoachPage() {
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Accels</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Decels</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Max Vel</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
                             </> : <>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Tot Dist (m)</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">HS Dist (m)</th>
@@ -7196,6 +7202,8 @@ export default function CoachPage() {
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Decels (#)</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Acc B2-3</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Dec B2-3</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
                             </>}
                           </tr>
                         </thead>
@@ -7210,6 +7218,8 @@ export default function CoachPage() {
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaAccel,   0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.imaDecel)), 0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxVel)),   1)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
                             </> : <>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDist)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgHs)}</td>
@@ -7217,6 +7227,8 @@ export default function CoachPage() {
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totDecels)))}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgAccB)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDecB)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
                             </>}
                           </tr>
                           {todaySorted.map((p, i) => (
@@ -7232,6 +7244,8 @@ export default function CoachPage() {
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaAccel)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaDecel)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.maxVel, 1)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
                               </> : <>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.totalDist)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.hsDist > 0 ? p.hsDist : null)}</td>
@@ -7239,6 +7253,8 @@ export default function CoachPage() {
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totDecels)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.accelB23)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.decelB23)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
                               </>}
                             </tr>
                           ))}

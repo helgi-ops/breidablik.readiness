@@ -63,6 +63,14 @@ export type CatapultSessionMetric = {
     };
   };
   activityId?: string | null;
+  // Heart Rate
+  avgHeartRate?: number | null;
+  maxHeartRate?: number | null;
+  hrZone1TimeS?: number | null;
+  hrZone2TimeS?: number | null;
+  hrZone3TimeS?: number | null;
+  hrZone4TimeS?: number | null;
+  hrZone5TimeS?: number | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -102,6 +110,14 @@ export type NormalizedExternalLoad = {
     imaTotal?: number | null;
     codEvents?: number | null;
     impacts?: number | null;
+    // Heart Rate
+    avgHeartRate?: number | null;
+    maxHeartRate?: number | null;
+    hrZone1TimeS?: number | null;
+    hrZone2TimeS?: number | null;
+    hrZone3TimeS?: number | null;
+    hrZone4TimeS?: number | null;
+    hrZone5TimeS?: number | null;
   };
   rawPayload?: unknown;
   activityCount?: number;

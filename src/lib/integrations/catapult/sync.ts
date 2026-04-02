@@ -129,6 +129,14 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
     current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
     current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
+    // Heart Rate: avg HR uses max across sessions as proxy; max HR takes max; zones sum
+    current.externalLoad.avgHeartRate = maxNullable(current.externalLoad.avgHeartRate, row.externalLoad.avgHeartRate);
+    current.externalLoad.maxHeartRate = maxNullable(current.externalLoad.maxHeartRate, row.externalLoad.maxHeartRate);
+    current.externalLoad.hrZone1TimeS = sumNullable(current.externalLoad.hrZone1TimeS, row.externalLoad.hrZone1TimeS);
+    current.externalLoad.hrZone2TimeS = sumNullable(current.externalLoad.hrZone2TimeS, row.externalLoad.hrZone2TimeS);
+    current.externalLoad.hrZone3TimeS = sumNullable(current.externalLoad.hrZone3TimeS, row.externalLoad.hrZone3TimeS);
+    current.externalLoad.hrZone4TimeS = sumNullable(current.externalLoad.hrZone4TimeS, row.externalLoad.hrZone4TimeS);
+    current.externalLoad.hrZone5TimeS = sumNullable(current.externalLoad.hrZone5TimeS, row.externalLoad.hrZone5TimeS);
   }
 
   return Array.from(merged.values());
@@ -187,6 +195,13 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     external_athlete_id: row.externalAthleteId,
     activity_count: row.activityCount ?? 1,
     raw_payload_json: row.rawPayload ?? null,
+    avg_heart_rate: row.externalLoad.avgHeartRate ?? null,
+    max_heart_rate: row.externalLoad.maxHeartRate ?? null,
+    hr_zone_1_time_s: row.externalLoad.hrZone1TimeS ?? null,
+    hr_zone_2_time_s: row.externalLoad.hrZone2TimeS ?? null,
+    hr_zone_3_time_s: row.externalLoad.hrZone3TimeS ?? null,
+    hr_zone_4_time_s: row.externalLoad.hrZone4TimeS ?? null,
+    hr_zone_5_time_s: row.externalLoad.hrZone5TimeS ?? null,
   }));
 
   if (!payload.length) return 0;

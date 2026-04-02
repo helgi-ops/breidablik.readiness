@@ -10,7 +10,14 @@ export type CatapultMetricKey =
   | "totAs"
   | "decelB23TotEffsGen2"
   | "totDs"
-  | "totalPlayerLoad";
+  | "totalPlayerLoad"
+  | "avgHeartRate"
+  | "maxHeartRate"
+  | "hrZone1TimeS"
+  | "hrZone2TimeS"
+  | "hrZone3TimeS"
+  | "hrZone4TimeS"
+  | "hrZone5TimeS";
 
 export type CatapultMetricDefinition = {
   key: CatapultMetricKey;
@@ -83,6 +90,48 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     digits: 0,
     acwrSupported: true,
     aliases: ["total_player_load", "player_load", "totalPlayerLoad", "playerLoad"],
+  },
+  {
+    key: "avgHeartRate",
+    label: "Avg HR (bpm)",
+    digits: 0,
+    aliases: ["avg_heart_rate", "average_heart_rate", "heart_rate_avg", "avgHeartRate"],
+  },
+  {
+    key: "maxHeartRate",
+    label: "Max HR (bpm)",
+    digits: 0,
+    aliases: ["max_heart_rate", "maximum_heart_rate", "heart_rate_max", "maxHeartRate"],
+  },
+  {
+    key: "hrZone1TimeS",
+    label: "HR Zone 1 (s)",
+    digits: 0,
+    aliases: ["hr_zone_1_time_s", "hr_zone1_time_s", "hrZone1TimeS", "hrz_1_duration"],
+  },
+  {
+    key: "hrZone2TimeS",
+    label: "HR Zone 2 (s)",
+    digits: 0,
+    aliases: ["hr_zone_2_time_s", "hr_zone2_time_s", "hrZone2TimeS", "hrz_2_duration"],
+  },
+  {
+    key: "hrZone3TimeS",
+    label: "HR Zone 3 (s)",
+    digits: 0,
+    aliases: ["hr_zone_3_time_s", "hr_zone3_time_s", "hrZone3TimeS", "hrz_3_duration"],
+  },
+  {
+    key: "hrZone4TimeS",
+    label: "HR Zone 4 (s)",
+    digits: 0,
+    aliases: ["hr_zone_4_time_s", "hr_zone4_time_s", "hrZone4TimeS", "hrz_4_duration"],
+  },
+  {
+    key: "hrZone5TimeS",
+    label: "HR Zone 5 (s)",
+    digits: 0,
+    aliases: ["hr_zone_5_time_s", "hr_zone5_time_s", "hrZone5TimeS", "hrz_5_duration"],
   },
 ] as const;
 

@@ -346,6 +346,119 @@ const METABOLIC_GEN_KEYS = [
   "metabolic_power_model",
 ];
 
+// ─── Heart Rate metric keys ─────────────────────────────────────────────────
+
+const AVG_HEART_RATE_KEYS = [
+  // Catapult OpenField display-name variants
+  "Heart Rate Avg",
+  "Average Heart Rate",
+  "Avg Heart Rate",
+  "HR Average",
+  "HR Avg",
+  // snake_case / camelCase
+  "avg_heart_rate",
+  "average_heart_rate",
+  "heart_rate_avg",
+  "hr_avg",
+  "hr_average",
+  "avgHeartRate",
+  "averageHeartRate",
+];
+
+const MAX_HEART_RATE_KEYS = [
+  // Catapult OpenField display-name variants
+  "Heart Rate Max",
+  "Maximum Heart Rate",
+  "Max Heart Rate",
+  "HR Maximum",
+  "HR Max",
+  // snake_case / camelCase
+  "max_heart_rate",
+  "maximum_heart_rate",
+  "heart_rate_max",
+  "hr_max",
+  "hr_maximum",
+  "maxHeartRate",
+  "maximumHeartRate",
+];
+
+const HR_ZONE_KEYS: Record<1 | 2 | 3 | 4 | 5, string[]> = {
+  1: [
+    "Heart Rate Zone 1 Duration",
+    "HR Zone 1 Duration",
+    "HR Zone 1 Time",
+    "heart_rate_zone_1_duration",
+    "hr_zone_1_duration",
+    "hrz_1_duration",
+    "zone1duration",
+    "hr_zone1_s",
+    "heart_rate_z1_duration",
+  ],
+  2: [
+    "Heart Rate Zone 2 Duration",
+    "HR Zone 2 Duration",
+    "HR Zone 2 Time",
+    "heart_rate_zone_2_duration",
+    "hr_zone_2_duration",
+    "hrz_2_duration",
+    "zone2duration",
+    "hr_zone2_s",
+    "heart_rate_z2_duration",
+  ],
+  3: [
+    "Heart Rate Zone 3 Duration",
+    "HR Zone 3 Duration",
+    "HR Zone 3 Time",
+    "heart_rate_zone_3_duration",
+    "hr_zone_3_duration",
+    "hrz_3_duration",
+    "zone3duration",
+    "hr_zone3_s",
+    "heart_rate_z3_duration",
+  ],
+  4: [
+    "Heart Rate Zone 4 Duration",
+    "HR Zone 4 Duration",
+    "HR Zone 4 Time",
+    "heart_rate_zone_4_duration",
+    "hr_zone_4_duration",
+    "hrz_4_duration",
+    "zone4duration",
+    "hr_zone4_s",
+    "heart_rate_z4_duration",
+  ],
+  5: [
+    "Heart Rate Zone 5 Duration",
+    "HR Zone 5 Duration",
+    "HR Zone 5 Time",
+    "heart_rate_zone_5_duration",
+    "hr_zone_5_duration",
+    "hrz_5_duration",
+    "zone5duration",
+    "hr_zone5_s",
+    "heart_rate_z5_duration",
+  ],
+};
+
+export function extractHeartRateMetrics(record: Record<string, unknown>): {
+  avgHeartRate: number | null;
+  maxHeartRate: number | null;
+  hrZone1TimeS: number | null;
+  hrZone2TimeS: number | null;
+  hrZone3TimeS: number | null;
+  hrZone4TimeS: number | null;
+  hrZone5TimeS: number | null;
+} {
+  const avgHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, AVG_HEART_RATE_KEYS), 30, 220));
+  const maxHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, MAX_HEART_RATE_KEYS), 30, 230));
+  const hrZone1TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[1]), 0, 14_400));
+  const hrZone2TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[2]), 0, 14_400));
+  const hrZone3TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[3]), 0, 14_400));
+  const hrZone4TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[4]), 0, 14_400));
+  const hrZone5TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[5]), 0, 14_400));
+  return { avgHeartRate, maxHeartRate, hrZone1TimeS, hrZone2TimeS, hrZone3TimeS, hrZone4TimeS, hrZone5TimeS };
+}
+
 /** Returns the first matching string value for generation tag, else null. */
 function extractStringField(record: Record<string, unknown>, keys: string[]): string | null {
   const canonicalMap = buildCanonicalMap(record);
@@ -547,6 +660,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
     const playerLoad = extractMetric(flattenedRecord, ["total_player_load", "player_load", "playerLoad", "load"]) ?? 0;
     const normalizedIma = normalizeImaMetrics(flattenedRecord, playerLoad);
     const normalizedMetabolic = extractMetabolicMetrics(flattenedRecord);
+    const normalizedHr = extractHeartRateMetrics(flattenedRecord);
 
     normalized.push({
       athleteId,
@@ -626,6 +740,13 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,
       imaDebug: normalizedIma.debug,
+      avgHeartRate: normalizedHr.avgHeartRate,
+      maxHeartRate: normalizedHr.maxHeartRate,
+      hrZone1TimeS: normalizedHr.hrZone1TimeS,
+      hrZone2TimeS: normalizedHr.hrZone2TimeS,
+      hrZone3TimeS: normalizedHr.hrZone3TimeS,
+      hrZone4TimeS: normalizedHr.hrZone4TimeS,
+      hrZone5TimeS: normalizedHr.hrZone5TimeS,
     });
   }
 
@@ -695,6 +816,14 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     if (metric.imaDebug?.interestingKeys?.length) {
       current.imaDebug = metric.imaDebug;
     }
+    // Heart Rate: average HR is averaged across activities, max HR takes max, zones sum
+    current.avgHeartRate = maxNullable(current.avgHeartRate, metric.avgHeartRate); // use max as proxy when multi-session
+    current.maxHeartRate = maxNullable(current.maxHeartRate, metric.maxHeartRate);
+    current.hrZone1TimeS = sumNullable(current.hrZone1TimeS, metric.hrZone1TimeS);
+    current.hrZone2TimeS = sumNullable(current.hrZone2TimeS, metric.hrZone2TimeS);
+    current.hrZone3TimeS = sumNullable(current.hrZone3TimeS, metric.hrZone3TimeS);
+    current.hrZone4TimeS = sumNullable(current.hrZone4TimeS, metric.hrZone4TimeS);
+    current.hrZone5TimeS = sumNullable(current.hrZone5TimeS, metric.hrZone5TimeS);
   }
 
   return Array.from(byAthleteDate.values());
@@ -739,6 +868,13 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaTotal: metric.imaTotal ?? null,
       codEvents: metric.codEvents ?? null,
       impacts: metric.impacts ?? null,
+      avgHeartRate: metric.avgHeartRate ?? null,
+      maxHeartRate: metric.maxHeartRate ?? null,
+      hrZone1TimeS: metric.hrZone1TimeS ?? null,
+      hrZone2TimeS: metric.hrZone2TimeS ?? null,
+      hrZone3TimeS: metric.hrZone3TimeS ?? null,
+      hrZone4TimeS: metric.hrZone4TimeS ?? null,
+      hrZone5TimeS: metric.hrZone5TimeS ?? null,
     },
   };
 }
