@@ -55,6 +55,13 @@ type PlayerStatusRow = {
   final_flag: string | null;
 };
 
+type TemplateSetOption = {
+  label: string;        // display name
+  table_name: string;   // "microdose_templates" or custom slug
+  md_days: string[];    // available MD days
+  season_phase: string | null;
+};
+
 /* =========================
    UI MAP
 ========================= */
@@ -227,6 +234,10 @@ export default function DisplayClient() {
   const [selectedMdDay, setSelectedMdDay] = useState<string | null>(sp.get("md") || null);
   const [mdTouched, setMdTouched] = useState(false);
 
+  // ✅ template set selection (custom sets from custom_template_sets)
+  const [templateSets, setTemplateSets] = useState<TemplateSetOption[]>([]);
+  const [selectedSetIdx, setSelectedSetIdx] = useState<number>(0);
+
   // ✅ templates fetched for selected md_day
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [playersToday, setPlayersToday] = useState<PlayerStatusRow[]>([]);
@@ -285,31 +296,54 @@ export default function DisplayClient() {
   }, []);
 
   /* =========================
-     LOAD MD OPTIONS
+     LOAD TEMPLATE SETS + MD OPTIONS
   ========================= */
 
   useEffect(() => {
     if (!teamId) return;
     (async () => {
       try {
-        const { data, error } = await supabase
+        // 1) Custom template sets for this team
+        const { data: setsData } = await supabase
+          .from("custom_template_sets")
+          .select("set_name, table_name, md_days, season_phase, sport, gender")
+          .eq("team_id", teamId)
+          .order("created_at", { ascending: false });
+
+        // 2) Default microdose_templates md_days
+        const { data: defaultData } = await supabase
           .from("microdose_templates")
           .select("md_day")
           .eq("team_id", teamId)
           .not("md_day", "is", null);
-        if (error) throw error;
 
-        const set = new Set<string>();
-        for (const r of (data ?? []) as Array<{ md_day: string | null }>) if (r.md_day) set.add(String(r.md_day));
+        const defaultMdDays = Array.from(
+          new Set<string>(
+            (defaultData ?? []).flatMap((r: any) => (r.md_day ? [String(r.md_day)] : []))
+          )
+        ).sort((a, b) => mdOrderKey(a) - mdOrderKey(b));
 
-        const list = Array.from(set).sort((a, b) => mdOrderKey(a) - mdOrderKey(b));
-        setMdDayOptions(list);
+        // Build options list: default first, then custom sets
+        const options: TemplateSetOption[] = [];
+        if (defaultMdDays.length) {
+          options.push({ label: "Sjálfgefið", table_name: "microdose_templates", md_days: defaultMdDays, season_phase: null });
+        }
+        for (const s of (setsData ?? []) as Array<any>) {
+          const mdDays = (Array.isArray(s.md_days) ? s.md_days : []).sort((a: string, b: string) => mdOrderKey(a) - mdOrderKey(b));
+          const phase = s.season_phase ? ` (${s.season_phase})` : "";
+          options.push({ label: `${s.set_name}${phase}`, table_name: s.table_name, md_days: mdDays, season_phase: s.season_phase });
+        }
 
-        // choose default if none selected
-        if (!mdTouched && !selectedMdDay && list.length) {
-          // prefer MD-3 if exists, else first
-          const def = list.includes("MD-3") ? "MD-3" : list[0];
-          setSelectedMdDay(def);
+        setTemplateSets(options);
+
+        // Activate first set and its md_days
+        const firstSet = options[0];
+        if (firstSet) {
+          setMdDayOptions(firstSet.md_days);
+          if (!mdTouched && !selectedMdDay && firstSet.md_days.length) {
+            const def = firstSet.md_days.includes("MD-3") ? "MD-3" : firstSet.md_days[0];
+            setSelectedMdDay(def);
+          }
         }
       } catch {
         // ignore
@@ -334,11 +368,16 @@ export default function DisplayClient() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("microdose_templates")
+      const activeSet = templateSets[selectedSetIdx];
+      const tableName = activeSet?.table_name ?? "microdose_templates";
+
+      const query = supabase
+        .from(tableName as any)
         .select("md_day, readiness_level, title, description, structure, variant")
-        .eq("team_id", teamId)
         .eq("md_day", md);
+
+      // microdose_templates is team-scoped; custom tables store team_id too
+      const { data, error } = await query.eq("team_id", teamId);
 
       if (error) throw error;
 
@@ -385,12 +424,25 @@ export default function DisplayClient() {
     }
   }
 
+  // When selected set changes: update md_days and reset md selection
+  useEffect(() => {
+    const activeSet = templateSets[selectedSetIdx];
+    if (!activeSet) return;
+    const days = activeSet.md_days;
+    setMdDayOptions(days);
+    // Reset to a sensible default for this set
+    const def = days.includes("MD-3") ? "MD-3" : days[0] ?? null;
+    setSelectedMdDay(def);
+    setMdTouched(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSetIdx, templateSets]);
+
   useEffect(() => {
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMdDay]);
+  }, [selectedMdDay, selectedSetIdx]);
 
   /* =========================
      BUILD VARIANTS PER COLOR
@@ -465,8 +517,9 @@ export default function DisplayClient() {
     const md = selectedMdDay ?? "—";
     const ts = lastUpdated ? lastUpdated.toLocaleTimeString("is-IS") : "—";
     const rows = templates.length;
-    return `Build: TV_TEMPLATES_${md} • Rows: ${rows} • Updated: ${ts}`;
-  }, [selectedMdDay, lastUpdated, templates.length]);
+    const setLabel = templateSets[selectedSetIdx]?.label ?? "—";
+    return `${setLabel} • ${md} • ${rows} færslur • ${ts}`;
+  }, [selectedMdDay, lastUpdated, templates.length, templateSets, selectedSetIdx]);
 
   const playersByColor = useMemo(() => {
     const groups: Record<ColorKey, string[]> = {
@@ -500,6 +553,23 @@ export default function DisplayClient() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {templateSets.length > 1 && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">Kerfi</label>
+              <select
+                className="h-9 rounded-md border bg-background px-2 text-sm max-w-[200px]"
+                value={selectedSetIdx}
+                onChange={(e) => setSelectedSetIdx(Number(e.target.value))}
+              >
+                {templateSets.map((s, i) => (
+                  <option key={s.table_name} value={i}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground">MD</label>
             <select
