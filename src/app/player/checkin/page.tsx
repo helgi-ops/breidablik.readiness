@@ -126,6 +126,8 @@ export default function PlayerCheckinPage() {
 
   const [playerId, setPlayerId] = React.useState<string | null>(null);
   const [playerName, setPlayerName] = React.useState<string | null>(null);
+  const [isGameDay, setIsGameDay] = React.useState(false);
+  const [gameBypass, setGameBypass] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -213,6 +215,20 @@ export default function PlayerCheckinPage() {
 
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
+
+      // Fetch today's MD day to detect game days
+      const today = todayIsoDateUTC();
+      const { data: microdose } = await supabase
+        .from("v_player_today_microdose_resolved")
+        .select("md_day_resolved, md_day_raw")
+        .eq("player_id", playerRow.id)
+        .eq("entry_date", today)
+        .maybeSingle();
+      if (!cancelled) {
+        const mdVal = String((microdose as any)?.md_day_resolved ?? (microdose as any)?.md_day_raw ?? "").trim().toUpperCase();
+        setIsGameDay(mdVal === "MD");
+      }
+
       setLoading(false);
     };
 
@@ -326,6 +342,43 @@ export default function PlayerCheckinPage() {
     );
   }
 
+  if (isGameDay && !gameBypass) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-8">
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-xl">🏟️ Leikdagur</CardTitle>
+            <CardDescription>
+              Í dag er leikur. Check-in er valkvætt — GPS og RPE eftir leikinn koma sjálfvirkt inn í kerfið og þjálfarinn hefur allar nauðsynlegar upplýsingar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Ef eitthvað er að (meiðsl, veikindi eða sérstök þreyta) — gerðu check-in svo þjálfarinn fái vitneskju áður en leikurinn fer í gang.
+            </p>
+          </CardContent>
+          <CardFooter className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-1/2 rounded-xl"
+              onClick={() => router.push("/player")}
+            >
+              Sleppa
+            </Button>
+            <Button
+              type="button"
+              className="w-1/2 rounded-xl"
+              onClick={() => setGameBypass(true)}
+            >
+              Gera Check-in
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   if (success) {
     return (
       <div className="mx-auto max-w-xl px-4 py-8">
@@ -375,7 +428,9 @@ export default function PlayerCheckinPage() {
           </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          30 sek. — skýr merki = betri ákvörðun og læst dagsæfing.
+          {isGameDay
+            ? "Leikdagur — þú velur að gefa merki. Takk fyrir heiðarleikann."
+            : "30 sek. — skýr merki = betri ákvörðun og læst dagsæfing."}
         </p>
       </div>
 

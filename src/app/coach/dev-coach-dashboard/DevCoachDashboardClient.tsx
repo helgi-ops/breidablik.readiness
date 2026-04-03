@@ -4900,12 +4900,16 @@ export default function CoachPage() {
     const isSaving = !!saving[pid];
     const isOpen = expandedPlayerId === pid;
 
-    const cm = colorMeta(r.final_color ?? "green");
+    const score = typeof r.total_score === "number" ? r.total_score : null;
+    const isGameDay = String(r.md_day ?? mdDayToday ?? "").trim().toUpperCase() === "MD";
+    const noCheckinOnGameDay = isGameDay && score === null;
+    const cm = noCheckinOnGameDay
+      ? { label: "—", dot: "bg-slate-400", pill: "bg-slate-50 text-slate-600 border-slate-200" }
+      : colorMeta(r.final_color ?? "green");
     const lockedForCoach = r.is_locked && !isAdmin;
     const isOverride = String(r.final_source ?? "").toUpperCase().includes("COACH");
 
-    const score = typeof r.total_score === "number" ? r.total_score : null;
-    const scoreText = `${cm.label} · ${score ?? "—"}`;
+    const scoreText = noCheckinOnGameDay ? "Leikdagur · —" : `${cm.label} · ${score ?? "—"}`;
     const mdText = prettyMd(r.md_day ?? mdDayToday).md;
 
     const zVal = typeof r._z_today === "number" ? r._z_today : null;
