@@ -663,12 +663,24 @@ function IconZap({ active }: { active: boolean }) {
   );
 }
 
+function IconDumbbell({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 6.5h11M6.5 17.5h11" />
+      <rect x="2" y="6.5" width="4.5" height="11" rx="1" />
+      <rect x="17.5" y="6.5" width="4.5" height="11" rx="1" />
+      <path d="M12 6.5v11" />
+    </svg>
+  );
+}
+
 // ── PWA bottom navigation bar ────────────────────────────────────────────────
 
 const PWA_NAV_TAB_KEYS = [
   { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free"  as const },
   { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const },
   { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const },
+  { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const },
   { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const },
   { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const },
 ];
@@ -1014,6 +1026,15 @@ export default function DevPlayerClient() {
         .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="rpe"],
         .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="reminders"],
         .dev-player-tabbed-shell[data-player-active-tab="history"] [data-player-card="vald"] {
+          display: none !important;
+        }
+
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="decision"],
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="metrics"],
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="risk"],
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="rpe"],
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="reminders"],
+        .dev-player-tabbed-shell[data-player-active-tab="strength"] [data-player-card="vald"] {
           display: none !important;
         }
       `;
