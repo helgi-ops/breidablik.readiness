@@ -19,6 +19,8 @@ import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
+import { computeCompositeLoadConcern } from "@/lib/micropulse/compositeLoad";
+import { computeRpeDiscrepancy } from "@/lib/micropulse/rpeDiscrepancy";
 import {
   buildPerformanceIntelligenceDecision,
   buildTeamPerformanceIntelligenceSummary,
@@ -5153,6 +5155,26 @@ export default function CoachPage() {
       painFlag: tissueSignal.painProtection,
       gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
     }, explainableDecision);
+    const _catapultSignals = r._catapult_signals as Record<string, unknown> | null | undefined;
+    const _catapultExternalLoadState = (["normal", "elevated", "high"].includes(String(_catapultSignals?.externalLoadState ?? ""))
+      ? _catapultSignals?.externalLoadState
+      : "unknown") as "normal" | "elevated" | "high" | "unknown";
+    const compositeLoad = computeCompositeLoadConcern({
+      rpeAcwr: null, // RPE ACWR not available client-side; GPS carries signal
+      neuromuscularBurdenScore: _catapultSignals?.neuromuscularBurdenScore as number | null ?? null,
+      externalLoadState: _catapultExternalLoadState,
+    });
+    const playerRpeToday = toMaybeFinite((tm as Record<string, unknown> | null)?.session_rpe as number | undefined) ?? null;
+    const teamRpeValues = rowsWithAdaptive
+      .filter((row) => String(row.player_id) !== pid)
+      .map((row) => toMaybeFinite(normalizeTrainingModifier(row.training_modifier)?.session_rpe as number | undefined))
+      .filter((v): v is number => v != null);
+    const rpeDiscrepancy = computeRpeDiscrepancy({
+      playerRpe: playerRpeToday,
+      teamRpeValues,
+      neuromuscularBurdenScore: _catapultSignals?.neuromuscularBurdenScore as number | null ?? null,
+      externalLoadState: _catapultExternalLoadState,
+    });
     const athleteDecision = buildAthleteDecision({
       snapshot,
       readinessDecision: explainableDecision,
@@ -5168,6 +5190,9 @@ export default function CoachPage() {
             confidence: 0.65,
             summary: neural.summary ?? null,
           }
+        : null,
+      load: compositeLoad.concernLevel !== "none"
+        ? { concernLevel: compositeLoad.concernLevel, summary: compositeLoad.summary }
         : null,
       hardBlock: false,
     });
@@ -5351,6 +5376,28 @@ export default function CoachPage() {
                 {neuralBiasApplied ? (
                   <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
                     Neural bias
+                  </span>
+                ) : null}
+                {compositeLoad.concernLevel === "high" ? (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                    ⚠ Load há
+                  </span>
+                ) : compositeLoad.concernLevel === "moderate" ? (
+                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                    ↑ Load
+                  </span>
+                ) : compositeLoad.concernLevel === "low" ? (
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    Load monitor
+                  </span>
+                ) : null}
+                {rpeDiscrepancy.level === "significant" ? (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                    {rpeDiscrepancy.flags.some((f) => f.includes("under")) ? "⚠ RPE ↓↓ vs lið" : "RPE ↑↑ vs lið"}
+                  </span>
+                ) : rpeDiscrepancy.level === "notable" ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    {rpeDiscrepancy.flags.some((f) => f.includes("under")) ? "RPE ↓ vs lið" : "RPE ↑ vs lið"}
                   </span>
                 ) : null}
                 {r.notes && r.notes.trim().length ? (

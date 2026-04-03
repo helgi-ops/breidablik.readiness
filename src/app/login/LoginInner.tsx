@@ -116,12 +116,13 @@ export default function LoginInner() {
         const { data: { session } } = await supabase.auth.getSession();
         if (cancelled) return;
         if (!session) { setCheckingSession(false); return; }
-        // Valid session exists — skip login form and go straight to the right page
+        // Valid session exists — route through /auth/redirect so role-based routing is applied
+        if (cancelled) return;
         const landingPath = await getPlayerLandingPath();
         if (cancelled) return;
         const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
-        router.replace(finalNext);
+        router.replace(`/auth/redirect?next=${encodeURIComponent(finalNext)}`);
       } catch {
         if (!cancelled) setCheckingSession(false);
       }

@@ -285,13 +285,14 @@ export async function syncCatapultDailyMetrics(
     const mapped = await mapCatapultAthleteToPlayer(athlete);
     if (!mapped) {
       unmatchedCount += 1;
-      warnings.push(`Unmatched Catapult athlete ${metric.athleteId}`);
+      const athleteName = [athlete.firstName, athlete.lastName].filter(Boolean).join(" ").trim() || "(no name)";
+      warnings.push(`Unmatched Catapult athlete ${metric.athleteId} (${athleteName})`);
       await logIntegrationEvent({
         provider: "catapult",
         scope: "athlete-map",
         status: "warning",
         message: "Unmatched Catapult athlete during daily sync.",
-        metadata: { athleteId: metric.athleteId, date: targetDate },
+        metadata: { athleteId: metric.athleteId, athleteName, date: targetDate },
       });
       continue;
     }

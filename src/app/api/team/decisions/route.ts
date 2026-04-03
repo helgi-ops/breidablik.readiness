@@ -7,6 +7,8 @@ import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import { buildCatapultReadinessContextFromRows, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
+import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
+import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -193,6 +195,75 @@ async function fetchCatapultRows(
   return byPlayer;
 }
 
+async function fetchRpeAcwrForPlayers(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+  date: string
+): Promise<Map<string, RpeAcwrInput | null>> {
+  if (!playerIds.length) return new Map();
+  const start = new Date(`${date}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - 27);
+  const startDate = start.toISOString().slice(0, 10);
+  const { data, error } = await sb
+    .from("session_rpe_entries")
+    .select("player_id, session_date, session_load, is_imputed")
+    .in("player_id", playerIds)
+    .gte("session_date", startDate)
+    .lte("session_date", date)
+    .order("session_date", { ascending: true });
+  if (error) return new Map();
+
+  // Group rows by player
+  const rowsByPlayer = new Map<string, Array<{ session_date: string; session_load: number | null; is_imputed?: boolean | null }>>();
+  for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
+    const pid = String(raw.player_id ?? "");
+    const list = rowsByPlayer.get(pid) ?? [];
+    list.push({
+      session_date: String(raw.session_date ?? ""),
+      session_load: raw.session_load != null ? Number(raw.session_load) : null,
+      is_imputed: raw.is_imputed as boolean | null | undefined,
+    });
+    rowsByPlayer.set(pid, list);
+  }
+
+  const result = new Map<string, RpeAcwrInput | null>();
+  for (const pid of playerIds) {
+    const rows = rowsByPlayer.get(pid) ?? [];
+    result.set(pid, computeRpeAcwrFromRows(rows, date));
+  }
+  return result;
+}
+
+/**
+ * Fetch all real (non-imputed) RPE submissions for a team on a given date.
+ * Returns a map of playerId → rpe value, used to compute team median for
+ * discrepancy analysis.
+ */
+async function fetchTeamRpeForDate(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+  date: string
+): Promise<Map<string, number>> {
+  if (!playerIds.length) return new Map();
+  const { data, error } = await sb
+    .from("session_rpe_entries")
+    .select("player_id, rpe, is_imputed")
+    .in("player_id", playerIds)
+    .eq("session_date", date)
+    .eq("is_imputed", false);
+  if (error) return new Map();
+
+  const result = new Map<string, number>();
+  for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
+    const pid = String(raw.player_id ?? "");
+    const rpe = raw.rpe != null ? Number(raw.rpe) : null;
+    if (rpe != null && Number.isFinite(rpe) && !result.has(pid)) {
+      result.set(pid, rpe);
+    }
+  }
+  return result;
+}
+
 async function fetchYesterdayContext(
   sb: ReturnType<typeof getAdminClient>,
   teamId: string,
@@ -274,10 +345,13 @@ async function buildPlayerSource(args: {
   teamId: string;
   tmRaw: unknown;
   catapultRows: ReturnType<typeof normalizeCatapultDailyLoadRow>[];
+  rpeAcwr: RpeAcwrInput | null;
+  /** RPE values from all OTHER players on the team today (non-imputed) */
+  teamRpeValues: number[];
   ydayContext: Record<string, unknown> | null;
   mdDay: string | null;
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
-}): Promise<CoachCommandPlayerSource> {
+}): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
   const yZ = extractYesterdayZ(tm);
@@ -411,11 +485,29 @@ async function buildPlayerSource(args: {
     readinessDecision
   );
 
+  const compositeLoad = computeCompositeLoadConcern({
+    rpeAcwr: args.rpeAcwr,
+    neuromuscularBurdenScore: catapultContext.signals.neuromuscularBurdenScore,
+    externalLoadState: catapultContext.signals.externalLoadState,
+  });
+
+  const playerRpeToday = toFinite(tm?.rpe) ?? toFinite(tm?.session_rpe) ?? null;
+  const rpeDiscrepancy = computeRpeDiscrepancy({
+    playerRpe: playerRpeToday,
+    teamRpeValues: args.teamRpeValues,
+    neuromuscularBurdenScore: catapultContext.signals.neuromuscularBurdenScore ?? null,
+    externalLoadState: catapultContext.signals.externalLoadState ?? "unknown",
+  });
+
   const athleteDecision = buildAthleteDecision({
     snapshot,
     readinessDecision,
     injuryDecision: injuryRiskDecision,
     neural: null,
+    load: {
+      concernLevel: compositeLoad.concernLevel,
+      summary: compositeLoad.summary,
+    },
     hardBlock: false,
   });
 
@@ -438,6 +530,7 @@ async function buildPlayerSource(args: {
     athleteName: String(args.row.full_name ?? ""),
     readinessScore: toFinite(args.row.readiness) ?? toFinite(args.row.total_score),
     cmjRequired,
+    rpeDiscrepancy,
     recommendation:
       athleteDecision.trainingRecommendation ??
       {
@@ -480,9 +573,11 @@ export async function GET(req: Request) {
     }
 
     const playerIds = rows.map((row) => String(row.player_id));
-    const [tmByPlayer, catapultByPlayer, ydayContext, mdDay, whoopByPlayer] = await Promise.all([
+    const [tmByPlayer, catapultByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer] = await Promise.all([
       fetchTrainingModifiers(sb, playerIds, date),
       fetchCatapultRows(sb, playerIds, date),
+      fetchRpeAcwrForPlayers(sb, playerIds, date),
+      fetchTeamRpeForDate(sb, playerIds, date),
       fetchYesterdayContext(sb, teamId, date),
       fetchMdContext(sb, teamId, date),
       fetchWhoopSnapshots(sb, playerIds),
@@ -498,6 +593,10 @@ export async function GET(req: Request) {
             teamId,
             tmRaw: tmByPlayer.get(String(row.player_id))?.training_modifier ?? null,
             catapultRows: (catapultByPlayer.get(String(row.player_id)) ?? []).filter(Boolean),
+            rpeAcwr: rpeAcwrByPlayer.get(String(row.player_id)) ?? null,
+            teamRpeValues: Array.from(teamRpeMap.entries())
+              .filter(([pid]) => pid !== String(row.player_id))
+              .map(([, rpe]) => rpe),
             ydayContext,
             mdDay,
             whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
