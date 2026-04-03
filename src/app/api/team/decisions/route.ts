@@ -9,6 +9,7 @@ import { buildCatapultReadinessContextFromRows, normalizeCatapultDailyLoadRow } 
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
 import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
 import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
+import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type VbtSessionRow } from "@/lib/micropulse/vbtReadiness";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -339,6 +340,72 @@ async function fetchWhoopSnapshots(
   }
 }
 
+/**
+ * Fetch GymAware VBT sessions for a list of players: today + 28-day history.
+ * Returns per-player: { today: VbtSessionRow[], history: VbtSessionRow[] }
+ */
+async function fetchVbtDataForPlayers(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+  date: string,
+  teamId: string,
+): Promise<Map<string, { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string }>> {
+  const result = new Map<string, { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string }>();
+  if (!playerIds.length) return result;
+
+  // Check if GymAware is configured for this team
+  const { data: settings } = await sb
+    .from("gymaware_settings")
+    .select("reference_exercise, sync_enabled")
+    .eq("team_id", teamId)
+    .eq("sync_enabled", true)
+    .maybeSingle();
+
+  if (!settings) return result;
+
+  const refExercise = settings.reference_exercise ?? "Trap Bar Deadlift";
+
+  // Compute 28 days back from date
+  const dateObj = new Date(`${date}T00:00:00Z`);
+  const historyStart = new Date(dateObj);
+  historyStart.setUTCDate(historyStart.getUTCDate() - 28);
+  const historyStartStr = historyStart.toISOString().slice(0, 10);
+
+  const { data: rows, error } = await sb
+    .from("gymaware_vbt_sessions")
+    .select("player_id, session_date, exercise_name, load_kg, mean_velocity, peak_velocity")
+    .in("player_id", playerIds)
+    .gte("session_date", historyStartStr)
+    .lte("session_date", date);
+
+  if (error || !rows) return result;
+
+  for (const row of rows as Array<Record<string, unknown>>) {
+    const pid = String(row.player_id ?? "");
+    if (!pid) continue;
+
+    if (!result.has(pid)) {
+      result.set(pid, { today: [], history: [], referenceExercise: refExercise });
+    }
+    const entry = result.get(pid)!;
+    const sessionRow: VbtSessionRow = {
+      session_date: String(row.session_date ?? ""),
+      exercise_name: String(row.exercise_name ?? ""),
+      load_kg: typeof row.load_kg === "number" ? row.load_kg : null,
+      mean_velocity: typeof row.mean_velocity === "number" ? row.mean_velocity : null,
+      peak_velocity: typeof row.peak_velocity === "number" ? row.peak_velocity : null,
+    };
+
+    if (sessionRow.session_date === date) {
+      entry.today.push(sessionRow);
+    } else {
+      entry.history.push(sessionRow);
+    }
+  }
+
+  return result;
+}
+
 async function buildPlayerSource(args: {
   row: CoachRow;
   date: string;
@@ -351,7 +418,8 @@ async function buildPlayerSource(args: {
   ydayContext: Record<string, unknown> | null;
   mdDay: string | null;
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
-}): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult }> {
+  vbtData?: { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string } | null;
+}): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
   const yZ = extractYesterdayZ(tm);
@@ -499,6 +567,11 @@ async function buildPlayerSource(args: {
     externalLoadState: catapultContext.signals.externalLoadState ?? "unknown",
   });
 
+  // VBT readiness from GymAware
+  const vbtReadiness: VbtReadinessResult | null = args.vbtData?.today.length
+    ? computeVbtReadiness(args.vbtData.today, args.vbtData.history, args.vbtData.referenceExercise)
+    : null;
+
   const athleteDecision = buildAthleteDecision({
     snapshot,
     readinessDecision,
@@ -531,6 +604,7 @@ async function buildPlayerSource(args: {
     readinessScore: toFinite(args.row.readiness) ?? toFinite(args.row.total_score),
     cmjRequired,
     rpeDiscrepancy,
+    vbtReadiness,
     recommendation:
       athleteDecision.trainingRecommendation ??
       {
@@ -573,7 +647,7 @@ export async function GET(req: Request) {
     }
 
     const playerIds = rows.map((row) => String(row.player_id));
-    const [tmByPlayer, catapultByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer] = await Promise.all([
+    const [tmByPlayer, catapultByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
       fetchTrainingModifiers(sb, playerIds, date),
       fetchCatapultRows(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -581,6 +655,7 @@ export async function GET(req: Request) {
       fetchYesterdayContext(sb, teamId, date),
       fetchMdContext(sb, teamId, date),
       fetchWhoopSnapshots(sb, playerIds),
+      fetchVbtDataForPlayers(sb, playerIds, date, teamId),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -600,6 +675,7 @@ export async function GET(req: Request) {
             ydayContext,
             mdDay,
             whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
+            vbtData: vbtByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {

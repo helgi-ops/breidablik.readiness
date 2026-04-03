@@ -12,6 +12,7 @@ import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
 import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
 import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
+import DevPlayerStrengthTab from "./dev-player-dashboard/DevPlayerStrengthTab";
 import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt";
 import {
   buildDevPlayerRiskViewModel,
@@ -769,7 +770,7 @@ export default function DevPlayerClient() {
 
   // If on a locked tab, redirect to today
   useEffect(() => {
-    const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe"]);
+    const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe", "strength"]);
     const eliteOnlyTabs = new Set<DevPlayerTab>(["vald"]);
     const tabLocked =
       (!isAtLeastPro && proOnlyTabs.has(activeTab)) ||
@@ -856,7 +857,8 @@ export default function DevPlayerClient() {
       const showRisk = activeTab === "risk";
       const showRpe = activeTab === "rpe";
       const showVald = activeTab === "vald";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald;
+      const showStrength = activeTab === "strength";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -948,6 +950,7 @@ export default function DevPlayerClient() {
     // Block navigation to locked tabs
     if (!isAtLeastPro && (tab === "dashboard" || tab === "risk" || tab === "rpe")) return;
     if (!isElite && tab === "vald") return;
+    if (!isAtLeastPro && tab === "strength") return;
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     if (tab === "today") params.delete("tab");
     else params.set("tab", tab);
@@ -1042,6 +1045,7 @@ export default function DevPlayerClient() {
               {activeTab === "history" && <DevPlayerHistoryTab />}
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
+              {activeTab === "strength" && <DevPlayerStrengthTab />}
             </div>,
             panelMountNode
           )

@@ -19,6 +19,7 @@ const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboa
   { key: "dashboard", labelKey: "dashboard", fullLabelIS: "Yfirlit",                  fullLabelEN: "Dashboard",                minTier: "pro"   },
   { key: "risk",      labelKey: "today",     fullLabelIS: "Áhætta",                   fullLabelEN: "Risk",                     minTier: "pro"   },
   { key: "vald",      labelKey: "vald",      fullLabelIS: "Taugavöðvaprófun",         fullLabelEN: "Neuromuscular Testing",    minTier: "elite" },
+  { key: "strength",  labelKey: "today",     fullLabelIS: "Styrkur / VBT",            fullLabelEN: "Strength / VBT",           minTier: "pro"   },
   { key: "history",   labelKey: "history",   fullLabelIS: "Saga",                     fullLabelEN: "History",                  minTier: "free"  },
 ];
 

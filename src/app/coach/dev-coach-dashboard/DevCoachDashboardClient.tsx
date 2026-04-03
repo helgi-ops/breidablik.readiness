@@ -87,6 +87,7 @@ import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
+import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import {
   buildCatapultReadinessContextFromRows,
@@ -1695,7 +1696,7 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald" | "trend" | "rtp">("today");
+  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald" | "strength" | "trend" | "rtp">("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -5997,9 +5998,9 @@ export default function CoachPage() {
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex items-center justify-between">
           <div className="-mb-px flex flex-1">
-          {(["today", "squad", "intel", "load", "gps", "volatility", "vald", "trend", "rtp"] as const).map((tabId) => {
+          {(["today", "squad", "intel", "load", "gps", "volatility", "vald", "strength", "trend", "rtp"] as const).map((tabId) => {
             const labels = ct.tabs as Record<string, string>;
-            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald", "trend", "rtp"]);
+            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald", "strength", "trend", "rtp"]);
             const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
             return (
               <button
@@ -7786,6 +7787,20 @@ export default function CoachPage() {
         <div className="space-y-4">
           <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          STRENGTH / VBT TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "strength" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Strength / VBT"
+          description="See each player's personal bests per exercise, today's performance vs PB, estimated 1RM, and VBT readiness signals."
+        />
+      )}
+      {dashTab === "strength" && isAtLeastPro && (
+        <CoachStrengthVbtTab teamId={coachTeamId} date={today} lang={lang} />
       )}
 
       {/* ══════════════════════════════════════════
