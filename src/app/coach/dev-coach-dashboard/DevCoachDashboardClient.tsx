@@ -86,8 +86,11 @@ import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard"
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
+import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
+import CoachMdComparisonCard from "@/components/dashboard/CoachMdComparisonCard";
+import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import {
   buildCatapultReadinessContextFromRows,
@@ -1696,9 +1699,20 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  const [dashTab, setDashTab] = useState<"today" | "squad" | "intel" | "load" | "gps" | "volatility" | "vald" | "strength" | "trend" | "rtp">("today");
+  type CoachTab = "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+  const [dashTab, setDashTab] = useState<CoachTab>("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+
+  // PWA detection
+  const [isPwa, setIsPwa] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(display-mode: standalone)");
+    const update = () => setIsPwa(mq.matches || !!(navigator as any).standalone);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
@@ -1809,6 +1823,97 @@ export default function CoachPage() {
   const [imputing, setImputing] = useState(false);
   const [imputeMessage, setImputeMessage] = useState("");
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
+
+  // MLI + Metabolic Load per player (for Decision Summary enrichment)
+  const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
+  const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
+  // VBT fatigue flags per player
+  const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
+    exerciseName: string; loadKg: number; velocityDropPct: number;
+    baselineVelocity: number; worstVelocity: number;
+  }>>>({});
+
+  // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
+  useEffect(() => {
+    if (!rows.length || !coachTeamId) return;
+    const entryDate = rows[0]?.entry_date ?? today;
+    const yd = new Date(entryDate);
+    yd.setDate(yd.getDate() - 1);
+    const yesterdayStr = yd.toISOString().slice(0, 10);
+    const datesToTry = [entryDate, yesterdayStr];
+
+    (async () => {
+      let headers: Record<string, string>;
+      try {
+        headers = await getCoachAuthHeaders();
+      } catch {
+        return; // not authenticated
+      }
+
+      // MLI — try entry date first, if no rows fall back to yesterday
+      for (const dateStr of datesToTry) {
+        try {
+          const res = await fetch(`/api/coach/player-load/mli?teamId=${coachTeamId}&date=${dateStr}`, { headers });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const validRows = (data?.rows ?? []).filter((r: any) => r.mli != null);
+          if (validRows.length > 0) {
+            const map: Record<string, { mli: number | null; band: string | null }> = {};
+            for (const r of validRows) {
+              map[r.player_id] = { mli: r.mli ?? null, band: r.mli_band ?? null };
+            }
+            setPlayerMli(map);
+            break;
+          }
+        } catch { /* continue to next date */ }
+      }
+
+      // Metabolic — same pattern
+      for (const dateStr of datesToTry) {
+        try {
+          const res = await fetch(`/api/coach/player-load/metabolic?teamId=${coachTeamId}&date=${dateStr}`, { headers });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const validRows = (data?.rows ?? []).filter((r: any) => r.metabolic_load_score != null);
+          if (validRows.length > 0) {
+            const map: Record<string, { score: number | null; band: string | null }> = {};
+            for (const r of validRows) {
+              map[r.player_id] = { score: r.metabolic_load_score ?? null, band: r.metabolic_load_band ?? null };
+            }
+            setPlayerMetabolic(map);
+            break;
+          }
+        } catch { /* continue to next date */ }
+      }
+
+      // VBT fatigue — velocity loss from first 2 sets
+      try {
+        const res = await fetch(`/api/coach/vbt-fatigue?teamId=${coachTeamId}&date=${entryDate}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.players?.length) {
+            const map: Record<string, Array<{
+              exerciseName: string; loadKg: number; velocityDropPct: number;
+              baselineVelocity: number; worstVelocity: number;
+            }>> = {};
+            for (const p of data.players) {
+              if (p.hasFatigue && p.flags?.length) {
+                map[p.playerId] = p.flags.map((f: any) => ({
+                  exerciseName: f.exerciseName,
+                  loadKg: f.loadKg,
+                  velocityDropPct: f.velocityDropPct,
+                  baselineVelocity: f.baselineVelocity,
+                  worstVelocity: f.worstVelocity,
+                }));
+              }
+            }
+            setPlayerVbtFatigue(map);
+          }
+        }
+      } catch { /* VBT fatigue is optional */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length, coachTeamId]);
 
   // Auto-fill zeros when OFF
   useEffect(() => {
@@ -5994,47 +6099,102 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Tab navigation + lang toggle ── */}
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex items-center justify-between">
-          <div className="-mb-px flex flex-1">
-          {(["today", "squad", "intel", "load", "gps", "volatility", "vald", "strength", "trend", "rtp"] as const).map((tabId) => {
-            const labels = ct.tabs as Record<string, string>;
-            const proTabs = new Set(["squad", "intel", "load", "gps", "volatility", "vald", "strength", "trend", "rtp"]);
-            const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
-            return (
-              <button
-                key={tabId}
-                onClick={() => setDashTab(tabId)}
-                className={`flex items-center gap-1.5 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  dashTab === tabId
-                    ? "border-slate-900 text-slate-900"
-                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-                }`}
-              >
-                {labels[tabId]}
-                {isLocked && (
-                  <svg className="h-3 w-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
-          </div>
-          {/* Language toggle */}
-          <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
+      {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
+      {!isPwa && (() => {
+        const labels = ct.tabs as Record<string, string>;
+        const proTabs = new Set(["squad", "intel", "load", "gps", "md", "volatility", "vald", "strength", "trend", "rtp"]);
+
+        // Primary tabs always visible, overflow goes in "More" dropdown
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md"];
+        const MORE_TABS: Array<typeof dashTab> = ["intel", "volatility", "vald", "strength", "trend", "rtp"];
+        const moreLabel = lang === "IS" ? "Meira" : "More";
+
+        const isMoreActive = MORE_TABS.includes(dashTab);
+
+        const TabBtn = ({ tabId }: { tabId: typeof dashTab }) => {
+          const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
+          return (
             <button
-              onClick={() => setLang("IS")}
-              className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >IS</button>
-            <button
-              onClick={() => setLang("EN")}
-              className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
-            >EN</button>
+              onClick={() => setDashTab(tabId)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                dashTab === tabId
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              {labels[tabId]}
+              {isLocked && (
+                <svg className="h-3 w-3 flex-shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              )}
+            </button>
+          );
+        };
+
+        return (
+          <div className="border-b border-slate-200">
+            <nav className="-mb-px flex items-center justify-between">
+              <div className="-mb-px flex items-center">
+                {PRIMARY_TABS.map((tabId) => (
+                  <TabBtn key={tabId} tabId={tabId} />
+                ))}
+
+                {/* "More" dropdown */}
+                <div className="relative group">
+                  <button
+                    className={`flex items-center gap-1 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isMoreActive
+                        ? "border-slate-900 text-slate-900"
+                        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    {isMoreActive ? labels[dashTab] : moreLabel}
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <div className="invisible group-hover:visible absolute left-0 top-full z-50 mt-0 min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                    {MORE_TABS.map((tabId) => {
+                      const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
+                      return (
+                        <button
+                          key={tabId}
+                          onClick={() => setDashTab(tabId)}
+                          className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                            dashTab === tabId
+                              ? "bg-slate-50 font-semibold text-slate-900"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          <span>{labels[tabId]}</span>
+                          {isLocked && (
+                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Language toggle */}
+              <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
+                <button
+                  onClick={() => setLang("IS")}
+                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >IS</button>
+                <button
+                  onClick={() => setLang("EN")}
+                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >EN</button>
+              </div>
+            </nav>
           </div>
-        </nav>
-      </div>
+        );
+      })()}
 
       {/* ══════════════════════════════════════════
           TODAY TAB
@@ -6224,7 +6384,36 @@ export default function CoachPage() {
 
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
-            <DecisionSummaryCard rows={rows as any} />
+            <DecisionSummaryCard rows={rows.map((r) => {
+              // Enrich with most recent GPS load from catapult history
+              // Try entry date first (today), then yesterday
+              const ed = r.entry_date ?? today;
+              const yd = new Date(ed);
+              yd.setDate(yd.getDate() - 1);
+              const yesterdayStr = yd.toISOString().slice(0, 10);
+              const history = ((r as any)._catapult_history ?? []) as Array<{ date: string; [k: string]: unknown }>;
+              const yRow = history.find((h) => h.date === ed)
+                ?? history.find((h) => h.date === yesterdayStr)
+                ?? null;
+              const mliData = playerMli[r.player_id];
+              const metaData = playerMetabolic[r.player_id];
+              return {
+                ...r,
+                _yesterday_load: yRow ? {
+                  totalDistance: yRow.totalDistance ?? null,
+                  playerLoad: yRow.playerLoad ?? null,
+                  velocityBand5TotalDistance: yRow.velocityBand5TotalDistance ?? null,
+                  velocityBand6TotalDistance: yRow.velocityBand6TotalDistance ?? null,
+                  accelBand2to3Efforts: yRow.accelBand2to3Efforts ?? null,
+                  decelBand2to3Efforts: yRow.decelBand2to3Efforts ?? null,
+                } : null,
+                _yesterday_mli: mliData?.mli ?? null,
+                _yesterday_mli_band: mliData?.band ?? null,
+                _yesterday_metabolic_score: metaData?.score ?? null,
+                _yesterday_metabolic_band: metaData?.band ?? null,
+                _vbt_fatigue_flags: playerVbtFatigue[r.player_id] ?? null,
+              };
+            }) as any} />
           )}
 
           {/* Readiness Today — team signal summary */}
@@ -7004,14 +7193,7 @@ export default function CoachPage() {
       {dashTab === "load" && isAtLeastPro && (
         <div className="space-y-8">
 
-          {/* ── ACWR Risk Overview ────────────────────────────── */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Risk Overview</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-            <InternalAcwrCard teamId={coachTeamId} />
-          </section>
+          {/* Weekly Load moved to GPS tab */}
 
           {/* ── Session RPE ───────────────────────────────────── */}
           <section>
@@ -7023,6 +7205,15 @@ export default function CoachPage() {
               <SessionRpeMonitoringCard teamId={coachTeamId} />
               <DailyInternalLoadCard teamId={coachTeamId} />
             </div>
+          </section>
+
+          {/* ── ACWR Risk Overview ────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Risk Overview</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <InternalAcwrCard teamId={coachTeamId} />
           </section>
 
           {/* ── 7/28d Load Metrics ───────────────────────────── */}
@@ -7292,6 +7483,15 @@ export default function CoachPage() {
         return (
           <div className="space-y-4">
 
+            {/* ── Cumulative Weekly Load ────────────────────────── */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{lang === "IS" ? "Vikuálag" : "Weekly Load"}</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} />}
+            </section>
+
             {/* ── Today's Training Overview ── */}
             <Card>
               <CardHeader className="pb-3">
@@ -7498,9 +7698,30 @@ export default function CoachPage() {
             </Card>
             <MechanicalLoadIndexCard teamId={coachTeamId} />
             <TeamMetabolicSummary teamId={coachTeamId} />
+            <CoachGpsManualEntry
+              teamId={coachTeamId}
+              date={today}
+              getAuthHeaders={getCoachAuthHeaders}
+            />
           </div>
         );
       })()}
+
+      {/* ══════════════════════════════════════════
+          MD COMPARISON TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "md" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="MD Comparison"
+          description="Compare training session load against historical averages for the same match day designation using Z-scores and STEN."
+        />
+      )}
+      {dashTab === "md" && isAtLeastPro && coachTeamId && (
+        <div className="space-y-4">
+          <CoachMdComparisonCard teamId={coachTeamId} date={today} lang={lang} />
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════
           VOLATILITY TAB
@@ -7851,6 +8072,162 @@ export default function CoachPage() {
           <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.
         </CardContent>
       </Card>
+
+      {/* PWA bottom padding */}
+      {isPwa && <div style={{ height: "calc(68px + env(safe-area-inset-bottom))" }} />}
+
+      {/* PWA bottom navigation */}
+      {isPwa && <CoachPwaBottomNav activeTab={dashTab} onChange={setDashTab} lang={lang} />}
     </div>
+  );
+}
+
+// ─── Coach PWA Bottom Navigation ────────────────────────────────────────────
+
+function CoachPwaBottomNav({
+  activeTab,
+  onChange,
+  lang,
+}: {
+  activeTab: string;
+  onChange: (tab: "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
+  lang: "IS" | "EN";
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const PRIMARY: Array<{
+    key: "today" | "squad" | "load" | "gps" | "md";
+    labelIS: string;
+    labelEN: string;
+    icon: (active: boolean) => React.ReactNode;
+  }> = [
+    {
+      key: "today", labelIS: "Í dag", labelEN: "Today",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12L12 4l9 8" /><path d="M9 21V12h6v9" />
+        </svg>
+      ),
+    },
+    {
+      key: "squad", labelIS: "Hópur", labelEN: "Squad",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      key: "load", labelIS: "Álag", labelEN: "Load",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+      ),
+    },
+    {
+      key: "gps", labelIS: "GPS", labelEN: "GPS",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
+        </svg>
+      ),
+    },
+    {
+      key: "md", labelIS: "MD", labelEN: "MD",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+        </svg>
+      ),
+    },
+  ];
+
+  const MORE_TABS: Array<{
+    key: "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+    labelIS: string;
+    labelEN: string;
+  }> = [
+    { key: "intel",      labelIS: "Greind",         labelEN: "Intelligence" },
+    { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
+    { key: "vald",       labelIS: "VALD / CMJ",     labelEN: "VALD / CMJ" },
+    { key: "strength",   labelIS: "Styrkur / VBT",  labelEN: "Strength / VBT" },
+    { key: "trend",      labelIS: "Þróun",          labelEN: "Trends" },
+    { key: "rtp",        labelIS: "Meiðsli / RTP",  labelEN: "Injuries / RTP" },
+  ];
+
+  const isMoreActive = MORE_TABS.some((t) => t.key === activeTab);
+
+  return (
+    <>
+      {/* More menu overlay */}
+      {moreOpen && (
+        <div
+          className="fixed inset-0 z-[998] bg-black/30"
+          onClick={() => setMoreOpen(false)}
+        />
+      )}
+
+      {/* More menu panel */}
+      {moreOpen && (
+        <div className="fixed bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-[999] mx-4 mb-1 rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="grid grid-cols-2 gap-px p-2">
+            {MORE_TABS.map((t) => {
+              const isActive = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => { onChange(t.key); setMoreOpen(false); }}
+                  className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors text-left ${
+                    isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {lang === "IS" ? t.labelIS : t.labelEN}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom nav bar */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-[1000] flex items-stretch border-t border-slate-200 bg-white/95 backdrop-blur-sm"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {PRIMARY.map(({ key, labelIS, labelEN, icon }) => {
+          const isActive = activeTab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { onChange(key); setMoreOpen(false); }}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                isActive ? "text-slate-900" : "text-slate-400"
+              }`}
+            >
+              {icon(isActive)}
+              <span className={`text-[9px] font-semibold tracking-wide ${isActive ? "text-slate-900" : "text-slate-400"}`}>
+                {(lang === "IS" ? labelIS : labelEN).toUpperCase()}
+              </span>
+            </button>
+          );
+        })}
+
+        {/* More button */}
+        <button
+          onClick={() => setMoreOpen(!moreOpen)}
+          className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+            isMoreActive ? "text-slate-900" : "text-slate-400"
+          }`}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={isMoreActive ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><circle cx="12" cy="19" r="1.5" fill="currentColor" />
+          </svg>
+          <span className={`text-[9px] font-semibold tracking-wide ${isMoreActive ? "text-slate-900" : "text-slate-400"}`}>
+            {lang === "IS" ? "MEIRA" : "MORE"}
+          </span>
+        </button>
+      </nav>
+    </>
   );
 }

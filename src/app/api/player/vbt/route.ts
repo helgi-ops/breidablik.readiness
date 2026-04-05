@@ -87,12 +87,45 @@ export async function GET(req: Request) {
 
     const loadBreakdowns = computeLoadBreakdowns(allSets);
 
+    // Chart data: per exercise, all data points for load-velocity scatter
+    const chartData: Record<string, Array<{ load: number; velocity: number; date: string }>> = {};
+    for (const s of allSets) {
+      const key = s.exercise_name.trim();
+      if (!key || s.load_kg == null || s.mean_velocity == null || s.load_kg <= 0) continue;
+      if (!chartData[key]) chartData[key] = [];
+      chartData[key].push({ load: s.load_kg, velocity: s.mean_velocity, date: s.session_date });
+    }
+
+    // Velocity trend: per exercise, best velocity per session date (chronological)
+    const velocityTrend: Record<string, Array<{ date: string; velocity: number; loadKg: number | null }>> = {};
+    for (const s of allSets) {
+      const key = s.exercise_name.trim();
+      if (!key || s.mean_velocity == null) continue;
+      if (!velocityTrend[key]) velocityTrend[key] = [];
+      velocityTrend[key].push({ date: s.session_date, velocity: s.mean_velocity, loadKg: s.load_kg });
+    }
+    // Aggregate: best velocity per date per exercise, sorted chronologically
+    for (const key of Object.keys(velocityTrend)) {
+      const byDate = new Map<string, { velocity: number; loadKg: number | null }>();
+      for (const p of velocityTrend[key]) {
+        const existing = byDate.get(p.date);
+        if (!existing || p.velocity > existing.velocity) {
+          byDate.set(p.date, { velocity: p.velocity, loadKg: p.loadKg });
+        }
+      }
+      velocityTrend[key] = Array.from(byDate.entries())
+        .map(([d, v]) => ({ date: d, velocity: v.velocity, loadKg: v.loadKg }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    }
+
     return NextResponse.json({
       date,
       exercises,
       todayComparisons,
       loadBreakdowns,
       recentHistory,
+      chartData,
+      velocityTrend,
       totalSets: allSets.length,
     });
   } catch (err) {

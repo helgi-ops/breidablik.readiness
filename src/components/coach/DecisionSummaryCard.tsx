@@ -49,6 +49,16 @@ type NeuralVolatilityIntelligenceDecision = {
   };
 };
 
+/** Per-player GPS load snapshot (Catapult camelCase fields) */
+export type PlayerLoadSnapshot = {
+  totalDistance: number | null;
+  playerLoad: number | null;
+  velocityBand5TotalDistance: number | null;
+  velocityBand6TotalDistance: number | null;
+  accelBand2to3Efforts: number | null;
+  decelBand2to3Efforts: number | null;
+};
+
 export type DecisionSummaryRow = {
   player_id: string;
   full_name: string;
@@ -61,6 +71,26 @@ export type DecisionSummaryRow = {
   final_flag?: string | null;    // "RED" | "YELLOW" | "GREEN"
   final_decision?: string | null;
   system_decision?: string | null;
+  // ── Readiness questionnaire scores (1–5 scale) ──────────────────────────
+  sleep_quality?: number | null;
+  muscle_soreness?: number | null;   // 1 = very sore (bad), 4 = fresh, 5 = very fresh
+  fatigue_energy?: number | null;
+  stress_mood?: number | null;
+  // ── Yesterday GPS load (populated by dashboard from _catapult_history) ──
+  _yesterday_load?: PlayerLoadSnapshot | null;
+  // ── Composite scores (populated by dashboard from MLI/Metabolic APIs) ───
+  _yesterday_mli?: number | null;
+  _yesterday_mli_band?: string | null;
+  _yesterday_metabolic_score?: number | null;
+  _yesterday_metabolic_band?: string | null;
+  // ── VBT fatigue flags (velocity loss ≥10% from first 2 sets) ───────────
+  _vbt_fatigue_flags?: Array<{
+    exerciseName: string;
+    loadKg: number;
+    velocityDropPct: number;
+    baselineVelocity: number;
+    worstVelocity: number;
+  }> | null;
 };
 
 // ── Action resolution (matches Squad tab logic exactly) ───────────────────
@@ -715,6 +745,9 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
             );
           })()}
 
+          {/* Readiness ↔ Load detail */}
+          <ReadinessLoadDetail row={row} />
+
           {/* Action */}
           <div className={`rounded-xl border ${cfg.actionBgClass} px-5 py-5`}>
             <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-3">Coach action</p>
@@ -736,6 +769,275 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Readiness ↔ Load helpers ─────────────────────────────────────────────
+// Readiness questions: 1–5 scale. ALL metrics same direction:
+//   1–2 = bad, 3 = moderate, 4–5 = good.
+// Soreness: 1 = very sore (bad/red), 4 = fresh (good/green), 5 = very fresh.
+// No inversion needed — low score always = worse for every metric.
+
+type ReadinessItem = {
+  label: string;
+  shortLabel: string;
+  value: number;
+};
+
+function readinessColor(value: number): { bg: string; text: string } {
+  if (value <= 2) return { bg: "bg-rose-100", text: "text-rose-700" };
+  if (value <= 3) return { bg: "bg-amber-100", text: "text-amber-700" };
+  return { bg: "bg-emerald-100", text: "text-emerald-700" };
+}
+
+function getReadinessItems(row: DecisionSummaryRow): ReadinessItem[] {
+  const items: ReadinessItem[] = [];
+  if (row.sleep_quality != null) items.push({ label: "Sleep quality", shortLabel: "Svefn", value: row.sleep_quality });
+  if (row.muscle_soreness != null) items.push({ label: "Soreness", shortLabel: "Verk", value: row.muscle_soreness });
+  if (row.fatigue_energy != null) items.push({ label: "Energy", shortLabel: "Orka", value: row.fatigue_energy });
+  if (row.stress_mood != null) items.push({ label: "Mood", shortLabel: "Streita", value: row.stress_mood });
+  return items;
+}
+
+type LoadItem = { label: string; value: number; unit: string };
+
+function getLoadItems(row: DecisionSummaryRow): LoadItem[] {
+  const load = row._yesterday_load;
+  const items: LoadItem[] = [];
+  if (load) {
+    if (load.totalDistance != null && load.totalDistance > 0)
+      items.push({ label: "Dist", value: Math.round(load.totalDistance), unit: "m" });
+    if (load.playerLoad != null && load.playerLoad > 0)
+      items.push({ label: "PL", value: Math.round(load.playerLoad * 10) / 10, unit: "" });
+    if (load.velocityBand5TotalDistance != null && load.velocityBand5TotalDistance > 0)
+      items.push({ label: "VB5", value: Math.round(load.velocityBand5TotalDistance), unit: "m" });
+    if (load.velocityBand6TotalDistance != null && load.velocityBand6TotalDistance > 0)
+      items.push({ label: "VB6", value: Math.round(load.velocityBand6TotalDistance), unit: "m" });
+    if (load.accelBand2to3Efforts != null && load.accelBand2to3Efforts > 0)
+      items.push({ label: "Acc", value: Math.round(load.accelBand2to3Efforts), unit: "" });
+    if (load.decelBand2to3Efforts != null && load.decelBand2to3Efforts > 0)
+      items.push({ label: "Dec", value: Math.round(load.decelBand2to3Efforts), unit: "" });
+  }
+  // Composite scores (fetched independently from MLI/Metabolic APIs)
+  if (row._yesterday_mli != null)
+    items.push({ label: "MLI", value: Math.round(row._yesterday_mli * 10) / 10, unit: "" });
+  if (row._yesterday_metabolic_score != null)
+    items.push({ label: "Metab", value: Math.round(row._yesterday_metabolic_score), unit: "" });
+  return items;
+}
+
+// ── Soreness ↔ Load explanatory text ─────────────────────────────────────
+// When soreness is high (≤ 2), highlight which GPS metrics from yesterday
+// were elevated to help the coach understand the likely cause.
+
+function buildSorenessLoadNote(row: DecisionSummaryRow): string | null {
+  const soreness = row.muscle_soreness;
+  if (soreness == null || soreness > 2) return null; // only for high soreness (1–2)
+
+  const load = row._yesterday_load;
+  if (!load) return null;
+
+  const elevated: string[] = [];
+
+  // Check each metric — flag if present and non-trivial
+  if (load.velocityBand6TotalDistance != null && load.velocityBand6TotalDistance > 50)
+    elevated.push(`VB6 ${Math.round(load.velocityBand6TotalDistance)}m`);
+  if (load.decelBand2to3Efforts != null && load.decelBand2to3Efforts > 15)
+    elevated.push(`Dec ${Math.round(load.decelBand2to3Efforts)}`);
+  if (load.accelBand2to3Efforts != null && load.accelBand2to3Efforts > 15)
+    elevated.push(`Acc ${Math.round(load.accelBand2to3Efforts)}`);
+  if (load.totalDistance != null && load.totalDistance > 5000)
+    elevated.push(`Dist ${Math.round(load.totalDistance).toLocaleString("is-IS")}m`);
+
+  // MLI / Metabolic composite
+  if (row._yesterday_mli != null && row._yesterday_mli >= 60)
+    elevated.push(`MLI ${Math.round(row._yesterday_mli)}`);
+  if (row._yesterday_metabolic_score != null && row._yesterday_metabolic_score >= 60)
+    elevated.push(`Metab ${Math.round(row._yesterday_metabolic_score)}`);
+
+  if (!elevated.length) return null;
+  return `Possible load link: ${elevated.join(", ")} yesterday`;
+}
+
+/** Compact readiness + load strip for player cards */
+const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
+  const readiness = getReadinessItems(row);
+  const load = getLoadItems(row);
+  if (readiness.length === 0 && load.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+      {/* Readiness pills */}
+      {readiness.length > 0 && (
+        <div className="flex items-center gap-1">
+          {readiness.map((item) => {
+            const col = readinessColor(item.value);
+            return (
+              <span
+                key={item.shortLabel}
+                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold ${col.bg} ${col.text}`}
+                title={`${item.label}: ${item.value}/5`}
+              >
+                {item.shortLabel} {item.value}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {/* Load pills */}
+      {load.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[8px] text-slate-400 font-semibold uppercase">Load</span>
+          {load.map((item) => {
+            // Highlight MLI/Metabolic if high
+            const isComposite = item.label === "MLI" || item.label === "Metab";
+            const isHigh = isComposite && item.value >= 60;
+            const isVeryHigh = isComposite && item.value >= 75;
+            const pillClass = isVeryHigh
+              ? "bg-rose-100 text-rose-700"
+              : isHigh
+              ? "bg-amber-100 text-amber-700"
+              : "bg-slate-100 text-slate-600";
+            return (
+              <span
+                key={item.label}
+                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium ${pillClass}`}
+                title={`${item.label}: ${item.value}${item.unit ? ` ${item.unit}` : ""}`}
+              >
+                {item.label} {item.value.toLocaleString("is-IS")}{item.unit ? <span className="text-[8px] opacity-60">{item.unit}</span> : null}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {/* Soreness ↔ Load note */}
+      {(() => {
+        const note = buildSorenessLoadNote(row);
+        if (!note) return null;
+        return (
+          <div className="w-full mt-0.5">
+            <p className="text-[9px] text-rose-600 font-semibold leading-tight">{note}</p>
+          </div>
+        );
+      })()}
+      {/* VBT fatigue flags */}
+      {row._vbt_fatigue_flags && row._vbt_fatigue_flags.length > 0 && (
+        <div className="w-full mt-0.5 flex flex-wrap gap-1">
+          {row._vbt_fatigue_flags.map((f, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700"
+              title={`${f.exerciseName} @ ${f.loadKg}kg: ${f.velocityDropPct}% velocity drop (baseline ${f.baselineVelocity} → ${f.worstVelocity} m/s)`}
+            >
+              ⚡ {f.exerciseName.split(" ")[0]} {f.velocityDropPct}%
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** Detailed readiness + load section for player modal */
+const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
+  const readiness = getReadinessItems(row);
+  const load = getLoadItems(row);
+  if (readiness.length === 0 && load.length === 0) return null;
+
+  return (
+    <div className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-4">
+      <p className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">Readiness &amp; Load context</p>
+      <div className="flex flex-col gap-3">
+        {/* Readiness bars */}
+        {readiness.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Readiness (1–5)</p>
+            {readiness.map((item) => {
+              const col = readinessColor(item.value);
+              const pct = (item.value / 5) * 100;
+              return (
+                <div key={item.label} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-600 w-20 shrink-0">{item.label}</span>
+                  <div className="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${pct}%`, backgroundColor: item.value <= 2 ? "#f87171" : item.value <= 3 ? "#fbbf24" : "#34d399" }}
+                    />
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums w-6 text-right ${col.text}`}>{item.value}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Load metrics */}
+        {load.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Yesterday&apos;s GPS load</p>
+            <div className="flex flex-wrap gap-3">
+              {load.map((item) => {
+                const isComposite = item.label === "MLI" || item.label === "Metab";
+                const isHigh = isComposite && item.value >= 60;
+                const isVeryHigh = isComposite && item.value >= 75;
+                const borderClass = isVeryHigh
+                  ? "border-rose-300 bg-rose-50"
+                  : isHigh
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-slate-200 bg-white";
+                const valueClass = isVeryHigh
+                  ? "text-rose-700"
+                  : isHigh
+                  ? "text-amber-700"
+                  : "text-slate-800";
+                return (
+                  <div key={item.label} className={`flex flex-col items-center rounded-lg border px-3 py-2 min-w-[4.5rem] ${borderClass}`}>
+                    <span className="text-[9px] text-slate-400 font-semibold uppercase">{item.label}</span>
+                    <span className={`text-lg font-bold tabular-nums ${valueClass}`}>{item.value.toLocaleString("is-IS")}</span>
+                    {item.unit && <span className="text-[9px] text-slate-400">{item.unit}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* Soreness ↔ Load connection note */}
+        {(() => {
+          const note = buildSorenessLoadNote(row);
+          if (!note) return null;
+          return (
+            <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 mt-1">
+              <p className="text-xs text-rose-700 font-semibold leading-snug">{note}</p>
+            </div>
+          );
+        })()}
+        {/* VBT velocity loss fatigue */}
+        {row._vbt_fatigue_flags && row._vbt_fatigue_flags.length > 0 && (
+          <div className="rounded-lg bg-orange-50 border border-orange-200 px-4 py-3 mt-1">
+            <p className="text-[10px] uppercase tracking-wider text-orange-500 font-semibold mb-2">VBT velocity loss</p>
+            <div className="space-y-2">
+              {row._vbt_fatigue_flags.map((f, i) => {
+                const dropAbs = Math.abs(f.velocityDropPct);
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-orange-700">{f.exerciseName}</span>
+                    <span className="text-[10px] text-orange-600">{f.loadKg}kg</span>
+                    <span className={`text-sm font-bold tabular-nums ${dropAbs >= 20 ? "text-rose-600" : "text-orange-700"}`}>
+                      {f.velocityDropPct}%
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {f.baselineVelocity} → {f.worstVelocity} m/s
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-orange-500 leading-snug">
+              Baseline: average of first 2 sets. Flag at ≥10% drop.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -856,6 +1158,9 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
             </>
           );
         })()}
+
+        {/* Readiness ↔ Load context strip */}
+        <ReadinessLoadStrip row={row} />
       </div>
     </div>
   );

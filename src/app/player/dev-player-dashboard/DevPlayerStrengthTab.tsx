@@ -32,6 +32,8 @@ type VbtResponse = {
     }>;
   }>;
   loadBreakdowns: Record<string, VbtLoadBreakdown[]>;
+  chartData: Record<string, Array<{ load: number; velocity: number; date: string }>>;
+  velocityTrend: Record<string, Array<{ date: string; velocity: number; loadKg: number | null }>>;
   totalSets: number;
 };
 
@@ -199,6 +201,170 @@ function SyncButton({ syncing, syncResult, syncError, onSync, t }: {
   );
 }
 
+// ─── SVG Charts ─────────────────────────────────────────────────────────────
+
+/** Simple linear regression: returns { slope, intercept } */
+function linReg(points: Array<{ x: number; y: number }>): { slope: number; intercept: number } | null {
+  const n = points.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of points) { sx += p.x; sy += p.y; sxx += p.x * p.x; sxy += p.x * p.y; }
+  const denom = n * sxx - sx * sx;
+  if (Math.abs(denom) < 1e-10) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  return { slope, intercept };
+}
+
+/**
+ * Load-Velocity Profile chart — SVG scatter + regression line.
+ * Shows where velocity drops to ~0.3 m/s (estimated 1RM zone).
+ */
+function LoadVelocityChart({ points }: { points: Array<{ load: number; velocity: number; date: string }> }) {
+  if (points.length < 1) return null;
+
+  const W = 280, H = 140, PAD = { top: 12, right: 16, bottom: 24, left: 36 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const loads = points.map((p) => p.load);
+  const vels = points.map((p) => p.velocity);
+  const minLoad = Math.min(...loads);
+  const maxLoad = Math.max(...loads);
+  const maxVel = Math.max(...vels);
+  const rangeLoad = maxLoad - minLoad || 1;
+  const rangeVel = maxVel || 1;
+
+  const scaleX = (v: number) => PAD.left + ((v - minLoad) / rangeLoad) * plotW;
+  const scaleY = (v: number) => PAD.top + plotH - (v / rangeVel) * plotH;
+
+  // Regression line
+  const reg = linReg(points.map((p) => ({ x: p.load, y: p.velocity })));
+  let regLine: { x1: number; y1: number; x2: number; y2: number } | null = null;
+  let est1RM: number | null = null;
+  if (reg && reg.slope < 0) {
+    const yAtMin = reg.slope * minLoad + reg.intercept;
+    const yAtMax = reg.slope * maxLoad + reg.intercept;
+    regLine = { x1: scaleX(minLoad), y1: scaleY(yAtMin), x2: scaleX(maxLoad), y2: scaleY(yAtMax) };
+    // Estimated 1RM: where velocity = 0.3 m/s (minimum concentric velocity)
+    const x1rm = (0.3 - reg.intercept) / reg.slope;
+    if (x1rm > maxLoad && x1rm < maxLoad * 3) est1RM = Math.round(x1rm);
+  }
+
+  // Tick marks for axes
+  const loadTicks = Array.from({ length: 5 }, (_, i) => minLoad + (rangeLoad * i) / 4);
+  const velTicks = Array.from({ length: 4 }, (_, i) => (rangeVel * (i + 1)) / 4);
+
+  return (
+    <div className="mt-2">
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Load-Velocity Profile</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxWidth: 320 }}>
+        {/* Grid lines */}
+        {velTicks.map((v) => (
+          <g key={v}>
+            <line x1={PAD.left} y1={scaleY(v)} x2={W - PAD.right} y2={scaleY(v)} stroke="#e4e4e7" strokeWidth={0.5} strokeDasharray="3,3" />
+            <text x={PAD.left - 4} y={scaleY(v) + 3} textAnchor="end" className="fill-zinc-400" style={{ fontSize: 8 }}>{v.toFixed(1)}</text>
+          </g>
+        ))}
+        {loadTicks.map((l) => (
+          <text key={l} x={scaleX(l)} y={H - 4} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: 8 }}>{Math.round(l)}</text>
+        ))}
+
+        {/* Axes */}
+        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + plotH} stroke="#d4d4d8" strokeWidth={0.75} />
+        <line x1={PAD.left} y1={PAD.top + plotH} x2={W - PAD.right} y2={PAD.top + plotH} stroke="#d4d4d8" strokeWidth={0.75} />
+
+        {/* Regression line */}
+        {regLine && (
+          <line x1={regLine.x1} y1={regLine.y1} x2={regLine.x2} y2={regLine.y2} stroke="#0ea5e9" strokeWidth={1.5} strokeDasharray="6,3" opacity={0.6} />
+        )}
+
+        {/* Data points */}
+        {points.map((p, i) => (
+          <circle key={i} cx={scaleX(p.load)} cy={scaleY(p.velocity)} r={3} fill="#0ea5e9" opacity={0.7} stroke="white" strokeWidth={0.5} />
+        ))}
+
+        {/* 1RM estimate marker */}
+        {est1RM && (
+          <g>
+            <line x1={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y1={scaleY(0.3)} x2={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y2={scaleY(0.3) - 8} stroke="#f59e0b" strokeWidth={1} strokeDasharray="2,2" />
+            <text x={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y={scaleY(0.3) - 10} textAnchor="middle" className="fill-amber-600" style={{ fontSize: 8, fontWeight: 700 }}>~{est1RM}kg</text>
+          </g>
+        )}
+
+        {/* Axis labels */}
+        <text x={W / 2} y={H - 0} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: 7 }}>kg</text>
+        <text x={4} y={H / 2} textAnchor="middle" className="fill-zinc-400" style={{ fontSize: 7 }} transform={`rotate(-90, 4, ${H / 2})`}>m/s</text>
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Velocity trend sparkline — shows best velocity per session over time.
+ * Small inline chart for quick trend visibility.
+ */
+function VelocitySparkline({ data }: { data: Array<{ date: string; velocity: number; loadKg: number | null }> }) {
+  if (data.length < 1) return null;
+
+  const W = 140, H = 32, PAD = 4;
+  const plotW = W - PAD * 2;
+  const plotH = H - PAD * 2;
+
+  const vels = data.map((d) => d.velocity);
+
+  // Single data point — just show a dot
+  if (data.length === 1) {
+    return (
+      <div className="flex items-center gap-2">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxWidth: 140, height: 32 }}>
+          <circle cx={W / 2} cy={H / 2} r={3} fill="#71717a" stroke="white" strokeWidth={0.75} />
+        </svg>
+        <span className="text-[10px] tabular-nums text-zinc-400">1 session</span>
+      </div>
+    );
+  }
+
+  const minV = Math.min(...vels);
+  const maxV = Math.max(...vels);
+  const rangeV = maxV - minV || 0.1;
+
+  const scaleX = (i: number) => PAD + (i / (data.length - 1)) * plotW;
+  const scaleY = (v: number) => PAD + plotH - ((v - minV) / rangeV) * plotH;
+
+  const pathD = data.map((d, i) => `${i === 0 ? "M" : "L"}${scaleX(i).toFixed(1)},${scaleY(d.velocity).toFixed(1)}`).join(" ");
+
+  // Gradient fill area
+  const areaD = `${pathD} L${scaleX(data.length - 1).toFixed(1)},${(H - PAD).toFixed(1)} L${scaleX(0).toFixed(1)},${(H - PAD).toFixed(1)} Z`;
+
+  // Trend direction
+  const first3Avg = vels.slice(0, Math.min(3, vels.length)).reduce((a, b) => a + b, 0) / Math.min(3, vels.length);
+  const last3Avg = vels.slice(-Math.min(3, vels.length)).reduce((a, b) => a + b, 0) / Math.min(3, vels.length);
+  const trending = last3Avg > first3Avg ? "up" : last3Avg < first3Avg ? "down" : "flat";
+  const trendColor = trending === "up" ? "#10b981" : trending === "down" ? "#f59e0b" : "#71717a";
+  const trendStroke = trending === "up" ? "#10b981" : trending === "down" ? "#f59e0b" : "#a1a1aa";
+
+  return (
+    <div className="flex items-center gap-2">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxWidth: 140, height: 32 }}>
+        <defs>
+          <linearGradient id={`spark-grad-${trending}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={trendColor} stopOpacity={0.2} />
+            <stop offset="100%" stopColor={trendColor} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#spark-grad-${trending})`} />
+        <path d={pathD} fill="none" stroke={trendStroke} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        {/* Last point dot */}
+        <circle cx={scaleX(data.length - 1)} cy={scaleY(vels[vels.length - 1])} r={2.5} fill={trendColor} stroke="white" strokeWidth={0.75} />
+      </svg>
+      <span className="text-[10px] tabular-nums" style={{ color: trendColor }}>
+        {trending === "up" ? "↑" : trending === "down" ? "↓" : "→"} {data.length} sessions
+      </span>
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function DevPlayerStrengthTab() {
@@ -260,9 +426,22 @@ export default function DevPlayerStrengthTab() {
     }
   };
 
+  // Auto-sync: trigger if no data or data might be stale (on first load only)
+  const didAutoSync = React.useRef(false);
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // After data loads, check if an auto-sync would help
+  useEffect(() => {
+    if (didAutoSync.current || loading || syncing) return;
+    // Auto-sync if we have no data at all
+    if (data && data.totalSets === 0) {
+      didAutoSync.current = true;
+      triggerSync();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, loading]);
 
   // ─── Loading state ──────────────────────────────────────────────
   if (loading) {
@@ -392,12 +571,14 @@ export default function DevPlayerStrengthTab() {
         </div>
       )}
 
-      {/* ─── Exercise Overview (PB + Load Profile merged) ─────────── */}
+      {/* ─── Exercise Overview (PB + Load Profile + Charts) ─────────── */}
       {data.exercises.length > 0 && (
         <div className="space-y-3">
           {data.exercises.map((ex) => {
             const loads = data.loadBreakdowns?.[ex.exerciseName] ?? [];
             const hasMultipleLoads = loads.length > 1;
+            const chartPoints = data.chartData?.[ex.exerciseName] ?? [];
+            const trendPoints = data.velocityTrend?.[ex.exerciseName] ?? [];
 
             return (
               <div key={ex.exerciseName} className="rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
@@ -414,6 +595,13 @@ export default function DevPlayerStrengthTab() {
                   </div>
                 </div>
 
+                {/* Velocity trend sparkline (compact, in header area) */}
+                {trendPoints.length >= 1 && (
+                  <div className="px-4 pb-1">
+                    <VelocitySparkline data={trendPoints} />
+                  </div>
+                )}
+
                 {/* PB summary row */}
                 <div className="grid grid-cols-3 gap-px mx-4 mb-3 rounded-lg overflow-hidden">
                   <div className="bg-amber-50/80 px-3 py-2">
@@ -429,6 +617,13 @@ export default function DevPlayerStrengthTab() {
                     <p className="text-base font-bold tabular-nums text-violet-800">{fmtW(ex.bestPeakPower)} <span className="text-[10px] font-normal text-violet-500">W</span></p>
                   </div>
                 </div>
+
+                {/* Load-Velocity Profile chart */}
+                {chartPoints.length >= 2 && (
+                  <div className="px-4 pb-2">
+                    <LoadVelocityChart points={chartPoints} />
+                  </div>
+                )}
 
                 {/* Load profile (only if multiple loads exist) */}
                 {hasMultipleLoads && (

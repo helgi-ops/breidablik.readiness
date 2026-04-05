@@ -61,6 +61,13 @@ const MICROPULSE_MANIFEST = {
       url: "/player?tab=rpe",
       icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
     },
+    {
+      name: "Þjálfari",
+      short_name: "Coach",
+      description: "Stjórnstöð þjálfara",
+      url: "/coach",
+      icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+    },
   ],
 };
 
@@ -69,8 +76,22 @@ export async function GET(req: NextRequest) {
   // team_id may be passed as a query param by the client (injected in layout.tsx
   // via a small client component). Falls back to MicroPulse branding if absent.
   const teamId = req.nextUrl.searchParams.get("team_id")?.trim() ?? null;
+  // role=coach → coach-specific start_url and id for independent PWA install
+  const role = req.nextUrl.searchParams.get("role")?.trim() ?? null;
 
-  let manifest = MICROPULSE_MANIFEST;
+  let manifest = { ...MICROPULSE_MANIFEST };
+
+  // Coach PWA: separate identity so it can be installed alongside the player PWA
+  if (role === "coach") {
+    manifest = {
+      ...manifest,
+      id: "/coach",
+      name: "MicroPulse Coach",
+      short_name: "MP Coach",
+      start_url: "/coach",
+      description: "Stjórnstöð þjálfara — álag, greind og ákvörðunartugi.",
+    };
+  }
 
   if (teamId) {
     try {
