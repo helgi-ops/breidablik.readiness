@@ -2970,7 +2970,21 @@ export default function PlayerClient() {
       throw new Error(rErr.message);
     }
 
-    if (resolved) {
+    // The v_player_today_microdose_resolved view doesn't understand OFF days:
+    // it maps planned_focus='ACTIVATION' to MD-1 even on OFF days, and joins the
+    // default microdose_templates table (no custom table / no season_phase).
+    // When the session context says it's an OFF day, skip the resolved view data
+    // and fall through to the session-context fallback which handles OFF correctly.
+    const sessionCheck = await supabase
+      .from("v_player_session_today_v2")
+      .select("md_day_resolved")
+      .eq("player_id", playerId)
+      .eq("day_date", safeDay)
+      .maybeSingle();
+    const sessionMdDay = (sessionCheck?.data as any)?.md_day_resolved ?? null;
+    const isOffDay = sessionMdDay === "OFF";
+
+    if (resolved && !isOffDay) {
       setPlanIsFallback(false);
 
       const resolvedTeamId = (resolved as any).team_id ?? null;
