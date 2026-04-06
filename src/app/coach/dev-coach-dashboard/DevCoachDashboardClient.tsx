@@ -8105,7 +8105,7 @@ function CoachPwaBottomNav({
   lang,
 }: {
   activeTab: string;
-  onChange: (tab: "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
+  onChange: (tab: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
   lang: "IS" | "EN";
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
