@@ -87,6 +87,7 @@ import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
+import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
 import CoachMdComparisonCard from "@/components/dashboard/CoachMdComparisonCard";
@@ -1699,7 +1700,7 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  type CoachTab = "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+  type CoachTab = "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
   const [dashTab, setDashTab] = useState<CoachTab>("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -6102,10 +6103,10 @@ export default function CoachPage() {
       {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
       {!isPwa && (() => {
         const labels = ct.tabs as Record<string, string>;
-        const proTabs = new Set(["squad", "intel", "load", "gps", "md", "volatility", "vald", "strength", "trend", "rtp"]);
+        const proTabs = new Set(["squad", "intel", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
         // Primary tabs always visible, overflow goes in "More" dropdown
-        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md"];
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md", "drills"];
         const MORE_TABS: Array<typeof dashTab> = ["intel", "volatility", "vald", "strength", "trend", "rtp"];
         const moreLabel = lang === "IS" ? "Meira" : "More";
 
@@ -7724,6 +7725,20 @@ export default function CoachPage() {
       )}
 
       {/* ══════════════════════════════════════════
+          DRILLS TAB (team library + research templates)
+      ══════════════════════════════════════════ */}
+      {dashTab === "drills" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Drill Library"
+          description="Team-scoped drill library með GPS load metrics og research-backed SSG templates (Rampinini, Fradua)."
+        />
+      )}
+      {dashTab === "drills" && isAtLeastPro && coachTeamId && (
+        <CoachDrillsTab teamId={coachTeamId} />
+      )}
+
+      {/* ══════════════════════════════════════════
           VOLATILITY TAB
       ══════════════════════════════════════════ */}
       {dashTab === "volatility" && !isAtLeastPro && (
@@ -8144,11 +8159,12 @@ function CoachPwaBottomNav({
   ];
 
   const MORE_TABS: Array<{
-    key: "today" | "squad" | "intel" | "load" | "gps" | "md" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+    key: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
     labelIS: string;
     labelEN: string;
   }> = [
     { key: "intel",      labelIS: "Greind",         labelEN: "Intelligence" },
+    { key: "drills",     labelIS: "Session",        labelEN: "Session" },
     { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
     { key: "vald",       labelIS: "VALD / CMJ",     labelEN: "VALD / CMJ" },
     { key: "strength",   labelIS: "Styrkur / VBT",  labelEN: "Strength / VBT" },

@@ -238,6 +238,9 @@ export default function DisplayClient() {
   const [templateSets, setTemplateSets] = useState<TemplateSetOption[]>([]);
   const [selectedSetIdx, setSelectedSetIdx] = useState<number>(0);
 
+  // ✅ active season phase from coach_week_setup
+  const [activeSeasonPhase, setActiveSeasonPhase] = useState<string | null>(null);
+
   // ✅ templates fetched for selected md_day
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [playersToday, setPlayersToday] = useState<PlayerStatusRow[]>([]);
@@ -294,6 +297,37 @@ export default function DisplayClient() {
       if ((prof as any)?.team_id) setTeamId((prof as any).team_id);
     })();
   }, []);
+
+  /* =========================
+     LOAD ACTIVE SEASON PHASE
+  ========================= */
+
+  useEffect(() => {
+    if (!teamId) return;
+    (async () => {
+      try {
+        // Find current week's Monday
+        const now = new Date();
+        const day = now.getDay();
+        const mon = new Date(now);
+        mon.setDate(now.getDate() - ((day + 6) % 7));
+        const weekStart = mon.toISOString().slice(0, 10);
+
+        const { data } = await supabase
+          .from("coach_week_setup")
+          .select("season_phase")
+          .eq("team_id", teamId)
+          .eq("week_start_date", weekStart)
+          .maybeSingle();
+
+        const sp = (data as any)?.season_phase;
+        const valid = ["preseason", "inseason", "playoffs", "offseason"];
+        setActiveSeasonPhase(valid.includes(sp) ? sp : "inseason");
+      } catch {
+        setActiveSeasonPhase("inseason");
+      }
+    })();
+  }, [teamId]);
 
   /* =========================
      LOAD TEMPLATE SETS + MD OPTIONS
@@ -371,13 +405,20 @@ export default function DisplayClient() {
       const activeSet = templateSets[selectedSetIdx];
       const tableName = activeSet?.table_name ?? "microdose_templates";
 
-      const query = supabase
+      let query = supabase
         .from(tableName as any)
         .select("md_day, readiness_level, title, description, structure, variant")
         .eq("md_day", md);
 
       // microdose_templates is team-scoped; custom tables store team_id too
-      const { data, error } = await query.eq("team_id", teamId);
+      query = query.eq("team_id", teamId);
+
+      // Filter by season_phase when the table supports it
+      if (activeSeasonPhase && tableName !== "microdose_templates") {
+        query = query.eq("season_phase", activeSeasonPhase);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -442,7 +483,7 @@ export default function DisplayClient() {
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMdDay, selectedSetIdx]);
+  }, [selectedMdDay, selectedSetIdx, activeSeasonPhase]);
 
   /* =========================
      BUILD VARIANTS PER COLOR

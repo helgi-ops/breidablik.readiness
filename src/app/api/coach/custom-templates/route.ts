@@ -85,10 +85,15 @@ export async function GET(req: NextRequest) {
     if (!/^[a-z][a-z0-9_]*$/.test(table_name))
       return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
 
-    const { data: records, error: rErr } = await supabase.rpc("read_custom_template_records", {
+    const season_phase = req.nextUrl.searchParams.get("season_phase") || undefined;
+
+    const rpcParams: Record<string, unknown> = {
       p_table_name: table_name,
       p_team_id:    auth.teamId,
-    });
+    };
+    if (season_phase) rpcParams.p_season_phase = season_phase;
+
+    const { data: records, error: rErr } = await supabase.rpc("read_custom_template_records", rpcParams);
     if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
 
     // Return only GREEN records so UI can pre-populate the builder
@@ -161,22 +166,30 @@ export async function POST(req: NextRequest) {
   });
   if (createErr) return NextResponse.json({ ok: false, error: createErr.message }, { status: 500 });
 
-  // 2) Save records
-  const { error: saveErr } = await supabase.rpc("save_custom_template_records", {
+  // 2) Save records (with season_phase so the RPC uses correct ON CONFLICT)
+  const saveParams: Record<string, unknown> = {
     p_table_name: table_name,
     p_team_id:    auth.teamId,
     p_records:    records as unknown as string,
-  });
+  };
+  if (season_phase) saveParams.p_season_phase = season_phase;
+
+  const { error: saveErr } = await supabase.rpc("save_custom_template_records", saveParams);
   if (saveErr) return NextResponse.json({ ok: false, error: saveErr.message }, { status: 500 });
 
   // 3) Upsert metadata — merge md_days so existing days are preserved
   // First read current md_days if set already exists
-  const { data: existing } = await supabase
+  let existingQuery = supabase
     .from("custom_template_sets")
     .select("md_days")
     .eq("team_id", auth.teamId)
-    .eq("table_name", table_name)
-    .maybeSingle();
+    .eq("table_name", table_name);
+  if (season_phase) {
+    existingQuery = existingQuery.eq("season_phase", season_phase);
+  } else {
+    existingQuery = existingQuery.is("season_phase", null);
+  }
+  const { data: existing } = await existingQuery.maybeSingle();
 
   const existingDays: string[] = Array.isArray(existing?.md_days) ? existing.md_days : [];
   const mergedDays = Array.from(new Set([...existingDays, ...md_days]));
@@ -194,7 +207,7 @@ export async function POST(req: NextRequest) {
         md_days:      mergedDays,
         created_by:   auth.userId,
       },
-      { onConflict: "team_id,table_name" }
+      { onConflict: "team_id,table_name,season_phase" }
     );
   if (metaErr) return NextResponse.json({ ok: false, error: metaErr.message }, { status: 500 });
 

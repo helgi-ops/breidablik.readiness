@@ -176,6 +176,109 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   },
 ];
 
+// ─── Potentiation cluster variations (XL Athlete / Cal Dietz) ────────────────
+
+const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
+  {
+    id: "pc-acceleration",
+    label: "Acceleration Focus",
+    description: "Trap Bar Deadlift + Box Jump. Hraðaþróun — fyrstu 3–4 skrefin. 65–80% 1RM.",
+    clusterVariant: true,
+    blocks: [
+      {
+        block: "A. Potentiation Cluster — Acceleration",
+        items: [
+          "A1. Trap Bar Deadlift — 1 rep @ 65–80%",
+          "A2. Box Jump — 1 rep (max effort)",
+          "15–20 sek hvíld → endurtaka",
+          "4 reps per cluster (4 × A1+A2)",
+          "2–3 mín hvíld milli clusters",
+          "2–4 clusters total",
+        ],
+      },
+    ],
+  },
+  {
+    id: "pc-topend-speed",
+    label: "Top-End Speed Focus",
+    description: "Trap Bar Deadlift + Hurdle Hop. Liðstífni og top-end hraði. 65–80% 1RM.",
+    clusterVariant: true,
+    blocks: [
+      {
+        block: "A. Potentiation Cluster — Top-End Speed",
+        items: [
+          "A1. Trap Bar Deadlift — 1 rep @ 65–80%",
+          "A2. Hurdle Hop — 1 rep (max effort, joint stiffness)",
+          "15–20 sek hvíld → endurtaka",
+          "4 reps per cluster (4 × A1+A2)",
+          "2–3 mín hvíld milli clusters",
+          "2–4 clusters total",
+        ],
+      },
+    ],
+  },
+  {
+    id: "pc-peaking-basic",
+    label: "Peaking — Basic (lið)",
+    description: "Squat Jump + Drop Box Jump. Létt álag (25–30%) fyrir peaking 2–4 vikum fyrir keppni.",
+    clusterVariant: true,
+    blocks: [
+      {
+        block: "A. Potentiation Cluster — Peaking Basic",
+        items: [
+          "A1. Squat Jump — 1 rep @ 25–30%",
+          "A2. Drop Box Jump — 1 rep (12–18 inch box, max effort)",
+          "15–20 sek hvíld → endurtaka",
+          "4 reps per cluster (4 × A1+A2)",
+          "2–3 mín hvíld milli clusters",
+          "1–3 clusters total (peaking = minna magn)",
+        ],
+      },
+    ],
+  },
+  {
+    id: "pc-peaking-advanced",
+    label: "Peaking — Advanced (triple cluster)",
+    description: "Squat Jump + Drop Box Jump + Band Jump. Þrjár hreyfigæðar í einni blokk — acceleration, mid-range, top-end.",
+    clusterVariant: true,
+    blocks: [
+      {
+        block: "A. Triple Potentiation Cluster — Peaking Advanced",
+        items: [
+          "A1. Squat Jump — 1 rep @ 25–30% (acceleration depth)",
+          "A2. Drop Box Jump — 1 rep (mid-range angle, max effort)",
+          "A3. Accelerated Band Jump — 1 rep (minimal joint angle, top-end speed)",
+          "15–20 sek hvíld → endurtaka",
+          "3 reps per cluster (3 × A1+A2+A3)",
+          "2–3 mín hvíld milli clusters",
+          "2–4 clusters total",
+        ],
+      },
+    ],
+  },
+  {
+    id: "pc-french-contrast-style",
+    label: "French Contrast Style (4 æfingar)",
+    description: "Trap Bar Deadlift + Drop Box Jump + Squat Jump + Hurdle Hop. Fjórar hreyfigæðar — styrkur, reactive, hraði, stífni.",
+    clusterVariant: true,
+    blocks: [
+      {
+        block: "A. French Contrast Potentiation Cluster",
+        items: [
+          "A1. Trap Bar Deadlift — 1 rep @ 55–80%",
+          "A2. Drop Box Jump — 1 rep (reactive, max effort)",
+          "A3. Squat Jump — 1 rep @ 25–30%",
+          "A4. Hurdle Hop — 1 rep (joint stiffness, top-end speed)",
+          "15–20 sek hvíld → endurtaka",
+          "3 reps per cluster (3 × A1+A2+A3+A4)",
+          "3–5 mín hvíld milli clusters",
+          "2–4 clusters total",
+        ],
+      },
+    ],
+  },
+];
+
 const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "french-contrast",
@@ -212,18 +315,8 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "potentiation-clusters",
     label: "Potentiation clusters",
-    description: "Stutt hvíld milli endurtekningar (10–20 sek) til að viðhalda kröftum og virkja motor units hámarki.",
-    blocks: [
-      {
-        block: "A. Potentiation Clusters",
-        items: [
-          "Veldu æfingu: Power Clean / Hang Clean / Push Press",
-          "80–85% 1RM · 4 sett × (1+1+1) cluster",
-          "15–20 sek intra-set hvíld",
-          "2–3 mín hvíld milli setta",
-        ],
-      },
-    ],
+    description: "5 útgáfur: Acceleration, Top-end speed, Peaking basic/advanced, French Contrast style.",
+    blocks: [], // expanded into POTENTIATION_CLUSTER_VARIATIONS sub-picker
   },
   {
     id: "cluster-variations",
@@ -274,10 +367,19 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
   const [clusterSub, setClusterSub] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  const activeStructure =
+  const SUB_PICKER_IDS = ["cluster-variations", "potentiation-clusters"] as const;
+  const hasSubPicker = SUB_PICKER_IDS.includes(selected as typeof SUB_PICKER_IDS[number]);
+
+  const subVariants =
     selected === "cluster-variations"
-      ? CLUSTER_VARIATIONS.find((c) => c.id === clusterSub) ?? null
-      : WORKOUT_STRUCTURES.find((s) => s.id === selected) ?? null;
+      ? CLUSTER_VARIATIONS
+      : selected === "potentiation-clusters"
+        ? POTENTIATION_CLUSTER_VARIATIONS
+        : [];
+
+  const activeStructure = hasSubPicker
+    ? subVariants.find((c) => c.id === clusterSub) ?? null
+    : WORKOUT_STRUCTURES.find((s) => s.id === selected) ?? null;
 
   function handleApply() {
     if (!activeStructure || activeStructure.blocks.length === 0) return;
@@ -317,7 +419,7 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
           <button
             key={s.id}
             type="button"
-            onClick={() => { setSelected(s.id); if (s.id !== "cluster-variations") setClusterSub(null); }}
+            onClick={() => { setSelected(s.id); if (s.id !== "cluster-variations" && s.id !== "potentiation-clusters") setClusterSub(null); }}
             className={`rounded-lg border p-3 text-left text-sm transition-colors ${
               selected === s.id
                 ? "border-indigo-500 bg-white shadow-sm"
@@ -330,12 +432,14 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
         ))}
       </div>
 
-      {/* Cluster sub-variants */}
-      {selected === "cluster-variations" && (
+      {/* Sub-variants (cluster-variations & potentiation-clusters) */}
+      {hasSubPicker && (
         <div className="mt-1 space-y-1.5">
-          <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Veldu cluster-útgáfu:</div>
+          <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
+            {selected === "potentiation-clusters" ? "Veldu potentiation cluster útgáfu:" : "Veldu cluster-útgáfu:"}
+          </div>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {CLUSTER_VARIATIONS.map((c) => (
+            {subVariants.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -1244,9 +1348,13 @@ function BlockEditor({
 function TemplatePreview({
   template,
   color,
+  onEdit,
+  isOverridden,
 }: {
   template: TemplateRecord;
   color: "green" | "yellow" | "red";
+  onEdit?: () => void;
+  isOverridden?: boolean;
 }) {
   const colors = {
     green:  { badge: "bg-green-100 text-green-800",  border: "border-green-200" },
@@ -1257,16 +1365,30 @@ function TemplatePreview({
 
   return (
     <div className={`rounded-xl border ${c.border} p-4`}>
-      <div className="flex items-start gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.badge}`}>
-          {template.readiness_level}
-        </span>
-        <div className="min-w-0">
-          <div className="text-sm font-semibold leading-snug">{template.title}</div>
-          {template.description && (
-            <div className="mt-0.5 text-xs text-muted-foreground">{template.description}</div>
-          )}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.badge}`}>
+            {template.readiness_level}
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold leading-snug">
+              {template.title}
+              {isOverridden && <span className="ml-1.5 text-[10px] text-amber-600 font-normal">(breytt)</span>}
+            </div>
+            {template.description && (
+              <div className="mt-0.5 text-xs text-muted-foreground">{template.description}</div>
+            )}
+          </div>
         </div>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
+          >
+            ✏️ Breyta
+          </button>
+        )}
       </div>
       <div className="mt-3 space-y-2">
         {template.structure.map((block, i) => (
@@ -1281,6 +1403,131 @@ function TemplatePreview({
             </ul>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Inline editor for YELLOW / RED overrides ────────────────────────────────
+
+function TemplateOverrideEditor({
+  template,
+  color,
+  onSave,
+  onCancel,
+  onReset,
+  isOverridden,
+}: {
+  template: TemplateRecord;
+  color: "yellow" | "red";
+  onSave: (t: TemplateRecord) => void;
+  onCancel: () => void;
+  onReset?: () => void;
+  isOverridden: boolean;
+}) {
+  const [draft, setDraft] = useState<TemplateRecord>(() => JSON.parse(JSON.stringify(template)));
+
+  const colorLabel = color === "yellow" ? "Gula" : "Rauða";
+  const borderColor = color === "yellow" ? "border-yellow-300" : "border-red-300";
+  const bgColor = color === "yellow" ? "bg-yellow-50" : "bg-red-50";
+
+  function updateBlockName(idx: number, name: string) {
+    setDraft((d) => {
+      const s = [...d.structure];
+      s[idx] = { ...s[idx], block: name };
+      return { ...d, structure: s };
+    });
+  }
+
+  function updateItem(blockIdx: number, itemIdx: number, value: string) {
+    setDraft((d) => {
+      const s = [...d.structure];
+      const items = [...s[blockIdx].items];
+      items[itemIdx] = value;
+      s[blockIdx] = { ...s[blockIdx], items };
+      return { ...d, structure: s };
+    });
+  }
+
+  function removeItem(blockIdx: number, itemIdx: number) {
+    setDraft((d) => {
+      const s = [...d.structure];
+      const items = s[blockIdx].items.filter((_, j) => j !== itemIdx);
+      s[blockIdx] = { ...s[blockIdx], items };
+      return { ...d, structure: s };
+    });
+  }
+
+  function addItem(blockIdx: number) {
+    setDraft((d) => {
+      const s = [...d.structure];
+      s[blockIdx] = { ...s[blockIdx], items: [...s[blockIdx].items, ""] };
+      return { ...d, structure: s };
+    });
+  }
+
+  return (
+    <div className={`rounded-xl border-2 ${borderColor} ${bgColor} p-4 space-y-3`}>
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">{colorLabel} útgáfa — breyta</div>
+        <div className="flex gap-2">
+          {isOverridden && onReset && (
+            <button type="button" onClick={onReset}
+              className="text-[11px] text-amber-600 hover:text-amber-800 underline">
+              Endursetja sjálfvirka
+            </button>
+          )}
+          <button type="button" onClick={onCancel}
+            className="text-xs text-muted-foreground hover:text-foreground">✕ Hætta við</button>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div>
+        <label className="text-[11px] font-medium text-neutral-500">Titill</label>
+        <input
+          type="text"
+          value={draft.title}
+          onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+          className="mt-0.5 w-full rounded-md border px-2 py-1 text-sm"
+        />
+      </div>
+
+      {/* Blocks */}
+      {draft.structure.map((block, bi) => (
+        <div key={bi} className="rounded-lg border border-neutral-200 bg-white p-3 space-y-1.5">
+          <input
+            type="text"
+            value={block.block}
+            onChange={(e) => updateBlockName(bi, e.target.value)}
+            className="w-full rounded border px-2 py-0.5 text-xs font-semibold"
+          />
+          {block.items.map((item, ii) => (
+            <div key={ii} className="flex items-center gap-1">
+              <span className="text-neutral-400 text-xs">·</span>
+              <input
+                type="text"
+                value={item}
+                onChange={(e) => updateItem(bi, ii, e.target.value)}
+                className="flex-1 rounded border px-2 py-0.5 text-xs"
+              />
+              <button type="button" onClick={() => removeItem(bi, ii)}
+                className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => addItem(bi)}
+            className="text-[11px] text-indigo-600 hover:text-indigo-800">+ Bæta við línu</button>
+        </div>
+      ))}
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => onSave(draft)}
+          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+        >
+          Vista breytingar
+        </button>
       </div>
     </div>
   );
@@ -1322,6 +1569,12 @@ export default function CustomTemplatesPage() {
   const [selectedDays, setSelectedDays] = useState<string[]>(["GENERIC"]);
   const [currentDayIdx, setCurrentDayIdx] = useState(0);
   const [greenTemplates, setGreenTemplates] = useState<GreenTemplates>({});
+
+  // Manual overrides for auto-generated YELLOW / RED (keyed by md_day)
+  const [yellowOverrides, setYellowOverrides] = useState<Record<string, TemplateRecord>>({});
+  const [redOverrides, setRedOverrides] = useState<Record<string, TemplateRecord>>({});
+  // Which color is being edited in the inline editor (null = closed)
+  const [editingColor, setEditingColor] = useState<{ day: string; color: "yellow" | "red" } | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState<string | null>(null);
@@ -1498,8 +1751,8 @@ export default function CustomTemplatesPage() {
     for (const day of selectedDays) {
       const green = getOrInitGreen(day);
       records.push(green);
-      records.push(generateYellow(green));
-      records.push(generateRed(green));
+      records.push(yellowOverrides[day] ?? generateYellow(green));
+      records.push(redOverrides[day] ?? generateRed(green));
     }
     return records;
   }
@@ -1549,7 +1802,8 @@ export default function CustomTemplatesPage() {
     setStep(1); setSeasonPhase(null);
     setSelectedDays(["GENERIC"]); setCurrentDayIdx(0);
     setGreenTemplates({}); setExistingDays([]);
-    setEditingSet(null);
+    setYellowOverrides({}); setRedOverrides({});
+    setEditingColor(null); setEditingSet(null);
     // setName/sport/gender are derived from selectedTeam — no reset needed
   }
 
@@ -1570,8 +1824,10 @@ export default function CustomTemplatesPage() {
     setStep(2);
     setShowBuilder(true);
 
-    // Fetch existing GREEN records and pre-populate builder
-    const res = await fetch(`/api/coach/custom-templates?table_name=${s.table_name}`, {
+    // Fetch existing GREEN records and pre-populate builder (filtered by season_phase)
+    const params = new URLSearchParams({ table_name: s.table_name });
+    if (s.season_phase) params.set("season_phase", s.season_phase);
+    const res = await fetch(`/api/coach/custom-templates?${params.toString()}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return;
@@ -1596,8 +1852,8 @@ export default function CustomTemplatesPage() {
   // ── Computed ─────────────────────────────────────────────────────────────────
   const currentDay = selectedDays[currentDayIdx] ?? selectedDays[0];
   const currentGreen = getOrInitGreen(currentDay);
-  const currentYellow = generateYellow(currentGreen);
-  const currentRed    = generateRed(currentGreen);
+  const currentYellow = yellowOverrides[currentDay] ?? generateYellow(currentGreen);
+  const currentRed    = redOverrides[currentDay]    ?? generateRed(currentGreen);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -2022,15 +2278,65 @@ export default function CustomTemplatesPage() {
                     ))}
                   </div>
 
-                  {/* Auto-generated preview */}
+                  {/* Auto-generated preview (with edit option) */}
                   <Separator />
                   <div className="grid gap-2">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Sjálfkrafa myndar kerfið:
                     </div>
+
+                    {/* Inline editor or preview for YELLOW */}
+                    {editingColor?.day === currentDay && editingColor.color === "yellow" ? (
+                      <TemplateOverrideEditor
+                        template={currentYellow}
+                        color="yellow"
+                        isOverridden={!!yellowOverrides[currentDay]}
+                        onSave={(t) => {
+                          setYellowOverrides((prev) => ({ ...prev, [currentDay]: t }));
+                          setEditingColor(null);
+                        }}
+                        onCancel={() => setEditingColor(null)}
+                        onReset={() => {
+                          setYellowOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; });
+                          setEditingColor(null);
+                        }}
+                      />
+                    ) : editingColor?.day === currentDay && editingColor.color === "red" ? (
+                      /* Inline editor for RED */
+                      <TemplateOverrideEditor
+                        template={currentRed}
+                        color="red"
+                        isOverridden={!!redOverrides[currentDay]}
+                        onSave={(t) => {
+                          setRedOverrides((prev) => ({ ...prev, [currentDay]: t }));
+                          setEditingColor(null);
+                        }}
+                        onCancel={() => setEditingColor(null)}
+                        onReset={() => {
+                          setRedOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; });
+                          setEditingColor(null);
+                        }}
+                      />
+                    ) : null}
+
+                    {/* Preview cards (hidden while editing that color) */}
                     <div className="grid gap-2 md:grid-cols-2">
-                      <TemplatePreview template={currentYellow} color="yellow" />
-                      <TemplatePreview template={currentRed}    color="red" />
+                      {!(editingColor?.day === currentDay && editingColor.color === "yellow") && (
+                        <TemplatePreview
+                          template={currentYellow}
+                          color="yellow"
+                          isOverridden={!!yellowOverrides[currentDay]}
+                          onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })}
+                        />
+                      )}
+                      {!(editingColor?.day === currentDay && editingColor.color === "red") && (
+                        <TemplatePreview
+                          template={currentRed}
+                          color="red"
+                          isOverridden={!!redOverrides[currentDay]}
+                          onEdit={() => setEditingColor({ day: currentDay, color: "red" })}
+                        />
+                      )}
                     </div>
                   </div>
 

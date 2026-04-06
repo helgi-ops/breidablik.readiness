@@ -2627,6 +2627,8 @@ export default function PlayerClient() {
 
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
   const [planTemplateOverride, setPlanTemplateOverride] = useState<PlanTemplateOverrideRow>(null);
+  const [activeSeasonPhase, setActiveSeasonPhase] = useState<string>("inseason");
+  const [templateTableName, setTemplateTableName] = useState<string>("microdose_templates");
   const [planIsFallback, setPlanIsFallback] = useState(false);
 
   const [stage4Final, setStage4Final] = useState<Stage4DecisionFinalRow>(null);
@@ -2916,7 +2918,14 @@ export default function PlayerClient() {
     }
   }
 
-  async function fetchStage4Plan(playerId: string, dayInput: string) {
+  async function fetchStage4Plan(
+    playerId: string,
+    dayInput: string,
+    effectiveTableName?: string,
+    effectiveSeasonPhase?: string,
+  ) {
+    const tblName = effectiveTableName ?? templateTableName;
+    const sPhase = effectiveSeasonPhase ?? activeSeasonPhase;
     const safeDay = sanitizeDay(dayInput);
 
     const { data: resolved, error: rErr } = await supabase
@@ -2982,11 +2991,12 @@ export default function PlayerClient() {
 
       if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
         const { data: templateRows, error: templateErr } = await supabase
-          .from("microdose_templates")
+          .from(tblName as any)
           .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", resolvedTeamId)
           .eq("md_day", resolvedMdDay)
           .eq("readiness_level", resolvedReadiness)
+          .eq("season_phase", sPhase)
           .order("variant", { ascending: true });
 
         if (templateErr) {
@@ -3044,7 +3054,12 @@ export default function PlayerClient() {
       .maybeSingle();
 
     if (dErr) throw new Error(dErr.message);
-    if (!drow?.id) {
+
+    // If the decision is from a different date (stale fallback), don't use it.
+    // Instead, fall through to session context which knows the actual day type (OFF, etc.).
+    const decisionIsStale = drow?.id && (drow as any).entry_date !== safeDay;
+
+    if (!drow?.id || decisionIsStale) {
       // Fallback 1: use assigned workout template for the day if present.
       const { data: assignment } = await supabase
         .from("player_template_assignments")
@@ -3094,13 +3109,44 @@ export default function PlayerClient() {
 
       if (sessionRow) {
         setPlanIsFallback(true);
+
+        const sesTeamId = (sessionRow as any).team_id ?? null;
+        const sesMdDay = (sessionRow as any).md_day_resolved ?? null;
+        const sesReadiness = (sessionRow as any).readiness_flag ?? null;
+
+        // Try to find a matching template for this session context (e.g. OFF day templates)
+        let sesTemplateRow: { title?: string; description?: string; structure?: any; structure_en?: any } | null = null;
+        if (sesTeamId && sesMdDay && sesReadiness) {
+          const { data: sesTr } = await supabase
+            .from(tblName as any)
+            .select("title, description, structure, structure_en")
+            .eq("team_id", sesTeamId)
+            .eq("md_day", sesMdDay)
+            .eq("readiness_level", sesReadiness)
+            .eq("season_phase", sPhase)
+            .maybeSingle();
+          sesTemplateRow = (sesTr as any) ?? null;
+        }
+        // If readiness is UNKNOWN, try GREEN as fallback
+        if (!sesTemplateRow && sesTeamId && sesMdDay && sesReadiness === "UNKNOWN") {
+          const { data: sesTr } = await supabase
+            .from(tblName as any)
+            .select("title, description, structure, structure_en")
+            .eq("team_id", sesTeamId)
+            .eq("md_day", sesMdDay)
+            .eq("readiness_level", "GREEN")
+            .eq("season_phase", sPhase)
+            .maybeSingle();
+          sesTemplateRow = (sesTr as any) ?? null;
+        }
+
         return {
           decision_id: null,
-          team_id: (sessionRow as any).team_id ?? null,
+          team_id: sesTeamId,
           player_id: playerId,
           entry_date: safeDay,
-          md_day: (sessionRow as any).md_day_resolved ?? null,
-          readiness_level: (sessionRow as any).readiness_flag ?? null,
+          md_day: sesMdDay,
+          readiness_level: sesTemplateRow ? (sesReadiness === "UNKNOWN" ? "GREEN" : sesReadiness) : sesReadiness,
           chosen_variant_id: null,
           locked: false,
           source: "SESSION_CONTEXT_FALLBACK",
@@ -3109,9 +3155,9 @@ export default function PlayerClient() {
           inputs: null,
           training_system: null,
           variant: null,
-          title: (sessionRow as any).planned_focus ?? "Training Session",
-          description: (sessionRow as any).session_type ? `Session type: ${(sessionRow as any).session_type}` : null,
-          structure: [],
+          title: sesTemplateRow?.title ?? (sessionRow as any).planned_focus ?? "Training Session",
+          description: sesTemplateRow?.description ?? ((sessionRow as any).session_type ? `Session type: ${(sessionRow as any).session_type}` : null),
+          structure: sesTemplateRow?.structure ?? [],
         } as Stage4PlanRow;
       }
 
@@ -3127,11 +3173,12 @@ export default function PlayerClient() {
 
     if (teamId && mdDay && lvl) {
       const { data: tr, error: trErr } = await supabase
-        .from("microdose_templates")
+        .from(tblName as any)
         .select("id, title, description, structure, structure_en")
         .eq("team_id", teamId)
         .eq("md_day", mdDay)
         .eq("readiness_level", lvl)
+        .eq("season_phase", sPhase)
         .maybeSingle();
 
       if (trErr) throw new Error(trErr.message);
@@ -3391,6 +3438,11 @@ export default function PlayerClient() {
         if (pErr) throw new Error(pErr.message);
         setProfile((prof as any) ?? null);
 
+        // Local vars for season_phase and template table — used by fetchStage4Plan
+        // in this same tick (React state won't be available until next render).
+        let resolvedSeasonPhase = "inseason";
+        let resolvedTableName = "microdose_templates";
+
         // Fetch plan_tier and club_theme_color from teams
         if (prof?.team_id) {
           const { data: teamRow } = await supabase
@@ -3402,6 +3454,42 @@ export default function PlayerClient() {
           if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
           else setTeamPlanTier("FREE");
           setClubThemeColor((teamRow as any)?.club_theme_color ?? null);
+
+          // Fetch active season_phase from coach_week_setup for current week
+          try {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const mon = new Date(now);
+            mon.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+            const weekStart = mon.toISOString().slice(0, 10);
+            const { data: wsRow } = await supabase
+              .from("coach_week_setup")
+              .select("season_phase")
+              .eq("team_id", prof.team_id)
+              .eq("week_start_date", weekStart)
+              .maybeSingle();
+            const sp = (wsRow as any)?.season_phase;
+            const validPhases = ["preseason", "inseason", "playoffs", "offseason"];
+            if (validPhases.includes(sp)) {
+              resolvedSeasonPhase = sp;
+              setActiveSeasonPhase(sp);
+            }
+          } catch { /* keep default inseason */ }
+
+          // Look up team's custom template table (if any)
+          try {
+            const { data: ctSet } = await supabase
+              .from("custom_template_sets")
+              .select("table_name")
+              .eq("team_id", prof.team_id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (ctSet?.table_name) {
+              resolvedTableName = ctSet.table_name;
+              setTemplateTableName(ctSet.table_name);
+            }
+          } catch { /* keep default microdose_templates */ }
         }
 
         if (!prof?.player_id) {
@@ -3468,7 +3556,7 @@ export default function PlayerClient() {
           .maybeSingle();
         setCoachFinalFlag((coachFlagRow as any) ?? null);
 
-        const p = await fetchStage4Plan(prof.player_id, safeDay);
+        const p = await fetchStage4Plan(prof.player_id, safeDay, resolvedTableName, resolvedSeasonPhase);
         if (p) {
           setPlan((p as any) ?? null);
         } else if (srow) {
@@ -3951,11 +4039,12 @@ export default function PlayerClient() {
 
       const overrideTeamId = (profile as any)?.team_id ?? null;
       const { data, error } = await supabase
-        .from("microdose_templates")
+        .from(templateTableName as any)
         .select("title, description, structure, structure_en, readiness_level, md_day, variant")
         .eq("team_id", overrideTeamId)
         .eq("readiness_level", desiredReadiness)
         .eq("md_day", mdDay)
+        .eq("season_phase", activeSeasonPhase)
         .order("variant", { ascending: true });
 
       if (error) {
@@ -3978,10 +4067,11 @@ export default function PlayerClient() {
       // row for this team+readiness so player view still follows the effective readiness flag.
       if (!rows.length) {
         const { data: fallbackRows, error: fallbackErr } = await supabase
-          .from("microdose_templates")
+          .from(templateTableName as any)
           .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", overrideTeamId)
           .eq("readiness_level", desiredReadiness)
+          .eq("season_phase", activeSeasonPhase)
           .order("md_day", { ascending: true })
           .order("variant", { ascending: true })
           .limit(20);
