@@ -9,6 +9,8 @@ export type ExerciseDescription = {
 export type ExerciseEntry = {
   IS: ExerciseDescription;
   EN: ExerciseDescription;
+  /** Optional video URL (e.g. Vimeo) shown as a button in the info modal */
+  videoUrl?: string;
 };
 
 export const EXERCISE_DB: Record<string, ExerciseEntry> = {
@@ -292,6 +294,174 @@ export const EXERCISE_DB: Record<string, ExerciseEntry> = {
         "Keep the load close to your body",
       ],
       goal: "Train explosive triple extension and neuromuscular activation that transfers directly into speed and jumping.",
+    },
+  },
+
+  // ─── MET exercises (OFF day) ──────────────────────────────────────
+
+  "hip flexor met": {
+    videoUrl: "https://vimeo.com/706049903/8ec966ac36",
+    IS: {
+      execution: [
+        "Liggðu á bakmegin á bekkjarenda — annað hné hangir niður (Thomas-test staða)",
+        "Þjálfari færir fótinn niður þar til fyrsta mótstaða finnst (feather-edge) — ekki þrýsta of langt",
+        "INNÖNDUN: Þrýstu hnénu upp gegn hendi þjálfara — létt, ~20% kraftur — í 5 sek",
+        "ÚTÖNDUN: Andaðu út og slakaðu algjörlega á — þjálfari lætur fótinn síga varlega í nýja lengd (10 sek)",
+        "Endurtaktu 3 sinnum á hvora hlið",
+      ],
+      focus: [
+        "Byrjaðu alltaf á feather-edge — ekki hámarkshreyfisvið",
+        "20% kraftur eingöngu — þetta er EKKI styrktaræfing",
+        "Andinn stýrir: innöndun = samdráttur, útöndun = slökun + ný lengd",
+      ],
+      goal: "👉 Losa um mjaðmabeygjur (iliopsoas + rectus femoris) sem styttast við langvarandi setu og þjálfun. Dregur úr anterior pelvic tilt og léttir álagi á mjóbak.",
+    },
+    EN: {
+      execution: [
+        "Lie supine at the edge of a bench — one knee hangs off (Thomas-test position)",
+        "Coach lowers the leg until the first resistance is felt (feather-edge) — do not push too far",
+        "INHALE: Push knee up against coach's hand — light, ~20% force — for 5 seconds",
+        "EXHALE: Breathe out and fully relax — coach gently lowers the leg to a new length (10 sec)",
+        "Repeat 3 times per side",
+      ],
+      focus: [
+        "Always start at feather-edge — not max range",
+        "20% force only — this is NOT a strength exercise",
+        "Breathing drives it: inhale = contraction, exhale = release + new length",
+      ],
+      goal: "Release hip flexors (iliopsoas + rectus femoris) that shorten from prolonged sitting and training. Reduces anterior pelvic tilt and relieves lower back load.",
+    },
+  },
+
+  "hamstring met": {
+    IS: {
+      execution: [
+        "Liggðu á baki — þjálfari lyftir beinum fæti þar til fyrsta mótstaða (feather-edge)",
+        "MIKILVÆGT: Mjaðnagrind verður að vera FLAT við benkinn — ef hún veltur tapast krafturinn í lendarhrygg",
+        "INNÖNDUN: Þrýstu hælnum niður gegn hendi/öxl þjálfara — ~20% kraftur — í 5 sek",
+        "ÚTÖNDUN: Slakaðu á — þjálfari færir fót varlega í nýja lengd (10 sek). Mjaðnagrind helst flat.",
+        "Endurtaktu 3 sinnum á hvora hlið",
+      ],
+      focus: [
+        "Mjaðnagrind flat á benknum alla tíma — annars er æfingin óskilvirk",
+        "Feather-edge — fyrsta mótstaðan, ekki hámarksteygja",
+        "Heimaæfing: Nota belti um fótinn og framkvæma sjálfur",
+      ],
+      goal: "👉 Auka teygjuþol (stretch tolerance) í hamstrings. Taugakerfið leyfir meiri hreyfingu til langs tíma, þó viscoelastic breytingin sé skammvinn.",
+    },
+    EN: {
+      execution: [
+        "Lie supine — coach lifts the straight leg until first resistance (feather-edge)",
+        "CRITICAL: Pelvis must stay FLAT on the bench — if it tilts, the force transfers to the lumbar spine",
+        "INHALE: Push heel down against coach's hand/shoulder — ~20% force — for 5 seconds",
+        "EXHALE: Relax — coach gently moves the leg to a new length (10 sec). Pelvis stays flat.",
+        "Repeat 3 times per side",
+      ],
+      focus: [
+        "Pelvis flat on the bench at all times — otherwise the exercise is ineffective",
+        "Feather-edge — first resistance, not max stretch",
+        "Self-MET: Use a belt around the foot and perform solo",
+      ],
+      goal: "Increase stretch tolerance in hamstrings. The nervous system allows greater range long-term, even though the viscoelastic change is short-lived.",
+    },
+  },
+
+  "adductor met": {
+    IS: {
+      execution: [
+        "Liggðu á baki, hné beygt, fótur á borði",
+        "Þjálfari færir hnéð út til hliðar (abduction) að feather-edge",
+        "INNÖNDUN: Þrýstu hnénu inn (adduction) gegn hendi þjálfara — ~20% kraftur — í 5 sek",
+        "ÚTÖNDUN: Slakaðu á — þjálfari færir hnéð varlega lengra út í nýja lengd (10 sek)",
+        "Endurtaktu 3 sinnum á hvora hlið",
+      ],
+      focus: [
+        "Þrýstu inn (nærfærsla) — ekki upp eða niður",
+        "Feather-edge áður en samdráttur hefst",
+        "Létt kraftur — aðeins 20% af hámarkskrafti",
+      ],
+      goal: "👉 Losa um nærfærsluvöðva sem eru oft ofvirkir hjá fótboltamönnum vegna sparks og snúnings. Dregur úr sársauka í nára og eykur mjaðnasnúning.",
+    },
+    EN: {
+      execution: [
+        "Lie supine, knee bent, foot on the table",
+        "Coach moves the knee outward (abduction) to feather-edge",
+        "INHALE: Push knee inward (adduction) against coach's hand — ~20% force — for 5 seconds",
+        "EXHALE: Release — coach gently moves knee further out to a new length (10 sec)",
+        "Repeat 3 times per side",
+      ],
+      focus: [
+        "Push inward (adduction) — not up or down",
+        "Find feather-edge before starting the contraction",
+        "Light force — only 20% of maximum",
+      ],
+      goal: "Release adductors that are often overactive in footballers from kicking and turning. Reduces groin pain and improves hip rotation.",
+    },
+  },
+
+  "piriformis met": {
+    IS: {
+      execution: [
+        "Liggðu á baki, hné beygt í 90°, fótur á borði",
+        "Þjálfari fer í innsnúning á mjaðnalið (færir fót út) að feather-edge",
+        "INNÖNDUN: Þrýstu fæti inn (ytri snúningur) gegn hendi þjálfara — ~20% kraftur — 5 sek",
+        "ÚTÖNDUN: Slakaðu á — þjálfari færir fót lengra út (innsnúningur) í nýja lengd (10 sek)",
+        "Endurtaktu 3 sinnum á hvoru hlið",
+      ],
+      focus: [
+        "Ef sársauki við samdrátt: Notaðu RI (reciprocal inhibition) — spennu mjaðmabeygjur í staðinn",
+        "Sérstaklega gott til að slökkva á trigger-punktum í piriformis",
+        "Horfa í átt að samdrættinum (visual synkinesis) auðveldar taugaboðin",
+      ],
+      goal: "👉 Losa um piriformis sem getur hermt ischias-einkenni. MET er sérstaklega áhrifarík til að slökkva á trigger-punktum í þessum vöðva.",
+    },
+    EN: {
+      execution: [
+        "Lie supine, knee bent at 90°, foot on table",
+        "Coach takes the hip into internal rotation (moves foot outward) to feather-edge",
+        "INHALE: Push foot inward (external rotation) against coach's hand — ~20% force — 5 sec",
+        "EXHALE: Release — coach gently moves foot further outward (internal rotation) to new length (10 sec)",
+        "Repeat 3 times per side",
+      ],
+      focus: [
+        "If pain during contraction: Use RI (reciprocal inhibition) — contract hip flexors instead",
+        "Especially effective at turning off trigger points in piriformis",
+        "Look in the direction of contraction (visual synkinesis) to facilitate neural signaling",
+      ],
+      goal: "Release piriformis which can mimic sciatic symptoms. MET is particularly effective at turning off trigger points in this muscle.",
+    },
+  },
+
+  "ql met": {
+    IS: {
+      execution: [
+        "Liggðu á hliðinni — efri handleggur rétt yfir höfuð til að opna QL",
+        "Þjálfari stöðugar mjaðnagrind og færir bol í hliðarbeygjur (lateral flexion) að feather-edge",
+        "INNÖNDUN: Þrýstu bol aftur í átt að hliðarbeygjunni — ~20% — 5 sek",
+        "ÚTÖNDUN: Slakaðu á — þjálfari færir varlega í nýja lengd (10 sek)",
+        "Endurtaktu 3 sinnum á hvora hlið",
+      ],
+      focus: [
+        "Mjaðnagrind stöðug — eingöngu hreyfing í bol",
+        "Létt kraftur — QL er lítill vöðvi",
+        "Þessi æfing er í GREEN+ sniðmátinu eingöngu",
+      ],
+      goal: "👉 Losa um quadratus lumborum sem getur valdið einhliða mjóbaksverkjum og dregið úr hliðarbeygjur hreyfisviðs.",
+    },
+    EN: {
+      execution: [
+        "Lie on your side — upper arm extended overhead to open the QL",
+        "Coach stabilizes the pelvis and moves the torso into lateral flexion to feather-edge",
+        "INHALE: Push torso back against the lateral flexion — ~20% — 5 sec",
+        "EXHALE: Release — coach gently moves to new length (10 sec)",
+        "Repeat 3 times per side",
+      ],
+      focus: [
+        "Pelvis stays stable — movement only in the torso",
+        "Light force — QL is a small muscle",
+        "This exercise is in the GREEN+ template only",
+      ],
+      goal: "Release the quadratus lumborum which can cause unilateral lower back pain and reduced lateral flexion range.",
     },
   },
 };

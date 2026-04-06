@@ -7,11 +7,13 @@ import { catapultAdapter } from "./adapters/catapult";
 import { polarAdapter } from "./adapters/polar";
 import { garminAdapter } from "./adapters/garmin";
 import { genericCsvAdapter } from "./adapters/genericCsv";
+import { statsportAdapter } from "./adapters/statsport";
 
 const ADAPTERS: Record<IntegrationProviderKey, IntegrationProviderAdapter> = {
   WHOOP: whoopAdapter,
   VALD: valdAdapter,
   CATAPULT: catapultAdapter,
+  STATSPORT: statsportAdapter,
   POLAR: polarAdapter,
   GARMIN: garminAdapter,
   GENERIC_CSV: genericCsvAdapter,

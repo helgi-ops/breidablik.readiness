@@ -1,4 +1,4 @@
-export type IntegrationProviderKey = "WHOOP" | "VALD" | "CATAPULT" | "POLAR" | "GARMIN" | "GENERIC_CSV";
+export type IntegrationProviderKey = "WHOOP" | "VALD" | "CATAPULT" | "STATSPORT" | "POLAR" | "GARMIN" | "GENERIC_CSV";
 
 export type IntegrationConnectionStatus = "DISCONNECTED" | "CONNECTED" | "PENDING" | "ERROR" | "DISABLED";
 

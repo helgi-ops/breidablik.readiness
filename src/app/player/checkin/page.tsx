@@ -19,7 +19,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
-
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 function todayIsoDateUTC(): string {
@@ -245,6 +244,7 @@ export default function PlayerCheckinPage() {
     if (step === 3) return sleepDuration !== null;
     if (step === 4) return stressMood !== null;
     if (step === 5) return muscleSoreness !== null;
+    if (step === 6) return true; // sore areas = optional
     return true;
   }, [step, fatigueEnergy, sleepQuality, sleepDuration, stressMood, muscleSoreness]);
 
@@ -311,15 +311,18 @@ export default function PlayerCheckinPage() {
         throw { message: "Vistun tókst ekki (ekkert svar frá DB)." };
       }
 
-      // Attempt to save notes separately — fail silently if column doesn't exist
+      // Attempt to save notes and sore_areas separately — fail silently if columns don't exist
+      const extraFields: Record<string, unknown> = {};
       const trimmedNotes = notes.trim();
-      if (trimmedNotes) {
-        const notesRes = await supabase
+      if (trimmedNotes) extraFields.notes = trimmedNotes;
+
+      if (Object.keys(extraFields).length > 0) {
+        const extraRes = await supabase
           .from("readiness_entries")
-          .update({ notes: trimmedNotes })
+          .update(extraFields)
           .eq("id", res.data.id);
-        if (notesRes.error) {
-          console.warn("CHECKIN notes update failed (column may not exist):", notesRes.error.message);
+        if (extraRes.error) {
+          console.warn("CHECKIN extra fields update failed (columns may not exist):", extraRes.error.message);
         }
       }
 
@@ -405,6 +408,7 @@ export default function PlayerCheckinPage() {
                 <div className="whitespace-pre-wrap">{notes.trim()}</div>
               </div>
             ) : null}
+
           </CardContent>
 
           <CardFooter>
@@ -461,7 +465,7 @@ export default function PlayerCheckinPage() {
             {step === 3 && "Hversu lengi svafstu? 5 = 8+ klst."}
             {step === 4 && "Hvernig er stress/skap í dag? 5 = mjög gott."}
             {step === 5 && "Hvernig er almenn vöðvaeymsli? 5 = feeling great."}
-            {step === 6 && "Ef eitthvað skiptir máli (t.d. stífleiki, veikindi, óvenjulegt stress) skrifaðu hér."}
+            {step === 6 && "Ef eitthvað skiptir máli (t.d. meiðsli, veikindi, stress) skrifaðu hér — kerfið sendir þér ráðleggingar."}
           </CardDescription>
         </CardHeader>
 
@@ -569,7 +573,7 @@ export default function PlayerCheckinPage() {
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Dæmi: stífur í mjöðm, illt í hásin, veikindi, óvenjulegt stress…"
+                placeholder="Dæmi: veikindi, óvenjulegt stress, annað sem skiptir máli…"
                 className="min-h-[120px] rounded-xl"
               />
               <div className="text-xs text-muted-foreground">

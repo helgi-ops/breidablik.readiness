@@ -25,6 +25,14 @@ export const INTEGRATION_PROVIDERS: Record<IntegrationProviderKey, IntegrationPr
     requiresPlayerMapping: true,
     description: "External load and GPS-derived session metrics.",
   },
+  STATSPORT: {
+    provider: "STATSPORT",
+    displayName: "STATSports",
+    supportedModes: ["API_PULL", "CSV_IMPORT"],
+    supportedCategories: ["GPS", "LOAD", "SESSION", "HEART_RATE"],
+    requiresPlayerMapping: true,
+    description: "GPS tracking, external load, and heart-rate metrics from STATSports Sonra.",
+  },
   POLAR: {
     provider: "POLAR",
     displayName: "Polar",

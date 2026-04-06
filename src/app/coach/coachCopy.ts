@@ -24,6 +24,10 @@ export const COACH_COPY = {
     actions: {
       syncCatapult: "Samstilla Catapult",
       syncingCatapult: "Samstilli...",
+      syncStatSport: "Samstilla STATSports",
+      syncingStatSport: "Samstilli...",
+      syncGps: "Samstilla GPS",
+      syncingGps: "Samstilli...",
       generateDecisions: "Búa til ákvarðanir",
       generating: "Hleð...",
     },
@@ -69,6 +73,10 @@ export const COACH_COPY = {
     actions: {
       syncCatapult: "Sync Catapult",
       syncingCatapult: "Syncing Catapult...",
+      syncStatSport: "Sync STATSports",
+      syncingStatSport: "Syncing STATSports...",
+      syncGps: "Sync GPS",
+      syncingGps: "Syncing GPS...",
       generateDecisions: "Generate Today Decisions",
       generating: "Generating...",
     },

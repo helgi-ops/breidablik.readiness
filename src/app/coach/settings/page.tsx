@@ -13,6 +13,7 @@ import {
   type RecommendationAuditView,
 } from "@/lib/micropulse/adminConfig";
 import ClubBrandingSettings from "@/components/settings/ClubBrandingSettings";
+import GpsProviderSettings from "@/components/settings/GpsProviderSettings";
 import RulesManager from "@/components/admin/RulesManager";
 import ProtectedPlayersManager from "@/components/admin/ProtectedPlayersManager";
 import TeamPolicySettings from "@/components/admin/TeamPolicySettings";
@@ -205,6 +206,10 @@ export default function CoachSettingsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+
+      {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
+      {/* ── GPS Provider ───────────────────────────────────────────────── */}
+      <GpsProviderSettings teamId={teamId} />
 
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {effectivePlan === "ELITE" && (

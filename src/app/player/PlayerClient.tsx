@@ -976,6 +976,7 @@ function parseExerciseItem(raw: string): ParsedExercise {
   // Extract method badge
   let method: string | null = null;
   if (/\bCLUSTER\b/i.test(working)) method = "CLUSTER";
+  else if (/\bMET\b/.test(working)) method = "MET";
   else if (/\bISO\b/i.test(working)) method = "ISO";
   else if (/\bEMOM\b/i.test(working)) method = "EMOM";
   else if (/\bAMRAP\b/i.test(working)) method = "AMRAP";
@@ -1042,6 +1043,10 @@ const METHOD_GUIDE: Record<string, { IS: string; EN: string }> = {
     IS: "Cluster uppsetning þýðir að þú framkvæmir allar endurtekningarnar saman í hvert skipti og hvílir síðan á milli setta.\n\nDæmi — 2 reps × 3 sett (20 sek hvíld):\n2 reps → hvíl 20 sek → 2 reps → hvíl 20 sek → 2 reps = lokið.\n\nÞetta gerir þér kleift að nota meiri þyngd og halda betri tækni í gegnum öll settin.",
     EN: "Cluster setup means you perform all reps together each time, then rest between sets.\n\nExample — 2 reps × 3 sets (20 sec rest):\n2 reps → rest 20 sec → 2 reps → rest 20 sec → 2 reps = complete.\n\nThis allows you to use heavier loads and maintain better technique across all sets.",
   },
+  MET: {
+    IS: "MET (Muscle Energy Technique) — samvinnuaðferð þar sem þú virkjar vöðvann gegn léttri mótstöðu frá þjálfara, sleppir og leyfir vöðvanum að ná nýjum lengd.\n\n1. Þjálfari færir líkamshluta að feather-edge (fyrsta mótstaða)\n2. INNÖNDUN: Þú þrýstir létt gegn þjálfara (~20% kraftur) í 5 sek\n3. ÚTÖNDUN: Þú slakar algjörlega á — þjálfari færir í nýja lengd (10 sek)\n\nEndurtaktu 2–3 sinnum á hvora hlið. Þetta er EKKI teygja — þú notar eigin kraft til að endurforrita taugakerfið.",
+    EN: "MET (Muscle Energy Technique) — a collaborative method where you contract the muscle against light resistance from the coach, then release and allow the muscle to reach a new length.\n\n1. Coach positions the limb to the feather-edge (first resistance)\n2. INHALE: Push lightly against the coach (~20% force) for 5 seconds\n3. EXHALE: Fully relax — coach moves to a new length (10 sec)\n\nRepeat 2–3 times per side. This is NOT stretching — you use your own force to reprogram the nervous system.",
+  },
   ISO: {
     IS: "Isometric æfing — haltu stöðunni í tilgreindan tíma. Einbeittu þér að að spenna vöðvana að fullu og halda jafnri líkamsstöðu í gegnum allt tímabilið.\n\nÞetta þróar styrk á ákveðnum punkti á hreyfisviðinu og örvar taugavöðvasamband.",
     EN: "Isometric exercise — hold the position for the specified time. Focus on fully contracting the muscles and maintaining a steady position throughout.\n\nThis develops strength at a specific point in the range of motion and enhances neuromuscular control.",
@@ -1057,6 +1062,14 @@ const METHOD_GUIDE: Record<string, { IS: string; EN: string }> = {
 };
 
 const BLOCK_GOAL: Record<string, { IS: string; EN: string }> = {
+  "MET": {
+    IS: "Losa um stutta og ofvirka vöðva með vöðvaorkutækni. MET notar taugakerfið til að endursetja vöðvaspennu og auka hreyfisvið — samdráttur á innöndun, slökun á útöndun. Þetta opnar hreyfigetu sem ISO og Core styrkja síðan í næstu blokkum.",
+    EN: "Release shortened and overactive muscles with Muscle Energy Technique. MET uses the nervous system to reset muscle tone and increase range of motion — contraction on inhale, release on exhale. This opens mobility that ISO and Core then strengthen in the following blocks.",
+  },
+  "MET — Muscle Energy Technique": {
+    IS: "Losa um stutta og ofvirka vöðva með vöðvaorkutækni. MET notar taugakerfið til að endursetja vöðvaspennu og auka hreyfisvið — samdráttur á innöndun, slökun á útöndun. Þetta opnar hreyfigetu sem ISO og Core styrkja síðan í næstu blokkum.",
+    EN: "Release shortened and overactive muscles with Muscle Energy Technique. MET uses the nervous system to reset muscle tone and increase range of motion — contraction on inhale, release on exhale. This opens mobility that ISO and Core then strengthen in the following blocks.",
+  },
   Upphitun: {
     IS: "Hækka líkamshita, auka blóðflæði og virkja vöðva og taugakerfi fyrir eftirfarandi æfingar. Taktu þér tíma og einbeittu þér að gæðum hreyfinganna.",
     EN: "Raise body temperature, increase blood flow and activate muscles and the nervous system for the exercises ahead. Take your time and focus on movement quality.",
@@ -1155,6 +1168,28 @@ function ExerciseInfoModal({
                 ))}
               </ol>
             </div>
+          ) : null}
+
+          {/* Video link */}
+          {exInfo?.videoUrl ? (
+            <a
+              href={exInfo.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3.5 transition-colors active:bg-indigo-100"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                <span className="text-lg">▶</span>
+              </span>
+              <div>
+                <div className="text-sm font-semibold text-indigo-900">
+                  {isIS ? "Horfa á myndband" : "Watch video"}
+                </div>
+                <div className="text-[11px] text-indigo-500">
+                  {isIS ? "Sjá hvernig æfingin er framkvæmd" : "See how to perform the exercise"}
+                </div>
+              </div>
+            </a>
           ) : null}
 
           {/* Exercise-specific: Focus points */}

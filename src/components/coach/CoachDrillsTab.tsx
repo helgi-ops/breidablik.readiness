@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import CoachDrillLibrary from "./CoachDrillLibrary";
+import DrillAnalytics from "./DrillAnalytics";
 import PublicDrillTemplates from "./PublicDrillTemplates";
 import SessionBuilder from "./SessionBuilder";
 import SessionLibrary from "./SessionLibrary";
@@ -15,6 +16,7 @@ const DRILLS_TAB_COPY = {
     myLibrary: "Mitt Library",
     generalLibrary: "General Library",
     researchLibrary: "Research Library",
+    analytics: "Yfirlit",
   },
   EN: {
     selectTeam: "Select a team to view drills.",
@@ -23,10 +25,11 @@ const DRILLS_TAB_COPY = {
     myLibrary: "My Library",
     generalLibrary: "General Library",
     researchLibrary: "Research Library",
+    analytics: "Analytics",
   },
 } as const;
 
-type SubTab = "general" | "research" | "mine" | "session" | "saved";
+type SubTab = "general" | "research" | "mine" | "session" | "saved" | "analytics";
 
 export default function CoachDrillsTab({ teamId }: { teamId: string }) {
   const [lang] = useLang();
@@ -60,6 +63,9 @@ export default function CoachDrillsTab({ teamId }: { teamId: string }) {
         <SubTabBtn active={subTab === "research"} onClick={() => setSubTab("research")}>
           {t.researchLibrary}
         </SubTabBtn>
+        <SubTabBtn active={subTab === "analytics"} onClick={() => setSubTab("analytics")}>
+          {t.analytics}
+        </SubTabBtn>
       </div>
 
       {subTab === "general" && (
@@ -76,6 +82,7 @@ export default function CoachDrillsTab({ teamId }: { teamId: string }) {
       )}
       {subTab === "session" && <SessionBuilder teamId={teamId} />}
       {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} />}
+      {subTab === "analytics" && <DrillAnalytics teamId={teamId} />}
     </div>
   );
 }

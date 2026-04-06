@@ -349,6 +349,7 @@ type Row = {
   muscle_soreness?: number | null;
   total_score: number | null;
   notes: string | null;
+  sore_areas?: string[] | null;
 
   planned_day_type?: string | null;
   planned_focus?: string | null;
@@ -1740,6 +1741,7 @@ export default function CoachPage() {
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
+  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
 
   // MD context
@@ -2165,6 +2167,29 @@ export default function CoachPage() {
     }
   }
 
+  async function syncStatSportForDate(entryDate: string) {
+    try {
+      setCatapultSyncing(true);
+      setCatapultSyncMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/integrations/statsport/daily-sync", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date: entryDate }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync STATSports.");
+      const stored = Number(json?.result?.storedCount ?? 0);
+      const unmatched = Number(json?.result?.unmatchedCount ?? 0);
+      setCatapultSyncMessage(`STATSports synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      await loadToday();
+    } catch (e: any) {
+      setCatapultSyncMessage(e?.message ?? "Failed to sync STATSports.");
+    } finally {
+      setCatapultSyncing(false);
+    }
+  }
+
   async function fetchCompliance(date?: string) {
     try {
       const headers = await getCoachAuthHeaders();
@@ -2373,8 +2398,11 @@ export default function CoachPage() {
 
     // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
     if (resolvedTeamId) {
-      supabase.from("teams").select("sport").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
+      supabase.from("teams").select("sport, gps_provider").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
         setTeamSport(String((data as any)?.sport ?? "").toLowerCase() || null);
+        const gp = String((data as any)?.gps_provider ?? "catapult").toLowerCase();
+        if (gp === "statsport" || gp === "none") setGpsProvider(gp);
+        else setGpsProvider("catapult");
       });
     }
 
@@ -2972,6 +3000,7 @@ export default function CoachPage() {
           muscle_soreness: (r as any).muscle_soreness ?? null,
           total_score: r.total_score ?? null,
           notes: r.notes ?? null,
+          sore_areas: Array.isArray((r as any).sore_areas) ? (r as any).sore_areas : null,
 
           planned_focus: plannedFocus,
           planned_day_type: r.planned_day_type ?? weekSetupDayTypeToday ?? null,
@@ -5517,6 +5546,11 @@ export default function CoachPage() {
                     Athugasemd
                   </span>
                 ) : null}
+                {r.sore_areas && r.sore_areas.length > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                    Sár svæði ({r.sore_areas.length})
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -5529,6 +5563,19 @@ export default function CoachPage() {
             <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
               <svg className="mt-0.5 shrink-0 text-blue-500" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
               <p className="text-sm text-blue-900 leading-snug">{r.notes.trim()}</p>
+            </div>
+          ) : null}
+
+          {r.sore_areas && r.sore_areas.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-red-500 mb-2">Sár / stíf svæði</div>
+              <div className="flex flex-wrap gap-1.5">
+                {r.sore_areas.map((area: string) => (
+                  <span key={area} className="inline-flex rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-xs font-medium text-red-700 capitalize">
+                    {area.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -6228,9 +6275,15 @@ export default function CoachPage() {
                     <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-end">
-                    <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
-                      {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
-                    </Button>
+                    {gpsProvider === "statsport" ? (
+                      <Button variant="outline" size="sm" onClick={() => syncStatSportForDate(today)} disabled={catapultSyncing || loading}>
+                        {catapultSyncing ? ct.actions.syncingStatSport : ct.actions.syncStatSport}
+                      </Button>
+                    ) : gpsProvider !== "none" ? (
+                      <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
+                        {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
+                      </Button>
+                    ) : null}
                     <Button
                       variant="outline"
                       size="sm"
