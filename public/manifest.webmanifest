@@ -1,0 +1,53 @@
+{
+  "id": "/player",
+  "name": "Breiðablik Readiness",
+  "short_name": "Breiðablik",
+  "start_url": "/login?next=/player",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#005a2b",
+  "lang": "is",
+  "description": "Dagleg líðansskráning og þjálfanaálag fyrir leikmenn Breiðabliks.",
+  "categories": ["sports", "health", "fitness"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Check-in",
+      "short_name": "Check-in",
+      "description": "Skrá líðan dagsins",
+      "url": "/player/checkin",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "RPE skráning",
+      "short_name": "RPE",
+      "description": "Skrá æfingaálag eftir æfingu",
+      "url": "/player?tab=rpe",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

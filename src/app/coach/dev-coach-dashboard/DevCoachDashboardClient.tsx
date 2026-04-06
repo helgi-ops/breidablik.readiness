@@ -1,0 +1,8249 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import { useLang } from "@/lib/lang";
+import { COACH_COPY } from "../coachCopy";
+import { PlayerTrendTab } from "./PlayerTrendTab";
+import { RtpTab } from "./RtpTab";
+import { OnboardingChecklist } from "./OnboardingChecklist";
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+import computeTeamDecision from "@/lib/decision/engine";
+import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
+import { buildTeamNeuralLoadSummary } from "@/lib/neuralLoad/teamSummary";
+import { runNeuralLoadValidationSuite } from "@/lib/neuralLoad/validation";
+import type { NeuralLoadClassification } from "@/lib/neuralLoad/types";
+import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
+import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
+import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
+import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
+import { computeCompositeLoadConcern } from "@/lib/micropulse/compositeLoad";
+import { computeRpeDiscrepancy } from "@/lib/micropulse/rpeDiscrepancy";
+import {
+  buildPerformanceIntelligenceDecision,
+  buildTeamPerformanceIntelligenceSummary,
+} from "@/lib/micropulse/performanceIntelligence";
+import type { PerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import { buildTeamRiskMap } from "@/lib/micropulse/performanceIntelligence/teamRiskMap";
+import { buildWeeklyRiskReport } from "@/lib/micropulse/performanceIntelligence/weeklyReport";
+import { buildTeamOutlook } from "@/lib/micropulse/performanceIntelligence/teamOutlook";
+import { resolveSessionMdContextFromSources } from "@/lib/micropulse/weekSetup/sessionSource";
+import { computePlayerVolatilitySummary } from "@/lib/micropulse/volatility/compute";
+import { summarizeDrivers, volatilityLevelLabel, volatilityLevelTone } from "@/lib/micropulse/volatility/format";
+import type { VolatilityDailyPoint } from "@/lib/micropulse/volatility/types";
+import {
+  buildNeuralVolatilityIntelligenceDecision,
+  buildTeamNeuralVolatilitySummary,
+  type NeuralVolatilityIntelligenceDecision,
+} from "@/lib/micropulse/neuralVolatilityIntelligence";
+import {
+  buildPrescriptionDecision,
+  buildTeamPrescriptionSummary,
+  type PrescriptionDecision,
+} from "@/lib/micropulse/prescriptionEngine";
+import {
+  buildSessionDraft,
+  buildTeamSessionBuildSummary,
+  type SessionDraft,
+} from "@/lib/micropulse/autoSessionBuilder";
+import {
+  buildWorkflowEvent,
+  loadSessionDraftRecordByPlayerDate,
+  saveSessionDraftRecord,
+  saveSessionWorkflowEvent,
+  type SessionDraftRecord,
+} from "@/lib/micropulse/sessionWorkflow";
+import {
+  applyCoachRules,
+  buildTeamRulesSummary,
+  type FinalRecommendationDecision,
+  type CoachRule,
+} from "@/lib/micropulse/rulesEngine";
+import {
+  buildRuntimeRulesFromAdminConfig,
+  createDefaultAdminConfigSnapshot,
+  getProtectedPlayerTags,
+  isPlayerProtectedByAdminConfig,
+  loadAdminConfigSnapshotFromStorage,
+  type AdminConfigSnapshot,
+} from "@/lib/micropulse/adminConfig";
+import ExplainabilityDrawer from "@/components/performanceIntelligence/ExplainabilityDrawer";
+import PerformanceIntelligencePanel from "@/components/performanceIntelligence/PerformanceIntelligencePanel";
+import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
+import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
+import TeamSessionBuildSummaryCard from "@/components/sessionBuilder/TeamSessionBuildSummary";
+
+// shadcn/ui
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
+import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
+import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
+import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
+import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
+import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
+import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
+import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
+import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
+import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
+import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
+import CoachMdComparisonCard from "@/components/dashboard/CoachMdComparisonCard";
+import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
+import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
+import {
+  buildCatapultReadinessContextFromRows,
+  buildTeamExternalLoadSummary,
+  normalizeCatapultDailyLoadRow,
+  type CatapultExternalLoadBaseline,
+  type CatapultDailyLoadRow,
+  type CatapultExternalLoadSignals,
+  type CatapultReadinessModifier,
+  type TeamExternalLoadSummary,
+} from "@/lib/micropulse/externalLoad";
+import {
+  computeCatapultMetricAverage,
+  computeCatapultWeeklyMetricSnapshot,
+  getCatapultMetricDefinition,
+  getCatapultMetricValue,
+  getDefaultCatapultTodayVsTeamMetricKeys,
+  getDefaultCatapultWeeklyLoadMetricKeys,
+  type CatapultMetricKey,
+} from "@/lib/integrations/catapult/metricCatalog";
+import { usePlan } from "@/lib/micropulse/product";
+import UpgradeWall from "@/components/micropulse/UpgradeWall";
+
+/** -----------------------------
+ * Types
+ * ----------------------------- */
+type TrainingAction = "FULL" | "REDUCED" | "RECOVERY";
+type FinalColor = "red" | "yellow" | "green";
+type FinalFlag = "RED" | "YELLOW" | "GREEN";
+type Filter = "all" | FinalColor;
+type PlayerDetailSectionKey =
+  | "readinessDecision"
+  | "injuryRisk"
+  | "readinessInputs"
+  | "fatigueAdaptation"
+  | "trainingSession"
+  | "neuralLoad"
+  | "coachMessage";
+
+type PlanPreview = {
+  team_id: string | null;
+  md_day: string | null;
+  source?: string | null;
+  confidence?: number | string | null;
+  readiness_level: "GREEN" | "YELLOW" | "RED" | null;
+  is_locked: boolean | null;
+  template_title: string | null;
+  template_description: string | null;
+  template_structure: any | null;
+};
+
+type TemplateLite = {
+  id: string;
+  title: string | null;
+  code: string | null;
+};
+
+type TeamIntel = {
+  team_id: string;
+  entry_date: string;
+  n_players: number | null;
+  n_red: number | null;
+  n_yellow: number | null;
+  n_green: number | null;
+  n_green_plus: number | null;
+  pct_red: number | null;
+  pct_yellow: number | null;
+  pct_green: number | null;
+  pct_green_plus: number | null;
+  n_volatile: number | null;
+  volatility_pct: number | null;
+  n_low_baseline: number | null;
+  baseline_low_pct: number | null;
+  baseline_maturity: string | null;
+  team_status: string | null;
+  recommendation: string | null;
+  narrative?: string | null;
+  monitoring_notes?: string[] | string | null;
+  session_recommendation?: string | null;
+};
+
+type TeamSignal = {
+  n_players: number;
+  n_full: number;
+  n_reduced: number;
+  n_recovery: number;
+  avg_confidence?: number | null;
+};
+
+type ReminderStatus = {
+  dateKey: string;
+  totalPlayers: number;
+  checkedIn: number;
+  missing: number;
+  lastManualSendAt: string | null;
+};
+
+type ExternalLoadDailyRow = {
+  player_id: string;
+  date: string;
+  total_distance: number | null;
+  high_speed_distance: number | null;
+  sprint_distance: number | null;
+  accelerations: number | null;
+  decelerations: number | null;
+  player_load: number | null;
+  max_velocity: number | null;
+  velocity_band5_total_distance?: number | null;
+  velocity_band6_total_distance?: number | null;
+  hir_dist?: number | null;
+  max_vel?: number | null;
+  accel_b2_3_tot_effs_gen2?: number | null;
+  tot_as?: number | null;
+  decel_b2_3_tot_effs_gen2?: number | null;
+  tot_ds?: number | null;
+  total_player_load?: number | null;
+  player_load_per_minute?: number | null;
+  source: string | null;
+};
+
+type ExternalLoadBaseline = {
+  totalDistanceAvg: number | null;
+  sprintDistanceAvg: number | null;
+  accelerationsAvg: number | null;
+  playerLoadAvg: number | null;
+  maxVelocityAvg: number | null;
+  velocityBand5Avg: number | null;
+  velocityBand6Avg: number | null;
+  hirDistAvg: number | null;
+  accelB23Avg: number | null;
+  totAsAvg: number | null;
+  decelB23Avg: number | null;
+  totDsAvg: number | null;
+  totalPlayerLoadAvg: number | null;
+  maxVelAvg: number | null;
+};
+
+type DayState = "NORMAL_DAY" | "OFF_DAY" | "NO_INPUT_EXPECTED" | "MISSING_INPUT";
+
+type DayStateInput = {
+  readinessCount: number;
+  mdDay: string | null | undefined;
+  plannedDayType: Array<string | null | undefined>;
+  complianceCounts: {
+    totalPlayers: number;
+    missing: number | null;
+  };
+  teamContext: {
+    intensity: string | null | undefined;
+  };
+};
+
+type DecisionConfidence = {
+  level: "HIGH" | "MEDIUM" | "LOW";
+  inputsUsed: string[];
+  missingInputs: string[];
+  fallbackUsed: boolean;
+};
+
+type ReadinessRiskReportPlayer = {
+  name: string;
+  readinessStatus: "YELLOW" | "RED";
+  score: number | null;
+  confidence: number | null;
+  why: string[];
+  checkInScore: number | null;
+  zScore: number | null;
+  deltaZ: number | null;
+  acwr: number | null;
+  sleepScore: number | null;
+  hrv: number | null;
+  volatility: number | null;
+  ateSessionMode: "full" | "modified" | "recovery";
+  injuryRiskLevel: "LOW" | "MODERATE" | "HIGH";
+  injuryConfidence: "low" | "medium" | "high";
+  injuryWhy: string[];
+  injuryRecommendation: string[];
+};
+
+type ReadinessRiskReportData = {
+  teamName: string;
+  date: string;
+  flaggedPlayers: ReadinessRiskReportPlayer[];
+  summary: {
+    green: number;
+    yellow: number;
+    red: number;
+  };
+};
+
+// ── Post-Training Report types ─────────────────────────────────
+type PostTrainingReportPlayer = {
+  name: string;
+  position: string;
+  readinessFlag: "GREEN" | "YELLOW" | "RED" | "—";
+  totalDistance: number | null;
+  totalDistancePct: number | null;   // % of 28D chronic avg
+  hsd: number | null;                // High-speed distance (Vel B5+B6)
+  hsdPct: number | null;
+  playerLoad: number | null;
+  playerLoadPct: number | null;
+  playerLoadPerMin: number | null;
+  accelB23: number | null;
+  decelB23: number | null;
+  maxVelocity: number | null;
+  acwr: number | null;
+  // Internal load (RPE)
+  rpe: number | null;
+  sessionLoad: number | null;        // RPE × duration
+  durationMinutes: number | null;
+  rpeSubmitted: boolean;
+  attentionFlag: "OK" | "MONITOR" | "ALERT";
+  attentionReason: string[];
+};
+
+type PostTrainingReportData = {
+  teamName: string;
+  sessionDate: string;
+  mdDay: string;
+  players: PostTrainingReportPlayer[];
+  teamAvg: {
+    totalDistance: number | null;
+    hsd: number | null;
+    playerLoad: number | null;
+    accelB23: number | null;
+    decelB23: number | null;
+    maxVelocity: number | null;
+  };
+  rpeTeamAvg: number | null;
+  rpeTotalLoad: number | null;
+  rpeSubmissionCount: number;
+  alertCount: number;
+  monitorCount: number;
+};
+
+type Row = {
+  readiness_entry_id: string | null;
+
+  entry_date: string;
+  created_at: string;
+
+  player_id: string;
+  full_name: string;
+  team: string | null;
+  team_id?: string | null;
+  position: string | null;
+
+  readiness: number | null;
+  sleep: number | null;
+  soreness: number | null;
+  fatigue_energy?: number | null;
+  sleep_quality?: number | null;
+  sleep_duration?: number | null;
+  stress_mood?: number | null;
+  muscle_soreness?: number | null;
+  total_score: number | null;
+  notes: string | null;
+
+  planned_day_type?: string | null;
+  planned_focus?: string | null;
+
+  training_action: TrainingAction | null;
+  coach_message: string | null;
+  is_locked: boolean;
+
+  final_color?: FinalColor | null;
+  final_reason?: string | null;
+  final_flag?: FinalFlag | null;
+
+  md_day?: string | null;
+
+  system_decision?: TrainingAction | null;
+  coach_decision?: TrainingAction | null;
+  final_decision?: TrainingAction | null;
+  final_source?: string | null;
+  stage4_updated_at?: string | null;
+
+  ui_key?: string;
+
+  _confidence_num?: number | null;
+  _needs_review?: boolean;
+  _adaptation?: {
+    reduceVolumePct?: number;
+    reduceContactsPct?: number;
+    extendRest?: boolean;
+    simplifySession?: boolean;
+    recoveryBias?: boolean;
+    swapBallistic?: boolean;
+    protectTissue?: "ACHILLES" | "HAMSTRING" | "PATELLAR" | null;
+    addTendonReload?: boolean;
+    addNeuralReset?: boolean;
+    notes?: string[];
+  } | null;
+  _adaptation_summary?: string | null;
+  _neural_load?: NeuralLoadClassification | null;
+  _neural_bias_applied?: boolean;
+  _neural_bias_reason_codes?: string[] | null;
+  _performance_intelligence?: PerformanceIntelligenceDecision | null;
+  _neural_volatility_intelligence?: NeuralVolatilityIntelligenceDecision | null;
+  _prescription_decision?: PrescriptionDecision | null;
+  _final_recommendation_decision?: FinalRecommendationDecision | null;
+  _session_draft?: SessionDraft | null;
+
+  training_modifier?: any | null;
+
+  _z_today?: number | null;
+  _yesterday_z?: number | null;
+  _dz?: number | null;
+  _spark?: string | null;
+
+  _sten?: number | null;
+  _baseline_n?: number | null;
+  _external_load_today?: ExternalLoadDailyRow | null;
+  _external_load_baseline?: ExternalLoadBaseline | null;
+  _catapult_baseline?: CatapultExternalLoadBaseline | null;
+  _catapult_signals?: CatapultExternalLoadSignals | null;
+  _catapult_modifier?: CatapultReadinessModifier | null;
+  _catapult_history?: CatapultDailyLoadRow[] | null;
+};
+
+/** -----------------------------
+ * Helpers (safe parsing etc.)
+ * ----------------------------- */
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isoMondayOfISO(yyyyMmDd: string): string {
+  const d = new Date(`${yyyyMmDd}T00:00:00`);
+  const day = d.getDay(); // Sun=0..Sat=6
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysISO(yyyyMmDd: string, days: number): string {
+  const d = new Date(`${yyyyMmDd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function mapNoMatchIntentToGrid(intent: string | null | undefined): { dayTypeFinal: string; doseFinal: string } {
+  const token = String(intent ?? "").trim().toUpperCase();
+  if (token === "OFF") return { dayTypeFinal: "OFF", doseFinal: "OFF" };
+  if (token === "GAME") return { dayTypeFinal: "GAME", doseFinal: "GAME" };
+  if (token === "RECOVERY") return { dayTypeFinal: "RECOVERY", doseFinal: "RECOVERY" };
+  if (token === "FORCE") return { dayTypeFinal: "TRAIN", doseFinal: "FORCE" };
+  if (token === "VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "VELOCITY" };
+  if (token === "NEURAL_VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "NEURAL / VELOCITY" };
+  if (token === "POLISH_CALM") return { dayTypeFinal: "TRAIN", doseFinal: "POLISH / CALM" };
+  if (token === "ACTIVATION") return { dayTypeFinal: "TRAIN", doseFinal: "ACTIVATION" };
+  return { dayTypeFinal: "TRAIN", doseFinal: "TRAIN" };
+}
+
+function toNum(x: any): number | null {
+  if (x == null) return null;
+  const n = typeof x === "string" ? Number(x) : x;
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeTrainingModifier(tm: any): any | null {
+  if (tm == null) return null;
+  if (typeof tm === "string") {
+    try {
+      return JSON.parse(tm);
+    } catch {
+      return null;
+    }
+  }
+  return tm;
+}
+
+function extractBaselineN(tmRaw: any): number | null {
+  const tm = normalizeTrainingModifier(tmRaw);
+  if (!tm) return null;
+  const n1 = toNum(tm?.pi?.baseline_n);
+  if (n1 != null) return n1;
+  const n2 = toNum(tm?.pi?.["baseline_n"]);
+  if (n2 != null) return n2;
+  const n3 = toNum(tm?.baseline_n);
+  if (n3 != null) return n3;
+  return null;
+}
+
+// NOTE: your DB writes `pi.z` (from the trigger you posted). Some views may use other shapes.
+// We support a few possible keys, without changing DB.
+function extractZ(tmRaw: any): number | null {
+  const tm = normalizeTrainingModifier(tmRaw);
+  if (!tm) return null;
+
+  // 1) preferred from hybrid PI: tm.pi.z
+  const z0 = toNum(tm?.pi?.z);
+  if (z0 != null) return z0;
+
+  // 2) legacy keys (if any)
+  const z1 = toNum(tm?.pi?.z_today);
+  if (z1 != null) return z1;
+
+  const z2 = toNum(tm?.baseline_z);
+  if (z2 != null) return z2;
+
+  const z3 = toNum(tm?.["baseline_z"]);
+  if (z3 != null) return z3;
+
+  return null;
+}
+
+function extractYesterdayZ(tmRaw: any): number | null {
+  const tm = normalizeTrainingModifier(tmRaw);
+  if (!tm) return null;
+
+  // if you store yesterday z explicitly
+  const yz = toNum(tm?.pi?.yesterday_z);
+  if (yz != null) return yz;
+
+  // if you store delta_z and today z, we could infer yesterday = today - delta, but only if both exist
+  const z = toNum(tm?.pi?.z);
+  const dz = toNum(tm?.pi?.delta_z);
+  if (z != null && dz != null) return z - dz;
+
+  return null;
+}
+
+function extractRecentZHistory(tmRaw: any, zToday: number | null, zPrev: number | null): number[] {
+  const tm = normalizeTrainingModifier(tmRaw);
+  const out: number[] = [];
+
+  const fromPi = Array.isArray(tm?.pi?.z_history) ? tm.pi.z_history : [];
+  for (const v of fromPi) {
+    const n = toNum(v);
+    if (n != null) out.push(n);
+  }
+
+  if (!out.length && zPrev != null) out.push(zPrev);
+  if (zToday != null) out.push(zToday);
+
+  return out.slice(-7);
+}
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function fmt2(n: number | null | undefined) {
+  return typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : "—";
+}
+
+/**
+ * STEN transform (client-side only)
+ * STEN has mean ~5.5 and SD 2.0 -> sten = round(z*2 + 5.5), clamp 1..10
+ */
+function zToSten(z: number | null | undefined): number | null {
+  if (typeof z !== "number" || !Number.isFinite(z)) return null;
+  const sten = Math.round(z * 2 + 5.5);
+  return Math.max(1, Math.min(10, sten));
+}
+
+// Sparkline from numeric series (fixed scale)
+function sparkline(values: number[], opts?: { min?: number; max?: number }) {
+  const blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+  const min = opts?.min ?? -2.5;
+  const max = opts?.max ?? 2.5;
+
+  const clampV = (x: number) => Math.max(min, Math.min(max, x));
+  const norm = (x: number) => (clampV(x) - min) / (max - min);
+
+  return values
+    .map((v) => {
+      const t = norm(v);
+      const idx = Math.max(0, Math.min(blocks.length - 1, Math.round(t * (blocks.length - 1))));
+      return blocks[idx];
+    })
+    .join("");
+}
+
+function volatilityLinePoints(values: number[], width = 220, height = 44, padding = 4): string {
+  if (!values.length) return "";
+  if (values.length === 1) {
+    const y = height / 2;
+    return `${padding},${y} ${width - padding},${y}`;
+  }
+
+  const min = 0;
+  const max = 100;
+  const innerW = Math.max(1, width - padding * 2);
+  const innerH = Math.max(1, height - padding * 2);
+  const stepX = innerW / (values.length - 1);
+
+  return values
+    .map((raw, idx) => {
+      const x = padding + idx * stepX;
+      const clamped = Math.max(min, Math.min(max, raw));
+      const t = (clamped - min) / (max - min);
+      const y = padding + (1 - t) * innerH;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function volatilitySeriesPoints(values: number[], width = 220, height = 44, padding = 4): Array<{ x: number; y: number; value: number }> {
+  if (!values.length) return [];
+  if (values.length === 1) {
+    return [{ x: width / 2, y: height / 2, value: Math.max(0, Math.min(100, values[0])) }];
+  }
+
+  const min = 0;
+  const max = 100;
+  const innerW = Math.max(1, width - padding * 2);
+  const innerH = Math.max(1, height - padding * 2);
+  const stepX = innerW / (values.length - 1);
+
+  return values.map((raw, idx) => {
+    const x = padding + idx * stepX;
+    const clamped = Math.max(min, Math.min(max, raw));
+    const t = (clamped - min) / (max - min);
+    const y = padding + (1 - t) * innerH;
+    return { x, y, value: clamped };
+  });
+}
+
+function prettyMd(md: string | null | undefined) {
+  const v = (md ?? "").trim();
+  if (!v) return { md: "—", label: "No MD set" };
+  const U = v.toUpperCase();
+  if (U === "MD") return { md: "MD", label: "GAME" };
+  if (U === "MD+1") return { md: "MD+1", label: "POST" };
+  return { md: v, label: v };
+}
+
+function mdFromPlannedFocus(focus: string | null | undefined) {
+  const s = String(focus ?? "").toUpperCase();
+  const m = s.match(/\bMD[+-]?\d*\b/);
+  return m?.[0] ?? null;
+}
+
+function dateKey(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw.slice(0, 10);
+}
+
+function isValidMdToken(x: string | null | undefined) {
+  const s = String(x ?? "").trim().toUpperCase();
+  if (!s) return false;
+  return /^MD([+-]\d+)?$/.test(s);
+}
+
+function shortReason(reason?: string | null) {
+  const s = String(reason ?? "").trim();
+  if (!s) return null;
+  if (s.toLowerCase().startsWith("hybrid:")) return null;
+  return s.length > 60 ? s.slice(0, 57) + "…" : s;
+}
+
+function applySorenessDowngrade(input: {
+  flag: FinalFlag | null;
+  color: FinalColor | null;
+  reason: string | null;
+  soreness: number | null;
+}) {
+  const soreness = input.soreness ?? 0;
+
+  if (soreness > 2 || !input.flag || !input.color) {
+    return {
+      final_flag: input.flag,
+      final_color: input.color,
+      final_reason: input.reason,
+    };
+  }
+
+  const final_flag: FinalFlag = input.flag === "GREEN" ? "YELLOW" : input.flag === "YELLOW" ? "RED" : "RED";
+  const final_color: FinalColor = input.color === "green" ? "yellow" : input.color === "yellow" ? "red" : "red";
+
+  const final_reason =
+    input.flag === "GREEN" ? "YELLOW: Low soreness reported. Adjust load." : "RED: Low soreness and risk signal. Recovery/very light day.";
+
+  return { final_flag, final_color, final_reason };
+}
+
+function formatConfidence(v: PlanPreview["confidence"]) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "string") return v;
+  if (Number.isFinite(v)) {
+    if (v <= 1) return `${Math.round(v * 100)}%`;
+    if (v <= 100) return `${Math.round(v)}%`;
+    return String(v);
+  }
+  return "—";
+}
+
+const colorMeta = (c?: string | null) => {
+  const C = (c || "").toUpperCase();
+  if (C === "RED") return { label: "RED", dot: "bg-red-500", pill: "bg-red-50 text-red-700 border-red-200" };
+  if (C === "YELLOW")
+    return { label: "YELLOW", dot: "bg-yellow-400", pill: "bg-yellow-50 text-yellow-800 border-yellow-200" };
+  return { label: "GREEN", dot: "bg-green-500", pill: "bg-green-50 text-green-700 border-green-200" };
+};
+
+function v(n: number | null | undefined) {
+  return typeof n === "number" ? n : "—";
+}
+
+// Check-in wellness scale is 1..5 where 1 is worst and 5 is best.
+// Fatigue rules use risk-oriented direction (higher = worse), so invert 1<->5.
+function toRiskLikertFromCheckin(v: number | null | undefined): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  if (v >= 1 && v <= 5) return 6 - v;
+  return v;
+}
+
+function teamStatusMeta(status: string | null | undefined) {
+  const s = String(status ?? "").toUpperCase();
+  if (s === "ALERT") return { label: "ALERT", border: "border-red-200", bg: "bg-red-50", text: "text-red-800" };
+  if (s === "CAUTION")
+    return { label: "CAUTION", border: "border-yellow-200", bg: "bg-yellow-50", text: "text-yellow-900" };
+  return { label: "OK", border: "border-green-200", bg: "bg-green-50", text: "text-green-800" };
+}
+
+function isOffLikeToken(value: string | null | undefined) {
+  const v = String(value ?? "").trim().toUpperCase();
+  return v === "OFF" || v === "REST" || v === "DAY_OFF" || v === "DAY OFF";
+}
+
+function isNoInputExpectedToken(value: string | null | undefined) {
+  const v = String(value ?? "").trim().toUpperCase();
+  return v === "OTHER" || v === "NO_INPUT" || v === "NO INPUT";
+}
+
+function dayStateMeta(state: DayState) {
+  if (state === "OFF_DAY") {
+    return {
+      label: "OFF DAY",
+      badge: "bg-slate-700 text-white",
+      reason: "OFF/rest context detected. Input is generally not expected for readiness decisions.",
+    };
+  }
+  if (state === "NO_INPUT_EXPECTED") {
+    return {
+      label: "NO INPUT EXPECTED",
+      badge: "bg-slate-200 text-slate-800",
+      reason: "No-input context detected (e.g. OTHER/maintenance context or no active players expected).",
+    };
+  }
+  if (state === "MISSING_INPUT") {
+    return {
+      label: "MISSING INPUT",
+      badge: "bg-amber-600 text-white",
+      reason: "Readiness inputs are missing for expected players today.",
+    };
+  }
+  return {
+    label: "NORMAL DAY",
+    badge: "bg-emerald-600 text-white",
+    reason: "Normal readiness day: check-ins and decision inputs expected as usual.",
+  };
+}
+
+function getDayState(input: DayStateInput): { state: DayState; reason: string } {
+  const mdNorm = String(input.mdDay ?? "").trim().toUpperCase();
+  const planDayTypes = (input.plannedDayType ?? []).map((x) => String(x ?? "").trim().toUpperCase()).filter(Boolean);
+
+  const offByIntensity = String(input.teamContext.intensity ?? "").trim().toUpperCase() === "OFF";
+  const offByMd = isOffLikeToken(mdNorm);
+  const allPlanTypesOffLike = planDayTypes.length > 0 && planDayTypes.every((t) => isOffLikeToken(t));
+
+  // Priority 1: explicit OFF context
+  if (offByIntensity || offByMd || allPlanTypesOffLike) {
+    return { state: "OFF_DAY", reason: "Explicit OFF/rest context detected from intensity/MD/day-type." };
+  }
+
+  // Priority 2: readiness rows exist => normal readiness day
+  if ((input.readinessCount ?? 0) > 0) {
+    return { state: "NORMAL_DAY", reason: "Readiness rows are present for today." };
+  }
+
+  const noInputByMd = isNoInputExpectedToken(mdNorm);
+  const allPlanTypesNoInput = planDayTypes.length > 0 && planDayTypes.every((t) => isNoInputExpectedToken(t));
+  const totalPlayers = Number(input.complianceCounts.totalPlayers ?? 0);
+
+  // Priority 3: context suggests no input expected
+  if (noInputByMd || allPlanTypesNoInput || totalPlayers === 0) {
+    return { state: "NO_INPUT_EXPECTED", reason: "Day context indicates no player check-in input is expected." };
+  }
+
+  // Priority 4: default missing input
+  return { state: "MISSING_INPUT", reason: "Expected readiness input is missing for today." };
+}
+
+const confNum = (v: any) => {
+  if (v == null) return null;
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) ? n : null;
+};
+
+const needsReview = (confidence: any) => {
+  const c = confNum(confidence);
+  return c == null || c < 60;
+};
+
+const flagRank = (flag: any) => {
+  const f = String(flag ?? "").toUpperCase();
+  if (f === "RED") return 0;
+  if (f === "YELLOW") return 1;
+  return 2;
+};
+
+const flagToAction = (flag: string | null | undefined): TrainingAction => {
+  const f = String(flag ?? "").toUpperCase();
+  if (f === "RED") return "RECOVERY";
+  if (f === "YELLOW") return "REDUCED";
+  return "FULL";
+};
+
+function actionToSessionMode(action: TrainingAction | null | undefined): "full" | "modified" | "recovery" | "pending" {
+  if (action === "RECOVERY") return "recovery";
+  if (action === "REDUCED") return "modified";
+  if (action === "FULL") return "full";
+  return "pending";
+}
+
+function actionToPlannedIntensity(action: TrainingAction | null | undefined): "low" | "moderate" | "high" {
+  if (action === "RECOVERY") return "low";
+  if (action === "REDUCED") return "moderate";
+  return "high";
+}
+
+const TEAM_RISK_COPY = {
+  IS: {
+    noDataWhy:   "Engin team-samantekt tiltæk fyrir daginn.",
+    noDataRec:   "Refresh eða keyrðu Generate Today Decisions.",
+    highRec:     "Breytðu æfingu: minnkaðu heildarálag (volume/intensity), forðastu mikla eccentrics/contacts, aukið recovery blocks. Haltu gæðum á lykilatriðum en skera niður magn.",
+    cautionRec:  "Aðlaga daginn: halda gæðum en lækka magn (t.d. -20–30% sets/reps), velja minni árekstra, lengri hvíld, og fylgjast með þeim sem eru REDUCED/RECOVERY.",
+    stableRec:   "Keyra plan að mestu: normal session, með sértækri áherslu á þá sem eru REDUCED/RECOVERY (individual mods).",
+  },
+  EN: {
+    noDataWhy:   "No team summary available for today.",
+    noDataRec:   "Refresh or run Generate Today Decisions.",
+    highRec:     "Modify session: reduce total load (volume/intensity), avoid heavy eccentrics/contacts, increase recovery blocks. Maintain quality on key actions but cut volume.",
+    cautionRec:  "Adjust the day: maintain quality but lower volume (e.g. -20–30% sets/reps), choose lower-contact options, extend rest periods, and monitor REDUCED/RECOVERY players.",
+    stableRec:   "Run plan as normal: standard session, with individual focus on players flagged REDUCED/RECOVERY.",
+  },
+} as const;
+
+function computeTeamRisk(signal: TeamSignal | null, lang: "IS" | "EN" = "IS") {
+  const rc = TEAM_RISK_COPY[lang];
+
+  if (!signal || !signal.n_players) {
+    return {
+      level: "UNKNOWN" as const,
+      label: "No data",
+      why: rc.noDataWhy,
+      recommendation: rc.noDataRec,
+    };
+  }
+
+  const n = signal.n_players;
+  const reducedPct = (signal.n_reduced / n) * 100;
+  const recoveryPct = (signal.n_recovery / n) * 100;
+  const impactScore = recoveryPct * 1.5 + reducedPct * 1.0;
+
+  if (impactScore > 30) {
+    return {
+      level: "HIGH" as const,
+      label: "HIGH RISK",
+      why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
+      recommendation: rc.highRec,
+    };
+  }
+
+  if (impactScore >= 15) {
+    return {
+      level: "CAUTION" as const,
+      label: "CAUTION",
+      why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
+      recommendation: rc.cautionRec,
+    };
+  }
+
+  return {
+    level: "STABLE" as const,
+    label: "STABLE",
+    why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
+    recommendation: rc.stableRec,
+  };
+}
+
+function riskUi(level: "UNKNOWN" | "STABLE" | "CAUTION" | "HIGH") {
+  switch (level) {
+    case "HIGH":
+      return { border: "border-red-200", bg: "bg-red-50", text: "text-red-800", pill: "bg-red-600 text-white" };
+    case "CAUTION":
+      return { border: "border-yellow-200", bg: "bg-yellow-50", text: "text-yellow-900", pill: "bg-yellow-600 text-white" };
+    case "STABLE":
+      return { border: "border-green-200", bg: "bg-green-50", text: "text-green-800", pill: "bg-green-600 text-white" };
+    default:
+      return { border: "border-gray-200", bg: "bg-gray-50", text: "text-gray-800", pill: "bg-gray-600 text-white" };
+  }
+}
+
+function titleCaseToken(value: string | null | undefined): string {
+  const v = String(value ?? "").trim().toLowerCase();
+  if (!v) return "—";
+  return v
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+function performanceRiskTone(
+  band: "LOW" | "MODERATE" | "HIGH" | "CRITICAL"
+): string {
+  if (band === "LOW") return "text-emerald-700";
+  if (band === "MODERATE") return "text-amber-700";
+  if (band === "HIGH") return "text-orange-700";
+  return "text-red-700";
+}
+
+function summaryLines(text: string | null | undefined, maxParts = 3): string[] {
+  const raw = String(text ?? "").trim();
+  if (!raw) return [];
+  const parts = raw
+    .split(/[.;]\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length) return parts.slice(0, maxParts);
+  return [raw];
+}
+
+function toMaybeFinite(x: unknown): number | null {
+  const n = typeof x === "string" ? Number(x) : (x as number);
+  return Number.isFinite(n) ? n : null;
+}
+
+function scoreFmt(x: number | null) {
+  return x == null ? "—" : String(x);
+}
+
+function numFmt(x: number | null, digits = 2) {
+  return x == null ? "—" : x.toFixed(digits);
+}
+
+function averageMetric(values: Array<number | null | undefined>): number | null {
+  const nums = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!nums.length) return null;
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+}
+
+function summarizeExternalLoad(rows: ExternalLoadDailyRow[], targetDate: string): {
+  today: ExternalLoadDailyRow | null;
+  baseline: ExternalLoadBaseline | null;
+} {
+  const today = rows.find((row) => row.date === targetDate) ?? null;
+  const baselineRows = rows
+    .filter((row) => row.date < targetDate)
+    .slice(-7);
+
+  if (!today && baselineRows.length === 0) {
+    return { today: null, baseline: null };
+  }
+
+  return {
+    today,
+    baseline: {
+      totalDistanceAvg: averageMetric(baselineRows.map((row) => row.total_distance)),
+      sprintDistanceAvg: averageMetric(baselineRows.map((row) => row.sprint_distance)),
+      accelerationsAvg: averageMetric(baselineRows.map((row) => row.accelerations)),
+      playerLoadAvg: averageMetric(baselineRows.map((row) => row.player_load)),
+      maxVelocityAvg: averageMetric(baselineRows.map((row) => row.max_velocity)),
+      velocityBand5Avg: averageMetric(baselineRows.map((row) => row.velocity_band5_total_distance ?? null)),
+      velocityBand6Avg: averageMetric(baselineRows.map((row) => row.velocity_band6_total_distance ?? null)),
+      hirDistAvg: averageMetric(baselineRows.map((row) => row.hir_dist ?? null)),
+      accelB23Avg: averageMetric(baselineRows.map((row) => row.accel_b2_3_tot_effs_gen2 ?? null)),
+      totAsAvg: averageMetric(baselineRows.map((row) => row.tot_as ?? null)),
+      decelB23Avg: averageMetric(baselineRows.map((row) => row.decel_b2_3_tot_effs_gen2 ?? null)),
+      totDsAvg: averageMetric(baselineRows.map((row) => row.tot_ds ?? null)),
+      totalPlayerLoadAvg: averageMetric(baselineRows.map((row) => row.total_player_load ?? null)),
+      maxVelAvg: averageMetric(baselineRows.map((row) => row.max_vel ?? null)),
+    },
+  };
+}
+
+function externalLoadTone(value: number | null | undefined, baseline: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || typeof baseline !== "number" || !Number.isFinite(baseline) || baseline <= 0) {
+    return {
+      label: "No baseline",
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    };
+  }
+
+  const ratio = value / baseline;
+  if (ratio >= 1.5) {
+    return { label: "Red", tone: "border-red-200 bg-red-50 text-red-700" };
+  }
+  if (ratio >= 1.2) {
+    return { label: "Yellow", tone: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
+  return { label: "Green", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+}
+
+function confidenceFmt(x: number | null) {
+  if (x == null) return "—";
+  return x <= 1 ? `${Math.round(x * 100)}%` : `${Math.round(x)}%`;
+}
+
+function acwrFmt(x: number | null) {
+  return x == null ? "—" : x.toFixed(2);
+}
+
+const reportStyles = StyleSheet.create({
+  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  header: { marginBottom: 14, paddingBottom: 10, borderBottom: "2 solid #E5E7EB" },
+  h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
+  headerMeta: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
+  headerMetaText: { fontSize: 10, color: "#4B5563" },
+  muted: { color: "#6B7280", fontSize: 9 },
+  // Player card
+  playerCard: { marginBottom: 14, border: "1 solid #D1D5DB", borderRadius: 6, overflow: "hidden" },
+  playerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: "8 10", backgroundColor: "#F9FAFB" },
+  playerName: { fontSize: 13, fontWeight: 700 },
+  badgeYellow: { fontSize: 11, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "2 8", borderRadius: 4 },
+  badgeRed: { fontSize: 11, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "2 8", borderRadius: 4 },
+  // Coach action box
+  actionBoxRecovery: { backgroundColor: "#FEE2E2", padding: "8 10", borderBottom: "1 solid #FECACA" },
+  actionBoxModified: { backgroundColor: "#FEF3C7", padding: "8 10", borderBottom: "1 solid #FDE68A" },
+  actionBoxFull: { backgroundColor: "#DCFCE7", padding: "8 10", borderBottom: "1 solid #BBF7D0" },
+  actionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", marginBottom: 2, textTransform: "uppercase" },
+  actionTextRecovery: { fontSize: 12, fontWeight: 700, color: "#991B1B" },
+  actionTextModified: { fontSize: 12, fontWeight: 700, color: "#92400E" },
+  actionTextFull: { fontSize: 12, fontWeight: 700, color: "#166534" },
+  actionNote: { fontSize: 9, color: "#4B5563", marginTop: 2 },
+  // Body sections
+  cardBody: { padding: "8 10" },
+  sectionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
+  reasonItem: { fontSize: 10, color: "#1F2937", marginBottom: 3, paddingLeft: 8 },
+  // Injury risk
+  injuryRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  injuryLabelLow: { fontSize: 10, fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "1 6", borderRadius: 3 },
+  injuryLabelModerate: { fontSize: 10, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "1 6", borderRadius: 3 },
+  injuryLabelHigh: { fontSize: 10, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "1 6", borderRadius: 3 },
+  injuryRec: { fontSize: 9, color: "#374151", marginBottom: 2, paddingLeft: 8 },
+  // Reference table
+  refTableWrap: { marginTop: 8, borderTop: "1 solid #E5E7EB", paddingTop: 6 },
+  refTableLabel: { fontSize: 8, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 },
+  table: { border: "1 solid #E5E7EB", borderRadius: 3 },
+  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
+  cellH: { flex: 1, padding: "3 4", fontSize: 8, fontWeight: 700, color: "#6B7280" },
+  cell: { flex: 1, padding: "3 4", fontSize: 8, color: "#374151" },
+  // Footer
+  footerBar: { marginTop: 12, paddingTop: 8, borderTop: "1 solid #E5E7EB", flexDirection: "row", justifyContent: "space-between" },
+  footerCount: { fontSize: 10 },
+  footerGreen: { color: "#166534", fontWeight: 700 },
+  footerYellow: { color: "#92400E", fontWeight: 700 },
+  footerRed: { color: "#991B1B", fontWeight: 700 },
+});
+
+function coachAction(mode: "full" | "modified" | "recovery"): { boxStyle: any; textStyle: any; title: string; note: string } {
+  if (mode === "recovery") return {
+    boxStyle: reportStyles.actionBoxRecovery,
+    textStyle: reportStyles.actionTextRecovery,
+    title: "RECOVERY — Do not train today",
+    note: "Athlete's body is under significant stress. Rest or light recovery work only.",
+  };
+  if (mode === "modified") return {
+    boxStyle: reportStyles.actionBoxModified,
+    textStyle: reportStyles.actionTextModified,
+    title: "REDUCE LOAD — Modified session",
+    note: "Reduce intensity or volume. Monitor closely during training.",
+  };
+  return {
+    boxStyle: reportStyles.actionBoxFull,
+    textStyle: reportStyles.actionTextFull,
+    title: "FULL PARTICIPATION — Monitor closely",
+    note: "Can train normally. Flag is precautionary — keep an eye on this player.",
+  };
+}
+
+function injuryBadgeStyle(level: "LOW" | "MODERATE" | "HIGH") {
+  if (level === "HIGH") return reportStyles.injuryLabelHigh;
+  if (level === "MODERATE") return reportStyles.injuryLabelModerate;
+  return reportStyles.injuryLabelLow;
+}
+
+function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }) {
+  const playersPerPage = 2;
+  const flaggedPages: ReadinessRiskReportPlayer[][] = [];
+  for (let i = 0; i < data.flaggedPlayers.length; i += playersPerPage) {
+    flaggedPages.push(data.flaggedPlayers.slice(i, i + playersPerPage));
+  }
+  if (flaggedPages.length === 0) flaggedPages.push([]);
+
+  return (
+    <Document>
+      {flaggedPages.map((pagePlayers, pageIdx) => (
+        <Page key={`risk-report-page-${pageIdx}`} size="A4" style={reportStyles.page}>
+          {/* Header — only on first page */}
+          {pageIdx === 0 && (
+            <View style={reportStyles.header}>
+              <Text style={reportStyles.h1}>Daily Readiness Report</Text>
+              <View style={reportStyles.headerMeta}>
+                <Text style={reportStyles.headerMetaText}>{data.teamName || "—"}</Text>
+                <Text style={reportStyles.headerMetaText}>{data.date}</Text>
+              </View>
+              <Text style={reportStyles.muted}>
+                Players requiring attention: {data.flaggedPlayers.length} of {data.summary.green + data.summary.yellow + data.summary.red}
+              </Text>
+            </View>
+          )}
+
+          {/* Player cards */}
+          {pagePlayers.length ? (
+            pagePlayers.map((p, i) => {
+              const action = coachAction(p.ateSessionMode);
+              const reasons = p.why.length ? p.why : ["No specific reasons available."];
+              const injRecs = p.injuryRecommendation.length ? p.injuryRecommendation : ["Continue with planned load and routine monitoring."];
+              return (
+                <View key={`${p.name}-${pageIdx}-${i}`} style={reportStyles.playerCard}>
+                  {/* Player name + status */}
+                  <View style={reportStyles.playerHeader}>
+                    <Text style={reportStyles.playerName}>{p.name}</Text>
+                    <Text style={p.readinessStatus === "RED" ? reportStyles.badgeRed : reportStyles.badgeYellow}>
+                      {p.readinessStatus === "RED" ? "🔴 RED" : "🟡 YELLOW"}
+                    </Text>
+                  </View>
+
+                  {/* Coach action — prominent */}
+                  <View style={action.boxStyle}>
+                    <Text style={reportStyles.actionLabel}>Today&apos;s recommendation</Text>
+                    <Text style={action.textStyle}>{action.title}</Text>
+                    <Text style={reportStyles.actionNote}>{action.note}</Text>
+                  </View>
+
+                  {/* Reasons */}
+                  <View style={reportStyles.cardBody}>
+                    <Text style={reportStyles.sectionLabel}>Why this player is flagged</Text>
+                    {reasons.map((r, idx) => (
+                      <Text key={`${p.name}-reason-${idx}`} style={reportStyles.reasonItem}>• {r}</Text>
+                    ))}
+
+                    {/* Injury risk */}
+                    <Text style={reportStyles.sectionLabel}>Injury risk</Text>
+                    <View style={reportStyles.injuryRow}>
+                      <Text style={injuryBadgeStyle(p.injuryRiskLevel)}>{p.injuryRiskLevel}</Text>
+                    </View>
+                    {injRecs.map((r, idx) => (
+                      <Text key={`${p.name}-injrec-${idx}`} style={reportStyles.injuryRec}>• {r}</Text>
+                    ))}
+
+                    {/* Reference numbers — compact, for staff use */}
+                    <View style={reportStyles.refTableWrap}>
+                      <Text style={reportStyles.refTableLabel}>Reference data</Text>
+                      <View style={reportStyles.table}>
+                        <View style={reportStyles.tHead}>
+                          <Text style={reportStyles.cellH}>Wellness score</Text>
+                          <Text style={reportStyles.cellH}>Sleep (1–5)</Text>
+                          <Text style={reportStyles.cellH}>Load ratio</Text>
+                          <Text style={reportStyles.cellH}>HRV</Text>
+                          <Text style={reportStyles.cellH}>Load index</Text>
+                          <Text style={reportStyles.cellH}>vs. baseline</Text>
+                        </View>
+                        <View style={reportStyles.tRow}>
+                          <Text style={reportStyles.cell}>{scoreFmt(p.checkInScore)}</Text>
+                          <Text style={reportStyles.cell}>{p.sleepScore != null ? `${p.sleepScore}/5` : "—"}</Text>
+                          <Text style={reportStyles.cell}>{p.acwr != null ? numFmt(p.acwr) : "—"}</Text>
+                          <Text style={reportStyles.cell}>{p.hrv != null ? numFmt(p.hrv) : "—"}</Text>
+                          <Text style={reportStyles.cell}>{p.zScore != null ? numFmt(p.zScore) : "—"}</Text>
+                          <Text style={reportStyles.cell}>{p.deltaZ != null ? numFmt(p.deltaZ) : "—"}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={reportStyles.muted}>No players requiring attention today.</Text>
+          )}
+
+          {/* Footer summary — last page only */}
+          {pageIdx === flaggedPages.length - 1 && (
+            <View style={reportStyles.footerBar}>
+              <Text style={reportStyles.footerCount}>
+                Team status:{"  "}
+                <Text style={reportStyles.footerGreen}>● {data.summary.green} ready</Text>
+                {"   "}
+                <Text style={reportStyles.footerYellow}>● {data.summary.yellow} monitor</Text>
+                {"   "}
+                <Text style={reportStyles.footerRed}>● {data.summary.red} at risk</Text>
+              </Text>
+              <Text style={reportStyles.muted}>Page {pageIdx + 1} / {flaggedPages.length}</Text>
+            </View>
+          )}
+        </Page>
+      ))}
+    </Document>
+  );
+}
+
+// ── Post-Training GPS Report PDF ──────────────────────────────
+const postStyles = StyleSheet.create({
+  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  h1: { fontSize: 15, fontWeight: 700, marginBottom: 4 },
+  subtitle: { fontSize: 10, color: "#6B7280", marginBottom: 14 },
+  section: { marginBottom: 14 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #E5E7EB" },
+  summaryRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  summaryBox: { flex: 1, border: "1 solid #E5E7EB", borderRadius: 4, padding: 6, alignItems: "center" },
+  summaryVal: { fontSize: 13, fontWeight: 700 },
+  summaryLabel: { fontSize: 8, color: "#6B7280", marginTop: 2 },
+  table: { border: "1 solid #D1D5DB", borderRadius: 4, overflow: "hidden" },
+  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
+  tRowAlt: { flexDirection: "row", borderTop: "1 solid #E5E7EB", backgroundColor: "#F9FAFB" },
+  colName: { width: "18%", padding: 4, fontSize: 9 },
+  colPos: { width: "8%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colFlag: { width: "8%", padding: 4, fontSize: 9, textAlign: "center" },
+  colMetric: { width: "9%", padding: 4, fontSize: 9, textAlign: "right" },
+  colPct: { width: "7%", padding: 4, fontSize: 9, textAlign: "right" },
+  colAttn: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
+  // RPE-specific table columns
+  colRpeName: { width: "19%", padding: 4, fontSize: 9 },
+  colRpePos: { width: "7%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colRpeScore: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
+  colRpeDesc: { width: "12%", padding: 4, fontSize: 9 },
+  colRpeDur: { width: "11%", padding: 4, fontSize: 9, textAlign: "right" },
+  colRpeLoad: { width: "12%", padding: 4, fontSize: 9, textAlign: "right" },
+  colRpeBand: { width: "18%", padding: 4, fontSize: 9 },
+  hdr: { fontWeight: 700 },
+  attnAlert: { color: "#DC2626", fontWeight: 700 },
+  attnMonitor: { color: "#D97706", fontWeight: 700 },
+  attnOk: { color: "#16A34A" },
+  flagRed: { color: "#DC2626", fontWeight: 700 },
+  flagYellow: { color: "#D97706", fontWeight: 700 },
+  flagGreen: { color: "#16A34A" },
+  alertBox: { marginBottom: 6, padding: 6, border: "1 solid #FCA5A5", borderRadius: 4, backgroundColor: "#FEF2F2" },
+  alertName: { fontWeight: 700, marginBottom: 2 },
+  alertLine: { color: "#7F1D1D", fontSize: 9 },
+  monitorBox: { marginBottom: 6, padding: 6, border: "1 solid #FDE68A", borderRadius: 4, backgroundColor: "#FFFBEB" },
+  monitorName: { fontWeight: 700, marginBottom: 2 },
+  monitorLine: { color: "#78350F", fontSize: 9 },
+});
+
+function numFmt2(v: number | null, digits = 0): string {
+  if (v == null) return "—";
+  return v.toFixed(digits);
+}
+
+function pctFmt(v: number | null): string {
+  if (v == null) return "—";
+  const s = Math.round(v);
+  return (s >= 0 ? "+" : "") + s + "%";
+}
+
+function rpeInterpretation(avgRpe: number | null, submittedCount: number, totalPlayers: number): string {
+  if (avgRpe == null || submittedCount === 0) {
+    return `Engir leikmenn hafa skilað inn RPE fyrir þessa æfingu (${submittedCount}/${totalPlayers}). Ekki er hægt að meta innri álag liðsins.`;
+  }
+  const score = avgRpe.toFixed(1);
+  const sub = `${submittedCount}/${totalPlayers} leikmenn skildu inn`;
+  if (avgRpe <= 2) {
+    return `Upplifun liðsins á æfingunni var mjög létt (meðal RPE ${score}). Æfingin lítur út sem hlýjunar- eða endurhæfingarþáttur með lítið sem ekkert líkamlegt álag. (${sub})`;
+  }
+  if (avgRpe <= 4) {
+    return `Upplifun liðsins á æfingunni var létt (meðal RPE ${score}). Liðið var vel á sig komið og þoldi æfinguna vel án mikillar fyrirhafnar. (${sub})`;
+  }
+  if (avgRpe <= 6) {
+    return `Upplifun liðsins á æfingunni var í meðallagi (meðal RPE ${score}). Líkamlegt álag var hóflegt — góð jafnvægisæfing milli álags og hvíldar. (${sub})`;
+  }
+  if (avgRpe <= 7.9) {
+    return `Upplifun liðsins á æfingunni var erfið (meðal RPE ${score}). Líkamlegt álag var hátt. Mikilvægt er að tryggja góða hvíld og næringaruppbót fyrir næstu æfingu. (${sub})`;
+  }
+  if (avgRpe <= 8.9) {
+    return `Upplifun liðsins á æfingunni var mjög erfið (meðal RPE ${score}). Álagið var mjög hátt. Nauðsynlegt er að gefa liðinu tíma til að jafna sig og fylgjast vel með ástandi leikmanna næstu daga. (${sub})`;
+  }
+  return `Upplifun liðsins á æfingunni var á hámarki (meðal RPE ${score}). Þetta er mesta mögulega álag sem leikmenn upplifðu. Hvíld og endurhæfing eru sérstaklega mikilvægar næstu 48 klst. (${sub})`;
+}
+
+function rpeScoreLabel(rpe: number | null): string {
+  if (rpe == null) return "—";
+  if (rpe <= 2) return "Very easy";
+  if (rpe <= 4) return "Easy";
+  if (rpe <= 6) return "Moderate";
+  if (rpe <= 8) return "Hard";
+  if (rpe <= 9) return "Very hard";
+  return "Maximal";
+}
+
+function rpeLoadBand(sessionLoad: number | null): string {
+  if (sessionLoad == null) return "—";
+  if (sessionLoad < 200) return "Very light  (<200)";
+  if (sessionLoad < 400) return "Light  (200–399)";
+  if (sessionLoad < 600) return "Moderate  (400–599)";
+  if (sessionLoad < 800) return "Hard  (600–799)";
+  return "Very hard  (≥800)";
+}
+
+function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) {
+  const PLAYERS_PER_PAGE = 30;
+
+  // GPS page only shows players who actually have GPS data
+  const gpsPlayers = data.players.filter((p) => p.totalDistance != null);
+  const pages: PostTrainingReportPlayer[][] = [];
+  for (let i = 0; i < gpsPlayers.length; i += PLAYERS_PER_PAGE) {
+    pages.push(gpsPlayers.slice(i, i + PLAYERS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  const alerts = data.players.filter((p) => p.attentionFlag === "ALERT");
+  const monitors = data.players.filter((p) => p.attentionFlag === "MONITOR");
+
+  // RPE table: all players who submitted RPE, sorted highest first
+  const rpeTablePlayers = data.players.filter((p) => p.rpeSubmitted).sort((a, b) => (b.rpe ?? -1) - (a.rpe ?? -1));
+  const interpretText = rpeInterpretation(data.rpeTeamAvg, data.rpeSubmissionCount, data.players.length);
+
+  return (
+    <Document>
+      {/* ══ Page 1: Internal Load — RPE ══ */}
+      <Page size="A4" orientation="landscape" style={postStyles.page}>
+        {/* Header */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.h1}>Post-Training Report</Text>
+          <Text style={postStyles.subtitle}>
+            {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
+          </Text>
+        </View>
+
+        {/* RPE summary boxes */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>Innri álag — Session RPE</Text>
+          <View style={postStyles.summaryRow}>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeTeamAvg != null ? numFmt2(data.rpeTeamAvg, 1) : "—"}</Text>
+              <Text style={postStyles.summaryLabel}>Meðal RPE liðsins</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeTotalLoad != null ? numFmt2(data.rpeTotalLoad, 0) : "—"}</Text>
+              <Text style={postStyles.summaryLabel}>Heildar session load</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{data.rpeSubmissionCount} / {data.players.length}</Text>
+              <Text style={postStyles.summaryLabel}>Leikmenn skildu inn</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Interpretation text */}
+        <View style={[postStyles.section, { backgroundColor: "#F9FAFB", border: "1 solid #E5E7EB", borderRadius: 4, padding: 10 }]}>
+          <Text style={{ fontSize: 10, color: "#111827", lineHeight: 1.5 }}>{interpretText}</Text>
+          <Text style={{ fontSize: 8, color: "#9CA3AF", marginTop: 6 }}>
+            Session Load = RPE x Mínútur (AU). Flokkur: &lt;200 Very light · 200-399 Light · 400-599 Moderate · 600-799 Hard · &gt;=800 Very hard
+          </Text>
+        </View>
+
+        {/* Per-player RPE table (sorted by RPE desc) */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>RPE eftir leikmann (raðað eftir RPE, hæst fyrst)</Text>
+          <View style={postStyles.table}>
+            <View style={postStyles.tHead}>
+              <Text style={[postStyles.colRpeName, postStyles.hdr]}>Leikmaður</Text>
+              <Text style={[postStyles.colRpePos, postStyles.hdr]}>Staða</Text>
+              <Text style={[postStyles.colRpeScore, postStyles.hdr]}>RPE</Text>
+              <Text style={[postStyles.colRpeDesc, postStyles.hdr]}>Lýsing</Text>
+              <Text style={[postStyles.colRpeDur, postStyles.hdr]}>Tímalengd (mín)</Text>
+              <Text style={[postStyles.colRpeLoad, postStyles.hdr]}>Session Load</Text>
+              <Text style={[postStyles.colRpeBand, postStyles.hdr]}>Session Load flokkur</Text>
+            </View>
+            {rpeTablePlayers.map((p, i) => {
+              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+              const rpeNumStyle = p.rpe != null && p.rpe >= 9 ? postStyles.attnAlert : p.rpe != null && p.rpe >= 7 ? postStyles.attnMonitor : postStyles.attnOk;
+              return (
+                <View key={p.name + "-rpe"} style={rowStyle}>
+                  <Text style={postStyles.colRpeName}>{p.name}</Text>
+                  <Text style={postStyles.colRpePos}>{p.position}</Text>
+                  <Text style={[postStyles.colRpeScore, rpeNumStyle]}>{p.rpeSubmitted ? numFmt2(p.rpe, 1) : "—"}</Text>
+                  <Text style={[postStyles.colRpeDesc, rpeNumStyle]}>{p.rpeSubmitted ? rpeScoreLabel(p.rpe) : "—"}</Text>
+                  <Text style={postStyles.colRpeDur}>{p.rpeSubmitted ? numFmt2(p.durationMinutes, 0) : "—"}</Text>
+                  <Text style={postStyles.colRpeLoad}>{p.rpeSubmitted ? numFmt2(p.sessionLoad, 0) : "—"}</Text>
+                  <Text style={postStyles.colRpeBand}>{p.rpeSubmitted ? rpeLoadBand(p.sessionLoad) : "Ekki skilað"}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </Page>
+
+      {/* ══ Page 2: External Load — GPS ══ */}
+      <Page size="A4" orientation="landscape" style={postStyles.page}>
+        <View style={postStyles.section}>
+          <Text style={postStyles.h1}>Post-Training Report — GPS (Catapult)</Text>
+          <Text style={postStyles.subtitle}>
+            {data.teamName} · {data.sessionDate} · {data.mdDay} · {gpsPlayers.length} players with GPS data
+          </Text>
+        </View>
+
+        {/* GPS team averages */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>Ytra álag — liðsmeðaltal</Text>
+          <View style={postStyles.summaryRow}>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.totalDistance, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Total Dist (m)</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.hsd, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>HSD (m)</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.playerLoad, 1)}</Text>
+              <Text style={postStyles.summaryLabel}>Player Load</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.accelB23, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Accel B2-3</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.decelB23, 0)}</Text>
+              <Text style={postStyles.summaryLabel}>Decel B2-3</Text>
+            </View>
+            <View style={postStyles.summaryBox}>
+              <Text style={postStyles.summaryVal}>{numFmt2(data.teamAvg.maxVelocity, 1)}</Text>
+              <Text style={postStyles.summaryLabel}>Max Vel (m/s)</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Attention flags */}
+        {(alerts.length > 0 || monitors.length > 0) && (
+          <View style={postStyles.section}>
+            <Text style={postStyles.sectionTitle}>
+              Attention — {alerts.length} ALERT · {monitors.length} MONITOR
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                {alerts.map((p) => (
+                  <View key={p.name + "-alert"} style={postStyles.alertBox}>
+                    <Text style={postStyles.alertName}>! {p.name} ({p.position})</Text>
+                    {p.attentionReason.map((line, i) => (
+                      <Text key={i} style={postStyles.alertLine}>· {line}</Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+              <View style={{ flex: 1 }}>
+                {monitors.map((p) => (
+                  <View key={p.name + "-monitor"} style={postStyles.monitorBox}>
+                    <Text style={postStyles.monitorName}>~ {p.name} ({p.position})</Text>
+                    {p.attentionReason.map((line, i) => (
+                      <Text key={i} style={postStyles.monitorLine}>· {line}</Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Player GPS table — first GPS page */}
+        <View style={postStyles.section}>
+          <Text style={postStyles.sectionTitle}>GPS gögn eftir leikmann (raðað eftir heildar vegalengd)</Text>
+          <View style={postStyles.table}>
+            <View style={postStyles.tHead}>
+              <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
+              <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
+              <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
+              <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
+              <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
+              <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
+            </View>
+            {(pages[0] ?? []).map((p, i) => {
+              const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+              const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
+              const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
+              return (
+                <View key={p.name} style={rowStyle}>
+                  <Text style={postStyles.colName}>{p.name}</Text>
+                  <Text style={postStyles.colPos}>{p.position}</Text>
+                  <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
+                  <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
+                  <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
+                  <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </Page>
+
+      {/* ── GPS overflow pages if many players ── */}
+      {pages.slice(1).map((pagePlayers, pgIdx) => (
+        <Page key={"pt-page-" + (pgIdx + 3)} size="A4" orientation="landscape" style={postStyles.page}>
+          <Text style={postStyles.h1}>Post-Training Report — GPS (cont.) · {data.sessionDate}</Text>
+          <View style={[postStyles.section, { marginTop: 8 }]}>
+            <View style={postStyles.table}>
+              <View style={postStyles.tHead}>
+                <Text style={[postStyles.colName, postStyles.hdr]}>Leikmaður</Text>
+                <Text style={[postStyles.colPos, postStyles.hdr]}>Staða</Text>
+                <Text style={[postStyles.colFlag, postStyles.hdr]}>Pre</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Dist</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>HSD</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL</Text>
+                <Text style={[postStyles.colPct, postStyles.hdr]}>%28D</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>PL/min</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Ac B2-3</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>De B2-3</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>Vmax</Text>
+                <Text style={[postStyles.colMetric, postStyles.hdr]}>ACWR</Text>
+                <Text style={[postStyles.colAttn, postStyles.hdr]}>Signal</Text>
+              </View>
+              {pagePlayers.map((p, i) => {
+                const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+                const flagStyle = p.readinessFlag === "RED" ? postStyles.flagRed : p.readinessFlag === "YELLOW" ? postStyles.flagYellow : postStyles.flagGreen;
+                const attnStyle = p.attentionFlag === "ALERT" ? postStyles.attnAlert : p.attentionFlag === "MONITOR" ? postStyles.attnMonitor : postStyles.attnOk;
+                return (
+                  <View key={p.name} style={rowStyle}>
+                    <Text style={postStyles.colName}>{p.name}</Text>
+                    <Text style={postStyles.colPos}>{p.position}</Text>
+                    <Text style={[postStyles.colFlag, flagStyle]}>{p.readinessFlag}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.totalDistance, 0)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.totalDistancePct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.hsd, 0)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.hsdPct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoad, 1)}</Text>
+                    <Text style={postStyles.colPct}>{pctFmt(p.playerLoadPct)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.playerLoadPerMin, 2)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.accelB23, 0)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.decelB23, 0)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.maxVelocity, 1)}</Text>
+                    <Text style={postStyles.colMetric}>{numFmt2(p.acwr, 2)}</Text>
+                    <Text style={[postStyles.colAttn, attnStyle]}>{p.attentionFlag}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </Page>
+      ))}
+    </Document>
+  );
+}
+
+function dominantTeamAction(signal: TeamSignal | null): TrainingAction | "—" {
+  if (!signal) return "—";
+  const pairs: Array<[TrainingAction, number]> = [
+    ["FULL", signal.n_full ?? 0],
+    ["REDUCED", signal.n_reduced ?? 0],
+    ["RECOVERY", signal.n_recovery ?? 0],
+  ];
+  pairs.sort((a, b) => b[1] - a[1]);
+  return pairs[0]?.[0] ?? "—";
+}
+
+function graphAthleteStateFromFlag(flag: FinalFlag | null | undefined): "GREEN" | "YELLOW" | "RED" | null {
+  const f = String(flag ?? "").toUpperCase();
+  if (f === "RED") return "RED";
+  if (f === "YELLOW") return "YELLOW";
+  if (f === "GREEN") return "GREEN";
+  return null;
+}
+
+function graphMdContextFromToken(md: string | null | undefined): "MD5" | "MD4" | "MD3" | "MD2" | "MD1" | "MD_PLUS_1" | "OFF" | "UNKNOWN" | null {
+  const raw = String(md ?? "").trim().toUpperCase();
+  if (!raw) return null;
+  if (raw === "OFF" || raw === "REST") return "OFF";
+  if (raw === "UNKNOWN") return "UNKNOWN";
+  if (raw === "MD" || raw === "MD-1" || raw === "MD1") return "MD1";
+  if (raw === "MD+1") return "MD_PLUS_1";
+  if (raw === "MD-2" || raw === "MD2") return "MD2";
+  if (raw === "MD-3" || raw === "MD3") return "MD3";
+  if (raw === "MD-4" || raw === "MD4") return "MD4";
+  if (raw === "MD-5" || raw === "MD5") return "MD5";
+  return null;
+}
+
+function graphNeuralFatigueBandFromState(
+  neuralState: string | null | undefined
+): "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | null {
+  const s = String(neuralState ?? "").toUpperCase();
+  if (!s) return null;
+  if (s === "CRITICAL") return "VERY_HIGH";
+  if (s === "HIGH") return "HIGH";
+  if (s === "RISING") return "MODERATE";
+  if (s === "STABLE") return "LOW";
+  return null;
+}
+
+function buildDecisionConfidence(params: {
+  readinessScore: number | null;
+  mdContext: string | null;
+  neuralFatigueBand: string | null;
+  yesterdayLoadBand: string | null;
+  fallbackUsed: boolean;
+}): DecisionConfidence {
+  const inputs: Array<{ label: string; present: boolean }> = [
+    { label: "Readiness score", present: typeof params.readinessScore === "number" && Number.isFinite(params.readinessScore) },
+    {
+      label: "MD context",
+      present: !!params.mdContext && params.mdContext !== "UNKNOWN",
+    },
+    { label: "Neural fatigue band", present: !!params.neuralFatigueBand },
+    { label: "Yesterday load band", present: !!params.yesterdayLoadBand },
+  ];
+
+  const inputsUsed = inputs.filter((x) => x.present).map((x) => x.label);
+  const missingInputs = inputs.filter((x) => !x.present).map((x) => x.label);
+  const usedCount = inputsUsed.length;
+  const fallbackUsed = params.fallbackUsed;
+
+  let level: DecisionConfidence["level"] = "MEDIUM";
+  if (usedCount === inputs.length && !fallbackUsed) level = "HIGH";
+  else if (usedCount <= 1 || (fallbackUsed && usedCount <= 2)) level = "LOW";
+
+  return {
+    level,
+    inputsUsed,
+    missingInputs,
+    fallbackUsed,
+  };
+}
+
+/** -----------------------------
+ * Small UI components
+ * ----------------------------- */
+function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5">
+      <Link
+        href="/coach/week-setup"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        <span>Week setup</span>
+        {weeklyOutlook ? (
+          <span className="ml-1 text-xs font-normal text-slate-400">{weeklyOutlook}</span>
+        ) : null}
+      </Link>
+
+      <div className="h-4 w-px bg-slate-200" />
+
+      <Link
+        href="/coach/match-minutes"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        Match minutes
+      </Link>
+
+      <div className="h-4 w-px bg-slate-200" />
+
+      <Link
+        href="/coach/messages"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        Messages
+      </Link>
+
+      <div className="h-4 w-px bg-slate-200" />
+
+      <Link
+        href="/coach/display?refresh=15"
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        TV view ↗
+      </Link>
+    </div>
+  );
+}
+
+/** -----------------------------
+ * Main page
+ * ----------------------------- */
+export default function CoachPage() {
+  const router = useRouter();
+  const [lang, setLang] = useLang();
+  const ct = COACH_COPY[lang];
+
+  const PAGE_SIZE = 100;
+
+  // Plan-based access control
+  const { isAtLeastPro, loading: planLoading } = usePlan();
+
+  type CoachTab = "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+  const [dashTab, setDashTab] = useState<CoachTab>("today");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
+
+  // PWA detection
+  const [isPwa, setIsPwa] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(display-mode: standalone)");
+    const update = () => setIsPwa(mq.matches || !!(navigator as any).standalone);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+
+  const [filter, setFilter] = useState<Filter>("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
+  const [draftAction, setDraftAction] = useState<Record<string, TrainingAction>>({});
+  const [draftMessage, setDraftMessage] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+  const [detailSectionOpenByPlayer, setDetailSectionOpenByPlayer] = useState<Record<string, Partial<Record<PlayerDetailSectionKey, boolean>>>>({});
+
+  const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
+  const [weekGrid, setWeekGrid] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<TemplateLite[]>([]);
+
+  const [coachName, setCoachName] = useState<string>("");
+  const [coachDisplayName, setCoachDisplayName] = useState<string>("—");
+  const [coachVerified, setCoachVerified] = useState(false);
+  const [coachRole, setCoachRole] = useState<string>("coach");
+  const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+  const [teamSport, setTeamSport] = useState<string | null>(null);
+  const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+
+  // MD context
+  const [mdContextToday, setMdContextToday] = useState<string | null>(null);
+
+  // Team rollups
+  const [teamIntel, setTeamIntel] = useState<TeamIntel | null>(null);
+  const [teamSignal, setTeamSignal] = useState<TeamSignal | null>(null);
+  const [unitAlerts, setUnitAlerts] = useState<any[]>([]);
+
+  // Generator
+  const [genLoading, setGenLoading] = useState(false);
+  const [genToast, setGenToast] = useState("");
+
+  // Save all dirty
+  const [saveAllLoading, setSaveAllLoading] = useState(false);
+  const [saveAllToast, setSaveAllToast] = useState("");
+
+  // Auto-lock
+  const [autoLockRan, setAutoLockRan] = useState(false);
+  const isAdmin = useMemo(() => String(coachRole ?? "").toLowerCase() === "admin", [coachRole]);
+
+  useEffect(() => {
+    const load = () => setAdminConfigSnapshot(loadAdminConfigSnapshotFromStorage());
+    load();
+
+    const onStorage = () => load();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Z history
+  const [zHistory, setZHistory] = useState<Record<string, number[]>>({});
+  const [recentMonitoringByPlayer, setRecentMonitoringByPlayer] = useState<Record<string, VolatilityDailyPoint[]>>({});
+  const [volatilityOpenByPlayer, setVolatilityOpenByPlayer] = useState<Record<string, boolean>>({});
+  const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
+  const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
+
+  // GPS tab — all players fetched independently of readiness rows
+  const [gpsAllPlayers, setGpsAllPlayers] = useState<Array<{
+    id: string;
+    name: string;
+    position: string;
+    history: Array<Record<string, unknown>>;
+  }>>([]);
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  // Yesterday load context
+  const [ctxHsr, setCtxHsr] = useState<string>("");
+  const [ctxAcc, setCtxAcc] = useState<string>("");
+  const [ctxDec, setCtxDec] = useState<string>("");
+  const [ctxDist, setCtxDist] = useState<string>("");
+  const [ctxVmax, setCtxVmax] = useState<string>("");
+  const [ctxDuration, setCtxDuration] = useState<string>("");
+  const [ctxIntensity, setCtxIntensity] = useState<"LOW" | "MEDIUM" | "HIGH" | "OFF" | "">("");
+  // GPS-specific yesterday metrics (from Catapult)
+  const [ctxVelB5, setCtxVelB5] = useState<string>("");
+  const [ctxVelB6, setCtxVelB6] = useState<string>("");
+  const [ctxAccB23, setCtxAccB23] = useState<string>("");
+  const [ctxDecB23, setCtxDecB23] = useState<string>("");
+  const [ctxYesterdayLoaded, setCtxYesterdayLoaded] = useState(false);
+
+  const [ctxSaving, setCtxSaving] = useState(false);
+  const [localDecisionLoading, setLocalDecisionLoading] = useState(false);
+  const [localDecision, setLocalDecision] = useState<any | null>(null);
+  const [localDecisionError, setLocalDecisionError] = useState<string>("");
+  const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
+  const [reminderStatusLoading, setReminderStatusLoading] = useState(false);
+  const [reminderStatusError, setReminderStatusError] = useState("");
+  const [manualReminderSending, setManualReminderSending] = useState(false);
+  const [catapultSyncing, setCatapultSyncing] = useState(false);
+  const [catapultSyncMessage, setCatapultSyncMessage] = useState("");
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  // Compliance / imputation
+  const [complianceSummary, setComplianceSummary] = useState<{
+    checkin: { submitted: number; imputed: number; missing: number };
+    rpe:     { submitted: number; imputed: number; missing: number };
+  } | null>(null);
+  const [complianceMissing, setComplianceMissing] = useState<Array<{
+    player_id: string; full_name: string; missing_checkin: boolean; missing_rpe: boolean;
+  }>>([]);
+  const [imputing, setImputing] = useState(false);
+  const [imputeMessage, setImputeMessage] = useState("");
+  const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
+
+  // MLI + Metabolic Load per player (for Decision Summary enrichment)
+  const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
+  const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
+  // VBT fatigue flags per player
+  const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
+    exerciseName: string; loadKg: number; velocityDropPct: number;
+    baselineVelocity: number; worstVelocity: number;
+  }>>>({});
+
+  // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
+  useEffect(() => {
+    if (!rows.length || !coachTeamId) return;
+    const entryDate = rows[0]?.entry_date ?? today;
+    const yd = new Date(entryDate);
+    yd.setDate(yd.getDate() - 1);
+    const yesterdayStr = yd.toISOString().slice(0, 10);
+    const datesToTry = [entryDate, yesterdayStr];
+
+    (async () => {
+      let headers: Record<string, string>;
+      try {
+        headers = await getCoachAuthHeaders();
+      } catch {
+        return; // not authenticated
+      }
+
+      // MLI — try entry date first, if no rows fall back to yesterday
+      for (const dateStr of datesToTry) {
+        try {
+          const res = await fetch(`/api/coach/player-load/mli?teamId=${coachTeamId}&date=${dateStr}`, { headers });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const validRows = (data?.rows ?? []).filter((r: any) => r.mli != null);
+          if (validRows.length > 0) {
+            const map: Record<string, { mli: number | null; band: string | null }> = {};
+            for (const r of validRows) {
+              map[r.player_id] = { mli: r.mli ?? null, band: r.mli_band ?? null };
+            }
+            setPlayerMli(map);
+            break;
+          }
+        } catch { /* continue to next date */ }
+      }
+
+      // Metabolic — same pattern
+      for (const dateStr of datesToTry) {
+        try {
+          const res = await fetch(`/api/coach/player-load/metabolic?teamId=${coachTeamId}&date=${dateStr}`, { headers });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const validRows = (data?.rows ?? []).filter((r: any) => r.metabolic_load_score != null);
+          if (validRows.length > 0) {
+            const map: Record<string, { score: number | null; band: string | null }> = {};
+            for (const r of validRows) {
+              map[r.player_id] = { score: r.metabolic_load_score ?? null, band: r.metabolic_load_band ?? null };
+            }
+            setPlayerMetabolic(map);
+            break;
+          }
+        } catch { /* continue to next date */ }
+      }
+
+      // VBT fatigue — velocity loss from first 2 sets
+      try {
+        const res = await fetch(`/api/coach/vbt-fatigue?teamId=${coachTeamId}&date=${entryDate}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.players?.length) {
+            const map: Record<string, Array<{
+              exerciseName: string; loadKg: number; velocityDropPct: number;
+              baselineVelocity: number; worstVelocity: number;
+            }>> = {};
+            for (const p of data.players) {
+              if (p.hasFatigue && p.flags?.length) {
+                map[p.playerId] = p.flags.map((f: any) => ({
+                  exerciseName: f.exerciseName,
+                  loadKg: f.loadKg,
+                  velocityDropPct: f.velocityDropPct,
+                  baselineVelocity: f.baselineVelocity,
+                  worstVelocity: f.worstVelocity,
+                }));
+              }
+            }
+            setPlayerVbtFatigue(map);
+          }
+        }
+      } catch { /* VBT fatigue is optional */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length, coachTeamId]);
+
+  // Auto-fill zeros when OFF
+  useEffect(() => {
+    if (ctxIntensity !== "OFF") return;
+    setCtxHsr("0");
+    setCtxAcc("0");
+    setCtxDec("0");
+    setCtxDist("0");
+    setCtxVmax("0");
+    setCtxDuration("0");
+  }, [ctxIntensity]);
+
+  const today = useMemo(() => todayISO(), []);
+
+  // Header MD-day (team display)
+  const mdDayToday = useMemo(() => {
+    const t = dateKey(todayISO());
+    const row = (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === t) ?? null;
+    const src = mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
+    return prettyMd(src).md;
+  }, [weekGrid, planPreview?.md_day, mdContextToday]);
+
+
+  /** -----------------------------
+   * Utilities
+   * ----------------------------- */
+  const AUTO_LOCK_MINUTES_BEFORE = 30;
+  const DEFAULT_SESSION_START = { hour: 16, minute: 0 };
+
+  function toIntOrNull(v: string): number | null {
+    const n = Number(v);
+    return Number.isFinite(n) && v.trim() !== "" ? Math.trunc(n) : null;
+  }
+  function toNumOrNull(v: string): number | null {
+    const n = Number(v);
+    return Number.isFinite(n) && v.trim() !== "" ? n : null;
+  }
+  function driverLabel(input: unknown): string {
+    if (input && typeof input === "object") {
+      const obj = input as { label?: unknown; code?: unknown; points?: unknown };
+      if (typeof obj.label === "string" && obj.label.trim().length) {
+        const pts = typeof obj.points === "number" && Number.isFinite(obj.points) ? `(+${obj.points})` : "";
+        return `${obj.label}${pts}`;
+      }
+      if (typeof obj.code === "string" && obj.code.trim().length) {
+        return String(obj.code)
+          .toLowerCase()
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+    }
+    return String(input ?? "")
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+  }
+  function hasExplicitPainInNotes(note: string | null | undefined): boolean {
+    const text = String(note ?? "").toLowerCase();
+    if (!text) return false;
+    return /(pain|injur|injury|meið|meid|verk|hamstring|groin|adductor|achilles|patellar|stíf)/i.test(text);
+  }
+  function deriveTissueProtectionSignal(input: {
+    fatigueType: string;
+    fatigueSeverity: string;
+    sorenessScore: number | null;
+    noteText: string | null | undefined;
+    neuralFatigueBand: "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | null;
+    readinessScore: number | null;
+    zScore: number | null;
+    stenScore: number | null;
+  }): {
+    painProtection: boolean;
+    tissueSignal: boolean;
+    tissueSeverity: "LOW" | "MODERATE" | "HIGH" | null;
+    explicitPainTextFlag: boolean;
+  } {
+    const tissueSignal = input.fatigueType === "TISSUE";
+    const tissueSeverity: "LOW" | "MODERATE" | "HIGH" | null =
+      input.fatigueSeverity === "LOW" || input.fatigueSeverity === "MODERATE" || input.fatigueSeverity === "HIGH"
+        ? input.fatigueSeverity
+        : null;
+    const lowSoreness = typeof input.sorenessScore === "number" && input.sorenessScore <= 2;
+    const goodSoreness = typeof input.sorenessScore === "number" && input.sorenessScore >= 4;
+    const explicitPainTextFlag = hasExplicitPainInNotes(input.noteText);
+    const tissueSeverityEscalates = tissueSeverity === "MODERATE" || tissueSeverity === "HIGH";
+    const strongRedCompanion =
+      input.neuralFatigueBand === "HIGH" ||
+      input.neuralFatigueBand === "VERY_HIGH" ||
+      (typeof input.readinessScore === "number" && input.readinessScore < 40) ||
+      (typeof input.zScore === "number" && input.zScore <= -1);
+    const strongPositiveGuardrail =
+      typeof input.zScore === "number" &&
+      input.zScore > 1.5 &&
+      typeof input.stenScore === "number" &&
+      input.stenScore >= 8 &&
+      goodSoreness &&
+      tissueSeverity === "LOW";
+    const painProtection =
+      tissueSignal &&
+      !strongPositiveGuardrail &&
+      (tissueSeverityEscalates || lowSoreness || explicitPainTextFlag || strongRedCompanion);
+
+    return {
+      painProtection,
+      tissueSignal,
+      tissueSeverity,
+      explicitPainTextFlag,
+    };
+  }
+  function formatAdaptationFallback(adaptation: Row["_adaptation"]): string {
+    if (!adaptation) return "";
+    const parts: string[] = [];
+    if (typeof adaptation.reduceVolumePct === "number") parts.push(`-${adaptation.reduceVolumePct}% volume`);
+    if (typeof adaptation.reduceContactsPct === "number") parts.push(`-${adaptation.reduceContactsPct}% contacts`);
+    if (adaptation.extendRest) parts.push("extended rest");
+    if (adaptation.simplifySession) parts.push("simplify session");
+    if (adaptation.recoveryBias) parts.push("recovery bias");
+    if (adaptation.swapBallistic) parts.push("swap ballistic");
+    if (adaptation.protectTissue) parts.push(`protect ${String(adaptation.protectTissue).toLowerCase()}`);
+    if (adaptation.addTendonReload) parts.push("add tendon reload");
+    if (adaptation.addNeuralReset) parts.push("add neural reset");
+    return parts.join(", ");
+  }
+  function adaptationDetailLines(adaptation: Row["_adaptation"]): string[] {
+    if (!adaptation) return [];
+    const lines: string[] = [];
+    if (typeof adaptation.reduceVolumePct === "number") lines.push(`Reduce volume: ${adaptation.reduceVolumePct}%`);
+    if (typeof adaptation.reduceContactsPct === "number") lines.push(`Reduce contacts: ${adaptation.reduceContactsPct}%`);
+    if (adaptation.extendRest) lines.push("Extend rest intervals");
+    if (adaptation.simplifySession) lines.push("Simplify session");
+    if (adaptation.recoveryBias) lines.push("Recovery bias");
+    if (adaptation.swapBallistic) lines.push("Swap ballistic elements");
+    if (adaptation.protectTissue) lines.push(`Protect tissue: ${adaptation.protectTissue}`);
+    if (adaptation.addTendonReload) lines.push("Add tendon reload");
+    if (adaptation.addNeuralReset) lines.push("Add neural reset");
+    if (adaptation.notes?.length) lines.push(`Notes: ${adaptation.notes.join(", ")}`);
+    return lines;
+  }
+  function truncateLine(value: string | null | undefined, max = 92): string {
+    const s = String(value ?? "").trim();
+    if (!s) return "";
+    if (s.length <= max) return s;
+    return `${s.slice(0, Math.max(0, max - 1))}…`;
+  }
+  function neuralBiasReasonLabel(code: string): string {
+    const c = String(code ?? "").toUpperCase();
+    if (c === "TEAM_NEURAL_LOAD_RISING") return "Rising team neural load";
+    if (c === "TEAM_NEURAL_LOAD_HIGH") return "High team neural load";
+    if (c === "TEAM_NEURAL_LOAD_CRITICAL") return "Critical team neural load";
+    if (c === "TEAM_NEXT_DAY_RISK_MODERATE") return "Moderate next-day risk";
+    if (c === "TEAM_NEXT_DAY_RISK_HIGH") return "High next-day risk";
+    if (c === "PLAYER_NEURAL_LOAD_RISING") return "Rising neural load";
+    if (c === "PLAYER_NEURAL_LOAD_HIGH") return "High neural load";
+    if (c === "PLAYER_NEURAL_LOAD_CRITICAL") return "Critical neural load";
+    if (c === "PLAYER_NEXT_DAY_RISK_MODERATE") return "Moderate next-day risk";
+    if (c === "PLAYER_NEXT_DAY_RISK_HIGH") return "High next-day risk";
+    if (c === "PLAYER_TRAJECTORY_DECLINING") return "Declining trajectory";
+    if (c === "PLAYER_NEURAL_BIAS_REDUCE") return "Bias nudged action to reduced volume";
+    if (c === "PLAYER_NEURAL_BIAS_NO_SPRINT") return "Bias nudged action to no sprint";
+    return driverLabel(c);
+  }
+  function formatNeuralBiasReasons(codes: string[] | null | undefined, limit = 3): string {
+    const arr = (codes ?? []).filter(Boolean);
+    if (!arr.length) return "";
+    return arr
+      .slice(0, limit)
+      .map((c) => neuralBiasReasonLabel(c))
+      .join(" + ");
+  }
+
+  function ydayOf(dateStr: string) {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function getCoachAuthHeaders() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw new Error(error.message);
+    const accessToken = data?.session?.access_token;
+    if (!accessToken) throw new Error("Missing auth token");
+    return {
+      Authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    };
+  }
+
+  async function loadReminderStatus(dateKey: string) {
+    try {
+      setReminderStatusLoading(true);
+      setReminderStatusError("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch(`/api/reminders/status?dateKey=${encodeURIComponent(dateKey)}`, {
+        method: "GET",
+        headers,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to load reminder status.");
+      setReminderStatus((json?.status ?? null) as ReminderStatus | null);
+    } catch (e: any) {
+      setReminderStatus(null);
+      setReminderStatusError(e?.message ?? "Failed to load reminder status.");
+    } finally {
+      setReminderStatusLoading(false);
+    }
+  }
+
+  async function sendManualReminder(dateKey: string) {
+    try {
+      setManualReminderSending(true);
+      setReminderStatusError("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/reminders/send", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ dateKey }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to send manual reminders.");
+      await loadReminderStatus(dateKey);
+    } catch (e: any) {
+      setReminderStatusError(e?.message ?? "Failed to send manual reminders.");
+    } finally {
+      setManualReminderSending(false);
+    }
+  }
+
+  async function syncCatapultForDate(entryDate: string) {
+    try {
+      setCatapultSyncing(true);
+      setCatapultSyncMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/integrations/catapult/daily-sync", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date: entryDate }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync Catapult.");
+      const stored = Number(json?.result?.storedCount ?? 0);
+      const unmatched = Number(json?.result?.unmatchedCount ?? 0);
+      setCatapultSyncMessage(`Catapult synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      await loadToday();
+    } catch (e: any) {
+      setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");
+    } finally {
+      setCatapultSyncing(false);
+    }
+  }
+
+  async function fetchCompliance(date?: string) {
+    try {
+      const headers = await getCoachAuthHeaders();
+      const d = date ?? today;
+      const res = await fetch(`/api/coach/impute?date=${d}`, { headers });
+      const json = await res.json().catch(() => ({}));
+      if (json?.ok) {
+        setComplianceSummary(json.summary ?? null);
+        setComplianceMissing(json.missing ?? []);
+      }
+    } catch {
+      // non-critical — ignore
+    }
+  }
+
+  async function runImputation() {
+    try {
+      setImputing(true);
+      setImputeMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/coach/impute", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date: today }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Imputation failed.");
+      const ri = Number(json.readiness_imputed ?? 0);
+      const rpe = Number(json.rpe_imputed ?? 0);
+      setImputeMessage(`Fyllt inn: ${ri} check-in${ri !== 1 ? "s" : ""} · ${rpe} RPE`);
+      await fetchCompliance();
+      await loadToday();
+    } catch (e: unknown) {
+      setImputeMessage((e instanceof Error ? e.message : null) ?? "Villa við imputation.");
+    } finally {
+      setImputing(false);
+    }
+  }
+
+  async function loadYesterdayContext(teamId: string, entryDate: string) {
+    const yday = ydayOf(entryDate);
+
+    // Auto-populate from Catapult team data — no manual input needed
+    const { data, error } = await supabase
+      .from("player_external_load_daily")
+      .select("hir_dist, tot_as, tot_ds, total_distance, max_vel, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
+      .eq("team_id", teamId)
+      .eq("date", yday)
+      .eq("source", "catapult");
+
+    if (error) {
+      console.warn("loadYesterdayContext (Catapult) error:", error.message);
+      return;
+    }
+
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    setCtxYesterdayLoaded(true);
+    if (!rows.length) return;
+
+    function avgOf(key: string): number | null {
+      const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && isFinite(v));
+      return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+    }
+    function maxOf(key: string): number | null {
+      const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && isFinite(v));
+      return vals.length ? Math.max(...vals) : null;
+    }
+
+    const avgDist = avgOf("total_distance");
+    const intensity: "OFF" | "LOW" | "MEDIUM" | "HIGH" =
+      avgDist == null || avgDist === 0 ? "OFF"
+      : avgDist > 7000 ? "HIGH"
+      : avgDist > 4000 ? "MEDIUM"
+      : "LOW";
+
+    setCtxHsr(avgOf("hir_dist")?.toString() ?? "");
+    setCtxAcc(avgOf("tot_as")?.toString() ?? "");
+    setCtxDec(avgOf("tot_ds")?.toString() ?? "");
+    setCtxDist(avgDist?.toString() ?? "");
+    setCtxVmax(maxOf("max_vel")?.toString() ?? "");
+    setCtxIntensity(intensity);
+    setCtxDuration("");
+    // GPS-specific metrics
+    setCtxVelB5(avgOf("velocity_band5_total_distance")?.toString() ?? "");
+    setCtxVelB6(avgOf("velocity_band6_total_distance")?.toString() ?? "");
+    setCtxAccB23(avgOf("accel_b2_3_tot_effs_gen2")?.toString() ?? "");
+    setCtxDecB23(avgOf("decel_b2_3_tot_effs_gen2")?.toString() ?? "");
+  }
+
+  async function saveYesterdayContext(teamId: string, entryDate: string) {
+    setCtxSaving(true);
+    try {
+      const yday = ydayOf(entryDate);
+
+      const intensity = ctxIntensity;
+      const hsr_m = toIntOrNull(ctxHsr);
+      const acc_total = toIntOrNull(ctxAcc);
+      const dec_total = toIntOrNull(ctxDec);
+      const total_distance_m = toIntOrNull(ctxDist);
+      const max_velocity_pct = toNumOrNull(ctxVmax);
+      const duration_min = toIntOrNull(ctxDuration);
+
+      const normalized = {
+        hsr_m: intensity === "OFF" ? 0 : hsr_m ?? null,
+        acc_total: intensity === "OFF" ? 0 : acc_total ?? null,
+        dec_total: intensity === "OFF" ? 0 : dec_total ?? null,
+        total_distance_m: intensity === "OFF" ? 0 : total_distance_m ?? null,
+        max_velocity_pct: intensity === "OFF" ? 0 : max_velocity_pct ?? null,
+        duration_min: intensity === "OFF" ? 0 : duration_min ?? null,
+        intensity: intensity || null,
+      };
+
+      const payload: any = {
+        team_id: teamId,
+        session_date: yday,
+        ...normalized,
+      };
+
+      const { error } = await supabase.from("training_session_context").upsert(payload, { onConflict: "team_id,session_date" });
+      if (error) throw error;
+    } catch (e: any) {
+      setError(e?.message ?? "Save yesterday load mistókst.");
+    } finally {
+      setCtxSaving(false);
+    }
+  }
+
+  async function computeLocalTeamDecisionPreview() {
+  setLocalDecisionLoading(true);
+  setLocalDecisionError("");
+  try {
+    const intensity = ctxIntensity;
+    
+      const hsr_m = toIntOrNull(ctxHsr);
+      const acc_total = toIntOrNull(ctxAcc);
+      const dec_total = toIntOrNull(ctxDec);
+      const total_distance_m = toIntOrNull(ctxDist);
+      const max_velocity_pct = toNumOrNull(ctxVmax);
+
+      const normalized = {
+        hsr_m: intensity === "OFF" ? 0 : hsr_m ?? null,
+        acc_total: intensity === "OFF" ? 0 : acc_total ?? null,
+        dec_total: intensity === "OFF" ? 0 : dec_total ?? null,
+        total_distance_m: intensity === "OFF" ? 0 : total_distance_m ?? null,
+        max_velocity_pct: intensity === "OFF" ? 0 : max_velocity_pct ?? null,
+        intensity: intensity || null,
+      };
+
+      const players = (rows ?? []).map((r) => ({
+        player_id: String(r.player_id),
+        z: typeof r._z_today === "number" ? r._z_today : null,
+        z_prev: typeof r._yesterday_z === "number" ? r._yesterday_z : null,
+      }));
+
+      const accDecTotal = (normalized.acc_total ?? 0) + (normalized.dec_total ?? 0);
+
+      const decision = computeTeamDecision(players as any, {
+        hsr_m: normalized.hsr_m,
+        acc_dec_total: accDecTotal,
+        total_distance_m: normalized.total_distance_m,
+        max_velocity_pct: normalized.max_velocity_pct,
+        intensity: (normalized.intensity || null) as any,
+      });
+
+      console.log("MicroPulse preview result:", decision);
+
+      if (!decision) {
+        throw new Error("computeTeamDecision skilaði engu svari.");
+      }
+
+      setLocalDecision(decision);
+    } catch (e: any) {
+      console.error("computeLocalTeamDecisionPreview failed:", e);
+      setLocalDecision(null);
+      setLocalDecisionError(e?.message ?? "Preview computation failed.");
+    } finally {
+      setLocalDecisionLoading(false);
+    }
+  }
+
+  async function ensureCoachAccess() {
+    setError("");
+
+    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error("auth.getUser error:", authErr.message);
+
+    const uid = auth?.user?.id;
+    if (!uid) {
+      router.replace(`/login?next=${encodeURIComponent("/coach")}`);
+      return false;
+    }
+
+    const { data: prof, error: profErr } = await supabase.from("profiles").select("role, display_name, team_id").eq("id", uid).maybeSingle();
+    if (profErr) {
+      console.error("profiles load error:", profErr.message);
+      setError(profErr.message);
+      return false;
+    }
+
+    const role = (prof as any)?.role ?? null;
+    const name = (prof as any)?.display_name ?? auth?.user?.email ?? "";
+    setCoachName(name);
+    setCoachRole(String(role ?? "coach"));
+    const resolvedTeamId = (prof as any)?.team_id ?? null;
+    setCoachTeamId(resolvedTeamId);
+
+    // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
+    if (resolvedTeamId) {
+      supabase.from("teams").select("sport").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
+        setTeamSport(String((data as any)?.sport ?? "").toLowerCase() || null);
+      });
+    }
+
+    const r = String(role ?? "").toLowerCase();
+    if (r !== "coach" && r !== "admin") {
+      router.replace(`/login?next=${encodeURIComponent("/coach")}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  /** -----------------------------
+   * Fetch helpers
+   * ----------------------------- */
+  async function loadPlanPreview(): Promise<PlanPreview | null> {
+    try {
+      const { data, error } = await supabase.from("v_coach_plan_preview_today").select("*").maybeSingle();
+      if (error) {
+        console.error("Plan preview error:", error.message);
+        setPlanPreview(null);
+        return null;
+      }
+      const row = (data as any) ?? null;
+      setPlanPreview(row);
+      return row;
+    } catch (e) {
+      console.error("Plan preview error (catch):", e);
+      setPlanPreview(null);
+      return null;
+    }
+  }
+
+  async function loadWeekGrid(entryDate: string): Promise<any[]> {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) return [];
+
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id, id, user_id")
+        .or(`id.eq.${uid},user_id.eq.${uid}`)
+        .maybeSingle();
+
+      const teamId =
+        (prof as any)?.team_id ??
+        (
+          await supabase
+            .from("coach_teams")
+            .select("team_id,is_primary")
+            .eq("coach_id", uid)
+            .order("is_primary", { ascending: false })
+            .limit(1)
+        ).data?.[0]?.team_id ??
+        null;
+      if (!teamId) return [];
+
+      // Primary source: saved Week Setup (coach_week_setup) for the current week.
+      const weekStartDate = isoMondayOfISO(entryDate);
+      const { data: coachWeekSetup } = await supabase
+        .from("coach_week_setup")
+        .select("week_start_date, no_match_intents")
+        .eq("team_id", teamId)
+        .eq("week_start_date", weekStartDate)
+        .maybeSingle();
+
+      const intents = Array.isArray((coachWeekSetup as any)?.no_match_intents) ? ((coachWeekSetup as any).no_match_intents as string[]) : null;
+      if (intents && intents.length === 7) {
+        const derivedGrid = intents.map((intent, idx) => {
+          const mapped = mapNoMatchIntentToGrid(intent);
+          return {
+            day_date: addDaysISO(weekStartDate, idx),
+            md_day: null,
+            day_type_final: mapped.dayTypeFinal,
+            dose_final: mapped.doseFinal,
+          };
+        });
+        setWeekGrid(derivedGrid);
+        return derivedGrid;
+      }
+
+      // Fallback: legacy week_setups/v_week_plan_grid path.
+      const { data: ws } = await supabase
+        .from("week_setups")
+        .select("id")
+        .eq("team_id", teamId)
+        .order("week_start", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const weekSetupId = (ws as any)?.id;
+      if (!weekSetupId) {
+        setWeekGrid([]);
+        return [];
+      }
+
+      const { data: grid, error } = await supabase
+        .from("v_week_plan_grid")
+        .select("day_date, md_day, day_type_final, dose_final")
+        .eq("week_setup_id", weekSetupId)
+        .order("day_date", { ascending: true });
+
+      if (error) {
+        console.error("Week grid error:", error.message);
+        setWeekGrid([]);
+        return [];
+      }
+
+      const rows = (grid as any[]) ?? [];
+      setWeekGrid(rows);
+      return rows;
+    } catch (e) {
+      console.error("Week grid error (catch):", e);
+      setWeekGrid([]);
+      return [];
+    }
+  }
+
+  async function loadTeamIntelligenceToday() {
+    try {
+      const { data, error } = await supabase.from("v_coach_team_intelligence_today").select("*").maybeSingle();
+      if (error) {
+        console.error("Team intel error:", error.message);
+        setTeamIntel(null);
+        return;
+      }
+      setTeamIntel((data as any) ?? null);
+    } catch (e) {
+      console.error("Team intel error (catch):", e);
+      setTeamIntel(null);
+    }
+  }
+
+  async function loadZHistoryForPlayers(entryDate: string, playerIds: string[]): Promise<Record<string, number[]>> {
+    if (!playerIds.length) {
+      setZHistory({});
+      setRecentMonitoringByPlayer({});
+      return {};
+    }
+
+    const start = new Date(entryDate);
+    start.setDate(start.getDate() - 7);
+    const startISO = start.toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
+
+    try {
+      const { data, error } = await supabase
+        .from("readiness_entries")
+        .select(
+          "player_id, entry_date, training_modifier, total_score, fatigue_energy, sleep_quality, stress_mood, muscle_soreness"
+        )
+        .in("player_id", playerIds)
+        .gte("entry_date", startISO)
+        .lte("entry_date", entryDate)
+        .order("entry_date", { ascending: true });
+
+      if (error) throw error;
+
+      const map: Record<string, number[]> = {};
+      const monitoringMap: Record<string, VolatilityDailyPoint[]> = {};
+      for (const r of (data ?? []) as any[]) {
+        const pid = String(r.player_id);
+        const date = String(r.entry_date ?? "").slice(0, 10);
+        const z = extractZ(r.training_modifier);
+        const dz = extractYesterdayZ(r.training_modifier);
+        if (z != null) {
+          if (!map[pid]) map[pid] = [];
+          map[pid].push(z);
+        }
+
+        if (!monitoringMap[pid]) monitoringMap[pid] = [];
+        monitoringMap[pid].push({
+          date,
+          checkInScore: toNum(r.total_score),
+          zScore: z,
+          deltaZ: z != null && dz != null ? z - dz : null,
+          soreness: toNum(r.muscle_soreness),
+          sleepQuality: toNum(r.sleep_quality),
+          mood: toNum(r.stress_mood),
+          energy: toNum(r.fatigue_energy),
+          stress: toNum(r.stress_mood),
+        });
+      }
+
+      setZHistory(map);
+      setRecentMonitoringByPlayer(monitoringMap);
+      return map;
+    } catch (e) {
+      console.warn("loadZHistoryForPlayers failed:", e);
+      setZHistory({});
+      setRecentMonitoringByPlayer({});
+      return {};
+    }
+  }
+
+  async function hydrateTrainingModifiers(entryDate: string, list: Row[]): Promise<Row[]> {
+    const playerIds = list.map((r) => String(r.player_id));
+    if (!playerIds.length) return list;
+
+    try {
+      const { data, error } = await supabase
+        .from("readiness_entries")
+        .select("player_id, entry_date, training_modifier")
+        .eq("entry_date", entryDate)
+        .in("player_id", playerIds);
+
+      if (error) throw error;
+
+      const tmByPlayer: Record<string, any> = {};
+      for (const r of (data ?? []) as any[]) {
+        tmByPlayer[String(r.player_id)] = normalizeTrainingModifier(r.training_modifier);
+      }
+
+      return list.map((row) => {
+        const tm = row.training_modifier ?? tmByPlayer[String(row.player_id)] ?? null;
+        const zToday = extractZ(tm);
+        const yZ = extractYesterdayZ(tm);
+        const dz = zToday != null && yZ != null ? zToday - yZ : null;
+
+        return {
+          ...row,
+          training_modifier: tm,
+          _z_today: zToday,
+          _yesterday_z: yZ,
+          _dz: dz,
+          _sten: zToSten(zToday),
+          _baseline_n: extractBaselineN(tm),
+        };
+      });
+    } catch (e) {
+      console.warn("hydrateTrainingModifiers failed:", e);
+      return list;
+    }
+  }
+
+  async function hydrateExternalLoad(entryDate: string, list: Row[]): Promise<Row[]> {
+    const playerIds = list.map((row) => String(row.player_id));
+    if (!playerIds.length) return list;
+
+    try {
+      const startDate = addDaysISO(entryDate, -35); // 35 days to ensure full 28-day chronic window
+      const { data, error } = await supabase
+        .from("player_external_load_daily")
+        .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .gte("date", startDate)
+        .lte("date", entryDate)
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+
+      const byPlayer = new Map<string, ExternalLoadDailyRow[]>();
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        const playerId = String(row.player_id);
+        const listForPlayer = byPlayer.get(playerId) ?? [];
+        listForPlayer.push({
+          player_id: playerId,
+          date: String(row.date),
+          total_distance: toMaybeFinite(row.total_distance),
+          high_speed_distance: toMaybeFinite(row.high_speed_distance),
+          sprint_distance: toMaybeFinite(row.sprint_distance),
+          accelerations: toMaybeFinite(row.accelerations),
+          decelerations: toMaybeFinite(row.decelerations),
+          player_load: toMaybeFinite(row.player_load),
+          max_velocity: toMaybeFinite(row.max_velocity),
+          velocity_band5_total_distance: toMaybeFinite(row.velocity_band5_total_distance),
+          velocity_band6_total_distance: toMaybeFinite(row.velocity_band6_total_distance),
+          hir_dist: toMaybeFinite(row.hir_dist),
+          max_vel: toMaybeFinite(row.max_vel),
+          accel_b2_3_tot_effs_gen2: toMaybeFinite(row.accel_b2_3_tot_effs_gen2),
+          tot_as: toMaybeFinite(row.tot_as),
+          decel_b2_3_tot_effs_gen2: toMaybeFinite(row.decel_b2_3_tot_effs_gen2),
+          tot_ds: toMaybeFinite(row.tot_ds),
+          total_player_load: toMaybeFinite(row.total_player_load),
+          player_load_per_minute: toMaybeFinite(row.player_load_per_minute),
+          source: (row.source as string | null) ?? null,
+        });
+        byPlayer.set(playerId, listForPlayer);
+      }
+
+      return list.map((row) => {
+        const playerRows = byPlayer.get(String(row.player_id)) ?? [];
+        const externalLoad = summarizeExternalLoad(playerRows, entryDate);
+        const catapultRows = playerRows
+          .map((item) => normalizeCatapultDailyLoadRow(item as unknown as Record<string, unknown>))
+          .filter((item): item is NonNullable<typeof item> => item != null);
+        const catapultContext = buildCatapultReadinessContextFromRows({
+          rows: catapultRows,
+          date: entryDate,
+        });
+        return {
+          ...row,
+          _external_load_today: externalLoad.today,
+          _external_load_baseline: externalLoad.baseline,
+          _catapult_baseline: catapultContext.baseline,
+          _catapult_signals: catapultContext.signals,
+          _catapult_modifier: catapultContext.modifier,
+          _catapult_history: catapultRows,
+        };
+      });
+    } catch (e) {
+      console.warn("hydrateExternalLoad failed:", e);
+      return list;
+    }
+  }
+
+  /** -----------------------------
+   * Auto-lock helpers
+   * ----------------------------- */
+  function parseSessionStartFromPlanPreview(pp: PlanPreview | null): { hour: number; minute: number } | null {
+    try {
+      const raw = (pp as any)?.template_structure?.session_start ?? null;
+      if (!raw) return null;
+      const s = String(raw).trim();
+      const m = s.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      const hour = Math.max(0, Math.min(23, Number(m[1])));
+      const minute = Math.max(0, Math.min(59, Number(m[2])));
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+      return { hour, minute };
+    } catch {
+      return null;
+    }
+  }
+
+  function shouldAutoLockNow(entryDate: string, pp: PlanPreview | null): boolean {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+    if (String(entryDate) !== String(today)) return false;
+
+    const start = parseSessionStartFromPlanPreview(pp) ?? DEFAULT_SESSION_START;
+
+    const now = new Date();
+    const year = Number(entryDate.slice(0, 4));
+    const month = Number(entryDate.slice(5, 7));
+    const day = Number(entryDate.slice(8, 10));
+
+    const sessionStart = new Date(year, month - 1, day, start.hour, start.minute, 0, 0);
+    const lockTime = new Date(sessionStart.getTime() - AUTO_LOCK_MINUTES_BEFORE * 60 * 1000);
+
+    return now.getTime() >= lockTime.getTime();
+  }
+
+  async function lockAllForTodayIfNeeded(entryDate: string, list: Row[]) {
+    if (isAdmin) return;
+    if (autoLockRan) return;
+    if (!shouldAutoLockNow(entryDate, planPreview)) return;
+
+    const unlocked = list.filter((r) => !r.is_locked).map((r) => String(r.player_id));
+    if (unlocked.length === 0) {
+      setAutoLockRan(true);
+      return;
+    }
+
+    try {
+      setError("");
+      const { error } = await supabase.from("stage4_decisions_final").update({ locked: true }).eq("entry_date", entryDate).in("player_id", unlocked);
+      if (error) throw new Error(error.message);
+
+      setAutoLockRan(true);
+      await loadToday();
+    } catch (e: any) {
+      setError(e?.message ?? "Auto-lock mistókst.");
+      setAutoLockRan(true);
+    }
+  }
+
+  /** -----------------------------
+   * Load Today (core)
+   * ----------------------------- */
+  async function loadToday() {
+    try {
+      setError("");
+      setLoading(true);
+
+      const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+
+      // Ensure Stage4 rows exist (best effort)
+      try {
+        await supabase.rpc("stage4_bootstrap_for_date", { p_date: entryDate });
+      } catch (e: any) {
+        console.warn("stage4_bootstrap_for_date failed (loadToday, continuing):", e?.message ?? e);
+      }
+
+      // md_day context for today (per team)
+      let ctxMd: string | null = null;
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth?.user?.id;
+        if (uid) {
+          const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+          const teamId = (prof as any)?.team_id ?? null;
+          if (teamId) {
+            const { data: ctxRow } = await supabase
+              .from("v_training_day_context_team")
+              .select("md_day")
+              .eq("team_id", teamId)
+              .eq("date", entryDate)
+              .maybeSingle();
+            ctxMd = (ctxRow as any)?.md_day ?? null;
+            setMdContextToday(ctxMd);
+          } else {
+            setMdContextToday(null);
+          }
+        } else {
+          setMdContextToday(null);
+        }
+      } catch {
+        setMdContextToday(null);
+      }
+
+      // Team intelligence + plan preview + grid
+      await loadTeamIntelligenceToday();
+      const pp = await loadPlanPreview();
+      const grid = await loadWeekGrid(entryDate);
+
+      // Auto-set OFF for yesterday (UI only)
+      try {
+        const y = new Date(entryDate);
+        y.setDate(y.getDate() - 1);
+        const yesterdayISO = y.toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
+        const yRow = (grid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(yesterdayISO)) ?? null;
+        const yDose = String(yRow?.dose_final ?? yRow?.day_type_final ?? "").toUpperCase();
+        if (yDose === "OFF") {
+          setCtxIntensity("OFF");
+          setCtxHsr("0");
+          setCtxAcc("0");
+          setCtxDec("0");
+          setCtxDist("0");
+          setCtxVmax("0");
+          setCtxDuration("0");
+        }
+      } catch {
+        // ignore
+      }
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let q = supabase
+        .from("v_coach_readiness_today_v8")
+        .select("*", { count: "exact" })
+        .eq("entry_date", entryDate)
+        .order("total_score", { ascending: true })
+        .order("full_name", { ascending: true })
+        .range(from, to);
+
+      if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
+      if (filter !== "all") q = q.eq("final_color", filter);
+      if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
+
+      const { data, error, count } = await q;
+      if (error) {
+        setError(error.message);
+        setRows([]);
+        setTotal(0);
+        return;
+      }
+
+      // Team readiness signal
+      try {
+        let teamIdForSignal: string | null = null;
+        if (teamFilter && teamFilter !== "all") {
+          teamIdForSignal = teamFilter;
+        } else {
+          const { data: auth } = await supabase.auth.getUser();
+          const uid = auth?.user?.id;
+          if (uid) {
+            const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+            teamIdForSignal = (prof as any)?.team_id ?? null;
+          }
+        }
+
+        if (teamIdForSignal) {
+          const { data: signal } = await supabase
+            .from("v_team_readiness_today")
+            .select("*")
+            .eq("team_id", teamIdForSignal)
+            .eq("entry_date", entryDate)
+            .maybeSingle();
+          setTeamSignal((signal as TeamSignal) ?? null);
+        } else {
+          setTeamSignal(null);
+        }
+      } catch {
+        setTeamSignal(null);
+      }
+
+      // Unit alerts
+      try {
+        const teamId =
+          teamFilter && teamFilter !== "all"
+            ? teamFilter
+            : (
+                await supabase
+                  .from("profiles")
+                  .select("team_id")
+                  .eq("id", (await supabase.auth.getUser()).data?.user?.id ?? "")
+                  .maybeSingle()
+              ).data?.team_id ?? null;
+
+        if (teamId) {
+          const { data: ua } = await supabase
+            .from("v_team_unit_alerts_today")
+            .select("*")
+            .eq("team_id", teamId)
+            .eq("entry_date", entryDate)
+            .order("unit_order", { ascending: true });
+          setUnitAlerts(ua ?? []);
+        } else {
+          setUnitAlerts([]);
+        }
+      } catch {
+        setUnitAlerts([]);
+      }
+
+      const raw: any[] = (data ?? []) as any[];
+
+      // Team-level MD truth
+      const gridRowToday = (grid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(entryDate)) ?? null;
+      const weekSetupDoseToday = String(gridRowToday?.dose_final ?? "").trim() || null;
+      const weekSetupDayTypeToday = String(gridRowToday?.day_type_final ?? "").trim() || null;
+      const weekSetupMdDay = resolveSessionMdContextFromSources({
+        weekSetupDay: gridRowToday,
+      }).mdContext;
+      const teamMdDay =
+        (weekSetupMdDay !== "UNKNOWN" ? weekSetupMdDay : null) ??
+        (isValidMdToken(ctxMd) ? String(ctxMd).toUpperCase() : null) ??
+        (isValidMdToken(gridRowToday?.md_day) ? String(gridRowToday.md_day).toUpperCase() : null) ??
+        (isValidMdToken(pp?.md_day) ? String(pp?.md_day).toUpperCase() : null) ??
+        null;
+
+      const list: Row[] = raw.map((r) => {
+        const playerId = String(r.player_id);
+        const entryId: string | null = (r.readiness_entry_id ?? null) as string | null;
+
+        const confidenceNum = confNum((r as any).system_confidence ?? null);
+        const reviewNeeded = needsReview((r as any).system_confidence ?? null);
+
+        const baseColor = (String(r.final_color ?? "").toLowerCase() as FinalColor) || null;
+        const baseFlag = (String(r.final_flag ?? "").toUpperCase() as FinalFlag) || null;
+        const baseReason = (r.final_reason ?? null) as string | null;
+
+        let finalColor: FinalColor = (baseColor ?? "green") as FinalColor;
+        let finalFlag: FinalFlag = (baseFlag ?? "GREEN") as FinalFlag;
+        let finalReason: string | null = baseReason ?? null;
+
+        const hasDbFinal = !!baseFlag && !!baseColor;
+        if (!hasDbFinal) {
+          const downgraded = applySorenessDowngrade({
+            flag: baseFlag,
+            color: baseColor,
+            reason: baseReason,
+            soreness: r.soreness ?? null,
+          });
+
+          finalColor = (downgraded.final_color ?? finalColor) as FinalColor;
+          finalFlag = (downgraded.final_flag ?? finalFlag) as FinalFlag;
+          finalReason = downgraded.final_reason ?? finalReason;
+        }
+
+        const plannedFocus = r.planned_focus ?? weekSetupDoseToday ?? weekSetupDayTypeToday ?? null;
+        const perPlayerMdRaw = mdFromPlannedFocus(plannedFocus);
+        const perPlayerMd = isValidMdToken(perPlayerMdRaw) ? perPlayerMdRaw : null;
+
+        const viewMdRaw = (r.md_day ?? null) as string | null;
+        const viewMd = isValidMdToken(viewMdRaw) ? viewMdRaw : null;
+
+        const tm = normalizeTrainingModifier((r as any).training_modifier ?? null);
+
+        const zToday = extractZ(tm);
+        const yZ = extractYesterdayZ(tm);
+        const dz = zToday != null && yZ != null ? zToday - yZ : null;
+        const sten = zToSten(zToday);
+
+        return {
+          readiness_entry_id: entryId,
+          entry_date: String(r.entry_date ?? entryDate).trim() || entryDate,
+          created_at: String(r.created_at),
+
+          player_id: playerId,
+          full_name: String(r.full_name ?? ""),
+          team: r.team ?? null,
+          position: r.position ?? null,
+          team_id: (r as any).team_id ?? null,
+
+          readiness: r.readiness ?? null,
+          sleep: r.sleep ?? null,
+          soreness: r.soreness ?? null,
+          fatigue_energy: (r as any).fatigue_energy ?? null,
+          sleep_quality: (r as any).sleep_quality ?? null,
+          sleep_duration: (r as any).sleep_duration ?? null,
+          stress_mood: (r as any).stress_mood ?? null,
+          muscle_soreness: (r as any).muscle_soreness ?? null,
+          total_score: r.total_score ?? null,
+          notes: r.notes ?? null,
+
+          planned_focus: plannedFocus,
+          planned_day_type: r.planned_day_type ?? weekSetupDayTypeToday ?? null,
+
+          training_action: (r.final_decision ?? "FULL") as TrainingAction,
+          coach_message: (r.coach_note ?? null) as string | null,
+          is_locked: !!(r.locked ?? false),
+
+          final_color: finalColor,
+          final_flag: finalFlag,
+          final_reason: finalReason,
+
+          md_day: viewMd ?? perPlayerMd ?? teamMdDay ?? "—",
+
+          system_decision: (r.system_decision ?? null) as TrainingAction | null,
+          coach_decision: (r.coach_decision ?? null) as TrainingAction | null,
+          final_decision: (r.final_decision ?? null) as TrainingAction | null,
+          final_source: (r.final_source ?? null) as string | null,
+          stage4_updated_at: (r.stage4_updated_at ?? null) as string | null,
+
+          ui_key: `${playerId}_${String(r.entry_date ?? entryDate)}`,
+
+          _confidence_num: confidenceNum,
+          _needs_review: reviewNeeded,
+
+          training_modifier: tm,
+          _z_today: zToday,
+          _yesterday_z: yZ,
+          _dz: dz,
+          _sten: sten,
+          _spark: null,
+          _baseline_n: extractBaselineN(tm),
+        };
+      });
+
+      list.sort((a: any, b: any) => {
+        if (a._needs_review !== b._needs_review) return a._needs_review ? -1 : 1;
+
+        const as = a.total_score ?? 9999;
+        const bs = b.total_score ?? 9999;
+        if (as !== bs) return as - bs;
+
+        const ar = flagRank(a.final_flag);
+        const br = flagRank(b.final_flag);
+        if (ar !== br) return ar - br;
+
+        return String(a.full_name ?? "").localeCompare(String(b.full_name ?? ""));
+      });
+
+      // hydrate training_modifier (z/sten)
+      const hydrated = await hydrateTrainingModifiers(entryDate, list);
+
+      // attach sparkline
+      const playerIds = hydrated.map((x) => String(x.player_id));
+      const hist = await loadZHistoryForPlayers(entryDate, playerIds);
+
+      const withSpark: Row[] = hydrated.map((x) => {
+        const series = hist[String(x.player_id)] ?? [];
+        const last7 = series.slice(-7);
+        return {
+          ...x,
+          _spark: last7.length >= 3 ? sparkline(last7) : null,
+        };
+      });
+
+      const withExternalLoad = await hydrateExternalLoad(entryDate, withSpark);
+
+      setRows(withExternalLoad);
+      setTotal(count ?? 0);
+
+      setDraftAction(() => {
+        const next: Record<string, TrainingAction> = {};
+        for (const r of withExternalLoad) {
+          const pid = String(r.player_id);
+          next[pid] = (r.training_action ?? "FULL") as TrainingAction;
+        }
+        return next;
+      });
+
+      setDraftMessage(() => {
+        const next: Record<string, string> = {};
+        for (const r of withExternalLoad) {
+          const pid = String(r.player_id);
+          next[pid] = r.coach_message ?? "";
+        }
+        return next;
+      });
+
+      setSaved({});
+      await lockAllForTodayIfNeeded(entryDate, withExternalLoad);
+    } catch (e: any) {
+      setError(e?.message ?? "Unknown error");
+      setRows([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** -----------------------------
+   * Stage4 actions
+   * ----------------------------- */
+  async function saveConfirmed(r: Row) {
+    if (r.is_locked && !isAdmin) return;
+
+    const playerId = String(r.player_id);
+    const action = draftAction[playerId] ?? r.training_action ?? "FULL";
+    const message = (draftMessage[playerId] ?? r.coach_message ?? "").trim();
+    const entryDate = r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
+    const systemDecision = flagToAction(r.final_flag ?? (r.final_color ? String(r.final_color).toUpperCase() : null));
+
+    setSaving((p) => ({ ...p, [playerId]: true }));
+    setSaved((p) => ({ ...p, [playerId]: false }));
+    setError("");
+
+    try {
+      const payload: any = {
+        player_id: playerId,
+        entry_date: entryDate,
+        system_decision: systemDecision,
+        coach_decision: action,
+        coach_note: message.length ? message : null,
+        locked: false,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upErr } = await supabase.from("stage4_decisions_final").upsert(payload, {
+        onConflict: "player_id,entry_date",
+      });
+      if (upErr) throw new Error(`Save failed: ${upErr.message}`);
+
+      // keep your existing behavior
+      const { error: lockErr } = await supabase.rpc("coach_override_microdose_plan", {
+        p_player_id: playerId,
+        p_entry_date: entryDate,
+        p_variant_id: null,
+        p_source: "COACH",
+      });
+      if (lockErr) console.warn("coach_override_microdose_plan failed:", lockErr.message);
+
+      setSaved((p) => ({ ...p, [playerId]: true }));
+      await loadToday();
+    } catch (e: any) {
+      setError(e?.message ?? "Save mistókst.");
+    } finally {
+      setSaving((p) => ({ ...p, [playerId]: false }));
+    }
+  }
+
+  async function lockForDay(r: Row) {
+    if (r.is_locked) return;
+
+    const playerId = String(r.player_id);
+    const action = draftAction[playerId] ?? r.training_action ?? "FULL";
+    const message = (draftMessage[playerId] ?? r.coach_message ?? "").trim();
+    const entryDate = r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
+    const systemDecision = flagToAction(r.final_flag ?? (r.final_color ? String(r.final_color).toUpperCase() : null));
+
+    setSaving((p) => ({ ...p, [playerId]: true }));
+    setError("");
+
+    try {
+      const payload: any = {
+        player_id: playerId,
+        entry_date: entryDate,
+        system_decision: systemDecision,
+        coach_decision: action,
+        coach_note: message.length ? message : null,
+        locked: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upErr } = await supabase.from("stage4_decisions_final").upsert(payload, {
+        onConflict: "player_id,entry_date",
+      });
+      if (upErr) throw new Error(`Lock failed: ${upErr.message}`);
+
+      await loadToday();
+    } catch (e: any) {
+      setError(e?.message ?? "Lock mistókst.");
+    } finally {
+      setSaving((p) => ({ ...p, [playerId]: false }));
+    }
+  }
+
+  async function unlockForDay(r: Row) {
+    if (!isAdmin) return;
+    if (!r.is_locked) return;
+
+    const playerId = String(r.player_id);
+    const entryDate = r.entry_date && String(r.entry_date).trim().length > 0 ? String(r.entry_date).trim() : todayISO();
+
+    setSaving((p) => ({ ...p, [playerId]: true }));
+    setError("");
+
+    try {
+      const { error } = await supabase
+        .from("stage4_decisions_final")
+        .update({ locked: false, updated_at: new Date().toISOString() })
+        .eq("player_id", playerId)
+        .eq("entry_date", entryDate);
+
+      if (error) throw new Error(`Unlock failed: ${error.message}`);
+      await loadToday();
+    } catch (e: any) {
+      setError(e?.message ?? "Unlock mistókst.");
+    } finally {
+      setSaving((p) => ({ ...p, [playerId]: false }));
+    }
+  }
+
+  async function generateTodayDecisionsForTeam() {
+    try {
+      setGenToast("");
+      setError("");
+      setGenLoading(true);
+
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) throw new Error("Ekki innskráður.");
+
+      const { data: prof, error: pErr } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+      if (pErr) throw new Error(pErr.message);
+
+      const teamId = (prof as any)?.team_id ?? null;
+      if (!teamId) throw new Error("Vantar team_id á profile.");
+
+      const day = todayISO();
+
+      const { data, error } = await supabase.rpc("stage4_generate_today_decisions", {
+        p_team_id: teamId,
+        p_entry_date: day,
+      });
+
+      if (error) throw new Error(error.message);
+
+      const row = Array.isArray(data) ? data[0] : data;
+      const processed = row?.processed ?? "?";
+      const inserted = row?.inserted ?? "?";
+      const updated = row?.updated ?? "?";
+
+      setGenToast(`✅ Decisions generated: processed ${processed} · inserted ${inserted} · updated ${updated}`);
+      await loadToday();
+    } catch (e: any) {
+      setGenToast("");
+      setError(e?.message ?? "Generate decisions mistókst.");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  async function saveAllDirty() {
+    setSaveAllToast("");
+    setError("");
+    setSaveAllLoading(true);
+
+    // Find all unlocked rows where draftAction differs from the last saved value
+    const dirty = rows.filter((r) => {
+      if (r.is_locked && !isAdmin) return false;
+      const pid = String(r.player_id);
+      const draft = draftAction[pid];
+      const saved = (r.training_action ?? "FULL") as TrainingAction;
+      return draft != null && draft !== saved;
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const r of dirty) {
+      try {
+        await saveConfirmed(r);
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    setSaveAllLoading(false);
+    if (failCount === 0) {
+      setSaveAllToast(`✅ ${successCount} leikmann${successCount === 1 ? "ur" : "ar"} vistaðir`);
+    } else {
+      setSaveAllToast(`⚠️ ${successCount} vistuð, ${failCount} misheppnuð`);
+    }
+    setTimeout(() => setSaveAllToast(""), 4000);
+  }
+
+  async function assignTemplate(playerId: string, entryDate: string, templateId: string, teamId?: string | null) {
+    const { error } = await supabase
+      .from("player_template_assignments")
+      .upsert(
+        {
+          player_id: playerId,
+          entry_date: entryDate,
+          template_id: templateId,
+          team_id: teamId ?? null,
+        },
+        { onConflict: "player_id,entry_date" }
+      );
+
+    if (error) {
+      console.error(error);
+      alert("Tókst ekki að úthluta template.");
+    }
+  }
+
+  /** -----------------------------
+   * Effects
+   * ----------------------------- */
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const ok = await ensureCoachAccess();
+        if (!ok) return;
+        setCoachVerified(true);
+        await loadToday();
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // load yesterday context once teamId known
+  useEffect(() => {
+    if (!coachVerified) return;
+    if (!coachTeamId) return;
+    const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
+    loadYesterdayContext(coachTeamId, entryDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId]);
+
+  useEffect(() => {
+    if (!coachVerified) return;
+    loadReminderStatus(today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, today]);
+
+  // coach display name
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) return;
+
+      const { data, error } = await supabase.from("coaches").select("display_name").eq("user_id", uid).maybeSingle();
+      if (!alive) return;
+
+      if (!error && data?.display_name) setCoachDisplayName(data.display_name);
+      else if (coachName) setCoachDisplayName(coachName);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [coachName]);
+
+  // reload on filters/page/search
+  useEffect(() => {
+    if (!coachVerified) return;
+    loadToday();
+    fetchCompliance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, teamFilter, filter, search, coachVerified]);
+
+  // load templates
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("workout_templates").select("id, title, code").eq("is_active", true).order("title");
+      setTemplates((data ?? []) as any);
+    })();
+  }, []);
+
+  // reset drafts on filter changes
+  useEffect(() => {
+    if (!coachVerified) return;
+    setPage(0);
+    setDraftAction({});
+    setDraftMessage({});
+    setSaved({});
+  }, [teamFilter, filter, search, coachVerified]);
+
+  // GPS tab — fetch ALL players with Catapult data, independent of readiness rows
+  useEffect(() => {
+    if (dashTab !== "gps" || !coachVerified) return;
+    let alive = true;
+    (async () => {
+      setGpsLoading(true);
+      try {
+        const startDate = addDaysISO(today, -35);
+        const { data: playerData } = await supabase
+          .from("players")
+          .select("id, full_name, position")
+          .eq("is_active", true)
+          .order("full_name");
+
+        if (!playerData?.length || !alive) return;
+        const playerIds = (playerData as Array<Record<string, unknown>>).map((p) => String(p.id));
+
+        const { data: loadData } = await supabase
+          .from("player_external_load_daily")
+          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
+          .eq("source", "catapult")
+          .in("player_id", playerIds)
+          .gte("date", startDate)
+          .lte("date", today)
+          .order("date");
+
+        if (!alive) return;
+
+        const byPlayer = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of ((loadData ?? []) as Array<Record<string, unknown>>)) {
+          const pid = String(row.player_id);
+          const list = byPlayer.get(pid) ?? [];
+          list.push(row);
+          byPlayer.set(pid, list);
+        }
+
+        const result = (playerData as Array<Record<string, unknown>>)
+          .filter((p) => (byPlayer.get(String(p.id)) ?? []).length > 0)
+          .map((p) => ({
+            id: String(p.id),
+            name: String(p.full_name ?? ""),
+            position: String(p.position ?? "—"),
+            history: byPlayer.get(String(p.id)) ?? [],
+          }));
+
+        if (alive) setGpsAllPlayers(result);
+      } finally {
+        if (alive) setGpsLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashTab, coachVerified, today]);
+
+  /** -----------------------------
+   * Derived UI data
+   * ----------------------------- */
+  const counts = useMemo(() => {
+    const acc: Record<FinalColor, number> = { red: 0, yellow: 0, green: 0 };
+    for (const r of rows) {
+      const c = (String(r.final_color ?? "").toLowerCase() as FinalColor) || null;
+      if (c === "red" || c === "yellow" || c === "green") acc[c] += 1;
+    }
+    return acc;
+  }, [rows]);
+
+  const teamSten = useMemo(() => {
+    const stens = (rows ?? [])
+      .map((r) => (typeof r._sten === "number" ? r._sten : null))
+      .filter((x): x is number => typeof x === "number");
+
+    const avg = stens.length ? stens.reduce((a, b) => a + b, 0) / stens.length : null;
+
+    return {
+      avg,
+      coverage: `${stens.length}/${rows.length}`,
+    };
+  }, [rows]);
+
+  const teamExternalLoadSummary = useMemo<TeamExternalLoadSummary | null>(() => {
+    if (!rows.length) return null;
+    const teamId = String(rows.find((row) => row.team_id)?.team_id ?? coachTeamId ?? "").trim();
+    const entryDate = String(rows[0]?.entry_date ?? today).trim();
+    if (!teamId || !entryDate) return null;
+
+    return buildTeamExternalLoadSummary({
+      date: entryDate,
+      teamId,
+      players: rows.map((row) => ({
+        playerId: String(row.player_id),
+        playerName: row.full_name,
+        readinessState: row.final_flag ?? "GRAY",
+        externalLoadState: row._catapult_signals?.externalLoadState ?? "unknown",
+        dataQuality: row._catapult_signals?.dataQuality,
+        todayRow: row._catapult_history?.find((item) => item.date === entryDate) ?? null,
+        historyRows: row._catapult_history ?? [],
+        playerLoadSpike: row._catapult_signals?.playerLoadSpike ?? null,
+        hirSpike: row._catapult_signals?.hirSpike ?? null,
+        decelSpike: row._catapult_signals?.decelSpike ?? null,
+        accelSpike: row._catapult_signals?.accelSpike ?? null,
+        densityStressRatio: row._catapult_signals?.densityStressRatio ?? null,
+        maxVelocityExposureRatio: row._catapult_signals?.maxVelocityExposureRatio ?? null,
+        band6ExposureRatio: row._catapult_signals?.band6ExposureRatio ?? null,
+        neuromuscularBurdenScore: row._catapult_signals?.neuromuscularBurdenScore ?? null,
+      })),
+    });
+  }, [coachTeamId, rows, today]);
+
+  const fatigueSnapshot = useMemo(() => {
+    try {
+      const intensity = ctxIntensity;
+      const hsr_m = toIntOrNull(ctxHsr);
+      const acc_total = toIntOrNull(ctxAcc);
+      const dec_total = toIntOrNull(ctxDec);
+      const total_distance_m = toIntOrNull(ctxDist);
+      const max_velocity_pct = toNumOrNull(ctxVmax);
+
+      const normalized = {
+        hsr_m: intensity === "OFF" ? 0 : hsr_m ?? null,
+        acc_total: intensity === "OFF" ? 0 : acc_total ?? null,
+        dec_total: intensity === "OFF" ? 0 : dec_total ?? null,
+        total_distance_m: intensity === "OFF" ? 0 : total_distance_m ?? null,
+        max_velocity_pct: intensity === "OFF" ? 0 : max_velocity_pct ?? null,
+        intensity: intensity || null,
+      };
+
+      const players = (rows ?? []).map((r) => ({
+        player_id: String(r.player_id),
+        z: typeof r._z_today === "number" ? r._z_today : null,
+        z_prev: typeof r._yesterday_z === "number" ? r._yesterday_z : null,
+        energy: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        sleep_quality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        sleep_duration: typeof r.sleep_duration === "number" ? r.sleep_duration : null,
+        stress: toRiskLikertFromCheckin(r.stress_mood),
+        soreness:
+          typeof r.muscle_soreness === "number" ? toRiskLikertFromCheckin(r.muscle_soreness) : r.soreness ?? null,
+        total_score: typeof r.total_score === "number" ? r.total_score : null,
+      }));
+
+      const accDecTotal = (normalized.acc_total ?? 0) + (normalized.dec_total ?? 0);
+
+      return computeTeamDecision(players as any, {
+        hsr_m: normalized.hsr_m,
+        acc_dec_total: accDecTotal,
+        total_distance_m: normalized.total_distance_m,
+        max_velocity_pct: normalized.max_velocity_pct,
+        intensity: (normalized.intensity || null) as any,
+      });
+    } catch {
+      return null;
+    }
+  }, [rows, ctxIntensity, ctxHsr, ctxAcc, ctxDec, ctxDist, ctxVmax]);
+
+  const fatigueByPlayer = useMemo(() => {
+    const map = new Map<string, any>();
+    const exceptions = (fatigueSnapshot as any)?.exceptions ?? [];
+    for (const ex of exceptions) {
+      const pid = String((ex as any)?.player_id ?? "");
+      if (!pid) continue;
+      map.set(pid, (ex as any)?.fatigue ?? null);
+    }
+    return map;
+  }, [fatigueSnapshot]);
+
+  const adaptationByPlayer = useMemo(() => {
+    const map = new Map<string, { adaptation: Row["_adaptation"]; summary: string | null }>();
+    const exceptions = (fatigueSnapshot as any)?.exceptions ?? [];
+    for (const ex of exceptions) {
+      const pid = String((ex as any)?.player_id ?? "");
+      if (!pid) continue;
+      const adaptation = ((ex as any)?.adaptation ?? null) as Row["_adaptation"];
+      const summaryRaw = String((ex as any)?.adaptation_summary ?? "").trim();
+      map.set(pid, { adaptation, summary: summaryRaw.length ? summaryRaw : null });
+    }
+    return map;
+  }, [fatigueSnapshot]);
+
+  const neuralBiasByPlayer = useMemo(() => {
+    const map = new Map<string, { applied: boolean; reasonCodes: string[] }>();
+    const exceptions = (fatigueSnapshot as any)?.exceptions ?? [];
+    for (const ex of exceptions) {
+      const pid = String((ex as any)?.player_id ?? "");
+      if (!pid) continue;
+      const applied = !!(ex as any)?.neural_bias_applied;
+      const reasonCodes = Array.isArray((ex as any)?.neural_bias_reason_codes)
+        ? ((ex as any).neural_bias_reason_codes as string[])
+        : [];
+      map.set(pid, { applied, reasonCodes });
+    }
+    return map;
+  }, [fatigueSnapshot]);
+
+  const neuralByPlayer = useMemo(() => {
+    const map = new Map<string, NeuralLoadClassification>();
+
+    const intensity = ctxIntensity;
+    const hsr_m = toIntOrNull(ctxHsr);
+    const max_velocity_pct = toNumOrNull(ctxVmax);
+    const normalized = {
+      hsr_m: intensity === "OFF" ? 0 : hsr_m ?? null,
+      max_velocity_pct: intensity === "OFF" ? 0 : max_velocity_pct ?? null,
+    };
+
+    const teamVolHigh = (teamIntel?.volatility_pct ?? 0) >= 40;
+    const scheduleCongestion = false;
+    const travelFlag = false;
+    const matchMinutesHigh = false;
+
+    for (const r of rows ?? []) {
+      const zToday = typeof r._z_today === "number" ? r._z_today : null;
+      const zPrev = typeof r._yesterday_z === "number" ? r._yesterday_z : null;
+      const dz = zToday != null && zPrev != null ? zToday - zPrev : null;
+      const sten = typeof r._sten === "number" ? r._sten : null;
+      const pid = String(r.player_id);
+      const fatigue = fatigueByPlayer.get(pid) ?? null;
+
+      const neural = classifyNeuralLoad({
+        playerId: pid,
+        z: zToday,
+        zPrev,
+        deltaZ: dz,
+        sten,
+        lowStenDays: sten != null && sten <= 4 ? 1 : 0,
+        totalScore: typeof r.total_score === "number" ? r.total_score : null,
+        energy: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        sleepQuality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        sleepDuration: typeof r.sleep_duration === "number" ? r.sleep_duration : null,
+        stress: toRiskLikertFromCheckin(r.stress_mood),
+        soreness: typeof r.muscle_soreness === "number" ? toRiskLikertFromCheckin(r.muscle_soreness) : null,
+        zHistory: extractRecentZHistory(r.training_modifier, zToday, zPrev),
+        volatility: teamIntel?.volatility_pct ?? null,
+        hsrHighYesterday: (normalized.hsr_m ?? 0) >= 800,
+        maxVelocityHighYesterday: (normalized.max_velocity_pct ?? 0) >= 90,
+        scheduleCongestion,
+        travelFlag,
+        matchMinutesHigh,
+        teamVolatilityHigh: teamVolHigh,
+        fatigue,
+      });
+
+      map.set(pid, neural);
+    }
+
+    return map;
+  }, [rows, fatigueByPlayer, teamIntel?.volatility_pct, ctxIntensity, ctxHsr, ctxVmax]);
+
+  const teamNeuralSummary = useMemo(() => {
+    return buildTeamNeuralLoadSummary(Array.from(neuralByPlayer.values()));
+  }, [neuralByPlayer]);
+
+  const neuralValidation = useMemo(() => runNeuralLoadValidationSuite(), []);
+
+  const rowsWithAdaptive = useMemo(
+    () =>
+      (rows ?? []).map((r) => {
+        const pid = String(r.player_id);
+        const a = adaptationByPlayer.get(pid);
+        const n = neuralByPlayer.get(pid) ?? null;
+        const nb = neuralBiasByPlayer.get(pid);
+        return {
+          ...r,
+          _adaptation: a?.adaptation ?? null,
+          _adaptation_summary: a?.summary ?? null,
+          _neural_load: n,
+          _neural_bias_applied: !!nb?.applied,
+          _neural_bias_reason_codes: nb?.reasonCodes ?? null,
+        };
+      }),
+    [rows, adaptationByPlayer, neuralByPlayer, neuralBiasByPlayer],
+  );
+
+  const performanceIntelligenceByPlayer = useMemo(() => {
+    const out = new Map<string, PerformanceIntelligenceDecision>();
+    const hsrValue = toIntOrNull(ctxHsr);
+    const vMaxValue = toNumOrNull(ctxVmax);
+    const durationValue = toNumOrNull(ctxDuration);
+    const intensityToken = String(ctxIntensity ?? "").toUpperCase();
+    const gpsSpike = intensityToken !== "OFF" && (hsrValue ?? 0) >= 1000;
+
+    for (const r of rowsWithAdaptive) {
+      const pid = String(r.player_id);
+      const fatigue = fatigueByPlayer.get(pid) as Record<string, unknown> | undefined;
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const tmObj = tm && typeof tm === "object" ? (tm as Record<string, unknown>) : null;
+      const tmLoad = tmObj?.load && typeof tmObj.load === "object" ? (tmObj.load as Record<string, unknown>) : null;
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const selectedAction: TrainingAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const mdContextResolved = resolveSessionMdContextFromSources({
+        weekSetupDay:
+          (weekGrid ?? []).find((x: { day_date?: string | null }) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ??
+          null,
+        rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+        teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+        plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+        previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+      });
+      const mdToken = String(mdContextResolved.mdContext ?? "").toUpperCase();
+      const neuralState = String(r._neural_load?.neuralLoadState ?? "").toUpperCase();
+      const neuralMetrics =
+        r._neural_load && typeof r._neural_load === "object" ? (r._neural_load as unknown as Record<string, unknown>) : null;
+      const neuralScore = toMaybeFinite(neuralMetrics?.score) ?? null;
+      const tmPi = tmObj?.pi && typeof tmObj.pi === "object" ? (tmObj.pi as Record<string, unknown>) : null;
+      const acwrValue = toMaybeFinite(fatigue?.acwr) ?? toMaybeFinite(tmObj?.acwr) ?? toMaybeFinite(tmLoad?.acwr);
+      const volatilityValue = toMaybeFinite(tmPi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+      const recentPoints = recentMonitoringByPlayer[pid] ?? [];
+      const volatilitySummary = computePlayerVolatilitySummary(recentPoints);
+      const volatilityWindow = volatilitySummary.overallScore ?? volatilityValue;
+
+      const decision = buildPerformanceIntelligenceDecision({
+        playerId: pid,
+        playerName: r.full_name,
+        date: String(r.entry_date ?? today),
+        readinessScore: normalizedReadinessScore,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode(selectedAction),
+        neuralFatigueScore: neuralScore,
+        neuralFatigueFlag: neuralState === "HIGH" || neuralState === "CRITICAL",
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        rpe: toMaybeFinite(tmObj?.session_rpe),
+        sessionLoad: toMaybeFinite(tmLoad?.session_load),
+        acuteLoad: hsrValue,
+        chronicLoad: toMaybeFinite(tmLoad?.chronic_load),
+        acuteChronicRatio: acwrValue,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: volatilityWindow,
+        volatility7d: volatilityWindow,
+        matchCongestionScore: mdToken === "MD1" || mdToken === "MD2" ? 65 : mdToken === "MD3" ? 45 : 20,
+        travelLoadScore: 0,
+        upcomingMatchInDays: mdToken === "MD1" ? 1 : mdToken === "MD2" ? 2 : mdToken === "MD3" ? 3 : null,
+        plannedSessionIntensity: actionToPlannedIntensity(selectedAction),
+        dataConfidence: undefined,
+        gpsSpike,
+        maxVelocityPct: vMaxValue,
+        durationMinutes: durationValue,
+      });
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [
+    rowsWithAdaptive,
+    fatigueByPlayer,
+    ctxHsr,
+    ctxVmax,
+    ctxDuration,
+    ctxIntensity,
+    weekGrid,
+    mdDayToday,
+    planPreview?.md_day,
+    today,
+    teamIntel?.volatility_pct,
+    recentMonitoringByPlayer,
+  ]);
+
+  const rowsWithPerformanceIntelligence = useMemo(
+    () =>
+      rowsWithAdaptive.map((r) => ({
+        ...r,
+        _performance_intelligence: performanceIntelligenceByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithAdaptive, performanceIntelligenceByPlayer],
+  );
+
+  const neuralVolatilityByPlayer = useMemo(() => {
+    const out = new Map<string, NeuralVolatilityIntelligenceDecision>();
+
+    for (const r of rowsWithPerformanceIntelligence) {
+      const pid = String(r.player_id);
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const tmObj = tm && typeof tm === "object" ? (tm as Record<string, unknown>) : null;
+      const tmLoad = tmObj?.load && typeof tmObj.load === "object" ? (tmObj.load as Record<string, unknown>) : null;
+      const history = recentMonitoringByPlayer[pid] ?? [];
+      const normalizedReadinessHistory = history
+        .map((point) =>
+          point.checkInScore == null ? null : Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)),
+        )
+        .map((value) => (typeof value === "number" && Number.isFinite(value) ? value : null));
+      const readinessStateHistory = history.map((point) => {
+        const raw = point.checkInScore;
+        const norm = raw == null ? null : Math.max(0, Math.min(100, ((raw - 5) / 20) * 100));
+        if (norm == null) return null;
+        if (norm < 40) return "RED";
+        if (norm < 60) return "YELLOW";
+        return "GREEN";
+      });
+      const neuralFatigueHistory = history.map((point) => {
+        if (typeof point.deltaZ === "number" && point.deltaZ <= -0.4) return 8;
+        if (typeof point.deltaZ === "number" && point.deltaZ <= -0.2) return 6;
+        if (typeof point.deltaZ === "number" && point.deltaZ >= 0.2) return 3;
+        return 5;
+      });
+      const volatilitySummary = computePlayerVolatilitySummary(history);
+
+      const decision = buildNeuralVolatilityIntelligenceDecision({
+        playerId: pid,
+        date: String(r.entry_date ?? today),
+        readinessScore:
+          typeof r.total_score === "number" ? Math.max(0, Math.min(100, ((r.total_score - 5) / 20) * 100)) : null,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode((r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag)),
+        neuralFatigueScore: toMaybeFinite(r._neural_load?.neuralLoadScore) ?? null,
+        neuralFatigueFlag: ["HIGH", "CRITICAL"].includes(String(r._neural_load?.neuralLoadState ?? "").toUpperCase()),
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        acuteLoad: toIntOrNull(ctxHsr),
+        chronicLoad: toMaybeFinite(tmLoad?.chronic_load),
+        acuteChronicRatio: toMaybeFinite(tmObj?.acwr) ?? toMaybeFinite(tmLoad?.acwr),
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: volatilitySummary.overallScore,
+        volatility7d: volatilitySummary.overallScore,
+        matchCongestionScore:
+          String(r.md_day ?? "").toUpperCase() === "MD-1"
+            ? 65
+            : String(r.md_day ?? "").toUpperCase() === "MD-2"
+              ? 55
+              : 25,
+        travelLoadScore: 0,
+        upcomingMatchInDays: String(r.md_day ?? "").toUpperCase() === "MD-1" ? 1 : null,
+        readinessHistory: normalizedReadinessHistory,
+        neuralFatigueHistory,
+        sorenessHistory: history.map((point) => (typeof point.soreness === "number" ? point.soreness : null)),
+        sleepHistory: history.map((point) => (typeof point.sleepQuality === "number" ? point.sleepQuality : null)),
+        stressHistory: history.map((point) => (typeof point.stress === "number" ? point.stress : null)),
+        volatilityHistory: volatilitySummary.dailyComposite,
+        riskHistory: history.map((point) => {
+          const d = buildPerformanceIntelligenceDecision({
+            readinessScore: point.checkInScore == null ? null : Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)),
+            sorenessScore: point.soreness ?? null,
+            sleepScore: point.sleepQuality ?? null,
+            stressScore: point.stress ?? null,
+            energyScore: point.energy ?? null,
+            zScore: point.zScore ?? null,
+            deltaZ: point.deltaZ ?? null,
+          });
+          return d.injuryRisk.score;
+        }),
+        loadHistory: [],
+        sessionModeHistory: [],
+        athleteStateHistory: readinessStateHistory,
+        dataConfidence: null,
+      });
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [rowsWithPerformanceIntelligence, recentMonitoringByPlayer, ctxHsr, today]);
+
+  const rowsWithNeuralVolatility = useMemo(
+    () =>
+      rowsWithPerformanceIntelligence.map((r) => ({
+        ...r,
+        _neural_volatility_intelligence: neuralVolatilityByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithPerformanceIntelligence, neuralVolatilityByPlayer],
+  );
+
+  const teamNeuralVolatilitySummary = useMemo(() => {
+    const decisions: Array<{ playerId?: string; playerName?: string; decision: NeuralVolatilityIntelligenceDecision }> = [];
+    for (const r of rowsWithNeuralVolatility) {
+      if (!r._neural_volatility_intelligence) continue;
+      decisions.push({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        decision: r._neural_volatility_intelligence,
+      });
+    }
+    return buildTeamNeuralVolatilitySummary(decisions);
+  }, [rowsWithNeuralVolatility]);
+
+  const prescriptionByPlayer = useMemo(() => {
+    const out = new Map<string, PrescriptionDecision>();
+    for (const r of rowsWithNeuralVolatility) {
+      const pid = String(r.player_id);
+      const pi = r._performance_intelligence ?? null;
+      const nvi = r._neural_volatility_intelligence ?? null;
+      const selectedAction: TrainingAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const mdToken = String(r.md_day ?? "").toUpperCase();
+
+      const decision = buildPrescriptionDecision({
+        playerId: pid,
+        date: String(r.entry_date ?? today),
+        readinessScore: normalizedReadinessScore,
+        readinessState: graphAthleteStateFromFlag(r.final_flag),
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        sessionMode: actionToSessionMode(selectedAction),
+
+        injuryRiskScore: pi?.injuryRisk.score ?? null,
+        injuryRiskBand: pi?.injuryRisk.band ?? null,
+        performanceScore: pi?.performanceForecast.score ?? null,
+        performanceBand: pi?.performanceForecast.band ?? null,
+        loadToleranceScore: pi?.loadForecast.score ?? null,
+        loadToleranceBand: pi?.loadForecast.band ?? null,
+
+        fatigueAccumulationScore: nvi?.fatigueAccumulation.score ?? null,
+        fatigueAccumulationBand: nvi?.fatigueAccumulation.band ?? null,
+        instabilityWindowScore: nvi?.instabilityWindow.score ?? null,
+        instabilityWindowBand: nvi?.instabilityWindow.band ?? null,
+        collapseRiskScore: nvi?.collapseRisk.score ?? null,
+        collapseRiskBand: nvi?.collapseRisk.band ?? null,
+        peakWindowScore: nvi?.peakWindow.score ?? null,
+        peakWindowBand: nvi?.peakWindow.band ?? null,
+        trendDirection: nvi?.trendState.direction ?? null,
+
+        neuralFatigueScore: toMaybeFinite(r._neural_load?.neuralLoadScore) ?? null,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        stressScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        energyScore: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        moodScore: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        acuteLoad: toIntOrNull(ctxHsr),
+        chronicLoad: null,
+        acuteChronicRatio: null,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        volatility5d: nvi?.instabilityWindow.score ?? null,
+        volatility7d: nvi?.instabilityWindow.score ?? null,
+        matchCongestionScore: mdToken === "MD-1" || mdToken === "MD1" ? 70 : mdToken === "MD-2" || mdToken === "MD2" ? 55 : 25,
+        travelLoadScore: 0,
+        upcomingMatchInDays: mdToken === "MD-1" || mdToken === "MD1" ? 1 : mdToken === "MD-2" || mdToken === "MD2" ? 2 : null,
+        plannedSessionType: "mixed",
+        plannedSessionIntensity:
+          selectedAction === "RECOVERY" ? "low" : selectedAction === "REDUCED" ? "moderate" : "high",
+        dayType:
+          mdToken === "MD-1" || mdToken === "MD1"
+            ? "md-1"
+            : mdToken === "MD-2" || mdToken === "MD2"
+            ? "md-2"
+            : mdToken === "MD-3" || mdToken === "MD3"
+            ? "md-3"
+            : mdToken === "MD+1" || mdToken === "MD_PLUS_1"
+            ? "md+1"
+            : "training",
+        weekDensity: (mdToken === "MD-1" || mdToken === "MD1") && (mdDayToday === "MD-2" || mdDayToday === "MD-1") ? "congested" : "normal",
+      });
+
+      out.set(pid, decision);
+    }
+    return out;
+  }, [rowsWithNeuralVolatility, today, ctxHsr, mdDayToday]);
+
+  const rowsWithPrescription = useMemo(
+    () =>
+      rowsWithNeuralVolatility.map((r) => ({
+        ...r,
+        _prescription_decision: prescriptionByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithNeuralVolatility, prescriptionByPlayer],
+  );
+
+  const teamPrescriptionSummary = useMemo(() => {
+    const decisions: Array<{ playerId?: string; playerName?: string; decision: PrescriptionDecision }> = [];
+    for (const r of rowsWithPrescription) {
+      if (!r._prescription_decision) continue;
+      decisions.push({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        decision: r._prescription_decision,
+      });
+    }
+    return buildTeamPrescriptionSummary(decisions);
+  }, [rowsWithPrescription]);
+
+  const customCoachRules = useMemo<CoachRule[]>(() => buildRuntimeRulesFromAdminConfig(adminConfigSnapshot), [adminConfigSnapshot]);
+
+  const finalRecommendationByPlayer = useMemo(() => {
+    const out = new Map<string, FinalRecommendationDecision>();
+
+    for (const r of rowsWithPrescription) {
+      const pid = String(r.player_id);
+      const prescription = r._prescription_decision ?? null;
+      if (!prescription) continue;
+
+      const manualOverrideActionRaw = String(r.final_decision ?? "").toUpperCase();
+      const manualOverrideAction: "FULL" | "MODIFIED" | "RECOVERY" | null =
+        manualOverrideActionRaw === "REDUCED" ? "MODIFIED" : manualOverrideActionRaw === "FULL" || manualOverrideActionRaw === "RECOVERY" ? manualOverrideActionRaw : null;
+
+      const manualOverride =
+        String(r.final_source ?? "").toUpperCase() === "COACH_OVERRIDE" && r.final_decision
+          ? {
+              applied: true,
+              overriddenBy: null,
+              reason: r.coach_message ?? "Coach override",
+              finalAction: manualOverrideAction,
+              finalInstruction: r.coach_message ?? undefined,
+            }
+          : null;
+
+      const runtimeProtected = isPlayerProtectedByAdminConfig(adminConfigSnapshot, pid);
+      const configuredTags = getProtectedPlayerTags(adminConfigSnapshot, pid);
+      const isProtectedPlayer =
+        runtimeProtected ||
+        !!normalizeTrainingModifier(r.training_modifier)?.protected_player ||
+        (typeof r.notes === "string" && /return|protected|r2p|restricted/i.test(r.notes));
+
+      const decision = applyCoachRules(
+        {
+          playerId: pid,
+          playerName: r.full_name,
+          teamId: r.team_id ?? undefined,
+          dayType:
+            String(r.md_day ?? "").toUpperCase() === "MD-1"
+              ? "md-1"
+              : String(r.md_day ?? "").toUpperCase() === "MD-2"
+              ? "md-2"
+              : String(r.md_day ?? "").toUpperCase() === "MD-3"
+              ? "md-3"
+              : String(r.md_day ?? "").toUpperCase() === "MD+1"
+              ? "md+1"
+              : "training",
+          weekDensity: (teamIntel?.volatility_pct ?? 0) >= 45 ? "congested" : "normal",
+          playerTags: isProtectedPlayer ? Array.from(new Set(["protected", ...configuredTags])) : [],
+          isProtectedPlayer,
+          readinessState: graphAthleteStateFromFlag(r.final_flag),
+          athleteState: graphAthleteStateFromFlag(r.final_flag),
+          injuryRiskBand: r._performance_intelligence?.injuryRisk.band ?? null,
+          injuryRiskScore: r._performance_intelligence?.injuryRisk.score ?? null,
+          performanceBand: r._performance_intelligence?.performanceForecast.band ?? null,
+          loadToleranceBand: r._performance_intelligence?.loadForecast.band ?? null,
+          fatigueAccumulationBand: r._neural_volatility_intelligence?.fatigueAccumulation.band ?? null,
+          instabilityWindowBand: r._neural_volatility_intelligence?.instabilityWindow.band ?? null,
+          collapseRiskBand: r._neural_volatility_intelligence?.collapseRisk.band ?? null,
+          peakWindowBand: r._neural_volatility_intelligence?.peakWindow.band ?? null,
+          trendDirection: r._neural_volatility_intelligence?.trendState.direction ?? null,
+          prescriptionDecision: prescription,
+          dataConfidence: prescription.confidence,
+          plannedSessionType: "mixed",
+          plannedSessionIntensity:
+            prescription.action === "RECOVERY" || prescription.action === "HOLD"
+              ? "low"
+              : prescription.action === "MODIFIED"
+              ? "moderate"
+              : "high",
+          sessionMode:
+            prescription.action === "FULL"
+              ? "full"
+              : prescription.action === "MODIFIED"
+              ? "modified"
+              : "recovery",
+        },
+        customCoachRules,
+        manualOverride,
+      );
+
+      out.set(pid, decision);
+    }
+
+    return out;
+  }, [rowsWithPrescription, customCoachRules, teamIntel?.volatility_pct, adminConfigSnapshot]);
+
+  const rowsWithFinalRecommendation = useMemo(
+    () =>
+      rowsWithPrescription.map((r) => ({
+        ...r,
+        _final_recommendation_decision: finalRecommendationByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithPrescription, finalRecommendationByPlayer],
+  );
+
+  const sessionDraftByPlayer = useMemo(() => {
+    const out = new Map<string, SessionDraft>();
+    for (const r of rowsWithFinalRecommendation) {
+      const pid = String(r.player_id);
+      const finalRecommendationDecision = r._final_recommendation_decision ?? null;
+      const prescriptionDecision = r._prescription_decision ?? null;
+      if (!finalRecommendationDecision && !prescriptionDecision) continue;
+
+      const selectedAction = (r.final_decision as TrainingAction | null) ?? flagToAction(r.final_flag);
+      const mdToken = String(r.md_day ?? "").toUpperCase();
+      const dayType: "matchday" | "md+1" | "md+2" | "md-3" | "md-2" | "md-1" | "training" | "off" =
+        mdToken === "MD-1"
+          ? "md-1"
+          : mdToken === "MD-2"
+          ? "md-2"
+          : mdToken === "MD-3"
+          ? "md-3"
+          : mdToken === "MD+1"
+          ? "md+1"
+          : mdToken === "OFF"
+          ? "off"
+          : "training";
+
+      const draft = buildSessionDraft({
+        playerId: pid,
+        playerName: r.full_name,
+        teamId: r.team_id ?? undefined,
+        date: r.entry_date,
+        dayType,
+        weekDensity: (teamIntel?.volatility_pct ?? 0) >= 45 ? "congested" : "normal",
+        plannedSessionType:
+          selectedAction === "RECOVERY" ? "recovery" : selectedAction === "FULL" ? "field" : "mixed",
+        plannedSessionIntensity: actionToPlannedIntensity(selectedAction),
+        prescriptionDecision,
+        finalRecommendationDecision,
+        dataConfidence: finalRecommendationDecision?.confidence ?? prescriptionDecision?.confidence ?? null,
+        isProtectedPlayer: !!normalizeTrainingModifier(r.training_modifier)?.protected_player,
+      });
+
+      out.set(pid, draft);
+    }
+    return out;
+  }, [rowsWithFinalRecommendation, teamIntel?.volatility_pct]);
+
+  const rowsWithSessionDraft = useMemo(
+    () =>
+      rowsWithFinalRecommendation.map((r) => ({
+        ...r,
+        _session_draft: sessionDraftByPlayer.get(String(r.player_id)) ?? null,
+      })),
+    [rowsWithFinalRecommendation, sessionDraftByPlayer],
+  );
+
+  const teamSessionBuildSummary = useMemo(() => {
+    const drafts: Array<{ playerId?: string; playerName?: string; draft: SessionDraft }> = [];
+    for (const r of rowsWithSessionDraft) {
+      if (!r._session_draft) continue;
+      drafts.push({ playerId: String(r.player_id), playerName: r.full_name, draft: r._session_draft });
+    }
+    return buildTeamSessionBuildSummary(drafts);
+  }, [rowsWithSessionDraft]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    for (const row of rowsWithSessionDraft) {
+      const draft = row._session_draft ?? null;
+      if (!draft) continue;
+
+      const playerId = String(row.player_id);
+      const date = row.entry_date || todayISO();
+      const existing = loadSessionDraftRecordByPlayerDate(playerId, date);
+      if (existing) continue;
+
+      const createdAt = new Date().toISOString();
+      const record: SessionDraftRecord = {
+        id: `wf:${playerId}:${date}`,
+        playerId,
+        playerName: row.full_name,
+        teamId: row.team_id ?? undefined,
+        date,
+        originalGeneratedDraft: structuredClone(draft),
+        workingDraft: structuredClone(draft),
+        approvedDraft: null,
+        publishedDraft: null,
+        status: "GENERATED",
+        version: 1,
+        createdAt,
+        updatedAt: createdAt,
+        createdBy: "system:auto-session-builder",
+        lastEditedBy: null,
+        approvedBy: null,
+        approvedAt: null,
+        publishedBy: null,
+        publishedAt: null,
+      };
+
+      saveSessionDraftRecord(record);
+      saveSessionWorkflowEvent(
+        buildWorkflowEvent({
+          workflowId: record.id,
+          actionType: "GENERATED",
+          actorId: "system",
+          actorName: "Auto Session Builder",
+          summary: "Session draft generated from recommendation stack.",
+          metadata: {
+            playerId,
+            date,
+            draftAction: draft.draftAction,
+            sessionType: draft.sessionType,
+          },
+        }),
+      );
+    }
+  }, [rowsWithSessionDraft]);
+
+  const teamRulesSummary = useMemo(
+    () =>
+      buildTeamRulesSummary(
+        rowsWithSessionDraft
+          .filter((r) => !!r._final_recommendation_decision)
+          .map((r) => ({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            decision: r._final_recommendation_decision!,
+            isProtectedPlayer: !!normalizeTrainingModifier(r.training_modifier)?.protected_player,
+          })),
+      ),
+    [rowsWithSessionDraft],
+  );
+
+  const teamPerformanceIntelligence = useMemo(
+    () => {
+      const decisions: Array<{ playerId?: string; playerName?: string; decision: PerformanceIntelligenceDecision }> = [];
+      for (const r of rowsWithNeuralVolatility) {
+        if (!r._performance_intelligence) continue;
+        decisions.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          decision: r._performance_intelligence,
+        });
+      }
+      return buildTeamPerformanceIntelligenceSummary(decisions);
+    },
+    [rowsWithNeuralVolatility],
+  );
+
+  const teamPerformanceRiskGroups = useMemo(() => {
+    const groups = {
+      lowRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      moderateRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      highRiskPlayers: [] as Array<{ playerId: string; playerName: string }>,
+      recoveryRecommendedPlayers: [] as Array<{ playerId: string; playerName: string }>,
+    };
+
+    for (const r of rowsWithNeuralVolatility) {
+      const pi = r._performance_intelligence;
+      if (!pi) continue;
+      const item = { playerId: String(r.player_id), playerName: r.full_name };
+      if (pi.injuryRisk.band === "LOW") groups.lowRiskPlayers.push(item);
+      else if (pi.injuryRisk.band === "MODERATE") groups.moderateRiskPlayers.push(item);
+      else groups.highRiskPlayers.push(item);
+      if (pi.loadForecast.recommendedAction === "recovery") groups.recoveryRecommendedPlayers.push(item);
+    }
+
+    return groups;
+  }, [rowsWithNeuralVolatility]);
+
+  const teamRiskMap = useMemo(
+    () =>
+      buildTeamRiskMap(
+        rowsWithNeuralVolatility
+          .filter((r) => !!r._performance_intelligence)
+          .map((r) => ({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            decision: r._performance_intelligence!,
+          })),
+      ),
+    [rowsWithNeuralVolatility],
+  );
+
+  const weeklyRiskReport = useMemo(() => {
+    const entries: Array<{
+      playerId?: string;
+      playerName?: string;
+      date: string;
+      decision: PerformanceIntelligenceDecision;
+    }> = [];
+
+    for (const r of rowsWithNeuralVolatility) {
+      const current = r._performance_intelligence;
+      if (current) {
+        entries.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          date: dateKey(String(r.entry_date ?? today)),
+          decision: current,
+        });
+      }
+
+      const history = recentMonitoringByPlayer[String(r.player_id)] ?? [];
+      for (const point of history.slice(-7)) {
+        if (!point?.date) continue;
+        entries.push({
+          playerId: String(r.player_id),
+          playerName: r.full_name,
+          date: dateKey(point.date),
+          decision: buildPerformanceIntelligenceDecision({
+            playerId: String(r.player_id),
+            playerName: r.full_name,
+            date: point.date,
+            readinessScore: point.checkInScore != null ? Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)) : null,
+            readinessState:
+              String(point.readinessState ?? "").toUpperCase() === "RED"
+                ? "RED"
+                : String(point.readinessState ?? "").toUpperCase() === "YELLOW"
+                  ? "YELLOW"
+                  : String(point.readinessState ?? "").toUpperCase() === "GREEN"
+                    ? "GREEN"
+                    : "GRAY",
+            athleteState:
+              String(point.readinessState ?? "").toUpperCase() === "RED"
+                ? "RED"
+                : String(point.readinessState ?? "").toUpperCase() === "YELLOW"
+                  ? "YELLOW"
+                  : String(point.readinessState ?? "").toUpperCase() === "GREEN"
+                    ? "GREEN"
+                    : "GRAY",
+            sessionMode: "pending",
+            sorenessScore: point.soreness ?? null,
+            sleepScore: point.sleepQuality ?? null,
+            stressScore: point.stress ?? null,
+            energyScore: point.energy ?? null,
+            moodScore: point.mood ?? null,
+            zScore: point.zScore ?? null,
+            deltaZ: point.deltaZ ?? null,
+            volatility5d: null,
+            volatility7d: null,
+          }),
+        });
+      }
+    }
+    return buildWeeklyRiskReport(entries);
+  }, [rowsWithNeuralVolatility, recentMonitoringByPlayer, today]);
+
+  const teamOutlook = useMemo(
+    () =>
+      buildTeamOutlook(
+        rowsWithNeuralVolatility
+          .map((r) => r._performance_intelligence)
+          .filter((d): d is PerformanceIntelligenceDecision => !!d),
+      ),
+    [rowsWithNeuralVolatility],
+  );
+
+  const weeklyPerformanceOutlook = useMemo(() => {
+    if (!weekGrid?.length) return null;
+    const highCount = teamPerformanceRiskGroups.highRiskPlayers.length;
+    const modCount = teamPerformanceRiskGroups.moderateRiskPlayers.length;
+    const recCount = teamPerformanceRiskGroups.recoveryRecommendedPlayers.length;
+    return `Weekly risk outlook: ${highCount} elevated, ${modCount} moderate, ${recCount} recovery recommended.`;
+  }, [weekGrid, teamPerformanceRiskGroups]);
+
+  const needsReviewCount = useMemo(
+    () => rowsWithAdaptive.filter((r) => r._needs_review).length,
+    [rowsWithAdaptive]
+  );
+
+  const flaggedReviewStats = useMemo(() => {
+    const highNeuralLoad = rowsWithAdaptive.filter((r) =>
+      ["HIGH", "CRITICAL"].includes(String(r._neural_load?.neuralLoadState ?? "").toUpperCase())
+    ).length;
+    const lowReadiness = rowsWithAdaptive.filter((r) =>
+      ["RED", "YELLOW"].includes(String(r.final_flag ?? "").toUpperCase())
+    ).length;
+    const painFlag = rowsWithAdaptive.filter((r) => {
+      const pid = String(r.player_id);
+      const fatigue = fatigueByPlayer.get(pid) as
+        | { primaryFatigueType?: string; severity?: string; drivers?: unknown[]; reasonCodes?: unknown[] }
+        | null
+        | undefined;
+      const fatigueType = String(fatigue?.primaryFatigueType ?? "").toUpperCase();
+      const fatigueSeverity = String(fatigue?.severity ?? "").toUpperCase();
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const signal = deriveTissueProtectionSignal({
+        fatigueType,
+        fatigueSeverity,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        noteText: r.notes ?? null,
+        neuralFatigueBand: graphNeuralFatigueBandFromState(r._neural_load?.neuralLoadState),
+        readinessScore: normalizedReadinessScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        stenScore: typeof r._sten === "number" ? r._sten : null,
+      });
+      return signal.painProtection;
+    }).length;
+    const manualReview = rowsWithAdaptive.filter((r) =>
+      String(r.final_source ?? "").toUpperCase().includes("COACH")
+    ).length;
+
+    return { highNeuralLoad, lowReadiness, painFlag, manualReview };
+  }, [rowsWithAdaptive, fatigueByPlayer]);
+
+  const reviewContextStats = useMemo(() => {
+    const neuralBiasApplied = rowsWithAdaptive.filter((r) => !!r._neural_bias_applied).length;
+    const highNextDayRisk = rowsWithAdaptive.filter(
+      (r) => String(r._neural_load?.nextDayRisk ?? "").toUpperCase() === "HIGH"
+    ).length;
+    const lockedRows = rowsWithAdaptive.filter((r) => !!r.is_locked).length;
+    return { neuralBiasApplied, highNextDayRisk, lockedRows };
+  }, [rowsWithAdaptive]);
+
+  const readinessRiskReportData = useMemo<ReadinessRiskReportData>(() => {
+    const flaggedRows = rowsWithAdaptive.filter((r) => {
+      const flag = String(r.final_flag ?? "").toUpperCase();
+      return flag === "YELLOW" || flag === "RED";
+    });
+
+    const hsrYesterday = toIntOrNull(ctxHsr);
+    const yesterdayLoadBand: "LOW" | "MODERATE" | "HIGH" | null =
+      String(ctxIntensity ?? "").toUpperCase() === "OFF"
+        ? "LOW"
+        : hsrYesterday == null
+        ? null
+        : hsrYesterday >= 800
+        ? "HIGH"
+        : hsrYesterday >= 500
+        ? "MODERATE"
+        : "LOW";
+
+    const flaggedPlayers: ReadinessRiskReportPlayer[] = flaggedRows.map((r) => {
+      const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+      const normalizedReadinessScore =
+        rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+      const weekSetupRowForEntry =
+        (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ?? null;
+      const mdContextResolved = resolveSessionMdContextFromSources({
+        weekSetupDay: weekSetupRowForEntry,
+        rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+        teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+        plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+        previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+      });
+      const mdContextInput = mdContextResolved.mdContext;
+      const neuralFatigueBandInput = graphNeuralFatigueBandFromState(r._neural_load?.neuralLoadState);
+      const externalLoadToday = r._external_load_today ?? null;
+      const externalLoadBaseline = r._external_load_baseline ?? null;
+      const graphSession = buildDevDailySessionAdapterResult({
+        athleteState: graphAthleteStateFromFlag(r.final_flag),
+        mdContext: mdContextInput,
+        readinessScore: normalizedReadinessScore,
+        neuralFatigueBand: neuralFatigueBandInput,
+        yesterdayLoadBand,
+        externalLoad: {
+          playerLoad: externalLoadToday?.player_load ?? null,
+          playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+          sprintDistance: externalLoadToday?.sprint_distance ?? null,
+          sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+        },
+      });
+
+      const ateState = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+      const ateSessionMode: "full" | "modified" | "recovery" =
+        ateState === "RED" ? "recovery" : ateState === "YELLOW" ? "modified" : "full";
+      const reasons = graphSession.ateDecisionPanel?.reasonLines?.filter(Boolean) ?? [];
+      const tm = normalizeTrainingModifier(r.training_modifier);
+      const fatigue = fatigueByPlayer.get(String(r.player_id)) ?? null;
+      const fatigueMetrics = fatigue && typeof fatigue === "object" ? (fatigue as Record<string, unknown>) : null;
+      const fatigueType = String((fatigueMetrics?.primaryFatigueType as string | undefined) ?? "").toUpperCase();
+      const fatigueSeverity = String((fatigueMetrics?.severity as string | undefined) ?? "").toUpperCase();
+      const tissueSignal = deriveTissueProtectionSignal({
+        fatigueType,
+        fatigueSeverity,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        noteText: r.notes ?? null,
+        neuralFatigueBand: neuralFatigueBandInput,
+        readinessScore: normalizedReadinessScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        stenScore: typeof r._sten === "number" ? r._sten : null,
+      });
+      const acwrValue = toMaybeFinite(fatigueMetrics?.acwr) ?? toMaybeFinite(tm?.acwr) ?? toMaybeFinite(tm?.load?.acwr);
+      const hrvValue = toMaybeFinite(fatigueMetrics?.hrv) ?? toMaybeFinite(tm?.hrv);
+      const hrvChangePctValue = toMaybeFinite(fatigueMetrics?.hrv_change_pct) ?? toMaybeFinite(tm?.hrv_change_pct);
+      const volatilityValue = toMaybeFinite(tm?.pi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+      const lightAteStateRaw = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+      const lightAteState =
+        lightAteStateRaw === "RED"
+          ? "RED"
+          : lightAteStateRaw === "YELLOW"
+          ? "YELLOW"
+          : lightAteStateRaw === "GREEN" || lightAteStateRaw === "GREEN_PLUS"
+          ? "GREEN"
+          : "GRAY";
+      const snapshot = buildDailyAthleteSnapshot({
+        athleteId: String(r.player_id),
+        date: String(r.entry_date ?? today),
+        manual: {
+          id: r.readiness_entry_id ?? null,
+          totalScore: rawTotalScore,
+          soreness: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+          stress: typeof r.stress_mood === "number" ? r.stress_mood : null,
+          mood: typeof r.stress_mood === "number" ? r.stress_mood : null,
+          sleepQuality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+          motivation: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+          completed: rawTotalScore != null,
+          sourceDate: String(r.entry_date ?? today),
+        },
+        load: {
+          zScore: typeof r._z_today === "number" ? r._z_today : null,
+          deltaZ: typeof r._dz === "number" ? r._dz : null,
+          acuteLoad: toIntOrNull(ctxHsr) ?? null,
+          acwr: acwrValue ?? null,
+          sessionRpeLoad: toMaybeFinite(tm?.session_load) ?? null,
+          volatility5d: volatilityValue ?? null,
+          sourceDate: String(r.entry_date ?? today),
+        },
+        context: {
+          weekSetupLabel: r.md_day ?? mdDayToday,
+          expectedSessionType: graphSession.ateDecisionPanel?.sessionLabel ?? null,
+          rehab: false,
+          returnToPlay: false,
+          sourceDate: String(r.entry_date ?? today),
+        },
+        externalLoad: {
+          totalDistance: externalLoadToday?.total_distance ?? null,
+          highSpeedDistance: externalLoadToday?.high_speed_distance ?? null,
+          sprintDistance: externalLoadToday?.sprint_distance ?? null,
+          accelerations: externalLoadToday?.accelerations ?? null,
+          decelerations: externalLoadToday?.decelerations ?? null,
+          playerLoad: externalLoadToday?.player_load ?? null,
+          maxVelocity: externalLoadToday?.max_velocity ?? null,
+          playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+          sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+          source: externalLoadToday ? "catapult" : null,
+          sourceDate: String(r.entry_date ?? today),
+        },
+      });
+      const readinessDecision = buildExplainableReadinessDecision({
+        playerId: String(r.player_id),
+        playerName: r.full_name,
+        date: r.entry_date,
+        dailySnapshot: snapshot,
+        readinessScore: normalizedReadinessScore ?? undefined,
+        checkinScore: rawTotalScore ?? undefined,
+        zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+        deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+        volatility: volatilityValue ?? undefined,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+        hrvScore: hrvValue ?? undefined,
+        hrvChangePct: hrvChangePctValue ?? undefined,
+        acuteLoad: toIntOrNull(ctxHsr) ?? undefined,
+        acwr: acwrValue ?? undefined,
+        durationMinutes: toNumOrNull(ctxDuration) ?? undefined,
+        neuralFatigueLevel:
+          neuralFatigueBandInput === "VERY_HIGH" || neuralFatigueBandInput === "HIGH"
+            ? "high"
+            : neuralFatigueBandInput === "MODERATE"
+            ? "moderate"
+            : "low",
+        neuralFatigueReason: r._neural_load?.summary ?? null,
+        stenScore: typeof r._sten === "number" ? r._sten : undefined,
+        tissueSignal: tissueSignal.tissueSignal,
+        tissueSeverity: tissueSignal.tissueSeverity,
+        explicitPainTextFlag: tissueSignal.explicitPainTextFlag,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+        sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+        painFlag: tissueSignal.painProtection,
+        highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+        maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+        gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+        recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+        recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+        matchCongestion: undefined,
+        travelLoad: undefined,
+        dataCompleteness: undefined,
+        lightAteState,
+        catapultDailyLoad: r._catapult_baseline ? (r._catapult_signals ? (r._external_load_today ? normalizeCatapultDailyLoadRow(r._external_load_today as unknown as Record<string, unknown>) : null) : null) ?? undefined : undefined,
+        catapultBaseline: r._catapult_baseline ?? undefined,
+        catapultSignals: r._catapult_signals ?? undefined,
+        externalLoadState: r._catapult_signals?.externalLoadState ?? undefined,
+        catapultReadinessModifier: r._catapult_modifier ?? undefined,
+      });
+      const injuryRiskDecision = buildInjuryRiskDecision({
+        acwr: acwrValue ?? undefined,
+        zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+        deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+        volatility: volatilityValue ?? undefined,
+        recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+        recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+        highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+        maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+        hrvChangePct: hrvChangePctValue ?? undefined,
+        sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+        sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+        painFlag: tissueSignal.painProtection,
+        gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+        matchCongestion: undefined,
+        travelLoad: undefined,
+      }, readinessDecision);
+      const neural = r._neural_load ?? null;
+      const athleteDecision = buildAthleteDecision({
+        snapshot,
+        readinessDecision,
+        injuryDecision: injuryRiskDecision,
+        neural: neural
+          ? {
+              status:
+                String(neural.neuralLoadState ?? "").toUpperCase() === "CRITICAL" || String(neural.neuralLoadState ?? "").toUpperCase() === "HIGH"
+                  ? "suppressed"
+                  : String(neural.neuralLoadState ?? "").toUpperCase() === "RISING"
+                  ? "caution"
+                  : "clear",
+              confidence: 0.65,
+              summary: neural.summary ?? null,
+            }
+          : null,
+        hardBlock: false,
+      });
+
+      return {
+        name: r.full_name,
+        readinessStatus: String(r.final_flag).toUpperCase() === "RED" ? "RED" : "YELLOW",
+        score: typeof r.readiness === "number" ? r.readiness : rawTotalScore,
+        confidence: athleteDecision.decisionConfidence,
+        why: athleteDecision.explanationLines.length ? athleteDecision.explanationLines : reasons,
+        checkInScore: rawTotalScore,
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        acwr: acwrValue,
+        sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        hrv: hrvValue,
+        volatility: volatilityValue,
+        ateSessionMode: athleteDecision.sessionMode === "pending" ? ateSessionMode : athleteDecision.sessionMode,
+        injuryRiskLevel: injuryRiskDecision.injuryRiskLevel,
+        injuryConfidence: injuryRiskDecision.confidence,
+        injuryWhy: injuryRiskDecision.why,
+        injuryRecommendation: injuryRiskDecision.recommendation,
+      };
+    });
+
+    const green = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "GREEN").length;
+    const yellow = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "YELLOW").length;
+    const red = rowsWithAdaptive.filter((r) => String(r.final_flag ?? "").toUpperCase() === "RED").length;
+
+    return {
+      teamName: rowsWithAdaptive[0]?.team ?? "Team",
+      date: today,
+      flaggedPlayers,
+      summary: { green, yellow, red },
+    };
+  }, [rowsWithAdaptive, ctxHsr, ctxIntensity, mdDayToday, planPreview?.md_day, weekGrid, teamIntel?.volatility_pct, fatigueByPlayer, today]);
+
+  async function downloadReadinessRiskReport() {
+    try {
+      setPdfDownloading(true);
+      const blob = await pdf(<ReadinessRiskReportDocument data={readinessRiskReportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `readiness-risk-report-${readinessRiskReportData.date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("readiness risk report download failed:", e?.message ?? e);
+      alert("Could not generate PDF report.");
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
+
+  async function downloadPostTrainingReport() {
+    try {
+      setPdfPostDownloading(true);
+
+      // ── 1. Fetch active players ──────────────────────────────
+      const { data: playerData } = await supabase
+        .from("players")
+        .select("id, full_name, position")
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (!playerData?.length) {
+        alert("Engir leikmenn fundust.");
+        return;
+      }
+
+      const playerIds = (playerData as Array<Record<string, unknown>>).map((p) => String(p.id));
+
+      // ── 2. Find most recent session date with GPS data ───────
+      const { data: latestDateRows } = await supabase
+        .from("player_external_load_daily")
+        .select("date")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .lte("date", today)
+        .order("date", { ascending: false })
+        .limit(1);
+
+      const sessionDate: string = (latestDateRows?.[0] as any)?.date ?? today;
+      const chronicStart = addDaysISO(sessionDate, -27);
+
+      // Fetch only columns that actually exist in player_external_load_daily
+      const { data: loadRows, error: loadErr } = await supabase
+        .from("player_external_load_daily")
+        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel")
+        .eq("source", "catapult")
+        .in("player_id", playerIds)
+        .gte("date", chronicStart)
+        .lte("date", sessionDate)
+        .order("date");
+
+      if (loadErr) {
+        console.error("GPS load fetch error:", loadErr);
+        alert(`GPS gögn villa: ${loadErr.message}`);
+        return;
+      }
+
+      // ── 2b. Fetch RPE submissions for the session date ────────
+      type RpeRow = {
+        player_id: string;
+        rpe: number | null;
+        session_load: number | null;
+        duration_minutes: number | null;
+      };
+      const { data: rpeRows } = await supabase
+        .from("session_rpe_entries")
+        .select("player_id, rpe, session_load, duration_minutes")
+        .eq("session_date", sessionDate)
+        .in("player_id", playerIds);
+
+      // Sum up session load per player (a player may have submitted multiple sessions)
+      const rpeByPlayer = new Map<string, { rpe: number; sessionLoad: number; durationMinutes: number }>();
+      for (const row of ((rpeRows ?? []) as RpeRow[])) {
+        const pid = String(row.player_id);
+        const cur = rpeByPlayer.get(pid);
+        const load = Number(row.session_load ?? 0);
+        const dur = Number(row.duration_minutes ?? 0);
+        const rpe = Number(row.rpe ?? 0);
+        if (!cur) {
+          rpeByPlayer.set(pid, { rpe, sessionLoad: load, durationMinutes: dur });
+        } else {
+          // Multiple sessions: use weighted avg RPE and sum load
+          const totalDur = cur.durationMinutes + dur;
+          const weightedRpe = totalDur > 0
+            ? (cur.rpe * cur.durationMinutes + rpe * dur) / totalDur
+            : rpe;
+          rpeByPlayer.set(pid, {
+            rpe: weightedRpe,
+            sessionLoad: cur.sessionLoad + load,
+            durationMinutes: totalDur,
+          });
+        }
+      }
+
+      // ── 3. Build readiness flag lookup from current rows ─────
+      const flagByPlayerId = new Map<string, "GREEN" | "YELLOW" | "RED">();
+      for (const r of rowsWithAdaptive) {
+        const flag = String(r.final_flag ?? "").toUpperCase();
+        if (flag === "GREEN" || flag === "YELLOW" || flag === "RED") {
+          flagByPlayerId.set(String(r.player_id), flag as "GREEN" | "YELLOW" | "RED");
+        }
+      }
+
+      // ── 4. Compute per-player metrics ─────────────────────────
+      type LoadRow = {
+        player_id: string; date: string;
+        total_distance: number | null;
+        velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null;
+        accel_b2_3_tot_effs_gen2: number | null; tot_as: number | null;
+        decel_b2_3_tot_effs_gen2: number | null; tot_ds: number | null;
+        total_player_load: number | null; player_load_per_minute: number | null;
+        max_vel: number | null;
+      };
+
+      const rows28 = ((loadRows ?? []) as unknown as LoadRow[]);
+      const rowsToday = rows28.filter((r) => r.date === sessionDate);
+      const byPlayer = new Map<string, LoadRow[]>();
+      for (const r of rows28) {
+        const list = byPlayer.get(r.player_id) ?? [];
+        list.push(r);
+        byPlayer.set(r.player_id, list);
+      }
+
+      function avgOf(vals: (number | null)[]): number | null {
+        const nums = vals.filter((v): v is number => v != null && Number.isFinite(v));
+        return nums.length ? nums.reduce((s, v) => s + v, 0) / nums.length : null;
+      }
+      function pctVsNorm(val: number | null, norm: number | null): number | null {
+        if (val == null || norm == null || norm === 0) return null;
+        return ((val - norm) / norm) * 100;
+      }
+
+      const reportPlayers: PostTrainingReportPlayer[] = [];
+      const includedPids = new Set<string>();
+
+      // ── Pass 1: players WITH GPS data ────────────────────────
+      for (const player of playerData as Array<Record<string, unknown>>) {
+        const pid = String(player.id);
+        const todayRow = rowsToday.find((r) => r.player_id === pid) ?? null;
+        if (!todayRow) continue; // handled in pass 2 if they have RPE
+
+        includedPids.add(pid);
+
+        const hist = byPlayer.get(pid) ?? [];
+        const hist28 = hist.filter((r) => r.date >= chronicStart && r.date <= sessionDate);
+
+        const hsdToday = (todayRow.velocity_band5_total_distance ?? 0) + (todayRow.velocity_band6_total_distance ?? 0);
+        const hsd28Avg = avgOf(hist28.map((r) => (r.velocity_band5_total_distance ?? 0) + (r.velocity_band6_total_distance ?? 0)));
+        const pl28Avg = avgOf(hist28.map((r) => r.total_player_load));
+        const dist28Avg = avgOf(hist28.map((r) => r.total_distance));
+
+        const acuteStart = addDaysISO(sessionDate, -6);
+        const acuteRows = hist28.filter((r) => r.date >= acuteStart && r.date <= sessionDate);
+        const acute7 = avgOf(acuteRows.map((r) => r.total_distance));
+        const chronic28 = dist28Avg;
+        const acwr = acute7 != null && chronic28 != null && chronic28 > 0 ? acute7 / chronic28 : null;
+
+        const readinessFlag = flagByPlayerId.get(pid) ?? "—" as const;
+
+        const reasons: string[] = [];
+        let attentionFlag: "OK" | "MONITOR" | "ALERT" = "OK";
+
+        if (acwr != null && acwr > 1.5) {
+          reasons.push(`ACWR ${acwr.toFixed(2)} — klínískt hár álag (>1.5)`);
+          attentionFlag = "ALERT";
+        } else if (acwr != null && acwr > 1.3) {
+          reasons.push(`ACWR ${acwr.toFixed(2)} — hár álag (>1.3)`);
+          attentionFlag = "MONITOR";
+        }
+
+        if ((readinessFlag === "RED" || readinessFlag === "YELLOW") && acwr != null && acwr > 1.2) {
+          reasons.push(`${readinessFlag} readiness + hár ACWR — hvíldarþörf`);
+          attentionFlag = readinessFlag === "RED" ? "ALERT" : "MONITOR";
+        }
+
+        const distPct = pctVsNorm(todayRow.total_distance, dist28Avg);
+        if (distPct != null && distPct > 30) {
+          reasons.push(`Vegalengd ${Math.round(distPct)}% yfir 28D meðaltali`);
+          if (attentionFlag !== "ALERT") attentionFlag = "MONITOR";
+        }
+
+        const plPct = pctVsNorm(todayRow.total_player_load, pl28Avg);
+        if (plPct != null && plPct > 30) {
+          reasons.push(`Player Load ${Math.round(plPct)}% yfir 28D meðaltali`);
+          if (attentionFlag !== "ALERT") attentionFlag = "MONITOR";
+        }
+
+        if (readinessFlag === "RED" && attentionFlag === "OK") {
+          reasons.push("RED readiness í dag — fylgjast með líðan á morgun");
+          attentionFlag = "MONITOR";
+        }
+
+        const rpeEntry = rpeByPlayer.get(pid) ?? null;
+
+        reportPlayers.push({
+          name: String(player.full_name ?? ""),
+          position: String(player.position ?? "—"),
+          readinessFlag,
+          totalDistance: todayRow.total_distance,
+          totalDistancePct: pctVsNorm(todayRow.total_distance, dist28Avg),
+          hsd: hsdToday > 0 ? hsdToday : null,
+          hsdPct: pctVsNorm(hsdToday > 0 ? hsdToday : null, hsd28Avg),
+          playerLoad: todayRow.total_player_load,
+          playerLoadPct: plPct,
+          playerLoadPerMin: todayRow.player_load_per_minute,
+          accelB23: todayRow.accel_b2_3_tot_effs_gen2,
+          decelB23: todayRow.decel_b2_3_tot_effs_gen2,
+          maxVelocity: todayRow.max_vel,
+          acwr,
+          rpe: rpeEntry ? rpeEntry.rpe : null,
+          sessionLoad: rpeEntry ? rpeEntry.sessionLoad : null,
+          durationMinutes: rpeEntry ? rpeEntry.durationMinutes : null,
+          rpeSubmitted: rpeEntry != null,
+          attentionFlag,
+          attentionReason: reasons,
+        });
+      }
+
+      // ── Pass 2: players WITHOUT GPS but WITH RPE (e.g. goalkeepers) ──
+      for (const player of playerData as Array<Record<string, unknown>>) {
+        const pid = String(player.id);
+        if (includedPids.has(pid)) continue; // already added in pass 1
+        const rpeEntry = rpeByPlayer.get(pid) ?? null;
+        if (!rpeEntry) continue; // no GPS, no RPE — skip entirely
+
+        const readinessFlag = flagByPlayerId.get(pid) ?? "—" as const;
+        const reasons: string[] = [];
+        let attentionFlag: "OK" | "MONITOR" | "ALERT" = "OK";
+        if (readinessFlag === "RED") {
+          reasons.push("RED readiness í dag — fylgjast með líðan á morgun");
+          attentionFlag = "MONITOR";
+        }
+
+        reportPlayers.push({
+          name: String(player.full_name ?? ""),
+          position: String(player.position ?? "—"),
+          readinessFlag,
+          totalDistance: null,
+          totalDistancePct: null,
+          hsd: null,
+          hsdPct: null,
+          playerLoad: null,
+          playerLoadPct: null,
+          playerLoadPerMin: null,
+          accelB23: null,
+          decelB23: null,
+          maxVelocity: null,
+          acwr: null,
+          rpe: rpeEntry.rpe,
+          sessionLoad: rpeEntry.sessionLoad,
+          durationMinutes: rpeEntry.durationMinutes,
+          rpeSubmitted: true,
+          attentionFlag,
+          attentionReason: reasons,
+        });
+      }
+
+      // GPS players sorted by distance desc; RPE-only players sorted by name at the bottom
+      const gpsPlayers = reportPlayers.filter((p) => p.totalDistance != null);
+      const rpeOnlyPlayers = reportPlayers.filter((p) => p.totalDistance == null);
+      gpsPlayers.sort((a, b) => (b.totalDistance ?? 0) - (a.totalDistance ?? 0));
+      rpeOnlyPlayers.sort((a, b) => a.name.localeCompare(b.name));
+      reportPlayers.length = 0;
+      reportPlayers.push(...gpsPlayers, ...rpeOnlyPlayers);
+
+      // ── 5. Team averages ─────────────────────────────────────
+      const teamAvg = {
+        totalDistance: avgOf(reportPlayers.map((p) => p.totalDistance)),
+        hsd: avgOf(reportPlayers.map((p) => p.hsd)),
+        playerLoad: avgOf(reportPlayers.map((p) => p.playerLoad)),
+        accelB23: avgOf(reportPlayers.map((p) => p.accelB23)),
+        decelB23: avgOf(reportPlayers.map((p) => p.decelB23)),
+        maxVelocity: reportPlayers.reduce((max, p) => (p.maxVelocity != null && (max == null || p.maxVelocity > max) ? p.maxVelocity : max), null as number | null),
+      };
+
+      const rpeSubmitters = reportPlayers.filter((p) => p.rpeSubmitted);
+      const rpeTeamAvg = rpeSubmitters.length
+        ? rpeSubmitters.reduce((s, p) => s + (p.rpe ?? 0), 0) / rpeSubmitters.length
+        : null;
+      const rpeTotalLoad = rpeSubmitters.length
+        ? rpeSubmitters.reduce((s, p) => s + (p.sessionLoad ?? 0), 0)
+        : null;
+
+      const reportData: PostTrainingReportData = {
+        teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
+        sessionDate,
+        mdDay: mdDayToday,
+        players: reportPlayers,
+        teamAvg,
+        rpeTeamAvg,
+        rpeTotalLoad,
+        rpeSubmissionCount: rpeSubmitters.length,
+        alertCount: reportPlayers.filter((p) => p.attentionFlag === "ALERT").length,
+        monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
+      };
+
+      if (reportPlayers.length === 0) {
+        alert("Engir leikmenn fundust með GPS eða RPE gögn í dag.");
+        return;
+      }
+
+      // ── 6. Generate and download PDF ─────────────────────────
+      const blob = await pdf(<PostTrainingReportDocument data={reportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `post-training-report-${sessionDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("post-training report download failed:", e?.message ?? e);
+      alert("Could not generate post-training PDF report.");
+    } finally {
+      setPdfPostDownloading(false);
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
+  const tm = teamStatusMeta(teamIntel?.team_status);
+  const dayStateInfo = useMemo(() => {
+    const resolved = getDayState({
+      readinessCount: rowsWithAdaptive.length,
+      mdDay: mdDayToday,
+      plannedDayType: rowsWithAdaptive.map((r) => r.planned_day_type ?? null),
+      complianceCounts: {
+        totalPlayers: reminderStatus?.totalPlayers ?? teamSignal?.n_players ?? 0,
+        missing: reminderStatus?.missing ?? null,
+      },
+      teamContext: {
+        intensity: ctxIntensity,
+      },
+    });
+
+    return {
+      state: resolved.state,
+      ...dayStateMeta(resolved.state),
+      reason: resolved.reason,
+    };
+  }, [mdDayToday, rowsWithAdaptive, ctxIntensity, reminderStatus, teamSignal?.n_players]);
+
+  const teamIntelEmptyMessage =
+    dayStateInfo.state === "OFF_DAY"
+      ? (lang === "EN" ? "OFF day detected. Team intelligence input is intentionally de-emphasized." : "OFF dagur greinst. Team intelligence inntak er vísvitandi dregið saman.")
+      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+      ? (lang === "EN" ? "No input expected for this day context. Team intelligence will populate when inputs are expected." : "Ekkert inntak gert ráð fyrir í þessum dagasamhengi. Team intelligence mun fylla upp þegar inntak er gert ráð fyrir.")
+      : dayStateInfo.state === "MISSING_INPUT"
+      ? (lang === "EN" ? "Missing readiness inputs for expected players today. Team intelligence may be incomplete." : "Vantar readiness gögn frá leikmönnum sem gert er ráð fyrir. Team intelligence gæti verið ófullkomið.")
+      : (lang === "EN" ? "No team intelligence record found for today." : "Engin team intelligence færsla fannst í dag.");
+
+  const queueEmptyMessage =
+    dayStateInfo.state === "OFF_DAY"
+      ? (lang === "EN" ? "OFF day: no player review queue expected." : "OFF dagur: ekkert gert ráð fyrir leikmannaendurskoðun.")
+      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+      ? (lang === "EN" ? "No input expected today; player review queue is intentionally empty." : "Ekkert inntak gert ráð fyrir í dag; leikmannaröð er vísvitandi tóm.")
+      : dayStateInfo.state === "MISSING_INPUT"
+      ? (lang === "EN" ? "Expected player inputs are missing. Trigger reminders or wait for check-ins." : "Vantar inntak frá leikmönnum. Sendum áminningar eða biðum eftir check-ins.")
+      : (lang === "EN" ? "No readiness data for today." : "Engin readiness gögn í dag.");
+
+  const complianceMessage =
+    dayStateInfo.state === "OFF_DAY"
+      ? "OFF day detected. Missing check-ins may be acceptable depending on protocol."
+      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+      ? "No input expected for this day context."
+      : dayStateInfo.state === "MISSING_INPUT"
+      ? "Check-in compliance is below expected level for today."
+      : "Normal readiness day compliance monitoring.";
+
+  /** -----------------------------
+   * Render helpers
+   * ----------------------------- */
+  const renderActionPills = (pid: string, locked: boolean) => {
+    const current = draftAction[pid] ?? "FULL";
+
+    const pill = (value: TrainingAction, label: string) => {
+      const active = current === value;
+      const disabled = locked && !isAdmin;
+      return (
+        <button
+          key={value}
+          type="button"
+          disabled={disabled}
+          onClick={() => setDraftAction((p) => ({ ...p, [pid]: value }))}
+          className={[
+            "inline-flex h-12 min-w-[108px] items-center justify-center rounded-xl border px-4 text-sm font-semibold tracking-wide transition-colors",
+            disabled ? "cursor-not-allowed opacity-50" : "",
+            active ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50",
+          ].join(" ")}
+          aria-pressed={active}
+        >
+          {label}
+        </button>
+      );
+    };
+
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {pill("FULL", "FULL")}
+        {pill("REDUCED", "REDUCED")}
+        {pill("RECOVERY", "RECOVERY")}
+      </div>
+    );
+  };
+
+  const renderRow = (r: Row) => {
+    const pid = String(r.player_id);
+    const isSaving = !!saving[pid];
+    const isOpen = expandedPlayerId === pid;
+
+    const score = typeof r.total_score === "number" ? r.total_score : null;
+    const isGameDay = String(r.md_day ?? mdDayToday ?? "").trim().toUpperCase() === "MD";
+    const noCheckinOnGameDay = isGameDay && score === null;
+    const cm = noCheckinOnGameDay
+      ? { label: "—", dot: "bg-slate-400", pill: "bg-slate-50 text-slate-600 border-slate-200" }
+      : colorMeta(r.final_color ?? "green");
+    const lockedForCoach = r.is_locked && !isAdmin;
+    const isOverride = String(r.final_source ?? "").toUpperCase().includes("COACH");
+
+    const scoreText = noCheckinOnGameDay ? "Leikdagur · —" : `${cm.label} · ${score ?? "—"}`;
+    const mdText = prettyMd(r.md_day ?? mdDayToday).md;
+
+    const zVal = typeof r._z_today === "number" ? r._z_today : null;
+    const zText = zVal != null ? zVal.toFixed(2) : "—";
+    const dzVal = typeof r._dz === "number" ? r._dz : null;
+    const dzText = dzVal != null ? dzVal.toFixed(2) : "—";
+    const stenVal = typeof r._sten === "number" ? r._sten : zToSten(zVal);
+    const stenText = stenVal != null ? stenVal.toFixed(2) : "—";
+    const fatigue = fatigueByPlayer.get(pid) ?? null;
+    const fatigueType = String(fatigue?.primaryFatigueType ?? "NONE").toUpperCase();
+    const fatigueSeverity = String(fatigue?.severity ?? "").toUpperCase();
+    const fatigueDrivers = ((fatigue?.drivers ?? fatigue?.reasonCodes ?? []) as unknown[]).filter((v) => v != null);
+    const adaptationSummaryRaw = r._adaptation_summary ?? formatAdaptationFallback(r._adaptation);
+    const adaptationLinesRaw = adaptationDetailLines(r._adaptation);
+    const neural = r._neural_load ?? null;
+    const neuralBiasApplied = !!r._neural_bias_applied;
+    const neuralBiasWhy = formatNeuralBiasReasons(r._neural_bias_reason_codes, 3);
+    const hsrYesterday = toIntOrNull(ctxHsr);
+    const yesterdayLoadBand: "LOW" | "MODERATE" | "HIGH" | null =
+      String(ctxIntensity ?? "").toUpperCase() === "OFF"
+        ? "LOW"
+        : hsrYesterday == null
+        ? null
+        : hsrYesterday >= 800
+        ? "HIGH"
+        : hsrYesterday >= 500
+        ? "MODERATE"
+        : "LOW";
+    const rawTotalScore = typeof r.total_score === "number" ? r.total_score : null;
+    // readiness questionnaire total_score is stored as a 5–25 sum; normalize to 0–100 before Light ATE thresholds
+    const normalizedReadinessScore =
+      rawTotalScore == null ? null : Math.max(0, Math.min(100, ((rawTotalScore - 5) / 20) * 100));
+    const weekSetupRowForEntry =
+      (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === dateKey(String(r.entry_date ?? today))) ?? null;
+    const mdContextResolved = resolveSessionMdContextFromSources({
+      weekSetupDay: weekSetupRowForEntry,
+      rowMdContext: graphMdContextFromToken(r.md_day ?? null) ?? null,
+      teamMdContext: graphMdContextFromToken(mdDayToday) ?? null,
+      plannedFocusMdContext: graphMdContextFromToken(mdFromPlannedFocus(r.planned_focus ?? null)) ?? null,
+      previewMdContext: graphMdContextFromToken(planPreview?.md_day ?? null) ?? null,
+    });
+    const mdContextInput = mdContextResolved.mdContext;
+    const neuralFatigueBandInput = graphNeuralFatigueBandFromState(neural?.neuralLoadState);
+    const externalLoadToday = r._external_load_today ?? null;
+    const externalLoadBaseline = r._external_load_baseline ?? null;
+    const graphSession = buildDevDailySessionAdapterResult({
+      athleteState: graphAthleteStateFromFlag(r.final_flag),
+      mdContext: mdContextInput,
+      readinessScore: normalizedReadinessScore,
+      neuralFatigueBand: neuralFatigueBandInput,
+      yesterdayLoadBand,
+      externalLoad: {
+        playerLoad: externalLoadToday?.player_load ?? null,
+        playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+        sprintDistance: externalLoadToday?.sprint_distance ?? null,
+        sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+      },
+    });
+    const decisionConfidence = buildDecisionConfidence({
+      readinessScore: normalizedReadinessScore,
+      mdContext: mdContextInput,
+      neuralFatigueBand: neuralFatigueBandInput,
+      yesterdayLoadBand,
+      fallbackUsed: graphSession.mode !== "graph" || !!graphSession.fallbackReason,
+    });
+    const performanceIntelligence = r._performance_intelligence ?? null;
+    const piRiskLabel = performanceIntelligence ? titleCaseToken(performanceIntelligence.injuryRisk.band) : null;
+    const piLoadLabel = performanceIntelligence
+      ? performanceIntelligence.loadForecast.band === "TOLERATES_HIGH"
+        ? "High"
+        : performanceIntelligence.loadForecast.band === "TOLERATES_MODERATE"
+          ? "Moderate"
+          : performanceIntelligence.loadForecast.band === "TOLERATES_LOW"
+            ? "Low"
+            : "Recovery only"
+      : null;
+    const piActionLabel = performanceIntelligence
+      ? performanceIntelligence.loadForecast.recommendedAction === "full"
+        ? "Full"
+        : performanceIntelligence.loadForecast.recommendedAction === "modified"
+          ? "Modified"
+          : "Recovery"
+      : null;
+    const piMainDriver =
+      performanceIntelligence?.injuryRisk.primaryDrivers?.[0]?.label ??
+      performanceIntelligence?.loadForecast.primaryDrivers?.[0]?.label ??
+      null;
+    const piExplanationLine =
+      performanceIntelligence?.explanationLines?.[0] ??
+      performanceIntelligence?.coachSummary ??
+      null;
+    const prescription = r._prescription_decision ?? null;
+    const prescriptionCompactLine = prescription
+      ? `Action: ${titleCaseToken(prescription.action)} · Cap: ${titleCaseToken(
+          prescription.intensityCap,
+        )} · Volume: ${titleCaseToken(prescription.volumeAdjustment)}`
+      : null;
+    const prescriptionGuidanceLine = prescription
+      ? `Exposure: ${prescription.exposureGuidance
+          .slice(0, 2)
+          .map((tag) => titleCaseToken(tag))
+          .join(", ")}${prescription.exposureGuidance.length > 2 ? "…" : ""}`
+      : null;
+    const finalRecommendationDecision = r._final_recommendation_decision ?? null;
+    const finalRecommendationLine = finalRecommendationDecision
+      ? `Final action: ${titleCaseToken(finalRecommendationDecision.finalRecommendation.action)}${
+          finalRecommendationDecision.manualOverride?.applied ? " · Override applied" : ""
+        }${finalRecommendationDecision.requiresCoachReview ? " · Review required" : ""}`
+      : null;
+    const finalRecommendationSummary = finalRecommendationDecision?.overrideSummary ?? null;
+    const sessionDraft = r._session_draft ?? null;
+    const sessionDraftLine = sessionDraft ? `Draft ready: ${titleCaseToken(sessionDraft.draftAction)} ${sessionDraft.sessionType.toLowerCase()} session` : null;
+    const neuralVolatility = r._neural_volatility_intelligence ?? null;
+    const nvCompactLine = neuralVolatility
+      ? `Fatigue build: ${titleCaseToken(neuralVolatility.fatigueAccumulation.band)} · Stability: ${titleCaseToken(
+          neuralVolatility.instabilityWindow.band,
+        )} · Collapse risk: ${titleCaseToken(neuralVolatility.collapseRisk.band)} · Peak window: ${titleCaseToken(
+          neuralVolatility.peakWindow.band,
+        )}`
+      : null;
+    const nvExplainLine = neuralVolatility?.explanationLines?.[0] ?? null;
+    const fatigueMetrics = fatigue && typeof fatigue === "object" ? (fatigue as Record<string, unknown>) : null;
+    const tm = normalizeTrainingModifier(r.training_modifier);
+    const tissueSignal = deriveTissueProtectionSignal({
+      fatigueType,
+      fatigueSeverity,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+      noteText: r.notes ?? null,
+      neuralFatigueBand: neuralFatigueBandInput,
+      readinessScore: normalizedReadinessScore,
+      zScore: typeof r._z_today === "number" ? r._z_today : null,
+      stenScore: typeof r._sten === "number" ? r._sten : null,
+    });
+    const acwrValue = toMaybeFinite(fatigueMetrics?.acwr) ?? toMaybeFinite(tm?.acwr) ?? toMaybeFinite(tm?.load?.acwr);
+    const hrvChangePctValue = toMaybeFinite(fatigueMetrics?.hrv_change_pct) ?? toMaybeFinite(tm?.hrv_change_pct);
+    const volatilityValue = toMaybeFinite(tm?.pi?.volatility) ?? (teamIntel?.volatility_pct ?? null);
+    const lightAteStateRaw = String(graphSession.lightAteDecision?.athleteState ?? "").toUpperCase();
+    const lightAteState =
+      lightAteStateRaw === "RED"
+        ? "RED"
+        : lightAteStateRaw === "YELLOW"
+        ? "YELLOW"
+        : lightAteStateRaw === "GREEN" || lightAteStateRaw === "GREEN_PLUS"
+        ? "GREEN"
+        : "GRAY";
+    const snapshot = buildDailyAthleteSnapshot({
+      athleteId: String(r.player_id),
+      date: String(r.entry_date ?? today),
+      manual: {
+        id: r.readiness_entry_id ?? null,
+        totalScore: rawTotalScore,
+        soreness: typeof r.muscle_soreness === "number" ? r.muscle_soreness : null,
+        stress: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        mood: typeof r.stress_mood === "number" ? r.stress_mood : null,
+        sleepQuality: typeof r.sleep_quality === "number" ? r.sleep_quality : null,
+        motivation: typeof r.fatigue_energy === "number" ? r.fatigue_energy : null,
+        completed: rawTotalScore != null,
+        sourceDate: String(r.entry_date ?? today),
+      },
+      load: {
+        zScore: typeof r._z_today === "number" ? r._z_today : null,
+        deltaZ: typeof r._dz === "number" ? r._dz : null,
+        acuteLoad: toIntOrNull(ctxHsr) ?? null,
+        acwr: acwrValue ?? null,
+        sessionRpeLoad: toMaybeFinite(tm?.session_load) ?? null,
+        volatility5d: volatilityValue ?? null,
+        sourceDate: String(r.entry_date ?? today),
+      },
+      context: {
+        weekSetupLabel: r.md_day ?? mdDayToday,
+        expectedSessionType: graphSession.ateDecisionPanel?.sessionLabel ?? null,
+        rehab: false,
+        returnToPlay: false,
+        sourceDate: String(r.entry_date ?? today),
+      },
+      externalLoad: {
+        totalDistance: externalLoadToday?.total_distance ?? null,
+        highSpeedDistance: externalLoadToday?.high_speed_distance ?? null,
+        sprintDistance: externalLoadToday?.sprint_distance ?? null,
+        accelerations: externalLoadToday?.accelerations ?? null,
+        decelerations: externalLoadToday?.decelerations ?? null,
+        playerLoad: externalLoadToday?.player_load ?? null,
+        maxVelocity: externalLoadToday?.max_velocity ?? null,
+        playerLoad7DayAverage: externalLoadBaseline?.playerLoadAvg ?? null,
+        sprintDistance7DayAverage: externalLoadBaseline?.sprintDistanceAvg ?? null,
+        source: externalLoadToday ? "catapult" : null,
+        sourceDate: String(r.entry_date ?? today),
+      },
+    });
+
+    const explainableDecision = buildExplainableReadinessDecision({
+      playerId: String(r.player_id),
+      playerName: r.full_name,
+      date: r.entry_date,
+      dailySnapshot: snapshot,
+      readinessScore: normalizedReadinessScore ?? undefined,
+      checkinScore: rawTotalScore ?? undefined,
+      zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+      deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+      volatility: volatilityValue ?? undefined,
+      sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+      hrvScore: toMaybeFinite(fatigueMetrics?.hrv) ?? toMaybeFinite(tm?.hrv) ?? undefined,
+      hrvChangePct: hrvChangePctValue ?? undefined,
+      acuteLoad: toIntOrNull(ctxHsr) ?? undefined,
+      acwr: acwrValue ?? undefined,
+      durationMinutes: toNumOrNull(ctxDuration) ?? undefined,
+      neuralFatigueLevel:
+        neuralFatigueBandInput === "VERY_HIGH" || neuralFatigueBandInput === "HIGH"
+          ? "high"
+          : neuralFatigueBandInput === "MODERATE"
+          ? "moderate"
+          : "low",
+      neuralFatigueReason: neural?.summary ?? null,
+      stenScore: typeof r._sten === "number" ? r._sten : undefined,
+      tissueSignal: tissueSignal.tissueSignal,
+      tissueSeverity: tissueSignal.tissueSeverity,
+      explicitPainTextFlag: tissueSignal.explicitPainTextFlag,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+      sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+      painFlag: tissueSignal.painProtection,
+      highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+      maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+      gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+      recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+      recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+      dataCompleteness: undefined,
+      lightAteState,
+      catapultDailyLoad: r._catapult_baseline ? (r._external_load_today ? normalizeCatapultDailyLoadRow(r._external_load_today as unknown as Record<string, unknown>) : null) ?? undefined : undefined,
+      catapultBaseline: r._catapult_baseline ?? undefined,
+      catapultSignals: r._catapult_signals ?? undefined,
+      externalLoadState: r._catapult_signals?.externalLoadState ?? undefined,
+      catapultReadinessModifier: r._catapult_modifier ?? undefined,
+    });
+    const injuryRiskDecision = buildInjuryRiskDecision({
+      acwr: acwrValue ?? undefined,
+      zScore: typeof r._z_today === "number" ? r._z_today : undefined,
+      deltaZ: typeof r._dz === "number" ? r._dz : undefined,
+      volatility: volatilityValue ?? undefined,
+      recentYellowDays: toMaybeFinite(tm?.recent_yellow_days) ?? undefined,
+      recentRedDays: toMaybeFinite(tm?.recent_red_days) ?? undefined,
+      highSpeedRunning: toIntOrNull(ctxHsr) ?? undefined,
+      maxVelocityPct: toNumOrNull(ctxVmax) ?? undefined,
+      sleepScore: typeof r.sleep_quality === "number" ? r.sleep_quality : undefined,
+      hrvChangePct: hrvChangePctValue ?? undefined,
+      sorenessScore: typeof r.muscle_soreness === "number" ? r.muscle_soreness : undefined,
+      sorenessFlag: typeof r.muscle_soreness === "number" ? r.muscle_soreness <= 2 : undefined,
+      painFlag: tissueSignal.painProtection,
+      gpsSpike: String(ctxIntensity ?? "").toUpperCase() !== "OFF" && (toIntOrNull(ctxHsr) ?? 0) >= 1000,
+    }, explainableDecision);
+    const _catapultSignals = r._catapult_signals as Record<string, unknown> | null | undefined;
+    const _catapultExternalLoadState = (["normal", "elevated", "high"].includes(String(_catapultSignals?.externalLoadState ?? ""))
+      ? _catapultSignals?.externalLoadState
+      : "unknown") as "normal" | "elevated" | "high" | "unknown";
+    const compositeLoad = computeCompositeLoadConcern({
+      rpeAcwr: null, // RPE ACWR not available client-side; GPS carries signal
+      neuromuscularBurdenScore: _catapultSignals?.neuromuscularBurdenScore as number | null ?? null,
+      externalLoadState: _catapultExternalLoadState,
+    });
+    const playerRpeToday = toMaybeFinite((tm as Record<string, unknown> | null)?.session_rpe as number | undefined) ?? null;
+    const teamRpeValues = rowsWithAdaptive
+      .filter((row) => String(row.player_id) !== pid)
+      .map((row) => toMaybeFinite(normalizeTrainingModifier(row.training_modifier)?.session_rpe as number | undefined))
+      .filter((v): v is number => v != null);
+    const rpeDiscrepancy = computeRpeDiscrepancy({
+      playerRpe: playerRpeToday,
+      teamRpeValues,
+      neuromuscularBurdenScore: _catapultSignals?.neuromuscularBurdenScore as number | null ?? null,
+      externalLoadState: _catapultExternalLoadState,
+    });
+    const athleteDecision = buildAthleteDecision({
+      snapshot,
+      readinessDecision: explainableDecision,
+      injuryDecision: injuryRiskDecision,
+      neural: neural
+        ? {
+            status:
+              String(neural.neuralLoadState ?? "").toUpperCase() === "CRITICAL" || String(neural.neuralLoadState ?? "").toUpperCase() === "HIGH"
+                ? "suppressed"
+                : String(neural.neuralLoadState ?? "").toUpperCase() === "RISING"
+                ? "caution"
+                : "clear",
+            confidence: 0.65,
+            summary: neural.summary ?? null,
+          }
+        : null,
+      load: compositeLoad.concernLevel !== "none"
+        ? { concernLevel: compositeLoad.concernLevel, summary: compositeLoad.summary }
+        : null,
+      hardBlock: false,
+    });
+    const teamTodayRows = rows
+      .map((row) => row._external_load_today)
+      .filter((item): item is ExternalLoadDailyRow => item != null);
+    const todayVsTeamMetrics = getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      const value = getCatapultMetricValue(externalLoadToday as unknown as Record<string, unknown> | null, key);
+      const teamAverage = computeCatapultMetricAverage(
+        teamTodayRows as unknown as Array<Record<string, unknown>>,
+        key,
+      );
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        value,
+        teamAverage,
+      };
+    });
+    const weeklyLoadMetrics = getDefaultCatapultWeeklyLoadMetricKeys().map((key) => {
+      const definition = getCatapultMetricDefinition(key);
+      const weekly = computeCatapultWeeklyMetricSnapshot({
+        rows: (r._catapult_history ?? []) as unknown as Array<Record<string, unknown>>,
+        key,
+      });
+      return {
+        key,
+        label: definition.label,
+        digits: definition.digits ?? 0,
+        acwrSupported: !!definition.acwrSupported,
+        weekly,
+      };
+    });
+    const volatilityPoints = recentMonitoringByPlayer[pid] ?? [];
+    const volatilitySummary = computePlayerVolatilitySummary(volatilityPoints);
+    const volatilityGraphLabels = volatilitySummary.dayLabels.slice(-volatilitySummary.dailyComposite.length);
+    const volatilityGraphPoints = volatilitySeriesPoints(volatilitySummary.dailyComposite);
+    const volatilityPanelId = `volatility-panel-${pid}`;
+    const volatilityExpanded = !!volatilityOpenByPlayer[pid];
+    const strongGreenGuardrail =
+      explainableDecision.athleteState === "GREEN" &&
+      typeof zVal === "number" &&
+      zVal > 1.5 &&
+      typeof stenVal === "number" &&
+      stenVal >= 8 &&
+      typeof r.muscle_soreness === "number" &&
+      r.muscle_soreness >= 4 &&
+      fatigueType === "TISSUE" &&
+      fatigueSeverity === "LOW" &&
+      injuryRiskDecision.injuryRiskLevel === "LOW" &&
+      !["HIGH", "CRITICAL"].includes(String(neural?.neuralLoadState ?? "").toUpperCase());
+    const legacyRecoveryOverreach =
+      !!r._adaptation?.recoveryBias ||
+      (typeof r._adaptation?.reduceVolumePct === "number" && r._adaptation.reduceVolumePct >= 40) ||
+      /recovery bias|-40%\s*volume/i.test(String(adaptationSummaryRaw ?? ""));
+    const adaptationSummary =
+      strongGreenGuardrail && legacyRecoveryOverreach
+        ? "Adaptive: monitoring only (strong readiness, no hard red flags)"
+        : adaptationSummaryRaw;
+    const adaptationLines =
+      strongGreenGuardrail && legacyRecoveryOverreach
+        ? ["Standard monitoring only."]
+        : adaptationLinesRaw;
+
+    const currentMessage = (draftMessage[pid] ?? r.coach_message ?? "").trim();
+    const readinessInputSummary = `Score ${rawTotalScore ?? "—"} · Logged ${new Date(r.created_at).toLocaleTimeString("is-IS", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+    const fatigueSummaryText = [fatigueType !== "NONE" ? fatigueType : null, fatigueSeverity || null, adaptationSummary || null].filter(Boolean).join(" · ") || "No fatigue flags";
+    const trainingSessionSummary =
+      graphSession.mode === "graph"
+        ? graphSession.ateDecisionPanel?.sessionLabel ?? "Training graph session"
+        : "Legacy template rendering";
+    const neuralSummaryText = neural
+      ? `${neural.neuralLoadState} · ${neural.nextDayRisk}`
+      : neuralBiasApplied
+      ? "Bias applied"
+      : "No neural load data";
+    const coachMessageSummary = currentMessage ? currentMessage : "No coach message";
+
+    const isSectionOpen = (sectionKey: PlayerDetailSectionKey, defaultOpen = false) =>
+      detailSectionOpenByPlayer[pid]?.[sectionKey] ?? defaultOpen;
+
+    const toggleSection = (sectionKey: PlayerDetailSectionKey, defaultOpen = false) => {
+      setDetailSectionOpenByPlayer((prev) => ({
+        ...prev,
+        [pid]: {
+          ...(prev[pid] ?? {}),
+          [sectionKey]: !(prev[pid]?.[sectionKey] ?? defaultOpen),
+        },
+      }));
+    };
+
+    const renderMetricTile = (
+      label: string,
+      value: string,
+      valueClassName: string,
+      tileClassName = "border-[#ece7de] bg-[#f7f4ee]"
+    ) => (
+      <div className={`min-w-[150px] flex-1 rounded-[20px] border px-4 py-3 ${tileClassName}`}>
+        <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-slate-700">{label}</div>
+        <div className={`mt-2 text-[22px] font-semibold leading-none tabular-nums ${valueClassName}`}>{value}</div>
+      </div>
+    );
+
+    const renderAccordionSection = (
+      sectionKey: PlayerDetailSectionKey,
+      title: string,
+      summary: string,
+      content: React.ReactNode,
+      defaultOpen = false
+    ) => {
+      const open = isSectionOpen(sectionKey, defaultOpen);
+      const panelId = `${pid}-${sectionKey}-panel`;
+
+      return (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm" key={sectionKey}>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => toggleSection(sectionKey, defaultOpen)}
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-semibold tracking-tight text-slate-900">{title}</div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="truncate text-right text-sm font-medium text-slate-600">{summary}</div>
+              <span
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-500 transition-transform ${
+                  open ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </div>
+          </button>
+          {open ? (
+            <div id={panelId} className="border-t border-slate-200 bg-slate-50/35 px-4 py-4">
+              {content}
+            </div>
+          ) : null}
+        </section>
+      );
+    };
+
+    return (
+      <React.Fragment key={r.ui_key ?? r.readiness_entry_id ?? pid}>
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="text-xl font-semibold tracking-tight text-slate-950">{r.full_name}</div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${cm.pill}`}>
+                  <span className={`h-2 w-2 rounded-full ${cm.dot}`} />
+                  <span className="tabular-nums">{scoreText}</span>
+                </span>
+                {r._needs_review ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    Needs review
+                  </span>
+                ) : null}
+                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                  {mdText}
+                </span>
+                {r.is_locked ? (
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    Locked
+                  </span>
+                ) : null}
+                {isOverride ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    Override
+                  </span>
+                ) : null}
+                {neuralBiasApplied ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    Neural bias
+                  </span>
+                ) : null}
+                {compositeLoad.concernLevel === "high" ? (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                    ⚠ Load há
+                  </span>
+                ) : compositeLoad.concernLevel === "moderate" ? (
+                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                    ↑ Load
+                  </span>
+                ) : compositeLoad.concernLevel === "low" ? (
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    Load monitor
+                  </span>
+                ) : null}
+                {rpeDiscrepancy.level === "significant" ? (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                    {rpeDiscrepancy.flags.some((f) => f.includes("under")) ? "⚠ RPE ↓↓ vs lið" : "RPE ↑↑ vs lið"}
+                  </span>
+                ) : rpeDiscrepancy.level === "notable" ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    {rpeDiscrepancy.flags.some((f) => f.includes("under")) ? "RPE ↓ vs lið" : "RPE ↑ vs lið"}
+                  </span>
+                ) : null}
+                {r.notes && r.notes.trim().length ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
+                    Athugasemd
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[360px] xl:items-end">
+              {renderActionPills(pid, r.is_locked)}
+            </div>
+          </div>
+
+          {r.notes && r.notes.trim().length ? (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <svg className="mt-0.5 shrink-0 text-blue-500" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
+              <p className="text-sm text-blue-900 leading-snug">{r.notes.trim()}</p>
+            </div>
+          ) : null}
+
+          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid flex-1 gap-3 md:grid-cols-3">
+              {renderMetricTile("Z-SCORE", zText, zVal != null && zVal > 0 ? "text-[#3f6f1f]" : "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
+              {renderMetricTile("DELTA Z", dzText, dzVal != null ? "text-[#3f6f1f]" : "text-slate-900", "border-[#dce9c9] bg-[#eaf4da]")}
+              {renderMetricTile("STEN", stenText, "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
+            </div>
+
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 self-end rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              aria-expanded={isOpen}
+              onClick={() => setExpandedPlayerId((prev) => (prev === pid ? null : pid))}
+            >
+              <span>{isOpen ? "Hide details" : "Show details"}</span>
+              <span className={`transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
+                ▾
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {isOpen ? (
+          <div className="mt-3 space-y-3">
+            {renderAccordionSection(
+              "readinessDecision",
+              "Readiness decision",
+              `${athleteDecision.athleteState} · Confidence: ${explainableDecision.confidence}${explainableDecision.confidenceHint ? ` · ${explainableDecision.confidenceHint}` : ""}`,
+              <div className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                      {athleteDecision.reasons.map((line) => (
+                        <li key={`${pid}-exp-why-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Coach action</div>
+                      {performanceIntelligence ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPiDrawerPlayerName(r.full_name);
+                            setPiDrawerDecision(performanceIntelligence);
+                          }}
+                          className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Why?
+                        </button>
+                      ) : null}
+                    </div>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                      {(athleteDecision.recommendations.length
+                        ? athleteDecision.recommendations
+                        : ["Monitor quality and adjust only if response drops."]).map((line) => (
+                        <li key={`${pid}-exp-act-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {performanceIntelligence || prescription || neuralVolatility || finalRecommendationDecision ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-600">
+                    {performanceIntelligence ? (
+                      <div>
+                        Risk: <span className={`font-semibold ${performanceRiskTone(performanceIntelligence.injuryRisk.band)}`}>{piRiskLabel}</span> ·
+                        Load: <span className="font-semibold text-slate-700"> {piLoadLabel}</span> · Action:{" "}
+                        <span className="font-semibold text-slate-700">{piActionLabel}</span>
+                      </div>
+                    ) : null}
+                    {piMainDriver ? (
+                      <div>
+                        Main driver: <span className="font-medium text-slate-700">{piMainDriver}</span>
+                      </div>
+                    ) : null}
+                    {piExplanationLine ? <div>{piExplanationLine}</div> : null}
+                    {prescriptionCompactLine ? <div>{prescriptionCompactLine}</div> : null}
+                    {prescriptionGuidanceLine ? <div>{prescriptionGuidanceLine}</div> : null}
+                    {finalRecommendationLine ? <div>{finalRecommendationLine}</div> : null}
+                    {finalRecommendationSummary ? <div>{finalRecommendationSummary}</div> : null}
+                    {sessionDraftLine ? <div>{sessionDraftLine}</div> : null}
+                    {nvCompactLine ? <div>{nvCompactLine}</div> : null}
+                    {nvExplainLine ? <div>{nvExplainLine}</div> : null}
+                  </div>
+                ) : null}
+              </div>,
+              true
+            )}
+
+            {renderAccordionSection(
+              "injuryRisk",
+              "Injury risk",
+              `${injuryRiskDecision.injuryRiskLevel} · Confidence: ${injuryRiskDecision.confidence}`,
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                    {injuryRiskDecision.why.map((line) => (
+                      <li key={`${pid}-inj-why-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recommendation</div>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
+                    {injuryRiskDecision.recommendation.map((line) => (
+                      <li key={`${pid}-inj-rec-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "readinessInputs",
+              "Readiness inputs",
+              readinessInputSummary,
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Fatigue/Energy: <span className="font-semibold tabular-nums text-slate-900">{v(r.fatigue_energy)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Sleep quality: <span className="font-semibold tabular-nums text-slate-900">{v(r.sleep_quality)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Sleep duration: <span className="font-semibold tabular-nums text-slate-900">{v(r.sleep_duration)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Stress/Mood: <span className="font-semibold tabular-nums text-slate-900">{v(r.stress_mood)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Muscle soreness: <span className="font-semibold tabular-nums text-slate-900">{v(r.muscle_soreness)}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Baseline n: <span className="font-semibold tabular-nums text-slate-900">{r._baseline_n ?? "—"}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Recorded: <span className="font-semibold text-slate-900">{new Date(r.created_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Supporting metrics: <span className="font-semibold text-slate-900">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)}</span></div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  Notes: <span className="font-medium text-slate-900">{r.notes && r.notes.trim().length ? r.notes : "—"}</span>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">External load</div>
+                    <div className="text-xs text-slate-500">Catapult</div>
+                  </div>
+                  {externalLoadToday ? (
+                    <div className="mt-3 space-y-4">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Today vs Team</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          {todayVsTeamMetrics.map((item) => {
+                            const tone = externalLoadTone(item.value, item.teamAverage);
+                            return (
+                              <div key={`${pid}-external-team-${item.key}`} className={`rounded-2xl border px-3 py-3 ${tone.tone}`}>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.14em]">{item.label}</div>
+                                <div className="mt-2 text-base font-semibold tabular-nums">
+                                  {item.value == null ? "—" : numFmt(item.value, item.digits)}
+                                </div>
+                                <div className="mt-1 text-[11px]">
+                                  Team {item.teamAverage == null ? "—" : numFmt(item.teamAverage, item.digits)} · {tone.label}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Weekly Load</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {weeklyLoadMetrics.map((item) => {
+                            const tone = externalLoadTone(item.weekly.acute7Avg, item.weekly.chronic28Avg);
+                            return (
+                              <div key={`${pid}-external-weekly-${item.key}`} className={`rounded-2xl border px-3 py-3 ${tone.tone}`}>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.14em]">{item.label}</div>
+                                <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">7d</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.weekly.acute7Avg == null ? "—" : numFmt(item.weekly.acute7Avg, item.digits)}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">28d</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.weekly.chronic28Avg == null ? "—" : numFmt(item.weekly.chronic28Avg, item.digits)}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="uppercase tracking-wide opacity-70">ACWR</div>
+                                    <div className="mt-1 text-sm font-semibold tabular-nums">
+                                      {item.acwrSupported ? acwrFmt(item.weekly.acwr) : "—"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      No Catapult external load synced for this player on this date.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  Supporting metrics: <span className="font-mono">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)} · acwr {numFmt(explainableDecision.supportingMetrics?.acwr ?? null)} · sleep {numFmt(explainableDecision.supportingMetrics?.sleepScore ?? null)} · hrvΔ {numFmt(explainableDecision.supportingMetrics?.hrvChangePct ?? null)} · vol {numFmt(explainableDecision.supportingMetrics?.volatility ?? null)}</span>
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "fatigueAdaptation",
+              "Fatigue & adaptation",
+              fatigueSummaryText,
+              <div className="space-y-4">
+                {fatigue ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-900">Fatigue</div>
+                    <div className="mt-2">
+                      Type: <span className="font-mono">{fatigueType}</span>
+                      {fatigueSeverity ? (
+                        <>
+                          {" "}
+                          · Severity: <span className="font-mono">{fatigueSeverity}</span>
+                        </>
+                      ) : null}
+                    </div>
+                    {!!fatigueDrivers?.length ? (
+                      <div className="mt-1">Drivers: <span className="font-mono">{fatigueDrivers.slice(0, 6).map(driverLabel).join(", ")}</span></div>
+                    ) : null}
+                    {!!fatigue?.recommendedModifiers?.length ? (
+                      <div className="mt-1">Modifiers: <span className="font-mono">{fatigue.recommendedModifiers.join(", ")}</span></div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No fatigue detail available.</div>
+                )}
+
+                {adaptationSummary || adaptationLines.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-900">Adaptation</div>
+                    {adaptationSummary ? <div className="mt-2">{adaptationSummary}</div> : null}
+                    {adaptationLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5">
+                        {adaptationLines.map((line) => (
+                          <li key={`${pid}-ad-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                    aria-expanded={volatilityExpanded}
+                    aria-controls={volatilityPanelId}
+                    onClick={() =>
+                      setVolatilityOpenByPlayer((prev) => ({
+                        ...prev,
+                        [pid]: !volatilityExpanded,
+                      }))
+                    }
+                  >
+                    <span className={`transition-transform ${volatilityExpanded ? "rotate-90" : ""}`} aria-hidden="true">▸</span>
+                    <span>Recent volatility{typeof volatilitySummary.overallScore === "number" ? ` · ${volatilitySummary.overallScore.toFixed(1)}` : ""}</span>
+                  </button>
+
+                  {volatilityExpanded ? (
+                    <div id={volatilityPanelId} className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-900">Recent volatility</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold tabular-nums text-slate-700">
+                            Score {typeof volatilitySummary.overallScore === "number" ? `${volatilitySummary.overallScore.toFixed(1)}/100` : "—"}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${volatilityLevelTone(volatilitySummary.level)}`}>
+                            {volatilityLevelLabel(volatilitySummary.level)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                        Last {volatilitySummary.windowDays || volatilitySummary.sampleSize || 0} days
+                      </div>
+                      <div className="mt-2 text-sm text-slate-700">{volatilitySummary.interpretation}</div>
+                      {volatilitySummary.drivers.length ? (
+                        <div className="mt-2 text-xs text-slate-600">
+                          <span className="font-medium text-slate-700">Main drivers:</span> {summarizeDrivers(volatilitySummary)}
+                        </div>
+                      ) : null}
+                      {volatilitySummary.drivers.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {volatilitySummary.drivers.map((driver) => (
+                            <span key={`${pid}-vol-driver-${driver.key}`} className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] tabular-nums text-slate-600">
+                              {driver.label}: {driver.volatilityScore.toFixed(1)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {volatilitySummary.dailyComposite.length >= 2 ? (
+                        <div className="mt-3 rounded-xl border border-slate-200 bg-white px-2 py-2">
+                          <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                            <span>Volatility trend</span>
+                            <span className="tabular-nums">min {Math.min(...volatilitySummary.dailyComposite).toFixed(1)} · max {Math.max(...volatilitySummary.dailyComposite).toFixed(1)}</span>
+                          </div>
+                          <svg viewBox="0 0 220 44" className="h-11 w-full" role="img" aria-label="Recent volatility line graph">
+                            <line x1="0" y1="43.5" x2="220" y2="43.5" stroke="#E5E7EB" strokeWidth="1" />
+                            <line x1="0" y1="22" x2="220" y2="22" stroke="#F3F4F6" strokeWidth="1" />
+                            <polyline fill="none" stroke="#374151" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" points={volatilityLinePoints(volatilitySummary.dailyComposite)} />
+                            {volatilityGraphPoints.map((p, idx) => (
+                              <g key={`${pid}-vol-point-${idx}`}>
+                                <circle cx={p.x} cy={p.y} r="1.8" fill="#111827" />
+                                <text x={p.x} y={Math.max(7, p.y - 3)} textAnchor="middle" fontSize="6" fill="#374151">
+                                  {p.value.toFixed(1)}
+                                </text>
+                              </g>
+                            ))}
+                          </svg>
+                          <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                            {volatilitySummary.dailyComposite.map((value, idx) => (
+                              <span key={`${pid}-vol-day-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 tabular-nums">
+                                {volatilityGraphLabels[idx] ?? `D-${volatilitySummary.dailyComposite.length - 1 - idx}`}: {value.toFixed(1)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {volatilitySummary.currentVsTrendNote ? <div className="mt-2 text-[10px] text-slate-500">{volatilitySummary.currentVsTrendNote}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "trainingSession",
+              "Training session",
+              trainingSessionSummary,
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-900">Session planning</span>
+                  <span
+                    className={
+                      graphSession.mode === "graph"
+                        ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                        : "inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
+                    }
+                  >
+                    Session source: {graphSession.mode === "graph" ? "Training Graph" : "Legacy template"}
+                  </span>
+                </div>
+
+                {graphSession.mode === "graph" && graphSession.ateDecisionPanel ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-900">{graphSession.ateDecisionPanel.title}</div>
+                      {graphSession.ateDecisionPanel.sourceLabel ? <span className="text-[10px] uppercase tracking-wide text-slate-500">{graphSession.ateDecisionPanel.sourceLabel}</span> : null}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-700">Session: {graphSession.ateDecisionPanel.sessionLabel}</div>
+                    <div className="mt-1 text-sm text-slate-500">State: {graphSession.ateDecisionPanel.athleteStateLabel}</div>
+                    <div className="mt-1 text-sm text-slate-500">MD: {graphSession.ateDecisionPanel.mdContextLabel}</div>
+                    {graphSession.ateDecisionPanel.adjustmentLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Adjustments</div> : null}
+                    {graphSession.ateDecisionPanel.adjustmentLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+                        {graphSession.ateDecisionPanel.adjustmentLines.map((line) => (
+                          <li key={`${pid}-ate-adjust-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {graphSession.ateDecisionPanel.reasonLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div> : null}
+                    {graphSession.ateDecisionPanel.reasonLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-600">
+                        {graphSession.ateDecisionPanel.reasonLines.slice(0, 4).map((line) => (
+                          <li key={`${pid}-ate-reason-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {graphSession.ateDecisionPanel.riskFlagLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Risk</div> : null}
+                    {graphSession.ateDecisionPanel.riskFlagLines.length ? (
+                      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-amber-700">
+                        {graphSession.ateDecisionPanel.riskFlagLines.slice(0, 3).map((line) => (
+                          <li key={`${pid}-ate-risk-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Decision confidence</div>
+                        <span
+                          className={
+                            decisionConfidence.level === "HIGH"
+                              ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
+                              : decisionConfidence.level === "MEDIUM"
+                              ? "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                              : "inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700"
+                          }
+                        >
+                          {decisionConfidence.level === "HIGH" ? "High" : decisionConfidence.level === "MEDIUM" ? "Medium" : "Low"}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-600">Inputs: {decisionConfidence.inputsUsed.length ? decisionConfidence.inputsUsed.join(", ") : "None"}</div>
+                      <div className="mt-1 text-xs text-slate-600">Missing: {decisionConfidence.missingInputs.length ? decisionConfidence.missingInputs.join(", ") : "None"}</div>
+                      <div className="mt-1 text-xs text-slate-600">Fallbacks: {decisionConfidence.fallbackUsed ? "Partial" : "None"}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Legacy template rendering retained.
+                    {graphSession.fallbackReason ? <> Fallback reason: <span className="font-mono">{graphSession.fallbackReason}</span></> : null}
+                  </div>
+                )}
+
+                {graphSession.mode === "graph" && graphSession.coachView ? (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900">{graphSession.coachView.title}</div>
+                      <div className="text-sm text-slate-500">{graphSession.coachView.subtitle}</div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {graphSession.coachView.nodes.map((node) => (
+                        <div key={`${pid}-graph-${node.nodeId}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-900">{node.title}</div>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{node.status}</span>
+                          </div>
+                          {node.exercises.length ? <div className="mt-2 text-sm text-slate-700">{node.exercises.join(", ")}</div> : <div className="mt-2 text-sm text-slate-500">No exercise selected</div>}
+                          {node.prescriptionLines.length ? (
+                            <ul className="mt-2 list-disc pl-5 text-sm text-slate-600">
+                              {node.prescriptionLines.slice(0, 3).map((line) => (
+                                <li key={`${pid}-${node.nodeId}-${line}`}>{line}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {sessionDraft ? (
+                  <div className="space-y-3">
+                    <SessionDraftCard draft={sessionDraft} />
+                    <SessionDraftDetails draft={sessionDraft} />
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const tid = e.target.value;
+                      if (!tid) return;
+                      assignTemplate(r.player_id, r.entry_date, tid, r.team_id ?? null);
+                    }}
+                    disabled={lockedForCoach || isSaving}
+                  >
+                    <option value="">Template…</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title ?? t.code}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={async () => saveConfirmed(r)}
+                    disabled={isSaving || lockedForCoach}
+                    className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                    title={lockedForCoach ? "Locked fyrir daginn" : "Save (editable)"}
+                  >
+                    {lockedForCoach ? "Locked" : isSaving ? "Saving..." : saved[pid] ? "Saved" : "Save"}
+                  </button>
+
+                  {!r.is_locked ? (
+                    <button
+                      onClick={async () => lockForDay(r)}
+                      disabled={isSaving}
+                      className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                      title="Lock (endanlegt fyrir daginn)"
+                    >
+                      Lock
+                    </button>
+                  ) : isAdmin ? (
+                    <button
+                      onClick={async () => unlockForDay(r)}
+                      disabled={isSaving}
+                      className="h-11 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 disabled:opacity-50"
+                      title="Admin: Unlock"
+                    >
+                      Unlock
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                  <div>Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span></div>
+                  <div className="mt-1">Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=<span className="font-mono">{r.coach_decision ?? "—"}</span> · final=<span className="font-mono">{r.final_decision ?? "—"}</span> · source=<span className="font-mono">{r.final_source ?? "—"}</span></div>
+                  <div className="mt-1">Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span> · Updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span></div>
+                </div>
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "neuralLoad",
+              "Neural load",
+              neuralSummaryText,
+              <div className="space-y-4">
+                {neural ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <div>State: <span className="font-mono">{neural.neuralLoadState}</span> · Trajectory: <span className="font-mono">{neural.readinessTrajectory}</span> · Next-day risk: <span className="font-mono">{neural.nextDayRisk}</span> · Score: <span className="font-mono">{neural.neuralLoadScore}</span></div>
+                    <div className="mt-2">Summary: <span className="font-mono">{neural.summary}</span></div>
+                    {!!neural.drivers?.length ? (
+                      <div className="mt-2">Drivers: <span className="font-mono">{neural.drivers.slice(0, 4).map((d) => `${d.label}(+${d.points})`).join(", ")}</span></div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No neural load data.</div>
+                )}
+
+                {neuralBiasApplied ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div>Applied: <span className="font-mono">yes</span></div>
+                    <div className="mt-2">Why: <span className="font-mono">{neuralBiasWhy || "Neural risk signals crossed bias threshold."}</span></div>
+                    {!!r._neural_bias_reason_codes?.length ? <div className="mt-2">Codes: <span className="font-mono">{r._neural_bias_reason_codes.join(", ")}</span></div> : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {renderAccordionSection(
+              "coachMessage",
+              "Coach message",
+              coachMessageSummary,
+              <div className="space-y-3">
+                <textarea
+                  className="min-h-[96px] w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800"
+                  rows={3}
+                  value={draftMessage[pid] ?? ""}
+                  onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
+                  disabled={isSaving || (r.is_locked && !isAdmin)}
+                  placeholder="Skrifaðu coach skilaboð…"
+                />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  Save = confirmed (editable). Lock = endanlegt fyrir daginn. Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} mín fyrir session start.
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </React.Fragment>
+    );
+  };
+
+  /** -----------------------------
+   * Early return
+   * ----------------------------- */
+  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
+
+  const sectionTitleClass = "text-base font-semibold tracking-tight text-slate-900";
+  const sectionSubtitleClass = "text-xs text-slate-500";
+  const statLabelClass = "text-[10px] uppercase tracking-wide text-slate-500";
+  const statValueClass = "mt-1 text-lg font-semibold tabular-nums text-slate-900";
+  const softSurfaceClass = "rounded-xl border border-slate-200 bg-slate-50/50 shadow-sm";
+  const summaryCardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm";
+  const summaryTileClass = "rounded-2xl border border-slate-200 bg-white p-4";
+  const compactTileClass = "rounded-xl border p-3";
+
+  return (
+    <div className="space-y-6">
+      {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
+      {!isPwa && (() => {
+        const labels = ct.tabs as Record<string, string>;
+        const proTabs = new Set(["squad", "intel", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
+
+        // Primary tabs always visible, overflow goes in "More" dropdown
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md", "drills"];
+        const MORE_TABS: Array<typeof dashTab> = ["intel", "volatility", "vald", "strength", "trend", "rtp"];
+        const moreLabel = lang === "IS" ? "Meira" : "More";
+
+        const isMoreActive = MORE_TABS.includes(dashTab);
+
+        const TabBtn = ({ tabId }: { tabId: typeof dashTab }) => {
+          const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
+          return (
+            <button
+              onClick={() => setDashTab(tabId)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                dashTab === tabId
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              {labels[tabId]}
+              {isLocked && (
+                <svg className="h-3 w-3 flex-shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              )}
+            </button>
+          );
+        };
+
+        return (
+          <div className="border-b border-slate-200">
+            <nav className="-mb-px flex items-center justify-between">
+              <div className="-mb-px flex items-center">
+                {PRIMARY_TABS.map((tabId) => (
+                  <TabBtn key={tabId} tabId={tabId} />
+                ))}
+
+                {/* "More" dropdown */}
+                <div className="relative group">
+                  <button
+                    className={`flex items-center gap-1 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isMoreActive
+                        ? "border-slate-900 text-slate-900"
+                        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    {isMoreActive ? labels[dashTab] : moreLabel}
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <div className="invisible group-hover:visible absolute left-0 top-full z-50 mt-0 min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                    {MORE_TABS.map((tabId) => {
+                      const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
+                      return (
+                        <button
+                          key={tabId}
+                          onClick={() => setDashTab(tabId)}
+                          className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                            dashTab === tabId
+                              ? "bg-slate-50 font-semibold text-slate-900"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          <span>{labels[tabId]}</span>
+                          {isLocked && (
+                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Language toggle */}
+              <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
+                <button
+                  onClick={() => setLang("IS")}
+                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >IS</button>
+                <button
+                  onClick={() => setLang("EN")}
+                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                >EN</button>
+              </div>
+            </nav>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════
+          TODAY TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "today" && (
+        <div className="space-y-6">
+          {/* Onboarding checklist — only shown to new clubs */}
+          <OnboardingChecklist
+            teamId={coachTeamId}
+            lang={lang}
+            playerCount={rows.length}
+            hasCheckIn={rows.some((r) => r.total_score != null)}
+            hasGpsData={gpsAllPlayers.length > 0}
+            hasDecision={rows.some((r) => (r as Record<string, unknown>).training_action != null)}
+            hasSport={teamSport != null && teamSport.length > 0}
+          />
+          {/* Today Command Center */}
+          <Card className={summaryCardClass}>
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">{ct.header.commandCenter}</CardTitle>
+                  <CardDescription className="mt-1 text-sm text-slate-500">{ct.header.decisionSummary}</CardDescription>
+                  {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
+                  {imputeMessage ? <div className="mt-1 text-xs text-indigo-700">{imputeMessage}</div> : null}
+                </div>
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <div className="text-right text-xs text-slate-500">
+                    <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
+                    <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
+                      {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={runImputation}
+                      disabled={imputing || loading}
+                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      title="Fyll inn check-in og RPE fyrir leikmenn sem hafa ekki skilað inn"
+                    >
+                      {imputing ? "Fyllir inn…" : "↻ Fylla inn missing"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadReadinessRiskReport}
+                      disabled={pdfDownloading || loading}
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                    >
+                      {pdfDownloading ? "Generating…" : "⬇ Readiness Risk Report"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadPostTrainingReport}
+                      disabled={pdfPostDownloading || loading}
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    >
+                      {pdfPostDownloading ? "Generating…" : "⬇ Post-Training Report"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* ── Compliance strip ── */}
+              {complianceSummary && (() => {
+                const ci = complianceSummary.checkin;
+                const rp = complianceSummary.rpe;
+                const totalCi = ci.submitted + ci.imputed + ci.missing;
+                const totalRpe = rp.submitted + rp.imputed + rp.missing;
+                const ciMissingPct = totalCi > 0 ? Math.round((ci.missing / totalCi) * 100) : 0;
+                const rpeMissingPct = totalRpe > 0 ? Math.round((rp.missing / totalRpe) * 100) : 0;
+                const hasAnyMissing = ci.missing > 0 || rp.missing > 0;
+                return (
+                  <div className={`rounded-xl border px-4 py-2.5 ${hasAnyMissing ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
+                      <span className="font-semibold text-slate-700">Skil:</span>
+                      {/* Check-in */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-600">Check-in</span>
+                        <span className="text-emerald-700">✓ {ci.submitted}</span>
+                        {ci.imputed > 0 && <span className="text-indigo-600">~ {ci.imputed}</span>}
+                        {ci.missing > 0 && <span className="font-semibold text-amber-700">✗ {ci.missing} ({ciMissingPct}%)</span>}
+                      </span>
+                      <span className="text-slate-300">|</span>
+                      {/* RPE */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-600">RPE</span>
+                        <span className="text-emerald-700">✓ {rp.submitted}</span>
+                        {rp.imputed > 0 && <span className="text-indigo-600">~ {rp.imputed}</span>}
+                        {rp.missing > 0 && <span className="font-semibold text-amber-700">✗ {rp.missing} ({rpeMissingPct}%)</span>}
+                      </span>
+                      {complianceMissing.length > 0 && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-slate-500 italic">
+                            {complianceMissing.slice(0, 3).map((m) => m.full_name).join(", ")}
+                            {complianceMissing.length > 3 ? ` +${complianceMissing.length - 3}` : ""}
+                          </span>
+                        </>
+                      )}
+                      {!hasAnyMissing && (
+                        <span className="font-semibold text-emerald-700">Allir hafa skilað inn ✓</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const risk = computeTeamRisk(teamSignal, lang);
+                const ui = riskUi(risk.level);
+                const leadingAction = dominantTeamAction(teamSignal);
+                const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
+                  ?.teamFatigueSummary;
+                const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
+                const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
+                const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
+                const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
+                const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
+                const totalPlayers = teamSignal?.n_players ?? 0;
+                const nFull = teamSignal?.n_full ?? 0;
+                const nReduced = teamSignal?.n_reduced ?? 0;
+                const nRecovery = teamSignal?.n_recovery ?? 0;
+                const commandTiles = [
+                  { label: "Risk level", value: risk.label, tone: "border-slate-200 bg-white" },
+                  { label: "Team action", value: leadingAction, tone: "border-slate-200 bg-white" },
+                  { label: "Needs review", value: String(needsReviewCount), tone: "border-slate-200 bg-white" },
+                  { label: "Total players", value: String(totalPlayers), tone: "border-slate-200 bg-white" },
+                ];
+                const statusTiles = [
+                  { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+                  { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
+                  { label: "Recovery", value: String(nRecovery), sub: "Protected", tone: "border-rose-200 bg-rose-50 text-rose-800" },
+                  { label: "Dominant fatigue", value: fatigueDominant, sub: "Team signal", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                  { label: "Neural load", value: neuralState, sub: "Current state", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                  { label: "Next-day risk", value: nextDayRisk, sub: "Forecast", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                ];
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
+                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${dayStateInfo.badge}`}>
+                          Diagnostic: {dayStateInfo.label}
+                      </div>
+                      <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                        Team outlook: {teamOutlook.band}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      {commandTiles.map((tile) => (
+                        <div key={tile.label} className={`${summaryTileClass} ${tile.tone}`}>
+                          <div className={statLabelClass}>{tile.label}</div>
+                          <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{tile.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                      {statusTiles.map((tile) => (
+                        <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
+                          <div className="text-[10px] uppercase tracking-wide opacity-80">{tile.label}</div>
+                          <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
+                          <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
+                      <div className="text-[10px] uppercase tracking-wide opacity-80">Coach recommendation</div>
+                      <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
+                      <div className="mt-2 text-xs text-slate-600">
+                        Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
+                      </div>
+                      {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
+                    </div>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* Decision Summary — per-player today */}
+          {rows.length > 0 && (
+            <DecisionSummaryCard rows={rows.map((r) => {
+              // Enrich with most recent GPS load from catapult history
+              // Try entry date first (today), then yesterday
+              const ed = r.entry_date ?? today;
+              const yd = new Date(ed);
+              yd.setDate(yd.getDate() - 1);
+              const yesterdayStr = yd.toISOString().slice(0, 10);
+              const history = ((r as any)._catapult_history ?? []) as Array<{ date: string; [k: string]: unknown }>;
+              const yRow = history.find((h) => h.date === ed)
+                ?? history.find((h) => h.date === yesterdayStr)
+                ?? null;
+              const mliData = playerMli[r.player_id];
+              const metaData = playerMetabolic[r.player_id];
+              return {
+                ...r,
+                _yesterday_load: yRow ? {
+                  totalDistance: yRow.totalDistance ?? null,
+                  playerLoad: yRow.playerLoad ?? null,
+                  velocityBand5TotalDistance: yRow.velocityBand5TotalDistance ?? null,
+                  velocityBand6TotalDistance: yRow.velocityBand6TotalDistance ?? null,
+                  accelBand2to3Efforts: yRow.accelBand2to3Efforts ?? null,
+                  decelBand2to3Efforts: yRow.decelBand2to3Efforts ?? null,
+                } : null,
+                _yesterday_mli: mliData?.mli ?? null,
+                _yesterday_mli_band: mliData?.band ?? null,
+                _yesterday_metabolic_score: metaData?.score ?? null,
+                _yesterday_metabolic_band: metaData?.band ?? null,
+                _vbt_fatigue_flags: playerVbtFatigue[r.player_id] ?? null,
+              };
+            }) as any} />
+          )}
+
+          {/* Readiness Today — team signal summary */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Readiness Today</CardTitle>
+              <CardDescription>
+                Coach: <span className="font-medium">{coachDisplayName ?? coachName ?? "—"}</span> · Date: <span className="font-medium">{today}</span> · MD-day:{" "}
+                <span className="font-medium">{mdDayToday}</span> · Source: <span className="font-medium">{planPreview?.source ?? "—"}</span> · Confidence:{" "}
+                <span className="font-medium">{formatConfidence(planPreview?.confidence)}</span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {teamSignal
+                ? (() => {
+                    const risk = computeTeamRisk(teamSignal, lang);
+                    const ui = riskUi(risk.level);
+                    const recLines = summaryLines(risk.recommendation, 3);
+                    return (
+                      <div className={`rounded-xl border ${ui.border} bg-white p-4 shadow-sm space-y-3`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
+                          <div className="text-xs text-gray-500">
+                            Auto-lock: {AUTO_LOCK_MINUTES_BEFORE}m before session ({String(DEFAULT_SESSION_START.hour).padStart(2, "0")}:
+                            {String(DEFAULT_SESSION_START.minute).padStart(2, "0")})
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Total</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.n_players}</div>
+                          </div>
+                          <div className="rounded-lg border bg-green-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-green-700">Full</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{teamSignal.n_full}</div>
+                          </div>
+                          <div className="rounded-lg border bg-yellow-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-yellow-700">Reduced</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-yellow-700">{teamSignal.n_reduced}</div>
+                          </div>
+                          <div className="rounded-lg border bg-red-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-red-700">Recovery</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{teamSignal.n_recovery}</div>
+                          </div>
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Avg confidence</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.avg_confidence ?? "-"}</div>
+                          </div>
+                          <div className="rounded-lg border bg-gray-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Needs review</div>
+                            <div className="mt-1 text-lg font-semibold tabular-nums">{needsReviewCount}</div>
+                          </div>
+                        </div>
+                        <div className={`grid gap-2 md:grid-cols-2 text-xs ${ui.text}`}>
+                          <div className="rounded-lg border bg-white p-3">
+                            <div className="font-semibold text-gray-700">Why</div>
+                            <div className="mt-1">{risk.why}</div>
+                          </div>
+                          <div className="rounded-lg border bg-white p-3">
+                            <div className="font-semibold text-gray-700">Team plan</div>
+                            <div className="mt-1 space-y-1">
+                              {recLines.length ? (
+                                recLines.map((line, idx) => (
+                                  <div key={`rec-${idx}`} className="leading-relaxed">
+                                    {line}
+                                  </div>
+                                ))
+                              ) : (
+                                <div>{risk.recommendation}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                : null}
+            </CardContent>
+          </Card>
+
+          {/* Check-in reminders */}
+          <Card className="h-full border border-slate-200 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle className={sectionTitleClass}>Check-in reminders</CardTitle>
+              <CardDescription className={sectionSubtitleClass}>Status for today and manual reminder trigger for players missing check-in.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className={statLabelClass}>Total players</div>
+                  <div className={statValueClass}>{reminderStatus?.totalPlayers ?? "—"}</div>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-green-700">Checked in</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{reminderStatus?.checkedIn ?? "—"}</div>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-amber-700">Missing check-ins</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-amber-700">{reminderStatus?.missing ?? "—"}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={() => sendManualReminder(today)} disabled={manualReminderSending || reminderStatusLoading}>
+                  {manualReminderSending ? "Sending..." : "Send reminder to missing players"}
+                </Button>
+                <Button variant="outline" onClick={() => loadReminderStatus(today)} disabled={manualReminderSending || reminderStatusLoading}>
+                  {reminderStatusLoading ? "Loading..." : "Refresh status"}
+                </Button>
+                <div className="text-xs text-gray-500">
+                  Last manual send:{" "}
+                  <span className="font-medium text-gray-700">
+                    {reminderStatus?.lastManualSendAt ? new Date(reminderStatus.lastManualSendAt).toLocaleString() : "—"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Compliance diagnostic:</span> {complianceMessage}
+              </div>
+              {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
+            </CardContent>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          SQUAD TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "squad" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Squad overview"
+          description="See all players, filter by readiness flag, and review the full squad table."
+        />
+      )}
+
+      {dashTab === "squad" && isAtLeastPro && (
+        <div className="space-y-6">
+
+          {/* Players needing review */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <div className={sectionTitleClass}>Players needing review today</div>
+                <div className={sectionSubtitleClass}>{needsReviewCount} players flagged by the system</div>
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">Operational workspace · scan · decide · confirm</div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">Review context</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400">Today only</div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Needs review</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{needsReviewCount}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Neural bias</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.neuralBiasApplied}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>High next-day risk</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.highNextDayRisk}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Locked cards</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.lockedRows}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-gray-50 p-2.5">
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Players flagged today</div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>High neural load</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.highNeuralLoad}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Low readiness</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Pain flag</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.painFlag}</div>
+                </div>
+                <div className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className={statLabelClass}>Manual review</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.manualReview}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="grid gap-3 lg:grid-cols-12">
+                <div className="lg:col-span-7">
+                  <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Filters</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant={filter === "all" ? "default" : "outline"} onClick={() => setFilter("all")}>
+                      All
+                    </Button>
+                    <Button variant={filter === "red" ? "default" : "outline"} onClick={() => setFilter("red")}>
+                      Red ({counts.red})
+                    </Button>
+                    <Button variant={filter === "yellow" ? "default" : "outline"} onClick={() => setFilter("yellow")}>
+                      Yellow ({counts.yellow})
+                    </Button>
+                    <Button variant={filter === "green" ? "default" : "outline"} onClick={() => setFilter("green")}>
+                      Green ({counts.green})
+                    </Button>
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-500">Actions</div>
+                  <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
+                    <Input placeholder="Leita að leikmanni…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-[220px]" />
+                    <Button variant="outline" onClick={() => loadToday()} disabled={loading || genLoading}>
+                      {loading ? "Hleð..." : "Refresh"}
+                    </Button>
+                    <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading || saveAllLoading}>
+                      {genLoading ? ct.actions.generating : ct.actions.generateDecisions}
+                    </Button>
+                    {(() => {
+                      const dirtyCount = rows.filter((r) => {
+                        if (r.is_locked && !isAdmin) return false;
+                        const pid = String(r.player_id);
+                        const draft = draftAction[pid];
+                        const current = (r.training_action ?? "FULL") as TrainingAction;
+                        return draft != null && draft !== current;
+                      }).length;
+                      if (dirtyCount === 0) return null;
+                      return (
+                        <Button
+                          onClick={saveAllDirty}
+                          disabled={saveAllLoading || loading}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          {saveAllLoading
+                            ? (lang === "EN" ? "Saving…" : "Vistandi…")
+                            : (lang === "EN" ? `Save all changes (${dirtyCount})` : `Vista allar breytingar (${dirtyCount})`)}
+                        </Button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error ? <div className="text-sm text-red-600">{error}</div> : null}
+          {genToast ? <div className="text-sm text-green-700">{genToast}</div> : null}
+          {saveAllToast ? <div className="text-sm text-green-700">{saveAllToast}</div> : null}
+
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{queueEmptyMessage}</div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-gray-50/40 p-3 md:p-4 space-y-4">{rowsWithSessionDraft.map((r) => renderRow(r))}</div>
+          )}
+
+          {/* Paging */}
+          <div className="flex items-center justify-between pt-2 text-sm text-gray-600">
+            <div>
+              Page {page + 1} / {totalPages} · total {total}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Prev
+              </Button>
+              <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
+
+          {/* Team Risk Map */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Team Risk Map</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Low Risk</div>
+                  <div className="mt-1 space-y-0.5 text-emerald-900">
+                    {teamRiskMap.lowRisk.slice(0, 8).map((p) => (
+                      <div key={`low-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.lowRisk.length ? <div className="text-emerald-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Moderate Risk</div>
+                  <div className="mt-1 space-y-0.5 text-yellow-900">
+                    {teamRiskMap.moderateRisk.slice(0, 8).map((p) => (
+                      <div key={`mod-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.moderateRisk.length ? <div className="text-yellow-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-700">High Risk</div>
+                  <div className="mt-1 space-y-0.5 text-orange-900">
+                    {teamRiskMap.highRisk.slice(0, 8).map((p) => (
+                      <div key={`high-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.highRisk.length ? <div className="text-orange-700/70">No players</div> : null}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Critical</div>
+                  <div className="mt-1 space-y-0.5 text-red-900">
+                    {teamRiskMap.criticalRisk.slice(0, 8).map((p) => (
+                      <div key={`crit-${p.playerId ?? p.playerName}`}>{p.playerName ?? "Player"} – {titleCaseToken(p.recommendedAction)}</div>
+                    ))}
+                    {!teamRiskMap.criticalRisk.length ? <div className="text-red-700/70">No players</div> : null}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Weekly Performance Intelligence */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className={sectionTitleClass}>Weekly Performance Intelligence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm text-slate-700">
+                <div>
+                  Team average risk: <span className="font-semibold tabular-nums">{weeklyRiskReport.avgRiskScore.toFixed(1)}</span>
+                </div>
+                <div>{weeklyRiskReport.teamTrend}</div>
+                <div>{weeklyRiskReport.recommendation}</div>
+                <div>
+                  Highest risk:{" "}
+                  {weeklyRiskReport.highestRiskPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                </div>
+                <div>
+                  Improving: {weeklyRiskReport.mostImprovedPlayers.slice(0, 3).map((p) => p.playerName ?? "Player").join(", ") || "—"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          INTELLIGENCE TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "intel" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Team intelligence"
+          description="Neural fatigue model, volatility tracking, adaptive training engine, and explainable decisions."
+        />
+      )}
+
+      {dashTab === "intel" && isAtLeastPro && (
+        <div className="space-y-6">
+
+          {/* Performance Intelligence — Team */}
+          <Card className={`h-full border ${tm.border} shadow-sm`}>
+            <CardHeader className={`${tm.bg}`}>
+              <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
+              <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
+                Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
+                <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
+                <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {!teamIntel ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+              ) : (
+                <>
+                  <div className="grid gap-3 lg:grid-cols-12">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Volatility</div>
+                      <div className="mt-3 text-3xl font-semibold tabular-nums text-emerald-950">{teamIntel.volatility_pct ?? 0}%</div>
+                      <div className="mt-2 text-sm text-emerald-800">volatile players: <span className="font-semibold">{teamIntel.n_volatile ?? 0}</span></div>
+                    </div>
+
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-amber-700">Readiness Mix</div>
+                      <div className="mt-3 text-xl font-semibold tabular-nums text-amber-950">
+                        {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
+                      </div>
+                      <div className="mt-2 text-xs text-amber-800">
+                        RED / YELLOW / GREEN(+)
+                      </div>
+                      <div className="mt-1 text-xs text-amber-700">
+                        n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 shadow-sm lg:col-span-4">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-600">Status Snapshot</div>
+                      <div className="mt-3 text-2xl font-semibold text-slate-900">{teamIntel.team_status ?? "—"}</div>
+                      <div className="mt-2 text-xs text-slate-600">
+                        baseline: <span className="font-semibold text-slate-800">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
+                        <span className="font-semibold text-slate-800">{teamIntel.n_players ?? "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Team Summary</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
+                          ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                          [
+                            "High / critical risk",
+                            String(
+                              (teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0) +
+                                (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)
+                            ),
+                          ],
+                          [
+                            "External load",
+                            teamExternalLoadSummary
+                              ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
+                              : "—",
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamIntel.narrative ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
+                          {teamIntel.narrative}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Monitoring Pattern</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Risk bands", `Low ${teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0} · Mod ${teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0} · High ${teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0} · Critical ${teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}`],
+                          ["Recovery recommended", String(teamSignal?.n_recovery ?? 0)],
+                          ["Neural + volatility", teamNeuralVolatilitySummary.summaryText],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamIntel.monitoring_notes ? (
+                        <div className="mt-3 space-y-1 text-xs text-slate-600">
+                          {(Array.isArray(teamIntel.monitoring_notes) ? teamIntel.monitoring_notes : [teamIntel.monitoring_notes]).map((note: string, i: number) => (
+                            <div key={i} className="leading-relaxed">• {note}</div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Session Recommendation</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Prescription", teamPrescriptionSummary.summaryText],
+                          ["Protect for match", teamExternalLoadSummary ? `${teamExternalLoadSummary.counts.totalPlayers} · Limited exposure ${teamExternalLoadSummary.counts.unknown}` : "—"],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamIntel.session_recommendation ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
+                          {teamIntel.session_recommendation}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 text-[11px]">
+                        <Link href="/coach/session-workflow" className="font-medium text-slate-700 underline underline-offset-2">
+                          Open Session Workflow
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Rules / Overrides</div>
+                      <div className="rounded-2xl border border-slate-200 bg-white">
+                        {[
+                          ["Adjusted players", String(teamRulesSummary.overriddenPlayersCount ?? 0)],
+                          ["Review required", String(teamRulesSummary.reviewRequiredCount ?? 0)],
+                          ["Protected players", String(teamRulesSummary.protectedPlayersCount ?? 0)],
+                        ].map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                            <div className="text-xs text-slate-500">{label}</div>
+                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {teamRulesSummary.summaryText ? (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+                          {teamRulesSummary.summaryText}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Supporting team intelligence */}
+          <section className="space-y-4">
+            <div className={`flex items-end justify-between gap-3 px-3 py-2 ${softSurfaceClass}`}>
+              <div>
+                <div className={sectionTitleClass}>Supporting team intelligence</div>
+                <div className={sectionSubtitleClass}>Performance context and team-level monitoring beneath the command summary.</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  Team outlook: <span className="font-semibold text-slate-800">{teamOutlook.band}</span>
+                </div>
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-slate-500">Level 2</div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Card className={summaryCardClass}>
+                <CardHeader className="pb-3">
+                  <CardTitle className={sectionTitleClass}>Team Intelligence</CardTitle>
+                  <CardDescription className={sectionSubtitleClass}>High-level team monitoring summary.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!teamIntel ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white">
+                      {[
+                        ["Status", teamIntel.team_status ?? "—"],
+                        ["Baseline maturity", teamIntel.baseline_maturity ?? "—"],
+                        ["Players", String(teamIntel.n_players ?? "—")],
+                        ["Volatility", `${teamIntel.volatility_pct ?? 0}%`],
+                        ["Volatile players", String(teamIntel.n_volatile ?? 0)],
+                        ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
+                        ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
+                        ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
+                        [
+                          "External load",
+                          teamExternalLoadSummary
+                            ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
+                            : "—",
+                        ],
+                        [
+                          "Catapult coverage",
+                          teamExternalLoadSummary
+                            ? `${teamExternalLoadSummary.counts.totalPlayers - teamExternalLoadSummary.counts.unknown}/${teamExternalLoadSummary.counts.totalPlayers}`
+                            : "—",
+                        ],
+                        ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
+                        ["External load note", teamExternalLoadSummary?.summaryLines[0] ?? "—"],
+                        ["Prescription", teamPrescriptionSummary.summaryText],
+                        ["Rules / override", teamRulesSummary.summaryText],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                          <div className="text-xs text-slate-500">{label}</div>
+                          <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className={summaryCardClass}>
+                <CardHeader className="pb-3">
+                  <CardTitle className={sectionTitleClass}>Readiness Mix</CardTitle>
+                  <CardDescription className={sectionSubtitleClass}>Current team state distribution and risk map.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!teamIntel ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{queueEmptyMessage}</div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-rose-700">Red</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-rose-800">{teamIntel.pct_red ?? 0}%</div>
+                        </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-amber-700">Yellow</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-amber-800">{teamIntel.pct_yellow ?? 0}%</div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                          <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green</div>
+                          <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-800">{(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-3">
+                        <div className="h-4 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                          <div className="flex h-full w-full">
+                            <div className="bg-rose-400/70" style={{ width: `${teamIntel.pct_red ?? 0}%` }} />
+                            <div className="bg-amber-400/70" style={{ width: `${teamIntel.pct_yellow ?? 0}%` }} />
+                            <div className="bg-emerald-400/70" style={{ width: `${(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>n: {teamIntel.n_red ?? 0}</span>
+                          <span>n: {teamIntel.n_yellow ?? 0}</span>
+                          <span>n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3">
+                        <div className="text-sm font-semibold text-slate-900">Team Risk Map</div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-emerald-700">Low Risk</div>
+                            <div className="mt-1 text-xl font-semibold text-emerald-800">{teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-amber-700">Moderate</div>
+                            <div className="mt-1 text-xl font-semibold text-amber-800">{teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-orange-700">High Risk</div>
+                            <div className="mt-1 text-xl font-semibold text-orange-800">{teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0}</div>
+                          </div>
+                          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                            <div className="text-[10px] uppercase tracking-wide text-rose-700">Critical</div>
+                            <div className="mt-1 text-xl font-semibold text-rose-800">{teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* Team intelligence signals: Fatigue + Neural Load + Unit Alerts */}
+          <div className="space-y-3 rounded-xl border bg-gray-50/40 p-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-sm font-semibold">Team intelligence</div>
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive signals</div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-1">
+              {(fatigueSnapshot as any)?.teamFatigueSummary ? (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Fatigue</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive summary</div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant pattern</div>
+                      <div className="mt-1 text-lg font-semibold">
+                        {String((fatigueSnapshot as any).teamFatigueSummary.dominantType ?? "—")}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High severity count</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">
+                        {(fatigueSnapshot as any).teamFatigueSummary.highSeverityCount ??
+                          (fatigueSnapshot as any).teamFatigueSummary.highCount ??
+                          0}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {(fatigueSnapshot as any).teamFatigueSummary.summaryText ?? "No dominant fatigue pattern today."}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Fatigue</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {dayStateInfo.state === "MISSING_INPUT"
+                      ? "Fatigue summary is limited because expected check-ins are missing."
+                      : dayStateInfo.state === "OFF_DAY"
+                      ? "OFF day detected; fatigue summary is intentionally low-priority."
+                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+                      ? "No input expected for this day context."
+                      : "No team fatigue summary available yet."}
+                  </div>
+                </div>
+              )}
+
+              {teamNeuralSummary ? (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Neural Load</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Prediction summary</div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant state</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.dominantState}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Trajectory</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.trajectorySummary}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Next-day risk</div>
+                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.nextDayRiskSummary}</div>
+                    </div>
+                    <div className="rounded-lg border bg-gray-50 p-3">
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High-risk count</div>
+                      <div className="mt-1 text-lg font-semibold tabular-nums">{teamNeuralSummary.highRiskCount}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600">{teamNeuralSummary.summaryText}</div>
+                  {!!(fatigueSnapshot as any)?.neural_bias_applied ? (
+                    <div className="text-xs text-gray-700">
+                      <span className="font-semibold">Neural bias applied.</span>{" "}
+                      <span className="text-gray-600">
+                        Why: {formatNeuralBiasReasons((fatigueSnapshot as any)?.neural_bias_reason_codes, 3) || "Neural load/risk threshold nudge."}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="text-sm font-semibold">Team Neural Load</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {dayStateInfo.state === "MISSING_INPUT"
+                      ? "Neural load summary is incomplete because expected inputs are missing."
+                      : dayStateInfo.state === "OFF_DAY"
+                      ? "OFF day detected; neural load monitoring is informational only."
+                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
+                      ? "No neural input expected for this day context."
+                      : "No team neural summary available yet."}
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Performance Intelligence Panel */}
+          <PerformanceIntelligencePanel
+            teamOutlook={teamOutlook}
+            weeklyReport={weeklyRiskReport}
+            riskMap={teamRiskMap}
+          />
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          LOAD & RPE TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "load" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Load & RPE monitoring"
+          description="Session RPE compliance, daily internal load, yesterday GPS load from Catapult, and load metrics."
+        />
+      )}
+
+      {dashTab === "load" && isAtLeastPro && (
+        <div className="space-y-8">
+
+          {/* Weekly Load moved to GPS tab */}
+
+          {/* ── Session RPE ───────────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Session RPE</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <SessionRpeMonitoringCard teamId={coachTeamId} />
+              <DailyInternalLoadCard teamId={coachTeamId} />
+            </div>
+          </section>
+
+          {/* ── ACWR Risk Overview ────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Risk Overview</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <InternalAcwrCard teamId={coachTeamId} />
+          </section>
+
+          {/* ── 7/28d Load Metrics ───────────────────────────── */}
+          {/* ── External Load (GPS) ───────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">External Load · GPS</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+
+          {/* Yesterday Load — auto from Catapult GPS */}
+          <Card className="shadow-sm border border-slate-100">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Yesterday Load
+                <span className="text-xs font-normal text-slate-400 ml-1">· Catapult team avg</span>
+                {ctxIntensity && (
+                  <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    ctxIntensity === "HIGH" ? "bg-red-100 text-red-700" :
+                    ctxIntensity === "MEDIUM" ? "bg-amber-100 text-amber-700" :
+                    ctxIntensity === "LOW" ? "bg-blue-100 text-blue-700" :
+                    "bg-slate-100 text-slate-500"
+                  }`}>{ctxIntensity}</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!ctxYesterdayLoaded ? (
+                <div className="text-sm text-slate-400">Loading GPS data…</div>
+              ) : !ctxDist && !ctxHsr && !ctxVelB5 ? (
+                <div className="text-sm text-slate-400">No Catapult data found for yesterday.</div>
+              ) : (
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-3 text-sm">
+                  {[
+                    { label: "Total Dist", value: ctxDist ? `${ctxDist} m` : "—" },
+                    { label: "Vel Band 5", value: ctxVelB5 ? `${ctxVelB5} m` : "—" },
+                    { label: "Vel Band 6", value: ctxVelB6 ? `${ctxVelB6} m` : "—" },
+                    { label: "HIR Dist", value: ctxHsr ? `${ctxHsr} m` : "—" },
+                    { label: "Accel B2-3", value: ctxAccB23 || "—" },
+                    { label: "Tot Accels", value: ctxAcc || "—" },
+                    { label: "Decel B2-3", value: ctxDecB23 || "—" },
+                    { label: "Tot Decels", value: ctxDec || "—" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2">
+                      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{item.label}</div>
+                      <div className="mt-0.5 font-semibold text-slate-800">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          </section>
+
+          {/* ── Dev diagnostics (collapsible) ─────────────────── */}
+          <details className="group">
+            <summary className="flex cursor-pointer items-center gap-2 list-none select-none">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-300 group-open:text-slate-400">Dev diagnostics</span>
+              <div className="flex-1 h-px bg-slate-100" />
+              <svg className="w-3.5 h-3.5 text-slate-300 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 shadow-sm space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div className="text-sm font-semibold text-gray-700">Neural Load QA (dev)</div>
+                <div className="text-[11px] uppercase tracking-wide text-gray-400">Validation suite</div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Cases</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums">{neuralValidation.total}</div>
+                </div>
+                <div className="rounded-lg border bg-green-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-green-700">Pass</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{neuralValidation.passed}</div>
+                </div>
+                <div className="rounded-lg border bg-red-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-red-700">Fail</div>
+                  <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{neuralValidation.failed}</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {neuralValidation.cases.map((c) => (
+                  <div key={c.id} className="rounded-md border p-2 text-xs">
+                    <div className="font-semibold">
+                      Case {c.id}: {c.title} · {c.pass ? "PASS" : "FAIL"}
+                    </div>
+                    <div className="mt-1">
+                      {c.output.neuralLoadState} · {c.output.readinessTrajectory} · {c.output.nextDayRisk} · score {c.output.neuralLoadScore}
+                    </div>
+                    <div className="mt-1 text-gray-600">{c.output.summary}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          GPS DATA TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "gps" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="GPS Data"
+          description="Total distance, velocity bands, accelerations, decelerations, Player Load, IMA metrics, and 7D/28D/ACWR load monitoring for every player."
+        />
+      )}
+
+      {dashTab === "gps" && isAtLeastPro && (() => {
+        const isBasketball = teamSport === "basketball";
+
+        const GPS_METRICS: Array<{
+          key: string;
+          label: string;
+          shortLabel: string;
+          aliases: string[];
+          digits: number;
+        }> = isBasketball ? [
+          { key: "totalPlayerLoad",     label: "Player Load",          shortLabel: "Player Load", aliases: ["totalPlayerLoad", "total_player_load"],                          digits: 1 },
+          { key: "playerLoadPerMinute", label: "Player Load / min",    shortLabel: "PL/min",      aliases: ["playerLoadPerMinute", "player_load_per_minute"],                 digits: 2 },
+          { key: "imaCod",              label: "Changes of Direction", shortLabel: "IMA COD",     aliases: ["imaCod", "ima_cod", "cod_events"],                               digits: 0 },
+          { key: "imaAccel",            label: "IMA Accelerations",    shortLabel: "IMA Accels",  aliases: ["imaAccel", "ima_accel"],                                         digits: 0 },
+          { key: "imaDecel",            label: "IMA Decelerations",    shortLabel: "IMA Decels",  aliases: ["imaDecel", "ima_decel"],                                         digits: 0 },
+          { key: "totalDistance",       label: "Total Distance (m)",   shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                               digits: 0 },
+          { key: "maxVel",              label: "Max Velocity (km/h)",  shortLabel: "Max Vel",     aliases: ["maxVel", "max_vel", "max_velocity"],                             digits: 1 },
+        ] : [
+          { key: "totalDistance",              label: "Total Distance (m)",            shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                                    digits: 0 },
+          { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",           shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                         digits: 0 },
+          { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)",           shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                         digits: 0 },
+          { key: "accelBand2to3Efforts",       label: "Accel B2-3 Efforts (Gen 2)",    shortLabel: "Accel B2-3",  aliases: ["accelBand2to3Efforts", "accel_band2to3_efforts", "accel_b2_3_tot_effs_gen2", "accelB23TotEffsGen2"],  digits: 0 },
+          { key: "totalAccelerations",         label: "Tot Accels (#)",                shortLabel: "Tot Accels",  aliases: ["totalAccelerations", "total_accelerations", "tot_as", "totAs"],                                       digits: 0 },
+          { key: "decelBand2to3Efforts",       label: "Decel B2-3 Efforts (Gen 2)",    shortLabel: "Decel B2-3",  aliases: ["decelBand2to3Efforts", "decel_band2to3_efforts", "decel_b2_3_tot_effs_gen2", "decelB23TotEffsGen2"],  digits: 0 },
+          { key: "totalDecelerations",         label: "Tot Decels (#)",                shortLabel: "Tot Decels",  aliases: ["totalDecelerations", "total_decelerations", "tot_ds", "totDs"],                                       digits: 0 },
+        ];
+
+        function getVal(row: Record<string, unknown>, aliases: string[]): number | null {
+          for (const alias of aliases) {
+            const v = row[alias];
+            if (typeof v === "number" && Number.isFinite(v)) return v;
+          }
+          return null;
+        }
+
+        function avg(vals: number[]): number | null {
+          if (!vals.length) return null;
+          return vals.reduce((s, v) => s + v, 0) / vals.length;
+        }
+
+        function dateMinusDays(dateStr: string, days: number): string {
+          const d = new Date(`${dateStr}T00:00:00.000Z`);
+          d.setUTCDate(d.getUTCDate() - days);
+          return d.toISOString().slice(0, 10);
+        }
+
+        function computeSnapshot(history: Array<Record<string, unknown>>, aliases: string[], digits: number) {
+          const refDate = today; // component-level today date
+          const acuteStart = dateMinusDays(refDate, 6);   // last 7 calendar days inclusive
+          const chronicStart = dateMinusDays(refDate, 27); // last 28 calendar days inclusive
+
+          const dated = history.filter((r) => typeof r.date === "string");
+
+          const acuteVals = dated
+            .filter((r) => String(r.date) >= acuteStart && String(r.date) <= refDate)
+            .map((r) => getVal(r, aliases))
+            .filter((v): v is number => v != null);
+
+          const chronicVals = dated
+            .filter((r) => String(r.date) >= chronicStart && String(r.date) <= refDate)
+            .map((r) => getVal(r, aliases))
+            .filter((v): v is number => v != null);
+
+          const a7 = avg(acuteVals);
+          const c28 = avg(chronicVals);
+          const acwr = a7 != null && c28 != null && c28 > 0 ? a7 / c28 : null;
+          const fmt = (n: number | null) => n == null ? "—" : n.toFixed(digits);
+          return { a7: fmt(a7), c28: fmt(c28), acwr };
+        }
+
+        function acwrColor(v: number | null): string {
+          if (v == null) return "text-slate-400";
+          if (v > 1.5) return "text-red-600 font-semibold";
+          if (v > 1.3) return "text-amber-600 font-semibold";
+          if (v >= 0.8) return "text-emerald-700";
+          return "text-blue-600 font-semibold"; // < 0.8 — of lítið álag
+        }
+
+        function acwrBg(v: number | null): string {
+          if (v == null) return "";
+          if (v > 1.5) return "bg-red-50";
+          if (v > 1.3) return "bg-amber-50";
+          if (v >= 0.8) return "bg-emerald-50";
+          return "bg-blue-50"; // < 0.8 — of lítið álag
+        }
+
+        const gpsRows = gpsAllPlayers.map((p) => ({
+          name: p.name,
+          position: p.position,
+          snapshots: GPS_METRICS.map((m) => computeSnapshot(p.history, m.aliases, m.digits)),
+        }));
+
+        const noData = !gpsLoading && gpsRows.length === 0;
+
+        // ── Today's session overview ──────────────────────────────────────
+        const todayPlayerRows = gpsAllPlayers.map((p) => {
+          const row = p.history.find((r) => String(r.date ?? "").slice(0, 10) === today);
+          if (!row) return null;
+          const vb5 = getVal(row, ["velocity_band5_total_distance", "velocityBand5TotalDistance"]) ?? 0;
+          const vb6 = getVal(row, ["velocity_band6_total_distance", "velocityBand6TotalDistance"]) ?? 0;
+          return {
+            name: p.name,
+            position: p.position,
+            // Football fields
+            totalDist:  getVal(row, ["total_distance", "totalDistance"]),
+            hsDist:     vb5 + vb6,
+            accelB23:   getVal(row, ["accel_b2_3_tot_effs_gen2", "accelBand2to3Efforts", "accelB23TotEffsGen2"]),
+            decelB23:   getVal(row, ["decel_b2_3_tot_effs_gen2", "decelBand2to3Efforts", "decelB23TotEffsGen2"]),
+            totAccels:  getVal(row, ["tot_as", "totalAccelerations", "totAs"]),
+            totDecels:  getVal(row, ["tot_ds", "totalDecelerations", "totDs"]),
+            // Basketball fields
+            playerLoad:       getVal(row, ["total_player_load", "totalPlayerLoad"]),
+            playerLoadPerMin: getVal(row, ["player_load_per_minute", "playerLoadPerMinute"]),
+            imaCod:           getVal(row, ["ima_cod", "imaCod", "cod_events"]),
+            imaAccel:         getVal(row, ["ima_accel", "imaAccel"]),
+            imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
+            maxVel:           getVal(row, ["max_vel", "maxVel", "max_velocity"]),
+            avgHr:            getVal(row, ["avg_heart_rate", "avgHeartRate"]),
+            maxHr:            getVal(row, ["max_heart_rate", "maxHeartRate"]),
+          };
+        }).filter(Boolean) as Array<{
+          name: string; position: string;
+          // football
+          totalDist: number | null; hsDist: number;
+          accelB23: number | null; decelB23: number | null;
+          totAccels: number | null; totDecels: number | null;
+          // basketball
+          playerLoad: number | null; playerLoadPerMin: number | null;
+          imaCod: number | null; imaAccel: number | null; imaDecel: number | null;
+          maxVel: number | null;
+          // heart rate (both sports)
+          avgHr: number | null; maxHr: number | null;
+        }>;
+
+        function squadAvgToday(vals: (number | null)[]): number | null {
+          const valid = vals.filter((v): v is number => v != null && Number.isFinite(v));
+          return valid.length ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
+        }
+
+        const tAvgDist       = squadAvgToday(todayPlayerRows.map((r) => r.totalDist));
+        const tAvgHs         = squadAvgToday(todayPlayerRows.map((r) => r.hsDist));
+        const tAvgAccB       = squadAvgToday(todayPlayerRows.map((r) => r.accelB23));
+        const tAvgDecB       = squadAvgToday(todayPlayerRows.map((r) => r.decelB23));
+        // Basketball KPI averages
+        const tAvgPlayerLoad = squadAvgToday(todayPlayerRows.map((r) => r.playerLoad));
+        const tAvgPlPerMin   = squadAvgToday(todayPlayerRows.map((r) => r.playerLoadPerMin));
+        const tAvgImaCod     = squadAvgToday(todayPlayerRows.map((r) => r.imaCod));
+        const tAvgImaAccel   = squadAvgToday(todayPlayerRows.map((r) => r.imaAccel));
+        const todaySorted = [...todayPlayerRows].sort((a, b) =>
+          isBasketball
+            ? (b.playerLoad ?? 0) - (a.playerLoad ?? 0)
+            : (b.totalDist ?? 0) - (a.totalDist ?? 0)
+        );
+
+        const fmtN = (v: number | null, d = 0) => v == null ? "—" : v.toFixed(d);
+
+        return (
+          <div className="space-y-4">
+
+            {/* ── Cumulative Weekly Load ────────────────────────── */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{lang === "IS" ? "Vikuálag" : "Weekly Load"}</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} />}
+            </section>
+
+            {/* ── Today's Training Overview ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                      Æfing Dagsins · {today}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      {isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
+                    </CardDescription>
+                  </div>
+                  <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
+                    {todayPlayerRows.length} / {gpsAllPlayers.length} leikmenn
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {gpsLoading ? (
+                  <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
+                ) : todayPlayerRows.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-slate-400">{lang === "EN" ? "No GPS data recorded today." : "Engin GPS gögn skráð í dag."}</div>
+                ) : (
+                  <>
+                    {/* Squad average KPI tiles */}
+                    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {(isBasketball ? [
+                        { label: "Player Load",      value: fmtN(tAvgPlayerLoad, 1), unit: "avg" },
+                        { label: "PL / min",         value: fmtN(tAvgPlPerMin,   2), unit: "avg" },
+                        { label: "IMA COD",          value: fmtN(tAvgImaCod,     0), unit: "avg" },
+                        { label: "IMA Accelerations",value: fmtN(tAvgImaAccel,   0), unit: "avg" },
+                      ] : [
+                        { label: lang === "EN" ? "Total Distance" : "Heildarvegalengd", value: fmtN(tAvgDist),    unit: "m avg" },
+                        { label: lang === "EN" ? "High-speed Dist" : "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: "m avg (VB5+VB6)" },
+                        { label: "Accel B2-3",       value: fmtN(tAvgAccB),    unit: lang === "EN" ? "count avg" : "efni avg" },
+                        { label: "Decel B2-3",       value: fmtN(tAvgDecB),    unit: lang === "EN" ? "count avg" : "efni avg" },
+                      ]).map(({ label, value, unit }) => (
+                        <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+                          <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</div>
+                          <div className="text-[11px] text-slate-400">{unit}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Per-player table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Player" : "Leikmaður"}</th>
+                            {isBasketball ? <>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Player Load</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">PL/min</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA COD</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Accels</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Decels</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Max Vel</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
+                            </> : <>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Tot Dist (m)</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">HS Dist (m)</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Accels (#)</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Decels (#)</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Acc B2-3</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Dec B2-3</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
+                            </>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* Squad average row */}
+                          <tr className="border-b-2 border-slate-300 bg-slate-100 font-semibold">
+                            <td className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sveit avg</td>
+                            {isBasketball ? <>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgPlayerLoad, 1)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgPlPerMin,   2)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaCod,     0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaAccel,   0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.imaDecel)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxVel)),   1)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
+                            </> : <>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDist)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgHs)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totAccels)))}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totDecels)))}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgAccB)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDecB)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
+                            </>}
+                          </tr>
+                          {todaySorted.map((p, i) => (
+                            <tr key={p.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
+                              <td className="px-4 py-2 whitespace-nowrap">
+                                <div className="font-medium text-slate-900">{p.name}</div>
+                                <div className="text-[11px] text-slate-400">{p.position}</div>
+                              </td>
+                              {isBasketball ? <>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.playerLoad, 1)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.playerLoadPerMin, 2)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaCod)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaAccel)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaDecel)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.maxVel, 1)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
+                              </> : <>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.totalDist)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.hsDist > 0 ? p.hsDist : null)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totAccels)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totDecels)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.accelB23)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.decelB23)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
+                              </>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">GPS Data — Squad Load</CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      7-day acute · 28-day chronic · ACWR per player · Catapult
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" />&lt;0.8 Low</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />0.8–1.3 OK</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />1.3–1.5 Elevated</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" />&gt;1.5 High</span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {gpsLoading ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">Loading GPS data…</div>
+                ) : noData ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">
+                    No Catapult GPS data available. Sync Catapult to load player data.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 whitespace-nowrap border-r border-slate-200">
+                            Player
+                          </th>
+                          {GPS_METRICS.map((m) => (
+                            <th key={m.key} colSpan={3} className="px-2 py-2.5 text-center text-xs font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap">
+                              {m.shortLabel}
+                            </th>
+                          ))}
+                        </tr>
+                        <tr className="border-b border-slate-200 bg-slate-50/60">
+                          <th className="sticky left-0 z-10 bg-slate-50/60 px-4 py-1.5 border-r border-slate-200" />
+                          {GPS_METRICS.map((m) => (
+                            <React.Fragment key={m.key}>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500 border-l border-slate-200">7D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">28D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">ACWR</th>
+                            </React.Fragment>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gpsRows.map((player, i) => (
+                          <tr key={player.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
+                            <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-900 whitespace-nowrap border-r border-slate-200" style={{ background: i % 2 === 0 ? "white" : "rgb(248 250 252 / 0.4)" }}>
+                              <div>{player.name}</div>
+                              <div className="text-[11px] text-slate-400">{player.position}</div>
+                            </td>
+                            {player.snapshots.map((snap, si) => (
+                              <React.Fragment key={si}>
+                                <td className="px-3 py-2 text-center text-slate-700 border-l border-slate-100 tabular-nums">{snap.a7}</td>
+                                <td className="px-3 py-2 text-center text-slate-500 tabular-nums">{snap.c28}</td>
+                                <td className={`px-3 py-2 text-center tabular-nums ${acwrColor(snap.acwr)} ${acwrBg(snap.acwr)}`}>
+                                  {snap.acwr == null ? "—" : snap.acwr.toFixed(2)}
+                                </td>
+                              </React.Fragment>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <MechanicalLoadIndexCard teamId={coachTeamId} />
+            <TeamMetabolicSummary teamId={coachTeamId} />
+            <CoachGpsManualEntry
+              teamId={coachTeamId}
+              date={today}
+              getAuthHeaders={getCoachAuthHeaders}
+            />
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════
+          MD COMPARISON TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "md" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="MD Comparison"
+          description="Compare training session load against historical averages for the same match day designation using Z-scores and STEN."
+        />
+      )}
+      {dashTab === "md" && isAtLeastPro && coachTeamId && (
+        <div className="space-y-4">
+          <CoachMdComparisonCard teamId={coachTeamId} date={today} lang={lang} />
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          DRILLS TAB (team library + research templates)
+      ══════════════════════════════════════════ */}
+      {dashTab === "drills" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Drill Library"
+          description="Team-scoped drill library með GPS load metrics og research-backed SSG templates (Rampinini, Fradua)."
+        />
+      )}
+      {dashTab === "drills" && isAtLeastPro && coachTeamId && (
+        <CoachDrillsTab teamId={coachTeamId} />
+      )}
+
+      {/* ══════════════════════════════════════════
+          VOLATILITY TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "volatility" && !isAtLeastPro && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+          🔒 Volatility tab requires PRO or higher.
+        </div>
+      )}
+      {dashTab === "volatility" && isAtLeastPro && (() => {
+        // Last 10 days window
+        const DAYS = 10;
+        const windowStart = addDaysISO(today, -(DAYS - 1));
+
+        // Build player list with their 10-day monitoring history
+        const playerEntries = Object.entries(recentMonitoringByPlayer)
+          .map(([pid, points]) => {
+            // Filter + sort to last 10 days
+            const window = points
+              .filter((p) => p.date >= windowStart && p.date <= today)
+              .sort((a, b) => a.date.localeCompare(b.date));
+            // Find player name from current rows
+            const row = rowsWithAdaptive.find((r) => String(r.player_id) === pid);
+            return { pid, name: row?.full_name ?? pid, window };
+          })
+          .filter((e) => e.window.length >= 2)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        // Generate date labels for the window
+        const dayLabels: string[] = [];
+        for (let i = 0; i < DAYS; i++) {
+          const d = new Date(`${windowStart}T00:00:00Z`);
+          d.setUTCDate(d.getUTCDate() + i);
+          dayLabels.push(d.toISOString().slice(5, 10)); // MM-DD
+        }
+
+        // SVG multi-line chart helpers
+        const W = 420, H = 130, PAD = { top: 10, right: 38, bottom: 22, left: 30 };
+        const innerW = W - PAD.left - PAD.right;
+        const innerH = H - PAD.top - PAD.bottom;
+
+        function toX(idx: number, total: number) {
+          if (total <= 1) return PAD.left + innerW / 2;
+          return PAD.left + (idx / (total - 1)) * innerW;
+        }
+        function toY(val: number, min: number, max: number) {
+          if (max === min) return PAD.top + innerH / 2;
+          const t = (val - min) / (max - min);
+          return PAD.top + (1 - t) * innerH;
+        }
+        function buildPath(pts: Array<{ x: number; y: number } | null>): string {
+          let d = "";
+          for (const pt of pts) {
+            if (!pt) { d += " "; continue; }
+            d += d ? ` L${pt.x.toFixed(1)},${pt.y.toFixed(1)}` : `M${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+          }
+          return d.trim();
+        }
+
+        // Normalize z-score: -3..+3 → 0..100
+        function normZ(z: number | null | undefined): number | null {
+          if (z == null) return null;
+          return Math.max(0, Math.min(100, ((z + 3) / 6) * 100));
+        }
+        // Normalize check-in: 0..25 → 0..100
+        function normCI(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, (v / 25) * 100));
+        }
+        // Normalize soreness: 1..5 inverted → 0..100 (high soreness = low score)
+        function normSor(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, ((5 - v) / 4) * 100));
+        }
+        // Normalize sleep: 1..5 → 0..100
+        function normSleep(v: number | null | undefined): number | null {
+          if (v == null) return null;
+          return Math.max(0, Math.min(100, ((v - 1) / 4) * 100));
+        }
+
+        function flagColor(v: number | null): string {
+          if (v == null) return "#94A3B8";
+          if (v < 33) return "#EF4444";
+          if (v < 60) return "#F59E0B";
+          return "#22C55E";
+        }
+
+        const SERIES = [
+          { key: "ci",    label: "Check-in",  color: "#3B82F6", fn: (p: VolatilityDailyPoint) => normCI(p.checkInScore) },
+          { key: "z",     label: "Z-score",   color: "#8B5CF6", fn: (p: VolatilityDailyPoint) => normZ(p.zScore) },
+          { key: "sor",   label: "Soreness",  color: "#F97316", fn: (p: VolatilityDailyPoint) => normSor(p.soreness) },
+          { key: "sleep", label: "Sleep",     color: "#14B8A6", fn: (p: VolatilityDailyPoint) => normSleep(p.sleepQuality) },
+        ] as const;
+
+        // Y-axis labels
+        const yLabels = [{ val: 100, label: "100" }, { val: 50, label: "50" }, { val: 0, label: "0" }];
+
+        // X-axis tick positions (show at most 5)
+        const xTickStep = Math.max(1, Math.ceil(DAYS / 5));
+        const xTicks = dayLabels
+          .map((lbl, i) => ({ lbl, x: toX(i, DAYS) }))
+          .filter((_, i) => i % xTickStep === 0 || i === DAYS - 1);
+
+        return (
+          <div className="space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                  Readiness Volatility — Síðustu {DAYS} dagar
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-500">
+                  Sveiflur per leikmann · Check-in · Z-score · Þreyta · Svefn · 0 = slæmt, 100 = frábært
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Legend */}
+                <div className="mb-4 flex flex-wrap gap-4 text-xs">
+                  {SERIES.map((s) => (
+                    <span key={s.key} className="flex items-center gap-1.5">
+                      <span className="inline-block h-2.5 w-6 rounded-full" style={{ background: s.color }} />
+                      {s.label}
+                    </span>
+                  ))}
+                  <span className="ml-2 text-slate-400">· Soreness er snúin: hærra = minni þreyta</span>
+                </div>
+
+                {playerEntries.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-slate-400">
+                    Engin readiness gögn fundust fyrir síðustu {DAYS} daga. Gakktu úr skugga um að leikmenn hafi gert check-in.
+                  </div>
+                ) : (
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {playerEntries.map(({ pid, name, window: pts }) => {
+                      // Latest composite score (avg of available normalized metrics from latest point)
+                      const last = pts[pts.length - 1];
+                      const latestVals = [normCI(last?.checkInScore), normZ(last?.zScore), normSor(last?.soreness), normSleep(last?.sleepQuality)].filter((v): v is number => v != null);
+                      const latestComposite = latestVals.length ? latestVals.reduce((s, v) => s + v, 0) / latestVals.length : null;
+
+                      // Compute volatility = std dev of check-in scores over window
+                      const ciVals = pts.map((p) => p.checkInScore).filter((v): v is number => v != null);
+                      const ciMean = ciVals.length ? ciVals.reduce((s, v) => s + v, 0) / ciVals.length : null;
+                      const ciStd = ciMean != null && ciVals.length > 1
+                        ? Math.sqrt(ciVals.map((v) => (v - ciMean) ** 2).reduce((s, v) => s + v, 0) / ciVals.length)
+                        : null;
+                      const volLevel = ciStd == null ? null : ciStd > 5 ? "HIGH" : ciStd > 2.5 ? "MODERATE" : "LOW";
+
+                      return (
+                        <div key={pid} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                          {/* Header */}
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="font-semibold text-slate-900 text-sm truncate">{name}</div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {volLevel && (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${volLevel === "HIGH" ? "bg-red-100 text-red-700" : volLevel === "MODERATE" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                  {volLevel === "HIGH" ? "Há sveifla" : volLevel === "MODERATE" ? "Miðlungs" : "Stöðugur"}
+                                </span>
+                              )}
+                              {latestComposite != null && (
+                                <span className="text-xs font-bold" style={{ color: flagColor(latestComposite) }}>
+                                  {Math.round(latestComposite)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* SVG Chart */}
+                          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+                            {/* Grid lines */}
+                            {yLabels.map(({ val }) => {
+                              const y = toY(val, 0, 100);
+                              return (
+                                <line key={val} x1={PAD.left} x2={W - PAD.right} y1={y} y2={y}
+                                  stroke="#E2E8F0" strokeWidth="1" strokeDasharray={val === 50 ? "3,3" : undefined} />
+                              );
+                            })}
+
+                            {/* Y-axis labels */}
+                            {yLabels.map(({ val, label }) => (
+                              <text key={val} x={PAD.left - 4} y={toY(val, 0, 100) + 3.5}
+                                textAnchor="end" fontSize="8" fill="#94A3B8">{label}</text>
+                            ))}
+
+                            {/* X-axis ticks */}
+                            {xTicks.map(({ lbl, x }) => (
+                              <text key={lbl} x={x} y={H - 4} textAnchor="middle" fontSize="8" fill="#94A3B8">{lbl}</text>
+                            ))}
+
+                            {/* Data lines per series */}
+                            {SERIES.map((s) => {
+                              // Map each point in the window to the chart x position
+                              const pathPts = pts.map((p, i) => {
+                                const val = s.fn(p);
+                                if (val == null) return null;
+                                return { x: toX(i, pts.length), y: toY(val, 0, 100), val };
+                              });
+                              // Find the last valid point for the label
+                              const lastPt = [...pathPts].reverse().find(Boolean) ?? null;
+                              return (
+                                <g key={s.key}>
+                                  <path
+                                    d={buildPath(pathPts)}
+                                    fill="none"
+                                    stroke={s.color}
+                                    strokeWidth="1.8"
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                    opacity="0.85"
+                                  />
+                                  {/* Dots on actual data points */}
+                                  {pathPts.map((pt, i) =>
+                                    pt ? (
+                                      <circle key={i} cx={pt.x} cy={pt.y} r="2.5" fill={s.color} opacity="0.9" />
+                                    ) : null
+                                  )}
+                                  {/* Score label at the last data point */}
+                                  {lastPt && (
+                                    <g>
+                                      <rect
+                                        x={lastPt.x + 4}
+                                        y={lastPt.y - 7}
+                                        width={22}
+                                        height={11}
+                                        rx={3}
+                                        fill={s.color}
+                                        opacity={0.15}
+                                      />
+                                      <text
+                                        x={lastPt.x + 15}
+                                        y={lastPt.y + 2.5}
+                                        textAnchor="middle"
+                                        fontSize="8"
+                                        fontWeight="700"
+                                        fill={s.color}
+                                      >
+                                        {Math.round(lastPt.val)}
+                                      </text>
+                                    </g>
+                                  )}
+                                </g>
+                              );
+                            })}
+
+                            {/* Today marker */}
+                            {pts.some((p) => p.date === today) && (() => {
+                              const todayIdx = pts.findIndex((p) => p.date === today);
+                              if (todayIdx < 0) return null;
+                              const x = toX(todayIdx, pts.length);
+                              return (
+                                <line x1={x} x2={x} y1={PAD.top} y2={H - PAD.bottom}
+                                  stroke="#1E293B" strokeWidth="1" strokeDasharray="3,2" opacity="0.4" />
+                              );
+                            })()}
+                          </svg>
+
+                          {/* Latest values */}
+                          <div className="mt-1.5 grid grid-cols-4 gap-1 text-[10px] text-slate-500">
+                            <div>CI: <span className="font-medium text-slate-700">{last?.checkInScore != null ? Math.round(last.checkInScore) : "—"}</span></div>
+                            <div>Z: <span className="font-medium text-slate-700">{last?.zScore != null ? last.zScore.toFixed(1) : "—"}</span></div>
+                            <div>Sor: <span className="font-medium text-slate-700">{last?.soreness != null ? last.soreness : "—"}</span></div>
+                            <div>Svefn: <span className="font-medium text-slate-700">{last?.sleepQuality != null ? last.sleepQuality : "—"}</span></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════
+          VALD / CMJ TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "vald" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="VALD / CMJ testing"
+          description="See which players need a CMJ test today, track neuromuscular flags, and monitor force plate data alongside readiness scores."
+        />
+      )}
+      {dashTab === "vald" && isAtLeastPro && (
+        <div className="space-y-4">
+          <ValdAlertsPanel teamId={planPreview?.team_id ?? rows.find((row) => row.team_id)?.team_id ?? null} date={today} />
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          STRENGTH / VBT TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "strength" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Strength / VBT"
+          description="See each player's personal bests per exercise, today's performance vs PB, estimated 1RM, and VBT readiness signals."
+        />
+      )}
+      {dashTab === "strength" && isAtLeastPro && (
+        <CoachStrengthVbtTab teamId={coachTeamId} date={today} lang={lang} />
+      )}
+
+      {/* ══════════════════════════════════════════
+          TREND TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "trend" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Player Trends"
+          description="30, 60 and 90-day readiness, STEN, training action history and GPS load per player."
+        />
+      )}
+      {dashTab === "trend" && isAtLeastPro && (
+        <PlayerTrendTab
+          coachTeamId={coachTeamId}
+          today={today}
+          teamSport={teamSport}
+          lang={lang}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════
+          INJURIES / RTP TAB
+      ══════════════════════════════════════════ */}
+      {dashTab === "rtp" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName="Injuries / Return-to-Play"
+          description="Record injuries, track rehabilitation stages, and manage return-to-play progression per player."
+        />
+      )}
+      {dashTab === "rtp" && isAtLeastPro && (
+        <RtpTab coachTeamId={coachTeamId} lang={lang} />
+      )}
+
+      <ExplainabilityDrawer
+        open={!!piDrawerDecision}
+        onClose={() => {
+          setPiDrawerDecision(null);
+          setPiDrawerPlayerName(null);
+        }}
+        playerName={piDrawerPlayerName}
+        decision={piDrawerDecision}
+      />
+
+      <Card className="shadow-sm">
+        <CardContent className="p-4 text-sm">
+          <span className="font-semibold">Workflow:</span> Byrja á 🔴/🟡 → staðfesta með GPS/CMJ → velja minnsta virka skammt.
+        </CardContent>
+      </Card>
+
+      {/* PWA bottom padding */}
+      {isPwa && <div style={{ height: "calc(68px + env(safe-area-inset-bottom))" }} />}
+
+      {/* PWA bottom navigation */}
+      {isPwa && <CoachPwaBottomNav activeTab={dashTab} onChange={setDashTab} lang={lang} />}
+    </div>
+  );
+}
+
+// ─── Coach PWA Bottom Navigation ────────────────────────────────────────────
+
+function CoachPwaBottomNav({
+  activeTab,
+  onChange,
+  lang,
+}: {
+  activeTab: string;
+  onChange: (tab: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
+  lang: "IS" | "EN";
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const PRIMARY: Array<{
+    key: "today" | "squad" | "load" | "gps" | "md";
+    labelIS: string;
+    labelEN: string;
+    icon: (active: boolean) => React.ReactNode;
+  }> = [
+    {
+      key: "today", labelIS: "Í dag", labelEN: "Today",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12L12 4l9 8" /><path d="M9 21V12h6v9" />
+        </svg>
+      ),
+    },
+    {
+      key: "squad", labelIS: "Hópur", labelEN: "Squad",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      key: "load", labelIS: "Álag", labelEN: "Load",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+      ),
+    },
+    {
+      key: "gps", labelIS: "GPS", labelEN: "GPS",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
+        </svg>
+      ),
+    },
+    {
+      key: "md", labelIS: "MD", labelEN: "MD",
+      icon: (a) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+        </svg>
+      ),
+    },
+  ];
+
+  const MORE_TABS: Array<{
+    key: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+    labelIS: string;
+    labelEN: string;
+  }> = [
+    { key: "intel",      labelIS: "Greind",         labelEN: "Intelligence" },
+    { key: "drills",     labelIS: "Session",        labelEN: "Session" },
+    { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
+    { key: "vald",       labelIS: "VALD / CMJ",     labelEN: "VALD / CMJ" },
+    { key: "strength",   labelIS: "Styrkur / VBT",  labelEN: "Strength / VBT" },
+    { key: "trend",      labelIS: "Þróun",          labelEN: "Trends" },
+    { key: "rtp",        labelIS: "Meiðsli / RTP",  labelEN: "Injuries / RTP" },
+  ];
+
+  const isMoreActive = MORE_TABS.some((t) => t.key === activeTab);
+
+  return (
+    <>
+      {/* More menu overlay */}
+      {moreOpen && (
+        <div
+          className="fixed inset-0 z-[998] bg-black/30"
+          onClick={() => setMoreOpen(false)}
+        />
+      )}
+
+      {/* More menu panel */}
+      {moreOpen && (
+        <div className="fixed bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-[999] mx-4 mb-1 rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="grid grid-cols-2 gap-px p-2">
+            {MORE_TABS.map((t) => {
+              const isActive = activeTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => { onChange(t.key); setMoreOpen(false); }}
+                  className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors text-left ${
+                    isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {lang === "IS" ? t.labelIS : t.labelEN}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom nav bar */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-[1000] flex items-stretch border-t border-slate-200 bg-white/95 backdrop-blur-sm"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {PRIMARY.map(({ key, labelIS, labelEN, icon }) => {
+          const isActive = activeTab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { onChange(key); setMoreOpen(false); }}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                isActive ? "text-slate-900" : "text-slate-400"
+              }`}
+            >
+              {icon(isActive)}
+              <span className={`text-[9px] font-semibold tracking-wide ${isActive ? "text-slate-900" : "text-slate-400"}`}>
+                {(lang === "IS" ? labelIS : labelEN).toUpperCase()}
+              </span>
+            </button>
+          );
+        })}
+
+        {/* More button */}
+        <button
+          onClick={() => setMoreOpen(!moreOpen)}
+          className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+            isMoreActive ? "text-slate-900" : "text-slate-400"
+          }`}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={isMoreActive ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /><circle cx="12" cy="19" r="1.5" fill="currentColor" />
+          </svg>
+          <span className={`text-[9px] font-semibold tracking-wide ${isMoreActive ? "text-slate-900" : "text-slate-400"}`}>
+            {lang === "IS" ? "MEIRA" : "MORE"}
+          </span>
+        </button>
+      </nav>
+    </>
+  );
+}
