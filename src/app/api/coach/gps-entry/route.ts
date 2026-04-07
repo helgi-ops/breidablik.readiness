@@ -85,7 +85,7 @@ export async function POST(req: Request) {
           activity_count: 1,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "player_id,date" }
+        { onConflict: "player_id,date,source" }
       );
 
     if (upsertError) {

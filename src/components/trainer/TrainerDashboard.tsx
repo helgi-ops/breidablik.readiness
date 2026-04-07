@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
+import PlanBuilder from "./PlanBuilder";
+import PlanAssigner from "./PlanAssigner";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -61,18 +63,42 @@ interface Invitation {
   created_at: string;
 }
 
-type TrainerTab = "clients" | "invitations";
+interface PlanTemplate {
+  id: string;
+  name: string;
+  plan_type: "strength" | "endurance" | "mixed";
+  duration_weeks: number;
+  sessions_per_week: number;
+  readiness_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PlanAssignment {
+  id: string;
+  client_id: string;
+  client_name: string;
+  template_id: string;
+  template_name: string;
+  start_date: string;
+  status: string;
+}
+
+type TrainerTab = "clients" | "invitations" | "plans";
 
 /* ── Component ───────────────────────────────────────── */
 
 export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [lang] = useLang();
   const ct = TRAINER_COPY[lang as keyof typeof TRAINER_COPY] ?? TRAINER_COPY.IS;
+  const isIS = lang === "IS";
   // supabase is imported from @/lib/supabaseClient
 
   const [tab, setTab] = useState<TrainerTab>("clients");
   const [clients, setClients] = useState<Client[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [templates, setTemplates] = useState<PlanTemplate[]>([]);
+  const [assignments, setAssignments] = useState<PlanAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
@@ -83,14 +109,25 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [inviteMsg, setInviteMsg] = useState("");
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
+  // Plans modal
+  const [showPlanBuilder, setShowPlanBuilder] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showPlanAssigner, setShowPlanAssigner] = useState(false);
+  const [assigningTemplate, setAssigningTemplate] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   /* ── Fetch clients ──────────────────────────────────── */
+
+  const qs = `?team_id=${encodeURIComponent(teamId)}`;
 
   const fetchClients = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const res = await fetch("/api/trainer/clients", {
+      const res = await fetch(`/api/trainer/clients${qs}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
@@ -100,14 +137,14 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, qs]);
 
   const fetchInvitations = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const res = await fetch("/api/trainer/invitations", {
+      const res = await fetch(`/api/trainer/invitations${qs}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
@@ -115,12 +152,44 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     } catch {
       // silent
     }
-  }, [supabase]);
+  }, [supabase, qs]);
+
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch(`/api/trainer/templates${qs}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.templates) setTemplates(json.templates);
+    } catch {
+      // silent
+    }
+  }, [supabase, qs]);
+
+  const fetchAssignments = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch(`/api/trainer/plans${qs}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.assignments) setAssignments(json.assignments);
+    } catch {
+      // silent
+    }
+  }, [supabase, qs]);
 
   useEffect(() => {
     fetchClients();
     fetchInvitations();
-  }, [fetchClients, fetchInvitations]);
+    fetchTemplates();
+    fetchAssignments();
+  }, [fetchClients, fetchInvitations, fetchTemplates, fetchAssignments]);
 
   /* ── Send invitation ────────────────────────────────── */
 
@@ -132,7 +201,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const res = await fetch("/api/trainer/invitations", {
+      const res = await fetch(`/api/trainer/invitations${qs}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -166,7 +235,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return;
 
-    await fetch(`/api/trainer/invitations?id=${id}`, {
+    await fetch(`/api/trainer/invitations?id=${id}&team_id=${encodeURIComponent(teamId)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
@@ -217,6 +286,26 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     return ct.plan[type as keyof typeof ct.plan] ?? type;
   }
 
+  async function deleteTemplate(id: string) {
+    if (!confirm(isIS ? "Eyða þessu sniðmáti?" : "Delete this template?")) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch(`/api/trainer/templates?id=${id}&team_id=${encodeURIComponent(teamId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (res.ok) {
+        fetchTemplates();
+      }
+    } catch {
+      // silent
+    }
+  }
+
   /* ── Render ─────────────────────────────────────────── */
 
   if (loading) {
@@ -237,7 +326,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
-        {(["clients", "invitations"] as TrainerTab[]).map((t) => (
+        {(["clients", "invitations", "plans"] as TrainerTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -493,6 +582,162 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Plans tab ─────────────────────────────────── */}
+      {tab === "plans" && (
+        <div>
+          {/* Header with create button */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold">{ct.tabs.plans}</h2>
+            <button
+              onClick={() => {
+                setEditingTemplateId(null);
+                setShowPlanBuilder(true);
+              }}
+              className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800"
+            >
+              {ct.plans.createNew}
+            </button>
+          </div>
+
+          {/* Templates section */}
+          <div className="mb-8 pb-8 border-b">
+            <h3 className="font-semibold text-sm text-gray-700 mb-4">
+              {isIS ? "Sniðmát" : "Templates"}
+            </h3>
+            {templates.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>{ct.plans.noPlan}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {templates.map((template) => (
+                  <div key={template.id} className="bg-white border rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="font-medium">{template.name}</h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {planTypeLabel(template.plan_type)} • {template.duration_weeks}{" "}
+                          {isIS ? "vika" : "weeks"} • {template.sessions_per_week}{" "}
+                          {isIS ? "setumál" : "sessions"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingTemplateId(template.id);
+                          setShowPlanBuilder(true);
+                        }}
+                        className="flex-1 px-3 py-1 text-xs border rounded hover:bg-gray-50"
+                      >
+                        {ct.plans.edit}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAssigningTemplate({ id: template.id, name: template.name });
+                          setShowPlanAssigner(true);
+                        }}
+                        className="flex-1 px-3 py-1 text-xs border rounded hover:bg-gray-50"
+                      >
+                        {ct.plans.assignPlan}
+                      </button>
+                      <button
+                        onClick={() => deleteTemplate(template.id)}
+                        className="px-3 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
+                      >
+                        {ct.plans.delete}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assignments section */}
+          <div>
+            <h3 className="font-semibold text-sm text-gray-700 mb-4">
+              {isIS ? "Virkar áætlanir" : "Active Assignments"}
+            </h3>
+            {assignments.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>{ct.plans.noPlanAssignments}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {assignments.map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="bg-white border rounded-lg p-3 flex items-center gap-4"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{assignment.client_name}</div>
+                      <div className="text-xs text-gray-500">
+                        {assignment.template_name} •{" "}
+                        {new Date(assignment.start_date).toLocaleDateString(
+                          isIS ? "is-IS" : "en-US"
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        assignment.status === "active"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {assignment.status === "active"
+                        ? isIS
+                          ? "Virk"
+                          : "Active"
+                        : isIS
+                        ? "Lokið"
+                        : "Completed"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Plan Builder Modal */}
+      {showPlanBuilder && (
+        <PlanBuilder
+          teamId={teamId}
+          templateId={editingTemplateId ?? undefined}
+          onClose={() => {
+            setShowPlanBuilder(false);
+            setEditingTemplateId(null);
+          }}
+          onSaved={() => {
+            setShowPlanBuilder(false);
+            setEditingTemplateId(null);
+            fetchTemplates();
+          }}
+        />
+      )}
+
+      {/* Plan Assigner Modal */}
+      {showPlanAssigner && assigningTemplate && (
+        <PlanAssigner
+          teamId={teamId}
+          templateId={assigningTemplate.id}
+          templateName={assigningTemplate.name}
+          onClose={() => {
+            setShowPlanAssigner(false);
+            setAssigningTemplate(null);
+          }}
+          onAssigned={() => {
+            setShowPlanAssigner(false);
+            setAssigningTemplate(null);
+            fetchAssignments();
+          }}
+        />
       )}
     </div>
   );

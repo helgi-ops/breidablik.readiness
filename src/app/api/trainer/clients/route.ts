@@ -29,28 +29,45 @@ async function requireTrainerContext(req: Request) {
   const { data: userRes, error: userErr } = await sb.auth.getUser(token);
   if (userErr || !userRes?.user?.id) throw new Error("Unauthorized");
 
+  const userId = userRes.user.id;
+
   const { data: prof } = await sb
     .from("profiles")
     .select("role, team_id")
-    .eq("id", userRes.user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   const profile = prof as AuthProfile | null;
   const role = String(profile?.role ?? "").toUpperCase();
   if (!(role === "COACH" || role === "ADMIN" || role === "STAFF"))
     throw new Error("Forbidden");
-  if (!profile?.team_id) throw new Error("No team context");
 
-  // Verify it's a personal_trainer team
+  // Accept team_id from query string (frontend sends it when switching teams)
+  const url = new URL(req.url);
+  const requestedTeamId = url.searchParams.get("team_id");
+  const effectiveTeamId = requestedTeamId || profile?.team_id;
+  if (!effectiveTeamId) throw new Error("No team context");
+
+  // Verify the coach has access to this team via coach_teams
+  if (requestedTeamId && requestedTeamId !== profile?.team_id) {
+    const { data: access } = await sb
+      .from("coach_teams")
+      .select("team_id")
+      .eq("coach_id", userId)
+      .eq("team_id", requestedTeamId)
+      .maybeSingle();
+    if (!access) throw new Error("Forbidden: no access to this team");
+  }
+
   const { data: team } = await sb
     .from("teams")
     .select("id, name, team_type, sport")
-    .eq("id", profile.team_id)
+    .eq("id", effectiveTeamId)
     .maybeSingle();
 
   return {
-    userId: userRes.user.id,
-    teamId: profile.team_id,
+    userId,
+    teamId: effectiveTeamId,
     teamType: team?.team_type ?? "club_team",
     teamName: team?.name ?? "",
   };

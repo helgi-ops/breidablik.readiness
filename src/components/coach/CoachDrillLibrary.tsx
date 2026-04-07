@@ -10,6 +10,7 @@ import {
   formatGoalColorClasses,
   checkBoutDuration,
 } from "@/lib/drill-recommendations";
+import DrillPdfImporter from "./DrillPdfImporter";
 
 // ── Football categories ──
 type FootballCategory =
@@ -214,8 +215,10 @@ export default function CoachDrillLibrary({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Drill | null>(null);
+  const [durationOverride, setDurationOverride] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showPdfImporter, setShowPdfImporter] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!teamId) return;
@@ -416,12 +419,20 @@ export default function CoachDrillLibrary({
             {drills.filter((d) => d.source === "coach").length} frá þjálfara
           </p>
         </div>
-        <button
-          onClick={openAdd}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-        >
-          + Ný drilla
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowPdfImporter(!showPdfImporter)}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            📄 Flytja inn PDF
+          </button>
+          <button
+            onClick={openAdd}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          >
+            + Ný drilla
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 rounded-lg border bg-white p-3">
@@ -459,6 +470,16 @@ export default function CoachDrillLibrary({
         />
       </div>
 
+      {showPdfImporter && (
+        <DrillPdfImporter
+          teamId={teamId}
+          onImported={() => {
+            setShowPdfImporter(false);
+            refresh();
+          }}
+        />
+      )}
+
       {error && (
         <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
           {error}
@@ -480,7 +501,7 @@ export default function CoachDrillLibrary({
                   {list.map((d) => (
                     <div
                       key={d.id}
-                      onClick={() => setDetail(d)}
+                      onClick={() => { setDetail(d); setDurationOverride(null); }}
                       className="cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition hover:border-blue-400 hover:shadow-md"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -774,24 +795,142 @@ export default function CoachDrillLibrary({
                 </Section>
               )}
 
-              <Section title="Tími og vegalengd">
-                <DetailRow label="Duration" value={detail.duration_min ? `${n(detail.duration_min, 1)} mín` : "–"} />
-                <DetailRow label="Distance" value={detail.distance_m ? `${n(detail.distance_m, 0)} m` : "–"} />
-              </Section>
+              {/* ── Duration scaler ── */}
+              {(() => {
+                const baseDur = detail.duration_min;
+                const scale = (baseDur && baseDur > 0 && durationOverride && durationOverride > 0)
+                  ? durationOverride / baseDur
+                  : 1;
+                const isScaled = scale !== 1;
+                const sv = (v: number | null, dec: number) =>
+                  v != null ? n(Math.round(v * scale * (10 ** dec)) / (10 ** dec), dec) : "–";
+                return (
+                  <>
+                    <Section title="Tími og vegalengd">
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-sm text-gray-600">Duration</span>
+                        <div className="flex items-center gap-2">
+                          {baseDur ? (
+                            <>
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                className="w-20 rounded border px-2 py-0.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                                value={durationOverride ?? baseDur ?? ""}
+                                onChange={(e) => {
+                                  const v = parseFloat(e.target.value);
+                                  if (!isNaN(v) && v > 0) setDurationOverride(v);
+                                  else if (e.target.value === "") setDurationOverride(null);
+                                }}
+                              />
+                              <span className="text-sm text-gray-500">mín</span>
+                              {isScaled && (
+                                <button
+                                  onClick={() => setDurationOverride(null)}
+                                  className="ml-1 text-xs text-gray-400 hover:text-gray-600"
+                                  title="Endurstilla"
+                                >↺</button>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-sm text-gray-400">–</span>
+                          )}
+                        </div>
+                      </div>
+                      {isScaled && (
+                        <div className="mb-1 rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                          Skalað {n(scale * 100, 0)}% af upprunalegu ({n(baseDur!, 1)} mín → {n(durationOverride!, 1)} mín)
+                        </div>
+                      )}
+                      <DetailRow
+                        label="Distance"
+                        value={detail.distance_m ? (
+                          isScaled
+                            ? `${sv(detail.distance_m, 0)} m (↔ ${n(detail.distance_m, 0)})`
+                            : `${n(detail.distance_m, 0)} m`
+                        ) : "–"}
+                      />
+                    </Section>
 
-              <Section title={isFootball ? "Álag (GPS / Catapult)" : "Álag (Catapult Indoor)"}>
-                <DetailRow label="Player Load (PL)" value={n(detail.player_load, 1)} />
-                <DetailRow label="PL / mín" value={n(detail.player_load_per_min, 2)} />
-                {isFootball && <DetailRow label="HIR total" value={detail.hir_total ? `${n(detail.hir_total, 0)} m` : "–"} />}
-                {isFootball && <DetailRow label="Vel B5 (>19.8 km/h)" value={detail.vel_b5 ? `${n(detail.vel_b5, 0)} m` : "–"} />}
-                {isFootball && <DetailRow label="Vel B6 (>25.2 km/h)" value={detail.vel_b6 ? `${n(detail.vel_b6, 0)} m` : "–"} />}
-                <DetailRow label="Accel total" value={n(detail.accel_total, 0)} />
-                <DetailRow label="Decel total" value={n(detail.decel_total, 0)} />
-                <DetailRow label={isFootball ? "Accel B2–3" : "IMA Accel high"} value={n(detail.accel_b23, 0)} />
-                <DetailRow label={isFootball ? "Decel B2–3" : "IMA Decel high"} value={n(detail.decel_b23, 0)} />
-                {!isFootball && <DetailRow label="IMA COD total" value={n(detail.ima_cod_total, 0)} />}
-                {!isFootball && <DetailRow label="High-IMA (≥3.5 m/s²)" value={n(detail.high_ima, 0)} />}
-              </Section>
+                    <Section title={isFootball ? "Álag (GPS / Catapult)" : "Álag (Catapult Indoor)"}>
+                      <DetailRow
+                        label="Player Load (PL)"
+                        value={detail.player_load != null ? (
+                          isScaled
+                            ? `${sv(detail.player_load, 1)} (↔ ${n(detail.player_load, 1)})`
+                            : n(detail.player_load, 1)
+                        ) : "–"}
+                      />
+                      <DetailRow label="PL / mín" value={n(detail.player_load_per_min, 2)} />
+                      {isFootball && (
+                        <DetailRow
+                          label="HIR total"
+                          value={detail.hir_total ? (
+                            isScaled
+                              ? `${sv(detail.hir_total, 0)} m (↔ ${n(detail.hir_total, 0)})`
+                              : `${n(detail.hir_total, 0)} m`
+                          ) : "–"}
+                        />
+                      )}
+                      {isFootball && (
+                        <DetailRow
+                          label="Vel B5 (>19.8 km/h)"
+                          value={detail.vel_b5 ? (
+                            isScaled
+                              ? `${sv(detail.vel_b5, 0)} m (↔ ${n(detail.vel_b5, 0)})`
+                              : `${n(detail.vel_b5, 0)} m`
+                          ) : "–"}
+                        />
+                      )}
+                      {isFootball && (
+                        <DetailRow
+                          label="Vel B6 (>25.2 km/h)"
+                          value={detail.vel_b6 ? (
+                            isScaled
+                              ? `${sv(detail.vel_b6, 0)} m (↔ ${n(detail.vel_b6, 0)})`
+                              : `${n(detail.vel_b6, 0)} m`
+                          ) : "–"}
+                        />
+                      )}
+                      <DetailRow
+                        label="Accel total"
+                        value={detail.accel_total != null ? (
+                          isScaled
+                            ? `${sv(detail.accel_total, 0)} (↔ ${n(detail.accel_total, 0)})`
+                            : n(detail.accel_total, 0)
+                        ) : "–"}
+                      />
+                      <DetailRow
+                        label="Decel total"
+                        value={detail.decel_total != null ? (
+                          isScaled
+                            ? `${sv(detail.decel_total, 0)} (↔ ${n(detail.decel_total, 0)})`
+                            : n(detail.decel_total, 0)
+                        ) : "–"}
+                      />
+                      <DetailRow
+                        label={isFootball ? "Accel B2–3" : "IMA Accel high"}
+                        value={detail.accel_b23 != null ? (
+                          isScaled
+                            ? `${sv(detail.accel_b23, 0)} (↔ ${n(detail.accel_b23, 0)})`
+                            : n(detail.accel_b23, 0)
+                        ) : "–"}
+                      />
+                      <DetailRow
+                        label={isFootball ? "Decel B2–3" : "IMA Decel high"}
+                        value={detail.decel_b23 != null ? (
+                          isScaled
+                            ? `${sv(detail.decel_b23, 0)} (↔ ${n(detail.decel_b23, 0)})`
+                            : n(detail.decel_b23, 0)
+                        ) : "–"}
+                      />
+                      {!isFootball && <DetailRow label="IMA COD total" value={detail.ima_cod_total != null ? (isScaled ? `${sv(detail.ima_cod_total, 0)} (↔ ${n(detail.ima_cod_total, 0)})` : n(detail.ima_cod_total, 0)) : "–"} />}
+                      {!isFootball && <DetailRow label="High-IMA (≥3.5 m/s²)" value={detail.high_ima != null ? (isScaled ? `${sv(detail.high_ima, 0)} (↔ ${n(detail.high_ima, 0)})` : n(detail.high_ima, 0)) : "–"} />}
+                    </Section>
+                  </>
+                );
+              })()}
 
               {!isFootball && (
                 <Section title="Jumps (Catapult BMP)">

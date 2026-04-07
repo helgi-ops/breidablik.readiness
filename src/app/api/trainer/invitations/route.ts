@@ -22,17 +22,36 @@ async function requireCoach(req: Request) {
   const { data: userRes, error: userErr } = await sb.auth.getUser(token);
   if (userErr || !userRes?.user?.id) throw new Error("Unauthorized");
 
+  const userId = userRes.user.id;
+
   const { data: prof } = await sb
     .from("profiles")
     .select("role, team_id")
-    .eq("id", userRes.user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   const role = String((prof as { role?: string })?.role ?? "").toUpperCase();
   if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) throw new Error("Forbidden");
-  if (!(prof as { team_id?: string })?.team_id) throw new Error("No team context");
 
-  return { userId: userRes.user.id, teamId: (prof as { team_id: string }).team_id };
+  // Accept team_id from query string (frontend sends it when switching teams)
+  const url = new URL(req.url);
+  const requestedTeamId = url.searchParams.get("team_id");
+  const profileTeamId = (prof as { team_id?: string })?.team_id;
+  const effectiveTeamId = requestedTeamId || profileTeamId;
+  if (!effectiveTeamId) throw new Error("No team context");
+
+  // Verify the coach has access to this team via coach_teams
+  if (requestedTeamId && requestedTeamId !== profileTeamId) {
+    const { data: access } = await sb
+      .from("coach_teams")
+      .select("team_id")
+      .eq("coach_id", userId)
+      .eq("team_id", requestedTeamId)
+      .maybeSingle();
+    if (!access) throw new Error("Forbidden: no access to this team");
+  }
+
+  return { userId, teamId: effectiveTeamId };
 }
 
 /* ── GET: list invitations ─────────────────────────── */

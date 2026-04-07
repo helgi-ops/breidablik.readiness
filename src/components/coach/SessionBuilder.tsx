@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { downloadSessionPdf, type SessionPdfPlanMetric } from "./SessionPdf";
 import { estimateSsgIntensity, bandColorClasses } from "@/lib/ssg-intensity";
@@ -230,6 +230,10 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
   const [hydrated, setHydrated] = useState(false);
   const [detailDrill, setDetailDrill] = useState<Drill | null>(null);
 
+  // Drag & drop state for reordering items
+  const dragItemRef = useRef<string | null>(null);
+  const [dragOverUid, setDragOverUid] = useState<string | null>(null);
+
   // Restore session state from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -414,6 +418,22 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
       [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
       return copy;
     });
+  }
+
+  function handleDrop(targetUid: string) {
+    const fromUid = dragItemRef.current;
+    if (!fromUid || fromUid === targetUid) return;
+    setItems((prev) => {
+      const fromIdx = prev.findIndex((i) => i.uid === fromUid);
+      const toIdx = prev.findIndex((i) => i.uid === targetUid);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      const copy = [...prev];
+      const [moved] = copy.splice(fromIdx, 1);
+      copy.splice(toIdx, 0, moved);
+      return copy;
+    });
+    dragItemRef.current = null;
+    setDragOverUid(null);
   }
 
   function clearSession() {
@@ -1015,8 +1035,20 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                 const pl = (d.player_load ?? 0) * it.sets;
                 const dur = (d.duration_min ?? 0) * it.sets;
                 return (
-                  <li key={it.uid} className="flex items-start gap-2 p-2.5">
-                    <div className="flex flex-col items-center gap-0.5 pt-0.5">
+                  <li
+                    key={it.uid}
+                    draggable
+                    onDragStart={() => { dragItemRef.current = it.uid; }}
+                    onDragEnd={() => { dragItemRef.current = null; setDragOverUid(null); }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverUid(it.uid); }}
+                    onDrop={(e) => { e.preventDefault(); handleDrop(it.uid); }}
+                    className={`flex items-start gap-2 p-2.5 transition-colors ${
+                      dragOverUid === it.uid && dragItemRef.current !== it.uid
+                        ? "bg-blue-50 border-t-2 border-blue-400"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-0.5 pt-0.5 cursor-grab active:cursor-grabbing">
                       <button
                         onClick={() => moveItem(it.uid, -1)}
                         disabled={idx === 0}
