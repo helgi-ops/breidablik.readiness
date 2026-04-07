@@ -90,6 +90,40 @@ import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import TrainerDashboard from "@/components/trainer/TrainerDashboard";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
+
+/* ── Error boundary for TrainerDashboard ──────────────── */
+class TrainerErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[TrainerDashboard crash]", error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center">
+          <p className="text-red-600 font-medium mb-2">Villa kom upp</p>
+          <p className="text-sm text-gray-500">{this.state.error?.message}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="mt-4 px-4 py-2 bg-black text-white rounded-lg text-sm"
+          >
+            Reyna aftur
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
 import CoachMdComparisonCard from "@/components/dashboard/CoachMdComparisonCard";
@@ -2401,13 +2435,14 @@ export default function CoachPage() {
 
     // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
     if (resolvedTeamId) {
-      supabase.from("teams").select("sport, gps_provider, team_type").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
-        setTeamSport(String((data as any)?.sport ?? "").toLowerCase() || null);
-        setTeamType(String((data as any)?.team_type ?? "club_team"));
-        const gp = String((data as any)?.gps_provider ?? "catapult").toLowerCase();
+      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type").eq("id", resolvedTeamId).maybeSingle();
+      if (teamData) {
+        setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
+        setTeamType(String((teamData as any)?.team_type ?? "club_team"));
+        const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
         if (gp === "statsport" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
-      });
+      }
     }
 
     const r = String(role ?? "").toLowerCase();
@@ -6167,7 +6202,9 @@ export default function CoachPage() {
         <div className="flex justify-end px-4 pt-2">
           <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
         </div>
-        <TrainerDashboard teamId={coachTeamId} />
+        <TrainerErrorBoundary>
+          <TrainerDashboard teamId={coachTeamId} />
+        </TrainerErrorBoundary>
       </div>
     );
   }

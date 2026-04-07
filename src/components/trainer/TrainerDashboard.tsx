@@ -178,7 +178,20 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
-      if (json.assignments) setAssignments(json.assignments);
+      if (json.plans) {
+        // Map plans API response to PlanAssignment shape
+        setAssignments(
+          (json.plans as any[]).map((p: any) => ({
+            id: p.id,
+            client_id: p.playerId,
+            client_name: p.playerName,
+            template_id: "",
+            template_name: p.planName,
+            start_date: p.startDate,
+            status: p.status,
+          }))
+        );
+      }
     } catch {
       // silent
     }
