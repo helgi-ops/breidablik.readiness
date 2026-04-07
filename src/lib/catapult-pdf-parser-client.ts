@@ -4,17 +4,15 @@
  * Uses pdf.js (loaded from CDN) to extract text from the PDF,
  * then regex-parses the drill summary rows.
  *
- * Supports TWO Catapult PDF formats:
+ * Supports the Breiðablik Catapult "Drill breakdown" PDF format:
  *
- * FORMAT A (old) — Page 1 main table has 9+ numeric columns:
- *   Avg Dist | Vel B5 | Vel B6 | HIR Dist | Avg PL | Acc B2-3 Tot Effs | Tot As | Decel B2-3 Tot Effs | Tot Ds
- *   Plus a sub-table with 2 columns: Acc B2-3 Avg Effs | Decel B2-3 Avg Effs
+ * PAGE 1 — 8 columns:
+ *   Avg Dist (m) | Vel B5 Avg Dist (m) | Vel B6 Avg Dist (m) | HIR Dist (m) |
+ *   Max Vel (km/h) | Avg PL | Acc B2-3 Avg Effs | Decel B2-3 Avg Effs
  *
- * FORMAT B (new) — Page 1 has 7 columns (some may be "n/a"):
- *   Avg Dist | Vel B5+ Avg Eff Dist | Vel B6+ Avg Eff Dist | HIR Dist | Avg PL | Acc B2-3 Avg Effs | Decel B2-3 Avg Effs
- *
- * Both formats share Page 2 with 8 columns:
- *   Avg Dist | Vel B5 Avg Dist | Vel B6 Avg Dist | HIR Dist | Max Vel | Avg PL | Tot As | Tot Ds
+ * PAGE 2 — 8 columns:
+ *   Avg Dist (m) | Vel B5 Avg Dist (m) | Vel B6 Avg Dist (m) | HIR Dist (m) |
+ *   Max Vel (km/h) | Avg PL (Sess) | Tot As (#) | Tot Ds (#)
  *
  * This runs in the browser — no server-side dependencies needed.
  */
@@ -23,19 +21,19 @@ export interface ParsedDrillClient {
   drill_name: string;
   date: string; // YYYY-MM-DD
   distance_m: number | null;
-  vel_b5: number | null; // Total Vel B5 distance (from page 2)
-  vel_b6: number | null; // Total Vel B6 distance (from page 2)
-  vel_b5_avg: number | null; // Avg Vel B5 Eff distance per player (from Format B page 1)
-  vel_b6_avg: number | null; // Avg Vel B6 Eff distance per player (from Format B page 1)
+  vel_b5: number | null; // Vel B5 Avg Dist
+  vel_b6: number | null; // Vel B6 Avg Dist
+  vel_b5_avg: number | null;
+  vel_b6_avg: number | null;
   hir_dist_m: number | null;
   player_load: number | null;
-  accel_b23_total: number | null; // Acc B2-3 Tot Effs (Format A main table)
-  decel_b23_total: number | null; // Decel B2-3 Tot Effs (Format A main table)
-  accel_b23_avg: number | null; // Acc B2-3 Avg Effs per session (Format A sub-table or Format B main)
-  decel_b23_avg: number | null; // Decel B2-3 Avg Effs per session (Format A sub-table or Format B main)
-  accel_total: number | null; // Tot As (#) — from page 2
-  decel_total: number | null; // Tot Ds (#) — from page 2
-  max_velocity: number | null; // Max Vel km/h — from page 2
+  accel_b23_total: number | null;
+  decel_b23_total: number | null;
+  accel_b23_avg: number | null; // Acc B2-3 Avg Effs (page 1)
+  decel_b23_avg: number | null; // Decel B2-3 Avg Effs (page 1)
+  accel_total: number | null; // Tot As (#) (page 2)
+  decel_total: number | null; // Tot Ds (#) (page 2)
+  max_velocity: number | null; // Max Vel km/h
 }
 
 // Dynamically load pdf.js from CDN
@@ -169,7 +167,12 @@ function isHeaderLine(line: string): boolean {
 
 /**
  * Parse a Catapult "Drill breakdown" PDF in the browser.
- * Handles both Format A and Format B automatically.
+ *
+ * Page 1 data rows have 8 values:
+ *   dist, velB5, velB6, hirDist, maxVel, pl, accB23Avg, decB23Avg
+ *
+ * Page 2 data rows have 8 values:
+ *   dist, velB5, velB6, hirDist, maxVel, pl, totAs, totDs
  */
 export async function parseCatapultDrillPdfClient(
   file: File
@@ -187,49 +190,25 @@ export async function parseCatapultDrillPdfClient(
 
   const lines = text.split("\n");
 
-  // Regex for data rows: name followed by values (numbers or "n/a")
+  // Regex for data rows: name followed by numeric values
   const dataRowRe =
     /^([A-Za-zÀ-ÿÞþÐð0-9][\w\sÀ-ÿÞþÐð+v/.·\-]*?)\s{2,}([\w/.]+(?:\s+[\w/.]+)*)\s*$/;
 
   const drills: Record<string, ParsedDrillClient> = {};
 
-  // Detect page 1 format by scanning headers before PAGE 2
-  // Format A: has "Tot Effs" or "Tot As" in page 1 headers (9+ cols, tot+avg separate)
-  // Format B: has "Avg Eff Dist" but NOT "Max Vel" in page 1 headers
-  // Format C: has "Max Vel" AND "Avg Effs" in page 1 headers (8 cols)
-  let page1HasMaxVel = false;
-  let page1HasTotEffs = false;
-  for (const raw of lines) {
-    if (raw.includes("PAGE 2") || raw.includes("PREVIEW")) break;
-    if (/Max\s+Vel/i.test(raw)) page1HasMaxVel = true;
-    if (/Tot\s+Effs/i.test(raw) || /Tot\s+As/i.test(raw)) page1HasTotEffs = true;
-  }
-  // Format A: page1HasTotEffs (9+ cols)
-  // Format C: page1HasMaxVel && !page1HasTotEffs (8 cols with maxvel)
-  // Format B: !page1HasMaxVel && !page1HasTotEffs (7 cols without maxvel)
-  const page1Format: "A" | "B" | "C" = page1HasTotEffs ? "A" : page1HasMaxVel ? "C" : "B";
-
   let inPage2 = false;
-  let inSubTable = false; // Format A: the Acc B2-3 Avg / Decel B2-3 Avg sub-table
 
   for (const raw of lines) {
     const line = raw.trimEnd();
     if (!line.trim()) continue;
 
-    // Detect page transitions
+    // Detect page 2 transition
     if (
       line.includes("PREVIEW") ||
       line.includes("--- PAGE 2") ||
       line.includes("PAGE 2 OF")
     ) {
       inPage2 = true;
-      inSubTable = false;
-      continue;
-    }
-
-    // Detect Format A sub-table header: "Acc B2-3       Decel"
-    if (!inPage2 && /Acc\s+B2-3\s+Decel/i.test(line)) {
-      inSubTable = true;
       continue;
     }
 
@@ -244,13 +223,18 @@ export async function parseCatapultDrillPdfClient(
     const vals = m[2].trim().split(/\s+/);
 
     // Skip if name looks like a header
-    if (/^(SESSION|AVG|BREI|Vel|HIR|Tot|Max|Acc|Decel|PAGE|Powered)/i.test(name))
+    if (
+      /^(SESSION|AVG|BREI|Vel|HIR|Tot|Max|Acc|Decel|PAGE|Powered)/i.test(name)
+    )
       continue;
 
-    // ── Page 2 (same for both formats): 8 numeric values ──
-    // dist, velB5, velB6, hirDist, maxVel, pl, totAs, totDs
-    if (inPage2 && vals.length >= 8) {
-      const nums = vals.map(safeNum);
+    // Need at least 6 values for a valid data row
+    if (vals.length < 6) continue;
+
+    const nums = vals.map(safeNum);
+
+    if (inPage2) {
+      // ── Page 2: dist, velB5, velB6, hirDist, maxVel, pl, totAs, totDs ──
       if (!drills[name]) {
         drills[name] = {
           drill_name: name,
@@ -267,59 +251,20 @@ export async function parseCatapultDrillPdfClient(
           decel_b23_total: null,
           accel_b23_avg: null,
           decel_b23_avg: null,
-          accel_total: nums[6],
-          decel_total: nums[7],
+          accel_total: nums[6] ?? null,
+          decel_total: nums[7] ?? null,
         };
       } else {
-        // Merge page 2 data into existing drill
-        drills[name].vel_b5 = nums[1];
-        drills[name].vel_b6 = nums[2];
-        drills[name].max_velocity = nums[4];
-        drills[name].accel_total = nums[6];
-        drills[name].decel_total = nums[7];
+        // Merge page 2 totals into existing drill from page 1
+        drills[name].accel_total = nums[6] ?? null;
+        drills[name].decel_total = nums[7] ?? null;
+        // Page 2 also has maxVel, velB5, velB6 — use as fallback
+        if (drills[name].max_velocity == null) drills[name].max_velocity = nums[4];
+        if (drills[name].vel_b5 == null) drills[name].vel_b5 = nums[1];
+        if (drills[name].vel_b6 == null) drills[name].vel_b6 = nums[2];
       }
-      continue;
-    }
-
-    // ── Page 1: Format A sub-table (2 values) ──
-    if (inSubTable && !inPage2 && vals.length === 2) {
-      const nums = vals.map(safeNum);
-      if (drills[name]) {
-        drills[name].accel_b23_avg = nums[0];
-        drills[name].decel_b23_avg = nums[1];
-      }
-      continue;
-    }
-
-    // ── Page 1: Format A main table (9+ numeric values) ──
-    // dist, vb5, vb6, hir, pl, accB23Tot, totAs, decB23Tot, totDs
-    if (!inPage2 && !inSubTable && page1Format === "A" && vals.length >= 9) {
-      const nums = vals.map(safeNum);
-      drills[name] = {
-        drill_name: name,
-        date: sessionDate,
-        distance_m: nums[0],
-        vel_b5: nums[1],
-        vel_b6: nums[2],
-        vel_b5_avg: null,
-        vel_b6_avg: null,
-        hir_dist_m: nums[3],
-        player_load: nums[4],
-        accel_b23_total: nums[5],
-        accel_total: nums[6],
-        decel_b23_total: nums[7],
-        decel_total: nums[8],
-        accel_b23_avg: null,
-        decel_b23_avg: null,
-        max_velocity: null,
-      };
-      continue;
-    }
-
-    // ── Page 1: Format C (8 values with maxVel at position 4) ──
-    // dist, velB5, velB6, hirDist, maxVel, pl, accB23Avg, decB23Avg
-    if (!inPage2 && !inSubTable && page1Format === "C" && vals.length >= 7) {
-      const nums = vals.map(safeNum);
+    } else {
+      // ── Page 1: dist, velB5, velB6, hirDist, maxVel, pl, accB23Avg, decB23Avg ──
       drills[name] = {
         drill_name: name,
         date: sessionDate,
@@ -333,37 +278,11 @@ export async function parseCatapultDrillPdfClient(
         player_load: nums[5],
         accel_b23_total: null,
         decel_b23_total: null,
-        accel_b23_avg: nums[6],
+        accel_b23_avg: nums[6] ?? null,
         decel_b23_avg: nums[7] ?? null,
-        accel_total: null, // Will be filled from page 2
-        decel_total: null, // Will be filled from page 2
+        accel_total: null, // Filled from page 2
+        decel_total: null, // Filled from page 2
       };
-      continue;
-    }
-
-    // ── Page 1: Format B main table (6-7 values, may include "n/a") ──
-    // dist, velB5AvgEff, velB6AvgEff, hirDist, pl, accB23Avg, decB23Avg
-    if (!inPage2 && !inSubTable && page1Format === "B" && vals.length >= 6 && vals.length <= 8) {
-      const nums = vals.map(safeNum);
-      drills[name] = {
-        drill_name: name,
-        date: sessionDate,
-        distance_m: nums[0],
-        vel_b5: null, // Will be filled from page 2
-        vel_b6: null, // Will be filled from page 2
-        vel_b5_avg: nums[1], // Avg eff distance per player
-        vel_b6_avg: nums[2], // Avg eff distance per player (can be null for "n/a")
-        hir_dist_m: nums[3],
-        player_load: nums[4],
-        accel_b23_total: null, // Not in Format B page 1
-        decel_b23_total: null,
-        accel_b23_avg: nums[5],
-        decel_b23_avg: nums[6] ?? null,
-        accel_total: null, // Will be filled from page 2
-        decel_total: null, // Will be filled from page 2
-        max_velocity: null, // Will be filled from page 2
-      };
-      continue;
     }
   }
 
