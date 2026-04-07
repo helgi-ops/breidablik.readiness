@@ -15,10 +15,12 @@ export interface ParsedDrillClient {
   vel_b6: number | null;
   hir_dist_m: number | null;
   player_load: number | null;
-  accel_b23: number | null;
-  decel_b23: number | null;
-  accel_total: number | null;
-  decel_total: number | null;
+  accel_b23_total: number | null; // Acc B2-3 Tot Effs (from main table)
+  decel_b23_total: number | null; // Decel B2-3 Tot Effs (from main table)
+  accel_b23_avg: number | null; // Acc B2-3 Avg Effs per session (from sub-table)
+  decel_b23_avg: number | null; // Decel B2-3 Avg Effs per session (from sub-table)
+  accel_total: number | null; // Tot As (#)
+  decel_total: number | null; // Tot Ds (#)
   max_velocity: number | null;
 }
 
@@ -128,6 +130,16 @@ async function extractTextFromPdf(arrayBuffer: ArrayBuffer): Promise<string> {
 
 /**
  * Parse a Catapult "Drill breakdown" PDF in the browser.
+ *
+ * Page 1 has two tables:
+ *   Main table (9 number columns):
+ *     Avg Dist | Vel B5 | Vel B6 | HIR Dist | Avg PL | Acc B2-3 Tot Effs | Tot As (#) | Decel B2-3 Tot Effs | Tot Ds (#)
+ *
+ *   Sub-table (2 number columns):
+ *     Acc B2-3 Avg Effs (Sess) | Decel B2-3 Avg Effs (Sess)
+ *
+ * Page 2 has one table (8 number columns):
+ *     Avg Dist | Vel B5 | Vel B6 | HIR Dist | Max Vel | Avg PL | Tot As (#) | Tot Ds (#)
  */
 export async function parseCatapultDrillPdfClient(
   file: File
@@ -145,16 +157,14 @@ export async function parseCatapultDrillPdfClient(
 
   const lines = text.split("\n");
 
-  // Match data rows: drill name followed by numbers
-  // Page 1: name + 10 integers (dist, vb5, vb6, hir, pl, accB23, totAs, decB23, totDs)
-  // But pdf.js spacing may differ from pdftotext, so use a more flexible approach:
-  // Look for lines with a name followed by multiple numbers
+  // Regex for data rows: drill name followed by numbers
   const numberRowRe =
-    /^([A-Za-zÀ-ÿÞþÐð0-9][\w\sÀ-ÿÞþÐð+v/.·\-]*?)\s{2,}([\d.]+(?:\s+[\d.]+){5,})\s*$/;
+    /^([A-Za-zÀ-ÿÞþÐð0-9][\w\sÀ-ÿÞþÐð+v/.·\-]*?)\s{2,}([\d.]+(?:\s+[\d.]+)*)\s*$/;
 
   const drills: Record<string, ParsedDrillClient> = {};
 
   let inPage2 = false;
+  let inSubTable = false; // The Acc B2-3 Avg / Decel B2-3 Avg table on page 1
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -167,10 +177,22 @@ export async function parseCatapultDrillPdfClient(
       line.includes("PAGE 2 OF")
     ) {
       inPage2 = true;
+      inSubTable = false;
       continue;
     }
 
-    // Skip headers and metadata
+    // Detect the sub-table header on page 1:
+    // "Acc B2-3       Decel"
+    // "Avg Effs    B2-3 Avg"
+    if (
+      !inPage2 &&
+      /Acc\s+B2-3\s+Decel/i.test(line)
+    ) {
+      inSubTable = true;
+      continue;
+    }
+
+    // Skip header/metadata lines
     if (
       /SESSION\s+(SUMMARY|DURATION)/i.test(line) ||
       /Avg\s+Dist/i.test(line) ||
@@ -187,10 +209,10 @@ export async function parseCatapultDrillPdfClient(
       /Powered\s+by/i.test(line) ||
       /BREI[ÐD]ABLIK/i.test(line) ||
       /Drillur/i.test(line) ||
-      /Acc\s+B2-3/i.test(line) ||
-      /Decel/i.test(line) ||
       /Avg\s+PL/i.test(line) ||
-      /Avg\s+Dur/i.test(line)
+      /Avg\s+Dur/i.test(line) ||
+      /B2-3\s+Avg/i.test(line) ||
+      /Decel$/i.test(line.trim())
     ) {
       continue;
     }
@@ -202,7 +224,13 @@ export async function parseCatapultDrillPdfClient(
     const name = m[1].trim();
     const nums = m[2].trim().split(/\s+/).map(Number);
 
-    if (inPage2 && nums.length >= 8) {
+    if (inSubTable && !inPage2 && nums.length >= 2) {
+      // Sub-table: Acc B2-3 Avg Effs, Decel B2-3 Avg Effs (2 columns)
+      if (drills[name]) {
+        drills[name].accel_b23_avg = nums[0];
+        drills[name].decel_b23_avg = nums[1];
+      }
+    } else if (inPage2 && nums.length >= 8) {
       // Page 2: dist, vb5, vb6, hir, maxVel(decimal), pl, totAs, totDs
       if (!drills[name]) {
         drills[name] = {
@@ -214,8 +242,10 @@ export async function parseCatapultDrillPdfClient(
           hir_dist_m: nums[3],
           max_velocity: nums[4],
           player_load: nums[5],
-          accel_b23: null,
-          decel_b23: null,
+          accel_b23_total: null,
+          decel_b23_total: null,
+          accel_b23_avg: null,
+          decel_b23_avg: null,
           accel_total: nums[6],
           decel_total: nums[7],
         };
@@ -223,8 +253,8 @@ export async function parseCatapultDrillPdfClient(
         // Merge max velocity from page 2
         drills[name].max_velocity = nums[4];
       }
-    } else if (!inPage2 && nums.length >= 9) {
-      // Page 1: dist, vb5, vb6, hir, pl, accB23, totAs, decB23, totDs
+    } else if (!inPage2 && !inSubTable && nums.length >= 9) {
+      // Page 1 main table: dist, vb5, vb6, hir, pl, accB23Tot, totAs, decB23Tot, totDs
       drills[name] = {
         drill_name: name,
         date: sessionDate,
@@ -233,10 +263,12 @@ export async function parseCatapultDrillPdfClient(
         vel_b6: nums[2],
         hir_dist_m: nums[3],
         player_load: nums[4],
-        accel_b23: nums[5],
+        accel_b23_total: nums[5],
         accel_total: nums[6],
-        decel_b23: nums[7],
+        decel_b23_total: nums[7],
         decel_total: nums[8],
+        accel_b23_avg: null,
+        decel_b23_avg: null,
         max_velocity: null,
       };
     }

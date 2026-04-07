@@ -47,8 +47,10 @@ const copy: Record<Lang, Record<string, string>> = {
     playerLoad: "PL",
     velB5: "VB5",
     velB6: "VB6",
-    accel: "Hröð",
-    decel: "Hægð",
+    accelTot: "Hröð sam",
+    decelTot: "Hæg sam",
+    accelAvg: "Hröð meðal",
+    decelAvg: "Hæg meðal",
     maxVel: "Hámarks hraði",
     save: "Vista valdar drillur",
     saving: "Vista…",
@@ -71,8 +73,10 @@ const copy: Record<Lang, Record<string, string>> = {
     playerLoad: "PL",
     velB5: "VB5",
     velB6: "VB6",
-    accel: "Accel",
-    decel: "Decel",
+    accelTot: "Acc Tot",
+    decelTot: "Dec Tot",
+    accelAvg: "Acc Avg",
+    decelAvg: "Dec Avg",
     maxVel: "Max Vel",
     save: "Save selected drills",
     saving: "Saving…",
@@ -210,8 +214,10 @@ export default function DrillPdfImporter({
             vel_b6: d.vel_b6,
             hir_total: d.hir_dist_m,
             player_load: d.player_load,
-            accel_b23: d.accel_b23,
-            decel_b23: d.decel_b23,
+            accel_b23: d.accel_b23_total,
+            decel_b23: d.decel_b23_total,
+            accel_b23_avg: d.accel_b23_avg,
+            decel_b23_avg: d.decel_b23_avg,
             accel_total: d.accel_total,
             decel_total: d.decel_total,
             max_velocity: d.max_velocity,
@@ -292,10 +298,16 @@ export default function DrillPdfImporter({
                       {t.velB6}
                     </th>
                     <th className="px-2 py-1 text-left font-medium text-gray-700">
-                      {t.accel}
+                      {t.accelAvg}
                     </th>
                     <th className="px-2 py-1 text-left font-medium text-gray-700">
-                      {t.decel}
+                      {t.decelAvg}
+                    </th>
+                    <th className="px-2 py-1 text-left font-medium text-gray-700">
+                      {t.accelTot}
+                    </th>
+                    <th className="px-2 py-1 text-left font-medium text-gray-700">
+                      {t.decelTot}
                     </th>
                     <th className="px-2 py-1 text-left font-medium text-gray-700">
                       {t.maxVel}
@@ -327,6 +339,8 @@ export default function DrillPdfImporter({
                       <td className="px-2 py-1">{n(drill.player_load, 0)}</td>
                       <td className="px-2 py-1">{n(drill.vel_b5, 0)}</td>
                       <td className="px-2 py-1">{n(drill.vel_b6, 0)}</td>
+                      <td className="px-2 py-1">{n(drill.accel_b23_avg, 0)}</td>
+                      <td className="px-2 py-1">{n(drill.decel_b23_avg, 0)}</td>
                       <td className="px-2 py-1">{n(drill.accel_total, 0)}</td>
                       <td className="px-2 py-1">{n(drill.decel_total, 0)}</td>
                       <td className="px-2 py-1">{n(drill.max_velocity, 1)}</td>

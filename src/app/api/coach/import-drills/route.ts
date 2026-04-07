@@ -43,6 +43,8 @@ interface DrillInput {
   player_load?: number | null;
   accel_b23?: number | null;
   decel_b23?: number | null;
+  accel_b23_avg?: number | null;
+  decel_b23_avg?: number | null;
   accel_total?: number | null;
   decel_total?: number | null;
   max_velocity?: number | null;
@@ -108,8 +110,11 @@ export async function POST(req: NextRequest) {
               : null,
           accel_b23: drill.accel_b23 ?? null,
           decel_b23: drill.decel_b23 ?? null,
+          accel_b23_avg: drill.accel_b23_avg ?? null,
+          decel_b23_avg: drill.decel_b23_avg ?? null,
           accel_total: drill.accel_total ?? null,
           decel_total: drill.decel_total ?? null,
+          max_velocity: drill.max_velocity ?? null,
           metabolic_power_avg: null,
           metabolic_power_peak: null,
           hmld_m: null,
