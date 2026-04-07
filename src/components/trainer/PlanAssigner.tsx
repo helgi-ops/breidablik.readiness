@@ -13,11 +13,19 @@ interface Client {
   name: string;
 }
 
+interface ExerciseGroup {
+  label: string;
+  exercises: Exercise[];
+}
+
 interface SessionData {
   dayOfWeek: number;
   name: string;
   type: string;
-  exercises: Exercise[];
+  /** New format: groups */
+  groups?: ExerciseGroup[];
+  /** Old format: flat exercises */
+  exercises?: Exercise[];
 }
 
 interface WeekData {
@@ -239,37 +247,43 @@ export default function PlanAssigner({
             {showTweaks && (
               <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200">
                 {template.map((week) =>
-                  week.sessions.map((session) =>
-                    session.exercises.map((ex) => (
-                      <div key={ex.exerciseId} className="text-sm">
-                        <label className="block text-gray-700 font-medium mb-1">
-                          {ex.name} ({isIS ? "Vika" : "Week"} {week.week})
-                        </label>
-                        <div className="flex gap-2 items-end">
-                          <div className="flex-1">
-                            <input
-                              type="number"
-                              step="0.5"
-                              defaultValue={ex.loadValue}
-                              onChange={(e) => {
-                                const newTweaks = { ...tweaks };
-                                if (e.target.value === String(ex.loadValue)) {
-                                  delete newTweaks[ex.exerciseId];
-                                } else {
-                                  newTweaks[ex.exerciseId] = +e.target.value;
-                                }
-                                setTweaks(newTweaks);
-                              }}
-                              className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                            />
+                  week.sessions.map((session) => {
+                    // Support both old (flat exercises) and new (groups) format
+                    const allExercises: Exercise[] = session.groups
+                      ? session.groups.flatMap((g) => g.exercises)
+                      : session.exercises || [];
+                    return allExercises
+                      .filter((ex) => ex.exerciseId)
+                      .map((ex) => (
+                        <div key={`${week.week}-${ex.exerciseId}`} className="text-sm">
+                          <label className="block text-gray-700 font-medium mb-1">
+                            {ex.name} ({isIS ? "Vika" : "Week"} {week.week})
+                          </label>
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <input
+                                type="number"
+                                step="0.5"
+                                defaultValue={ex.loadValue}
+                                onChange={(e) => {
+                                  const newTweaks = { ...tweaks };
+                                  if (e.target.value === String(ex.loadValue)) {
+                                    delete newTweaks[ex.exerciseId];
+                                  } else {
+                                    newTweaks[ex.exerciseId] = +e.target.value;
+                                  }
+                                  setTweaks(newTweaks);
+                                }}
+                                className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {ex.loadType}
+                            </span>
                           </div>
-                          <span className="text-xs text-gray-500">
-                            {ex.loadType}
-                          </span>
                         </div>
-                      </div>
-                    ))
-                  )
+                      ));
+                  })
                 )}
               </div>
             )}

@@ -7,6 +7,16 @@ import { TRAINER_COPY } from "./trainerCopy";
 
 /* ── Types ───────────────────────────────────────────── */
 
+export type SessionMethod =
+  | "straight"
+  | "superset"
+  | "triset"
+  | "giant"
+  | "french_contrast"
+  | "contrast"
+  | "potentiation_cluster"
+  | "cluster";
+
 export interface Exercise {
   exerciseId: string;
   name: string;
@@ -18,13 +28,27 @@ export interface Exercise {
   tempo: string;
   restSeconds: number;
   notes: string;
+  /** Cluster sets: intra-set rest in seconds */
+  intraSetRest?: number;
+  /** Cluster sets: reps per cluster (e.g. "2+2+2") */
+  clusterReps?: string;
+}
+
+/** A group of exercises that are performed together (superset, contrast, etc.) */
+export interface ExerciseGroup {
+  /** Label like "A", "B", "C" */
+  label: string;
+  exercises: Exercise[];
 }
 
 export interface Session {
   dayOfWeek: number;
   name: string;
   type: "strength" | "endurance" | "mixed";
-  exercises: Exercise[];
+  method: SessionMethod;
+  groups: ExerciseGroup[];
+  /** @deprecated — kept for backward compat with old templates */
+  exercises?: Exercise[];
 }
 
 export interface Week {
@@ -43,6 +67,68 @@ export interface ExerciseLibraryItem {
 }
 
 type PlanType = "strength" | "endurance" | "mixed";
+
+/* ── Method config ───────────────────────────────────── */
+
+/** How many exercise slots each method needs per group */
+const METHOD_GROUP_SIZE: Record<SessionMethod, number> = {
+  straight: 1,
+  superset: 2,
+  triset: 3,
+  giant: 4,
+  french_contrast: 4,
+  contrast: 2,
+  potentiation_cluster: 2,
+  cluster: 1,
+};
+
+const ALL_METHODS: SessionMethod[] = [
+  "straight",
+  "superset",
+  "triset",
+  "giant",
+  "french_contrast",
+  "contrast",
+  "potentiation_cluster",
+  "cluster",
+];
+
+/** Generate slot labels for a method */
+function getSlotLabels(method: SessionMethod, ct: any): string[] {
+  if (ct.methodSlots?.[method]) return ct.methodSlots[method];
+  const size = METHOD_GROUP_SIZE[method];
+  if (size === 1) return [""];
+  return Array.from({ length: size }, (_, i) => `${i + 1}`);
+}
+
+/** Letter label for group index */
+function groupLetter(idx: number): string {
+  return String.fromCharCode(65 + idx); // A, B, C, ...
+}
+
+/** Migrate old templates (flat exercises[] → groups[]) */
+function migrateSession(s: any): Session {
+  if (s.groups && Array.isArray(s.groups)) {
+    return {
+      ...s,
+      method: s.method || "straight",
+      groups: s.groups,
+    };
+  }
+  // Old format: flat exercises array → wrap each in a group
+  const exercises: Exercise[] = s.exercises || [];
+  const groups: ExerciseGroup[] = exercises.map((ex: Exercise, i: number) => ({
+    label: groupLetter(i),
+    exercises: [ex],
+  }));
+  return {
+    dayOfWeek: s.dayOfWeek,
+    name: s.name,
+    type: s.type,
+    method: "straight",
+    groups,
+  };
+}
 
 /* ── Component ───────────────────────────────────────── */
 
@@ -81,7 +167,8 @@ export default function PlanBuilder({
   const [searchResults, setSearchResults] = useState<ExerciseLibraryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [showExerciseSearch, setShowExerciseSearch] = useState<string | null>(null);
+  /** Target: "weekIdx-sessionIdx-groupIdx-slotIdx" */
+  const [searchTarget, setSearchTarget] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(!!templateId);
   const [saving, setSaving] = useState(false);
@@ -99,7 +186,8 @@ export default function PlanBuilder({
             dayOfWeek: d,
             name: `${isIS ? "Seta" : "Session"} ${d}`,
             type: planType,
-            exercises: [],
+            method: "straight",
+            groups: [],
           });
         }
         newWeeks.push({ week: w, sessions });
@@ -120,7 +208,9 @@ export default function PlanBuilder({
 
   async function loadTemplate() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
       const res = await fetch(`/api/trainer/templates?id=${templateId}&${qs}`, {
@@ -143,12 +233,20 @@ export default function PlanBuilder({
         setDeloadPercentages(t.deload_weeks || []);
         setRecoveryPercentages(t.recovery_weeks || []);
 
-        // Parse structure
+        // Parse structure and migrate old format
+        let parsed: Week[] = [];
         if (t.structure && typeof t.structure === "string") {
-          setWeeks(JSON.parse(t.structure));
+          parsed = JSON.parse(t.structure);
         } else if (t.structure) {
-          setWeeks(t.structure);
+          parsed = t.structure;
         }
+
+        // Migrate each session
+        const migrated = parsed.map((w: any) => ({
+          ...w,
+          sessions: (w.sessions || []).map(migrateSession),
+        }));
+        setWeeks(migrated);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading template");
@@ -167,12 +265,17 @@ export default function PlanBuilder({
 
     setSearching(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const res = await fetch(`/api/trainer/exercises?search=${encodeURIComponent(query)}&${qs}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const res = await fetch(
+        `/api/trainer/exercises?search=${encodeURIComponent(query)}&${qs}`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
 
       if (res.ok) {
         const json = await res.json();
@@ -185,51 +288,114 @@ export default function PlanBuilder({
     }
   }
 
-  /* ── Add exercise ───────────────────────────────────– */
+  /* ── Session method change ─────────────────────────── */
 
-  function addExercise(
+  function changeSessionMethod(sessionIdx: number, method: SessionMethod) {
+    const newWeeks = [...weeks];
+    const session = { ...newWeeks[currentWeekIndex].sessions[sessionIdx] };
+    session.method = method;
+    // Keep existing groups — user can reorganize manually
+    newWeeks[currentWeekIndex].sessions[sessionIdx] = session;
+    setWeeks(newWeeks);
+  }
+
+  /* ── Add exercise group ────────────────────────────── */
+
+  function addGroup(sessionIdx: number) {
+    const newWeeks = [...weeks];
+    const session = newWeeks[currentWeekIndex].sessions[sessionIdx];
+    const groupSize = METHOD_GROUP_SIZE[session.method];
+    const newGroupIdx = session.groups.length;
+    const label = groupLetter(newGroupIdx);
+
+    const emptySlots: Exercise[] = Array.from(
+      { length: groupSize },
+      () => ({
+        exerciseId: "",
+        name: "",
+        sets: session.method === "cluster" ? 5 : 3,
+        reps: session.method === "potentiation_cluster" ? "1-2" : "6",
+        loadType: (planType === "endurance" ? "RPE" : "kg") as Exercise["loadType"],
+        loadValue: planType === "endurance" ? 7 : 100,
+        tempo: "3010",
+        restSeconds: session.method === "cluster" ? 20 : 180,
+        notes: "",
+        ...(session.method === "cluster"
+          ? { intraSetRest: 15, clusterReps: "2+2+2" }
+          : {}),
+      })
+    );
+
+    session.groups.push({ label, exercises: emptySlots });
+    setWeeks(newWeeks);
+  }
+
+  /* ── Set exercise in a slot ────────────────────────── */
+
+  function setExerciseInSlot(
     weekIdx: number,
     sessionIdx: number,
+    groupIdx: number,
+    slotIdx: number,
     exercise: ExerciseLibraryItem
   ) {
     const newWeeks = [...weeks];
-    const newEx: Exercise = {
-      exerciseId: exercise.id,
-      name: isIS ? exercise.name_is || exercise.name : exercise.name,
-      sets: 3,
-      reps: "6",
-      loadType: planType === "endurance" ? "RPE" : "kg",
-      loadValue: planType === "endurance" ? 7 : 100,
-      tempo: "3010",
-      restSeconds: 180,
-      notes: "",
-    };
-    newWeeks[weekIdx].sessions[sessionIdx].exercises.push(newEx);
+    const slot =
+      newWeeks[weekIdx].sessions[sessionIdx].groups[groupIdx].exercises[
+        slotIdx
+      ];
+    slot.exerciseId = exercise.id;
+    slot.name = isIS ? exercise.name_is || exercise.name : exercise.name;
     setWeeks(newWeeks);
-    setShowExerciseSearch(null);
+    setSearchTarget(null);
+    setSearchQuery("");
+    setSearchResults([]);
   }
 
-  /* ── Remove exercise ────────────────────────────────– */
+  /* ── Remove group ──────────────────────────────────── */
 
-  function removeExercise(weekIdx: number, sessionIdx: number, exIdx: number) {
+  function removeGroup(sessionIdx: number, groupIdx: number) {
     const newWeeks = [...weeks];
-    newWeeks[weekIdx].sessions[sessionIdx].exercises.splice(exIdx, 1);
+    const session = newWeeks[currentWeekIndex].sessions[sessionIdx];
+    session.groups.splice(groupIdx, 1);
+    // Re-label
+    session.groups.forEach((g, i) => {
+      g.label = groupLetter(i);
+    });
     setWeeks(newWeeks);
   }
 
-  /* ── Update exercise ────────────────────────────────– */
+  /* ── Update exercise in slot ───────────────────────── */
 
   function updateExercise(
     weekIdx: number,
     sessionIdx: number,
-    exIdx: number,
+    groupIdx: number,
+    slotIdx: number,
     updates: Partial<Exercise>
   ) {
     const newWeeks = [...weeks];
-    newWeeks[weekIdx].sessions[sessionIdx].exercises[exIdx] = {
-      ...newWeeks[weekIdx].sessions[sessionIdx].exercises[exIdx],
-      ...updates,
-    };
+    const ex =
+      newWeeks[weekIdx].sessions[sessionIdx].groups[groupIdx].exercises[
+        slotIdx
+      ];
+    Object.assign(ex, updates);
+    setWeeks(newWeeks);
+  }
+
+  /* ── Remove exercise from slot ─────────────────────── */
+
+  function clearSlot(
+    sessionIdx: number,
+    groupIdx: number,
+    slotIdx: number
+  ) {
+    const newWeeks = [...weeks];
+    const ex =
+      newWeeks[currentWeekIndex].sessions[sessionIdx].groups[groupIdx]
+        .exercises[slotIdx];
+    ex.exerciseId = "";
+    ex.name = "";
     setWeeks(newWeeks);
   }
 
@@ -237,22 +403,21 @@ export default function PlanBuilder({
 
   function copyWeek(weekIdx: number) {
     if (weekIdx >= weeks.length) return;
-    const sourcWeek = weeks[weekIdx];
-    const newSessions = sourcWeek.sessions.map((s) => ({
+    const sourceWeek = weeks[weekIdx];
+    const newSessions = sourceWeek.sessions.map((s) => ({
       ...s,
-      exercises: s.exercises.map((e) => ({ ...e })),
+      groups: s.groups.map((g) => ({
+        ...g,
+        exercises: g.exercises.map((e) => ({ ...e })),
+      })),
     }));
 
     const newWeeks = [
       ...weeks.slice(0, weekIdx + 1),
-      {
-        week: weeks[weekIdx + 1]?.week || weekIdx + 2,
-        sessions: newSessions,
-      },
+      { week: weekIdx + 2, sessions: newSessions },
       ...weeks.slice(weekIdx + 1),
     ];
 
-    // Update week numbers
     newWeeks.forEach((w, i) => {
       w.week = i + 1;
     });
@@ -273,7 +438,9 @@ export default function PlanBuilder({
     setError("");
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error("Not authenticated");
       }
@@ -384,14 +551,16 @@ export default function PlanBuilder({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {ct.plans.duration} ({isIS ? "vika" : "weeks"})
+                {ct.plans.duration} ({isIS ? "vikur" : "weeks"})
               </label>
               <input
                 type="number"
                 min="1"
                 max="12"
                 value={durationWeeks}
-                onChange={(e) => setDurationWeeks(Math.max(1, Math.min(12, +e.target.value)))}
+                onChange={(e) =>
+                  setDurationWeeks(Math.max(1, Math.min(12, +e.target.value)))
+                }
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
@@ -405,7 +574,11 @@ export default function PlanBuilder({
                 min="1"
                 max="6"
                 value={sessionsPerWeek}
-                onChange={(e) => setSessionsPerWeek(Math.max(1, Math.min(6, +e.target.value)))}
+                onChange={(e) =>
+                  setSessionsPerWeek(
+                    Math.max(1, Math.min(6, +e.target.value))
+                  )
+                }
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
@@ -427,7 +600,9 @@ export default function PlanBuilder({
         {/* Readiness settings */}
         {readinessEnabled && durationWeeks > 0 && (
           <div className="mb-6 pb-6 border-b">
-            <h3 className="font-semibold text-sm mb-3">{ct.plans.readinessSettings}</h3>
+            <h3 className="font-semibold text-sm mb-3">
+              {ct.plans.readinessSettings}
+            </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {Array.from({ length: durationWeeks }).map((_, weekIdx) => (
                 <div key={weekIdx}>
@@ -492,262 +667,493 @@ export default function PlanBuilder({
               <div className="space-y-4 mb-6 pb-6 border-b">
                 {currentWeek.sessions.map((session, sessionIdx) => (
                   <div key={sessionIdx} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={session.name}
-                          onChange={(e) => {
-                            const newWeeks = [...weeks];
-                            newWeeks[currentWeekIndex].sessions[sessionIdx].name =
-                              e.target.value;
-                            setWeeks(newWeeks);
-                          }}
-                          className="w-full border rounded px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black"
-                        />
-                      </div>
+                    {/* Session header: name + type + method */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={session.name}
+                        onChange={(e) => {
+                          const newWeeks = [...weeks];
+                          newWeeks[currentWeekIndex].sessions[
+                            sessionIdx
+                          ].name = e.target.value;
+                          setWeeks(newWeeks);
+                        }}
+                        className="flex-1 min-w-[140px] border rounded px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black"
+                      />
+
                       <select
                         value={session.type}
                         onChange={(e) => {
                           const newWeeks = [...weeks];
-                          newWeeks[currentWeekIndex].sessions[sessionIdx].type =
-                            e.target.value as PlanType;
+                          newWeeks[currentWeekIndex].sessions[
+                            sessionIdx
+                          ].type = e.target.value as PlanType;
                           setWeeks(newWeeks);
                         }}
-                        className="ml-2 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                        className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                       >
                         <option value="strength">{ct.plan.strength}</option>
                         <option value="endurance">{ct.plan.endurance}</option>
                         <option value="mixed">{ct.plan.mixed}</option>
                       </select>
-                    </div>
 
-                    {/* Exercises */}
-                    <div className="space-y-2 mb-3">
-                      {session.exercises.map((ex, exIdx) => (
-                        <div key={exIdx} className="bg-white rounded border p-3 text-sm">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="font-medium flex-1">{ex.name}</div>
-                            <button
-                              onClick={() =>
-                                removeExercise(currentWeekIndex, sessionIdx, exIdx)
-                              }
-                              className="text-red-600 hover:text-red-700 text-sm"
-                            >
-                              {isIS ? "Fjarlægja" : "Remove"}
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.sets}
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={ex.sets}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    sets: +e.target.value,
-                                  })
-                                }
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.reps}
-                              </label>
-                              <input
-                                type="text"
-                                value={ex.reps}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    reps: e.target.value,
-                                  })
-                                }
-                                placeholder="6-10"
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.loadType}
-                              </label>
-                              <select
-                                value={ex.loadType}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    loadType: e.target.value as Exercise["loadType"],
-                                  })
-                                }
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              >
-                                <option value="kg">kg</option>
-                                <option value="velocity">m/s</option>
-                                <option value="%1RM">%1RM</option>
-                                <option value="RPE">RPE</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.load}
-                              </label>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={ex.loadValue}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    loadValue: +e.target.value,
-                                  })
-                                }
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.tempo}
-                              </label>
-                              <input
-                                type="text"
-                                value={ex.tempo}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    tempo: e.target.value,
-                                  })
-                                }
-                                placeholder="3010"
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.rest} (s)
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={ex.restSeconds}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    restSeconds: +e.target.value,
-                                  })
-                                }
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-
-                            {ex.loadType === "RPE" && (
-                              <div>
-                                <label className="block text-gray-600 mb-0.5">
-                                  RPE
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="10"
-                                  value={ex.rpeTarget ?? 7}
-                                  onChange={(e) =>
-                                    updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                      rpeTarget: +e.target.value,
-                                    })
-                                  }
-                                  className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                                />
-                              </div>
-                            )}
-
-                            <div className="col-span-2 sm:col-span-4">
-                              <label className="block text-gray-600 mb-0.5">
-                                {ct.plans.notes}
-                              </label>
-                              <input
-                                type="text"
-                                value={ex.notes}
-                                onChange={(e) =>
-                                  updateExercise(currentWeekIndex, sessionIdx, exIdx, {
-                                    notes: e.target.value,
-                                  })
-                                }
-                                className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Add exercise button */}
-                    <div className="relative">
-                      <button
-                        onClick={() =>
-                          setShowExerciseSearch(
-                            showExerciseSearch === `${currentWeekIndex}-${sessionIdx}`
-                              ? null
-                              : `${currentWeekIndex}-${sessionIdx}`
+                      <select
+                        value={session.method}
+                        onChange={(e) =>
+                          changeSessionMethod(
+                            sessionIdx,
+                            e.target.value as SessionMethod
                           )
                         }
-                        className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
+                        className="border rounded px-2 py-1 text-sm bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        {isIS ? "+ Bæta æfingu" : "+ Add exercise"}
-                      </button>
-
-                      {showExerciseSearch === `${currentWeekIndex}-${sessionIdx}` && (
-                        <div className="absolute top-full left-0 mt-1 w-64 bg-white border rounded-lg shadow-lg z-10 p-2">
-                          <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
-                              searchExercises(e.target.value);
-                            }}
-                            placeholder={ct.plans.searchExercises}
-                            className="w-full border rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
-                            autoFocus
-                          />
-
-                          {searchQuery && searchResults.length > 0 && (
-                            <div className="max-h-64 overflow-y-auto space-y-1">
-                              {searchResults.map((result) => (
-                                <button
-                                  key={result.id}
-                                  onClick={() =>
-                                    addExercise(currentWeekIndex, sessionIdx, result)
-                                  }
-                                  className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
-                                >
-                                  <div className="font-medium">
-                                    {isIS ? result.name_is || result.name : result.name}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {result.category}
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {searchQuery && searchResults.length === 0 && !searching && (
-                            <div className="text-xs text-gray-500 text-center py-2">
-                              {isIS ? "Engar niðurstöður" : "No results"}
-                            </div>
-                          )}
-
-                          {searchQuery && searching && (
-                            <div className="text-xs text-gray-500 text-center py-2">
-                              {isIS ? "Leita..." : "Searching..."}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        {ALL_METHODS.map((m) => (
+                          <option key={m} value={m}>
+                            {ct.methods[m]}
+                          </option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* Exercise groups */}
+                    <div className="space-y-3 mb-3">
+                      {session.groups.map((group, groupIdx) => {
+                        const slotLabels = getSlotLabels(session.method, ct);
+                        const methodColor =
+                          session.method === "french_contrast"
+                            ? "border-l-purple-400"
+                            : session.method === "contrast"
+                            ? "border-l-orange-400"
+                            : session.method === "potentiation_cluster"
+                            ? "border-l-red-400"
+                            : session.method === "cluster"
+                            ? "border-l-yellow-400"
+                            : session.method === "superset"
+                            ? "border-l-blue-400"
+                            : session.method === "triset"
+                            ? "border-l-green-400"
+                            : session.method === "giant"
+                            ? "border-l-pink-400"
+                            : "border-l-gray-300";
+
+                        return (
+                          <div
+                            key={groupIdx}
+                            className={`bg-white rounded border border-l-4 ${methodColor} p-3`}
+                          >
+                            {/* Group header */}
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                {ct.plans.groupLabel} {group.label}
+                                {session.method !== "straight" && (
+                                  <span className="ml-2 text-xs font-normal text-gray-400">
+                                    {ct.methods[session.method]}
+                                  </span>
+                                )}
+                              </span>
+                              <button
+                                onClick={() =>
+                                  removeGroup(sessionIdx, groupIdx)
+                                }
+                                className="text-red-500 hover:text-red-700 text-xs"
+                              >
+                                {isIS ? "Fjarlægja" : "Remove"}
+                              </button>
+                            </div>
+
+                            {/* Exercise slots */}
+                            <div className="space-y-2">
+                              {group.exercises.map((ex, slotIdx) => {
+                                const slotLabel =
+                                  slotLabels[slotIdx] || `${slotIdx + 1}`;
+                                const targetKey = `${currentWeekIndex}-${sessionIdx}-${groupIdx}-${slotIdx}`;
+                                const isSearchOpen =
+                                  searchTarget === targetKey;
+
+                                return (
+                                  <div key={slotIdx}>
+                                    {/* Slot label for structured methods */}
+                                    {METHOD_GROUP_SIZE[session.method] > 1 && (
+                                      <div className="text-xs text-gray-500 mb-1 font-medium">
+                                        {group.label}
+                                        {slotIdx + 1}
+                                        {slotLabel ? ` — ${slotLabel}` : ""}
+                                      </div>
+                                    )}
+
+                                    {/* Exercise name / search */}
+                                    {!ex.exerciseId ? (
+                                      <div className="relative">
+                                        <button
+                                          onClick={() => {
+                                            setSearchTarget(
+                                              isSearchOpen ? null : targetKey
+                                            );
+                                            setSearchQuery("");
+                                            setSearchResults([]);
+                                          }}
+                                          className="w-full text-left px-3 py-2 border border-dashed rounded text-sm text-gray-400 hover:bg-gray-50"
+                                        >
+                                          {isIS
+                                            ? "+ Velja æfingu"
+                                            : "+ Choose exercise"}
+                                        </button>
+
+                                        {isSearchOpen && (
+                                          <div className="absolute top-full left-0 mt-1 w-72 bg-white border rounded-lg shadow-lg z-20 p-2">
+                                            <input
+                                              type="text"
+                                              value={searchQuery}
+                                              onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                searchExercises(e.target.value);
+                                              }}
+                                              placeholder={
+                                                ct.plans.searchExercises
+                                              }
+                                              className="w-full border rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
+                                              autoFocus
+                                            />
+                                            {searchQuery &&
+                                              searchResults.length > 0 && (
+                                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                                  {searchResults.map(
+                                                    (result) => (
+                                                      <button
+                                                        key={result.id}
+                                                        onClick={() =>
+                                                          setExerciseInSlot(
+                                                            currentWeekIndex,
+                                                            sessionIdx,
+                                                            groupIdx,
+                                                            slotIdx,
+                                                            result
+                                                          )
+                                                        }
+                                                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+                                                      >
+                                                        <div className="font-medium">
+                                                          {isIS
+                                                            ? result.name_is ||
+                                                              result.name
+                                                            : result.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                          {result.category}
+                                                        </div>
+                                                      </button>
+                                                    )
+                                                  )}
+                                                </div>
+                                              )}
+                                            {searchQuery &&
+                                              searchResults.length === 0 &&
+                                              !searching && (
+                                                <div className="text-xs text-gray-500 text-center py-2">
+                                                  {isIS
+                                                    ? "Engar niðurstöður"
+                                                    : "No results"}
+                                                </div>
+                                              )}
+                                            {searching && (
+                                              <div className="text-xs text-gray-500 text-center py-2">
+                                                {isIS
+                                                  ? "Leita..."
+                                                  : "Searching..."}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-sm font-medium">
+                                            {ex.name}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              clearSlot(
+                                                sessionIdx,
+                                                groupIdx,
+                                                slotIdx
+                                              )
+                                            }
+                                            className="text-red-500 hover:text-red-700 text-xs"
+                                          >
+                                            ×
+                                          </button>
+                                        </div>
+
+                                        {/* Exercise params */}
+                                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-xs">
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.sets}
+                                            </label>
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              value={ex.sets}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    sets: +e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.reps}
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={ex.reps}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    reps: e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.loadType}
+                                            </label>
+                                            <select
+                                              value={ex.loadType}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    loadType: e.target
+                                                      .value as Exercise["loadType"],
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            >
+                                              <option value="kg">kg</option>
+                                              <option value="velocity">
+                                                m/s
+                                              </option>
+                                              <option value="%1RM">%1RM</option>
+                                              <option value="RPE">RPE</option>
+                                            </select>
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.load}
+                                            </label>
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={ex.loadValue}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    loadValue: +e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.tempo}
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={ex.tempo}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    tempo: e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+
+                                          <div>
+                                            <label className="block text-gray-500 mb-0.5">
+                                              {ct.plans.rest} (s)
+                                            </label>
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              value={ex.restSeconds}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    restSeconds:
+                                                      +e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+
+                                          {/* Cluster-specific fields */}
+                                          {session.method === "cluster" && (
+                                            <>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {ct.plans.clusterReps}
+                                                </label>
+                                                <input
+                                                  type="text"
+                                                  value={
+                                                    ex.clusterReps || "2+2+2"
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateExercise(
+                                                      currentWeekIndex,
+                                                      sessionIdx,
+                                                      groupIdx,
+                                                      slotIdx,
+                                                      {
+                                                        clusterReps:
+                                                          e.target.value,
+                                                      }
+                                                    )
+                                                  }
+                                                  placeholder="2+2+2"
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {ct.plans.intraSetRest}
+                                                </label>
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  value={
+                                                    ex.intraSetRest ?? 15
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateExercise(
+                                                      currentWeekIndex,
+                                                      sessionIdx,
+                                                      groupIdx,
+                                                      slotIdx,
+                                                      {
+                                                        intraSetRest:
+                                                          +e.target.value,
+                                                      }
+                                                    )
+                                                  }
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                />
+                                              </div>
+                                            </>
+                                          )}
+
+                                          {/* RPE field */}
+                                          {ex.loadType === "RPE" && (
+                                            <div>
+                                              <label className="block text-gray-500 mb-0.5">
+                                                RPE
+                                              </label>
+                                              <input
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={ex.rpeTarget ?? 7}
+                                                onChange={(e) =>
+                                                  updateExercise(
+                                                    currentWeekIndex,
+                                                    sessionIdx,
+                                                    groupIdx,
+                                                    slotIdx,
+                                                    {
+                                                      rpeTarget:
+                                                        +e.target.value,
+                                                    }
+                                                  )
+                                                }
+                                                className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                              />
+                                            </div>
+                                          )}
+
+                                          {/* Notes */}
+                                          <div className="col-span-3 sm:col-span-6">
+                                            <input
+                                              type="text"
+                                              value={ex.notes}
+                                              onChange={(e) =>
+                                                updateExercise(
+                                                  currentWeekIndex,
+                                                  sessionIdx,
+                                                  groupIdx,
+                                                  slotIdx,
+                                                  {
+                                                    notes: e.target.value,
+                                                  }
+                                                )
+                                              }
+                                              placeholder={ct.plans.notes}
+                                              className="w-full border rounded px-1.5 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-black"
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add group button */}
+                    <button
+                      onClick={() => addGroup(sessionIdx)}
+                      className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100"
+                    >
+                      + {ct.plans.addGroup}
+                    </button>
                   </div>
                 ))}
 
@@ -757,7 +1163,7 @@ export default function PlanBuilder({
                     onClick={() => copyWeek(currentWeekIndex)}
                     className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
                   >
-                    {isIS ? "Afrita vikunna" : "Copy week"}
+                    {isIS ? "Afrita vikuna" : "Copy week"}
                   </button>
                 )}
               </div>

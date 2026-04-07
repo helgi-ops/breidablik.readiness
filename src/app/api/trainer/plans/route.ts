@@ -236,11 +236,17 @@ export async function POST(req: Request) {
         if (sessionErr) throw new Error(sessionErr.message);
         if (!newSession) throw new Error("Failed to create session");
 
+        // Collect exercises from both new (groups) and old (exercises) format
+        const allExercises: any[] = session.groups
+          ? (session.groups as any[]).flatMap((g: any) => g.exercises || [])
+          : session.exercises || [];
+
         // Add prescriptions for this session
-        for (const exercise of session.exercises || []) {
+        for (const exercise of allExercises) {
+          if (!exercise.exerciseId) continue; // Skip empty slots
           const tweak = tweakMap.get(structure.indexOf(week)) || null;
           const exerciseTweak = tweak?.tweaks.find(
-            (t) => t.exerciseId === exercise.exerciseId
+            (t: any) => t.exerciseId === exercise.exerciseId
           );
 
           const { error: rxErr } = await sb
