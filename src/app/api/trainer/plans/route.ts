@@ -158,7 +158,7 @@ export async function POST(req: Request) {
     // Verify template exists and belongs to trainer's team
     const { data: template, error: templateErr } = await sb
       .from("training_plan_templates")
-      .select("id, plan_name, plan_type, duration_weeks, sessions_per_week, readiness_enabled, readiness_red_action, readiness_yellow_action, deload_volume_pct, deload_intensity_pct, structure")
+      .select("id, name, plan_type, duration_weeks, sessions_per_week, readiness_enabled, deload_volume_pct, deload_intensity_pct, structure")
       .eq("id", body.templateId)
       .eq("team_id", ctx.teamId)
       .single();
@@ -188,17 +188,15 @@ export async function POST(req: Request) {
           player_id: body.playerId,
           team_id: ctx.teamId,
           created_by: ctx.userId,
-          plan_name: template.plan_name,
+          plan_name: template.name,
           plan_type: template.plan_type,
           start_date: body.startDate,
           end_date: endDate.toISOString().split("T")[0],
           status: "active",
           readiness_enabled: template.readiness_enabled,
-          readiness_red_action: template.readiness_red_action,
-          readiness_yellow_action: template.readiness_yellow_action,
           deload_volume_pct: template.deload_volume_pct,
           deload_intensity_pct: template.deload_intensity_pct,
-          notes: `From template: ${template.plan_name}`,
+          notes: `From template: ${template.name}`,
         },
       ])
       .select("id")
@@ -284,7 +282,7 @@ export async function POST(req: Request) {
           id: plan.id,
           playerId: body.playerId,
           playerName: player.full_name,
-          planName: template.plan_name,
+          planName: template.name,
           planType: template.plan_type,
           startDate: body.startDate,
           status: "active",
