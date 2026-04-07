@@ -103,8 +103,11 @@ export type Drill = {
   player_load_per_min: number | null;
   accel_b23: number | null;
   decel_b23: number | null;
+  accel_b23_avg: number | null;
+  decel_b23_avg: number | null;
   accel_total: number | null;
   decel_total: number | null;
+  max_velocity: number | null;
   metabolic_power_avg: number | null;
   metabolic_power_peak: number | null;
   hmld_m: number | null;
@@ -138,8 +141,11 @@ type FormState = {
   player_load_per_min: number | null;
   accel_b23: number | null;
   decel_b23: number | null;
+  accel_b23_avg: number | null;
+  decel_b23_avg: number | null;
   accel_total: number | null;
   decel_total: number | null;
+  max_velocity: number | null;
   metabolic_power_avg: number | null;
   metabolic_power_peak: number | null;
   hmld_m: number | null;
@@ -168,8 +174,11 @@ const emptyForm: FormState = {
   player_load_per_min: null,
   accel_b23: null,
   decel_b23: null,
+  accel_b23_avg: null,
+  decel_b23_avg: null,
   accel_total: null,
   decel_total: null,
+  max_velocity: null,
   metabolic_power_avg: null,
   metabolic_power_peak: null,
   hmld_m: null,
@@ -304,8 +313,11 @@ export default function CoachDrillLibrary({
       player_load_per_min: d.player_load_per_min,
       accel_b23: d.accel_b23,
       decel_b23: d.decel_b23,
+      accel_b23_avg: d.accel_b23_avg,
+      decel_b23_avg: d.decel_b23_avg,
       accel_total: d.accel_total,
       decel_total: d.decel_total,
+      max_velocity: d.max_velocity,
       metabolic_power_avg: d.metabolic_power_avg,
       metabolic_power_peak: d.metabolic_power_peak,
       hmld_m: d.hmld_m,
@@ -337,8 +349,11 @@ export default function CoachDrillLibrary({
       player_load_per_min: d.player_load_per_min,
       accel_b23: d.accel_b23,
       decel_b23: d.decel_b23,
+      accel_b23_avg: d.accel_b23_avg,
+      decel_b23_avg: d.decel_b23_avg,
       accel_total: d.accel_total,
       decel_total: d.decel_total,
+      max_velocity: d.max_velocity,
       metabolic_power_avg: d.metabolic_power_avg,
       metabolic_power_peak: d.metabolic_power_peak,
       hmld_m: d.hmld_m,
@@ -593,6 +608,9 @@ export default function CoachDrillLibrary({
                             value={d.hmld_m != null ? `${n(d.hmld_m, 0)}m` : "–"}
                           />
                         )}
+                        {isFootball && <Metric label="Acc B2-3 Avg" value={n(d.accel_b23_avg, 0)} />}
+                        {isFootball && <Metric label="Dec B2-3 Avg" value={n(d.decel_b23_avg, 0)} />}
+                        {isFootball && d.max_velocity != null && <Metric label="Max km/h" value={n(d.max_velocity, 1)} />}
                         {isFootball && <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />}
                         {!isFootball && <Metric label="IMA Accel" value={n(d.accel_total, 0)} />}
                         {!isFootball && <Metric label="IMA Decel" value={n(d.decel_total, 0)} />}
@@ -910,7 +928,7 @@ export default function CoachDrillLibrary({
                         ) : "–"}
                       />
                       <DetailRow
-                        label={isFootball ? "Accel B2–3" : "IMA Accel high"}
+                        label={isFootball ? "Accel B2–3 total" : "IMA Accel high"}
                         value={detail.accel_b23 != null ? (
                           isScaled
                             ? `${sv(detail.accel_b23, 0)} (↔ ${n(detail.accel_b23, 0)})`
@@ -918,13 +936,31 @@ export default function CoachDrillLibrary({
                         ) : "–"}
                       />
                       <DetailRow
-                        label={isFootball ? "Decel B2–3" : "IMA Decel high"}
+                        label={isFootball ? "Decel B2–3 total" : "IMA Decel high"}
                         value={detail.decel_b23 != null ? (
                           isScaled
                             ? `${sv(detail.decel_b23, 0)} (↔ ${n(detail.decel_b23, 0)})`
                             : n(detail.decel_b23, 0)
                         ) : "–"}
                       />
+                      {isFootball && (
+                        <DetailRow
+                          label="Accel B2–3 avg/sess"
+                          value={detail.accel_b23_avg != null ? n(detail.accel_b23_avg, 0) : "–"}
+                        />
+                      )}
+                      {isFootball && (
+                        <DetailRow
+                          label="Decel B2–3 avg/sess"
+                          value={detail.decel_b23_avg != null ? n(detail.decel_b23_avg, 0) : "–"}
+                        />
+                      )}
+                      {isFootball && detail.max_velocity != null && (
+                        <DetailRow
+                          label="Max velocity"
+                          value={`${n(detail.max_velocity, 1)} km/h`}
+                        />
+                      )}
                       {!isFootball && <DetailRow label="IMA COD total" value={detail.ima_cod_total != null ? (isScaled ? `${sv(detail.ima_cod_total, 0)} (↔ ${n(detail.ima_cod_total, 0)})` : n(detail.ima_cod_total, 0)) : "–"} />}
                       {!isFootball && <DetailRow label="High-IMA (≥3.5 m/s²)" value={detail.high_ima != null ? (isScaled ? `${sv(detail.high_ima, 0)} (↔ ${n(detail.high_ima, 0)})` : n(detail.high_ima, 0)) : "–"} />}
                     </Section>
@@ -1132,18 +1168,42 @@ export default function CoachDrillLibrary({
                   onChange={(v) => setForm({ ...form, decel_total: v })}
                 />
               </Field>
-              <Field label={isFootball ? "Accel B2-3 (count)" : "IMA Accel high (count)"}>
+              <Field label={isFootball ? "Accel B2-3 total" : "IMA Accel high (count)"}>
                 <NumInput
                   value={form.accel_b23}
                   onChange={(v) => setForm({ ...form, accel_b23: v })}
                 />
               </Field>
-              <Field label={isFootball ? "Decel B2-3 (count)" : "IMA Decel high (count)"}>
+              <Field label={isFootball ? "Decel B2-3 total" : "IMA Decel high (count)"}>
                 <NumInput
                   value={form.decel_b23}
                   onChange={(v) => setForm({ ...form, decel_b23: v })}
                 />
               </Field>
+              {isFootball && (
+                <Field label="Accel B2-3 avg/sess">
+                  <NumInput
+                    value={form.accel_b23_avg}
+                    onChange={(v) => setForm({ ...form, accel_b23_avg: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Decel B2-3 avg/sess">
+                  <NumInput
+                    value={form.decel_b23_avg}
+                    onChange={(v) => setForm({ ...form, decel_b23_avg: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Max velocity (km/h)">
+                  <NumInput
+                    value={form.max_velocity}
+                    onChange={(v) => setForm({ ...form, max_velocity: v })}
+                  />
+                </Field>
+              )}
               {isFootball && (
                 <Field label="Avg MetPwr (W/kg)">
                   <NumInput

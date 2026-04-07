@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Einkaþjálfari Dashboard — Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fa; }
+    .tab-active { border-color: #000; color: #000; }
+    .tab-inactive { border-color: transparent; color: #6b7280; }
+    .expand-detail { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .expand-detail.open { max-height: 400px; }
+  </style>
+</head>
+<body class="p-4 sm:p-8">
+
+  <!-- Container -->
+  <div class="max-w-5xl mx-auto">
+
+    <!-- Team Switcher -->
+    <div class="flex items-center justify-between mb-6">
+      <div></div>
+      <div class="flex items-center gap-2">
+        <select class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white shadow-sm">
+          <option>⚽ Breiðablik — Karlar</option>
+          <option selected>🏋️ Einkaþjálfun</option>
+        </select>
+        <button class="text-xs px-2 py-1 bg-gray-100 rounded">IS / EN</button>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold tracking-tight">Einkaþjálfari</h1>
+      <p class="text-sm text-gray-500">Yfirlit yfir viðskiptavini, ástand og æfingaáætlanir</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 border-b border-gray-200 mb-6">
+      <button id="tab-clients" onclick="switchTab('clients')" class="px-4 py-2 text-sm font-medium border-b-2 tab-active">
+        Viðskiptavinir
+      </button>
+      <button id="tab-invitations" onclick="switchTab('invitations')" class="px-4 py-2 text-sm font-medium border-b-2 tab-inactive">
+        Boðskort
+        <span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">2</span>
+      </button>
+    </div>
+
+    <!-- ═══════ CLIENTS TAB ═══════ -->
+    <div id="panel-clients">
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white border rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Viðskiptavinir</div>
+          <div class="text-2xl font-bold mt-1">5</div>
+        </div>
+        <div class="bg-white border rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Innritaðir í dag</div>
+          <div class="text-2xl font-bold mt-1 text-green-600">3</div>
+        </div>
+        <div class="bg-white border rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Lokið æfingu</div>
+          <div class="text-2xl font-bold mt-1 text-blue-600">2</div>
+        </div>
+        <div class="bg-white border rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Engin áætlun</div>
+          <div class="text-2xl font-bold mt-1 text-gray-400">1</div>
+        </div>
+      </div>
+
+      <!-- Client rows -->
+      <div class="space-y-3">
+
+        <!-- Client 1: GREEN -->
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="p-4 cursor-pointer hover:shadow-sm transition-shadow" onclick="toggleDetail('c1')">
+            <div class="flex items-center gap-4">
+              <div class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">Aron Þór Sigurðsson</div>
+                <div class="text-xs text-green-600">Innritaður</div>
+              </div>
+              <div class="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-300">
+                Grænt <span class="opacity-70">19/25</span>
+              </div>
+              <div class="text-right w-20 flex-shrink-0 hidden sm:block">
+                <div class="text-xs text-gray-500">ACWR</div>
+                <div class="text-sm font-medium">1.05 →</div>
+              </div>
+              <div class="text-right w-28 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Áætlun</div>
+                <div class="text-sm font-medium truncate">Styrkur</div>
+              </div>
+              <div class="text-right w-24 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Í dag</div>
+                <div class="text-sm">
+                  <span class="text-green-600 font-medium">3</span>
+                  <span class="text-gray-400">/4</span>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform" id="chevron-c1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+          <!-- Expanded detail -->
+          <div id="detail-c1" class="expand-detail">
+            <div class="border-t px-4 py-3 bg-gray-50">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                <div>
+                  <div class="text-xs text-gray-500">Þreyta</div>
+                  <div class="font-medium">4/5</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Svefn</div>
+                  <div class="font-medium">4/5</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Svefnlengd</div>
+                  <div class="font-medium">7.5 klst</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Streita</div>
+                  <div class="font-medium">3/5</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-500">Vöðvaverkir</div>
+                  <div class="font-medium">4/5</div>
+                </div>
+              </div>
+              <div class="mt-3 flex gap-2">
+                <div class="text-xs text-gray-500">Álag (7d): <span class="font-medium text-gray-800">2450 AU</span></div>
+                <div class="text-xs text-gray-400">|</div>
+                <div class="text-xs text-gray-500">Álag (28d): <span class="font-medium text-gray-800">2320 AU</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client 2: YELLOW -->
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="p-4 cursor-pointer hover:shadow-sm transition-shadow" onclick="toggleDetail('c2')">
+            <div class="flex items-center gap-4">
+              <div class="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">Katrín Svava Jóhannsdóttir</div>
+                <div class="text-xs text-green-600">Innrituð</div>
+              </div>
+              <div class="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-amber-100 text-amber-800 border-amber-300">
+                Gult <span class="opacity-70">14/25</span>
+              </div>
+              <div class="text-right w-20 flex-shrink-0 hidden sm:block">
+                <div class="text-xs text-gray-500">ACWR</div>
+                <div class="text-sm font-medium">1.32 ↑</div>
+              </div>
+              <div class="text-right w-28 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Áætlun</div>
+                <div class="text-sm font-medium truncate">Blandað</div>
+              </div>
+              <div class="text-right w-24 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Í dag</div>
+                <div class="text-sm">
+                  <span class="text-green-600 font-medium">2</span>
+                  <span class="text-gray-400">/3</span>
+                </div>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+          <div id="detail-c2" class="expand-detail">
+            <div class="border-t px-4 py-3 bg-gray-50">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                <div><div class="text-xs text-gray-500">Þreyta</div><div class="font-medium">3/5</div></div>
+                <div><div class="text-xs text-gray-500">Svefn</div><div class="font-medium">2/5</div></div>
+                <div><div class="text-xs text-gray-500">Svefnlengd</div><div class="font-medium">5.5 klst</div></div>
+                <div><div class="text-xs text-gray-500">Streita</div><div class="font-medium">3/5</div></div>
+                <div><div class="text-xs text-gray-500">Vöðvaverkir</div><div class="font-medium text-amber-600">2/5 — hné</div></div>
+              </div>
+              <div class="mt-3 flex gap-2">
+                <div class="text-xs text-gray-500">Álag (7d): <span class="font-medium text-gray-800">3120 AU</span></div>
+                <div class="text-xs text-gray-400">|</div>
+                <div class="text-xs text-gray-500">Álag (28d): <span class="font-medium text-gray-800">2360 AU</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client 3: RED -->
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="p-4 cursor-pointer hover:shadow-sm transition-shadow">
+            <div class="flex items-center gap-4">
+              <div class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">Björn Steinar Magnússon</div>
+                <div class="text-xs text-green-600">Innritaður</div>
+              </div>
+              <div class="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-red-100 text-red-800 border-red-300">
+                Rautt <span class="opacity-70">9/25</span>
+              </div>
+              <div class="text-right w-20 flex-shrink-0 hidden sm:block">
+                <div class="text-xs text-gray-500">ACWR</div>
+                <div class="text-sm font-medium">1.48 ↑</div>
+              </div>
+              <div class="text-right w-28 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Áætlun</div>
+                <div class="text-sm font-medium truncate">Styrkur</div>
+              </div>
+              <div class="text-right w-24 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Í dag</div>
+                <div class="text-sm text-gray-400">—</div>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client 4: not checked in -->
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="p-4 cursor-pointer hover:shadow-sm transition-shadow">
+            <div class="flex items-center gap-4">
+              <div class="w-3 h-3 rounded-full bg-gray-300 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">Guðrún Helga Eyjólfsdóttir</div>
+                <div class="text-xs text-amber-600">Ekki innrituð</div>
+              </div>
+              <div class="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-gray-100 text-gray-500 border-gray-200">
+                Vantar
+              </div>
+              <div class="text-right w-20 flex-shrink-0 hidden sm:block">
+                <div class="text-xs text-gray-500">ACWR</div>
+                <div class="text-sm font-medium">0.92 →</div>
+              </div>
+              <div class="text-right w-28 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Áætlun</div>
+                <div class="text-sm font-medium truncate">Þol</div>
+              </div>
+              <div class="text-right w-24 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Í dag</div>
+                <div class="text-sm text-gray-400">—</div>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client 5: no plan -->
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="p-4 cursor-pointer hover:shadow-sm transition-shadow">
+            <div class="flex items-center gap-4">
+              <div class="w-3 h-3 rounded-full bg-gray-300 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium">Sigurður Óli Davíðsson</div>
+                <div class="text-xs text-amber-600">Ekki búinn til aðgang</div>
+              </div>
+              <div class="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-gray-100 text-gray-500 border-gray-200">
+                Vantar
+              </div>
+              <div class="text-right w-20 flex-shrink-0 hidden sm:block">
+                <div class="text-xs text-gray-500">ACWR</div>
+                <div class="text-sm text-gray-400">—</div>
+              </div>
+              <div class="text-right w-28 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Áætlun</div>
+                <div class="text-sm text-gray-400">—</div>
+              </div>
+              <div class="text-right w-24 flex-shrink-0 hidden md:block">
+                <div class="text-xs text-gray-500">Í dag</div>
+                <div class="text-sm text-gray-400">—</div>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════ INVITATIONS TAB ═══════ -->
+    <div id="panel-invitations" class="hidden">
+
+      <!-- Send invitation form -->
+      <div class="bg-white border rounded-lg p-5 mb-6">
+        <h3 class="text-sm font-semibold mb-3">Senda boðskort</h3>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input type="email" placeholder="Netfang viðskiptavinar" value="jon@example.com"
+            class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20" />
+          <input type="text" placeholder="Nafn (valfrjálst)" value="Jón Gunnar"
+            class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20" />
+          <button class="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 whitespace-nowrap">
+            Senda boð
+          </button>
+        </div>
+      </div>
+
+      <!-- Pending invitations -->
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">Bíðandi boð</h3>
+      <div class="space-y-2 mb-6">
+        <div class="bg-white border rounded-lg p-4 flex items-center gap-4">
+          <div class="flex-1">
+            <div class="font-medium text-sm">Sigurður Óli Davíðsson</div>
+            <div class="text-xs text-gray-500">sigurdur@example.com</div>
+          </div>
+          <div class="text-xs text-gray-400">Sent 4. apr 2026</div>
+          <div class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Bíður</div>
+          <button class="text-xs text-blue-600 hover:underline" title="Afrita hlekk">📋 Afrita hlekk</button>
+          <button class="text-xs text-red-600 hover:underline">Afturkalla</button>
+        </div>
+        <div class="bg-white border rounded-lg p-4 flex items-center gap-4">
+          <div class="flex-1">
+            <div class="font-medium text-sm">Helga Björk Steinsdóttir</div>
+            <div class="text-xs text-gray-500">helga.bjork@example.com</div>
+          </div>
+          <div class="text-xs text-gray-400">Sent 2. apr 2026</div>
+          <div class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Bíður</div>
+          <button class="text-xs text-blue-600 hover:underline">📋 Afrita hlekk</button>
+          <button class="text-xs text-red-600 hover:underline">Afturkalla</button>
+        </div>
+      </div>
+
+      <!-- Accepted -->
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">Samþykkt</h3>
+      <div class="space-y-2">
+        <div class="bg-white border rounded-lg p-4 flex items-center gap-4 opacity-70">
+          <div class="flex-1">
+            <div class="font-medium text-sm">Aron Þór Sigurðsson</div>
+            <div class="text-xs text-gray-500">aron@example.com</div>
+          </div>
+          <div class="text-xs text-gray-400">Samþykkt 20. mar 2026</div>
+          <div class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Samþykkt</div>
+        </div>
+        <div class="bg-white border rounded-lg p-4 flex items-center gap-4 opacity-70">
+          <div class="flex-1">
+            <div class="font-medium text-sm">Katrín Svava Jóhannsdóttir</div>
+            <div class="text-xs text-gray-500">katrin@example.com</div>
+          </div>
+          <div class="text-xs text-gray-400">Samþykkt 15. mar 2026</div>
+          <div class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Samþykkt</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="mt-8 text-xs text-gray-400 text-center">
+      Mockup — Einkaþjálfari Dashboard · Breiðablik Readiness System
+    </div>
+
+  </div>
+
+  <script>
+    function switchTab(tab) {
+      document.getElementById('panel-clients').classList.toggle('hidden', tab !== 'clients');
+      document.getElementById('panel-invitations').classList.toggle('hidden', tab !== 'invitations');
+      document.getElementById('tab-clients').className = 'px-4 py-2 text-sm font-medium border-b-2 ' + (tab === 'clients' ? 'tab-active' : 'tab-inactive');
+      document.getElementById('tab-invitations').className = 'px-4 py-2 text-sm font-medium border-b-2 ' + (tab === 'invitations' ? 'tab-active' : 'tab-inactive');
+    }
+
+    function toggleDetail(id) {
+      const el = document.getElementById('detail-' + id);
+      el.classList.toggle('open');
+    }
+  </script>
+
+</body>
+</html>

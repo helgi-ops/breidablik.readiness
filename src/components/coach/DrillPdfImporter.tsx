@@ -212,6 +212,8 @@ export default function DrillPdfImporter({
             distance_m: d.distance_m,
             vel_b5: d.vel_b5,
             vel_b6: d.vel_b6,
+            vel_b5_avg: d.vel_b5_avg,
+            vel_b6_avg: d.vel_b6_avg,
             hir_total: d.hir_dist_m,
             player_load: d.player_load,
             accel_b23: d.accel_b23_total,
@@ -337,8 +339,8 @@ export default function DrillPdfImporter({
                       </td>
                       <td className="px-2 py-1">{n(drill.distance_m, 0)}</td>
                       <td className="px-2 py-1">{n(drill.player_load, 0)}</td>
-                      <td className="px-2 py-1">{n(drill.vel_b5, 0)}</td>
-                      <td className="px-2 py-1">{n(drill.vel_b6, 0)}</td>
+                      <td className="px-2 py-1">{drill.vel_b5_avg != null ? n(drill.vel_b5_avg, 0) : n(drill.vel_b5, 0)}</td>
+                      <td className="px-2 py-1">{drill.vel_b6_avg != null ? n(drill.vel_b6_avg, 0) : n(drill.vel_b6, 0)}</td>
                       <td className="px-2 py-1">{n(drill.accel_b23_avg, 0)}</td>
                       <td className="px-2 py-1">{n(drill.decel_b23_avg, 0)}</td>
                       <td className="px-2 py-1">{n(drill.accel_total, 0)}</td>

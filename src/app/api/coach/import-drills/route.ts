@@ -39,6 +39,8 @@ interface DrillInput {
   distance_m?: number | null;
   vel_b5?: number | null;
   vel_b6?: number | null;
+  vel_b5_avg?: number | null;
+  vel_b6_avg?: number | null;
   hir_total?: number | null;
   player_load?: number | null;
   accel_b23?: number | null;
@@ -100,6 +102,8 @@ export async function POST(req: NextRequest) {
           distance_m: drill.distance_m ?? null,
           vel_b5: drill.vel_b5 ?? null,
           vel_b6: drill.vel_b6 ?? null,
+          vel_b5_avg: drill.vel_b5_avg ?? null,
+          vel_b6_avg: drill.vel_b6_avg ?? null,
           hir_total: drill.hir_total ?? null,
           player_load: drill.player_load ?? null,
           player_load_per_min:
