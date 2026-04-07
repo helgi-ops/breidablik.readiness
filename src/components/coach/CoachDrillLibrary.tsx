@@ -11,7 +11,8 @@ import {
   checkBoutDuration,
 } from "@/lib/drill-recommendations";
 
-type Category =
+// ── Football categories ──
+type FootballCategory =
   | "possession"
   | "ssg"
   | "transition"
@@ -20,7 +21,19 @@ type Category =
   | "warmup"
   | "other";
 
-const CATEGORIES: Category[] = [
+// ── Basketball categories ──
+type BasketballCategory =
+  | "shooting"
+  | "fast_break"
+  | "half_court_offense"
+  | "defense"
+  | "conditioning"
+  | "warmup"
+  | "other";
+
+type Category = FootballCategory | BasketballCategory;
+
+const FOOTBALL_CATEGORIES: FootballCategory[] = [
   "possession",
   "ssg",
   "transition",
@@ -30,15 +43,42 @@ const CATEGORIES: Category[] = [
   "other",
 ];
 
-const CATEGORY_LABELS: Record<Category, string> = {
+const BASKETBALL_CATEGORIES: BasketballCategory[] = [
+  "shooting",
+  "fast_break",
+  "half_court_offense",
+  "defense",
+  "conditioning",
+  "warmup",
+  "other",
+];
+
+const ALL_CATEGORY_LABELS: Record<Category, string> = {
+  // Football
   possession: "Possession",
   ssg: "SSG",
   transition: "Transition",
   running: "Running",
   finishing: "Finishing",
+  // Basketball
+  shooting: "Shooting",
+  fast_break: "Fast Break",
+  half_court_offense: "Half-Court Offense",
+  defense: "Defense",
+  conditioning: "Conditioning",
+  // Shared
   warmup: "Warm-up",
   other: "Annað",
 };
+
+function getCategoriesForSport(sport: string | null): Category[] {
+  if (sport === "basketball") return BASKETBALL_CATEGORIES;
+  return FOOTBALL_CATEGORIES;
+}
+
+function isFootballSport(sport: string | null): boolean {
+  return sport !== "basketball";
+}
 
 export type Drill = {
   id: string;
@@ -69,6 +109,10 @@ export type Drill = {
   hmld_m: number | null;
   time_above_threshold_s: number | null;
   metabolic_estimated: boolean;
+  // ── Basketball BMP (Catapult) ──
+  jump_count: number | null;
+  ima_cod_total: number | null;
+  high_ima: number | null;
   source: "seed" | "coach" | "catapult" | "public_template";
   created_by: string | null;
   created_at: string;
@@ -99,6 +143,10 @@ type FormState = {
   metabolic_power_peak: number | null;
   hmld_m: number | null;
   time_above_threshold_s: number | null;
+  // ── Basketball BMP ──
+  jump_count: number | null;
+  ima_cod_total: number | null;
+  high_ima: number | null;
 };
 
 const emptyForm: FormState = {
@@ -125,6 +173,9 @@ const emptyForm: FormState = {
   metabolic_power_peak: null,
   hmld_m: null,
   time_above_threshold_s: null,
+  jump_count: null,
+  ima_cod_total: null,
+  high_ima: null,
 };
 
 function n(v: number | null | undefined, digits = 1) {
@@ -141,10 +192,14 @@ async function getAuthToken(): Promise<string | null> {
 export default function CoachDrillLibrary({
   teamId,
   mineOnly = false,
+  teamSport = null,
 }: {
   teamId: string;
   mineOnly?: boolean;
+  teamSport?: string | null;
 }) {
+  const categories = getCategoriesForSport(teamSport);
+  const isFootball = isFootballSport(teamSport);
   const [drills, setDrills] = useState<Drill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,14 +263,21 @@ export default function CoachDrillLibrary({
 
   const grouped = useMemo(() => {
     const map = new Map<Category, Drill[]>();
-    for (const c of CATEGORIES) map.set(c, []);
-    for (const d of filtered) map.get(d.category)!.push(d);
+    for (const c of categories) map.set(c, []);
+    for (const d of filtered) {
+      if (map.has(d.category)) {
+        map.get(d.category)!.push(d);
+      } else {
+        // Drill from another sport — put in "other"
+        map.get("other")!.push(d);
+      }
+    }
     return map;
-  }, [filtered]);
+  }, [filtered, categories]);
 
   function openAdd() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, category: categories[0] });
     setModalOpen(true);
   }
 
@@ -245,6 +307,9 @@ export default function CoachDrillLibrary({
       metabolic_power_peak: d.metabolic_power_peak,
       hmld_m: d.hmld_m,
       time_above_threshold_s: d.time_above_threshold_s,
+      jump_count: d.jump_count,
+      ima_cod_total: d.ima_cod_total,
+      high_ima: d.high_ima,
     });
     setModalOpen(true);
   }
@@ -275,6 +340,9 @@ export default function CoachDrillLibrary({
       metabolic_power_peak: d.metabolic_power_peak,
       hmld_m: d.hmld_m,
       time_above_threshold_s: d.time_above_threshold_s,
+      jump_count: d.jump_count,
+      ima_cod_total: d.ima_cod_total,
+      high_ima: d.high_ima,
     });
     setModalOpen(true);
   }
@@ -363,9 +431,9 @@ export default function CoachDrillLibrary({
           className="rounded border px-2 py-1 text-sm"
         >
           <option value="all">Allir flokkar</option>
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c} value={c}>
-              {CATEGORY_LABELS[c]}
+              {ALL_CATEGORY_LABELS[c]}
             </option>
           ))}
         </select>
@@ -400,13 +468,13 @@ export default function CoachDrillLibrary({
 
       {!loading && (
         <div className="space-y-6">
-          {CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const list = grouped.get(cat) ?? [];
             if (list.length === 0) return null;
             return (
               <div key={cat}>
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                  {CATEGORY_LABELS[cat]} ({list.length})
+                  {ALL_CATEGORY_LABELS[cat]} ({list.length})
                 </h3>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {list.map((d) => (
@@ -436,7 +504,7 @@ export default function CoachDrillLibrary({
                           >
                             {d.source}
                           </span>
-                          {(() => {
+                          {isFootball ? (() => {
                             const s = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
                             if (!s) return null;
                             const c = stimulusColorClasses(s.type);
@@ -448,8 +516,8 @@ export default function CoachDrillLibrary({
                                 {s.shortLabel}
                               </span>
                             );
-                          })()}
-                          {(() => {
+                          })() : null}
+                          {isFootball ? (() => {
                             const tag = getFormatTag(d.total_players);
                             if (!tag) return null;
                             const c = formatGoalColorClasses(tag.goal);
@@ -461,11 +529,11 @@ export default function CoachDrillLibrary({
                                 {tag.format}
                               </span>
                             );
-                          })()}
+                          })() : null}
                         </div>
                       </div>
 
-                      {(() => {
+                      {isFootball ? (() => {
                         const est = estimateSsgIntensity(d.total_players, d.area_per_player_m2);
                         if (!est) return null;
                         const c = bandColorClasses(est.band);
@@ -478,29 +546,38 @@ export default function CoachDrillLibrary({
                             <span className="opacity-80">{est.suitableMdDays.join(" · ")}</span>
                           </div>
                         );
-                      })()}
+                      })() : null}
 
                       <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
                         <Metric label="PL" value={n(d.player_load, 0)} />
                         <Metric label="PL/min" value={n(d.player_load_per_min, 1)} />
                         <Metric label="Dur (min)" value={n(d.duration_min, 1)} />
                         <Metric label="Dist (m)" value={n(d.distance_m, 0)} />
-                        <Metric label="HIR" value={n(d.hir_total, 0)} />
-                        <Metric
-                          label="Völlur"
-                          value={
-                            d.field_length_m && d.field_width_m
-                              ? `${n(d.field_length_m, 0)}×${n(d.field_width_m, 0)}`
-                              : "–"
-                          }
-                        />
-                        <Metric label="m²/leikm" value={n(d.area_per_player_m2, 0)} />
+                        {isFootball && <Metric label="HIR" value={n(d.hir_total, 0)} />}
+                        {isFootball && (
+                          <Metric
+                            label="Völlur"
+                            value={
+                              d.field_length_m && d.field_width_m
+                                ? `${n(d.field_length_m, 0)}×${n(d.field_width_m, 0)}`
+                                : "–"
+                            }
+                          />
+                        )}
+                        {isFootball && <Metric label="m²/leikm" value={n(d.area_per_player_m2, 0)} />}
                         <Metric label="Leikm" value={d.total_players ?? "–"} />
-                        <Metric
-                          label={d.metabolic_estimated ? "HMLD (est)" : "HMLD"}
-                          value={d.hmld_m != null ? `${n(d.hmld_m, 0)}m` : "–"}
-                        />
-                        <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />
+                        {isFootball && (
+                          <Metric
+                            label={d.metabolic_estimated ? "HMLD (est)" : "HMLD"}
+                            value={d.hmld_m != null ? `${n(d.hmld_m, 0)}m` : "–"}
+                          />
+                        )}
+                        {isFootball && <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />}
+                        {!isFootball && <Metric label="IMA Accel" value={n(d.accel_total, 0)} />}
+                        {!isFootball && <Metric label="IMA Decel" value={n(d.decel_total, 0)} />}
+                        {!isFootball && <Metric label="Jumps" value={n(d.jump_count, 0)} />}
+                        {!isFootball && <Metric label="COD" value={n(d.ima_cod_total, 0)} />}
+                        {!isFootball && <Metric label="High-IMA" value={n(d.high_ima, 0)} />}
                       </div>
 
                       <div className="mt-3 flex gap-1 text-xs">
@@ -556,7 +633,7 @@ export default function CoachDrillLibrary({
                 )}
                 <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                   <span className="rounded bg-gray-100 px-1.5 py-0.5">
-                    {CATEGORY_LABELS[detail.category]}
+                    {ALL_CATEGORY_LABELS[detail.category] ?? detail.category}
                   </span>
                   <span
                     className={`rounded px-1.5 py-0.5 ${
@@ -588,7 +665,7 @@ export default function CoachDrillLibrary({
               </p>
             )}
 
-            {(() => {
+            {isFootball ? (() => {
               const est = estimateSsgIntensity(detail.total_players, detail.area_per_player_m2);
               if (!est) return null;
               const c = bandColorClasses(est.band);
@@ -609,9 +686,9 @@ export default function CoachDrillLibrary({
                   </div>
                 </div>
               );
-            })()}
+            })() : null}
 
-            {(() => {
+            {isFootball ? (() => {
               const s = classifyDrillStimulus(detail.vel_b5, detail.vel_b6, detail.accel_b23, detail.decel_b23);
               if (!s) return null;
               const c = stimulusColorClasses(s.type);
@@ -631,9 +708,9 @@ export default function CoachDrillLibrary({
                   </div>
                 </div>
               );
-            })()}
+            })() : null}
 
-            {(() => {
+            {isFootball ? (() => {
               const rec = getFormatRecommendation(detail.total_players, detail.area_per_player_m2);
               if (!rec || !rec.format) return null;
               const c = formatGoalColorClasses(rec.goal);
@@ -668,68 +745,80 @@ export default function CoachDrillLibrary({
                   </div>
                 </div>
               );
-            })()}
+            })() : null}
 
             <div className="space-y-4">
-              <Section title="Völlur og leikmenn">
-                <DetailRow
-                  label="Völlur (L × B)"
-                  value={
-                    detail.field_length_m && detail.field_width_m
-                      ? `${n(detail.field_length_m, 0)} × ${n(detail.field_width_m, 0)} m`
-                      : "–"
-                  }
-                />
-                <DetailRow
-                  label="Flatarmál"
-                  value={detail.field_area_m2 ? `${n(detail.field_area_m2, 0)} m²` : "–"}
-                />
-                <DetailRow label="Fjöldi leikmanna" value={detail.total_players ?? "–"} />
-                <DetailRow
-                  label="m² / leikm (Fradua viðmið: 65–110)"
-                  value={detail.area_per_player_m2 ? `${n(detail.area_per_player_m2, 1)} m²` : "–"}
-                  highlight={detail.area_per_player_m2 != null ? (
-                    detail.area_per_player_m2 < 65 ? "low" :
-                    detail.area_per_player_m2 > 110 ? "high" : "ok"
-                  ) : undefined}
-                />
-              </Section>
+              {isFootball && (
+                <Section title="Völlur og leikmenn">
+                  <DetailRow
+                    label="Völlur (L × B)"
+                    value={
+                      detail.field_length_m && detail.field_width_m
+                        ? `${n(detail.field_length_m, 0)} × ${n(detail.field_width_m, 0)} m`
+                        : "–"
+                    }
+                  />
+                  <DetailRow
+                    label="Flatarmál"
+                    value={detail.field_area_m2 ? `${n(detail.field_area_m2, 0)} m²` : "–"}
+                  />
+                  <DetailRow label="Fjöldi leikmanna" value={detail.total_players ?? "–"} />
+                  <DetailRow
+                    label="m² / leikm (Fradua viðmið: 65–110)"
+                    value={detail.area_per_player_m2 ? `${n(detail.area_per_player_m2, 1)} m²` : "–"}
+                    highlight={detail.area_per_player_m2 != null ? (
+                      detail.area_per_player_m2 < 65 ? "low" :
+                      detail.area_per_player_m2 > 110 ? "high" : "ok"
+                    ) : undefined}
+                  />
+                </Section>
+              )}
 
               <Section title="Tími og vegalengd">
                 <DetailRow label="Duration" value={detail.duration_min ? `${n(detail.duration_min, 1)} mín` : "–"} />
                 <DetailRow label="Distance" value={detail.distance_m ? `${n(detail.distance_m, 0)} m` : "–"} />
               </Section>
 
-              <Section title="Álag (GPS / Catapult)">
+              <Section title={isFootball ? "Álag (GPS / Catapult)" : "Álag (Catapult Indoor)"}>
                 <DetailRow label="Player Load (PL)" value={n(detail.player_load, 1)} />
                 <DetailRow label="PL / mín" value={n(detail.player_load_per_min, 2)} />
-                <DetailRow label="HIR total" value={detail.hir_total ? `${n(detail.hir_total, 0)} m` : "–"} />
-                <DetailRow label="Vel B5 (>19.8 km/h)" value={detail.vel_b5 ? `${n(detail.vel_b5, 0)} m` : "–"} />
-                <DetailRow label="Vel B6 (>25.2 km/h)" value={detail.vel_b6 ? `${n(detail.vel_b6, 0)} m` : "–"} />
+                {isFootball && <DetailRow label="HIR total" value={detail.hir_total ? `${n(detail.hir_total, 0)} m` : "–"} />}
+                {isFootball && <DetailRow label="Vel B5 (>19.8 km/h)" value={detail.vel_b5 ? `${n(detail.vel_b5, 0)} m` : "–"} />}
+                {isFootball && <DetailRow label="Vel B6 (>25.2 km/h)" value={detail.vel_b6 ? `${n(detail.vel_b6, 0)} m` : "–"} />}
                 <DetailRow label="Accel total" value={n(detail.accel_total, 0)} />
                 <DetailRow label="Decel total" value={n(detail.decel_total, 0)} />
-                <DetailRow label="Accel B2–3" value={n(detail.accel_b23, 0)} />
-                <DetailRow label="Decel B2–3" value={n(detail.decel_b23, 0)} />
+                <DetailRow label={isFootball ? "Accel B2–3" : "IMA Accel high"} value={n(detail.accel_b23, 0)} />
+                <DetailRow label={isFootball ? "Decel B2–3" : "IMA Decel high"} value={n(detail.decel_b23, 0)} />
+                {!isFootball && <DetailRow label="IMA COD total" value={n(detail.ima_cod_total, 0)} />}
+                {!isFootball && <DetailRow label="High-IMA (≥3.5 m/s²)" value={n(detail.high_ima, 0)} />}
               </Section>
 
-              <Section title={`Metabolic Power (Osgnach 2010)${detail.metabolic_estimated ? " · áætlað frá PL" : ""}`}>
-                <DetailRow
-                  label="Avg MetPwr"
-                  value={detail.metabolic_power_avg != null ? `${n(detail.metabolic_power_avg, 1)} W/kg` : "–"}
-                />
-                <DetailRow
-                  label="Peak MetPwr"
-                  value={detail.metabolic_power_peak != null ? `${n(detail.metabolic_power_peak, 1)} W/kg` : "–"}
-                />
-                <DetailRow
-                  label="HMLD (>25.5 W/kg)"
-                  value={detail.hmld_m != null ? `${n(detail.hmld_m, 0)} m` : "–"}
-                />
-                <DetailRow
-                  label="Time > threshold"
-                  value={detail.time_above_threshold_s != null ? `${n(detail.time_above_threshold_s, 0)} s` : "–"}
-                />
-              </Section>
+              {!isFootball && (
+                <Section title="Jumps (Catapult BMP)">
+                  <DetailRow label="Jump Count" value={n(detail.jump_count, 0)} />
+                </Section>
+              )}
+
+              {isFootball && (
+                <Section title={`Metabolic Power (Osgnach 2010)${detail.metabolic_estimated ? " · áætlað frá PL" : ""}`}>
+                  <DetailRow
+                    label="Avg MetPwr"
+                    value={detail.metabolic_power_avg != null ? `${n(detail.metabolic_power_avg, 1)} W/kg` : "–"}
+                  />
+                  <DetailRow
+                    label="Peak MetPwr"
+                    value={detail.metabolic_power_peak != null ? `${n(detail.metabolic_power_peak, 1)} W/kg` : "–"}
+                  />
+                  <DetailRow
+                    label="HMLD (>25.5 W/kg)"
+                    value={detail.hmld_m != null ? `${n(detail.hmld_m, 0)} m` : "–"}
+                  />
+                  <DetailRow
+                    label="Time > threshold"
+                    value={detail.time_above_threshold_s != null ? `${n(detail.time_above_threshold_s, 0)} s` : "–"}
+                  />
+                </Section>
+              )}
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
@@ -774,9 +863,9 @@ export default function CoachDrillLibrary({
                   onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
                   className="w-full rounded border px-2 py-1"
                 >
-                  {CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <option key={c} value={c}>
-                      {CATEGORY_LABELS[c]}
+                      {ALL_CATEGORY_LABELS[c]}
                     </option>
                   ))}
                 </select>
@@ -815,18 +904,22 @@ export default function CoachDrillLibrary({
                 </Field>
               </div>
 
-              <Field label="Lengd vallar (m)">
-                <NumInput
-                  value={form.field_length_m}
-                  onChange={(v) => setForm({ ...form, field_length_m: v })}
-                />
-              </Field>
-              <Field label="Breidd vallar (m)">
-                <NumInput
-                  value={form.field_width_m}
-                  onChange={(v) => setForm({ ...form, field_width_m: v })}
-                />
-              </Field>
+              {isFootball && (
+                <Field label="Lengd vallar (m)">
+                  <NumInput
+                    value={form.field_length_m}
+                    onChange={(v) => setForm({ ...form, field_length_m: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Breidd vallar (m)">
+                  <NumInput
+                    value={form.field_width_m}
+                    onChange={(v) => setForm({ ...form, field_width_m: v })}
+                  />
+                </Field>
+              )}
               <Field label="Fjöldi leikmanna">
                 <NumInput
                   value={form.total_players}
@@ -834,11 +927,13 @@ export default function CoachDrillLibrary({
                   integer
                 />
               </Field>
-              <Field label="m² / leikmann (reiknað)">
-                <div className="rounded border bg-gray-50 px-2 py-1 text-gray-600">
-                  {computedAreaPerPlayer != null ? computedAreaPerPlayer.toFixed(1) : "–"}
-                </div>
-              </Field>
+              {isFootball && (
+                <Field label="m² / leikmann (reiknað)">
+                  <div className="rounded border bg-gray-50 px-2 py-1 text-gray-600">
+                    {computedAreaPerPlayer != null ? computedAreaPerPlayer.toFixed(1) : "–"}
+                  </div>
+                </Field>
+              )}
 
               <Field label="Duration (min)">
                 <NumInput
@@ -868,66 +963,107 @@ export default function CoachDrillLibrary({
                   onChange={(v) => setForm({ ...form, player_load_per_min: v })}
                 />
               </Field>
-              <Field label="Vel B5 (m)">
-                <NumInput value={form.vel_b5} onChange={(v) => setForm({ ...form, vel_b5: v })} />
-              </Field>
-              <Field label="Vel B6 (m)">
-                <NumInput value={form.vel_b6} onChange={(v) => setForm({ ...form, vel_b6: v })} />
-              </Field>
-              <Field label="HIR total (m)">
-                <NumInput
-                  value={form.hir_total}
-                  onChange={(v) => setForm({ ...form, hir_total: v })}
-                />
-              </Field>
-              <Field label="Accel total (count)">
+              {isFootball && (
+                <Field label="Vel B5 (m)">
+                  <NumInput value={form.vel_b5} onChange={(v) => setForm({ ...form, vel_b5: v })} />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Vel B6 (m)">
+                  <NumInput value={form.vel_b6} onChange={(v) => setForm({ ...form, vel_b6: v })} />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="HIR total (m)">
+                  <NumInput
+                    value={form.hir_total}
+                    onChange={(v) => setForm({ ...form, hir_total: v })}
+                  />
+                </Field>
+              )}
+              <Field label={isFootball ? "Accel total (count)" : "IMA Accel (count)"}>
                 <NumInput
                   value={form.accel_total}
                   onChange={(v) => setForm({ ...form, accel_total: v })}
                 />
               </Field>
-              <Field label="Decel total (count)">
+              <Field label={isFootball ? "Decel total (count)" : "IMA Decel (count)"}>
                 <NumInput
                   value={form.decel_total}
                   onChange={(v) => setForm({ ...form, decel_total: v })}
                 />
               </Field>
-              <Field label="Accel B2-3 (count)">
+              <Field label={isFootball ? "Accel B2-3 (count)" : "IMA Accel high (count)"}>
                 <NumInput
                   value={form.accel_b23}
                   onChange={(v) => setForm({ ...form, accel_b23: v })}
                 />
               </Field>
-              <Field label="Decel B2-3 (count)">
+              <Field label={isFootball ? "Decel B2-3 (count)" : "IMA Decel high (count)"}>
                 <NumInput
                   value={form.decel_b23}
                   onChange={(v) => setForm({ ...form, decel_b23: v })}
                 />
               </Field>
-              <Field label="Avg MetPwr (W/kg)">
-                <NumInput
-                  value={form.metabolic_power_avg}
-                  onChange={(v) => setForm({ ...form, metabolic_power_avg: v })}
-                />
-              </Field>
-              <Field label="Peak MetPwr (W/kg)">
-                <NumInput
-                  value={form.metabolic_power_peak}
-                  onChange={(v) => setForm({ ...form, metabolic_power_peak: v })}
-                />
-              </Field>
-              <Field label="HMLD (m)">
-                <NumInput
-                  value={form.hmld_m}
-                  onChange={(v) => setForm({ ...form, hmld_m: v })}
-                />
-              </Field>
-              <Field label="Time > HML (s)">
-                <NumInput
-                  value={form.time_above_threshold_s}
-                  onChange={(v) => setForm({ ...form, time_above_threshold_s: v })}
-                />
-              </Field>
+              {isFootball && (
+                <Field label="Avg MetPwr (W/kg)">
+                  <NumInput
+                    value={form.metabolic_power_avg}
+                    onChange={(v) => setForm({ ...form, metabolic_power_avg: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Peak MetPwr (W/kg)">
+                  <NumInput
+                    value={form.metabolic_power_peak}
+                    onChange={(v) => setForm({ ...form, metabolic_power_peak: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="HMLD (m)">
+                  <NumInput
+                    value={form.hmld_m}
+                    onChange={(v) => setForm({ ...form, hmld_m: v })}
+                  />
+                </Field>
+              )}
+              {isFootball && (
+                <Field label="Time > HML (s)">
+                  <NumInput
+                    value={form.time_above_threshold_s}
+                    onChange={(v) => setForm({ ...form, time_above_threshold_s: v })}
+                  />
+                </Field>
+              )}
+              {!isFootball && (
+                <Field label="Jump Count">
+                  <NumInput
+                    value={form.jump_count}
+                    onChange={(v) => setForm({ ...form, jump_count: v })}
+                    integer
+                  />
+                </Field>
+              )}
+              {!isFootball && (
+                <Field label="IMA COD total">
+                  <NumInput
+                    value={form.ima_cod_total}
+                    onChange={(v) => setForm({ ...form, ima_cod_total: v })}
+                    integer
+                  />
+                </Field>
+              )}
+              {!isFootball && (
+                <Field label="High-IMA (≥3.5 m/s²)">
+                  <NumInput
+                    value={form.high_ima}
+                    onChange={(v) => setForm({ ...form, high_ima: v })}
+                    integer
+                  />
+                </Field>
+              )}
             </div>
 
             <div className="mt-5 flex justify-end gap-2">

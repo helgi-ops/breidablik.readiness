@@ -22,11 +22,19 @@ function getSupabase() {
 }
 
 const CATEGORIES = [
+  // Football
   "possession",
   "ssg",
   "transition",
   "running",
   "finishing",
+  // Basketball
+  "shooting",
+  "fast_break",
+  "half_court_offense",
+  "defense",
+  "conditioning",
+  // Shared
   "warmup",
   "other",
 ] as const;
@@ -166,6 +174,9 @@ export async function POST(req: NextRequest) {
     metabolic_power_peak: num(body.metabolic_power_peak),
     hmld_m: num(body.hmld_m),
     time_above_threshold_s: num(body.time_above_threshold_s),
+    jump_count: num(body.jump_count),
+    ima_cod_total: num(body.ima_cod_total),
+    high_ima: num(body.high_ima),
     source: "coach" as const,
     created_by: auth.userId,
   };

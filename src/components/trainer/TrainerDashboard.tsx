@@ -1,0 +1,499 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import { TRAINER_COPY } from "./trainerCopy";
+
+/* ── Types ───────────────────────────────────────────── */
+
+interface ClientReadiness {
+  totalScore: number | null;
+  zone: "green" | "yellow" | "red" | "none";
+  fatigue: number;
+  sleep: number;
+  sleepDuration: number;
+  stress: number;
+  soreness: number;
+  soreAreas: string[] | null;
+}
+
+interface ClientLoad {
+  acwr: number | null;
+  trend: string | null;
+  dailyLoad: number;
+  acute7d: number | null;
+  chronic28d: number | null;
+}
+
+interface ClientPlan {
+  id: string;
+  name: string;
+  type: "strength" | "endurance" | "mixed";
+}
+
+interface ClientCompletion {
+  completed: number;
+  skipped: number;
+  total: number;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  hasAccount: boolean;
+  position: string | null;
+  checkedInToday: boolean;
+  readiness: ClientReadiness | null;
+  load: ClientLoad | null;
+  plan: ClientPlan | null;
+  todayCompletion: ClientCompletion | null;
+}
+
+interface Invitation {
+  id: string;
+  client_email: string;
+  client_name: string | null;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+type TrainerTab = "clients" | "invitations";
+
+/* ── Component ───────────────────────────────────────── */
+
+export default function TrainerDashboard({ teamId }: { teamId: string }) {
+  const [lang] = useLang();
+  const ct = TRAINER_COPY[lang as keyof typeof TRAINER_COPY] ?? TRAINER_COPY.IS;
+  // supabase is imported from @/lib/supabaseClient
+
+  const [tab, setTab] = useState<TrainerTab>("clients");
+  const [clients, setClients] = useState<Client[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  // Invitation form
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  /* ── Fetch clients ──────────────────────────────────── */
+
+  const fetchClients = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/trainer/clients", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.clients) setClients(json.clients);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  const fetchInvitations = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/trainer/invitations", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.invitations) setInvitations(json.invitations);
+    } catch {
+      // silent
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchClients();
+    fetchInvitations();
+  }, [fetchClients, fetchInvitations]);
+
+  /* ── Send invitation ────────────────────────────────── */
+
+  async function sendInvite() {
+    if (!inviteEmail.includes("@")) return;
+    setInviteSending(true);
+    setInviteMsg("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/trainer/invitations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientEmail: inviteEmail,
+          clientName: inviteName || undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok) {
+        setInviteEmail("");
+        setInviteName("");
+        setInviteMsg(json.signupUrl ? `✓ ${ct.invitations.copyLink}: ${json.signupUrl}` : "✓");
+        fetchInvitations();
+      } else {
+        setInviteMsg(json.error || "Error");
+      }
+    } catch {
+      setInviteMsg("Error");
+    } finally {
+      setInviteSending(false);
+    }
+  }
+
+  /* ── Revoke invitation ──────────────────────────────── */
+
+  async function revokeInvite(id: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    await fetch(`/api/trainer/invitations?id=${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    fetchInvitations();
+  }
+
+  /* ── Copy link ──────────────────────────────────────── */
+
+  function copySignupLink(token: string) {
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/signup?invite=${token}&team_id=${teamId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(null), 2000);
+  }
+
+  /* ── Readiness zone helpers ─────────────────────────── */
+
+  function zoneBg(zone: string) {
+    switch (zone) {
+      case "green": return "bg-green-100 text-green-800 border-green-300";
+      case "yellow": return "bg-amber-100 text-amber-800 border-amber-300";
+      case "red": return "bg-red-100 text-red-800 border-red-300";
+      default: return "bg-gray-100 text-gray-500 border-gray-200";
+    }
+  }
+
+  function zoneDot(zone: string) {
+    switch (zone) {
+      case "green": return "bg-green-500";
+      case "yellow": return "bg-amber-500";
+      case "red": return "bg-red-500";
+      default: return "bg-gray-300";
+    }
+  }
+
+  function zoneLabel(zone: string) {
+    return ct.readiness[zone as keyof typeof ct.readiness] ?? zone;
+  }
+
+  function trendArrow(trend: string | null) {
+    if (trend === "RISING") return "↑";
+    if (trend === "DROPPING") return "↓";
+    return "→";
+  }
+
+  function planTypeLabel(type: string) {
+    return ct.plan[type as keyof typeof ct.plan] ?? type;
+  }
+
+  /* ── Render ─────────────────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">{ct.header.title}</h1>
+        <p className="text-sm text-gray-500">{ct.header.subtitle}</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-6">
+        {(["clients", "invitations"] as TrainerTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === t
+                ? "border-black text-black"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {ct.tabs[t]}
+            {t === "invitations" && invitations.filter((i) => i.status === "pending").length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+                {invitations.filter((i) => i.status === "pending").length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Clients tab ───────────────────────────────── */}
+      {tab === "clients" && (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white border rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.tabs.clients}</div>
+              <div className="text-2xl font-bold mt-1">{clients.length}</div>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.checkedIn}</div>
+              <div className="text-2xl font-bold mt-1 text-green-600">
+                {clients.filter((c) => c.checkedInToday).length}
+              </div>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.todayDone}</div>
+              <div className="text-2xl font-bold mt-1 text-blue-600">
+                {clients.filter((c) => c.todayCompletion && c.todayCompletion.completed > 0).length}
+              </div>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">{ct.clients.noPlan}</div>
+              <div className="text-2xl font-bold mt-1 text-gray-400">
+                {clients.filter((c) => !c.plan).length}
+              </div>
+            </div>
+          </div>
+
+          {/* Client list */}
+          {clients.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>{ct.clients.noClients}</p>
+              <button
+                onClick={() => setTab("invitations")}
+                className="mt-4 px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800"
+              >
+                {ct.clients.addClient}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {clients.map((client) => (
+                <div
+                  key={client.id}
+                  className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow cursor-pointer"
+                  onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Readiness dot */}
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${zoneDot(client.readiness?.zone ?? "none")}`} />
+
+                    {/* Name + status */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{client.name || "—"}</div>
+                      <div className="text-xs text-gray-500">
+                        {client.checkedInToday ? ct.clients.checkedIn : (
+                          <span className="text-amber-600">{client.hasAccount ? ct.clients.notCheckedIn : ct.clients.noAccount}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Readiness zone badge */}
+                    <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${zoneBg(client.readiness?.zone ?? "none")}`}>
+                      {zoneLabel(client.readiness?.zone ?? "none")}
+                      {client.readiness?.totalScore != null && (
+                        <span className="ml-1 opacity-70">{client.readiness.totalScore}/25</span>
+                      )}
+                    </div>
+
+                    {/* ACWR */}
+                    <div className="text-right w-20 flex-shrink-0 hidden sm:block">
+                      <div className="text-xs text-gray-500">{ct.load.acwr}</div>
+                      <div className="text-sm font-medium">
+                        {client.load?.acwr != null ? (
+                          <>
+                            {Number(client.load.acwr).toFixed(2)} {trendArrow(client.load.trend)}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Plan */}
+                    <div className="text-right w-28 flex-shrink-0 hidden md:block">
+                      <div className="text-xs text-gray-500">{ct.tabs.plans}</div>
+                      <div className="text-sm truncate">
+                        {client.plan ? (
+                          <span className="font-medium">{planTypeLabel(client.plan.type)}</span>
+                        ) : (
+                          <span className="text-gray-400">{ct.clients.noPlan}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Today completion */}
+                    <div className="text-right w-16 flex-shrink-0 hidden md:block">
+                      {client.todayCompletion ? (
+                        <span className="text-sm text-green-600 font-medium">
+                          {client.todayCompletion.completed}/{client.todayCompletion.total}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-300">—</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded detail */}
+                  {selectedClient?.id === client.id && (
+                    <div className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
+                        <span className="font-medium">{client.readiness?.fatigue ?? "—"}/5</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 text-xs block">Sleep</span>
+                        <span className="font-medium">{client.readiness?.sleep ?? "—"}/5</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 text-xs block">Stress/Mood</span>
+                        <span className="font-medium">{client.readiness?.stress ?? "—"}/5</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 text-xs block">Soreness</span>
+                        <span className="font-medium">{client.readiness?.soreness ?? "—"}/5</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 text-xs block">Daily Load</span>
+                        <span className="font-medium">{client.load?.dailyLoad ?? "—"}</span>
+                      </div>
+                      {client.readiness?.soreAreas && client.readiness.soreAreas.length > 0 && (
+                        <div className="col-span-2 sm:col-span-5">
+                          <span className="text-gray-500 text-xs block">Sore Areas</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {(client.readiness.soreAreas as string[]).map((area) => (
+                              <span key={area} className="px-2 py-0.5 bg-red-50 text-red-700 rounded text-xs">
+                                {area}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Invitations tab ───────────────────────────── */}
+      {tab === "invitations" && (
+        <div>
+          <h2 className="text-lg font-semibold mb-4">{ct.invitations.title}</h2>
+
+          {/* Send invite form */}
+          <div className="bg-white border rounded-lg p-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="email"
+                placeholder={ct.invitations.email}
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              />
+              <input
+                type="text"
+                placeholder={`${ct.invitations.name} (${lang === "IS" ? "valfrjálst" : "optional"})`}
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              />
+              <button
+                onClick={sendInvite}
+                disabled={inviteSending || !inviteEmail.includes("@")}
+                className="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              >
+                {inviteSending ? "..." : ct.invitations.send}
+              </button>
+            </div>
+            {inviteMsg && (
+              <p className="mt-2 text-sm text-gray-600 break-all">{inviteMsg}</p>
+            )}
+          </div>
+
+          {/* Invitation list */}
+          {invitations.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">
+              {lang === "IS" ? "Engin boð send ennþá." : "No invitations sent yet."}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {invitations.map((inv) => (
+                <div key={inv.id} className="bg-white border rounded-lg p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {inv.client_name || inv.client_email}
+                    </div>
+                    {inv.client_name && (
+                      <div className="text-xs text-gray-500">{inv.client_email}</div>
+                    )}
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      inv.status === "pending"
+                        ? "bg-amber-100 text-amber-700"
+                        : inv.status === "accepted"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {ct.invitations[inv.status as keyof typeof ct.invitations] ?? inv.status}
+                  </span>
+                  {inv.status === "pending" && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); copySignupLink(inv.token); }}
+                        className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                      >
+                        {copiedToken === inv.token ? ct.invitations.linkCopied : ct.invitations.copyLink}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); revokeInvite(inv.id); }}
+                        className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
+                      >
+                        {ct.invitations.revoke}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

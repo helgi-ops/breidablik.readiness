@@ -9,6 +9,11 @@ type Category =
   | "transition"
   | "running"
   | "finishing"
+  | "shooting"
+  | "fast_break"
+  | "half_court_offense"
+  | "defense"
+  | "conditioning"
   | "warmup"
   | "other";
 
@@ -34,13 +39,24 @@ export type PublicTemplate = {
   tags: string[] | null;
 };
 
-const CATEGORIES: Array<Category | "all"> = [
+const FOOTBALL_CATEGORIES: Array<Category | "all"> = [
   "all",
   "possession",
   "ssg",
   "transition",
   "running",
   "finishing",
+  "warmup",
+  "other",
+];
+
+const BASKETBALL_CATEGORIES: Array<Category | "all"> = [
+  "all",
+  "conditioning",
+  "half_court_offense",
+  "fast_break",
+  "defense",
+  "shooting",
   "warmup",
   "other",
 ];
@@ -52,6 +68,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   transition: "Transition",
   running: "Running",
   finishing: "Finishing",
+  conditioning: "Conditioning",
+  half_court_offense: "Half-Court Offense",
+  fast_break: "Fast Break",
+  defense: "Defense",
+  shooting: "Shooting",
   warmup: "Warm-up",
   other: "Annað",
 };
@@ -69,9 +90,11 @@ async function getAuthToken(): Promise<string | null> {
 
 export default function PublicDrillTemplates({
   teamId,
+  sport = "football",
   onCopied,
 }: {
   teamId: string;
+  sport?: string;
   onCopied?: () => void;
 }) {
   const [templates, setTemplates] = useState<PublicTemplate[]>([]);
@@ -89,7 +112,8 @@ export default function PublicDrillTemplates({
     try {
       const token = await getAuthToken();
       if (!token) throw new Error("Vantar auðkenningu");
-      const res = await fetch("/api/public/drill-library", {
+      const qs = sport ? `?sport=${encodeURIComponent(sport)}` : "";
+      const res = await fetch(`/api/public/drill-library${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -100,7 +124,7 @@ export default function PublicDrillTemplates({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sport]);
 
   useEffect(() => {
     refresh();
@@ -162,7 +186,7 @@ export default function PublicDrillTemplates({
           onChange={(e) => setFilterCategory(e.target.value as Category | "all")}
           className="rounded border px-2 py-1 text-sm"
         >
-          {CATEGORIES.map((c) => (
+          {(sport === "basketball" ? BASKETBALL_CATEGORIES : FOOTBALL_CATEGORIES).map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABELS[c]}
             </option>

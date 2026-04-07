@@ -21,6 +21,8 @@ type CopyShape = {
     features: string;
     faq: string;
     pricing: string;
+    blog: string;
+    sports: string;
     cta: string;
   };
   hero: {
@@ -130,6 +132,8 @@ const COPY: Record<Lang, CopyShape> = {
       features: "Features",
       faq: "FAQ",
       pricing: "Pricing",
+      blog: "Articles",
+      sports: "Sports",
       cta: "Get started",
     },
     hero: {
@@ -423,6 +427,8 @@ const COPY: Record<Lang, CopyShape> = {
       features: "Eiginleikar",
       faq: "Spurningar",
       pricing: "Verðskrá",
+      blog: "Fræðsla",
+      sports: "Íþróttir",
       cta: "Byrja",
     },
     hero: {
@@ -829,6 +835,8 @@ export default function HomeLanding() {
               <a href="#features" className="hover:text-white">{t.nav.features}</a>
               <a href="#faq" className="hover:text-white">{t.nav.faq}</a>
               <Link href="/pricing" className="hover:text-white">{t.nav.pricing}</Link>
+              <Link href="/blog" className="hover:text-white">{t.nav.blog}</Link>
+              <Link href="/sports" className="hover:text-white">{t.nav.sports}</Link>
             </nav>
 
             <div className="flex items-center gap-3">
@@ -901,6 +909,20 @@ export default function HomeLanding() {
                     {item.label}
                   </a>
                 ))}
+                <Link
+                  href="/blog"
+                  className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t.nav.blog}
+                </Link>
+                <Link
+                  href="/sports"
+                  className="rounded-xl px-3 py-2.5 hover:bg-white/10 hover:text-white"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t.nav.sports}
+                </Link>
                 <div className="mt-2 flex gap-2 border-t border-white/10 pt-3">
                   <Link href="/login" className="flex-1 rounded-xl border border-white/25 bg-white/5 px-4 py-2 text-center text-sm text-white transition hover:bg-white/10">
                     {t.auth.signIn}

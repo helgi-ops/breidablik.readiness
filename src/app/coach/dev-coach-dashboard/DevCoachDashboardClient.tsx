@@ -88,6 +88,8 @@ import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
+import TrainerDashboard from "@/components/trainer/TrainerDashboard";
+import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import ValdAlertsPanel from "@/components/dashboard/ValdAlertsPanel";
 import CoachStrengthVbtTab from "@/components/dashboard/CoachStrengthVbtTab";
 import CoachMdComparisonCard from "@/components/dashboard/CoachMdComparisonCard";
@@ -1741,6 +1743,7 @@ export default function CoachPage() {
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
+  const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
 
@@ -2398,8 +2401,9 @@ export default function CoachPage() {
 
     // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
     if (resolvedTeamId) {
-      supabase.from("teams").select("sport, gps_provider").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
+      supabase.from("teams").select("sport, gps_provider, team_type").eq("id", resolvedTeamId).maybeSingle().then(({ data }) => {
         setTeamSport(String((data as any)?.sport ?? "").toLowerCase() || null);
+        setTeamType(String((data as any)?.team_type ?? "club_team"));
         const gp = String((data as any)?.gps_provider ?? "catapult").toLowerCase();
         if (gp === "statsport" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
@@ -2413,6 +2417,17 @@ export default function CoachPage() {
     }
 
     return true;
+  }
+
+  /** Handle team switch from TeamSwitcher */
+  function handleTeamSwitch(team: CoachTeam) {
+    setCoachTeamId(team.id);
+    setTeamSport(team.sport || null);
+    setTeamType(team.teamType);
+    // Reset tab to "today" when switching teams
+    setDashTab("today");
+    setRows([]);
+    setLoading(true);
   }
 
   /** -----------------------------
@@ -6145,6 +6160,18 @@ export default function CoachPage() {
   const summaryTileClass = "rounded-2xl border border-slate-200 bg-white p-4";
   const compactTileClass = "rounded-xl border p-3";
 
+  // ── Personal trainer: render trainer dashboard instead ──
+  if (teamType === "personal_trainer" && coachTeamId) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end px-4 pt-2">
+          <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
+        </div>
+        <TrainerDashboard teamId={coachTeamId} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
@@ -6227,6 +6254,9 @@ export default function CoachPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Team switcher */}
+              <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
 
               {/* Language toggle */}
               <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
@@ -7788,7 +7818,7 @@ export default function CoachPage() {
         />
       )}
       {dashTab === "drills" && isAtLeastPro && coachTeamId && (
-        <CoachDrillsTab teamId={coachTeamId} />
+        <CoachDrillsTab teamId={coachTeamId} teamSport={teamSport} />
       )}
 
       {/* ══════════════════════════════════════════

@@ -21,11 +21,19 @@ function getSupabase() {
 }
 
 const CATEGORIES = [
+  // Football
   "possession",
   "ssg",
   "transition",
   "running",
   "finishing",
+  // Basketball
+  "shooting",
+  "fast_break",
+  "half_court_offense",
+  "defense",
+  "conditioning",
+  // Shared
   "warmup",
   "other",
 ] as const;
@@ -48,6 +56,9 @@ const NUMERIC_FIELDS = [
   "metabolic_power_peak",
   "hmld_m",
   "time_above_threshold_s",
+  "jump_count",
+  "ima_cod_total",
+  "high_ima",
 ] as const;
 
 const EDITABLE_FIELDS = [

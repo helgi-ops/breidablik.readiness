@@ -31,7 +31,7 @@ const DRILLS_TAB_COPY = {
 
 type SubTab = "general" | "research" | "mine" | "session" | "saved" | "analytics";
 
-export default function CoachDrillsTab({ teamId }: { teamId: string }) {
+export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: string; teamSport?: string | null }) {
   const [lang] = useLang();
   const t = DRILLS_TAB_COPY[lang];
   const [subTab, setSubTab] = useState<SubTab>("session");
@@ -69,16 +69,17 @@ export default function CoachDrillsTab({ teamId }: { teamId: string }) {
       </div>
 
       {subTab === "general" && (
-        <CoachDrillLibrary key={`general-${refreshKey}`} teamId={teamId} />
+        <CoachDrillLibrary key={`general-${refreshKey}`} teamId={teamId} teamSport={teamSport} />
       )}
       {subTab === "research" && (
         <PublicDrillTemplates
           teamId={teamId}
+          sport={teamSport ?? "football"}
           onCopied={() => setRefreshKey((k) => k + 1)}
         />
       )}
       {subTab === "mine" && (
-        <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly />
+        <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
       )}
       {subTab === "session" && <SessionBuilder teamId={teamId} />}
       {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} />}

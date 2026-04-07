@@ -21,11 +21,19 @@ function getSupabase() {
 }
 
 const CATEGORIES = [
+  // Football
   "possession",
   "ssg",
   "transition",
   "running",
   "finishing",
+  // Basketball
+  "shooting",
+  "fast_break",
+  "half_court_offense",
+  "defense",
+  "conditioning",
+  // Shared
   "warmup",
   "other",
 ] as const;
@@ -49,6 +57,7 @@ export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category");
   const q = req.nextUrl.searchParams.get("q");
   const tag = req.nextUrl.searchParams.get("tag");
+  const sport = req.nextUrl.searchParams.get("sport"); // 'football' | 'basketball'
 
   let query = supabase
     .from("drill_library_public")
@@ -56,6 +65,9 @@ export async function GET(req: NextRequest) {
     .order("category", { ascending: true })
     .order("drill_name", { ascending: true });
 
+  if (sport && ["football", "basketball"].includes(sport)) {
+    query = query.eq("sport", sport);
+  }
   if (category && (CATEGORIES as readonly string[]).includes(category)) {
     query = query.eq("category", category);
   }

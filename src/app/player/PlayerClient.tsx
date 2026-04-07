@@ -2958,6 +2958,7 @@ export default function PlayerClient() {
     dayInput: string,
     effectiveTableName?: string,
     effectiveSeasonPhase?: string,
+    fallbackTeamId?: string,
   ) {
     const tblName = effectiveTableName ?? templateTableName;
     const sPhase = effectiveSeasonPhase ?? activeSeasonPhase;
@@ -3022,7 +3023,10 @@ export default function PlayerClient() {
     if (resolved && !isOffDay) {
       setPlanIsFallback(false);
 
-      const resolvedTeamId = (resolved as any).team_id ?? null;
+      // team_id from the resolved view comes from microdose_decisions (LEFT JOIN).
+      // When no decision exists for today, team_id is null — fall back to the
+      // player's profile team so the custom template query still runs.
+      const resolvedTeamId = (resolved as any).team_id ?? fallbackTeamId ?? null;
       const resolvedMdDay = (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null;
       const resolvedReadiness =
         (resolved as any).readiness_resolved ?? (resolved as any).readiness_flag ?? null;
@@ -3069,7 +3073,7 @@ export default function PlayerClient() {
 
       const merged: any = {
         decision_id: (resolved as any).decision_id ?? null,
-        team_id: (resolved as any).team_id ?? null,
+        team_id: resolvedTeamId,
         player_id: (resolved as any).player_id,
         entry_date: (resolved as any).entry_date,
         md_day: (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null,
@@ -3605,7 +3609,7 @@ export default function PlayerClient() {
           .maybeSingle();
         setCoachFinalFlag((coachFlagRow as any) ?? null);
 
-        const p = await fetchStage4Plan(prof.player_id, safeDay, resolvedTableName, resolvedSeasonPhase);
+        const p = await fetchStage4Plan(prof.player_id, safeDay, resolvedTableName, resolvedSeasonPhase, prof.team_id);
         if (p) {
           setPlan((p as any) ?? null);
         } else if (srow) {
