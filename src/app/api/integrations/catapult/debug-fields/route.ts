@@ -118,6 +118,7 @@ export async function GET(request: Request) {
     const rowsBase = extractRows(details.basePayload);
     const rowsImaOnly = extractRows(details.imaOnlyPayload);
     const rowsMetabolicOnly = extractRows(details.metabolicOnlyPayload);
+    const rowsFmpOnly = extractRows(details.fmpOnlyPayload);
     const rowsMerged = extractRows(details.mergedPayload);
     const normalized = normalizeCatapultActivityStats({
       activityId: activity.id,
@@ -147,6 +148,12 @@ export async function GET(request: Request) {
 
     const metabolicValues: Record<string, unknown> = {};
     for (const k of metabolicKeys) metabolicValues[k] = firstMergedFlat[k];
+
+    // FMP dedicated payload analysis
+    const firstFmpOnlyRow = rowsFmpOnly[0] ?? {};
+    const firstFmpOnlyFlat = Object.keys(firstFmpOnlyRow).length ? flattenMetricRecord(firstFmpOnlyRow) : {};
+    const allFmpOnlyKeys = Object.keys(firstFmpOnlyRow).sort();
+    const allFmpOnlyFlatKeys = Object.keys(firstFmpOnlyFlat).sort();
 
     // Unlimited fmp_* key scan across all payloads (not capped by sample limits)
     const allBaseKeys = Object.keys(firstBaseRow).sort();
@@ -188,6 +195,11 @@ export async function GET(request: Request) {
       fmpMergedKeys,
       fmpMergedValues,
       fmpMetabolicValues,
+      fmpOnlyError: details.fmpOnlyError,
+      fmpOnlyRowCount: rowsFmpOnly.length,
+      fmpOnlyRawKeys: allFmpOnlyKeys,
+      fmpOnlyFlatKeys: allFmpOnlyFlatKeys,
+      fmpOnlyFlatSample: Object.fromEntries(Object.entries(firstFmpOnlyFlat).slice(0, 80)),
       allBaseKeyCount: allBaseKeys.length,
       allMetabolicOnlyKeyCount: allMetabolicOnlyKeys.length,
       allMergedKeyCount: allMergedKeys.length,

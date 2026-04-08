@@ -676,11 +676,14 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   basePayload: unknown;
   imaOnlyPayload: unknown | null;
   metabolicOnlyPayload: unknown | null;
+  fmpOnlyPayload: unknown | null;
   mergedPayload: unknown;
   imaOnlyError: string | null;
   metabolicOnlyError: string | null;
+  fmpOnlyError: string | null;
   imaOnlyParameters: string[];
   metabolicOnlyParameters: string[];
+  fmpOnlyParameters: string[];
 }> {
   const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
@@ -725,15 +728,33 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     metabolicOnlyError = error instanceof Error ? error.message : "Unknown metabolic-only fetch error";
   }
 
+  let fmpOnlyPayload: unknown | null = null;
+  let fmpOnlyError: string | null = null;
+
+  try {
+    fmpOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_FMP_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, fmpOnlyPayload);
+  } catch (error) {
+    fmpOnlyError = error instanceof Error ? error.message : "Unknown FMP-only fetch error";
+  }
+
   return {
     basePayload,
     imaOnlyPayload,
     metabolicOnlyPayload,
+    fmpOnlyPayload,
     mergedPayload,
     imaOnlyError,
     metabolicOnlyError,
+    fmpOnlyError,
     imaOnlyParameters: CATAPULT_IMA_PARAMETERS,
     metabolicOnlyParameters: CATAPULT_METABOLIC_PARAMETERS,
+    fmpOnlyParameters: CATAPULT_FMP_PARAMETERS,
   };
 }
 
