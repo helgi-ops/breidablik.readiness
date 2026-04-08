@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { CoachRule } from "@/lib/micropulse/rulesEngine";
 import {
@@ -66,6 +66,9 @@ export default function CoachSettingsPage() {
   const [planAssignments, setPlanAssignments] = useState<OrganizationPlanAssignment[]>([]);
   const [players, setPlayers] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedAudit, setSelectedAudit] = useState<RecommendationAuditView | null>(null);
+  const [indoorMode, setIndoorMode] = useState<boolean | null>(null);
+  const [indoorModeLoading, setIndoorModeLoading] = useState(false);
+  const [indoorModeError, setIndoorModeError] = useState("");
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -155,6 +158,55 @@ export default function CoachSettingsPage() {
     run();
   }, [supabase]);
 
+  // ── Indoor Mode ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!teamId) return;
+    const fetchIndoorMode = async () => {
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        const token = session?.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/team/settings?team_id=${teamId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setIndoorMode(json.indoor_mode ?? false);
+        }
+      } catch { /* silently fail */ }
+    };
+    fetchIndoorMode();
+  }, [teamId, supabase]);
+
+  const toggleIndoorMode = useCallback(async () => {
+    if (!teamId) return;
+    setIndoorModeLoading(true);
+    setIndoorModeError("");
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const next = !indoorMode;
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ team_id: teamId, indoor_mode: next }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? "Failed to update");
+      }
+      setIndoorMode(next);
+    } catch (err) {
+      setIndoorModeError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setIndoorModeLoading(false);
+    }
+  }, [teamId, indoorMode, supabase]);
+
   const runtimeRules = useMemo(() => buildRuntimeRulesFromAdminConfig(snapshot), [snapshot]);
   const summary = useMemo(() => buildAdminSystemSummary({ snapshot, recommendationDecisions: [] }), [snapshot]);
   const effectivePlan = useMemo(
@@ -210,6 +262,63 @@ export default function CoachSettingsPage() {
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {/* ── GPS Provider ───────────────────────────────────────────────── */}
       <GpsProviderSettings teamId={teamId} />
+
+      {/* ── Indoor Mode (FMP) ─────────────────────────────────────────── */}
+      {teamId && indoorMode !== null && (
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Load monitoring mode</div>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-950">
+                {indoorMode ? "Indoor Mode (FMP)" : "Outdoor Mode (GPS)"}
+              </h2>
+              <p className="mt-1 max-w-xl text-sm text-zinc-600">
+                {indoorMode
+                  ? "Using Football Movement Profile (inertial sensors) + PlayerLoad + IMA for load monitoring. No GPS required."
+                  : "Using GPS-based metrics (HIR, velocity bands, max speed) for load monitoring."}
+              </p>
+              {indoorModeError && (
+                <div className="mt-2 text-sm text-red-600">{indoorModeError}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={indoorModeLoading}
+              onClick={toggleIndoorMode}
+              className={`relative mt-1 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                indoorMode
+                  ? "bg-indigo-600 focus:ring-indigo-500"
+                  : "bg-zinc-300 focus:ring-zinc-400"
+              } ${indoorModeLoading ? "opacity-50 cursor-wait" : ""}`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  indoorMode ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {indoorMode ? (
+              <>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High 34%</span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">PlayerLoad 26%</span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 20%</span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic Med 14%</span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Running High 6%</span>
+              </>
+            ) : (
+              <>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">HIR Distance 34%</span>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Decel Load 26%</span>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Density Stress 20%</span>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Max Velocity 14%</span>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Band 6 Distance 6%</span>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {effectivePlan === "ELITE" && (
