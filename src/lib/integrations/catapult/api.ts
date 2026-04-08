@@ -71,6 +71,40 @@ const CATAPULT_BASE_PARAMETERS = [
   "player_load_per_minute",
 ];
 
+// Football Movement Profile (FMP) — inertial sensor based, works indoors.
+// Catapult's 6 movement categories:
+//   Very Low, Low, Running Medium, Running High, Dynamic Medium, Dynamic High
+// Exact display names confirmed from OpenField Settings > Parameters (8 Apr 2026).
+export const CATAPULT_FMP_PARAMETERS = [
+  // Duration parameters (seconds) — exact names from OpenField
+  "FMP Very Low Duration",
+  "FMP Low Duration",
+  "FMP Running Medium Duration",
+  "FMP Running High Duration",
+  "FMP Dynamic Medium Duration",
+  "FMP Dynamic High Duration",
+  "FMP Total Dynamic Duration",
+  "FMP Total Running Duration",
+  // Percentage variants (exact from OpenField)
+  "FMP Very Low Duration %",
+  "FMP Low Duration %",
+  "FMP Running Medium Duration %",
+  "FMP Running High Duration %",
+  "FMP Dynamic Medium Duration %",
+  "FMP Dynamic High Duration %",
+  "FMP Total Dynamic Duration %",
+  "FMP Total Running Duration %",
+  // Session averages (may be returned by some orgs)
+  "FMP Very Low Duration Average (Session)",
+  "FMP Low Duration Average (Session)",
+  "FMP Running Medium Duration Average (Session)",
+  "FMP Running High Duration Average (Session)",
+  "FMP Dynamic Medium Duration Average (Session)",
+  "FMP Dynamic High Duration Average (Session)",
+  "FMP Total Dynamic Duration Average (Session)",
+  "FMP Total Running Duration Average (Session)",
+];
+
 type CatapultConfig = {
   baseUrl: string;
   apiKey: string;
@@ -622,6 +656,19 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     // Metabolic fetch failed — continue without metabolic data
   }
 
+  // FMP (Football Movement Profile) — inertial sensor based, works indoors
+  try {
+    const fmpPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_FMP_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, fmpPayload);
+  } catch {
+    // FMP fetch failed — continue without FMP data
+  }
+
   return mergedPayload;
 }
 
@@ -743,6 +790,19 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
     mergedPayload = mergeStatsPayloads(mergedPayload, metabolicPayload);
   } catch {
     // Metabolic fetch failed — continue without
+  }
+
+  // FMP (Football Movement Profile) — inertial sensor based, works indoors
+  try {
+    const fmpPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: baseFilters,
+      parameters: CATAPULT_FMP_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, fmpPayload);
+  } catch {
+    // FMP fetch failed — continue without FMP data
   }
 
   return mergedPayload;

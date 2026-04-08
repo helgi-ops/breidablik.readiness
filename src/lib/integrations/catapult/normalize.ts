@@ -740,6 +740,44 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,
       imaDebug: normalizedIma.debug,
+      // Football Movement Profile (FMP) — inertial sensor, works indoors
+      // Exact Catapult display names: "FMP Very Low Duration", "FMP Low Duration",
+      // "FMP Running Medium Duration", "FMP Running High Duration",
+      // "FMP Dynamic Medium Duration", "FMP Dynamic High Duration"
+      // API returns keys as flattened lowercase: "fmpverylowduration", "fmp_very_low_duration", etc.
+      fmpVeryLowS: extractMetric(flattenedRecord, [
+        "fmpverylowduration", "fmp_very_low_duration",
+        "fmpverylowintensityduration", "fmp_very_low_intensity_duration",
+      ]),
+      fmpLowIntensityS: extractMetric(flattenedRecord, [
+        "fmplowduration", "fmp_low_duration",
+        "fmplowintensityduration", "fmp_low_intensity_duration",
+      ]),
+      fmpRunningMediumS: extractMetric(flattenedRecord, [
+        "fmprunningmediumduration", "fmp_running_medium_duration",
+        "fmprunningmediumintensityduration", "fmp_running_medium_intensity_duration",
+      ]),
+      fmpRunningHighS: extractMetric(flattenedRecord, [
+        "fmprunninghighduration", "fmp_running_high_duration",
+        "fmprunninghighintensityduration", "fmp_running_high_intensity_duration",
+      ]),
+      fmpDynamicLowS: extractMetric(flattenedRecord, [
+        "fmpdynamiclowduration", "fmp_dynamic_low_duration",
+        "fmpdynamiclowintensityduration", "fmp_dynamic_low_intensity_duration",
+      ]),
+      fmpDynamicMediumS: extractMetric(flattenedRecord, [
+        "fmpdynamicmediumduration", "fmp_dynamic_medium_duration",
+        "fmpdynamicmediumintensityduration", "fmp_dynamic_medium_intensity_duration",
+      ]),
+      fmpDynamicHighS: extractMetric(flattenedRecord, [
+        "fmpdynamichighduration", "fmp_dynamic_high_duration",
+        "fmpdynamichighintensityduration", "fmp_dynamic_high_intensity_duration",
+      ]),
+      fmpTotalDurationS: extractMetric(flattenedRecord, [
+        "fmptotaldynamicduration", "fmp_total_dynamic_duration",
+        "fmptotalrunningduration", "fmp_total_running_duration",
+        "fmptotalduration", "fmp_total_duration",
+      ]),
       avgHeartRate: normalizedHr.avgHeartRate,
       maxHeartRate: normalizedHr.maxHeartRate,
       hrZone1TimeS: normalizedHr.hrZone1TimeS,
@@ -816,6 +854,15 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     if (metric.imaDebug?.interestingKeys?.length) {
       current.imaDebug = metric.imaDebug;
     }
+    // FMP: durations sum across sessions
+    current.fmpVeryLowS = sumNullable(current.fmpVeryLowS, metric.fmpVeryLowS);
+    current.fmpLowIntensityS = sumNullable(current.fmpLowIntensityS, metric.fmpLowIntensityS);
+    current.fmpRunningMediumS = sumNullable(current.fmpRunningMediumS, metric.fmpRunningMediumS);
+    current.fmpRunningHighS = sumNullable(current.fmpRunningHighS, metric.fmpRunningHighS);
+    current.fmpDynamicLowS = sumNullable(current.fmpDynamicLowS, metric.fmpDynamicLowS);
+    current.fmpDynamicMediumS = sumNullable(current.fmpDynamicMediumS, metric.fmpDynamicMediumS);
+    current.fmpDynamicHighS = sumNullable(current.fmpDynamicHighS, metric.fmpDynamicHighS);
+    current.fmpTotalDurationS = sumNullable(current.fmpTotalDurationS, metric.fmpTotalDurationS);
     // Heart Rate: average HR is averaged across activities, max HR takes max, zones sum
     current.avgHeartRate = maxNullable(current.avgHeartRate, metric.avgHeartRate); // use max as proxy when multi-session
     current.maxHeartRate = maxNullable(current.maxHeartRate, metric.maxHeartRate);
@@ -875,6 +922,15 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       hrZone3TimeS: metric.hrZone3TimeS ?? null,
       hrZone4TimeS: metric.hrZone4TimeS ?? null,
       hrZone5TimeS: metric.hrZone5TimeS ?? null,
+      // FMP (Football Movement Profile)
+      fmpVeryLowS: metric.fmpVeryLowS ?? null,
+      fmpLowIntensityS: metric.fmpLowIntensityS ?? null,
+      fmpRunningMediumS: metric.fmpRunningMediumS ?? null,
+      fmpRunningHighS: metric.fmpRunningHighS ?? null,
+      fmpDynamicLowS: metric.fmpDynamicLowS ?? null,
+      fmpDynamicMediumS: metric.fmpDynamicMediumS ?? null,
+      fmpDynamicHighS: metric.fmpDynamicHighS ?? null,
+      fmpTotalDurationS: metric.fmpTotalDurationS ?? null,
     },
   };
 }

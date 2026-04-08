@@ -137,6 +137,15 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.hrZone3TimeS = sumNullable(current.externalLoad.hrZone3TimeS, row.externalLoad.hrZone3TimeS);
     current.externalLoad.hrZone4TimeS = sumNullable(current.externalLoad.hrZone4TimeS, row.externalLoad.hrZone4TimeS);
     current.externalLoad.hrZone5TimeS = sumNullable(current.externalLoad.hrZone5TimeS, row.externalLoad.hrZone5TimeS);
+    // FMP: durations sum across sessions
+    current.externalLoad.fmpVeryLowS = sumNullable(current.externalLoad.fmpVeryLowS, row.externalLoad.fmpVeryLowS);
+    current.externalLoad.fmpLowIntensityS = sumNullable(current.externalLoad.fmpLowIntensityS, row.externalLoad.fmpLowIntensityS);
+    current.externalLoad.fmpRunningMediumS = sumNullable(current.externalLoad.fmpRunningMediumS, row.externalLoad.fmpRunningMediumS);
+    current.externalLoad.fmpRunningHighS = sumNullable(current.externalLoad.fmpRunningHighS, row.externalLoad.fmpRunningHighS);
+    current.externalLoad.fmpDynamicLowS = sumNullable(current.externalLoad.fmpDynamicLowS, row.externalLoad.fmpDynamicLowS);
+    current.externalLoad.fmpDynamicMediumS = sumNullable(current.externalLoad.fmpDynamicMediumS, row.externalLoad.fmpDynamicMediumS);
+    current.externalLoad.fmpDynamicHighS = sumNullable(current.externalLoad.fmpDynamicHighS, row.externalLoad.fmpDynamicHighS);
+    current.externalLoad.fmpTotalDurationS = sumNullable(current.externalLoad.fmpTotalDurationS, row.externalLoad.fmpTotalDurationS);
   }
 
   return Array.from(merged.values());
@@ -202,6 +211,18 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     hr_zone_3_time_s: row.externalLoad.hrZone3TimeS ?? null,
     hr_zone_4_time_s: row.externalLoad.hrZone4TimeS ?? null,
     hr_zone_5_time_s: row.externalLoad.hrZone5TimeS ?? null,
+    // FMP (Football Movement Profile)
+    fmp_very_low_s: row.externalLoad.fmpVeryLowS ?? null,
+    fmp_low_intensity_s: row.externalLoad.fmpLowIntensityS ?? null,
+    fmp_running_medium_s: row.externalLoad.fmpRunningMediumS ?? null,
+    fmp_running_high_s: row.externalLoad.fmpRunningHighS ?? null,
+    fmp_dynamic_low_s: row.externalLoad.fmpDynamicLowS ?? null,
+    fmp_dynamic_medium_s: row.externalLoad.fmpDynamicMediumS ?? null,
+    fmp_dynamic_high_s: row.externalLoad.fmpDynamicHighS ?? null,
+    fmp_total_duration_s: row.externalLoad.fmpTotalDurationS ?? null,
+    fmp_dynamic_medium_pct: row.externalLoad.fmpDynamicMediumPct ?? null,
+    fmp_dynamic_high_pct: row.externalLoad.fmpDynamicHighPct ?? null,
+    fmp_running_high_pct: row.externalLoad.fmpRunningHighPct ?? null,
   }));
 
   if (!payload.length) return 0;

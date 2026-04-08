@@ -136,6 +136,11 @@ export function runTrainingRecommendationValidationSuite(): TrainingRecommendati
           decelBand2to3Efforts: 22,
           totalAccelerations: 82,
           totalDecelerations: 77,
+          fmpDynamicMediumS: null,
+          fmpDynamicHighS: null,
+          fmpRunningHighS: null,
+          fmpTotalDurationS: null,
+          imaTotal: null,
         },
       },
       (recommendation) => recommendation.state === "YELLOW" && recommendation.constraints.includes("limit_accel_decel_density")

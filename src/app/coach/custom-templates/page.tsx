@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 // ─── Workout structures ───────────────────────────────────────────────────────
 
@@ -602,6 +603,359 @@ function parseTrainingText(text: string): TemplateBlock[] {
   // Fallback: no headers detected — one big block
   if (blocks.length === 0) return [{ block: "A. Blokk", items: lines }];
   return blocks;
+}
+
+// ─── Smart workout description parser ────────────────────────────────────────
+//
+// Understands:
+//   • VBT (Velocity Based Training): velocity targets, thresholds, m/s zones
+//   • Training methods: French Contrast, Contrast, Potentiation Clusters, Cluster variations
+//   • Exercise notation: "4x8 @ 80%", "3 sett af 6", rest intervals, rounds
+//   • Icelandic + English
+//
+
+/** Known training-method keywords → auto-expand into the matching pre-built structure */
+type MethodMatch = { structureId: string; source: WorkoutStructure[] | null; label: string };
+
+function detectTrainingMethod(text: string): MethodMatch | null {
+  const lower = text.toLowerCase();
+
+  // French Contrast (full 4-exercise variant)
+  if (/french\s*contrast/i.test(lower) && !/potentiation|cluster/i.test(lower)) {
+    return { structureId: "french-contrast", source: null, label: "French Contrast" };
+  }
+  // Contrast (simple 2-exercise)
+  if (/\bcontrast\b/i.test(lower) && !/french|potentiation|cluster/i.test(lower)) {
+    return { structureId: "contrast", source: null, label: "Contrast" };
+  }
+  // Potentiation cluster — acceleration
+  if (/potentiation.*acceler|acceler.*potentiation/i.test(lower)) {
+    return { structureId: "pc-acceleration", source: POTENTIATION_CLUSTER_VARIATIONS, label: "Potentiation Cluster — Acceleration" };
+  }
+  // Potentiation cluster — top-end speed
+  if (/potentiation.*top[- ]?end|top[- ]?end.*potentiation/i.test(lower)) {
+    return { structureId: "pc-topend-speed", source: POTENTIATION_CLUSTER_VARIATIONS, label: "Potentiation Cluster — Top-End Speed" };
+  }
+  // Potentiation cluster — peaking advanced
+  if (/potentiation.*peak.*adv|triple.*potentiation/i.test(lower)) {
+    return { structureId: "pc-peaking-advanced", source: POTENTIATION_CLUSTER_VARIATIONS, label: "Triple Potentiation Cluster — Peaking" };
+  }
+  // Potentiation cluster — peaking basic
+  if (/potentiation.*peak|peak.*potentiation/i.test(lower)) {
+    return { structureId: "pc-peaking-basic", source: POTENTIATION_CLUSTER_VARIATIONS, label: "Potentiation Cluster — Peaking" };
+  }
+  // Potentiation cluster — french contrast style
+  if (/potentiation.*french|french.*potentiation/i.test(lower)) {
+    return { structureId: "pc-french-contrast-style", source: POTENTIATION_CLUSTER_VARIATIONS, label: "French Contrast Potentiation Cluster" };
+  }
+  // Generic potentiation cluster
+  if (/potentiation\s*cluster/i.test(lower)) {
+    return { structureId: "pc-acceleration", source: POTENTIATION_CLUSTER_VARIATIONS, label: "Potentiation Cluster — Acceleration" };
+  }
+
+  // Named cluster variations
+  if (/garcia[- ]?ramos/i.test(lower)) {
+    return { structureId: "garcia-ramos", source: CLUSTER_VARIATIONS, label: "Garcia-Ramos Cluster" };
+  }
+  if (/moreno\s*cluster/i.test(lower)) {
+    return { structureId: "moreno", source: CLUSTER_VARIATIONS, label: "Moreno Cluster" };
+  }
+  if (/hansen\s*cluster/i.test(lower)) {
+    return { structureId: "hansen", source: CLUSTER_VARIATIONS, label: "Hansen Cluster" };
+  }
+  if (/iglesias/i.test(lower)) {
+    return { structureId: "iglesias-soler", source: CLUSTER_VARIATIONS, label: "Iglesias-Soler Cluster" };
+  }
+  if (/tufano.*cs2|cs2.*tufano|mechanical\s*stress/i.test(lower)) {
+    return { structureId: "tufano-cs2", source: CLUSTER_VARIATIONS, label: "Tufano CS2 — Mechanical Stress" };
+  }
+  if (/tufano.*cs4|cs4.*tufano|hypertrophy.*power/i.test(lower)) {
+    return { structureId: "tufano-cs4", source: CLUSTER_VARIATIONS, label: "Tufano CS4 — Hypertrophy + Power" };
+  }
+  if (/tufano/i.test(lower)) {
+    return { structureId: "tufano-standard", source: CLUSTER_VARIATIONS, label: "Tufano Standard Cluster" };
+  }
+  if (/oliver.*cluster|metabolic.*cluster/i.test(lower)) {
+    return { structureId: "oliver", source: CLUSTER_VARIATIONS, label: "Oliver Cluster — Metabolic" };
+  }
+
+  // Lower/Upper supersets
+  if (/lower.*upper.*super|super.*lower.*upper/i.test(lower)) {
+    return { structureId: "supersets-lower-upper", source: null, label: "Lower/Upper Supersets" };
+  }
+
+  return null;
+}
+
+/** Resolve a MethodMatch into TemplateBlock[] */
+function resolveMethodBlocks(match: MethodMatch): TemplateBlock[] {
+  if (match.source) {
+    const found = match.source.find((s) => s.id === match.structureId);
+    return found ? JSON.parse(JSON.stringify(found.blocks)) : [];
+  }
+  const found = WORKOUT_STRUCTURES.find((s) => s.id === match.structureId);
+  return found ? JSON.parse(JSON.stringify(found.blocks)) : [];
+}
+
+// ── VBT zone data ──
+
+const VBT_ZONES: Record<string, { range: string; quality: string }> = {
+  "absolute-strength":  { range: "< 0.5 m/s",        quality: "Hámarksstyrkur / Absolute Strength" },
+  "strength":           { range: "0.5–0.75 m/s",      quality: "Styrkur / Strength" },
+  "strength-speed":     { range: "0.75–1.0 m/s",      quality: "Styrktarhraði / Strength-Speed" },
+  "speed-strength":     { range: "1.0–1.3 m/s",       quality: "Hraðastyrkur / Speed-Strength" },
+  "speed":              { range: "1.3–1.5 m/s",       quality: "Hraði / Speed" },
+  "reactive":           { range: "> 1.5 m/s",         quality: "Reactive / Ballistic" },
+};
+
+/** Detect VBT annotations in a line and enhance with zone info */
+function enrichVbtLine(line: string): string {
+  // Match "velocity target 0.8 m/s" / "VT: 0.8" / "hraðamarkmið 0.8"
+  const vtMatch = line.match(
+    /(?:velocity\s*(?:target|zone)|VT|hraðamarkmið|markmið\s*hraði)[:\s]*([0-9]+\.?[0-9]*)\s*(?:m\/s)?/i,
+  );
+  if (vtMatch) {
+    const vel = parseFloat(vtMatch[1]);
+    const zone = velocityToZone(vel);
+    if (zone && !line.includes(zone.quality)) {
+      return `${line} — ${zone.quality} (${zone.range})`;
+    }
+  }
+
+  // Match "velocity threshold 0.5" / "velocity cutoff" / "hraðaþröskuldur"
+  const threshMatch = line.match(
+    /(?:velocity\s*(?:threshold|cutoff|stop)|hraðaþröskuldur|þröskuldur)[:\s]*([0-9]+\.?[0-9]*)\s*(?:m\/s)?/i,
+  );
+  if (threshMatch) {
+    const vel = parseFloat(threshMatch[1]);
+    return `${line} — Stopp ef hraði fer undir ${vel} m/s (velocity loss cutoff)`;
+  }
+
+  // Match standalone "0.8 m/s" or "@0.8m/s" in a line that mentions an exercise
+  const inlineVel = line.match(/[@]?\s*([0-9]+\.[0-9]+)\s*m\/?s/i);
+  if (inlineVel) {
+    const vel = parseFloat(inlineVel[1]);
+    const zone = velocityToZone(vel);
+    if (zone && !line.includes(zone.quality)) {
+      return `${line} — ${zone.quality}`;
+    }
+  }
+
+  // Match "velocity loss 20%" / "hraðatap 20%"
+  const vlossMatch = line.match(
+    /(?:velocity\s*loss|hraðatap|VL)[:\s]*([0-9]+)\s*%/i,
+  );
+  if (vlossMatch) {
+    const pct = parseInt(vlossMatch[1]);
+    const intent =
+      pct <= 10 ? "Neural / kraftþróun"
+      : pct <= 20 ? "Strength-speed / gæði"
+      : pct <= 30 ? "Hypertrophy / magn"
+      : "Metabolic / lactic";
+    if (!line.includes(intent)) {
+      return `${line} — ${intent}`;
+    }
+  }
+
+  return line;
+}
+
+function velocityToZone(vel: number): { range: string; quality: string } | null {
+  if (vel < 0.5) return VBT_ZONES["absolute-strength"];
+  if (vel < 0.75) return VBT_ZONES["strength"];
+  if (vel < 1.0) return VBT_ZONES["strength-speed"];
+  if (vel < 1.3) return VBT_ZONES["speed-strength"];
+  if (vel < 1.5) return VBT_ZONES["speed"];
+  return VBT_ZONES["reactive"];
+}
+
+/**
+ * Parse a free-form workout description into structured TemplateBlock[].
+ *
+ * Handles:
+ *   • VBT: velocity targets ("VT: 0.8 m/s"), thresholds, velocity loss %
+ *   • Named methods: French Contrast, Contrast, Potentiation Cluster, Cluster variations
+ *   • Exercise notation: "Back Squat 4x8 @ 80%", "4 sett af 8 endurt."
+ *   • Rest / rounds: "60s hvíld", "3 umferðir"
+ *   • Block headers: "A. Styrktarblokk", "Upphitun", etc.
+ */
+function parseSmartWorkoutText(text: string): TemplateBlock[] {
+  const raw = text.trim();
+  if (!raw) return [];
+
+  // Step 1: Check for known training methods mentioned in the text
+  const methodMatch = detectTrainingMethod(raw);
+  if (methodMatch) {
+    const methodBlocks = resolveMethodBlocks(methodMatch);
+    if (methodBlocks.length > 0) {
+      // Parse remaining lines that aren't the method keyword itself
+      const lines = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      // Filter out lines that are just the method name
+      const extraLines = lines.filter((l) => {
+        const lower = l.toLowerCase();
+        // Skip lines that are just "french contrast", "potentiation cluster", etc.
+        if (/^(french\s*contrast|contrast|potentiation\s*cluster|cluster)/i.test(lower) && lower.length < 40) return false;
+        if (/^(garcia|moreno|hansen|iglesias|tufano|oliver)/i.test(lower) && lower.length < 40) return false;
+        return true;
+      });
+
+      // Separate extra lines into rest/rounds metadata vs custom exercises
+      if (extraLines.length > 0 && methodBlocks[0]) {
+        const restPatterns = [
+          /^\d+\s*(?:sek|sec|s|mín|min)\s*(?:hvíld|rest|milli)/i,
+          /^(?:hvíld|rest)[:\s]*.+/i,
+        ];
+        const roundsPattern = /^\d+\s*(?:umferð|round|hring|cluster|sett)/i;
+        const customExercises: string[] = [];
+
+        for (const l of extraLines) {
+          if (restPatterns.some((p) => p.test(l))) {
+            methodBlocks[0].rest_between_sets = l;
+          } else if (roundsPattern.test(l)) {
+            methodBlocks[0].rest_between_rounds = l;
+          } else {
+            customExercises.push(enrichVbtLine(formatExerciseLine(l)));
+          }
+        }
+        if (customExercises.length > 0) {
+          methodBlocks[0].items = [...methodBlocks[0].items, ...customExercises];
+        }
+      }
+      return methodBlocks;
+    }
+  }
+
+  // Step 2: Split into lines, normalize
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  // Step 3: Detect if the text is structured (has block headers) or free-form prose
+  const hasHeaders = lines.some((l) => isBlockHeader(l));
+
+  if (hasHeaders) {
+    return enhanceBlocks(parseTrainingText(raw));
+  }
+
+  // Step 4: Free-form prose — intelligently split into blocks
+  const blocks: TemplateBlock[] = [];
+  let currentBlock: TemplateBlock | null = null;
+  let blockCounter = 0;
+
+  const sectionBreakPatterns = [
+    /^(upphitun|warmup|warm[- ]up|virkjun|activation)/i,
+    /^(aðalæfing|main|styrkt|strength|power|kraftur)/i,
+    /^(superset|þríund|triset|giant\s*set|hringæfing|circuit)/i,
+    /^(french\s*contrast|contrast\s*training|contrast)/i,
+    /^(potentiation|cluster)/i,
+    /^(vbt|velocity[- ]based)/i,
+    /^(kjarni|core|magi|kviður)/i,
+    /^(niðurlag|cooldown|cool[- ]down|teygjur|stretch)/i,
+    /^(hluti|part|phase|blokk|block)\s/i,
+  ];
+
+  const restPatterns = [
+    /^(\d+)\s*(?:sek|sec|s)\s*(?:hvíld|rest|milli)/i,
+    /^(?:hvíld|rest)[:\s]*(\d+)\s*(?:sek|sec|s|mín|min)/i,
+    /^(\d+)\s*(?:mín|min)\s*(?:hvíld|rest|milli)/i,
+  ];
+
+  const roundsPattern = /^(\d+)\s*(?:umferð|round|hring|cluster)/i;
+
+  for (const line of lines) {
+    const isNewSection = sectionBreakPatterns.some((p) => p.test(line));
+
+    if (isNewSection) {
+      if (currentBlock) blocks.push(currentBlock);
+      blockCounter++;
+      const letter = String.fromCharCode(64 + blockCounter);
+      currentBlock = { block: `${letter}. ${line}`, items: [] };
+      continue;
+    }
+
+    const restMatch = restPatterns.reduce<RegExpMatchArray | null>(
+      (acc, p) => acc || line.match(p), null,
+    );
+    if (restMatch && currentBlock) {
+      currentBlock.rest_between_sets = line;
+      continue;
+    }
+
+    const roundMatch = line.match(roundsPattern);
+    if (roundMatch && currentBlock) {
+      currentBlock.rest_between_rounds = line;
+      continue;
+    }
+
+    if (!currentBlock) {
+      blockCounter++;
+      const letter = String.fromCharCode(64 + blockCounter);
+      currentBlock = { block: `${letter}. Blokk`, items: [] };
+    }
+
+    // Apply VBT enrichment + exercise formatting
+    currentBlock.items.push(enrichVbtLine(formatExerciseLine(line)));
+  }
+
+  if (currentBlock) blocks.push(currentBlock);
+  if (blocks.length === 0) return [{ block: "A. Blokk", items: lines }];
+  return blocks;
+}
+
+/** Format an exercise line — normalize "4x8 back squat 80%" into a clean string */
+function formatExerciseLine(line: string): string {
+  // Already well-formatted: has × or x with numbers
+  if (/\d+\s*[×x]\s*\d+/i.test(line)) {
+    return line.replace(/(\d+)\s*x\s*(\d+)/gi, "$1×$2");
+  }
+
+  // Icelandic pattern: "4 sett af 8 endurtekningum í back squat á 80%"
+  const isSett = line.match(
+    /(\d+)\s*sett?\s*(?:af|með|x)?\s*(\d+)\s*(?:endurt|reps?)?\s*(?:í|af|:)?\s*(.+)/i,
+  );
+  if (isSett) {
+    const [, sets, reps, exercise] = isSett;
+    return `${exercise.trim()} · ${sets}×${reps}`;
+  }
+
+  // English pattern: "4 sets of 8 reps back squat at 80%"
+  const enSets = line.match(
+    /(\d+)\s*sets?\s*(?:of|x)?\s*(\d+)\s*(?:reps?)?\s*(?:of|in|:)?\s*(.+)/i,
+  );
+  if (enSets) {
+    const [, sets, reps, exercise] = enSets;
+    return `${exercise.trim()} · ${sets}×${reps}`;
+  }
+
+  return line;
+}
+
+/** Enhance already-parsed blocks by extracting rest info and enriching VBT */
+function enhanceBlocks(blocks: TemplateBlock[]): TemplateBlock[] {
+  return blocks.map((b) => {
+    const enhanced = { ...b, items: [...b.items] };
+    enhanced.items = enhanced.items.filter((item) => {
+      const restMatch = item.match(/^(?:hvíld|rest)[:\s]*(.+)/i);
+      if (restMatch) {
+        if (!enhanced.rest_between_sets) enhanced.rest_between_sets = restMatch[1].trim();
+        return false;
+      }
+      const roundMatch = item.match(/^(\d+)\s*(?:umferð|round|hring)/i);
+      if (roundMatch) {
+        if (!enhanced.rest_between_rounds) enhanced.rest_between_rounds = item;
+        return false;
+      }
+      return true;
+    });
+    // Normalize exercise lines + VBT enrichment
+    enhanced.items = enhanced.items.map((item) => enrichVbtLine(formatExerciseLine(item)));
+    return enhanced;
+  });
 }
 
 /** Dynamically load SheetJS from CDN (runs only in browser, cached after first load) */
@@ -1339,11 +1693,52 @@ function BlockEditor({
           + Bæta við línu
         </Button>
       </div>
+
+      {/* Rest / rounds metadata */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-blue-600">⏱</span>
+          <Input
+            value={block.rest_between_sets ?? ""}
+            onChange={(e) => onChange({ ...block, rest_between_sets: e.target.value || undefined })}
+            placeholder="Hvíld milli setta (t.d. 60s)"
+            className="h-7 text-[11px] w-44"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-violet-600">🔄</span>
+          <Input
+            value={block.rest_between_rounds ?? ""}
+            onChange={(e) => onChange({ ...block, rest_between_rounds: e.target.value || undefined })}
+            placeholder="Umferðir / rounds"
+            className="h-7 text-[11px] w-44"
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Template preview (read-only) ────────────────────────────────────────────
+
+/** Classify a block by its name for color-coding */
+function classifyBlock(name: string): "warmup" | "main" | "iso" | "core" | "cooldown" | "default" {
+  const l = name.toLowerCase();
+  if (["upphitun", "warmup", "warm-up", "activation", "virkjun"].some((k) => l.includes(k))) return "warmup";
+  if (["niðurlag", "cooldown", "cool-down", "teygjur", "stretch"].some((k) => l.includes(k))) return "cooldown";
+  if (["iso", "isometric"].some((k) => l.includes(k))) return "iso";
+  if (["kjarni", "core", "pallof", "dead bug", "plank"].some((k) => l.includes(k))) return "core";
+  return "main";
+}
+
+const BLOCK_COLORS: Record<ReturnType<typeof classifyBlock>, { bg: string; border: string; header: string; text: string }> = {
+  warmup:  { bg: "bg-sky-50",     border: "border-sky-100",     header: "text-sky-800",     text: "text-sky-700" },
+  main:    { bg: "bg-slate-50",   border: "border-slate-200",   header: "text-slate-800",   text: "text-slate-600" },
+  iso:     { bg: "bg-violet-50",  border: "border-violet-100",  header: "text-violet-800",  text: "text-violet-600" },
+  core:    { bg: "bg-amber-50",   border: "border-amber-100",   header: "text-amber-800",   text: "text-amber-700" },
+  cooldown:{ bg: "bg-teal-50",    border: "border-teal-100",    header: "text-teal-800",    text: "text-teal-600" },
+  default: { bg: "bg-neutral-50", border: "border-neutral-200", header: "text-neutral-800",  text: "text-neutral-600" },
+};
 
 function TemplatePreview({
   template,
@@ -1356,53 +1751,117 @@ function TemplatePreview({
   onEdit?: () => void;
   isOverridden?: boolean;
 }) {
-  const colors = {
-    green:  { badge: "bg-green-100 text-green-800",  border: "border-green-200" },
-    yellow: { badge: "bg-yellow-100 text-yellow-800", border: "border-yellow-200" },
-    red:    { badge: "bg-red-100 text-red-800",       border: "border-red-200" },
+  const cardColors = {
+    green:  { badge: "bg-green-100 text-green-800",  border: "border-green-200",  accent: "bg-green-500"  },
+    yellow: { badge: "bg-yellow-100 text-yellow-800", border: "border-yellow-200", accent: "bg-yellow-500" },
+    red:    { badge: "bg-red-100 text-red-800",       border: "border-red-200",    accent: "bg-red-500"    },
   };
-  const c = colors[color];
+  const cc = cardColors[color];
 
   return (
-    <div className={`rounded-xl border ${c.border} p-4`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2 min-w-0">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.badge}`}>
-            {template.readiness_level}
-          </span>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold leading-snug">
-              {template.title}
-              {isOverridden && <span className="ml-1.5 text-[10px] text-amber-600 font-normal">(breytt)</span>}
+    <div className={`rounded-xl border ${cc.border} overflow-hidden`}>
+      {/* Colored top accent */}
+      <div className={`h-1 ${cc.accent}`} />
+
+      <div className="p-3">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0">
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${cc.badge}`}>
+              {template.readiness_level}
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold leading-snug truncate">
+                {template.title}
+                {isOverridden && <span className="ml-1 text-[10px] text-amber-600 font-normal">(breytt)</span>}
+              </div>
+              {template.description && (
+                <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{template.description}</div>
+              )}
             </div>
-            {template.description && (
-              <div className="mt-0.5 text-xs text-muted-foreground">{template.description}</div>
-            )}
           </div>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-[10px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+            >
+              ✏️ Breyta
+            </button>
+          )}
         </div>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
-          >
-            ✏️ Breyta
-          </button>
-        )}
-      </div>
-      <div className="mt-3 space-y-2">
-        {template.structure.map((block, i) => (
-          <div key={i}>
-            <div className="text-xs font-semibold text-neutral-700">{block.block}</div>
-            <ul className="mt-0.5 space-y-0.5">
-              {block.items.map((item, j) => (
-                <li key={j} className="text-xs text-muted-foreground pl-3 before:content-['·'] before:mr-1.5 before:text-neutral-400">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+
+        {/* Blocks */}
+        <div className="mt-2.5 space-y-2">
+          {template.structure.map((block, i) => {
+            const kind = classifyBlock(block.block);
+            const bc = BLOCK_COLORS[kind];
+
+            return (
+              <div key={i} className={`rounded-lg border ${bc.border} ${bc.bg} px-2.5 py-1.5`}>
+                {/* Block name */}
+                <div className={`text-[11px] font-bold uppercase tracking-wider ${bc.header}`}>
+                  {block.block}
+                </div>
+
+                {/* Rest / rounds badges */}
+                {(block.rest_between_sets || block.rest_between_rounds) && (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {block.rest_between_sets && (
+                      <span className="rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-medium text-blue-600 border border-blue-100">
+                        ⏱ {block.rest_between_sets}
+                      </span>
+                    )}
+                    {block.rest_between_rounds && (
+                      <span className="rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 border border-violet-100">
+                        🔄 {block.rest_between_rounds}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Exercise lines — clean, no bullets */}
+                <div className="mt-1 space-y-0.5">
+                  {block.items.map((item, j) => {
+                    // VBT annotation
+                    if (/velocity|m\/s|hraðamarkmið|hraðaþröskuldur|hraðatap|VT:/i.test(item)) {
+                      return (
+                        <div key={j} className="text-[10px] font-medium text-emerald-700 bg-emerald-50/80 rounded px-1.5 py-0.5">
+                          ⚡ {item}
+                        </div>
+                      );
+                    }
+                    // Rest/round inline (shouldn't appear if properly extracted, but fallback)
+                    if (/^\d+\s*(mín|min|sek|sec)\s*(hvíld|rest)/i.test(item) || /^(hvíld|rest)/i.test(item)) {
+                      return (
+                        <div key={j} className="text-[10px] text-blue-500">
+                          ⏱ {item}
+                        </div>
+                      );
+                    }
+                    if (/^\d+\s*(umferð|round|cluster|hring)/i.test(item)) {
+                      return (
+                        <div key={j} className="text-[10px] text-violet-500">
+                          🔄 {item}
+                        </div>
+                      );
+                    }
+                    // Metadata / labels
+                    if (/^(ef |markmið|styrkt:|kraftur:|þyngd:|aðeins|samanborið)/i.test(item)) {
+                      return (
+                        <div key={j} className="text-[10px] text-neutral-400 italic">{item}</div>
+                      );
+                    }
+                    // Regular exercise line
+                    return (
+                      <div key={j} className={`text-[11px] ${bc.text}`}>{item}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1575,6 +2034,10 @@ export default function CustomTemplatesPage() {
   const [redOverrides, setRedOverrides] = useState<Record<string, TemplateRecord>>({});
   // Which color is being edited in the inline editor (null = closed)
   const [editingColor, setEditingColor] = useState<{ day: string; color: "yellow" | "red" } | null>(null);
+
+  // AI workout description textarea
+  const [workoutDescription, setWorkoutDescription] = useState("");
+  const [showDescriptionBox, setShowDescriptionBox] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState<string | null>(null);
@@ -2243,6 +2706,63 @@ export default function CustomTemplatesPage() {
                   </div>
 
                   <Separator />
+
+                  {/* ── AI workout description box ─────────────────────── */}
+                  <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowDescriptionBox((v) => !v)}
+                      className="flex w-full items-center justify-between text-left"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                          <span>✨</span> Lýstu æfingakerfinu
+                        </div>
+                        <div className="text-xs text-indigo-600 mt-0.5">
+                          Skrifaðu hvernig æfingin á að vera — kerfið býr til blokkir sjálfkrafa
+                        </div>
+                      </div>
+                      <span className="text-indigo-400 text-xs">{showDescriptionBox ? "▲ Fela" : "▼ Opna"}</span>
+                    </button>
+
+                    {showDescriptionBox && (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={workoutDescription}
+                          onChange={(e) => setWorkoutDescription(e.target.value)}
+                          placeholder={`Dæmi:\nFrench Contrast\nBack Squat 85% × 3, Depth Jump × 3\nVelocity target: 0.8 m/s\n\neða frjáls lýsing:\nA. Upphitun\n  Foam roll 5 mín, Hip 90/90 2×8\nB. Styrktarblokk\n  Back Squat 4×6 á 80% — VT: 0.5 m/s\n  RFESS 3×8 — velocity loss 20%\n  60s hvíld milli setta\nC. Potentiation Cluster — Acceleration`}
+                          rows={8}
+                          className="text-sm font-mono bg-white"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] text-indigo-500">
+                            VBT · French Contrast · Clusters · Potentiation · Hraðamarkmið · Hvíld
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!workoutDescription.trim()}
+                            onClick={() => {
+                              const blocks = parseSmartWorkoutText(workoutDescription);
+                              if (blocks.length > 0) {
+                                updateGreen(currentDay, { structure: blocks });
+                                setShowDescriptionBox(false);
+                              }
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            Búa til blokkir →
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="flex-1 border-t" />
+                    <span>eða hlaðið inn skjali</span>
+                    <span className="flex-1 border-t" />
+                  </div>
 
                   {/* File upload */}
                   <FileUploadZone

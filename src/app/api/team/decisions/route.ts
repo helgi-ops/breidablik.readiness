@@ -472,6 +472,7 @@ async function buildPlayerSource(args: {
   mdDay: string | null;
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
   vbtData?: { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string } | null;
+  indoorMode?: boolean;
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -480,6 +481,7 @@ async function buildPlayerSource(args: {
   const catapultContext = buildCatapultReadinessContextFromRows({
     rows: args.catapultRows.filter((row): row is NonNullable<typeof row> => row != null),
     date: args.date,
+    indoorMode: args.indoorMode,
   });
   const externalToday = catapultContext.today;
   const acwrValue = toFinite((tm?.acwr as unknown) ?? ((tm?.load as Record<string, unknown> | undefined)?.acwr as unknown));
@@ -727,6 +729,15 @@ export async function GET(req: Request) {
     }
 
     const playerIds = rows.map((row) => String(row.player_id));
+
+    // Fetch team settings (indoor_mode flag)
+    const { data: teamSettingsRow } = await sb
+      .from("team_settings")
+      .select("indoor_mode")
+      .eq("team_id", teamId)
+      .maybeSingle();
+    const indoorMode = teamSettingsRow?.indoor_mode === true;
+
     const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
@@ -757,6 +768,7 @@ export async function GET(req: Request) {
             mdDay,
             whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
             vbtData: vbtByPlayer.get(String(row.player_id)) ?? null,
+            indoorMode,
           })
         );
       } catch {

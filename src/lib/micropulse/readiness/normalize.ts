@@ -47,6 +47,11 @@ export function normalizePlayerMonitoringInput(input: NormalizedPlayerMonitoring
           decelBand2to3Efforts: null,
           totalAccelerations: n(snapshot.externalLoad.accelerations) ?? null,
           totalDecelerations: n(snapshot.externalLoad.decelerations) ?? null,
+          fmpDynamicMediumS: null,
+          fmpDynamicHighS: null,
+          fmpRunningHighS: null,
+          fmpTotalDurationS: null,
+          imaTotal: null,
         }
       : null;
   const catapultBaseline = input.catapultBaseline ?? null;

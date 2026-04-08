@@ -81,6 +81,12 @@ export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): Catapult
     decelBand2to3Efforts: asNumber(row.decel_b2_3_tot_effs_gen2 ?? row.decelBand2to3Efforts),
     totalAccelerations: asNumber(row.tot_as ?? row.totalAccelerations),
     totalDecelerations: asNumber(row.tot_ds ?? row.totalDecelerations),
+    // FMP
+    fmpDynamicMediumS: asNumber(row.fmp_dynamic_medium_s ?? row.fmpDynamicMediumS),
+    fmpDynamicHighS: asNumber(row.fmp_dynamic_high_s ?? row.fmpDynamicHighS),
+    fmpRunningHighS: asNumber(row.fmp_running_high_s ?? row.fmpRunningHighS),
+    fmpTotalDurationS: asNumber(row.fmp_total_duration_s ?? row.fmpTotalDurationS),
+    imaTotal: asNumber(row.ima_total ?? row.imaTotal),
   };
 }
 
@@ -155,6 +161,11 @@ export function computeCatapultExternalLoadBaseline(args: {
         maxVelocity: average(chronic28dRows.map((row) => row.maxVelocity ?? 0)),
         densityStress: average(chronic28dRows.map((row) => getDensityStress(row))),
         band6Distance: average(chronic28dRows.map((row) => getBand6Distance(row))),
+        // FMP (Indoor Mode)
+        fmpDynamicHighS: average(chronic28dRows.map((row) => row.fmpDynamicHighS ?? 0)),
+        fmpDynamicMediumS: average(chronic28dRows.map((row) => row.fmpDynamicMediumS ?? 0)),
+        fmpRunningHighS: average(chronic28dRows.map((row) => row.fmpRunningHighS ?? 0)),
+        imaTotal: average(chronic28dRows.map((row) => row.imaTotal ?? 0)),
       },
       availability: {
         daysAvailable7d: acute7dRows.length,

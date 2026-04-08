@@ -63,6 +63,15 @@ export type CatapultSessionMetric = {
     };
   };
   activityId?: string | null;
+  // Football Movement Profile (FMP) — inertial sensor, works indoors
+  fmpVeryLowS?: number | null;
+  fmpLowIntensityS?: number | null;
+  fmpRunningMediumS?: number | null;
+  fmpRunningHighS?: number | null;
+  fmpDynamicLowS?: number | null;
+  fmpDynamicMediumS?: number | null;
+  fmpDynamicHighS?: number | null;
+  fmpTotalDurationS?: number | null;
   // Heart Rate
   avgHeartRate?: number | null;
   maxHeartRate?: number | null;
@@ -110,6 +119,18 @@ export type NormalizedExternalLoad = {
     imaTotal?: number | null;
     codEvents?: number | null;
     impacts?: number | null;
+    // Football Movement Profile (FMP)
+    fmpVeryLowS?: number | null;
+    fmpLowIntensityS?: number | null;
+    fmpRunningMediumS?: number | null;
+    fmpRunningHighS?: number | null;
+    fmpDynamicLowS?: number | null;
+    fmpDynamicMediumS?: number | null;
+    fmpDynamicHighS?: number | null;
+    fmpTotalDurationS?: number | null;
+    fmpDynamicMediumPct?: number | null;
+    fmpDynamicHighPct?: number | null;
+    fmpRunningHighPct?: number | null;
     // Heart Rate
     avgHeartRate?: number | null;
     maxHeartRate?: number | null;

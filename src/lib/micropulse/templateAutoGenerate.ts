@@ -4,8 +4,8 @@
  * Generates YELLOW and RED microdose template variants from a GREEN template.
  *
  * Rules:
- *   GREEN → YELLOW  Reduced dose. ~30% less volume, no pure plyometrics.
- *   GREEN → RED     Isometrics + warmup only. No heavy lifting, no jumps.
+ *   GREEN → YELLOW  1–2 færri sett en GREEN. Sama uppbygging, minna magn.
+ *   GREEN → RED     Aðeins upphitun + ISO + core. Engar lyftur, engin hopp.
  */
 
 export type TemplateBlock = {
@@ -27,24 +27,17 @@ export type TemplateRecord = {
 // ── Keyword helpers ───────────────────────────────────────────────────────────
 
 const WARMUP_KEYWORDS   = ["upphitun", "warmup", "warm-up", "activation", "virkjun"];
+const COOLDOWN_KEYWORDS = ["niðurlag", "cooldown", "cool-down", "teygjur", "stretch"];
 const ISO_KEYWORDS      = ["iso", "isometric", "isometrics"];
-const EXPLOSIVE_KEYWORDS = ["ballistic", "plyo", "contrast", "cluster", "box jump", "drop jump", "pogo", "hopp", "sprettur"];
-const STRENGTH_KEYWORDS  = ["deadlift", "squat", "rfess", "split squat", "lyfting", "styrk", "strength", "trap bar"];
+const CORE_KEYWORDS     = ["kjarni", "core", "magi", "kviður", "pallof", "dead bug", "plank"];
 
-function blockIs(block: string, keywords: string[]): boolean {
-  const lower = block.toLowerCase();
+function blockIs(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase();
   return keywords.some((k) => lower.includes(k));
 }
 
-/** Reduce set counts in a string: "3×3" → "2×3", "4×3" → "2×3", "5×" → "3×" */
-function reduceVolume(item: string): string {
-  return item
-    .replace(/\b5\s*[×x]\s*/g, "3× ")
-    .replace(/\b4\s*[×x]\s*/g, "2× ")
-    .replace(/\b3\s*[×x]\s*/g, "2× ")
-    .replace(/\b5\s*sett\b/gi, "3 sett")
-    .replace(/\b4\s*sett\b/gi, "3 sett")
-    .replace(/\b3\s*sett\b/gi, "2 sett");
+function anyItemIs(items: string[], keywords: string[]): boolean {
+  return items.some((item) => blockIs(item, keywords));
 }
 
 function swapEmoji(title: string, from: string, to: string): string {
@@ -52,155 +45,157 @@ function swapEmoji(title: string, from: string, to: string): string {
   return to + " " + title;
 }
 
+// ── Volume reduction: always subtract 1–2 sets ─────────────────────────────
+
+/** Reduce every set count by 1–2: 5→3, 4→2, 3→2, 2→1. Never below 1. */
+function reduceSets(item: string): string {
+  // Don't touch metadata lines (rest, VBT, instructions)
+  const l = item.toLowerCase();
+  if (/^(hvíld|rest|\d+\s*(mín|min|sek|sec)\s*(hvíld|rest)|ef |markmið|stopp|───)/i.test(l)) return item;
+  if (/velocity|m\/s|hraðamarkmið|hraðaþröskuldur|hraðatap|VT:/i.test(item)) return item;
+  if (/^\d+\s*(umferð|round|hring|cluster)/i.test(l)) {
+    // Reduce round counts too
+    return item
+      .replace(/\b5\b/, "3").replace(/\b4\b/, "3").replace(/\b3\b/, "2");
+  }
+
+  return item
+    // "5×" → "3×", "4×" → "2×", "3×" → "2×"
+    .replace(/\b6\s*[×x]/g, "4×").replace(/\b5\s*[×x]/g, "3×")
+    .replace(/\b4\s*[×x]/g, "2×").replace(/\b3\s*[×x]/g, "2×")
+    // "5 sett" → "3 sett", "4 sett" → "3 sett", "3 sett" → "2 sett"
+    .replace(/\b6\s*sett/gi, "4 sett").replace(/\b5\s*sett/gi, "3 sett")
+    .replace(/\b4\s*sett/gi, "3 sett").replace(/\b3\s*sett/gi, "2 sett")
+    // Same for "sets"
+    .replace(/\b6\s*sets/gi, "4 sets").replace(/\b5\s*sets/gi, "3 sets")
+    .replace(/\b4\s*sets/gi, "3 sets").replace(/\b3\s*sets/gi, "2 sets");
+}
+
 // ── GREEN → YELLOW ────────────────────────────────────────────────────────────
+//
+// Regla: Sama uppbygging og GREEN, en 1–2 færri sett í hverri æfingu.
+// Allt annað helst óbreytt (VBT, hvíld, æfingaval).
 
 export function generateYellow(green: TemplateRecord): TemplateRecord {
   const title = swapEmoji(green.title, "🟢", "🟡")
     .replace("Green+", "Reduced")
     .replace("Green", "Reduced");
 
-  const structure = green.structure.flatMap((block): TemplateBlock[] => {
-    const name = block.block;
-
-    // Warmup: keep unchanged
-    if (blockIs(name, WARMUP_KEYWORDS)) return [block];
-
-    // ISO blocks: keep unchanged
-    if (blockIs(name, ISO_KEYWORDS)) return [block];
-
-    // Explosive/plyometric blocks: reduce volume, add reduced label
-    if (blockIs(name, EXPLOSIVE_KEYWORDS)) {
-      return [
-        {
-          ...block,
-          block: block.block + " — Reduced",
-          items: [
-            ...block.items.map(reduceVolume),
-            "Ef líðan er undir 7/10: sleppa ballistic/hopp og fara í ISO í staðinn.",
-          ],
-        },
-      ];
+  const structure = green.structure.map((block): TemplateBlock => {
+    // Warmup + cooldown: unchanged
+    if (blockIs(block.block, WARMUP_KEYWORDS) || blockIs(block.block, COOLDOWN_KEYWORDS)) {
+      return { ...block };
     }
 
-    // Strength blocks: reduce volume slightly
-    if (blockIs(name, STRENGTH_KEYWORDS)) {
-      return [
-        {
-          ...block,
-          items: block.items.map(reduceVolume),
-        },
-      ];
-    }
-
-    // Default: reduce volume
-    return [
-      {
-        ...block,
-        items: block.items.map(reduceVolume),
-      },
-    ];
+    // Everything else: reduce sets by 1–2
+    return {
+      ...block,
+      items: block.items.map(reduceSets),
+      rest_between_rounds: block.rest_between_rounds
+        ? reduceSets(block.rest_between_rounds)
+        : undefined,
+    };
   });
-
-  // Add a stopping rule block if not already present
-  const hasStopRule = structure.some((b) =>
-    b.items.some((i) => i.toLowerCase().includes("stopp"))
-  );
-  if (!hasStopRule) {
-    structure.push({
-      block: "🛑 STOPP-regla",
-      items: [
-        "Ef hreyfing hægist eða gæði falla: STOPP strax.",
-        "Markmið: líða jafn vel eða betur eftir.",
-      ],
-    });
-  }
 
   return {
     ...green,
     readiness_level: "YELLOW",
     title,
-    description: `Reduced dose. ${green.description ?? "Minnkað magn, engin ballistic/plyo ef líðan er undir 7/10."}`,
+    description: "Reduced dose — 1–2 færri sett en GREEN. Sama uppbygging.",
     structure,
   };
 }
 
 // ── GREEN → RED ───────────────────────────────────────────────────────────────
+//
+// Regla: Aðeins upphitun + ISO + core. Allt annað fellur brott.
 
 const DEFAULT_RED_ISO_BLOCK: TemplateBlock = {
-  block: "B. ISO Circuit (1–2 umferðir)",
+  block: "B. ISO Circuit",
   items: [
     "ISO hamstring (short range) — 2 × 20–30 sek / fót",
-    "ISO adductor / Copenhagen — 2 × 20–30 sek / fót (ef þörf)",
+    "ISO adductor / Copenhagen — 2 × 20–30 sek / fót",
     "ISO calf / ankle — 2 × 20–30 sek",
-    "Pallof Press — 2 × 6/6 (stuttur TUT)",
-    "Öndun: 4–7–8 box breathing í 2 mín að lokum",
+    "Öndun: 4–7–8 box breathing í 2 mín",
   ],
+  rest_between_rounds: "1–2 umferðir",
 };
 
-const DEFAULT_RED_RULE_BLOCK: TemplateBlock = {
-  block: "🛑 Reglur",
+const DEFAULT_CORE_BLOCK: TemplateBlock = {
+  block: "C. Core — Létt",
   items: [
-    "Engar þungar lyftur. Engin hopp. Engin ballistic.",
-    "Ef verkur eykst í ISO: stytta tímann, halda öndun.",
-    "Markmið: fara út ferskari en þú komst inn.",
+    "Pallof Press 2×8/hlið",
+    "Dead bug 2×8",
+    "Copenhagen plank 2×15s/hlið",
   ],
 };
 
 export function generateRed(green: TemplateRecord): TemplateRecord {
   const title = swapEmoji(green.title, "🟢", "🔴")
-    .replace("Green+", "Minimal / ISO")
-    .replace("Green", "Minimal / ISO");
+    .replace("Green+", "ISO + Core")
+    .replace("Green", "ISO + Core");
 
-  // Keep warmup blocks unchanged; drop all else and replace with ISO circuit
-  const warmupBlocks = green.structure.filter((b) =>
-    blockIs(b.block, WARMUP_KEYWORDS)
-  );
-
-  // If the GREEN template already has ISO blocks, include them at reduced volume
-  const isoBlocks = green.structure
-    .filter((b) => blockIs(b.block, ISO_KEYWORDS) && !blockIs(b.block, WARMUP_KEYWORDS))
+  // Keep warmup (strip explosive drills like A-skip, ankle hops)
+  const warmupBlocks = green.structure
+    .filter((b) => blockIs(b.block, WARMUP_KEYWORDS))
     .map((b) => ({
       ...b,
-      items: b.items.map(reduceVolume),
+      items: b.items.filter((item) => {
+        const l = item.toLowerCase();
+        return !/sprint|sprettur|a-skip|ankle hop|hopp|jump|pogo/i.test(l);
+      }),
     }));
+
+  // Keep existing ISO blocks
+  const isoBlocks = green.structure
+    .filter((b) => blockIs(b.block, ISO_KEYWORDS))
+    .filter((b) => !blockIs(b.block, WARMUP_KEYWORDS));
+
+  // Keep existing core blocks (reduced)
+  const coreBlocks = green.structure
+    .filter((b) => blockIs(b.block, CORE_KEYWORDS) || anyItemIs(b.items, CORE_KEYWORDS))
+    .filter((b) => !blockIs(b.block, WARMUP_KEYWORDS) && !blockIs(b.block, ISO_KEYWORDS))
+    .map((b) => ({
+      ...b,
+      items: b.items.map(reduceSets),
+    }));
+
+  // Keep cooldown
+  const cooldownBlocks = green.structure
+    .filter((b) => blockIs(b.block, COOLDOWN_KEYWORDS));
 
   const structure: TemplateBlock[] = [
     ...(warmupBlocks.length > 0
       ? warmupBlocks
-      : [
-          {
-            block: "A. Upphitun (létt)",
-            items: [
-              "Mini-band glute walk 2×10",
-              "Hip bridge 2×8",
-              "Split Squat ISO: 5 sek × 2/hlið",
-            ],
-          },
-        ]),
+      : [{
+          block: "A. Upphitun (létt)",
+          items: [
+            "Hjólreiðar / Röðull 5 mín létt",
+            "Hip bridge 2×8",
+            "World's greatest stretch 2×5/hlið",
+          ],
+        }]),
     ...(isoBlocks.length > 0 ? isoBlocks : [DEFAULT_RED_ISO_BLOCK]),
-    DEFAULT_RED_RULE_BLOCK,
+    ...(coreBlocks.length > 0 ? coreBlocks : [DEFAULT_CORE_BLOCK]),
+    ...cooldownBlocks,
   ];
 
   return {
     ...green,
     readiness_level: "RED",
     title,
-    description: "Isometrics only. Parasympathetic reset. Engar þungar lyftur, engin hopp.",
+    description: "Aðeins upphitun, ISO og core. Engar lyftur, engin hopp.",
     structure,
   };
 }
 
 // ── Slug helper ───────────────────────────────────────────────────────────────
 
-/**
- * Convert "Grindavík" + "Körfubolti" + "M" → "grindavik_korfubolti_karlar_microdose_templates"
- * gender: "M" | "F" | null/undefined
- */
 export function buildTableName(setName: string, sport: string, gender?: string | null): string {
   const slugify = (s: string) =>
     s
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")    // strip diacritics (á→a, ö→o, etc.)
+      .replace(/[\u0300-\u036f]/g, "")
       .replace(/þ/gi, "th")
       .replace(/ð/gi, "d")
       .replace(/æ/gi, "ae")

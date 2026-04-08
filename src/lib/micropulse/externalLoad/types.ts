@@ -18,6 +18,13 @@ export type CatapultDailyLoadRow = {
   decelBand2to3Efforts: number | null;
   totalAccelerations: number | null;
   totalDecelerations: number | null;
+  // FMP (Football Movement Profile) — inertial sensor, works indoors
+  fmpDynamicMediumS: number | null;
+  fmpDynamicHighS: number | null;
+  fmpRunningHighS: number | null;
+  fmpTotalDurationS: number | null;
+  // IMA (also works indoors)
+  imaTotal: number | null;
 };
 
 export type CatapultExternalLoadBaseline = {
@@ -41,6 +48,11 @@ export type CatapultExternalLoadBaseline = {
     maxVelocity: number;
     densityStress: number;
     band6Distance: number;
+    // FMP (Indoor Mode)
+    fmpDynamicHighS: number;
+    fmpDynamicMediumS: number;
+    fmpRunningHighS: number;
+    imaTotal: number;
   };
   availability: {
     daysAvailable7d: number;
@@ -59,6 +71,11 @@ export type CatapultExternalLoadSignals = {
   neuromuscularBurdenScore: number | null;
   externalLoadState: ExternalLoadState;
   dataQuality: ExternalLoadDataQuality;
+  // FMP indoor signals (only populated when indoor_mode = true)
+  fmpDynamicHighSpike: number | null;
+  fmpDynamicMediumSpike: number | null;
+  fmpRunningHighSpike: number | null;
+  imaTotalSpike: number | null;
 };
 
 export type ExternalLoadExplanation = {
