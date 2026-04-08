@@ -755,6 +755,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ]),
       fmpRunningMediumS: extractMetric(flattenedRecord, [
         "fmprunningmediumduration", "fmp_running_medium_duration",
+        "fmprunningmedduration", "fmp_running_med_duration",
         "fmprunningmediumintensityduration", "fmp_running_medium_intensity_duration",
       ]),
       fmpRunningHighS: extractMetric(flattenedRecord, [
@@ -767,6 +768,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ]),
       fmpDynamicMediumS: extractMetric(flattenedRecord, [
         "fmpdynamicmediumduration", "fmp_dynamic_medium_duration",
+        "fmpdynamicmedduration", "fmp_dynamic_med_duration",
         "fmpdynamicmediumintensityduration", "fmp_dynamic_medium_intensity_duration",
       ]),
       fmpDynamicHighS: extractMetric(flattenedRecord, [
@@ -774,9 +776,9 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
         "fmpdynamichighintensityduration", "fmp_dynamic_high_intensity_duration",
       ]),
       fmpTotalDurationS: extractMetric(flattenedRecord, [
+        "fmptotalduration", "fmp_total_duration",
         "fmptotaldynamicduration", "fmp_total_dynamic_duration",
         "fmptotalrunningduration", "fmp_total_running_duration",
-        "fmptotalduration", "fmp_total_duration",
       ]),
       avgHeartRate: normalizedHr.avgHeartRate,
       maxHeartRate: normalizedHr.maxHeartRate,
