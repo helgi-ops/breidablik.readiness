@@ -6184,18 +6184,10 @@ export default function CoachPage() {
   /** -----------------------------
    * Early return
    * ----------------------------- */
-  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
-
-  const sectionTitleClass = "text-base font-semibold tracking-tight text-slate-900";
-  const sectionSubtitleClass = "text-xs text-slate-500";
-  const statLabelClass = "text-[10px] uppercase tracking-wide text-slate-500";
-  const statValueClass = "mt-1 text-lg font-semibold tabular-nums text-slate-900";
-  const softSurfaceClass = "rounded-xl border border-slate-200 bg-slate-50/50 shadow-sm";
-  const summaryCardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm";
-  const summaryTileClass = "rounded-2xl border border-slate-200 bg-white p-4";
-  const compactTileClass = "rounded-xl border p-3";
 
   // ── Personal trainer: render trainer dashboard instead ──
+  // Must be BEFORE the loading check — TrainerDashboard has its own loading state,
+  // and the regular coach data-loading never calls setLoading(false) for PT teams.
   if (teamType === "personal_trainer" && coachTeamId) {
     return (
       <div className="space-y-4">
@@ -6208,6 +6200,17 @@ export default function CoachPage() {
       </div>
     );
   }
+
+  if (loading) return <div className="py-6 text-sm text-muted-foreground">Hleð...</div>;
+
+  const sectionTitleClass = "text-base font-semibold tracking-tight text-slate-900";
+  const sectionSubtitleClass = "text-xs text-slate-500";
+  const statLabelClass = "text-[10px] uppercase tracking-wide text-slate-500";
+  const statValueClass = "mt-1 text-lg font-semibold tabular-nums text-slate-900";
+  const softSurfaceClass = "rounded-xl border border-slate-200 bg-slate-50/50 shadow-sm";
+  const summaryCardClass = "rounded-[24px] border border-slate-200 bg-white shadow-sm";
+  const summaryTileClass = "rounded-2xl border border-slate-200 bg-white p-4";
+  const compactTileClass = "rounded-xl border p-3";
 
   return (
     <div className="space-y-6">

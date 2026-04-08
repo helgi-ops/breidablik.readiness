@@ -30,6 +30,12 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("GOOD_SORENESS_SIGNAL")) {
     lines.push("Muscle soreness does not currently suggest elevated recovery concern.");
   }
+  if (triggeredRules.includes("GLOBAL_FATIGUE")) {
+    lines.push("Both mechanical and metabolic load are elevated — full-body fatigue detected.");
+  }
+  if (triggeredRules.includes("RESIDUAL_MLI_HIGH") || triggeredRules.includes("RESIDUAL_MLI_CAUTION")) {
+    lines.push("Accumulated mechanical stress over multiple days is elevated.");
+  }
   return Array.from(new Set(lines)).slice(0, 4);
 }
 
@@ -46,6 +52,9 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("VALD_HAMSTRING_RISK")) drivers.push("Hamstring asymmetry / force concern");
   if (triggeredRules.includes("VALD_GROIN_RISK")) drivers.push("Groin profile concern");
   if (triggeredRules.includes("VALD_NEUROMUSCULAR_CAUTION")) drivers.push("Neuromuscular readiness decrement");
+  if (triggeredRules.includes("GLOBAL_FATIGUE")) drivers.push("Global fatigue (mechanical + metabolic)");
+  if (triggeredRules.includes("RESIDUAL_MLI_HIGH")) drivers.push("High accumulated mechanical load (3-day)");
+  if (triggeredRules.includes("RESIDUAL_MLI_CAUTION")) drivers.push("Elevated accumulated mechanical load (3-day)");
   return Array.from(new Set(drivers)).slice(0, 5);
 }
 

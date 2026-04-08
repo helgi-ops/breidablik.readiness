@@ -17,6 +17,8 @@ export type SessionMethod =
   | "potentiation_cluster"
   | "cluster";
 
+export type VelocityZone = "max_strength" | "strength_speed" | "speed_strength" | "speed" | "custom";
+
 export interface Exercise {
   exerciseId: string;
   name: string;
@@ -32,6 +34,12 @@ export interface Exercise {
   intraSetRest?: number;
   /** Cluster sets: reps per cluster (e.g. "2+2+2") */
   clusterReps?: string;
+  /** VBT: target mean concentric velocity (m/s) */
+  velocityTarget?: number;
+  /** VBT: velocity loss threshold to terminate set (%) */
+  velocityLoss?: number;
+  /** VBT: training zone */
+  velocityZone?: VelocityZone;
 }
 
 /** A group of exercises that are performed together (superset, contrast, etc.) */
@@ -46,6 +54,7 @@ export interface Session {
   name: string;
   type: "strength" | "endurance" | "mixed";
   method: SessionMethod;
+  bodySplit?: BodySplit;
   groups: ExerciseGroup[];
   /** @deprecated — kept for backward compat with old templates */
   exercises?: Exercise[];
@@ -64,7 +73,11 @@ export interface ExerciseLibraryItem {
   category: string;
   muscle_groups?: string[];
   equipment?: string;
+  movement_pattern?: "push" | "pull" | "hinge" | "squat" | "carry" | null;
+  is_bilateral?: boolean;
 }
+
+type BodySplit = "upper" | "lower" | "full";
 
 type PlanType = "strength" | "endurance" | "mixed";
 
@@ -93,6 +106,162 @@ const ALL_METHODS: SessionMethod[] = [
   "cluster",
 ];
 
+/* ── Method presets: correct default exercise variables per slot ─── */
+
+type SlotPreset = Omit<Exercise, "exerciseId" | "name"> & {
+  /** Suggested movement patterns for exercise search (upper body) */
+  suggestUpper?: string[];
+  /** Suggested movement patterns for exercise search (lower body) */
+  suggestLower?: string[];
+  /** Suggested category filter */
+  suggestCategory?: string;
+};
+
+const METHOD_SLOT_PRESETS: Record<SessionMethod, SlotPreset[]> = {
+  french_contrast: [
+    // A1 — Heavy Compound (85% 1RM, 3-5 reps, slow eccentric)
+    { sets: 3, reps: "3-5", loadType: "%1RM", loadValue: 85, tempo: "3010", restSeconds: 15, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"], suggestCategory: "compound" },
+    // A2 — Plyometric (bodyweight, explosive)
+    { sets: 3, reps: "5", loadType: "kg", loadValue: 0, tempo: "X0X0", restSeconds: 15, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"], suggestCategory: "plyometric" },
+    // A3 — Accentuated/Light Compound (30% 1RM, fast concentric)
+    { sets: 3, reps: "3-5", loadType: "%1RM", loadValue: 30, tempo: "X010", restSeconds: 15, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"], suggestCategory: "compound" },
+    // A4 — Reactive Plyo (bodyweight, reactive)
+    { sets: 3, reps: "5", loadType: "kg", loadValue: 0, tempo: "X0X0", restSeconds: 180, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"], suggestCategory: "plyometric" },
+  ],
+  contrast: [
+    // A1 — Heavy (85% 1RM)
+    { sets: 4, reps: "3-5", loadType: "%1RM", loadValue: 85, tempo: "3010", restSeconds: 30, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"], suggestCategory: "compound" },
+    // A2 — Explosive (bodyweight/light)
+    { sets: 4, reps: "3-5", loadType: "kg", loadValue: 0, tempo: "X0X0", restSeconds: 180, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"], suggestCategory: "plyometric" },
+  ],
+  potentiation_cluster: [
+    // A1 — Heavy (90% 1RM, 1-2 reps)
+    { sets: 5, reps: "1-2", loadType: "%1RM", loadValue: 90, tempo: "2010", restSeconds: 30, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"], suggestCategory: "compound" },
+    // A2 — Explosive (3-5 reps)
+    { sets: 5, reps: "3-5", loadType: "kg", loadValue: 0, tempo: "X0X0", restSeconds: 180, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"], suggestCategory: "plyometric" },
+  ],
+  cluster: [
+    // Cluster set (85% 1RM, 2+2+2 reps, intra-set rest)
+    { sets: 5, reps: "6", loadType: "%1RM", loadValue: 85, tempo: "2010", restSeconds: 180, notes: "",
+      intraSetRest: 20, clusterReps: "2+2+2",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"], suggestCategory: "compound" },
+  ],
+  straight: [
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 120, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"] },
+  ],
+  superset: [
+    // A1 — agonist
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 0, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"] },
+    // A2 — antagonist
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 90, notes: "",
+      suggestUpper: ["pull"], suggestLower: ["hinge"] },
+  ],
+  triset: [
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 0, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"] },
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 0, notes: "",
+      suggestUpper: ["pull"], suggestLower: ["hinge"] },
+    { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 90, notes: "",
+      suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"] },
+  ],
+  giant: [
+    { sets: 3, reps: "10-12", loadType: "kg", loadValue: 0, tempo: "2010", restSeconds: 0, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"] },
+    { sets: 3, reps: "10-12", loadType: "kg", loadValue: 0, tempo: "2010", restSeconds: 0, notes: "",
+      suggestUpper: ["pull"], suggestLower: ["hinge"] },
+    { sets: 3, reps: "10-12", loadType: "kg", loadValue: 0, tempo: "2010", restSeconds: 0, notes: "",
+      suggestUpper: ["push"], suggestLower: ["squat"] },
+    { sets: 3, reps: "10-12", loadType: "kg", loadValue: 0, tempo: "2010", restSeconds: 120, notes: "",
+      suggestUpper: ["pull"], suggestLower: ["hinge"] },
+  ],
+};
+
+const MOVEMENT_PATTERN_LABELS: Record<string, Record<string, string>> = {
+  IS: { push: "Ýta", pull: "Toga", hinge: "Hip hinge", squat: "Squat", carry: "Bera" },
+  EN: { push: "Push", pull: "Pull", hinge: "Hinge", squat: "Squat", carry: "Carry" },
+};
+
+const BODY_SPLIT_LABELS: Record<string, Record<BodySplit, string>> = {
+  IS: { upper: "Efri", lower: "Neðri", full: "Heild" },
+  EN: { upper: "Upper", lower: "Lower", full: "Full" },
+};
+
+/* ── VBT: Velocity zones & reference data from research ─── */
+
+interface VelocityZoneConfig {
+  label: Record<string, string>;
+  /** Approximate %1RM range */
+  pctRange: string;
+  /** Default target MV for squat-type exercises (m/s) */
+  targetSquat: number;
+  /** Default target MV for bench/upper exercises (m/s) */
+  targetUpper: number;
+  /** Recommended velocity loss threshold (%) */
+  defaultVLoss: number;
+  /** Suggested reps range */
+  repsHint: string;
+  color: string;
+}
+
+const VELOCITY_ZONES: Record<Exclude<VelocityZone, "custom">, VelocityZoneConfig> = {
+  max_strength: {
+    label: { IS: "Hámarkskraftur", EN: "Max Strength" },
+    pctRange: "85–100%",
+    targetSquat: 0.40,
+    targetUpper: 0.25,
+    defaultVLoss: 10,
+    repsHint: "1–3",
+    color: "bg-red-100 text-red-700",
+  },
+  strength_speed: {
+    label: { IS: "Krafthraði", EN: "Strength-Speed" },
+    pctRange: "70–85%",
+    targetSquat: 0.60,
+    targetUpper: 0.45,
+    defaultVLoss: 20,
+    repsHint: "3–6",
+    color: "bg-orange-100 text-orange-700",
+  },
+  speed_strength: {
+    label: { IS: "Hraðakraftur", EN: "Speed-Strength" },
+    pctRange: "55–70%",
+    targetSquat: 0.80,
+    targetUpper: 0.65,
+    defaultVLoss: 20,
+    repsHint: "4–8",
+    color: "bg-amber-100 text-amber-700",
+  },
+  speed: {
+    label: { IS: "Hraði / Sprengiafli", EN: "Speed / Power" },
+    pctRange: "<55%",
+    targetSquat: 1.00,
+    targetUpper: 0.85,
+    defaultVLoss: 10,
+    repsHint: "3–5",
+    color: "bg-emerald-100 text-emerald-700",
+  },
+};
+
+/** General V1RM (velocity at 1RM) reference per exercise — from Weakley et al. 2021, Table 2 */
+const V1RM_REFERENCE: Record<string, number> = {
+  "Back Squat": 0.30, "Front Squat": 0.30, "Leg Press": 0.21,
+  "Bench Press": 0.17, "Overhead Press": 0.19,
+  "Deadlift": 0.15, "Trap Bar Deadlift": 0.15, "Romanian Deadlift": 0.15,
+  "Hip Thrust": 0.25, "Bent Over Row": 0.50, "Pull Up": 0.47,
+};
+
+const VL_THRESHOLD_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+
 /** Generate slot labels for a method */
 function getSlotLabels(method: SessionMethod, ct: any): string[] {
   if (ct.methodSlots?.[method]) return ct.methodSlots[method];
@@ -112,6 +281,7 @@ function migrateSession(s: any): Session {
     return {
       ...s,
       method: s.method || "straight",
+      bodySplit: s.bodySplit || "full",
       groups: s.groups,
     };
   }
@@ -187,6 +357,7 @@ export default function PlanBuilder({
             name: `${isIS ? "Seta" : "Session"} ${d}`,
             type: planType,
             method: "straight",
+            bodySplit: "full",
             groups: [],
           });
         }
@@ -257,7 +428,21 @@ export default function PlanBuilder({
 
   /* ── Exercise search ────────────────────────────────── */
 
-  async function searchExercises(query: string) {
+  /** Get suggested movement pattern for a specific slot based on method + body split */
+  function getSlotSuggestion(sessionIdx: number, slotIdx: number): { pattern?: string; category?: string } {
+    const session = weeks[currentWeekIndex]?.sessions[sessionIdx];
+    if (!session) return {};
+    const presets = METHOD_SLOT_PRESETS[session.method];
+    const preset = presets[slotIdx] || presets[0];
+    const split = session.bodySplit || "full";
+    const patterns = split === "upper" ? preset.suggestUpper : split === "lower" ? preset.suggestLower : undefined;
+    return {
+      pattern: patterns?.[0], // Use first suggestion as default filter
+      category: preset.suggestCategory,
+    };
+  }
+
+  async function searchExercises(query: string, extraParams?: string) {
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -270,12 +455,12 @@ export default function PlanBuilder({
       } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const res = await fetch(
-        `/api/trainer/exercises?search=${encodeURIComponent(query)}&${qs}`,
-        {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }
-      );
+      let url = `/api/trainer/exercises?search=${encodeURIComponent(query)}&${qs}`;
+      if (extraParams) url += `&${extraParams}`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
       if (res.ok) {
         const json = await res.json();
@@ -299,6 +484,15 @@ export default function PlanBuilder({
     setWeeks(newWeeks);
   }
 
+  /* ── Session body split change ────────────────────── */
+
+  function changeBodySplit(sessionIdx: number, split: BodySplit) {
+    const newWeeks = [...weeks];
+    const session = newWeeks[currentWeekIndex].sessions[sessionIdx];
+    session.bodySplit = split;
+    setWeeks(newWeeks);
+  }
+
   /* ── Add exercise group ────────────────────────────── */
 
   function addGroup(sessionIdx: number) {
@@ -307,23 +501,26 @@ export default function PlanBuilder({
     const groupSize = METHOD_GROUP_SIZE[session.method];
     const newGroupIdx = session.groups.length;
     const label = groupLetter(newGroupIdx);
+    const presets = METHOD_SLOT_PRESETS[session.method];
 
     const emptySlots: Exercise[] = Array.from(
       { length: groupSize },
-      () => ({
-        exerciseId: "",
-        name: "",
-        sets: session.method === "cluster" ? 5 : 3,
-        reps: session.method === "potentiation_cluster" ? "1-2" : "6",
-        loadType: (planType === "endurance" ? "RPE" : "kg") as Exercise["loadType"],
-        loadValue: planType === "endurance" ? 7 : 100,
-        tempo: "3010",
-        restSeconds: session.method === "cluster" ? 20 : 180,
-        notes: "",
-        ...(session.method === "cluster"
-          ? { intraSetRest: 15, clusterReps: "2+2+2" }
-          : {}),
-      })
+      (_, slotIdx) => {
+        const preset = presets[slotIdx] || presets[0];
+        return {
+          exerciseId: "",
+          name: "",
+          sets: preset.sets,
+          reps: preset.reps,
+          loadType: (planType === "endurance" ? "RPE" : preset.loadType) as Exercise["loadType"],
+          loadValue: planType === "endurance" ? 7 : preset.loadValue,
+          tempo: preset.tempo,
+          restSeconds: preset.restSeconds,
+          notes: "",
+          ...(preset.intraSetRest != null ? { intraSetRest: preset.intraSetRest } : {}),
+          ...(preset.clusterReps ? { clusterReps: preset.clusterReps } : {}),
+        };
+      }
     );
 
     session.groups.push({ label, exercises: emptySlots });
@@ -714,6 +911,23 @@ export default function PlanBuilder({
                           </option>
                         ))}
                       </select>
+
+                      {/* Body split selector */}
+                      <div className="flex rounded overflow-hidden border text-xs">
+                        {(["upper", "lower", "full"] as BodySplit[]).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => changeBodySplit(sessionIdx, s)}
+                            className={`px-2.5 py-1 transition-colors ${
+                              (session.bodySplit || "full") === s
+                                ? "bg-black text-white"
+                                : "bg-white text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            {BODY_SPLIT_LABELS[isIS ? "IS" : "EN"][s]}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Exercise groups */}
@@ -800,14 +1014,29 @@ export default function PlanBuilder({
                                             : "+ Choose exercise"}
                                         </button>
 
-                                        {isSearchOpen && (
-                                          <div className="absolute top-full left-0 mt-1 w-72 bg-white border rounded-lg shadow-lg z-20 p-2">
+                                        {isSearchOpen && (() => {
+                                          const suggestion = getSlotSuggestion(sessionIdx, slotIdx);
+                                          const suggestionParams = [
+                                            suggestion.pattern ? `pattern=${suggestion.pattern}` : "",
+                                            suggestion.category ? `category=${suggestion.category}` : "",
+                                          ].filter(Boolean).join("&");
+                                          const patternLabels = MOVEMENT_PATTERN_LABELS[isIS ? "IS" : "EN"];
+
+                                          return (
+                                          <div className="absolute top-full left-0 mt-1 w-80 bg-white border rounded-lg shadow-lg z-20 p-2">
+                                            {/* Suggestion hint */}
+                                            {suggestion.pattern && (
+                                              <div className="text-[10px] text-indigo-500 mb-1.5 px-1">
+                                                {isIS ? "Ráðlagt" : "Suggested"}: {patternLabels[suggestion.pattern] || suggestion.pattern}
+                                                {suggestion.category ? ` · ${suggestion.category}` : ""}
+                                              </div>
+                                            )}
                                             <input
                                               type="text"
                                               value={searchQuery}
                                               onChange={(e) => {
                                                 setSearchQuery(e.target.value);
-                                                searchExercises(e.target.value);
+                                                searchExercises(e.target.value, suggestionParams);
                                               }}
                                               placeholder={
                                                 ct.plans.searchExercises
@@ -831,7 +1060,7 @@ export default function PlanBuilder({
                                                             result
                                                           )
                                                         }
-                                                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+                                                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-100 rounded"
                                                       >
                                                         <div className="font-medium">
                                                           {isIS
@@ -839,8 +1068,22 @@ export default function PlanBuilder({
                                                               result.name
                                                             : result.name}
                                                         </div>
-                                                        <div className="text-xs text-gray-500">
-                                                          {result.category}
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-0.5">
+                                                          <span>{result.category}</span>
+                                                          {result.movement_pattern && (
+                                                            <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
+                                                              {patternLabels[result.movement_pattern] || result.movement_pattern}
+                                                            </span>
+                                                          )}
+                                                          <span className={`px-1.5 py-0.5 rounded ${
+                                                            result.is_bilateral === false
+                                                              ? "bg-amber-50 text-amber-600"
+                                                              : "bg-gray-50 text-gray-500"
+                                                          }`}>
+                                                            {result.is_bilateral === false
+                                                              ? (isIS ? "Einhlið" : "Uni")
+                                                              : (isIS ? "Tvíhlið" : "Bi")}
+                                                          </span>
                                                         </div>
                                                       </button>
                                                     )
@@ -864,7 +1107,8 @@ export default function PlanBuilder({
                                               </div>
                                             )}
                                           </div>
-                                        )}
+                                          );
+                                        })()}
                                       </div>
                                     ) : (
                                       <div>
@@ -962,50 +1206,127 @@ export default function PlanBuilder({
                                             </select>
                                           </div>
 
-                                          <div>
-                                            <label className="block text-gray-500 mb-0.5">
-                                              {ct.plans.load}
-                                            </label>
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={ex.loadValue}
-                                              onChange={(e) =>
-                                                updateExercise(
-                                                  currentWeekIndex,
-                                                  sessionIdx,
-                                                  groupIdx,
-                                                  slotIdx,
-                                                  {
-                                                    loadValue: +e.target.value,
+                                          {/* ── Velocity-based training controls ── */}
+                                          {ex.loadType === "velocity" ? (
+                                            <>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {isIS ? "Svæði" : "Zone"}
+                                                </label>
+                                                <select
+                                                  value={ex.velocityZone || "strength_speed"}
+                                                  onChange={(e) => {
+                                                    const zone = e.target.value as VelocityZone;
+                                                    if (zone === "custom") {
+                                                      updateExercise(currentWeekIndex, sessionIdx, groupIdx, slotIdx, { velocityZone: zone });
+                                                    } else {
+                                                      const cfg = VELOCITY_ZONES[zone];
+                                                      const split = session.bodySplit || "full";
+                                                      const target = split === "upper" ? cfg.targetUpper : cfg.targetSquat;
+                                                      updateExercise(currentWeekIndex, sessionIdx, groupIdx, slotIdx, {
+                                                        velocityZone: zone,
+                                                        velocityTarget: target,
+                                                        velocityLoss: cfg.defaultVLoss,
+                                                        reps: cfg.repsHint,
+                                                      });
+                                                    }
+                                                  }}
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                >
+                                                  {(Object.keys(VELOCITY_ZONES) as Array<Exclude<VelocityZone, "custom">>).map((z) => (
+                                                    <option key={z} value={z}>
+                                                      {VELOCITY_ZONES[z].label[isIS ? "IS" : "EN"]} ({VELOCITY_ZONES[z].pctRange})
+                                                    </option>
+                                                  ))}
+                                                  <option value="custom">{isIS ? "Sérsniðið" : "Custom"}</option>
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {isIS ? "Markhraði" : "Target"} (m/s)
+                                                </label>
+                                                <input
+                                                  type="number"
+                                                  step="0.05"
+                                                  min="0.1"
+                                                  max="1.5"
+                                                  value={ex.velocityTarget ?? 0.60}
+                                                  onChange={(e) =>
+                                                    updateExercise(currentWeekIndex, sessionIdx, groupIdx, slotIdx, {
+                                                      velocityTarget: +e.target.value,
+                                                      velocityZone: "custom",
+                                                    })
                                                   }
-                                                )
-                                              }
-                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
-                                            />
-                                          </div>
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  VL%
+                                                </label>
+                                                <select
+                                                  value={ex.velocityLoss ?? 20}
+                                                  onChange={(e) =>
+                                                    updateExercise(currentWeekIndex, sessionIdx, groupIdx, slotIdx, {
+                                                      velocityLoss: +e.target.value,
+                                                    })
+                                                  }
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                >
+                                                  {VL_THRESHOLD_OPTIONS.map((v) => (
+                                                    <option key={v} value={v}>{v}%</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {ct.plans.load}
+                                                </label>
+                                                <input
+                                                  type="number"
+                                                  step="0.1"
+                                                  value={ex.loadValue}
+                                                  onChange={(e) =>
+                                                    updateExercise(
+                                                      currentWeekIndex,
+                                                      sessionIdx,
+                                                      groupIdx,
+                                                      slotIdx,
+                                                      {
+                                                        loadValue: +e.target.value,
+                                                      }
+                                                    )
+                                                  }
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                />
+                                              </div>
 
-                                          <div>
-                                            <label className="block text-gray-500 mb-0.5">
-                                              {ct.plans.tempo}
-                                            </label>
-                                            <input
-                                              type="text"
-                                              value={ex.tempo}
-                                              onChange={(e) =>
-                                                updateExercise(
-                                                  currentWeekIndex,
-                                                  sessionIdx,
-                                                  groupIdx,
-                                                  slotIdx,
-                                                  {
-                                                    tempo: e.target.value,
+                                              <div>
+                                                <label className="block text-gray-500 mb-0.5">
+                                                  {ct.plans.tempo}
+                                                </label>
+                                                <input
+                                                  type="text"
+                                                  value={ex.tempo}
+                                                  onChange={(e) =>
+                                                    updateExercise(
+                                                      currentWeekIndex,
+                                                      sessionIdx,
+                                                      groupIdx,
+                                                      slotIdx,
+                                                      {
+                                                        tempo: e.target.value,
+                                                      }
+                                                    )
                                                   }
-                                                )
-                                              }
-                                              className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
-                                            />
-                                          </div>
+                                                  className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                                                />
+                                              </div>
+                                            </>
+                                          )}
 
                                           <div>
                                             <label className="block text-gray-500 mb-0.5">
@@ -1112,6 +1433,27 @@ export default function PlanBuilder({
                                                 }
                                                 className="w-full border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-black"
                                               />
+                                            </div>
+                                          )}
+
+                                          {/* VBT zone info badge */}
+                                          {ex.loadType === "velocity" && ex.velocityZone && ex.velocityZone !== "custom" && (
+                                            <div className="col-span-3 sm:col-span-6">
+                                              <div className={`inline-flex items-center gap-2 px-2 py-1 rounded text-[10px] font-medium ${VELOCITY_ZONES[ex.velocityZone].color}`}>
+                                                <span>{VELOCITY_ZONES[ex.velocityZone].label[isIS ? "IS" : "EN"]}</span>
+                                                <span>·</span>
+                                                <span>~{VELOCITY_ZONES[ex.velocityZone].pctRange} 1RM</span>
+                                                <span>·</span>
+                                                <span>{ex.velocityTarget?.toFixed(2)} m/s</span>
+                                                <span>·</span>
+                                                <span>VL {ex.velocityLoss}%</span>
+                                                {ex.velocityLoss != null && ex.velocityLoss <= 10 && (
+                                                  <span className="ml-1 text-[9px] opacity-70">({isIS ? "kraftmiðað" : "power focus"})</span>
+                                                )}
+                                                {ex.velocityLoss != null && ex.velocityLoss >= 25 && (
+                                                  <span className="ml-1 text-[9px] opacity-70">({isIS ? "vöðvaþroski" : "hypertrophy"})</span>
+                                                )}
+                                              </div>
                                             </div>
                                           )}
 

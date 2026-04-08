@@ -87,6 +87,23 @@ export type CompositeLoadInput = {
    * Categorical GPS load state — used as a sanity check / tie-breaker.
    */
   externalLoadState: "normal" | "elevated" | "high" | "unknown";
+  /**
+   * Residual MLI (3-day weighted accumulation of Mechanical Load Index).
+   * Bands: <70 NORMAL, 70-109 ELEVATED, 110-134 CAUTION, ≥135 HIGH.
+   * Used as a safety net — if residual is CAUTION or HIGH,
+   * composite concern is bumped to at least "moderate".
+   */
+  residualMli?: number | null;
+  /**
+   * Metabolic Load Score (0–100, z-score based).
+   * Measures aerobic/metabolic demand — distinct from mechanical GPS burden.
+   * When available, enters as a third dimension in composite scoring.
+   */
+  metabolicLoadScore?: number | null;
+  /**
+   * Metabolic confidence — only trust score when "medium" or "high".
+   */
+  metabolicConfidence?: "low" | "medium" | "high" | null;
 };
 
 export type CompositeLoadResult = {
@@ -94,10 +111,52 @@ export type CompositeLoadResult = {
   /** 0–1 composite score before thresholding */
   compositeScore: number;
   /** Which signals contributed */
-  sources: Array<"rpe_acwr" | "gps_burden">;
+  sources: Array<"rpe_acwr" | "gps_burden" | "residual_mli" | "metabolic">;
   /** Human-readable summary for logging */
   summary: string;
+  /**
+   * Coach-facing explanation lines describing WHY concern was raised.
+   * Empty when concernLevel === "none".
+   */
+  escalationReasons: string[];
+  /**
+   * Composite fatigue type when both MLI and Metabolic are available.
+   * null when insufficient data.
+   */
+  fatigueType?: "global_fatigue" | "mechanical_fatigue" | "metabolic_fatigue" | "normal" | null;
 };
+
+/**
+ * Convert Metabolic Load Score (0–100) to a 0–1 concern score.
+ *
+ * Metabolic bands (z-score normalized):
+ *   < 35  → low     → 0.00 (no concern)
+ *   35–54 → moderate → 0.10 (minimal)
+ *   55–74 → high    → 0.45 (moderate concern)
+ *   ≥ 75  → very_high → 0.85 (high concern)
+ */
+function metabolicToScore(score: number | null | undefined): number | null {
+  if (score == null || !Number.isFinite(score)) return null;
+  if (score < 35) return 0.00;
+  if (score < 55) return 0.10;
+  if (score < 75) return 0.45;
+  return 0.85;
+}
+
+/**
+ * Residual MLI band classification.
+ *   < 70  → NORMAL
+ *   70–109 → ELEVATED
+ *   110–134 → CAUTION
+ *   ≥ 135 → HIGH
+ */
+function residualMliBand(residual: number | null | undefined): "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH" | null {
+  if (residual == null || !Number.isFinite(residual)) return null;
+  if (residual < 70) return "NORMAL";
+  if (residual < 110) return "ELEVATED";
+  if (residual < 135) return "CAUTION";
+  return "HIGH";
+}
 
 export function computeCompositeLoadConcern(input: CompositeLoadInput): CompositeLoadResult {
   const internalScore = rpeAcwrToScore(input.rpeAcwr?.acwr ?? null);
@@ -108,25 +167,51 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
       ? input.neuromuscularBurdenScore
       : null;
 
+  // Metabolic score — only use when confidence is medium or high
+  const metabolicConfOk = input.metabolicConfidence === "medium" || input.metabolicConfidence === "high";
+  const metabolicScore = metabolicConfOk ? metabolicToScore(input.metabolicLoadScore) : null;
+
   const sources: CompositeLoadResult["sources"] = [];
   if (internalScore != null) sources.push("rpe_acwr");
   if (externalScore != null) sources.push("gps_burden");
+  if (metabolicScore != null) sources.push("metabolic");
 
   // Neither signal available
-  if (sources.length === 0) {
-    return { concernLevel: "none", compositeScore: 0, sources, summary: "No load data available." };
+  if (internalScore == null && externalScore == null && metabolicScore == null) {
+    return { concernLevel: "none", compositeScore: 0, sources, summary: "No load data available.", escalationReasons: [], fatigueType: null };
   }
 
+  // ── Build composite score with dynamic weighting ──
+  //
+  // When all three signals are present:
+  //   40% RPE ACWR · 35% NBS (GPS) · 25% Metabolic
+  //
+  // When only RPE + GPS:
+  //   55% RPE · 45% GPS  (original weights preserved)
+  //
+  // When only one or two signals: normalize available weights
+  // and apply 0.80 confidence discount if only one signal.
   let compositeScore: number;
-  if (internalScore != null && externalScore != null) {
-    // Both signals: 55% internal, 45% external
+
+  if (internalScore != null && externalScore != null && metabolicScore != null) {
+    // All three signals → new tri-dimensional weights
+    compositeScore = internalScore * 0.40 + externalScore * 0.35 + metabolicScore * 0.25;
+  } else if (internalScore != null && externalScore != null) {
+    // Original two-signal mode: 55% internal, 45% external
     compositeScore = internalScore * 0.55 + externalScore * 0.45;
+  } else if (internalScore != null && metabolicScore != null) {
+    // RPE + Metabolic (no GPS)
+    compositeScore = (internalScore * 0.60 + metabolicScore * 0.40) * 0.85;
+  } else if (externalScore != null && metabolicScore != null) {
+    // GPS + Metabolic (no RPE)
+    compositeScore = (externalScore * 0.55 + metabolicScore * 0.45) * 0.85;
   } else if (internalScore != null) {
-    // Only RPE: apply 80% confidence discount
     compositeScore = internalScore * 0.80;
+  } else if (externalScore != null) {
+    compositeScore = externalScore * 0.80;
   } else {
-    // Only GPS: apply 80% confidence discount
-    compositeScore = (externalScore as number) * 0.80;
+    // Only metabolic — lowest confidence
+    compositeScore = (metabolicScore as number) * 0.70;
   }
 
   // Tie-breaker: if GPS says "high" but composite is "low", bump to "moderate"
@@ -137,14 +222,78 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
     compositeScore = Math.max(compositeScore, 0.40);
   }
 
+  // ── Residual MLI safety net ──
+  // If accumulated mechanical load (3-day weighted) is in CAUTION or HIGH,
+  // ensure concern level is at least "moderate" regardless of daily signals.
+  // This catches multi-day accumulation that single-day metrics miss.
+  const resBand = residualMliBand(input.residualMli);
+  if (resBand === "HIGH") {
+    compositeScore = Math.max(compositeScore, 0.68); // → "high"
+    if (!sources.includes("residual_mli")) sources.push("residual_mli");
+  } else if (resBand === "CAUTION") {
+    compositeScore = Math.max(compositeScore, 0.40); // → "moderate"
+    if (!sources.includes("residual_mli")) sources.push("residual_mli");
+  }
+
   const concernLevel = scoreToConcernLevel(compositeScore);
+
+  // ── Coach-facing escalation reasons ──
+  const escalationReasons: string[] = [];
+  if (concernLevel !== "none") {
+    if (internalScore != null && internalScore >= 0.50) {
+      const acwrVal = input.rpeAcwr?.acwr;
+      escalationReasons.push(
+        acwrVal != null && acwrVal > 1.5
+          ? `ACWR is ${acwrVal.toFixed(2)} — high injury risk zone (Gabbett).`
+          : `ACWR is ${acwrVal?.toFixed(2) ?? "n/a"} — above safe zone.`
+      );
+    }
+    if (externalScore != null && externalScore >= 0.34) {
+      escalationReasons.push("GPS neuromuscular burden is elevated above baseline.");
+    }
+    if (metabolicScore != null && metabolicScore >= 0.45) {
+      escalationReasons.push(
+        `Metabolic load is ${input.metabolicLoadScore?.toFixed(0) ?? "?"} — high energy-system demand.`
+      );
+    }
+    if (resBand === "HIGH") {
+      escalationReasons.push(
+        `Residual MLI is ${input.residualMli?.toFixed(0) ?? "?"} (HIGH) — accumulated mechanical stress over 3 days.`
+      );
+    } else if (resBand === "CAUTION") {
+      escalationReasons.push(
+        `Residual MLI is ${input.residualMli?.toFixed(0) ?? "?"} (CAUTION) — multi-day mechanical load building up.`
+      );
+    }
+  }
+
+  // ── Fatigue type classification ──
+  const mliRaw = input.metabolicLoadScore;
+  const nbsHigh = externalScore != null && externalScore >= 0.34;
+  const metaHigh = mliRaw != null && mliRaw >= 65;
+  // For fatigue type we check if mechanical (GPS) is high — proxy for MLI
+  let fatigueType: CompositeLoadResult["fatigueType"] = null;
+  if (nbsHigh && metaHigh) {
+    fatigueType = "global_fatigue";
+    if (!escalationReasons.some((r) => r.includes("Global"))) {
+      escalationReasons.push("Global fatigue — both mechanical and metabolic systems under high stress.");
+    }
+  } else if (nbsHigh && !metaHigh) {
+    fatigueType = "mechanical_fatigue";
+  } else if (!nbsHigh && metaHigh) {
+    fatigueType = "metabolic_fatigue";
+  } else {
+    fatigueType = "normal";
+  }
 
   const acwrStr = input.rpeAcwr?.acwr != null ? input.rpeAcwr.acwr.toFixed(2) : "n/a";
   const gpsStr = externalScore != null ? externalScore.toFixed(2) : "n/a";
+  const metStr = metabolicScore != null ? `${input.metabolicLoadScore?.toFixed(0)}(${metabolicScore.toFixed(2)})` : "n/a";
+  const resStr = input.residualMli != null ? `${input.residualMli.toFixed(0)}[${resBand}]` : "n/a";
   const summary =
-    `composite=${compositeScore.toFixed(2)} (rpe_acwr=${acwrStr}, gps_burden=${gpsStr}) → ${concernLevel}`;
+    `composite=${compositeScore.toFixed(2)} (rpe_acwr=${acwrStr}, gps_burden=${gpsStr}, metabolic=${metStr}, residual_mli=${resStr}) → ${concernLevel}`;
 
-  return { concernLevel, compositeScore, sources, summary };
+  return { concernLevel, compositeScore, sources, summary, escalationReasons, fatigueType };
 }
 
 /**

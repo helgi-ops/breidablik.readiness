@@ -389,3 +389,108 @@ export function normalizeForceFrameResult(rawPayload: unknown): ValdForceFrameNo
     isValid: leftPeak != null || rightPeak != null || asym.percent != null,
   };
 }
+
+// ── ForceDecks per-trial expansion ───────────────────────────────────────────
+//
+// VALD test sessions contain multiple trials (typically 3 CMJ jumps).
+// This function returns one ValdForceDecksNormalizedResult per trial,
+// each tagged with a 1-based trialNumber.  If the payload has no `trials`
+// array (legacy format), it falls back to the original normalizer so we
+// still produce at least one row.
+
+function buildTrialParamMap(trialRecord: Record<string, unknown>): Map<string, number> {
+  const map = new Map<string, number>();
+  const results = trialRecord.results;
+  if (!Array.isArray(results)) return map;
+  for (const res of results) {
+    const r = asRecord(res);
+    if (!r) continue;
+    const val = toNumber(r.value);
+    if (val == null) continue;
+    const def = asRecord(r.definition);
+    if (!def) continue;
+    const resultCode = typeof def.result === "string" ? def.result.trim() : null;
+    if (!resultCode) continue;
+    const unit = typeof def.unit === "string" ? def.unit.trim().toLowerCase() : "";
+    let converted = val;
+    if (unit === "meter" || unit === "m") converted = val * 100;
+    else if (unit === "second" || unit === "s") converted = val * 1000;
+    const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
+    const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
+    const key = `TRIAL_${resultCode}${suffix}`;
+    map.set(key, converted);
+    // Also store human-readable name from definition for param lookups
+    const namedKey =
+      (typeof def.name === "string" && def.name.trim() ? def.name.trim() : null) ??
+      (typeof def.shortName === "string" && def.shortName.trim() ? def.shortName.trim() : null);
+    if (namedKey) map.set(namedKey, converted);
+  }
+  return map;
+}
+
+export type ForceDecksTrialResult = ValdForceDecksNormalizedResult & { trialNumber: number };
+
+export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialResult[] {
+  const record = asRecord(rawPayload);
+  if (!record) throw new ValdNormalizationError("Invalid ForceDecks payload.", rawPayload);
+
+  const trials = record.trials;
+  if (!Array.isArray(trials) || trials.length === 0) {
+    return [{ ...normalizeForceDecksResult(rawPayload), trialNumber: 1 }];
+  }
+
+  const testType = firstString(record.testType, record.test_type, record.protocol, record.name);
+  const baseTimestamp =
+    firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+    new Date().toISOString();
+  const bodyWeightKg = firstNumber(record.weight, record.bodyWeightKg, record.body_weight_kg);
+
+  const expanded: ForceDecksTrialResult[] = [];
+  for (let i = 0; i < trials.length; i++) {
+    const t = asRecord(trials[i]);
+    if (!t) continue;
+    const params = buildTrialParamMap(t as Record<string, unknown>);
+    const jumpHeightCm =
+      paramValue(params, ["TRIAL_JUMP_HEIGHT_MO", "TRIAL_JUMP_HEIGHT"]) ??
+      paramValue(params, ["Jump Height (Flight Time)"]) ??
+      paramValue(params, ["Jump Height (Imp-Mom)"]);
+    const peakPowerW =
+      paramValue(params, ["TRIAL_PEAK_TAKEOFF_POWER", "TRIAL_PEAK_POWER"]) ??
+      paramValue(params, ["Peak Power / Force"]);
+    const leftValue =
+      paramValue(params, ["TRIAL_CONCENTRIC_PEAK_FORCE_LEFT", "TRIAL_MEAN_TAKEOFF_FORCE_LEFT", "TRIAL_PEAK_FORCE_LEFT"]);
+    const rightValue =
+      paramValue(params, ["TRIAL_CONCENTRIC_PEAK_FORCE_RIGHT", "TRIAL_MEAN_TAKEOFF_FORCE_RIGHT", "TRIAL_PEAK_FORCE_RIGHT"]);
+    const trustedPercent = paramValue(params, ["TRIAL_ASYMMETRY", "Asymmetry"]);
+    const trialAsym = computeAsymmetry({ left: leftValue, right: rightValue, trustedPercent });
+    const trialTimestamp = firstString(t.recordedUTC as string | undefined) ?? baseTimestamp;
+
+    expanded.push({
+      product: "forcedecks",
+      trialNumber: i + 1,
+      testType,
+      testTimestamp: trialTimestamp,
+      jumpHeightCm,
+      rsiMod: paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]),
+      eccentricDurationMs: paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]),
+      concentricDurationMs: paramValue(params, ["TRIAL_CONCENTRIC_DURATION", "TRIAL_PROPULSION_DURATION"]),
+      peakPowerW,
+      relativePeakPowerWKg:
+        paramValue(params, ["TRIAL_PEAK_TAKEOFF_POWER_BW"]) ??
+        (peakPowerW != null && bodyWeightKg != null && bodyWeightKg > 0 ? peakPowerW / bodyWeightKg : null),
+      peakForceN: paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]),
+      concentricImpulseNS: paramValue(params, ["TRIAL_CONCENTRIC_IMPULSE"]),
+      timeToTakeoffMs: paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]),
+      leftValue,
+      rightValue,
+      asymmetryPercent: trialAsym.percent,
+      asymmetrySide: trialAsym.side,
+      isValid: jumpHeightCm != null || peakPowerW != null || trialAsym.percent != null,
+    });
+  }
+
+  if (expanded.length === 0) {
+    return [{ ...normalizeForceDecksResult(rawPayload), trialNumber: 1 }];
+  }
+  return expanded;
+}

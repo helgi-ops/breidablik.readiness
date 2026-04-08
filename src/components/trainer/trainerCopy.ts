@@ -89,9 +89,12 @@ export const TRAINER_COPY = {
       cluster: "Cluster Sets",
     },
     methodSlots: {
-      french_contrast: ["Þungt samsetning", "Plyó", "Létt samsetning", "Reaktív plyó"],
+      french_contrast: ["Þungt samsetning", "Plyó", "Létt/hraðað samsetning", "Reaktív plyó"],
       contrast: ["Þungt", "Sprengikraftur"],
       potentiation_cluster: ["Þungt (1-2 endurt.)", "Sprengikraftur"],
+      superset: ["Agonist", "Antagonist"],
+      triset: ["Æfing 1", "Æfing 2", "Æfing 3"],
+      giant: ["Æfing 1", "Æfing 2", "Æfing 3", "Æfing 4"],
     },
     load: {
       acwr: "ACWR",
@@ -190,9 +193,12 @@ export const TRAINER_COPY = {
       cluster: "Cluster Sets",
     },
     methodSlots: {
-      french_contrast: ["Heavy Compound", "Plyometric", "Light Compound", "Reactive Plyo"],
+      french_contrast: ["Heavy Compound", "Plyometric", "Accentuated/Light Compound", "Reactive Plyo"],
       contrast: ["Heavy", "Explosive"],
       potentiation_cluster: ["Heavy (1-2 reps)", "Explosive"],
+      superset: ["Agonist", "Antagonist"],
+      triset: ["Exercise 1", "Exercise 2", "Exercise 3"],
+      giant: ["Exercise 1", "Exercise 2", "Exercise 3", "Exercise 4"],
     },
     load: {
       acwr: "ACWR",

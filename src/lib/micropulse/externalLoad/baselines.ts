@@ -47,6 +47,18 @@ export function getBand6Distance(row: CatapultDailyLoadRow | null | undefined): 
   return row?.velocityBand6TotalDistance ?? 0;
 }
 
+/**
+ * HIR (High-Intensity Running) distance.
+ * If the dedicated `hirDist` field is populated, use it.
+ * Otherwise fall back to Band 5 + Band 6 velocity distances,
+ * which together approximate the HIR threshold (~5.5 m/s+).
+ */
+export function getHirDistance(row: CatapultDailyLoadRow | null | undefined): number {
+  if (!row) return 0;
+  if (row.hirDist != null && row.hirDist > 0) return row.hirDist;
+  return (row.velocityBand5TotalDistance ?? 0) + (row.velocityBand6TotalDistance ?? 0);
+}
+
 export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): CatapultDailyLoadRow | null {
   const playerId = typeof row.player_id === "string" ? row.player_id : typeof row.playerId === "string" ? row.playerId : null;
   const date = typeof row.date === "string" ? row.date : null;
@@ -125,19 +137,19 @@ export function computeCatapultExternalLoadBaseline(args: {
     baseline: {
       acute3d: {
         playerLoad: sum(acute3dRows.map((row) => row.playerLoad ?? 0)),
-        hirDist: sum(acute3dRows.map((row) => row.hirDist ?? 0)),
+        hirDist: sum(acute3dRows.map((row) => getHirDistance(row))),
         decelLoad: sum(acute3dRows.map((row) => getDecelLoad(row))),
         accelLoad: sum(acute3dRows.map((row) => getAccelLoad(row))),
       },
       acute7d: {
         playerLoad: sum(acute7dRows.map((row) => row.playerLoad ?? 0)),
-        hirDist: sum(acute7dRows.map((row) => row.hirDist ?? 0)),
+        hirDist: sum(acute7dRows.map((row) => getHirDistance(row))),
         decelLoad: sum(acute7dRows.map((row) => getDecelLoad(row))),
         accelLoad: sum(acute7dRows.map((row) => getAccelLoad(row))),
       },
       chronic28dAvg: {
         playerLoad: average(chronic28dRows.map((row) => row.playerLoad ?? 0)),
-        hirDist: average(chronic28dRows.map((row) => row.hirDist ?? 0)),
+        hirDist: average(chronic28dRows.map((row) => getHirDistance(row))),
         decelLoad: average(chronic28dRows.map((row) => getDecelLoad(row))),
         accelLoad: average(chronic28dRows.map((row) => getAccelLoad(row))),
         maxVelocity: average(chronic28dRows.map((row) => row.maxVelocity ?? 0)),

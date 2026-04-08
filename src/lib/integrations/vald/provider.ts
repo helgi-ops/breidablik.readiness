@@ -4,7 +4,7 @@ import { resolveValdAccessToken } from "./auth";
 import { valdRequestJson } from "./client";
 import { getValdProductBaseUrl } from "./config";
 import { inferValdProductFromPayload, mapValdAthleteSummary, mapValdTestSummary } from "./mappers";
-import { normalizeForceDecksResult, normalizeForceFrameResult, normalizeNordBordResult } from "./normalizers";
+import { normalizeForceDecksResult, normalizeForceDecksTrials, normalizeForceFrameResult, normalizeNordBordResult } from "./normalizers";
 import type {
   ValdAthleteSummary,
   ValdConnectionConfig,
@@ -374,6 +374,10 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
       if (product === "nordbord") return normalizeNordBordResult(payload);
       if (product === "forceframe") return normalizeForceFrameResult(payload);
       return null;
+    },
+
+    normalizeForceDecksTrials(payload) {
+      return normalizeForceDecksTrials(payload);
     },
 
     getProductFromPayload(payload) {

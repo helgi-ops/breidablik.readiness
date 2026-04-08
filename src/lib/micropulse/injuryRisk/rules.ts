@@ -115,6 +115,21 @@ export function evaluateInjuryRiskRules(
     riskScore += 1;
   }
 
+  // Global fatigue: both mechanical and metabolic systems under high stress
+  if (input.globalFatigueFlag === true) {
+    triggeredRules.push("GLOBAL_FATIGUE");
+    riskScore += 2;
+  }
+
+  // Residual MLI accumulation: multi-day mechanical stress buildup
+  if (input.residualMliBand === "HIGH") {
+    triggeredRules.push("RESIDUAL_MLI_HIGH");
+    riskScore += 2;
+  } else if (input.residualMliBand === "CAUTION") {
+    triggeredRules.push("RESIDUAL_MLI_CAUTION");
+    riskScore += 1;
+  }
+
   let injuryRiskLevel: "LOW" | "MODERATE" | "HIGH" = "LOW";
   if (riskScore >= 8) injuryRiskLevel = "HIGH";
   else if (riskScore >= 4) injuryRiskLevel = "MODERATE";

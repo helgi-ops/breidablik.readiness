@@ -66,6 +66,34 @@ export default function PlayerDecisionDetails({ player }: Props) {
             {` · ${(player.confidenceScore * 100).toFixed(0)}%`}
           </div>
         </div>
+        {player.fatigueType && player.fatigueType !== "normal" ? (
+          <div className={`rounded-2xl border px-4 py-3 ${
+            player.fatigueType === "global_fatigue"
+              ? "border-rose-200 bg-rose-50"
+              : player.fatigueType === "mechanical_fatigue"
+              ? "border-orange-200 bg-orange-50"
+              : "border-blue-200 bg-blue-50"
+          }`}>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Fatigue type</div>
+            <div className="mt-2 text-sm font-semibold">
+              {player.fatigueType === "global_fatigue"
+                ? "Global Fatigue — bæði vöðva- og orkukerfi undir álagi"
+                : player.fatigueType === "mechanical_fatigue"
+                ? "Mechanical Fatigue — vöðvaálag hátt, orkukerfi OK"
+                : "Metabolic Fatigue — orkuálag hátt, vöðvaálag OK"}
+            </div>
+          </div>
+        ) : null}
+        {player.loadAlerts && player.loadAlerts.length > 0 ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Load alerts</div>
+            <div className="mt-2 space-y-1">
+              {player.loadAlerts.map((alert, i) => (
+                <div key={i} className="text-sm text-amber-900">{alert}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

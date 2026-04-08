@@ -164,5 +164,6 @@ export interface ValdProvider {
   normalizeRawTest(payload: unknown): Promise<
     ValdForceDecksNormalizedResult | ValdNordBordNormalizedResult | ValdForceFrameNormalizedResult | null
   >;
+  normalizeForceDecksTrials(payload: unknown): Array<ValdForceDecksNormalizedResult & { trialNumber: number }>;
   getProductFromPayload(payload: unknown): ValdProduct;
 }

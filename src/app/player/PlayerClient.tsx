@@ -843,6 +843,8 @@ type BlockAccentResult = {
   choiceHeader: string;
   choiceHeaderStyle?: CSSProperties;
   label: string;
+  /** Original block title — used to detect method variants like Potentiation Cluster */
+  rawTitle: string;
 };
 
 /** =========
@@ -888,6 +890,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
         choiceHeader: "",
         choiceHeaderStyle: { backgroundColor: a(0.08), borderColor: a(0.18), color: darkText },
         label: getLabel(),
+        rawTitle: titleRaw,
       };
     }
   }
@@ -903,6 +906,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       methodBadge: "bg-amber-100 text-amber-700 border-amber-200",
       choiceHeader: "bg-amber-100/80 border-amber-200 text-amber-900",
       label: "Upphitun",
+      rawTitle: titleRaw,
     };
   }
   if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) {
@@ -916,6 +920,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       methodBadge: "bg-violet-100 text-violet-700 border-violet-200",
       choiceHeader: "bg-violet-100/80 border-violet-200 text-violet-900",
       label: "Primer",
+      rawTitle: titleRaw,
     };
   }
   if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) {
@@ -929,6 +934,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       methodBadge: "bg-blue-100 text-blue-700 border-blue-200",
       choiceHeader: "bg-blue-100/80 border-blue-200 text-blue-900",
       label: "Main",
+      rawTitle: titleRaw,
     };
   }
   if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) {
@@ -942,6 +948,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       methodBadge: "bg-emerald-100 text-emerald-700 border-emerald-200",
       choiceHeader: "bg-emerald-100/80 border-emerald-200 text-emerald-900",
       label: "Accessory",
+      rawTitle: titleRaw,
     };
   }
   return {
@@ -954,6 +961,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
     methodBadge: "bg-zinc-100 text-zinc-600 border-zinc-200",
     choiceHeader: "bg-zinc-100 border-zinc-200 text-zinc-700",
     label: "Partur",
+    rawTitle: titleRaw,
   };
 }
 
@@ -973,9 +981,10 @@ function parseExerciseItem(raw: string): ParsedExercise {
   // Remove leading index like "1) " or "1. " and bullet characters
   let working = s.replace(/^\d+[\)\.\-]\s*/, "").replace(/^[•\-\*]\s*/, "");
 
-  // Extract method badge
+  // Extract method badge (potentiation must come BEFORE generic cluster)
   let method: string | null = null;
-  if (/\bCLUSTER\b/i.test(working)) method = "CLUSTER";
+  if (/\bPOTENTIATION\s*CLUSTER\b/i.test(working)) method = "POTENTIATION_CLUSTER";
+  else if (/\bCLUSTER\b/i.test(working)) method = "CLUSTER";
   else if (/\bMET\b/.test(working)) method = "MET";
   else if (/\bISO\b/i.test(working)) method = "ISO";
   else if (/\bEMOM\b/i.test(working)) method = "EMOM";
@@ -1039,6 +1048,10 @@ function stripVelocityQualifier(value: string | null) {
 
 /* ---- Exercise info content (method guides + block goals) ---- */
 const METHOD_GUIDE: Record<string, { IS: string; EN: string }> = {
+  POTENTIATION_CLUSTER: {
+    IS: "Potentiation Cluster parar saman þunga styrktaræfingu og sprengikraftsæfingu í sömu blokk til að nýta PAP (Post-Activation Potentiation) áhrif.\n\nUppsetning:\n1. Þung lyft (1–3 endurt. @ 85–95% 1RM) → 10–20 sek hvíld\n2. Sprengikraftsæfing (3–5 endurt. eða stökk/kast) → 2–3 mín hvíld\n\nEndurtaktu 3–5 sett.\n\nÞunga lyftan virkjar taugakerfið (PAP) sem eykur kraftframleiðslu í sprengikraftsæfingunni á eftir. Þetta er EKKI superset — þú nýtir stuttu hvíldina á milli til að fá PAP áhrifin.",
+    EN: "Potentiation Cluster pairs a heavy strength exercise with an explosive exercise in the same block to exploit PAP (Post-Activation Potentiation).\n\nSetup:\n1. Heavy lift (1–3 reps @ 85–95% 1RM) → 10–20 sec rest\n2. Explosive exercise (3–5 reps or jumps/throws) → 2–3 min rest\n\nRepeat for 3–5 sets.\n\nThe heavy lift activates the nervous system (PAP) which increases force production in the following explosive exercise. This is NOT a superset — the short intra-pair rest is intentional to capture the PAP window.",
+  },
   CLUSTER: {
     IS: "Cluster uppsetning þýðir að þú framkvæmir allar endurtekningarnar saman í hvert skipti og hvílir síðan á milli setta.\n\nDæmi — 2 reps × 3 sett (20 sek hvíld):\n2 reps → hvíl 20 sek → 2 reps → hvíl 20 sek → 2 reps = lokið.\n\nÞetta gerir þér kleift að nota meiri þyngd og halda betri tækni í gegnum öll settin.",
     EN: "Cluster setup means you perform all reps together each time, then rest between sets.\n\nExample — 2 reps × 3 sets (20 sec rest):\n2 reps → rest 20 sec → 2 reps → rest 20 sec → 2 reps = complete.\n\nThis allows you to use heavier loads and maintain better technique across all sets.",
@@ -1096,16 +1109,24 @@ const BLOCK_GOAL: Record<string, { IS: string; EN: string }> = {
 function ExerciseInfoModal({
   ex,
   blockLabel,
+  blockRawTitle,
   onClose,
 }: {
   ex: ParsedExercise;
   blockLabel: string;
+  /** Original block title e.g. "A. Potentiation Cluster — Acceleration" */
+  blockRawTitle?: string;
   onClose: () => void;
 }) {
   const [lang] = useLang();
   const isIS = lang === "IS";
 
-  const methodGuide = ex.method ? METHOD_GUIDE[ex.method] : null;
+  // If block raw title mentions "Potentiation" and method is CLUSTER, upgrade to POTENTIATION_CLUSTER
+  const titleToCheck = blockRawTitle || blockLabel;
+  const effectiveMethod = ex.method === "CLUSTER" && /potentiation/i.test(titleToCheck)
+    ? "POTENTIATION_CLUSTER"
+    : ex.method;
+  const methodGuide = effectiveMethod ? METHOD_GUIDE[effectiveMethod] : null;
   const blockGoal = BLOCK_GOAL[blockLabel];
   const exInfo = lookupExercise(ex.name);
   const desc = exInfo ? (isIS ? exInfo.IS : exInfo.EN) : null;
@@ -1130,7 +1151,11 @@ function ExerciseInfoModal({
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-lg font-bold text-zinc-900 leading-snug">{ex.name}</div>
+              <div className="text-lg font-bold text-zinc-900 leading-snug">
+                {effectiveMethod === "POTENTIATION_CLUSTER"
+                  ? (isIS ? "Potentiation Cluster uppsetning" : "Potentiation Cluster format")
+                  : ex.name}
+              </div>
               {ex.setsReps ? (
                 <div className="mt-1 text-sm font-semibold text-zinc-500">{ex.setsReps}</div>
               ) : null}
@@ -1223,7 +1248,7 @@ function ExerciseInfoModal({
           {methodGuide ? (
             <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3">
               <div className="text-[11px] font-bold uppercase tracking-wide text-violet-500 mb-2">
-                ⚙ {ex.method} — {isIS ? "Hvernig á að framkvæma" : "How to perform"}
+                ⚙ {effectiveMethod === "POTENTIATION_CLUSTER" ? "POTENTIATION CLUSTER" : ex.method} — {isIS ? "Hvernig á að framkvæma" : "How to perform"}
               </div>
               {(isIS ? methodGuide.IS : methodGuide.EN).split("\n").map((line, i) =>
                 line.trim() === "" ? (
@@ -1529,7 +1554,7 @@ function ExerciseCard({
         ) : null}
       </div>
       {infoOpen && blockLabel ? (
-        <ExerciseInfoModal ex={effectiveExercise} blockLabel={blockLabel} onClose={() => setInfoOpen(false)} />
+        <ExerciseInfoModal ex={effectiveExercise} blockLabel={blockLabel} blockRawTitle={accent.rawTitle} onClose={() => setInfoOpen(false)} />
       ) : null}
     </>
   );

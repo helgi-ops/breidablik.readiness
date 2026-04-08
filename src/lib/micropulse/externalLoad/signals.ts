@@ -1,5 +1,5 @@
 import type { CatapultDailyLoadRow, CatapultExternalLoadBaseline, CatapultExternalLoadSignals } from "./types";
-import { getAccelLoad, getBand6Distance, getDecelLoad, getDensityStress } from "./baselines";
+import { getAccelLoad, getBand6Distance, getDecelLoad, getDensityStress, getHirDistance } from "./baselines";
 
 const SMALL_NUMBER = 0.001;
 const MAX_RATIO = 3;
@@ -47,7 +47,7 @@ export function computeCatapultExternalLoadSignals(args: {
     !today || days28 < 10 ? "insufficient" : days7 < 3 ? "partial" : "good";
 
   const playerLoadSpike = ratio(today?.playerLoad ?? null, baseline.chronic28dAvg.playerLoad);
-  const hirSpike = ratio(today?.hirDist ?? null, baseline.chronic28dAvg.hirDist);
+  const hirSpike = ratio(getHirDistance(today), baseline.chronic28dAvg.hirDist);
   const decelSpike = ratio(getDecelLoad(today), baseline.chronic28dAvg.decelLoad);
   const accelSpike = ratio(getAccelLoad(today), baseline.chronic28dAvg.accelLoad);
   const maxVelocityExposureRatio = ratio(today?.maxVelocity ?? null, baseline.chronic28dAvg.maxVelocity);

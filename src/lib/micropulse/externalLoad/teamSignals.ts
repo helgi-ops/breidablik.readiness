@@ -1,5 +1,5 @@
 import { buildCatapultReadinessContextFromRows } from "./catapultReadiness";
-import { getBand6Distance, getDecelLoad, getDensityStress } from "./baselines";
+import { getBand6Distance, getDecelLoad, getDensityStress, getHirDistance } from "./baselines";
 import type {
   TeamExternalLoadPlayerInput,
   TeamExternalLoadPlayerSnapshot,
@@ -66,7 +66,7 @@ function playerMetricForDate(
     const today = context.today;
     if (!today) continue;
     if (metric === "playerLoad" && typeof today.playerLoad === "number") values.push(today.playerLoad);
-    if (metric === "hirDist" && typeof today.hirDist === "number") values.push(today.hirDist);
+    if (metric === "hirDist") { const hir = getHirDistance(today); if (hir > 0) values.push(hir); }
     if (metric === "decelLoad") values.push(getDecelLoad(today));
     if (metric === "densityStress") values.push(getDensityStress(today));
   }
@@ -83,7 +83,7 @@ export function buildTeamExternalLoadPlayerSnapshots(
     externalLoadState: input.externalLoadState,
     dataQuality: input.dataQuality,
     playerLoad: input.todayRow?.playerLoad ?? null,
-    hirDist: input.todayRow?.hirDist ?? null,
+    hirDist: getHirDistance(input.todayRow) || null,
     maxVelocity: input.todayRow?.maxVelocity ?? null,
     accelerations: input.todayRow?.accelerations ?? input.todayRow?.totalAccelerations ?? null,
     decelerations: input.todayRow?.decelerations ?? input.todayRow?.totalDecelerations ?? null,

@@ -10,6 +10,8 @@ import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustm
 import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
 import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
 import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type VbtSessionRow } from "@/lib/micropulse/vbtReadiness";
+import { computeMechanicalLoad, type MechanicalLoadSourceRow } from "@/lib/micropulse/mechanicalLoad";
+import { computeMetabolicLoad, type MetabolicLoadSourceRow } from "@/lib/micropulse/metabolicLoad";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -170,8 +172,11 @@ async function fetchCatapultRows(
   sb: ReturnType<typeof getAdminClient>,
   playerIds: string[],
   date: string
-): Promise<Map<string, ReturnType<typeof normalizeCatapultDailyLoadRow>[]>> {
-  if (!playerIds.length) return new Map();
+): Promise<{
+  normalized: Map<string, ReturnType<typeof normalizeCatapultDailyLoadRow>[]>;
+  raw: Map<string, Array<Record<string, unknown>>>;
+}> {
+  if (!playerIds.length) return { normalized: new Map(), raw: new Map() };
   const start = new Date(`${date}T00:00:00.000Z`);
   start.setUTCDate(start.getUTCDate() - 28);
   const startDate = start.toISOString().slice(0, 10);
@@ -185,15 +190,25 @@ async function fetchCatapultRows(
     .order("date", { ascending: true });
   if (error) throw error;
 
-  const byPlayer = new Map<string, ReturnType<typeof normalizeCatapultDailyLoadRow>[]>();
-  for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
-    const normalized = normalizeCatapultDailyLoadRow(raw);
+  const normalizedByPlayer = new Map<string, ReturnType<typeof normalizeCatapultDailyLoadRow>[]>();
+  const rawByPlayer = new Map<string, Array<Record<string, unknown>>>();
+  for (const rawRow of (data ?? []) as Array<Record<string, unknown>>) {
+    const pid = String(rawRow.player_id ?? "");
+    if (!pid) continue;
+
+    // Store raw row for MLI/Metabolic computation
+    const rawList = rawByPlayer.get(pid) ?? [];
+    rawList.push(rawRow);
+    rawByPlayer.set(pid, rawList);
+
+    // Store normalized row for existing GPS pipeline
+    const normalized = normalizeCatapultDailyLoadRow(rawRow);
     if (!normalized) continue;
-    const list = byPlayer.get(normalized.playerId) ?? [];
+    const list = normalizedByPlayer.get(normalized.playerId) ?? [];
     list.push(normalized);
-    byPlayer.set(normalized.playerId, list);
+    normalizedByPlayer.set(normalized.playerId, list);
   }
-  return byPlayer;
+  return { normalized: normalizedByPlayer, raw: rawByPlayer };
 }
 
 async function fetchRpeAcwrForPlayers(
@@ -406,12 +421,50 @@ async function fetchVbtDataForPlayers(
   return result;
 }
 
+/**
+ * Convert raw player_external_load_daily rows into MechanicalLoadSourceRow format.
+ * Uses the same field mappings as the MLI API endpoint.
+ */
+function toMechanicalLoadSourceRows(rawRows: Array<Record<string, unknown>>): MechanicalLoadSourceRow[] {
+  return rawRows.map((r) => ({
+    date: String(r.date ?? ""),
+    high_decels: r.decel_b2_3_tot_effs_gen2 as number | null,
+    total_decels: (r.tot_ds ?? r.decelerations) as number | null,
+    ima_decel: r.ima_decel as number | null,
+    high_accels: r.accel_b2_3_tot_effs_gen2 as number | null,
+    total_accels: (r.tot_as ?? r.accelerations) as number | null,
+    ima_accel: r.ima_accel as number | null,
+    cod_events: r.cod_events as number | null,
+    ima_cod: r.ima_cod as number | null,
+    ima_total: r.ima_total as number | null,
+    playerload_per_min: r.player_load_per_minute as number | null,
+    impacts: r.impacts as number | null,
+  }));
+}
+
+/**
+ * Convert raw player_external_load_daily rows into MetabolicLoadSourceRow format.
+ * Uses the same field mappings as the Metabolic API endpoint.
+ */
+function toMetabolicLoadSourceRows(rawRows: Array<Record<string, unknown>>): MetabolicLoadSourceRow[] {
+  return rawRows.map((r) => ({
+    date: String(r.date ?? ""),
+    metabolic_power: r.metabolic_power as number | null,
+    metabolic_power_peak: r.metabolic_power_peak as number | null,
+    high_metabolic_load_distance_m: r.high_metabolic_load_distance_m as number | null,
+    time_above_hml_threshold_s: r.time_above_hml_threshold_s as number | null,
+    metabolic_data_valid: (r.metabolic_data_valid as boolean | null) ?? false,
+  }));
+}
+
 async function buildPlayerSource(args: {
   row: CoachRow;
   date: string;
   teamId: string;
   tmRaw: unknown;
   catapultRows: ReturnType<typeof normalizeCatapultDailyLoadRow>[];
+  /** Raw DB rows for MLI/Metabolic computation (same source, different field extraction) */
+  rawCatapultRows: Array<Record<string, unknown>>;
   rpeAcwr: RpeAcwrInput | null;
   /** RPE values from all OTHER players on the team today (non-imputed) */
   teamRpeValues: number[];
@@ -527,6 +580,19 @@ async function buildPlayerSource(args: {
     valdReadinessAdjustment,
   });
 
+  // ── Pre-compute MLI/Metabolic for injury risk (computed before compositeLoad) ──
+  const mliSourceRowsEarly = toMechanicalLoadSourceRows(args.rawCatapultRows);
+  const mliResultEarly = mliSourceRowsEarly.length > 0 ? computeMechanicalLoad(mliSourceRowsEarly, args.date) : null;
+  const metaSourceRowsEarly = toMetabolicLoadSourceRows(args.rawCatapultRows);
+  const metaResultEarly = metaSourceRowsEarly.length > 0
+    ? computeMetabolicLoad(metaSourceRowsEarly, args.date, mliResultEarly?.mli ?? null)
+    : null;
+
+  // Global fatigue: both MLI ≥ 65 AND Metabolic ≥ 65
+  const globalFatigueFlag =
+    (mliResultEarly?.mli != null && mliResultEarly.mli >= 65) &&
+    (metaResultEarly?.metabolicLoadScore != null && metaResultEarly.metabolicLoadScore >= 65);
+
   const injuryRiskDecision = buildInjuryRiskDecision(
     {
       acwr: acwrValue ?? undefined,
@@ -549,14 +615,20 @@ async function buildPlayerSource(args: {
       valdGroinRiskFlag: valdInjurySignals?.groinRiskFlag ?? false,
       valdNeuromuscularRiskFlag: valdInjurySignals?.neuromuscularRiskFlag ?? false,
       valdReasons: valdInjurySignals?.reasons ?? [],
+      globalFatigueFlag,
+      residualMliBand: mliResultEarly?.residualBand ?? undefined,
     },
     readinessDecision
   );
 
+  // Reuse MLI/Metabolic already computed for injury risk
   const compositeLoad = computeCompositeLoadConcern({
     rpeAcwr: args.rpeAcwr,
     neuromuscularBurdenScore: catapultContext.signals.neuromuscularBurdenScore,
     externalLoadState: catapultContext.signals.externalLoadState,
+    residualMli: mliResultEarly?.residualMli ?? null,
+    metabolicLoadScore: metaResultEarly?.metabolicLoadScore ?? null,
+    metabolicConfidence: metaResultEarly?.confidence ?? null,
   });
 
   const playerRpeToday = toFinite(tm?.rpe) ?? toFinite(tm?.session_rpe) ?? null;
@@ -572,6 +644,12 @@ async function buildPlayerSource(args: {
     ? computeVbtReadiness(args.vbtData.today, args.vbtData.history, args.vbtData.referenceExercise)
     : null;
 
+  // Build load summary with coach-facing escalation reasons
+  const loadSummaryParts = [compositeLoad.summary];
+  if (compositeLoad.escalationReasons.length > 0) {
+    loadSummaryParts.push(...compositeLoad.escalationReasons);
+  }
+
   const athleteDecision = buildAthleteDecision({
     snapshot,
     readinessDecision,
@@ -579,7 +657,7 @@ async function buildPlayerSource(args: {
     neural: null,
     load: {
       concernLevel: compositeLoad.concernLevel,
-      summary: compositeLoad.summary,
+      summary: loadSummaryParts.join(" | "),
     },
     hardBlock: false,
   });
@@ -603,6 +681,8 @@ async function buildPlayerSource(args: {
     athleteName: String(args.row.full_name ?? ""),
     readinessScore: toFinite(args.row.readiness) ?? toFinite(args.row.total_score),
     cmjRequired,
+    loadAlerts: compositeLoad.escalationReasons,
+    fatigueType: compositeLoad.fatigueType,
     rpeDiscrepancy,
     vbtReadiness,
     recommendation:
@@ -647,9 +727,9 @@ export async function GET(req: Request) {
     }
 
     const playerIds = rows.map((row) => String(row.player_id));
-    const [tmByPlayer, catapultByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
-      fetchTrainingModifiers(sb, playerIds, date),
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
+      fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
       fetchTeamRpeForDate(sb, playerIds, date),
       fetchYesterdayContext(sb, teamId, date),
@@ -667,7 +747,8 @@ export async function GET(req: Request) {
             date,
             teamId,
             tmRaw: tmByPlayer.get(String(row.player_id))?.training_modifier ?? null,
-            catapultRows: (catapultByPlayer.get(String(row.player_id)) ?? []).filter(Boolean),
+            catapultRows: (catapultData.normalized.get(String(row.player_id)) ?? []).filter(Boolean),
+            rawCatapultRows: catapultData.raw.get(String(row.player_id)) ?? [],
             rpeAcwr: rpeAcwrByPlayer.get(String(row.player_id)) ?? null,
             teamRpeValues: Array.from(teamRpeMap.entries())
               .filter(([pid]) => pid !== String(row.player_id))
@@ -683,6 +764,9 @@ export async function GET(req: Request) {
           athleteId: String(row.player_id),
           athleteName: String(row.full_name ?? "Unknown athlete"),
           readinessScore: toFinite(row.readiness) ?? toFinite(row.total_score),
+          cmjRequired: false,
+          loadAlerts: [],
+          fatigueType: null,
           recommendation: {
             state: "GRAY",
             sessionMode: "pending",

@@ -18,6 +18,7 @@ type ValdSnapshotRow = {
   cmjFreshnessStatus: string | null;
   latestCmjAt: string | null;
   cmjScore: number | null;
+  cmjBaseline: number | null;  // 42-day median jump height
 };
 
 type CmjResult = {
@@ -75,7 +76,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     const [snapshotRes, mdRes, playersRes, cmjRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
-        .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, players!inner(full_name)")
+        .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, explanation, players!inner(full_name)")
         .eq("team_id", teamId)
         .eq("snapshot_date", date),
       supabase
@@ -104,6 +105,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
 
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
       const player = (row.players as Record<string, unknown> | null) ?? null;
+      const expl = (row.explanation as Record<string, unknown> | null) ?? null;
+      const cmjExpl = (expl?.cmj as Record<string, unknown> | null) ?? null;
+      const baselineRaw = cmjExpl?.baseline;
+      const cmjBaseline = typeof baselineRaw === "number" && Number.isFinite(baselineRaw) ? baselineRaw : null;
       return {
         playerId: String(row.microplayer_id ?? ""),
         playerName: String(player?.full_name ?? "Player"),
@@ -113,6 +118,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         cmjFreshnessStatus: row.cmj_freshness_status ? String(row.cmj_freshness_status) : null,
         latestCmjAt: row.latest_cmj_at ? String(row.latest_cmj_at) : null,
         cmjScore: row.cmj_score != null ? Number(row.cmj_score) : null,
+        cmjBaseline,
       };
     });
 
@@ -301,6 +307,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                       <tr className="border-b border-slate-100 bg-slate-50">
                         <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400">Leikmaður</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stökk</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">vs 42d</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">RSI-mod ⭐</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Rel. Power</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Take-Off ⭐</th>
@@ -313,10 +320,31 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                         const name = snap?.playerName ?? r.playerId;
                         const asymAbs = r.asymmetryPct != null ? Math.abs(r.asymmetryPct) : null;
                         const asymColor = asymAbs != null && asymAbs > 10 ? "text-amber-600 font-semibold" : "text-slate-500";
+                        // 42-day baseline comparison
+                        const baseline = snap?.cmjBaseline ?? null;
+                        const deltaPct = baseline != null && baseline > 0
+                          ? ((r.jumpHeightCm - baseline) / baseline) * 100
+                          : null;
+                        const deltaColor = deltaPct == null
+                          ? "text-slate-400"
+                          : deltaPct <= -10
+                          ? "text-red-600 font-semibold"
+                          : deltaPct <= -5
+                          ? "text-amber-600 font-semibold"
+                          : deltaPct >= 3
+                          ? "text-emerald-600 font-semibold"
+                          : "text-slate-500";
+                        const deltaLabel = deltaPct == null
+                          ? "–"
+                          : `${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`;
                         return (
                           <tr key={r.playerId} className="hover:bg-slate-50/60">
                             <td className="px-3 py-2 font-medium text-slate-700">{name}</td>
                             <td className="px-3 py-2 text-right font-bold text-emerald-700 tabular-nums">{r.jumpHeightCm.toFixed(1)} cm</td>
+                            <td className={`px-3 py-2 text-right tabular-nums ${deltaColor}`}
+                                title={baseline != null ? `42d baseline: ${baseline.toFixed(1)} cm` : "No baseline"}>
+                              {deltaLabel}
+                            </td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-600">
                               {r.rsiMod != null ? r.rsiMod.toFixed(2) : "–"}
                             </td>

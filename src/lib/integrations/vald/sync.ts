@@ -264,6 +264,7 @@ async function upsertNormalized(args: {
   rawTestId: string;
   product: ValdProduct;
   normalized: Record<string, unknown>;
+  trialNumber?: number;
 }) {
   const sb = getSupabaseServer();
   const base = {
@@ -274,6 +275,7 @@ async function upsertNormalized(args: {
     test_timestamp: args.normalized.testTimestamp,
     test_type: args.normalized.testType ?? null,
     is_valid: args.normalized.isValid === true,
+    trial_number: args.trialNumber ?? 1,
   };
   if (args.product === "forcedecks") {
     await sb.from("vald_forcedecks_results").upsert({
@@ -291,7 +293,7 @@ async function upsertNormalized(args: {
       right_value: args.normalized.rightValue ?? null,
       asymmetry_percent: args.normalized.asymmetryPercent ?? null,
       asymmetry_side: args.normalized.asymmetrySide ?? null,
-    }, { onConflict: "raw_test_id" });
+    }, { onConflict: "raw_test_id,trial_number" });
   } else if (args.product === "nordbord") {
     await sb.from("vald_nordbord_results").upsert({
       ...base,
@@ -301,7 +303,7 @@ async function upsertNormalized(args: {
       right_avg_force_n: args.normalized.rightAvgForceN ?? null,
       asymmetry_percent: args.normalized.asymmetryPercent ?? null,
       asymmetry_side: args.normalized.asymmetrySide ?? null,
-    }, { onConflict: "raw_test_id" });
+    }, { onConflict: "raw_test_id,trial_number" });
   } else if (args.product === "forceframe") {
     await sb.from("vald_forceframe_results").upsert({
       ...base,
@@ -313,7 +315,7 @@ async function upsertNormalized(args: {
       right_relative_force: args.normalized.rightRelativeForce ?? null,
       asymmetry_percent: args.normalized.asymmetryPercent ?? null,
       asymmetry_side: args.normalized.asymmetrySide ?? null,
-    }, { onConflict: "raw_test_id" });
+    }, { onConflict: "raw_test_id,trial_number" });
   }
 }
 
@@ -409,12 +411,7 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
       if (!raw.rawTestId) continue;
 
       try {
-        const normalized = await provider.normalizeRawTest(test.raw);
-        if (!normalized) {
-          summary.invalid_payloads += 1;
-          warnings.push(`Unknown VALD product for test ${test.testId}.`);
-          continue;
-        }
+        const product = provider.getProductFromPayload(test.raw);
         const microplayerId = await resolveMicroplayerId(teamId, test.athleteId);
         if (!microplayerId) {
           summary.mapping_missing += 1;
@@ -422,17 +419,41 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
         } else {
           impactedPlayers.push(microplayerId);
         }
-        await upsertNormalized({
-          teamId,
-          microplayerId,
-          valdAthleteId: test.athleteId,
-          rawTestId: raw.rawTestId,
-          product: normalized.product,
-          normalized: normalized as Record<string, unknown>,
-        });
-        if (normalized.product === "forcedecks") summary.normalized_forcedecks += 1;
-        if (normalized.product === "nordbord") summary.normalized_nordbord += 1;
-        if (normalized.product === "forceframe") summary.normalized_forceframe += 1;
+
+        // ForceDecks: expand trials so each jump gets its own row
+        if (product === "forcedecks") {
+          const trials = provider.normalizeForceDecksTrials(test.raw);
+          for (const trial of trials) {
+            await upsertNormalized({
+              teamId,
+              microplayerId,
+              valdAthleteId: test.athleteId,
+              rawTestId: raw.rawTestId,
+              product: "forcedecks",
+              normalized: trial as unknown as Record<string, unknown>,
+              trialNumber: trial.trialNumber,
+            });
+          }
+          summary.normalized_forcedecks += trials.length;
+        } else {
+          // NordBord / ForceFrame — single row per test (no trial expansion)
+          const normalized = await provider.normalizeRawTest(test.raw);
+          if (!normalized) {
+            summary.invalid_payloads += 1;
+            warnings.push(`Unknown VALD product for test ${test.testId}.`);
+            continue;
+          }
+          await upsertNormalized({
+            teamId,
+            microplayerId,
+            valdAthleteId: test.athleteId,
+            rawTestId: raw.rawTestId,
+            product: normalized.product,
+            normalized: normalized as Record<string, unknown>,
+          });
+          if (normalized.product === "nordbord") summary.normalized_nordbord += 1;
+          if (normalized.product === "forceframe") summary.normalized_forceframe += 1;
+        }
       } catch (error) {
         summary.invalid_payloads += 1;
         warnings.push(error instanceof Error ? error.message : String(error));

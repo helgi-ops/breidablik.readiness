@@ -85,11 +85,13 @@ export async function GET(req: Request) {
     const search = url.searchParams.get("search");
     const type = url.searchParams.get("type"); // "strength" | "endurance"
     const category = url.searchParams.get("category");
+    const pattern = url.searchParams.get("pattern"); // "push" | "pull" | "hinge" | "squat" | "carry"
+    const bilateral = url.searchParams.get("bilateral"); // "true" | "false"
 
     let query = sb
       .from("exercise_library")
       .select(
-        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, video_url, sport, is_bilateral, created_at, updated_at"
+        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, video_url, sport, is_bilateral, movement_pattern, created_at, updated_at"
       );
 
     // Apply filters
@@ -99,6 +101,16 @@ export async function GET(req: Request) {
 
     if (category) {
       query = query.eq("category", category);
+    }
+
+    if (pattern && ["push", "pull", "hinge", "squat", "carry"].includes(pattern)) {
+      query = query.eq("movement_pattern", pattern);
+    }
+
+    if (bilateral === "true") {
+      query = query.eq("is_bilateral", true);
+    } else if (bilateral === "false") {
+      query = query.eq("is_bilateral", false);
     }
 
     if (search) {

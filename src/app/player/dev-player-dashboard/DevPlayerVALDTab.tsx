@@ -9,6 +9,8 @@ type ForceDeckResult = {
   id: string;
   test_timestamp: string;
   test_type: string;
+  trial_number: number;
+  raw_test_id: string;
   jump_height_cm: number | null;
   rsi_mod: number | null;
   eccentric_duration_ms: number | null;
@@ -137,11 +139,12 @@ export default function DevPlayerVALDTab() {
     const [fdRes, nbRes] = await Promise.all([
       supabase
         .from("vald_forcedecks_results")
-        .select("id, test_timestamp, test_type, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
+        .select("id, test_timestamp, test_type, trial_number, raw_test_id, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
         .eq("microplayer_id", playerId)
         .eq("is_valid", true)
         .order("test_timestamp", { ascending: false })
-        .limit(20),
+        .order("trial_number", { ascending: true })
+        .limit(60),
       supabase
         .from("vald_nordbord_results")
         .select("id, test_timestamp, test_type, left_peak_force_n, right_peak_force_n, left_avg_force_n, right_avg_force_n, asymmetry_percent, asymmetry_side")
@@ -155,8 +158,34 @@ export default function DevPlayerVALDTab() {
     setLoading(false);
   }
 
-  const latestFD = forceDeckResults[0] ?? null;
+  // Best jump from the most recent test session (highest jump_height_cm among trials with the same raw_test_id)
+  const latestRawTestId = forceDeckResults[0]?.raw_test_id ?? null;
+  const latestSessionTrials = latestRawTestId
+    ? forceDeckResults.filter((r) => r.raw_test_id === latestRawTestId)
+    : [];
+  const latestFD = latestSessionTrials.length > 0
+    ? latestSessionTrials.reduce((best, r) =>
+        (r.jump_height_cm ?? 0) > (best.jump_height_cm ?? 0) ? r : best
+      , latestSessionTrials[0])
+    : forceDeckResults[0] ?? null;
   const latestNB = nordBordResults[0] ?? null;
+
+  // Group ForceDecks results by session (raw_test_id) for history display
+  type FDSession = { date: string; testType: string; trials: ForceDeckResult[]; bestJump: number | null };
+  const fdSessions: FDSession[] = [];
+  const seenSessions = new Map<string, FDSession>();
+  for (const r of forceDeckResults) {
+    let session = seenSessions.get(r.raw_test_id);
+    if (!session) {
+      session = { date: r.test_timestamp, testType: r.test_type, trials: [], bestJump: null };
+      seenSessions.set(r.raw_test_id, session);
+      fdSessions.push(session);
+    }
+    session.trials.push(r);
+    if (r.jump_height_cm != null && (session.bestJump == null || r.jump_height_cm > session.bestJump)) {
+      session.bestJump = r.jump_height_cm;
+    }
+  }
 
   if (loading) {
     return (
@@ -246,8 +275,8 @@ export default function DevPlayerVALDTab() {
             </div>
           </div>
 
-          {/* History table */}
-          {forceDeckResults.length > 1 && (
+          {/* History — grouped by test session */}
+          {fdSessions.length > 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-zinc-900 mb-3">Saga</h3>
               <div className="overflow-x-auto">
@@ -255,29 +284,45 @@ export default function DevPlayerVALDTab() {
                   <thead className="text-[10px] uppercase tracking-wide text-zinc-400 border-b">
                     <tr>
                       <th className="pb-2 text-left">Dagsetning</th>
-                      <th className="pb-2 text-left">Tegund</th>
+                      <th className="pb-2 text-center">Hopp</th>
                       <th className="pb-2 text-right">Stökk (cm)</th>
                       <th className="pb-2 text-right">RSI-mod</th>
                       <th className="pb-2 text-right">Peak Power (W)</th>
                       <th className="pb-2 text-right">Asymm (%)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {forceDeckResults.map((r) => (
-                      <tr key={r.id} className="hover:bg-zinc-50/60">
-                        <td className="py-2 text-zinc-500 text-xs">{fmtDate(r.test_timestamp)}</td>
-                        <td className="py-2 text-zinc-700 text-xs">{r.test_type ?? "CMJ"}</td>
-                        <td className="py-2 text-right font-semibold tabular-nums">{fmt(r.jump_height_cm, 1)}</td>
-                        <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.rsi_mod, 2)}</td>
-                        <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.peak_power_w, 0)}</td>
-                        <td className="py-2 text-right">
-                          {r.asymmetry_percent != null ? (
-                            <span className="font-semibold text-xs" style={{ color: asymmetryColor(r.asymmetry_percent) }}>
-                              {Math.abs(r.asymmetry_percent).toFixed(1)}% {r.asymmetry_side ?? ""}
-                            </span>
-                          ) : <span className="text-zinc-400">–</span>}
-                        </td>
-                      </tr>
+                  <tbody>
+                    {fdSessions.map((session, si) => (
+                      session.trials.map((r, ti) => {
+                        const isBest = session.trials.length > 1 && r.jump_height_cm != null && r.jump_height_cm === session.bestJump;
+                        return (
+                          <tr
+                            key={r.id}
+                            className={`hover:bg-zinc-50/60 ${ti === session.trials.length - 1 && si < fdSessions.length - 1 ? "border-b border-zinc-200" : ti > 0 ? "border-t border-zinc-50" : ""}`}
+                          >
+                            <td className="py-2 text-zinc-500 text-xs">
+                              {ti === 0 ? fmtDate(r.test_timestamp) : ""}
+                            </td>
+                            <td className="py-2 text-center">
+                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${isBest ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
+                                {r.trial_number}
+                              </span>
+                            </td>
+                            <td className={`py-2 text-right tabular-nums ${isBest ? "font-bold text-emerald-700" : "font-semibold"}`}>
+                              {fmt(r.jump_height_cm, 1)}
+                            </td>
+                            <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.rsi_mod, 2)}</td>
+                            <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.peak_power_w, 0)}</td>
+                            <td className="py-2 text-right">
+                              {r.asymmetry_percent != null ? (
+                                <span className="font-semibold text-xs" style={{ color: asymmetryColor(r.asymmetry_percent) }}>
+                                  {Math.abs(r.asymmetry_percent).toFixed(1)}% {r.asymmetry_side ?? ""}
+                                </span>
+                              ) : <span className="text-zinc-400">–</span>}
+                            </td>
+                          </tr>
+                        );
+                      })
                     ))}
                   </tbody>
                 </table>

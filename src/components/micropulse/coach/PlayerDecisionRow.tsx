@@ -43,7 +43,22 @@ export default function PlayerDecisionRow({ player, expanded, onToggle }: Props)
           )) : <span className="text-sm text-slate-400">—</span>}
         </div>
         <div className="text-sm font-medium capitalize text-slate-700">{player.confidenceBand}</div>
-        <div className="text-sm text-slate-700">{player.coachSummary}</div>
+        <div className="space-y-1.5">
+          {player.loadAlerts && player.loadAlerts.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {player.loadAlerts.slice(0, 2).map((alert, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                >
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {alert}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="text-sm text-slate-700">{player.coachSummary}</div>
+        </div>
         <div className="flex justify-end">
           <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={onToggle} aria-expanded={expanded}>
             {expanded ? "Hide" : "Details"}

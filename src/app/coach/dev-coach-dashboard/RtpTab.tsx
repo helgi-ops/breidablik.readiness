@@ -132,22 +132,142 @@ type Injury = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const RTP_STAGES: Record<Lang, Array<{ stage: number; label: string; desc: string }>> = {
+const RTP_STAGES: Record<Lang, Array<{ stage: number; label: string; desc: string; criteria: string[] }>> = {
   IS: [
-    { stage: 0, label: "Hvíld",               desc: "Engin líkamleg virkni" },
-    { stage: 1, label: "Léttur hjartsláttur", desc: "Ganga, sund, hjól — engin þolmörk" },
-    { stage: 2, label: "Íþróttamiðað álag",   desc: "Hlaup, beinar hreyfingar" },
-    { stage: 3, label: "Án snertings",         desc: "Tækniæfingar, liðsæfingar án snertings" },
-    { stage: 4, label: "Full þjálfun",         desc: "Snertingsþjálfun, hermar" },
-    { stage: 5, label: "Leikur",               desc: "Grænljós — fullur leikmaður" },
+    {
+      stage: 0, label: "Hvíld", desc: "Engin líkamleg virkni",
+      criteria: [
+        "POLICE meðferð (Protect, Optimal Loading, Ice, Compression, Elevation)",
+        "Verkjastjórnun og bólgumeðferð",
+        "Fyrsta mat á meiðslum — einkenni, merki, myndgreiningar ef þörf",
+        "Sálfræðilegt mat — upplýsa iðkanda um áætlun og tímalínu",
+        "Viðhalda hreyfigetu í ómeiðslum líkamshlutum ef verkjalaust",
+      ],
+    },
+    {
+      stage: 1, label: "Léttur hjartsláttur", desc: "Ganga, sund, hjól — engin þolmörk",
+      criteria: [
+        "Lágstyrks hjarta- og æðaþjálfun undir einkennamörkum (<70% HRmax)",
+        "Engir verkir við hreyfingu — ekkert þreifieymsli á meiðslastað",
+        "Engin viðnámsþjálfun á meiðslusvæði",
+        "Hreyfigeta (ROM): byrjuð virk hreyfing, verkjalaus teygja",
+        "Minnka bólgu og þrota — enginn þroti eftir þjálfun",
+        "Sálfræðilegt: iðkandi upplýstur um framvindu og næstu skref",
+      ],
+    },
+    {
+      stage: 2, label: "Íþróttamiðað álag", desc: "Hlaup, beinar hreyfingar",
+      criteria: [
+        "Stigvaxandi hlaup og beinlínu hreyfingar — engir verkir",
+        "Engir verkir við styrktaræfingar eða teygju á meiðslusvæði",
+        "ROM próf: virk hnérétta ≥90% af heilbrigðum fæti (active knee extension)",
+        "Beinn fótaréttupróf og Askling-H próf — verkjalaust",
+        "Kraftjafnvægi: styrkur ≥70% samanborið við ómeiðslahlið",
+        "Myndgreining ef nauðsynlegt: ör í vöðva sýnir gróandi ferli",
+      ],
+    },
+    {
+      stage: 3, label: "Án snertings", desc: "Tækniæfingar, liðsæfingar án snertings",
+      criteria: [
+        "Tækni- og liðsæfingar: sendingar, skot, stellingar — án snertingar",
+        "Lipurðar- og stefnubreytingaæfingar (agility/COD) — verkjalaust",
+        "Kraftjafnvægi beygju/réttvöðva hné ≥90% vs. heilbrigt hlið",
+        "Full hreyfigeta í öllum áttum — enginn verkur við hámarksteygju",
+        "Engir verkir við styrktaræfingar á aftari keðju (brú, framhandstökur, squat)",
+        "Sálfræðilegt mat: tilbúinn andlega, enginn ótti við sprett/hreyfingu",
+        "Myndgreining: MRI/ómun sýnir heilun í ör, minnkandi bjúgur",
+      ],
+    },
+    {
+      stage: 4, label: "Full þjálfun", desc: "Snertingsþjálfun, hermar",
+      criteria: [
+        "Full snertingaþjálfun með liðinu — 1–5 heilar æfingar áður en leikur",
+        "GPS álag: svipuð hreyfimynstur og fyrir meiðsli (hraði, vegalengd, hröðun)",
+        "Isokinetískt kraftpróf: <10% munur milli fóta",
+        "Hopppróf: eins fóta hopp ≥90% af heilbrigðum fæti (single, triple, crossover)",
+        "Engir verkir í æfingum, styrktarþjálfun eða sprettum",
+        "Sálfræðilegt: enginn hikun/ótti í snertingum eða keppnishermi",
+        "Huglægt mat: iðkandi finnur sig tilbúinn og örugg(an)",
+      ],
+    },
+    {
+      stage: 5, label: "Leikur", desc: "Grænljós — fullur leikmaður",
+      criteria: [
+        "Öll viðmið stiga 4 uppfyllt þvert á margar æfingar",
+        "Stigvaxandi leikhermi → varamenn → byrjunarliðsminútur",
+        "Engin einkenni eftir fulla þjálfun — enginn aukinn þroti eða verkur",
+        "Viðhaldsáætlun: eftirfylgni á álagi, styrk og líðan fyrstu 4 vikurnar",
+        "Endurkomu-áhætta metin og stýrt (injury history, season timing)",
+      ],
+    },
   ],
   EN: [
-    { stage: 0, label: "Rest",               desc: "No physical activity" },
-    { stage: 1, label: "Light aerobic",      desc: "Walking, swimming, cycling — no resistance" },
-    { stage: 2, label: "Sport-specific",     desc: "Running, straight-line movements" },
-    { stage: 3, label: "Non-contact drills", desc: "Technical and team drills without contact" },
-    { stage: 4, label: "Full training",      desc: "Contact training, simulated play" },
-    { stage: 5, label: "Match play",         desc: "Cleared — full participant" },
+    {
+      stage: 0, label: "Rest", desc: "No physical activity",
+      criteria: [
+        "POLICE protocol (Protect, Optimal Loading, Ice, Compression, Elevation)",
+        "Pain management and anti-inflammatory treatment",
+        "Initial injury assessment — symptoms, signs, imaging if needed",
+        "Psychological: inform athlete of plan and expected timeline",
+        "Maintain fitness in uninjured areas if pain-free",
+      ],
+    },
+    {
+      stage: 1, label: "Light aerobic", desc: "Walking, swimming, cycling — no resistance",
+      criteria: [
+        "Low-intensity cardiovascular work below symptom threshold (<70% HRmax)",
+        "No pain during activity — no tenderness at injury site on palpation",
+        "No resistance training on injured area",
+        "ROM: begin active range of motion, pain-free stretching",
+        "No swelling or inflammation after activity",
+        "Psychological: athlete informed of progression pathway",
+      ],
+    },
+    {
+      stage: 2, label: "Sport-specific", desc: "Running, straight-line movements",
+      criteria: [
+        "Progressive running and straight-line drills — pain-free",
+        "No pain during strengthening or stretching of injured area",
+        "ROM tests: active knee extension ≥90% of uninjured side",
+        "Passive straight leg raise and Askling-H test — pain-free",
+        "Strength symmetry ≥70% compared to uninjured side",
+        "Imaging if needed: scar tissue showing healing progress",
+      ],
+    },
+    {
+      stage: 3, label: "Non-contact drills", desc: "Technical and team drills without contact",
+      criteria: [
+        "Technical and tactical drills: passing, shooting, positional play — no contact",
+        "Agility and change-of-direction drills (COD) — pain-free",
+        "Knee flexor/extensor strength symmetry ≥90% vs. uninjured side",
+        "Full ROM in all directions — no pain at end-range stretch",
+        "No pain during posterior chain strengthening (bridge, Nordic, squat)",
+        "Psychological readiness: no fear or apprehension during sprinting",
+        "Imaging: MRI/ultrasound shows scar healing, reduced edema",
+      ],
+    },
+    {
+      stage: 4, label: "Full training", desc: "Contact training, simulated play",
+      criteria: [
+        "Full contact training with team — complete 1–5 sessions before match play",
+        "GPS load: similar movement profile to pre-injury microcycles (speed, distance, acceleration)",
+        "Isokinetic strength test: <10% bilateral asymmetry",
+        "Hop tests: single, triple, crossover hop ≥90% of uninjured limb",
+        "No pain during training, strengthening, or sprinting",
+        "Psychological: no hesitation in contact situations or match simulation",
+        "Subjective readiness: athlete feels confident and prepared",
+      ],
+    },
+    {
+      stage: 5, label: "Match play", desc: "Cleared — full participant",
+      criteria: [
+        "All Stage 4 criteria maintained across multiple sessions",
+        "Graduated match exposure: sub minutes → partial start → full match",
+        "No symptoms after full training — no increased swelling or pain",
+        "Maintenance plan: monitor load, strength, and wellbeing for first 4 weeks",
+        "Re-injury risk assessed and managed (injury history, season timing)",
+      ],
+    },
   ],
 };
 
@@ -428,9 +548,18 @@ function InjuryCard({
                   <span className={`shrink-0 font-bold w-5 text-center ${s.stage <= localStage ? "text-indigo-600" : "text-slate-300"}`}>
                     {s.stage < localStage ? "✓" : s.stage === localStage ? "→" : s.stage + ""}
                   </span>
-                  <div>
-                    <span className="font-semibold">{s.label}</span>
-                    <span className="ml-2 text-[11px] text-slate-400">{s.desc}</span>
+                  <div className="flex-1 min-w-0">
+                    <div>
+                      <span className="font-semibold">{s.label}</span>
+                      <span className="ml-2 text-[11px] text-slate-400">{s.desc}</span>
+                    </div>
+                    {s.stage === localStage && s.criteria && s.criteria.length > 0 && (
+                      <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-500 list-disc list-inside">
+                        {s.criteria.map((c: string, ci: number) => (
+                          <li key={ci}>{c}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               ))}

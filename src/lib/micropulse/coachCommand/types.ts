@@ -67,6 +67,15 @@ export type PlayerDecisionListItem = {
   riskFlags: string[];
   /** True when a CMJ test is recommended before training today */
   cmjRequired?: boolean;
+  /**
+   * Coach-facing load escalation alerts — explains WHY loadConcern was raised.
+   * Empty when load concern is "none". Displayed as alert badges in the row.
+   */
+  loadAlerts?: string[];
+  /**
+   * Composite fatigue classification when both MLI and Metabolic data available.
+   */
+  fatigueType?: "global_fatigue" | "mechanical_fatigue" | "metabolic_fatigue" | "normal" | null;
 };
 
 export type TeamDecisionResponse = {
@@ -84,6 +93,10 @@ export type CoachCommandPlayerSource = {
   readinessScore?: number | null;
   /** True when a CMJ test is recommended before training today */
   cmjRequired?: boolean;
+  /** Coach-facing load escalation alerts */
+  loadAlerts?: string[];
+  /** Composite fatigue classification */
+  fatigueType?: "global_fatigue" | "mechanical_fatigue" | "metabolic_fatigue" | "normal" | null;
   recommendation: {
     state: "GREEN" | "YELLOW" | "RED" | "GRAY";
     sessionMode: "full" | "modified" | "recovery" | "pending";
