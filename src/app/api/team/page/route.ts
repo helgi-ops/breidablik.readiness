@@ -68,9 +68,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // Get today's date in Iceland timezone
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
-
     // 2. Fetch announcements with author info
     const { data: announcements, error: announcementsError } = await supabase
       .from("team_announcements")
@@ -114,7 +111,8 @@ export async function GET(req: NextRequest) {
       created_at: a.created_at,
     })) ?? [];
 
-    // 3. Fetch schedule events
+    // 3. Fetch schedule events (from today onwards)
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
     const { data: schedule, error: scheduleError } = await supabase
       .from("team_schedule_events")
       .select("id, event_date, event_time, event_type, title, description, location")
@@ -154,58 +152,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: coachesError.message }, { status: 500 });
     }
 
-    // 6. Calculate stats
-    const totalPlayers = roster?.length ?? 0;
-
-    // Count today's check-ins
-    const { data: checkins, error: checkinsError } = await supabase
-      .from("wellness_checkins")
-      .select("id")
-      .eq("team_id", teamId)
-      .eq("entry_date", today);
-
-    if (checkinsError) {
-      console.error("Check-ins error:", checkinsError);
-    }
-
-    const checkedInToday = checkins?.length ?? 0;
-
-    // Average readiness score from v_coach_readiness_today_v8
-    const { data: readinessData, error: readinessError } = await supabase
-      .from("v_coach_readiness_today_v8")
-      .select("readiness_status")
-      .eq("team_id", teamId);
-
-    if (readinessError) {
-      console.error("Readiness error:", readinessError);
-    }
-
-    // Calculate average: GREEN=3, YELLOW=2, RED=1
-    let avgReadinessScore = 0;
-    if (readinessData && readinessData.length > 0) {
-      const scores: number[] = readinessData.map((r) => {
-        const status = r.readiness_status?.toUpperCase();
-        if (status === "GREEN") return 3;
-        if (status === "YELLOW") return 2;
-        if (status === "RED") return 1;
-        return 0;
-      });
-      avgReadinessScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-    }
-
-    const stats = {
-      total_players: totalPlayers,
-      checked_in_today: checkedInToday,
-      avg_readiness_score: Math.round(avgReadinessScore * 100) / 100,
-    };
-
     return NextResponse.json({
       team,
       announcements: announcementsWithAuthor,
       schedule: schedule ?? [],
       roster: roster ?? [],
       coaches: coaches ?? [],
-      stats,
     });
   } catch (err) {
     console.error("Unexpected error in GET /api/team/page:", err);
