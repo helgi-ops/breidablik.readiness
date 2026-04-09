@@ -1,0 +1,144 @@
+export const runtime = "nodejs";
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function authenticate(req: NextRequest) {
+  const supabase = getSupabase();
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return { error: "Missing authentication" };
+
+  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
+  if (uErr || !userRes?.user) return { error: "Invalid token" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, team_id, player_id")
+    .eq("id", userRes.user.id)
+    .maybeSingle();
+
+  if (!profile) return { error: "Profile not found" };
+
+  return { uid: userRes.user.id, profile, supabase };
+}
+
+/**
+ * POST /api/team/schedule
+ * Create a new schedule event.
+ * Body: { teamId, event_date, event_time?, event_type, title, description?, location? }
+ */
+export async function POST(req: NextRequest) {
+  const result = await authenticate(req);
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
+  const { profile, supabase } = result;
+
+  // Verify coach/admin role
+  const role = profile.role?.toUpperCase();
+  if (role !== "COACH" && role !== "ADMIN") {
+    return NextResponse.json({ error: "Only coaches and admins can create schedule events" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { teamId, event_date, event_time, event_type, title, description, location } = body;
+
+  if (!teamId || !event_date || !event_type || !title?.trim()) {
+    return NextResponse.json(
+      { error: "Missing required fields: teamId, event_date, event_type, title" },
+      { status: 400 }
+    );
+  }
+
+  // Verify user is on the specified team
+  if (profile.team_id !== teamId) {
+    return NextResponse.json({ error: "Not authorized for this team" }, { status: 403 });
+  }
+
+  try {
+    const { data: event, error } = await supabase
+      .from("team_schedule_events")
+      .insert({
+        team_id: teamId,
+        event_date,
+        event_time: event_time || null,
+        event_type: event_type.trim().slice(0, 100),
+        title: title.trim().slice(0, 500),
+        description: description ? description.trim().slice(0, 2000) : null,
+        location: location ? location.trim().slice(0, 500) : null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating schedule event:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ event }, { status: 201 });
+  } catch (err) {
+    console.error("Unexpected error in POST /api/team/schedule:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/team/schedule?id=...
+ * Delete a schedule event.
+ */
+export async function DELETE(req: NextRequest) {
+  const result = await authenticate(req);
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
+  const { profile, supabase } = result;
+
+  // Verify coach/admin role
+  const role = profile.role?.toUpperCase();
+  if (role !== "COACH" && role !== "ADMIN") {
+    return NextResponse.json({ error: "Only coaches and admins can delete schedule events" }, { status: 403 });
+  }
+
+  const url = new URL(req.url);
+  const eventId = url.searchParams.get("id");
+
+  if (!eventId) {
+    return NextResponse.json({ error: "Missing event id" }, { status: 400 });
+  }
+
+  try {
+    // Verify the event belongs to user's team
+    const { data: event } = await supabase
+      .from("team_schedule_events")
+      .select("team_id")
+      .eq("id", eventId)
+      .maybeSingle();
+
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    if (event.team_id !== profile.team_id) {
+      return NextResponse.json({ error: "Not authorized to delete this event" }, { status: 403 });
+    }
+
+    const { error } = await supabase.from("team_schedule_events").delete().eq("id", eventId);
+
+    if (error) {
+      console.error("Error deleting schedule event:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Unexpected error in DELETE /api/team/schedule:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

@@ -685,16 +685,28 @@ function IconChat({ active }: { active: boolean }) {
   );
 }
 
+function IconTeam({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 00-3-3.87" />
+      <path d="M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+
 // ── PWA bottom navigation bar ────────────────────────────────────────────────
 
 const PWA_NAV_TAB_KEYS = [
-  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free"  as const },
-  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const },
-  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const },
-  { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const },
-  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free"  as const },
-  { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const },
-  { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const },
+  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free"  as const, href: null as string | null },
+  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const, href: null as string | null },
+  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const, href: null as string | null },
+  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
+  { key: "today"     as DevPlayerTab, tabKey: "team"      as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
+  { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
+  { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
+  { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
 ];
 
 function PWABottomNav({
@@ -708,6 +720,7 @@ function PWABottomNav({
   planTier: PlanTier;
   unreadChatCount?: number;
 }) {
+  const router = useRouter();
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
   const isElite = planTier === "ELITE";
   const [lang] = useLang();
@@ -719,20 +732,25 @@ function PWABottomNav({
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="flex">
-        {PWA_NAV_TAB_KEYS.map(({ key, tabKey, Icon, minTier }) => {
-          const label = tabs[tabKey];
+        {PWA_NAV_TAB_KEYS.map(({ key, tabKey, Icon, minTier, href }) => {
+          const label = tabs[tabKey] ?? tabKey;
+          const tier = minTier as string;
           const locked =
-            (minTier === "pro" && !isAtLeastPro) ||
-            (minTier === "elite" && !isElite);
-          const isActive = activeTab === key;
+            (tier === "pro" && !isAtLeastPro) ||
+            (tier === "elite" && !isElite);
+          const isActive = !href && activeTab === key;
           const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
           return (
             <button
-              key={key}
+              key={tabKey}
               className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
                 isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"
               }`}
-              onClick={() => !locked && onChange(key)}
+              onClick={() => {
+                if (locked) return;
+                if (href) { router.push(href); return; }
+                onChange(key);
+              }}
               aria-label={label}
             >
               <div className="relative">

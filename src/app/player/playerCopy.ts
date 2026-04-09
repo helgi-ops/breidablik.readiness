@@ -13,6 +13,7 @@ export const PLAYER_COPY = {
       history: "Saga",
       vald: "VALD",
       chat: "Spjall",
+      team: "Lið",
     },
     decision: {
       kicker: "Í dag",
@@ -100,6 +101,7 @@ export const PLAYER_COPY = {
       history: "History",
       vald: "VALD",
       chat: "Chat",
+      team: "Team",
     },
     decision: {
       kicker: "Today",
