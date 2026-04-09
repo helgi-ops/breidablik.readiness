@@ -1074,6 +1074,203 @@ const METHOD_GUIDE: Record<string, { IS: string; EN: string }> = {
   },
 };
 
+/**
+ * Session-level training system explanations.
+ * Shown prominently in the session header so players understand the
+ * overall structure BEFORE they start.
+ * Matched by keyword against the session header title.
+ */
+const SESSION_SYSTEM_GUIDE: Array<{
+  match: RegExp;
+  label: string;
+  IS: { title: string; howTo: string; why: string };
+  EN: { title: string; howTo: string; why: string };
+}> = [
+  {
+    match: /potentiation\s*cluster/i,
+    label: "POTENTIATION CLUSTER",
+    IS: {
+      title: "Potentiation Cluster",
+      howTo:
+        "1. Þung lyft (1–3 endurt.) — hámarkskraftur\n" +
+        "2. Hvíldu í 10–15 sek\n" +
+        "3. Sprengikraftsæfing (3–5 endurt. / stökk / kast)\n" +
+        "4. Hvíldu í 2–3 mín\n" +
+        "5. Endurtaktu 3–5 sinnum",
+      why: "Þunga lyftan virkjar taugakerfið (PAP áhrif) sem eykur sprengikraft í næstu æfingu. Stutt hvíld á milli er lykilatriði — þetta er EKKI superset.",
+    },
+    EN: {
+      title: "Potentiation Cluster",
+      howTo:
+        "1. Heavy lift (1–3 reps) — max effort\n" +
+        "2. Rest 10–15 sec\n" +
+        "3. Explosive exercise (3–5 reps / jumps / throws)\n" +
+        "4. Rest 2–3 min\n" +
+        "5. Repeat 3–5 times",
+      why: "The heavy lift activates the nervous system (PAP effect) which increases explosive power in the next exercise. The short rest between is key — this is NOT a superset.",
+    },
+  },
+  {
+    match: /wave\s*(power|strength)/i,
+    label: "WAVE",
+    IS: {
+      title: "Wave Power / Strength",
+      howTo:
+        "Bylgja 1: 3 endurt. → 2 endurt. → 1 endurt. (þyngd hækkar)\n" +
+        "Bylgja 2: 3 endurt. → 2 endurt. → 1 endurt. (byrjar þar sem bylgja 1 byrjaði, eða aðeins þyngra)\n" +
+        "2–3 bylgjur samtals. Hvíldu 90–120 sek á milli setta.",
+      why: "Taugakerfið \"lærir\" af hverju setti og gerir þér kleift að lyfta þyngra í næstu bylgju. Þetta byggir upp hámarksstyrk á skilvirkan hátt.",
+    },
+    EN: {
+      title: "Wave Power / Strength",
+      howTo:
+        "Wave 1: 3 reps → 2 reps → 1 rep (weight increases)\n" +
+        "Wave 2: 3 reps → 2 reps → 1 rep (start at wave 1's starting weight or slightly heavier)\n" +
+        "2–3 waves total. Rest 90–120 sec between sets.",
+      why: "The nervous system \"learns\" from each set, allowing you to lift heavier in the next wave. This efficiently builds maximal strength.",
+    },
+  },
+  {
+    match: /on\s*the\s*min/i,
+    label: "OTM",
+    IS: {
+      title: "On the Minute (OTM)",
+      howTo:
+        "Á hverri mínútu framkvæmir þú tilgreindar endurtekningar.\n" +
+        "Hvíldin er sá tími sem eftir er af mínútunni.\n\n" +
+        "Dæmi: 1 rep á mínútu í 10 mín = 10 sett af 1 rep.\n" +
+        "Ef rep tekur 5 sek → 55 sek hvíld.",
+      why: "Stuttar en tíðar endurtekningar halda taugakerfinu virku án þreytu. Frábært til að þjálfa hraða og kraftframleiðslu.",
+    },
+    EN: {
+      title: "On the Minute (OTM)",
+      howTo:
+        "At the start of each minute, perform the prescribed reps.\n" +
+        "Rest for the remainder of that minute.\n\n" +
+        "Example: 1 rep per minute for 10 min = 10 sets of 1 rep.\n" +
+        "If rep takes 5 sec → 55 sec rest.",
+      why: "Short, frequent reps keep the nervous system active without fatigue. Excellent for training speed and force production.",
+    },
+  },
+  {
+    match: /omnis\s*endurance/i,
+    label: "OMNIS",
+    IS: {
+      title: "Omnis Endurance",
+      howTo:
+        "Hringrásin: Framkvæmdu 4–6 æfingar í röð, án hvíldar á milli.\n" +
+        "Hvíldu 60–90 sek á milli hringja.\n" +
+        "Endurtaktu 3–4 hringi.\n\n" +
+        "Notaðu létta til meðalþyngd og einbeittu þér að stöðugum hreyfingum.",
+      why: "Þetta byggir upp vöðvaþol og almenna líkamsrækt með samfelldri vinnu. Hjartsláttur helst hækkaður og vöðvarnir vinna lengi.",
+    },
+    EN: {
+      title: "Omnis Endurance",
+      howTo:
+        "Circuit: Perform 4–6 exercises in sequence, no rest between.\n" +
+        "Rest 60–90 sec between rounds.\n" +
+        "Complete 3–4 rounds.\n\n" +
+        "Use light to moderate loads and focus on steady movement.",
+      why: "This builds muscular endurance and general conditioning through sustained work. Heart rate stays elevated and muscles work for extended periods.",
+    },
+  },
+  {
+    match: /\bendurance\b/i,
+    label: "ENDURANCE",
+    IS: {
+      title: "Endurance / Þol",
+      howTo:
+        "Framkvæmdu hverja æfingu í 12–20 endurtekningum.\n" +
+        "Hvíldu 30–60 sek á milli setta.\n" +
+        "3–4 sett af hverri æfingu.\n\n" +
+        "Þyngdin á að vera nógu létt til að þú klárir öll sett með góðri tækni.",
+      why: "Þolæfingar auka vöðvaþol, blóðflæði og bata. Þær styðja við aðrar þyngri dagana og halda líkamanum hreyfanlegum.",
+    },
+    EN: {
+      title: "Endurance",
+      howTo:
+        "Perform each exercise for 12–20 reps.\n" +
+        "Rest 30–60 sec between sets.\n" +
+        "3–4 sets per exercise.\n\n" +
+        "Load should be light enough to complete all sets with good technique.",
+      why: "Endurance training increases muscular stamina, blood flow, and recovery. Supports heavier training days and keeps the body moving well.",
+    },
+  },
+  {
+    match: /base\s*burn/i,
+    label: "BASE BURN",
+    IS: {
+      title: "Base Burn",
+      howTo:
+        "Framkvæmdu æfingarnar í pörum (superset):\n" +
+        "Æfing A → beint í Æfing B → hvíla 60–90 sek → endurtaka.\n" +
+        "8–12 endurtekningar á hverja æfingu.\n" +
+        "3–4 sett af hverju pari.",
+      why: "Base Burn sameinar styrktarþjálfun og fitnesskondition. Superset uppsetningin heldur hjartsláttarhreyfingunni á lofti á meðan styrkur byggist upp.",
+    },
+    EN: {
+      title: "Base Burn",
+      howTo:
+        "Perform exercises in pairs (superset):\n" +
+        "Exercise A → straight into Exercise B → rest 60–90 sec → repeat.\n" +
+        "8–12 reps per exercise.\n" +
+        "3–4 sets per pair.",
+      why: "Base Burn combines strength training with conditioning. The superset setup keeps heart rate elevated while building strength.",
+    },
+  },
+  {
+    match: /\bcluster\b/i,
+    label: "CLUSTER",
+    IS: {
+      title: "Cluster sett",
+      howTo:
+        "Framkvæmdu tilgreindar endurtekningar → hvíldu 10–20 sek → endurtaktu.\n\n" +
+        "Dæmi: 2 reps × 3 cluster (20 sek hvíld)\n" +
+        "2 reps → 20 sek → 2 reps → 20 sek → 2 reps = 1 sett lokið.\n" +
+        "Hvíldu 2–3 mín á milli setta.",
+      why: "Cluster hvíldin leyfir þér að nota meiri þyngd og halda gæðum hreyfinganna. Þú getur lyft nálægt hámarki án þess að tæknin brotni niður.",
+    },
+    EN: {
+      title: "Cluster sets",
+      howTo:
+        "Perform prescribed reps → rest 10–20 sec → repeat.\n\n" +
+        "Example: 2 reps × 3 clusters (20 sec rest)\n" +
+        "2 reps → 20 sec → 2 reps → 20 sec → 2 reps = 1 set done.\n" +
+        "Rest 2–3 min between sets.",
+      why: "Cluster rest lets you use heavier loads while maintaining movement quality. You can lift near max without technique breakdown.",
+    },
+  },
+  {
+    match: /\bemom\b/i,
+    label: "EMOM",
+    IS: {
+      title: "EMOM (Every Minute On the Minute)",
+      howTo:
+        "Á hverri mínútu framkvæmir þú tilgreindar endurtekningar.\n" +
+        "Hvíldin er sá tími sem eftir er af mínútunni.\n" +
+        "Haltu áfram í tilgreindan tíma (t.d. 8–12 mín).",
+      why: "EMOM tryggir reglulega hvíld og stöðugt vinnuálag. Frábært til að byggja upp þol og tæknilega samkvæmni.",
+    },
+    EN: {
+      title: "EMOM (Every Minute On the Minute)",
+      howTo:
+        "At the start of each minute, perform the prescribed reps.\n" +
+        "Rest for the remainder of that minute.\n" +
+        "Continue for the prescribed duration (e.g. 8–12 min).",
+      why: "EMOM ensures regular rest and consistent work output. Great for building stamina and technical consistency.",
+    },
+  },
+];
+
+/** Match session title to a training system guide entry */
+function findSessionSystemGuide(title: string | null): (typeof SESSION_SYSTEM_GUIDE)[number] | null {
+  if (!title) return null;
+  for (const guide of SESSION_SYSTEM_GUIDE) {
+    if (guide.match.test(title)) return guide;
+  }
+  return null;
+}
+
 const BLOCK_GOAL: Record<string, { IS: string; EN: string }> = {
   "MET": {
     IS: "Losa um stutta og ofvirka vöðva með vöðvaorkutækni. MET notar taugakerfið til að endursetja vöðvaspennu og auka hreyfisvið — samdráttur á innöndun, slökun á útöndun. Þetta opnar hreyfigetu sem ISO og Core styrkja síðan í næstu blokkum.",
@@ -2107,6 +2304,8 @@ function renderStructureBlocks(
   const headerDesc = String(opts?.headerDesc ?? "").trim();
   const lockLabel = opts?.lockLabel ?? "";
   const t = opts?.t ?? PLAYER_COPY.IS;
+  const isIS = t === PLAYER_COPY.IS;
+  const systemGuide = findSessionSystemGuide(headerTitle);
 
   return (
     <div className="space-y-3">
@@ -2129,6 +2328,50 @@ function renderStructureBlocks(
           </div>
         </div>
       </CardShell>
+
+      {/* Training system explainer — always visible when matched */}
+      {systemGuide ? (
+        <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white overflow-hidden">
+          <details className="group" open>
+            <summary className="cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm">⚡</span>
+                <span className="text-sm font-bold text-violet-900">
+                  {isIS ? "Hvernig virkar þetta kerfi?" : "How does this system work?"}
+                </span>
+              </div>
+              <span className="text-xs text-violet-400 group-open:hidden">{isIS ? "Sýna" : "Show"}</span>
+              <span className="hidden text-xs text-violet-400 group-open:block">{isIS ? "Fela" : "Hide"}</span>
+            </summary>
+            <div className="px-4 pb-4 space-y-3">
+              {/* How to */}
+              <div className="rounded-xl bg-white border border-violet-100 px-3.5 py-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-violet-500 mb-2">
+                  {isIS ? "📋 Svona framkvæmir þú" : "📋 How to perform"}
+                </div>
+                <div className="space-y-1">
+                  {(isIS ? systemGuide.IS.howTo : systemGuide.EN.howTo).split("\n").map((line, i) =>
+                    line.trim() === "" ? (
+                      <div key={i} className="h-1.5" />
+                    ) : (
+                      <div key={i} className="text-sm text-zinc-800 leading-relaxed">{line}</div>
+                    )
+                  )}
+                </div>
+              </div>
+              {/* Why */}
+              <div className="rounded-xl bg-violet-50 border border-violet-100 px-3.5 py-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-violet-600 mb-1.5">
+                  {isIS ? "💡 Af hverju þetta virkar" : "💡 Why this works"}
+                </div>
+                <div className="text-sm text-violet-900 leading-relaxed">
+                  {isIS ? systemGuide.IS.why : systemGuide.EN.why}
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         {blocks.map((b: any, idx: number) => {
