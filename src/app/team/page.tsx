@@ -25,22 +25,26 @@ interface Profile {
 }
 
 interface TeamData {
-  club: {
+  team: {
     id: string;
     name: string;
-    logo_url: string | null;
-    club_theme_color: string;
     sport: string;
+    gender: string | null;
+    club_theme_color: string | null;
+    club_logo_url: string | null;
+    club_short_name: string | null;
+    plan_tier: string | null;
+    gps_provider: string | null;
   };
-  players: Array<{
+  roster: Array<{
     id: string;
-    name: string;
-    position: string;
-    profile_picture_url: string | null;
+    full_name: string;
+    position: string | null;
+    status: string;
   }>;
   coaches: Array<{
     id: string;
-    name: string;
+    display_name: string;
     role: string;
   }>;
   announcements: Array<{
@@ -49,13 +53,13 @@ interface TeamData {
     body: string;
     author_name: string;
     created_at: string;
-    is_pinned: boolean;
+    pinned: boolean;
   }>;
   schedule: Array<{
     id: string;
-    date: string;
-    time: string | null;
-    event_type: "training" | "match" | "meeting" | "recovery" | "day_off";
+    event_date: string;
+    event_time: string | null;
+    event_type: string;
     title: string;
     location: string | null;
     description: string | null;
@@ -63,7 +67,7 @@ interface TeamData {
   stats: {
     total_players: number;
     checked_in_today: number;
-    avg_readiness: number;
+    avg_readiness_score: number;
   };
 }
 
@@ -170,7 +174,7 @@ export default function TeamPage() {
           teamId: profile?.team_id,
           title: newAnnouncementTitle,
           body: newAnnouncementBody,
-          is_pinned: newAnnouncementPinned,
+          pinned: newAnnouncementPinned,
         }),
       });
 
@@ -262,8 +266,8 @@ export default function TeamPage() {
         },
         body: JSON.stringify({
           teamId: profile?.team_id,
-          date: newEventDate,
-          time: newEventTime || null,
+          event_date: newEventDate,
+          event_time: newEventTime || null,
           event_type: newEventType,
           title: newEventTitle,
           location: newEventLocation || null,
@@ -341,9 +345,7 @@ export default function TeamPage() {
     }
   };
 
-  const getEventTypeColor = (
-    type: "training" | "match" | "meeting" | "recovery" | "day_off"
-  ): string => {
+  const getEventTypeColor = (type: string): string => {
     switch (type) {
       case "training":
         return "bg-green-100 text-green-800";
@@ -360,9 +362,7 @@ export default function TeamPage() {
     }
   };
 
-  const getEventTypeIcon = (
-    type: "training" | "match" | "meeting" | "recovery" | "day_off"
-  ) => {
+  const getEventTypeIcon = (type: string) => {
     switch (type) {
       case "training":
         return "🏋️";
@@ -405,10 +405,10 @@ export default function TeamPage() {
     const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     return events
       .filter((e) => {
-        const eventDate = new Date(e.date);
+        const eventDate = new Date(e.event_date);
         return eventDate >= now && eventDate <= twoWeeksFromNow;
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
   };
 
   if (loading) {
@@ -444,10 +444,10 @@ export default function TeamPage() {
   }
 
   const pinnedAnnouncements = teamData.announcements.filter(
-    (a) => a.is_pinned
+    (a) => a.pinned
   );
   const regularAnnouncements = teamData.announcements.filter(
-    (a) => !a.is_pinned
+    (a) => !a.pinned
   );
 
   return (
@@ -455,28 +455,28 @@ export default function TeamPage() {
       className="min-h-screen bg-gray-50"
       style={
         {
-          "--theme-color": teamData.club.club_theme_color,
+          "--theme-color": teamData.team?.club_theme_color,
         } as React.CSSProperties
       }
     >
       {/* Team Header */}
-      <div className="w-full" style={{ backgroundColor: teamData.club.club_theme_color }}>
+      <div className="w-full" style={{ backgroundColor: teamData.team?.club_theme_color ?? "#16a34a" }}>
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
-            {teamData.club.logo_url && (
+            {teamData.team?.club_logo_url && (
               <img
-                src={teamData.club.logo_url}
-                alt={teamData.club.name}
+                src={teamData.team?.club_logo_url}
+                alt={teamData.team?.name}
                 className="w-16 h-16 rounded-lg object-cover"
               />
             )}
             <div className="flex-1">
               <h1 className="text-3xl font-bold text-white">
-                {teamData.club.name}
+                {teamData.team?.name}
               </h1>
               <div className="flex items-center gap-2 mt-2 text-white text-sm">
                 <span className="px-2 py-1 bg-white/20 rounded-full">
-                  {teamData.club.sport}
+                  {teamData.team?.sport}
                 </span>
                 <span className="px-2 py-1 bg-white/20 rounded-full">
                   {teamData.stats.total_players} leikmenn
@@ -753,8 +753,8 @@ export default function TeamPage() {
                         {event.title}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
-                        {formatDateIcelandic(event.date)}
-                        {event.time && ` • ${event.time}`}
+                        {formatDateIcelandic(event.event_date)}
+                        {event.event_time && ` • ${event.event_time}`}
                       </p>
                       {event.location && (
                         <p className="text-sm text-gray-600">
@@ -818,7 +818,7 @@ export default function TeamPage() {
                 <div>
                   <p className="text-sm text-gray-600">Meðal tilbúni</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {Math.round(teamData.stats.avg_readiness)}%
+                    {Math.round(teamData.stats.avg_readiness_score)}%
                   </p>
                 </div>
               </div>
@@ -830,20 +830,16 @@ export default function TeamPage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-bold text-gray-900">Leikmannalisti</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {teamData.players.map((player) => (
+            {teamData.roster.map((player) => (
               <div
                 key={player.id}
                 className="bg-white rounded-xl shadow-sm p-4 text-center border border-gray-200 hover:shadow-md transition"
               >
-                {player.profile_picture_url && (
-                  <img
-                    src={player.profile_picture_url}
-                    alt={player.name}
-                    className="w-16 h-16 rounded-full mx-auto mb-3 object-cover"
-                  />
-                )}
+                <div className="w-12 h-12 rounded-full mx-auto mb-3 bg-green-100 flex items-center justify-center text-green-700 font-bold text-lg">
+                  {player.full_name?.charAt(0) ?? "?"}
+                </div>
                 <h3 className="font-semibold text-gray-900 text-sm">
-                  {player.name}
+                  {player.full_name}
                 </h3>
                 <span className="inline-block mt-2 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
                   {player.position}
@@ -851,7 +847,7 @@ export default function TeamPage() {
               </div>
             ))}
           </div>
-          {teamData.players.length === 0 && (
+          {teamData.roster.length === 0 && (
             <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
               Engir leikmenn ennþá
             </div>
@@ -870,7 +866,7 @@ export default function TeamPage() {
                 >
                   <Shield className="w-5 h-5 text-gray-600" />
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{coach.name}</p>
+                    <p className="font-semibold text-gray-900">{coach.display_name}</p>
                     <p className="text-sm text-gray-600">{coach.role}</p>
                   </div>
                 </div>
