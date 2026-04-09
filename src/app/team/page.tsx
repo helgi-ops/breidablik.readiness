@@ -12,6 +12,10 @@ import {
   Zap,
   Shield,
   AlertCircle,
+  FileText,
+  Trash2,
+  Upload,
+  ExternalLink,
 } from "lucide-react";
 
 interface User {
@@ -95,6 +99,25 @@ export default function TeamPage() {
   const [newEventDescription, setNewEventDescription] = useState("");
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+
+  // Documents state
+  interface TeamDocument {
+    id: string;
+    title: string;
+    category: string;
+    file_name: string;
+    file_path: string;
+    file_size: number | null;
+    url: string;
+    created_at: string;
+  }
+  const [documents, setDocuments] = useState<TeamDocument[]>([]);
+  const [showDocUploadForm, setShowDocUploadForm] = useState(false);
+  const [docTitle, setDocTitle] = useState("");
+  const [docCategory, setDocCategory] = useState("leikaaetlanir");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docFilter, setDocFilter] = useState<string | null>(null);
 
   const isCoachOrAdmin = profile?.role === "coach" || profile?.role === "admin";
 
@@ -343,6 +366,112 @@ export default function TeamPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete event");
     }
+  };
+
+  // ── Documents ────────────────────────────────────────────────────────────
+
+  const fetchDocuments = async () => {
+    if (!profile?.team_id) return;
+    try {
+      const authSession = await supabase.auth.getSession();
+      const res = await fetch(
+        `/api/team/documents?teamId=${profile.team_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authSession.data?.session?.access_token ?? ""}`,
+          },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments(data.documents ?? []);
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  // Fetch documents when teamData is loaded
+  useEffect(() => {
+    if (teamData && profile) fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamData, profile]);
+
+  const handleUploadDocument = async () => {
+    if (!docTitle.trim() || !docFile || !profile?.team_id) return;
+    setDocLoading(true);
+    try {
+      const authSession = await supabase.auth.getSession();
+      const formData = new FormData();
+      formData.append("teamId", profile.team_id);
+      formData.append("title", docTitle.trim());
+      formData.append("category", docCategory);
+      formData.append("file", docFile);
+
+      const res = await fetch("/api/team/documents", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authSession.data?.session?.access_token ?? ""}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        setError(errData.error || "Failed to upload document");
+        setDocLoading(false);
+        return;
+      }
+
+      setDocTitle("");
+      setDocFile(null);
+      setShowDocUploadForm(false);
+      setDocLoading(false);
+      await fetchDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload document");
+      setDocLoading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (!confirm("Ertu viss um að þú viljir eyða þessu skjali?")) return;
+    try {
+      const authSession = await supabase.auth.getSession();
+      const res = await fetch("/api/team/documents", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authSession.data?.session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ id: docId, teamId: profile?.team_id }),
+      });
+      if (!res.ok) {
+        setError("Failed to delete document");
+        return;
+      }
+      await fetchDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete document");
+    }
+  };
+
+  const DOC_CATEGORIES = [
+    { value: "leikaaetlanir", label: "Leikáætlanir" },
+    { value: "fundir", label: "Fundir" },
+    { value: "aefingar", label: "Æfingar" },
+    { value: "general", label: "Annað" },
+  ];
+
+  const filteredDocuments = docFilter
+    ? documents.filter((d) => d.category === docFilter)
+    : documents;
+
+  const formatFileSize = (bytes: number | null): string => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const getEventTypeColor = (type: string): string => {
@@ -781,6 +910,161 @@ export default function TeamPage() {
             ) : (
               <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
                 Engir atburðir á næstu 14 dögum
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Documents Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900">Skjöl</h2>
+            {isCoachOrAdmin && (
+              <button
+                onClick={() => setShowDocUploadForm(!showDocUploadForm)}
+                className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition"
+              >
+                {showDocUploadForm ? (
+                  <X className="w-4 h-4" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                {showDocUploadForm ? "Hætta við" : "Hlaða upp"}
+              </button>
+            )}
+          </div>
+
+          {/* Upload form (coach only) */}
+          {isCoachOrAdmin && showDocUploadForm && (
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200 space-y-3">
+              <input
+                type="text"
+                placeholder="Titill skjals"
+                value={docTitle}
+                onChange={(e) => setDocTitle(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <select
+                value={docCategory}
+                onChange={(e) => setDocCategory(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                {DOC_CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-green-400 transition">
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                  />
+                  <FileText className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                  <span className="text-sm text-gray-500">
+                    {docFile ? docFile.name : "Veldu PDF skjal"}
+                  </span>
+                  {docFile && (
+                    <span className="block text-xs text-gray-400 mt-1">
+                      {formatFileSize(docFile.size)}
+                    </span>
+                  )}
+                </label>
+              </div>
+              <button
+                onClick={handleUploadDocument}
+                disabled={docLoading || !docTitle.trim() || !docFile}
+                className="w-full bg-green-600 text-white py-2 rounded-lg font-medium disabled:opacity-50 hover:bg-green-700 transition text-sm"
+              >
+                {docLoading ? "Hleð upp..." : "Hlaða upp skjali"}
+              </button>
+            </div>
+          )}
+
+          {/* Category filter pills */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setDocFilter(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                docFilter === null
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Allt
+            </button>
+            {DOC_CATEGORIES.map((cat) => (
+              <button
+                key={cat.value}
+                onClick={() =>
+                  setDocFilter(docFilter === cat.value ? null : cat.value)
+                }
+                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                  docFilter === cat.value
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Documents list */}
+          <div className="space-y-2">
+            {filteredDocuments.length > 0 ? (
+              filteredDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 flex items-center gap-4 hover:shadow-md transition"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm truncate">
+                      {doc.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                      <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+                        {DOC_CATEGORIES.find((c) => c.value === doc.category)?.label ?? doc.category}
+                      </span>
+                      {doc.file_size && (
+                        <span>{formatFileSize(doc.file_size)}</span>
+                      )}
+                      <span>
+                        {new Date(doc.created_at).toLocaleDateString("is-IS")}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                      title="Opna PDF"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    {isCoachOrAdmin && (
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition"
+                        title="Eyða"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
+                Engin skjöl hlaðið upp enn
               </div>
             )}
           </div>
