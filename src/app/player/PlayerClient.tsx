@@ -4299,6 +4299,19 @@ export default function PlayerClient() {
               {t.misc.noDataBtn}
             </a>
             <div className="mt-3 text-xs text-zinc-400">{sanitizeDay(day)}</div>
+
+            {/* Coach-player chat (also shown when no plan yet) */}
+            {profile?.player_id ? (
+              <div className="mt-5">
+                <ChatThread
+                  playerId={profile.player_id}
+                  playerName={profile?.display_name ?? "Leikmaður"}
+                  entryDate={sanitizeDay(day)}
+                  compact
+                  viewerRole="player"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
