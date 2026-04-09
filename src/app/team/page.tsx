@@ -65,11 +65,6 @@ interface TeamData {
     location: string | null;
     description: string | null;
   }>;
-  stats: {
-    total_players: number;
-    checked_in_today: number;
-    avg_readiness_score: number;
-  };
 }
 
 function usePwaMode(): boolean {
@@ -619,7 +614,7 @@ export default function TeamPage() {
                   {teamData.team?.sport}
                 </span>
                 <span className="px-2 py-1 bg-white/20 rounded-full">
-                  {teamData.stats.total_players} leikmenn
+                  {teamData.roster?.length ?? 0} leikmenn
                 </span>
               </div>
             </div>
