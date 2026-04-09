@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Load Alerts — Sýnidæmi</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; }
+</style>
+</head>
+<body class="p-6 max-w-5xl mx-auto space-y-8">
+
+<h1 class="text-lg font-bold text-slate-900 mb-1">Load Alerts — Sýnidæmi</h1>
+<p class="text-sm text-slate-500 mb-6">Svona líta skýringartextarnir út þegar leikmaður er með hækkað álag (composite load). Þetta birtist á Coach → Readiness síðunni.</p>
+
+<!-- ═══════ EXAMPLE 1: HIGH LOAD — YELLOW ═══════ -->
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <!-- Row -->
+  <div class="grid gap-3 px-4 py-4" style="grid-template-columns: 1.1fr 0.6fr 0.7fr 0.5fr 1fr 0.6fr 1.4fr auto; align-items: center;">
+    <div>
+      <div class="text-sm font-semibold text-slate-900">Viktor Karl Einarsson</div>
+      <div class="mt-1 text-xs text-slate-500">Leikmaður</div>
+    </div>
+    <div>
+      <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">YELLOW</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">modified</div>
+    <div class="text-sm font-semibold tabular-nums text-slate-900">75%</div>
+    <div class="flex flex-wrap gap-2">
+      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">high_acwr</span>
+      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">gps_elevated</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">medium</div>
+    <div class="space-y-1.5">
+      <!-- LOAD ALERTS — amber badges -->
+      <div class="flex flex-wrap gap-1.5">
+        <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+          ACWR is 1.62 — high injury risk zone (Gabbett).
+        </span>
+        <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+          GPS neuromuscular burden is elevated above baseline.
+        </span>
+      </div>
+      <div class="text-sm text-slate-700">Álag hækkað — ACWR yfir viðmiðum, GPS styrkur yfir grunnlínu. Mælt með aðlöguðu álagi.</div>
+    </div>
+    <div class="flex justify-end">
+      <button class="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Details</button>
+    </div>
+  </div>
+
+  <!-- Expanded details -->
+  <div class="grid gap-4 border-t border-slate-200 bg-slate-50 px-4 py-4 lg:grid-cols-2">
+    <div class="space-y-4">
+      <div>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Top factors</div>
+        <div class="mt-2 space-y-2">
+          <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-semibold text-slate-900">ACWR · 1.62</div>
+              <div class="text-xs font-medium text-slate-500">HIGH</div>
+            </div>
+            <div class="mt-1 text-sm text-slate-600">Acute workload well above chronic baseline — elevated injury risk per Gabbett model.</div>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-semibold text-slate-900">GPS Neuromuscular Burden · 0.52</div>
+              <div class="text-xs font-medium text-slate-500">ELEVATED</div>
+            </div>
+            <div class="mt-1 text-sm text-slate-600">External load normalized burden score exceeds 28-day rolling average.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Constraints</div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">reduce_volume</span>
+          <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">no_high_intensity</span>
+        </div>
+      </div>
+
+      <!-- FATIGUE TYPE — rose card for global fatigue -->
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Fatigue type</div>
+        <div class="mt-2 text-sm font-semibold text-rose-800">Global Fatigue — bæði vöðva- og orkukerfi undir álagi</div>
+      </div>
+
+      <!-- LOAD ALERTS — amber panel in details view -->
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Load alerts</div>
+        <div class="mt-2 space-y-1">
+          <div class="text-sm text-amber-900">ACWR is 1.62 — high injury risk zone (Gabbett).</div>
+          <div class="text-sm text-amber-900">GPS neuromuscular burden is elevated above baseline.</div>
+          <div class="text-sm text-amber-900">Global fatigue — both mechanical and metabolic systems under high stress.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ EXAMPLE 2: RESIDUAL MLI — MODERATE ═══════ -->
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <div class="grid gap-3 px-4 py-4" style="grid-template-columns: 1.1fr 0.6fr 0.7fr 0.5fr 1fr 0.6fr 1.4fr auto; align-items: center;">
+    <div>
+      <div class="text-sm font-semibold text-slate-900">Höskuldur Gunnlaugsson</div>
+      <div class="mt-1 text-xs text-slate-500">Leikmaður</div>
+    </div>
+    <div>
+      <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">YELLOW</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">modified</div>
+    <div class="text-sm font-semibold tabular-nums text-slate-900">80%</div>
+    <div class="flex flex-wrap gap-2">
+      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">residual_mli_caution</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">medium</div>
+    <div class="space-y-1.5">
+      <div class="flex flex-wrap gap-1.5">
+        <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+          Residual MLI is 118 (CAUTION) — multi-day mechanical load building up.
+        </span>
+      </div>
+      <div class="text-sm text-slate-700">Uppsafnað vöðvaálag yfir 3 daga — mælt með léttari álagi í dag.</div>
+    </div>
+    <div class="flex justify-end">
+      <button class="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ EXAMPLE 3: METABOLIC ONLY ═══════ -->
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <div class="grid gap-3 px-4 py-4" style="grid-template-columns: 1.1fr 0.6fr 0.7fr 0.5fr 1fr 0.6fr 1.4fr auto; align-items: center;">
+    <div>
+      <div class="text-sm font-semibold text-slate-900">Jónatan Guðni Arnarsson</div>
+      <div class="mt-1 text-xs text-slate-500">Leikmaður</div>
+    </div>
+    <div>
+      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">GREEN</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">full</div>
+    <div class="text-sm font-semibold tabular-nums text-slate-900">100%</div>
+    <div class="flex flex-wrap gap-2">
+      <span class="text-sm text-slate-400">—</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">high</div>
+    <div class="space-y-1.5">
+      <div class="flex flex-wrap gap-1.5">
+        <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+          <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+          Metabolic load is 72 — high energy-system demand.
+        </span>
+      </div>
+      <div class="text-sm text-slate-700">Leikmaður tilbúinn en metabolískt álag hátt — hafa í huga í skipulagningu.</div>
+    </div>
+    <div class="flex justify-end">
+      <button class="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ EXAMPLE 4: GREEN — NO ALERTS ═══════ -->
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <div class="grid gap-3 px-4 py-4" style="grid-template-columns: 1.1fr 0.6fr 0.7fr 0.5fr 1fr 0.6fr 1.4fr auto; align-items: center;">
+    <div>
+      <div class="text-sm font-semibold text-slate-900">Ágúst Orri Þorsteinsson</div>
+      <div class="mt-1 text-xs text-slate-500">Leikmaður</div>
+    </div>
+    <div>
+      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">GREEN</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">full</div>
+    <div class="text-sm font-semibold tabular-nums text-slate-900">100%</div>
+    <div class="flex flex-wrap gap-2">
+      <span class="text-sm text-slate-400">—</span>
+    </div>
+    <div class="text-sm font-medium capitalize text-slate-700">high</div>
+    <div class="space-y-1.5">
+      <div class="text-sm text-slate-700">Öll merki í lagi — fullt álag leyfilegt.</div>
+    </div>
+    <div class="flex justify-end">
+      <button class="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Details</button>
+    </div>
+  </div>
+</div>
+
+<div class="mt-8 rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+  <h2 class="text-sm font-bold text-slate-900">Hvernig þetta virkar:</h2>
+  <div class="text-sm text-slate-600 space-y-2">
+    <p><strong class="text-amber-700">Amber merkingar</strong> birtast í röð hvers leikmanns þegar composite load concern er "moderate" eða "high". Textinn útskýrir nákvæmlega <em>af hverju</em> álagið er hækkað.</p>
+    <p><strong>Mögulegir textar:</strong></p>
+    <ul class="list-disc ml-5 space-y-1 text-slate-500">
+      <li><span class="text-amber-800">ACWR is X.XX — high injury risk zone (Gabbett).</span></li>
+      <li><span class="text-amber-800">GPS neuromuscular burden is elevated above baseline.</span></li>
+      <li><span class="text-amber-800">Metabolic load is XX — high energy-system demand.</span></li>
+      <li><span class="text-amber-800">Residual MLI is XXX (HIGH) — accumulated mechanical stress over 3 days.</span></li>
+      <li><span class="text-amber-800">Global fatigue — both mechanical and metabolic systems under high stress.</span></li>
+    </ul>
+    <p>Ef leikmaður er GREEN með engin álagsgögn (eins og á OFF degi) → ekkert birtist.</p>
+  </div>
+</div>
+
+</body>
+</html>
