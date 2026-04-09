@@ -63,14 +63,38 @@ export const INDOOR_SIGNAL_WEIGHTS: IndoorSignalWeights = {
   fmpRunningHighSpike: 0.06,   // replaces band6
 };
 
+// ── Basketball signal weights ───────────────────────────────────────────────
+//
+// Basketball is always indoor. Key differences from football indoor:
+//   - PlayerLoad is primary (constant jumping, landing, cutting)
+//   - IMA Total weighted higher (change-of-direction dominant sport)
+//   - Dynamic High still important (explosive lateral movement)
+//   - Jump Load proxy via Dynamic High + PlayerLoad interaction
+//   - Running High weighted less (court is 28m, less linear running)
+
+export const BASKETBALL_SIGNAL_WEIGHTS: IndoorSignalWeights = {
+  playerLoadSpike: 0.30,           // PRIMARY: jumping, landing, cutting load
+  imaTotalSpike: 0.28,             // COD-dominant sport, accel/decel critical
+  fmpDynamicHighSpike: 0.24,       // explosive lateral movement, sharp cuts
+  fmpDynamicMediumSpike: 0.14,     // moderate-intensity movement patterns
+  fmpRunningHighSpike: 0.04,       // minimal linear running on court
+};
+
 // ── Main signal computation ──────────────────────────────────────────────────
 
 export function computeCatapultExternalLoadSignals(args: {
   today: CatapultDailyLoadRow | null;
   baseline: CatapultExternalLoadBaseline;
   indoorMode?: boolean;
+  sportType?: "football" | "basketball";
 }): CatapultExternalLoadSignals {
-  const { today, baseline, indoorMode = false } = args;
+  const { today, baseline, indoorMode = false, sportType = "football" } = args;
+
+  // Basketball always uses indoor mode regardless of toggle
+  const effectiveIndoor = sportType === "basketball" ? true : indoorMode;
+
+  // Select correct indoor weights based on sport
+  const indoorWeights = sportType === "basketball" ? BASKETBALL_SIGNAL_WEIGHTS : INDOOR_SIGNAL_WEIGHTS;
   const days7 = baseline.availability.daysAvailable7d;
   const days28 = baseline.availability.daysAvailable28d;
   const dataQuality =
@@ -99,14 +123,14 @@ export function computeCatapultExternalLoadSignals(args: {
 
   if (dataQuality === "insufficient") {
     neuromuscularBurdenScore = null;
-  } else if (indoorMode) {
-    // Indoor Mode: FMP + PlayerLoad + IMA based burden
+  } else if (effectiveIndoor) {
+    // Indoor Mode: FMP + PlayerLoad + IMA based burden (weights vary by sport)
     neuromuscularBurdenScore = clamp(
-      normalizeRatio(fmpDynamicHighSpike, 1.15, 1.6) * INDOOR_SIGNAL_WEIGHTS.fmpDynamicHighSpike +
-        normalizeRatio(playerLoadSpike, 1.15, 1.6) * INDOOR_SIGNAL_WEIGHTS.playerLoadSpike +
-        normalizeRatio(imaTotalSpike, 1.15, 1.6) * INDOOR_SIGNAL_WEIGHTS.imaTotalSpike +
-        normalizeRatio(fmpDynamicMediumSpike, 1.1, 1.35) * INDOOR_SIGNAL_WEIGHTS.fmpDynamicMediumSpike +
-        normalizeRatio(fmpRunningHighSpike, 1.2, 1.5) * INDOOR_SIGNAL_WEIGHTS.fmpRunningHighSpike,
+      normalizeRatio(fmpDynamicHighSpike, 1.15, 1.6) * indoorWeights.fmpDynamicHighSpike +
+        normalizeRatio(playerLoadSpike, 1.15, 1.6) * indoorWeights.playerLoadSpike +
+        normalizeRatio(imaTotalSpike, 1.15, 1.6) * indoorWeights.imaTotalSpike +
+        normalizeRatio(fmpDynamicMediumSpike, 1.1, 1.35) * indoorWeights.fmpDynamicMediumSpike +
+        normalizeRatio(fmpRunningHighSpike, 1.2, 1.5) * indoorWeights.fmpRunningHighSpike,
       0,
       1,
     );
@@ -128,7 +152,7 @@ export function computeCatapultExternalLoadSignals(args: {
   let elevatedCount: number;
   let highCount: number;
 
-  if (indoorMode) {
+  if (effectiveIndoor) {
     // Indoor: use FMP + PlayerLoad + IMA signals
     elevatedCount = [
       playerLoadSpike != null && playerLoadSpike >= 1.3,

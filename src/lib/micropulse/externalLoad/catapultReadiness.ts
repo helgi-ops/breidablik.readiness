@@ -71,9 +71,10 @@ export function buildCatapultReadinessContextFromRows(args: {
   rows: CatapultDailyLoadRow[];
   date: string;
   indoorMode?: boolean;
+  sportType?: "football" | "basketball";
 }): CatapultReadinessContext {
   const { today, baseline } = computeCatapultExternalLoadBaseline(args);
-  const signals = computeCatapultExternalLoadSignals({ today, baseline, indoorMode: args.indoorMode });
+  const signals = computeCatapultExternalLoadSignals({ today, baseline, indoorMode: args.indoorMode, sportType: args.sportType });
   const modifier = buildCatapultReadinessModifier({ today, baseline, signals });
   return { today, baseline, signals, modifier };
 }
@@ -83,7 +84,8 @@ export async function buildCatapultReadinessContextFromDatabase(args: {
   date: string;
   teamId?: string | null;
   indoorMode?: boolean;
+  sportType?: "football" | "basketball";
 }): Promise<CatapultReadinessContext> {
   const rows = await fetchCatapultDailyLoadRows(args);
-  return buildCatapultReadinessContextFromRows({ rows, date: args.date, indoorMode: args.indoorMode });
+  return buildCatapultReadinessContextFromRows({ rows, date: args.date, indoorMode: args.indoorMode, sportType: args.sportType });
 }

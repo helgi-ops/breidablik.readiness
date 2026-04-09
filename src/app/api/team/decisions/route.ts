@@ -473,6 +473,7 @@ async function buildPlayerSource(args: {
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
   vbtData?: { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string } | null;
   indoorMode?: boolean;
+  sportType?: "football" | "basketball";
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -482,6 +483,7 @@ async function buildPlayerSource(args: {
     rows: args.catapultRows.filter((row): row is NonNullable<typeof row> => row != null),
     date: args.date,
     indoorMode: args.indoorMode,
+    sportType: args.sportType,
   });
   const externalToday = catapultContext.today;
   const acwrValue = toFinite((tm?.acwr as unknown) ?? ((tm?.load as Record<string, unknown> | undefined)?.acwr as unknown));
@@ -730,13 +732,16 @@ export async function GET(req: Request) {
 
     const playerIds = rows.map((row) => String(row.player_id));
 
-    // Fetch team settings (indoor_mode flag)
+    // Fetch team settings (indoor_mode flag + sport_type)
     const { data: teamSettingsRow } = await sb
       .from("team_settings")
-      .select("indoor_mode")
+      .select("indoor_mode, sport_type")
       .eq("team_id", teamId)
       .maybeSingle();
     const indoorMode = teamSettingsRow?.indoor_mode === true;
+    const sportType = (teamSettingsRow?.sport_type === "basketball" ? "basketball" : "football") as "football" | "basketball";
+    // Basketball teams are always indoor regardless of toggle
+    const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
     const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
@@ -768,7 +773,8 @@ export async function GET(req: Request) {
             mdDay,
             whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
             vbtData: vbtByPlayer.get(String(row.player_id)) ?? null,
-            indoorMode,
+            indoorMode: effectiveIndoorMode,
+            sportType,
           })
         );
       } catch {

@@ -69,6 +69,8 @@ export default function CoachSettingsPage() {
   const [indoorMode, setIndoorMode] = useState<boolean | null>(null);
   const [indoorModeLoading, setIndoorModeLoading] = useState(false);
   const [indoorModeError, setIndoorModeError] = useState("");
+  const [sportType, setSportType] = useState<"football" | "basketball">("football");
+  const [sportTypeLoading, setSportTypeLoading] = useState(false);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -172,6 +174,7 @@ export default function CoachSettingsPage() {
         if (res.ok) {
           const json = await res.json();
           setIndoorMode(json.indoor_mode ?? false);
+          setSportType(json.sport_type === "basketball" ? "basketball" : "football");
         }
       } catch { /* silently fail */ }
     };
@@ -206,6 +209,34 @@ export default function CoachSettingsPage() {
       setIndoorModeLoading(false);
     }
   }, [teamId, indoorMode, supabase]);
+
+  const changeSportType = useCallback(async (next: "football" | "basketball") => {
+    if (!teamId) return;
+    setSportTypeLoading(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team_id: teamId, sport_type: next }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? "Failed to update");
+      }
+      const data = await res.json();
+      setSportType(next);
+      // Basketball auto-sets indoor mode
+      if (next === "basketball") setIndoorMode(true);
+      else setIndoorMode(data.indoor_mode ?? false);
+    } catch (err) {
+      setIndoorModeError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSportTypeLoading(false);
+    }
+  }, [teamId, supabase]);
 
   const runtimeRules = useMemo(() => buildRuntimeRulesFromAdminConfig(snapshot), [snapshot]);
   const summary = useMemo(() => buildAdminSystemSummary({ snapshot, recommendationDecisions: [] }), [snapshot]);
@@ -263,6 +294,56 @@ export default function CoachSettingsPage() {
       {/* ── GPS Provider ───────────────────────────────────────────────── */}
       <GpsProviderSettings teamId={teamId} />
 
+      {/* ── Sport Type ────────────────────────────────────────────────── */}
+      {teamId && (
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Sport / Íþrótt</div>
+          <h2 className="mt-1 text-lg font-semibold text-zinc-950">
+            {sportType === "basketball" ? "Körfubolti / Basketball" : "Fótbolti / Football"}
+          </h2>
+          <p className="mt-1 max-w-xl text-sm text-zinc-600">
+            {sportType === "basketball"
+              ? "Basketball signal weights: PlayerLoad 30%, IMA 28%, Dynamic High 24%, Dynamic Med 14%, Running High 4%. Always indoor mode."
+              : "Football uses GPS outdoors or FMP indoors. Signal weights optimized for football movement patterns."}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={sportTypeLoading}
+              onClick={() => changeSportType("football")}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                sportType === "football"
+                  ? "bg-zinc-900 text-white"
+                  : "border bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+              } ${sportTypeLoading ? "opacity-50 cursor-wait" : ""}`}
+            >
+              Fótbolti
+            </button>
+            <button
+              type="button"
+              disabled={sportTypeLoading}
+              onClick={() => changeSportType("basketball")}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                sportType === "basketball"
+                  ? "bg-orange-600 text-white"
+                  : "border bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+              } ${sportTypeLoading ? "opacity-50 cursor-wait" : ""}`}
+            >
+              Körfubolti
+            </button>
+          </div>
+          {sportType === "basketball" && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">PlayerLoad 30%</span>
+              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">IMA Total 28%</span>
+              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Dynamic High 24%</span>
+              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Dynamic Med 14%</span>
+              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Running High 4%</span>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ── Indoor Mode (FMP) ─────────────────────────────────────────── */}
       {teamId && indoorMode !== null && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -277,19 +358,23 @@ export default function CoachSettingsPage() {
                   ? "Using Football Movement Profile (inertial sensors) + PlayerLoad + IMA for load monitoring. No GPS required."
                   : "Using GPS-based metrics (HIR, velocity bands, max speed) for load monitoring."}
               </p>
+              {sportType === "basketball" && (
+                <div className="mt-2 text-xs text-indigo-600">Körfubolti notar alltaf indoor mode / Basketball always uses indoor mode</div>
+              )}
               {indoorModeError && (
                 <div className="mt-2 text-sm text-red-600">{indoorModeError}</div>
               )}
             </div>
             <button
               type="button"
-              disabled={indoorModeLoading}
+              disabled={indoorModeLoading || sportType === "basketball"}
               onClick={toggleIndoorMode}
+              title={sportType === "basketball" ? "Basketball is always indoor" : undefined}
               className={`relative mt-1 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                 indoorMode
                   ? "bg-indigo-600 focus:ring-indigo-500"
                   : "bg-zinc-300 focus:ring-zinc-400"
-              } ${indoorModeLoading ? "opacity-50 cursor-wait" : ""}`}
+              } ${indoorModeLoading || sportType === "basketball" ? "opacity-50 cursor-wait" : ""}`}
             >
               <span
                 className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${

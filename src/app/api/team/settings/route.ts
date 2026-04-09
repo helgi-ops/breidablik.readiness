@@ -54,6 +54,7 @@ export async function GET(req: Request) {
     const settings = data ?? {
       team_id: teamId,
       indoor_mode: false,
+      sport_type: "football",
       notes: null,
       updated_at: null,
       updated_by: null,
@@ -81,6 +82,13 @@ export async function PATCH(req: Request) {
 
     if (typeof body.indoor_mode === "boolean") {
       updates.indoor_mode = body.indoor_mode;
+    }
+    if (body.sport_type === "football" || body.sport_type === "basketball") {
+      updates.sport_type = body.sport_type;
+      // Basketball teams are always indoor
+      if (body.sport_type === "basketball") {
+        updates.indoor_mode = true;
+      }
     }
     if (typeof body.notes === "string" || body.notes === null) {
       updates.notes = body.notes;
