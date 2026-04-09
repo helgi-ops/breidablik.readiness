@@ -4,12 +4,9 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import {
   Calendar,
-  Users,
-  Activity,
   Plus,
   X,
   Pin,
-  Zap,
   AlertCircle,
   FileText,
   Trash2,
@@ -1069,45 +1066,7 @@ export default function TeamPage() {
           </div>
         </section>
 
-        {/* Team Stats Section */}
-        <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Staðan í dag</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl shadow-sm p-6 border-t-4 border-blue-500">
-              <div className="flex items-center gap-3">
-                <Users className="w-8 h-8 text-blue-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Leikmenn samtals</p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {teamData.stats.total_players}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm p-6 border-t-4 border-green-500">
-              <div className="flex items-center gap-3">
-                <Activity className="w-8 h-8 text-green-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Skráðir í dag</p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {teamData.stats.checked_in_today}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm p-6 border-t-4 border-purple-500">
-              <div className="flex items-center gap-3">
-                <Zap className="w-8 h-8 text-purple-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Meðal tilbúni</p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {Math.round(teamData.stats.avg_readiness_score)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+
 
       </div>
     </div>
