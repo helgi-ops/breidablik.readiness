@@ -925,6 +925,11 @@ export default function DevPlayerClient() {
             card.style.display = "none";
             continue;
           }
+          // Coach-player chat card — show on "today" tab
+          if (card.dataset.playerCard === "chat") {
+            card.style.display = showToday ? "" : "none";
+            continue;
+          }
           // Default: hide unknown legacy cards so tabs stay focused.
           card.style.display = "none";
         }

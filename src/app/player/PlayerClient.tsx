@@ -4500,13 +4500,15 @@ export default function PlayerClient() {
 
             {/* Coach-player chat */}
             {profile?.player_id ? (
-              <ChatThread
-                playerId={profile.player_id}
-                playerName={name}
-                entryDate={today}
-                compact
-                viewerRole="player"
-              />
+              <div data-player-card="chat">
+                <ChatThread
+                  playerId={profile.player_id}
+                  playerName={name}
+                  entryDate={today}
+                  compact
+                  viewerRole="player"
+                />
+              </div>
             ) : null}
 
             {/* Metrics */}
