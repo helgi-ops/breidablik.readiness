@@ -194,14 +194,14 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
               href="/coach/conversations"
               className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/conversations") ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
-              Spjall
+              Conversations
             </Link>
 
             <Link
               href="/team"
               className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/team" ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
-              Liðssíða
+              Team Page
             </Link>
 
             <Link
