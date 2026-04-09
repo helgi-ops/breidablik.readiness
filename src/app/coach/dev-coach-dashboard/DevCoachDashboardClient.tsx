@@ -5,6 +5,7 @@ import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
 import ChatThread from "@/components/chat/ChatThread";
+import BroadcastModal from "@/components/chat/BroadcastModal";
 import { RtpTab } from "./RtpTab";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
@@ -1767,6 +1768,7 @@ export default function CoachPage() {
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
   const [chatOpenPlayerId, setChatOpenPlayerId] = useState<string | null>(null);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [detailSectionOpenByPlayer, setDetailSectionOpenByPlayer] = useState<Record<string, Partial<Record<PlayerDetailSectionKey, boolean>>>>({});
 
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
@@ -6721,6 +6723,18 @@ export default function CoachPage() {
 
       {dashTab === "squad" && isAtLeastPro && (
         <div className="space-y-6">
+
+          {/* Broadcast message button */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setBroadcastOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+              Hópskilaboð
+            </button>
+          </div>
+          {coachTeamId && <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} teamId={coachTeamId} />}
 
           {/* Players needing review */}
           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">

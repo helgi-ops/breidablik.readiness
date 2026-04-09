@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import ChatThread from "@/components/chat/ChatThread";
+import BroadcastModal from "@/components/chat/BroadcastModal";
 
 type ThreadSummary = {
   player_id: string;
@@ -21,6 +22,8 @@ export default function ConversationsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedThread, setSelectedThread] = useState<ThreadSummary | null>(null);
   const [search, setSearch] = useState("");
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     loadThreads();
@@ -40,6 +43,7 @@ export default function ConversationsPage() {
 
       const teamId = (profile as any)?.team_id;
       if (!teamId) return;
+      setCoachTeamId(teamId);
 
       // Get recent messages grouped by player+date with last message info
       const { data: messages } = await supabase
@@ -132,8 +136,25 @@ export default function ConversationsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">Spjall við leikmenn</h1>
-      <p className="text-sm text-slate-500 mb-6">Öll samskipti milli þjálfara og leikmanna á einum stað.</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">Spjall við leikmenn</h1>
+          <p className="text-sm text-slate-500">Öll samskipti milli þjálfara og leikmanna á einum stað.</p>
+        </div>
+        <button
+          onClick={() => setBroadcastOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors shrink-0"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" />
+          </svg>
+          Hópskilaboð
+        </button>
+      </div>
+
+      {coachTeamId && (
+        <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} teamId={coachTeamId} />
+      )}
 
       <div className="flex gap-6 min-h-[600px]">
         {/* Thread list */}
