@@ -18,11 +18,8 @@ interface ChatThreadProps {
   playerId: string;
   playerName: string;
   entryDate: string;
-  /** Compact mode for dashboard inline, false for full Messages page */
   compact?: boolean;
-  /** Initial notes from check-in to show as context */
   checkinNotes?: string | null;
-  /** Current user role */
   viewerRole?: "player" | "coach" | "admin";
 }
 
@@ -41,10 +38,22 @@ export default function ChatThread({
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  /** Get auth headers for API calls */
+  async function authHeaders(): Promise<Record<string, string>> {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (token) return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    } catch {}
+    return { "Content-Type": "application/json" };
+  }
+
   const fetchMessages = useCallback(async () => {
     try {
+      const headers = await authHeaders();
       const res = await fetch(
-        `/api/messages?playerId=${playerId}&date=${entryDate}`
+        `/api/messages?playerId=${playerId}&date=${entryDate}`,
+        { headers }
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -107,11 +116,14 @@ export default function ChatThread({
     );
     if (unread.length === 0) return;
 
-    fetch("/api/messages/read", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageIds: unread.map((m) => m.id) }),
-    }).catch(() => {});
+    (async () => {
+      const headers = await authHeaders();
+      fetch("/api/messages/read", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ messageIds: unread.map((m) => m.id) }),
+      }).catch(() => {});
+    })();
   }, [messages, viewerRole]);
 
   async function sendMessage() {
@@ -120,9 +132,10 @@ export default function ChatThread({
 
     setSending(true);
     try {
+      const headers = await authHeaders();
       const res = await fetch("/api/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           playerId,
           entryDate,

@@ -1,19 +1,46 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function authenticate(req: NextRequest) {
+  const supabase = getSupabase();
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return { error: "Vantar auðkenningu" };
+
+  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
+  if (uErr || !userRes?.user) return { error: "Ógilt token" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, team_id, player_id")
+    .eq("id", userRes.user.id)
+    .maybeSingle();
+
+  if (!profile) return { error: "Profile not found" };
+
+  return { uid: userRes.user.id, profile, supabase };
+}
 
 /**
  * GET /api/messages?playerId=...&date=...
  * Fetch chat thread for a player on a given date.
- *
- * POST /api/messages
- * Send a new message. Body: { playerId, entryDate, body }
  */
-
 export async function GET(req: NextRequest) {
-  const { getSupabaseServer } = await import("@/lib/supabaseServer");
-  const supabase = getSupabaseServer();
-
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await authenticate(req);
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
+  const { supabase } = result;
 
   const url = new URL(req.url);
   const playerId = url.searchParams.get("playerId");
@@ -37,13 +64,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ messages: data ?? [] });
 }
 
+/**
+ * POST /api/messages
+ * Send a new message. Body: { playerId, entryDate, body }
+ */
 export async function POST(req: NextRequest) {
-  const { getSupabaseServer } = await import("@/lib/supabaseServer");
-  const supabase = getSupabaseServer();
-
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const uid = auth.user.id;
+  const result = await authenticate(req);
+  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
+  const { uid, profile, supabase } = result;
 
   const body = await req.json();
   const { playerId, entryDate, body: messageBody } = body;
@@ -52,18 +80,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing playerId or body" }, { status: 400 });
   }
 
-  // Determine sender role and team
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, team_id, player_id")
-    .eq("id", uid)
-    .maybeSingle();
-
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 403 });
-
   const senderRole = profile.role === "admin" ? "admin" : profile.role === "coach" ? "coach" : "player";
 
-  // Verify access: coaches must be on same team, players must be themselves
+  // Verify access: players must be themselves
   if (senderRole === "player" && profile.player_id !== playerId) {
     return NextResponse.json({ error: "Cannot send messages for other players" }, { status: 403 });
   }

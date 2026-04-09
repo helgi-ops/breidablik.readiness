@@ -12,6 +12,7 @@ import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
 import { usePushAutoResubscribe } from "@/lib/push/usePushAutoResubscribe";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
+import ChatThread from "@/components/chat/ChatThread";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
@@ -4483,6 +4484,17 @@ export default function PlayerClient() {
                 </div>
               ) : null}
             </div>
+
+            {/* Coach-player chat */}
+            {profile?.player_id ? (
+              <ChatThread
+                playerId={profile.player_id}
+                playerName={name}
+                entryDate={today}
+                compact
+                viewerRole="player"
+              />
+            ) : null}
 
             {/* Metrics */}
             <CardShell data-player-card="metrics">
