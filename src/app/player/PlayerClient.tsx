@@ -3713,13 +3713,13 @@ export default function PlayerClient() {
           supabase
             .from("player_external_load_daily")
             .select("*")
-            .eq("source", "catapult")
+            .in("source", ["catapult", "manual"])
             .eq("player_id", prof.player_id)
             .eq("date", safeDay),
           supabase
             .from("player_external_load_daily")
             .select("*")
-            .eq("source", "catapult")
+            .in("source", ["catapult", "manual"])
             .eq("player_id", prof.player_id)
             .gte("date", catapultStartDate)
             .lte("date", safeDay)
@@ -3744,7 +3744,7 @@ export default function PlayerClient() {
           const { data: catapultTeamRows, error: catapultTeamErr } = await supabase
             .from("player_external_load_daily")
             .select("*")
-            .eq("source", "catapult")
+            .in("source", ["catapult", "manual"])
             .eq("team_id", prof.team_id)
             .eq("date", safeDay);
           if (catapultTeamErr) {

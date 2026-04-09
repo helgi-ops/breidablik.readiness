@@ -118,7 +118,7 @@ export async function computeWeeklyLoad(args: {
     .eq("team_id", teamId)
     .gte("date", weekMonday)
     .lte("date", today)
-    .eq("source", "catapult");
+    .in("source", ["catapult", "manual"]);
   if (playerId) currentQuery = currentQuery.eq("player_id", playerId);
   const { data: currentRows } = await currentQuery;
 
@@ -178,7 +178,7 @@ export async function computeWeeklyLoad(args: {
     .eq("team_id", teamId)
     .gte("date", histStart)
     .lte("date", histEnd)
-    .eq("source", "catapult");
+    .in("source", ["catapult", "manual"]);
   if (playerId) histQuery = histQuery.eq("player_id", playerId);
   const { data: histRows } = await histQuery;
 

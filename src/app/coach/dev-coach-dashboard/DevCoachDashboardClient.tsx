@@ -2275,7 +2275,7 @@ export default function CoachPage() {
       .select("hir_dist, tot_as, tot_ds, total_distance, max_vel, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
       .eq("team_id", teamId)
       .eq("date", yday)
-      .eq("source", "catapult");
+      .in("source", ["catapult", "manual"]);
 
     if (error) {
       console.warn("loadYesterdayContext (Catapult) error:", error.message);
@@ -2698,7 +2698,7 @@ export default function CoachPage() {
       const { data, error } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
-        .eq("source", "catapult")
+        .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", startDate)
         .lte("date", entryDate)
@@ -2810,7 +2810,7 @@ export default function CoachPage() {
 
     try {
       setError("");
-      const { error } = await supabase.from("stage4_decisions_final").update({ locked: true }).eq("entry_date", entryDate).in("player_id", unlocked);
+      const { error } = await supabase.from("stage4_decisions").update({ locked: true }).eq("entry_date", entryDate).in("player_id", unlocked);
       if (error) throw new Error(error.message);
 
       setAutoLockRan(true);
@@ -3169,15 +3169,18 @@ export default function CoachPage() {
     try {
       const payload: any = {
         player_id: playerId,
+        team_id: r.team_id ?? coachTeamId ?? null,
         entry_date: entryDate,
         system_decision: systemDecision,
         coach_decision: action,
+        final_decision: action,
+        final_source: action !== systemDecision ? "COACH_OVERRIDE" : "SYSTEM",
         coach_note: message.length ? message : null,
         locked: false,
         updated_at: new Date().toISOString(),
       };
 
-      const { error: upErr } = await supabase.from("stage4_decisions_final").upsert(payload, {
+      const { error: upErr } = await supabase.from("stage4_decisions").upsert(payload, {
         onConflict: "player_id,entry_date",
       });
       if (upErr) throw new Error(`Save failed: ${upErr.message}`);
@@ -3215,15 +3218,18 @@ export default function CoachPage() {
     try {
       const payload: any = {
         player_id: playerId,
+        team_id: r.team_id ?? coachTeamId ?? null,
         entry_date: entryDate,
         system_decision: systemDecision,
         coach_decision: action,
+        final_decision: action,
+        final_source: action !== systemDecision ? "COACH_OVERRIDE" : "SYSTEM",
         coach_note: message.length ? message : null,
         locked: true,
         updated_at: new Date().toISOString(),
       };
 
-      const { error: upErr } = await supabase.from("stage4_decisions_final").upsert(payload, {
+      const { error: upErr } = await supabase.from("stage4_decisions").upsert(payload, {
         onConflict: "player_id,entry_date",
       });
       if (upErr) throw new Error(`Lock failed: ${upErr.message}`);
@@ -3248,7 +3254,7 @@ export default function CoachPage() {
 
     try {
       const { error } = await supabase
-        .from("stage4_decisions_final")
+        .from("stage4_decisions")
         .update({ locked: false, updated_at: new Date().toISOString() })
         .eq("player_id", playerId)
         .eq("entry_date", entryDate);
@@ -3454,7 +3460,7 @@ export default function CoachPage() {
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
           .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
-          .eq("source", "catapult")
+          .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
           .gte("date", startDate)
           .lte("date", today)
@@ -4708,7 +4714,7 @@ export default function CoachPage() {
       const { data: latestDateRows } = await supabase
         .from("player_external_load_daily")
         .select("date")
-        .eq("source", "catapult")
+        .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .lte("date", today)
         .order("date", { ascending: false })
@@ -4721,7 +4727,7 @@ export default function CoachPage() {
       const { data: loadRows, error: loadErr } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel")
-        .eq("source", "catapult")
+        .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", chronicStart)
         .lte("date", sessionDate)

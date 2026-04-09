@@ -329,7 +329,7 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
         .from("player_external_load_daily")
         .select("date, total_distance, total_player_load")
         .eq("player_id", selectedId)
-        .eq("source", "catapult")
+        .in("source", ["catapult", "manual"])
         .gte("date", startDate)
         .lte("date", today)
         .order("date", { ascending: true }),
