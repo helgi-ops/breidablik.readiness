@@ -10,7 +10,6 @@ import {
   X,
   Pin,
   Zap,
-  Shield,
   AlertCircle,
   FileText,
   Trash2,
@@ -1110,58 +1109,6 @@ export default function TeamPage() {
           </div>
         </section>
 
-        {/* Squad Roster Section */}
-        <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Leikmannalisti</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {teamData.roster.map((player) => (
-              <div
-                key={player.id}
-                className="bg-white rounded-xl shadow-sm p-4 text-center border border-gray-200 hover:shadow-md transition"
-              >
-                <div className="w-12 h-12 rounded-full mx-auto mb-3 bg-green-100 flex items-center justify-center text-green-700 font-bold text-lg">
-                  {player.full_name?.charAt(0) ?? "?"}
-                </div>
-                <h3 className="font-semibold text-gray-900 text-sm">
-                  {player.full_name}
-                </h3>
-                <span className="inline-block mt-2 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                  {player.position}
-                </span>
-              </div>
-            ))}
-          </div>
-          {teamData.roster.length === 0 && (
-            <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
-              Engir leikmenn ennþá
-            </div>
-          )}
-        </section>
-
-        {/* Coaching Staff Section */}
-        <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Þjálfarateymi</h2>
-          <div className="bg-white rounded-xl shadow-sm p-6 space-y-3 border border-gray-200">
-            {teamData.coaches.length > 0 ? (
-              teamData.coaches.map((coach) => (
-                <div
-                  key={coach.id}
-                  className="flex items-center gap-3 pb-3 border-b border-gray-100 last:border-b-0"
-                >
-                  <Shield className="w-5 h-5 text-gray-600" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{coach.display_name}</p>
-                    <p className="text-sm text-gray-600">{coach.role}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">
-                Engir þjálfarar skráðir
-              </p>
-            )}
-          </div>
-        </section>
       </div>
     </div>
   );
