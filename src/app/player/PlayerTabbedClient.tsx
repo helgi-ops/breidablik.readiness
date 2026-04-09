@@ -20,6 +20,9 @@ import {
   type DevPlayerTab,
 } from "@/lib/micropulse/playerDashboard/devPlayerViewModel";
 import { supabase } from "@/lib/supabaseClient";
+import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
+import ChatThread from "@/components/chat/ChatThread";
+import { useUnreadCount } from "@/components/chat/useUnreadCount";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -674,6 +677,14 @@ function IconDumbbell({ active }: { active: boolean }) {
   );
 }
 
+function IconChat({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
 // ── PWA bottom navigation bar ────────────────────────────────────────────────
 
 const PWA_NAV_TAB_KEYS = [
@@ -681,6 +692,7 @@ const PWA_NAV_TAB_KEYS = [
   { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const },
   { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const },
   { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const },
+  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free"  as const },
   { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const },
   { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const },
 ];
@@ -689,10 +701,12 @@ function PWABottomNav({
   activeTab,
   onChange,
   planTier,
+  unreadChatCount = 0,
 }: {
   activeTab: DevPlayerTab;
   onChange: (tab: DevPlayerTab) => void;
   planTier: PlanTier;
+  unreadChatCount?: number;
 }) {
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
   const isElite = planTier === "ELITE";
@@ -711,16 +725,24 @@ function PWABottomNav({
             (minTier === "pro" && !isAtLeastPro) ||
             (minTier === "elite" && !isElite);
           const isActive = activeTab === key;
+          const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
           return (
             <button
               key={key}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
                 isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"
               }`}
               onClick={() => !locked && onChange(key)}
               aria-label={label}
             >
-              <Icon active={isActive} />
+              <div className="relative">
+                <Icon active={isActive} />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 rounded-full text-[9px] font-bold text-white">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                  </span>
+                )}
+              </div>
               <span className={`text-[9px] font-semibold tracking-wide ${isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"}`}>
                 {label.toUpperCase()}
               </span>
@@ -741,9 +763,11 @@ export default function DevPlayerClient() {
   const [panelMountNode, setPanelMountNode] = useState<HTMLElement | null>(null);
   const [layoutReady, setLayoutReady] = useState(false);
 
-  // ── Plan tier + club branding ──────────────────────────────
+  // ── Plan tier + club branding + player info for chat ──────────────────────────────
   const [planTier, setPlanTier] = useState<PlanTier>("FREE");
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
+  const [chatPlayerId, setChatPlayerId] = useState<string | null>(null);
+  const [chatPlayerName, setChatPlayerName] = useState<string>("Leikmaður");
 
   useEffect(() => {
     let alive = true;
@@ -754,9 +778,14 @@ export default function DevPlayerClient() {
 
       const { data: prof } = await supabase
         .from("profiles")
-        .select("team_id")
+        .select("team_id, player_id, display_name")
         .eq("id", userId)
         .maybeSingle();
+
+      if (alive && (prof as any)?.player_id) {
+        setChatPlayerId((prof as any).player_id);
+        setChatPlayerName((prof as any).display_name || "Leikmaður");
+      }
 
       const teamId = (prof as any)?.team_id;
       if (!teamId || !alive) return;
@@ -779,6 +808,7 @@ export default function DevPlayerClient() {
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
   const isElite = planTier === "ELITE";
   const isPwa = usePwaMode();
+  const unreadChatCount = useUnreadCount(chatPlayerId, "player");
 
   // If on a locked tab, redirect to today
   useEffect(() => {
@@ -870,7 +900,8 @@ export default function DevPlayerClient() {
       const showRpe = activeTab === "rpe";
       const showVald = activeTab === "vald";
       const showStrength = activeTab === "strength";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength;
+      const showChat = activeTab === "chat";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -1072,14 +1103,44 @@ export default function DevPlayerClient() {
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
               {activeTab === "strength" && <DevPlayerStrengthTab />}
+              {activeTab === "chat" && chatPlayerId && (
+                <div className="mx-auto max-w-lg pb-24">
+                  <ChatThread
+                    playerId={chatPlayerId}
+                    playerName={chatPlayerName}
+                    entryDate={new Date().toISOString().slice(0, 10)}
+                    viewerRole="player"
+                    compact={false}
+                  />
+                </div>
+              )}
             </div>,
             panelMountNode
           )
         : null}
+      {/* Floating chat bubble — shown on Today tab in PWA mode */}
+      {isPwa && activeTab === "today" && chatPlayerId && (
+        <FloatingChatBubble
+          playerId={chatPlayerId}
+          playerName={chatPlayerName}
+          entryDate={new Date().toISOString().slice(0, 10)}
+          unreadCount={unreadChatCount}
+          isPwa
+        />
+      )}
+      {/* Non-PWA floating chat bubble */}
+      {!isPwa && activeTab === "today" && chatPlayerId && (
+        <FloatingChatBubble
+          playerId={chatPlayerId}
+          playerName={chatPlayerName}
+          entryDate={new Date().toISOString().slice(0, 10)}
+          unreadCount={unreadChatCount}
+        />
+      )}
       {/* PWA notification opt-in prompt (only in PWA mode, only when not yet subscribed) */}
       {isPwa && <PWANotificationPrompt />}
       {/* PWA bottom navigation bar */}
-      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} />}
+      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} />}
     </>
   );
 }

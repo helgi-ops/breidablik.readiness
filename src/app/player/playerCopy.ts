@@ -12,6 +12,7 @@ export const PLAYER_COPY = {
       strength: "Styrkur",
       history: "Saga",
       vald: "VALD",
+      chat: "Spjall",
     },
     decision: {
       kicker: "Í dag",
@@ -98,6 +99,7 @@ export const PLAYER_COPY = {
       strength: "Strength",
       history: "History",
       vald: "VALD",
+      chat: "Chat",
     },
     decision: {
       kicker: "Today",

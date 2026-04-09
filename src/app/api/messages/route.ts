@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
@@ -11,6 +12,136 @@ function getSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     "";
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+/**
+ * Send push notifications to recipients based on sender role.
+ * Fire-and-forget: errors are logged but don't block the response.
+ */
+async function sendNotificationsAsync(
+  supabase: ReturnType<typeof getSupabase>,
+  senderRole: string,
+  playerId: string,
+  messageBody: string,
+  senderName?: string
+) {
+  try {
+    if (senderRole === "coach" || senderRole === "admin") {
+      // Coach/admin sends to player: notify the PLAYER
+      await notifyPlayer(supabase, playerId, messageBody);
+    } else if (senderRole === "player") {
+      // Player sends to coach: notify COACHES on the same team
+      await notifyCoachesOnTeam(supabase, playerId, messageBody, senderName);
+    }
+  } catch (err) {
+    console.error("Error sending push notifications:", err);
+    // Silently fail—don't break the message send
+  }
+}
+
+/**
+ * Notify a player via push subscriptions.
+ */
+async function notifyPlayer(
+  supabase: ReturnType<typeof getSupabase>,
+  playerId: string,
+  messageBody: string
+) {
+  const { data: subscriptions } = await supabase
+    .from("player_push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .eq("player_id", playerId)
+    .eq("is_active", true);
+
+  if (!subscriptions || subscriptions.length === 0) return;
+
+  const truncatedBody = messageBody.substring(0, 100);
+  const payload = {
+    title: "Þjálfari",
+    body: truncatedBody,
+    url: "/player",
+  };
+
+  for (const sub of subscriptions) {
+    if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;
+    try {
+      await sendWebPush({ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth }, payload);
+    } catch (err) {
+      if (isSubscriptionGone(err)) {
+        await supabase
+          .from("player_push_subscriptions")
+          .update({ is_active: false })
+          .eq("id", sub.id);
+      }
+      console.error("Error sending push to player subscription:", err);
+    }
+  }
+}
+
+/**
+ * Notify coaches on the same team as the player.
+ */
+async function notifyCoachesOnTeam(
+  supabase: ReturnType<typeof getSupabase>,
+  playerId: string,
+  messageBody: string,
+  senderName?: string
+) {
+  // Get the player's team
+  const { data: player } = await supabase
+    .from("players")
+    .select("team_id")
+    .eq("id", playerId)
+    .maybeSingle();
+
+  if (!player) return;
+
+  // Get coach profiles on the same team
+  const { data: coachProfiles } = await supabase
+    .from("profiles")
+    .select("id, player_id, display_name")
+    .eq("team_id", player.team_id)
+    .in("role", ["COACH", "coach", "ADMIN", "admin"]);
+
+  if (!coachProfiles || coachProfiles.length === 0) return;
+
+  // Get player_ids that have push subscriptions
+  const coachPlayerIds = coachProfiles
+    .filter((cp) => cp.player_id)
+    .map((cp) => cp.player_id);
+
+  if (coachPlayerIds.length === 0) return;
+
+  const { data: subscriptions } = await supabase
+    .from("player_push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .in("player_id", coachPlayerIds)
+    .eq("is_active", true);
+
+  if (!subscriptions || subscriptions.length === 0) return;
+
+  const truncatedBody = messageBody.substring(0, 100);
+  const title = senderName || "Leikmaður";
+  const payload = {
+    title,
+    body: truncatedBody,
+    url: "/coach/conversations",
+  };
+
+  for (const sub of subscriptions) {
+    if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;
+    try {
+      await sendWebPush({ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth }, payload);
+    } catch (err) {
+      if (isSubscriptionGone(err)) {
+        await supabase
+          .from("player_push_subscriptions")
+          .update({ is_active: false })
+          .eq("id", sub.id);
+      }
+      console.error("Error sending push to coach subscription:", err);
+    }
+  }
 }
 
 async function authenticate(req: NextRequest) {
@@ -118,6 +249,9 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Send push notifications (fire-and-forget)
+  sendNotificationsAsync(supabase, senderRole, playerId, messageBody.trim());
 
   return NextResponse.json({ message: msg });
 }
