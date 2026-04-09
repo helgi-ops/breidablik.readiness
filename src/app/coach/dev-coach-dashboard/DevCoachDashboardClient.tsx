@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
+import ChatThread from "@/components/chat/ChatThread";
 import { RtpTab } from "./RtpTab";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
@@ -1765,6 +1766,7 @@ export default function CoachPage() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+  const [chatOpenPlayerId, setChatOpenPlayerId] = useState<string | null>(null);
   const [detailSectionOpenByPlayer, setDetailSectionOpenByPlayer] = useState<Record<string, Partial<Record<PlayerDetailSectionKey, boolean>>>>({});
 
   const [planPreview, setPlanPreview] = useState<PlanPreview | null>(null);
@@ -5618,7 +5620,44 @@ export default function CoachPage() {
           {r.notes && r.notes.trim().length ? (
             <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
               <svg className="mt-0.5 shrink-0 text-blue-500" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
-              <p className="text-sm text-blue-900 leading-snug">{r.notes.trim()}</p>
+              <div className="flex-1">
+                <p className="text-sm text-blue-900 leading-snug">{r.notes.trim()}</p>
+                <button
+                  type="button"
+                  className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                  onClick={() => setChatOpenPlayerId((prev) => (prev === pid ? null : pid))}
+                >
+                  {chatOpenPlayerId === pid ? "Loka spjalli" : "Svara leikmann"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Quick chat toggle (even without notes) */}
+          {!(r.notes && r.notes.trim().length) ? (
+            <div className="mt-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
+                onClick={() => setChatOpenPlayerId((prev) => (prev === pid ? null : pid))}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
+                {chatOpenPlayerId === pid ? "Loka spjalli" : "Opna spjall"}
+              </button>
+            </div>
+          ) : null}
+
+          {/* Inline chat thread */}
+          {chatOpenPlayerId === pid ? (
+            <div className="mt-3">
+              <ChatThread
+                playerId={pid}
+                playerName={String(r.full_name)}
+                entryDate={String(r.entry_date)}
+                compact
+                checkinNotes={r.notes?.trim() || null}
+                viewerRole="coach"
+              />
             </div>
           ) : null}
 

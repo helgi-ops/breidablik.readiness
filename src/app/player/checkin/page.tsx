@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
+import ChatThread from "@/components/chat/ChatThread";
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 function todayIsoDateUTC(): string {
@@ -410,6 +411,20 @@ export default function PlayerCheckinPage() {
             ) : null}
 
           </CardContent>
+
+          {/* Coach-player chat */}
+          {playerId && (
+            <div className="px-6 pb-4">
+              <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Skilaboð frá þjálfara</div>
+              <ChatThread
+                playerId={playerId}
+                playerName={playerName ?? "Leikmaður"}
+                entryDate={todayIsoDateUTC()}
+                compact
+                viewerRole="player"
+              />
+            </div>
+          )}
 
           <CardFooter>
             <Button className="w-full rounded-xl" onClick={() => (window.location.href = "/player")}>
