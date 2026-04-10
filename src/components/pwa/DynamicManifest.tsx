@@ -12,9 +12,12 @@
  */
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 export default function DynamicManifest() {
+  const pathname = usePathname();
+
   useEffect(() => {
     async function updateManifest() {
       try {
@@ -57,7 +60,7 @@ export default function DynamicManifest() {
     }
 
     void updateManifest();
-  }, []);
+  }, [pathname]);
 
   return null;
 }

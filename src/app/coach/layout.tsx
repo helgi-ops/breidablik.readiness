@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import InstallPwaButton from "@/components/pwa/InstallPwaButton";
 
 const operationsLinks = [
   { href: "/coach/match-minutes", label: "Match minutes" },
@@ -156,6 +157,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
             <div className="hidden text-xs text-muted-foreground sm:block">
               MicroPulse
             </div>
+            <InstallPwaButton role="coach" variant="compact" />
           </div>
 
           <nav className="flex items-center gap-1">

@@ -81,18 +81,7 @@ export async function GET(req: NextRequest) {
 
   let manifest = { ...MICROPULSE_MANIFEST };
 
-  // Coach PWA: separate identity so it can be installed alongside the player PWA
-  if (role === "coach") {
-    manifest = {
-      ...manifest,
-      id: "/coach",
-      name: "MicroPulse Coach",
-      short_name: "MP Coach",
-      start_url: "/coach",
-      description: "Stjórnstöð þjálfara — álag, greind og ákvörðunartugi.",
-    };
-  }
-
+  // Step 1 — ELITE club branding (applies to both player and coach PWAs)
   if (teamId) {
     try {
       const supabase = getSupabase();
@@ -118,7 +107,7 @@ export async function GET(req: NextRequest) {
           : MICROPULSE_MANIFEST.icons;
 
         manifest = {
-          ...MICROPULSE_MANIFEST,
+          ...manifest,
           name,
           short_name: name,
           theme_color: themeColor,
@@ -133,6 +122,55 @@ export async function GET(req: NextRequest) {
     } catch {
       // Silently fall back to default — better a working install than a broken one
     }
+  }
+
+  // Step 2 — Coach PWA overrides. Must run AFTER ELITE branding so the coach
+  // identity (id, start_url, shortcuts) wins. Keeps club name/logo/theme.
+  if (role === "coach") {
+    const baseName = manifest.name;
+    const coachName =
+      baseName === "MicroPulse" ? "MicroPulse Coach" : `${baseName} — Þjálfari`;
+    const coachShortName =
+      manifest.short_name === "MicroPulse" ? "MP Coach" : `${manifest.short_name}`;
+
+    manifest = {
+      ...manifest,
+      id: "/coach",
+      name: coachName,
+      short_name: coachShortName,
+      start_url: "/coach",
+      description: "Stjórnstöð þjálfara — álag, greind og ákvarðanir.",
+      shortcuts: [
+        {
+          name: "Yfirlit",
+          short_name: "Yfirlit",
+          description: "Dashboard þjálfara",
+          url: "/coach",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+        {
+          name: "Vika",
+          short_name: "Vika",
+          description: "Week setup og dagsáætlun",
+          url: "/coach/week-setup",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+        {
+          name: "Samskipti",
+          short_name: "Samskipti",
+          description: "Samtöl við leikmenn",
+          url: "/coach/conversations",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+        {
+          name: "Liðið",
+          short_name: "Lið",
+          description: "Team snapshot",
+          url: "/team",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+      ],
+    };
   }
 
   return new NextResponse(JSON.stringify(manifest, null, 2), {
