@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
+import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
 
 const operationsLinks = [
   { href: "/coach/match-minutes", label: "Match minutes" },
@@ -240,6 +241,9 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
       <main className={isDisplayRoute ? "w-full px-4 py-6" : "mx-auto max-w-6xl px-4 py-6"}>
         {children}
       </main>
+
+      {/* PWA bottom navigation — only renders in standalone/PWA mode */}
+      {!isDisplayRoute && <CoachPwaBottomNav />}
     </div>
   );
 }
