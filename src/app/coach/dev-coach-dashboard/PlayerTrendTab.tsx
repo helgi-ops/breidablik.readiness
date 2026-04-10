@@ -89,7 +89,41 @@ type DayEntry = {
   trainingAction: string | null;
   totalDistance: number | null;
   playerLoad: number | null;
+  sourceTeamId: string | null;
+  sourceTeamName: string | null;
+  sourceTeamShort: string | null;
+  sourceTeamColor: string | null;
 };
+
+type TeamMeta = {
+  id: string;
+  name: string;
+  short: string | null;
+  color: string | null;
+  type: string | null;
+};
+
+function teamBadgeBg(color: string | null): string {
+  // Use the team's color as background, at low opacity
+  if (!color) return "rgba(100, 116, 139, 0.10)";
+  return `${color}1a`; // append 1a hex (10% opacity)
+}
+
+function SourceTeamBadge({ team }: { team: { name: string; short: string | null; color: string | null } | null }) {
+  if (!team) return <span className="text-slate-300 text-xs">—</span>;
+  const label = team.short || team.name;
+  const color = team.color || "#64748b";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+      style={{ backgroundColor: teamBadgeBg(color), color }}
+      title={team.name}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -279,6 +313,7 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
   const [loading, setLoading]       = useState(false);
   const [entries, setEntries]       = useState<DayEntry[]>([]);
   const [showTable, setShowTable]   = useState(false);
+  const [playerTeams, setPlayerTeams] = useState<TeamMeta[]>([]);
 
   // Fetch player list
   useEffect(() => {
@@ -327,13 +362,18 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
 
       supabase
         .from("player_external_load_daily")
-        .select("date, total_distance, total_player_load")
+        .select("date, total_distance, total_player_load, source_team_id")
         .eq("player_id", selectedId)
-        .in("source", ["catapult", "manual"])
         .gte("date", startDate)
         .lte("date", today)
         .order("date", { ascending: true }),
-    ]).then(([readiness, decisions, gps]) => {
+
+      // Fetch teams the player has any membership in — used to label load rows
+      supabase
+        .from("player_team_memberships")
+        .select("team_id, teams(id, name, club_short_name, club_theme_color, team_type)")
+        .eq("player_id", selectedId),
+    ]).then(([readiness, decisions, gps, memberships]) => {
       if (!alive) return;
 
       const readMap = new Map<string, { total_score: number | null; training_modifier: unknown }>();
@@ -344,9 +384,28 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
       ((decisions.data ?? []) as Array<{ entry_date: string; training_action: string }>)
         .forEach((d) => actionMap.set(d.entry_date, d.training_action));
 
-      const gpsMap = new Map<string, { total_distance: number | null; total_player_load: number | null }>();
-      ((gps.data ?? []) as Array<{ date: string; total_distance: number | null; total_player_load: number | null }>)
+      const gpsMap = new Map<string, { total_distance: number | null; total_player_load: number | null; source_team_id: string | null }>();
+      ((gps.data ?? []) as Array<{ date: string; total_distance: number | null; total_player_load: number | null; source_team_id: string | null }>)
         .forEach((g) => gpsMap.set(g.date, g));
+
+      // Build a team lookup from the memberships query
+      const teamMap = new Map<string, TeamMeta>();
+      type MembershipRow = {
+        team_id: string;
+        teams: { id: string; name: string; club_short_name: string | null; club_theme_color: string | null; team_type: string | null } | null;
+      };
+      ((memberships.data ?? []) as unknown as MembershipRow[]).forEach((m) => {
+        const t = Array.isArray(m.teams) ? m.teams[0] : m.teams;
+        if (t) {
+          teamMap.set(t.id, {
+            id: t.id,
+            name: t.name,
+            short: t.club_short_name,
+            color: t.club_theme_color,
+            type: t.team_type,
+          });
+        }
+      });
 
       const result: DayEntry[] = [];
       const cur = new Date(`${startDate}T00:00:00.000Z`);
@@ -374,6 +433,8 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
           if (typeof z === "number" && Number.isFinite(z)) zScore = z;
         }
 
+        const sourceTeam = g?.source_team_id ? teamMap.get(g.source_team_id) ?? null : null;
+
         result.push({
           date: dateStr,
           readinessScore: r?.total_score ?? null,
@@ -382,12 +443,17 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
           trainingAction: actionMap.get(dateStr) ?? null,
           totalDistance: g?.total_distance ?? null,
           playerLoad: g?.total_player_load ?? null,
+          sourceTeamId: g?.source_team_id ?? null,
+          sourceTeamName: sourceTeam?.name ?? null,
+          sourceTeamShort: sourceTeam?.short ?? null,
+          sourceTeamColor: sourceTeam?.color ?? null,
         });
 
         cur.setUTCDate(cur.getUTCDate() + 1);
       }
 
       setEntries(result);
+      setPlayerTeams(Array.from(teamMap.values()));
       setLoading(false);
     });
 
@@ -429,6 +495,21 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
       e.totalDistance != null ||
       e.playerLoad != null
     );
+
+  // Distinct source teams actually present in this window (for the legend)
+  const sourceTeamsInWindow: TeamMeta[] = (() => {
+    const seen = new Map<string, TeamMeta>();
+    for (const e of entries) {
+      if (e.sourceTeamId && !seen.has(e.sourceTeamId)) {
+        const match = playerTeams.find((t) => t.id === e.sourceTeamId);
+        if (match) seen.set(e.sourceTeamId, match);
+      }
+    }
+    return Array.from(seen.values());
+  })();
+
+  // Active non-primary memberships to surface as a "currently with" indicator
+  const otherMemberships = playerTeams.filter((t) => t.type === "national_team");
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -520,6 +601,29 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
             />
           </div>
 
+          {/* Source teams legend — shows which teams contributed load data */}
+          {(sourceTeamsInWindow.length > 1 || otherMemberships.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                {lang === "IS" ? "Uppruni álags" : "Load source"}
+              </span>
+              {sourceTeamsInWindow.map((t) => (
+                <SourceTeamBadge key={t.id} team={t} />
+              ))}
+              {otherMemberships.length > 0 && sourceTeamsInWindow.every((s) => s.type !== "national_team") && (
+                <>
+                  <span className="text-[11px] text-slate-300 px-1">·</span>
+                  <span className="text-[11px] text-slate-400">
+                    {lang === "IS" ? "Núverandi í" : "Currently with"}
+                  </span>
+                  {otherMemberships.map((t) => (
+                    <SourceTeamBadge key={`m-${t.id}`} team={t} />
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Spark charts */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <SparkCard
@@ -599,6 +703,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
                     <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       {isBasketball ? ct.playerLoad : ct.dist}
                     </th>
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      {lang === "IS" ? "Lið" : "Team"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -643,6 +750,19 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
                               : Math.round(loadVal).toLocaleString()
                           ) : (
                             <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {e.sourceTeamName ? (
+                            <SourceTeamBadge
+                              team={{
+                                name: e.sourceTeamName,
+                                short: e.sourceTeamShort,
+                                color: e.sourceTeamColor,
+                              }}
+                            />
+                          ) : (
+                            <span className="text-slate-300 text-sm">—</span>
                           )}
                         </td>
                       </tr>
