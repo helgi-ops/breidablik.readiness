@@ -41,10 +41,24 @@ function isStandalone(): boolean {
   );
 }
 
-function isIos(): boolean {
-  if (typeof window === "undefined") return false;
+type IosKind = "none" | "iphone" | "ipad";
+
+function detectIos(): IosKind {
+  if (typeof window === "undefined") return "none";
   const ua = window.navigator.userAgent || "";
-  return /iPhone|iPad|iPod/i.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  // Non-Safari browsers on iOS can't install PWAs the same way
+  if (/CriOS|FxiOS|EdgiOS/.test(ua)) return "none";
+  if (/iPhone|iPod/i.test(ua)) return "iphone";
+  if (/iPad/i.test(ua)) return "ipad";
+  // iPadOS 13+ reports as Mac; detect via touch support
+  if (
+    ua.includes("Macintosh") &&
+    typeof document !== "undefined" &&
+    "ontouchend" in document
+  ) {
+    return "ipad";
+  }
+  return "none";
 }
 
 export default function InstallPwaButton({
@@ -57,11 +71,11 @@ export default function InstallPwaButton({
     null
   );
   const [showIosHelp, setShowIosHelp] = useState(false);
-  const [ios, setIos] = useState(false);
+  const [ios, setIos] = useState<IosKind>("none");
 
   useEffect(() => {
     setInstalled(isStandalone());
-    setIos(isIos());
+    setIos(detectIos());
 
     function onBeforeInstallPrompt(e: Event) {
       e.preventDefault();
@@ -103,7 +117,7 @@ export default function InstallPwaButton({
       }
       return;
     }
-    if (ios) {
+    if (ios !== "none") {
       setShowIosHelp(true);
     }
   }, [deferred, ios]);
@@ -113,7 +127,7 @@ export default function InstallPwaButton({
 
   // Nothing to do: not iOS and no deferred prompt captured yet.
   // We still render the button on iOS because iOS never fires beforeinstallprompt.
-  if (!deferred && !ios) return null;
+  if (!deferred && ios === "none") return null;
 
   const label =
     role === "coach" ? "Bæta við heimaskjá" : "Bæta við heimaskjá";
@@ -150,39 +164,86 @@ export default function InstallPwaButton({
 
       {showIosHelp && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 p-4"
           onClick={() => setShowIosHelp(false)}
+          role="dialog"
+          aria-modal="true"
         >
           <div
-            className="w-full max-w-sm rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
+            className="my-auto w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-gray-900">
-              Bæta við heimaskjá (iOS)
-            </h3>
-            <ol className="mt-3 space-y-2 text-sm text-gray-700">
-              <li>
-                1. Ýttu á{" "}
-                <span className="font-semibold">Deila</span> hnappinn neðst í
-                Safari.
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-base font-semibold text-gray-900">
+                Bæta við heimaskjá
+              </h3>
+              <button
+                onClick={() => setShowIosHelp(false)}
+                aria-label="Loka"
+                className="-m-1 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              {ios === "ipad" ? "iPad Safari" : "iPhone Safari"}
+            </p>
+            <ol className="mt-4 space-y-3 text-sm text-gray-700">
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                  1
+                </span>
+                <span>
+                  Ýttu á{" "}
+                  <span className="font-semibold">Deila</span>-hnappinn{" "}
+                  {ios === "ipad" ? (
+                    <>efst í hægra horninu á Safari</>
+                  ) : (
+                    <>neðst í Safari</>
+                  )}{" "}
+                  (ikon með ör upp úr kassa).
+                </span>
               </li>
-              <li>
-                2. Skrollaðu niður og veldu{" "}
-                <span className="font-semibold">Bæta við heimaskjá</span>.
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                  2
+                </span>
+                <span>
+                  Skrollaðu niður og veldu{" "}
+                  <span className="font-semibold">Bæta við heimaskjá</span>{" "}
+                  (Add to Home Screen).
+                </span>
               </li>
-              <li>
-                3. Staðfestu nafnið og ýttu á{" "}
-                <span className="font-semibold">Bæta við</span>.
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                  3
+                </span>
+                <span>
+                  Staðfestu nafnið og ýttu á{" "}
+                  <span className="font-semibold">Bæta við</span>.
+                </span>
               </li>
             </ol>
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
               {role === "coach"
-                ? "Appið opnast beint á þjálfarasíðunni."
+                ? "Appið opnast beint á þjálfarasíðunni og fær bottom-nav með YFIRLIT, LEIKMENN, VIKA, SAMTÖL og LIÐ."
                 : "Appið opnast beint á leikmannasíðunni."}
             </p>
             <button
               onClick={() => setShowIosHelp(false)}
-              className="mt-4 w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+              className="mt-4 w-full rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
             >
               Loka
             </button>
