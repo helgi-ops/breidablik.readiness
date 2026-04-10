@@ -8,6 +8,7 @@ import { lookupExercise } from "./exerciseDatabase";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import PlayerAccessPanel from "./PlayerAccessPanel";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
 import { usePushAutoResubscribe } from "@/lib/push/usePushAutoResubscribe";
@@ -4805,6 +4806,11 @@ export default function PlayerClient() {
                 <EnableRemindersCard />
               </div>
             </CardShell>
+
+            <PlayerAccessPanel
+              playerId={profile?.player_id ?? selectedPlayerId ?? null}
+              lang={lang}
+            />
 
             {/* Post-session RPE */}
             <CardShell data-player-card="rpe">

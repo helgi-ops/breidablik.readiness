@@ -4,6 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
+import IsoProtocolPickerModal from "./IsoProtocolPickerModal";
+import {
+  type IsoProtocol,
+  type IsoExercise,
+  formatRange,
+} from "@/lib/micropulse/isometrics/protocols";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -15,7 +21,8 @@ export type SessionMethod =
   | "french_contrast"
   | "contrast"
   | "potentiation_cluster"
-  | "cluster";
+  | "cluster"
+  | "isometric";
 
 export type VelocityZone = "max_strength" | "strength_speed" | "speed_strength" | "speed" | "custom";
 
@@ -93,6 +100,10 @@ const METHOD_GROUP_SIZE: Record<SessionMethod, number> = {
   contrast: 2,
   potentiation_cluster: 2,
   cluster: 1,
+  // Isometric group size is dynamic — determined by the picked protocol's
+  // phase 1 exercises. Placeholder of 1 is used when no protocol has been
+  // picked yet.
+  isometric: 1,
 };
 
 const ALL_METHODS: SessionMethod[] = [
@@ -104,6 +115,7 @@ const ALL_METHODS: SessionMethod[] = [
   "contrast",
   "potentiation_cluster",
   "cluster",
+  "isometric",
 ];
 
 /* ── Method presets: correct default exercise variables per slot ─── */
@@ -157,6 +169,10 @@ const METHOD_SLOT_PRESETS: Record<SessionMethod, SlotPreset[]> = {
   straight: [
     { sets: 3, reps: "8-10", loadType: "kg", loadValue: 0, tempo: "3010", restSeconds: 120, notes: "",
       suggestUpper: ["push", "pull"], suggestLower: ["squat", "hinge"] },
+  ],
+  isometric: [
+    // Default placeholder — real values come from the picked protocol
+    { sets: 3, reps: "1", loadType: "RPE", loadValue: 7, tempo: "ISO", restSeconds: 120, notes: "" },
   ],
   superset: [
     // A1 — agonist
@@ -344,6 +360,11 @@ export default function PlanBuilder({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Isometric protocol picker
+  const [isoPickerSessionIdx, setIsoPickerSessionIdx] = useState<number | null>(
+    null
+  );
+
   /* ── Initialize weeks structure ──────────────────────── */
 
   useEffect(() => {
@@ -524,6 +545,65 @@ export default function PlanBuilder({
     );
 
     session.groups.push({ label, exercises: emptySlots });
+    setWeeks(newWeeks);
+  }
+
+  /* ── Add isometric group from a protocol phase ─────── */
+
+  function isoExerciseToExercise(ex: IsoExercise): Exercise {
+    // Encode hold seconds in tempo field (e.g. "ISO45s" or "ISO30-45s")
+    const holdStr = formatRange(ex.holdSeconds, "s");
+    const tempo = `ISO ${holdStr}`;
+
+    // Use %1RM load type when MVC % is known, else RPE
+    const hasMvc = ex.mvcPercent !== undefined;
+    const loadValue = hasMvc
+      ? Array.isArray(ex.mvcPercent)
+        ? (ex.mvcPercent[0] + ex.mvcPercent[1]) / 2
+        : (ex.mvcPercent as number)
+      : 8;
+
+    const noteParts: string[] = [];
+    if (ex.setup) noteParts.push(ex.setup);
+    if (ex.jointAngle) noteParts.push(`${isIS ? "Horn" : "Angle"}: ${ex.jointAngle}`);
+    if (ex.target) noteParts.push(`${isIS ? "Markmið" : "Target"}: ${ex.target}`);
+    if (ex.mvcPercent !== undefined)
+      noteParts.push(`${formatRange(ex.mvcPercent, "% MVC")}`);
+
+    return {
+      exerciseId: "",
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps ? String(ex.reps) : "1",
+      loadType: hasMvc ? "%1RM" : "RPE",
+      loadValue,
+      tempo,
+      restSeconds: ex.restSeconds !== undefined
+        ? Array.isArray(ex.restSeconds)
+          ? ex.restSeconds[0]
+          : ex.restSeconds
+        : 60,
+      notes: noteParts.join(" • "),
+    };
+  }
+
+  function addIsometricGroup(
+    sessionIdx: number,
+    protocol: IsoProtocol,
+    phaseIdx: number
+  ) {
+    const newWeeks = [...weeks];
+    const session = newWeeks[currentWeekIndex].sessions[sessionIdx];
+    const phase = protocol.phases[phaseIdx];
+    if (!phase) return;
+
+    const newGroupIdx = session.groups.length;
+    const label = groupLetter(newGroupIdx);
+    const exercises: Exercise[] = phase.exercises.map(isoExerciseToExercise);
+    const protocolTitle = isIS ? protocol.titleIS : protocol.titleEN;
+    const groupLabel = `${label} · ${protocolTitle} — ${phase.name}`;
+
+    session.groups.push({ label: groupLabel, exercises });
     setWeeks(newWeeks);
   }
 
@@ -1491,7 +1571,15 @@ export default function PlanBuilder({
 
                     {/* Add group button */}
                     <button
-                      onClick={() => addGroup(sessionIdx)}
+                      onClick={() => {
+                        const s =
+                          weeks[currentWeekIndex].sessions[sessionIdx];
+                        if (s.method === "isometric") {
+                          setIsoPickerSessionIdx(sessionIdx);
+                        } else {
+                          addGroup(sessionIdx);
+                        }
+                      }}
                       className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100"
                     >
                       + {ct.plans.addGroup}
@@ -1530,6 +1618,18 @@ export default function PlanBuilder({
           </button>
         </div>
       </div>
+
+      {/* Isometric protocol picker modal */}
+      {isoPickerSessionIdx !== null && (
+        <IsoProtocolPickerModal
+          lang={lang === "EN" ? "EN" : "IS"}
+          onClose={() => setIsoPickerSessionIdx(null)}
+          onPick={(protocol, phaseIdx) => {
+            addIsometricGroup(isoPickerSessionIdx, protocol, phaseIdx);
+            setIsoPickerSessionIdx(null);
+          }}
+        />
+      )}
     </div>
   );
 }

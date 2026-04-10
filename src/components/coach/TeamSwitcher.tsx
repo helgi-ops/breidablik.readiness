@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { sportLabel, genderLabel } from "@/lib/teamLabels";
 
 export interface CoachTeam {
   id: string;
@@ -157,7 +158,9 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
                     >
                       <span>🏟</span>
                       <span className="truncate">{t.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto">{t.sport}</span>
+                      <span className="text-xs text-gray-400 ml-auto">
+                        {[sportLabel(t.sport, lang === "EN" ? "EN" : "IS"), genderLabel(t.gender, lang === "EN" ? "EN" : "IS")].filter(Boolean).join(" · ")}
+                      </span>
                     </button>
                   ))}
               </>

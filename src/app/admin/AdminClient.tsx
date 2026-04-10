@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import PlayerOwnershipAdminPanel from "@/components/admin/PlayerOwnershipAdminPanel";
+import ComplianceDashboard from "@/components/admin/ComplianceDashboard";
+import BulkDobEditor from "@/components/admin/BulkDobEditor";
+import { formatTeamLabel } from "@/lib/teamLabels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,6 +14,8 @@ type PlanTier = "FREE" | "PRO" | "ELITE";
 interface Team {
   id: string;
   name: string;
+  sport?: string | null;
+  gender?: string | null;
   plan_tier: PlanTier;
   created_at: string;
   player_count?: number;
@@ -36,7 +42,7 @@ interface Stats {
   eliteTeams: number;
 }
 
-type AdminTab = "overview" | "teams" | "players" | "pending";
+type AdminTab = "overview" | "teams" | "players" | "pending" | "compliance";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,6 +131,13 @@ export default function AdminClient() {
   const [moveTarget, setMoveTarget] = useState<Player | null>(null);
   const [moveToTeam, setMoveToTeam] = useState("");
 
+  // Player ownership drill-in
+  const [ownershipTarget, setOwnershipTarget] = useState<Player | null>(null);
+
+  // Bulk DOB editor
+  const [bulkDobOpen, setBulkDobOpen] = useState(false);
+  const [complianceRefreshKey, setComplianceRefreshKey] = useState(0);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -138,7 +151,7 @@ export default function AdminClient() {
     // Load teams
     const { data: teamsRaw } = await supabase
       .from("teams")
-      .select("id, name, plan_tier, created_at")
+      .select("id, name, sport, gender, plan_tier, created_at")
       .order("name");
 
     // Load coaches (profiles with role=coach)
@@ -154,7 +167,9 @@ export default function AdminClient() {
       .order("full_name");
 
     const teamsMap: Record<string, string> = {};
-    (teamsRaw ?? []).forEach((t: any) => { teamsMap[t.id] = t.name; });
+    (teamsRaw ?? []).forEach((t: any) => {
+      teamsMap[t.id] = formatTeamLabel({ name: t.name, sport: t.sport, gender: t.gender }, "IS");
+    });
 
     const coachByTeam: Record<string, string> = {};
     (coaches ?? []).forEach((c: any) => {
@@ -170,6 +185,8 @@ export default function AdminClient() {
     const enrichedTeams: Team[] = (teamsRaw ?? []).map((t: any) => ({
       id: t.id,
       name: t.name,
+      sport: t.sport ?? null,
+      gender: t.gender ?? null,
       plan_tier: t.plan_tier as PlanTier,
       created_at: t.created_at,
       player_count: playerCountByTeam[t.id] ?? 0,
@@ -315,6 +332,7 @@ export default function AdminClient() {
       key: "pending",
       label: pendingPlayers.length > 0 ? `Bíður samþykkis (${pendingPlayers.length})` : "Bíður samþykkis",
     },
+    { key: "compliance", label: "Regluvarsla" },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -364,7 +382,7 @@ export default function AdminClient() {
                 .filter((t) => t.id !== moveTarget.team_id)
                 .map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name}
+                    {formatTeamLabel(t, "IS")}
                   </option>
                 ))}
             </select>
@@ -444,7 +462,7 @@ export default function AdminClient() {
               <tbody className="divide-y">
                 {teams.map((team) => (
                   <tr key={team.id} className="hover:bg-zinc-50/60">
-                    <td className="px-4 py-3 font-medium">{team.name}</td>
+                    <td className="px-4 py-3 font-medium">{formatTeamLabel(team, "IS")}</td>
                     <td className="px-4 py-3">
                       <Badge label={team.plan_tier} color={PLAN_COLORS[team.plan_tier]} />
                     </td>
@@ -476,7 +494,7 @@ export default function AdminClient() {
               <tbody className="divide-y">
                 {teams.map((team) => (
                   <tr key={team.id} className="hover:bg-zinc-50/60">
-                    <td className="px-4 py-3 font-medium">{team.name}</td>
+                    <td className="px-4 py-3 font-medium">{formatTeamLabel(team, "IS")}</td>
                     <td className="px-4 py-3 text-zinc-500">{team.coach_name ?? "–"}</td>
                     <td className="px-4 py-3 text-right text-zinc-500">{team.player_count}</td>
                     <td className="px-4 py-3">
@@ -529,7 +547,7 @@ export default function AdminClient() {
             >
               <option value="ALL">Öll lið</option>
               {teams.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>{formatTeamLabel(t, "IS")}</option>
               ))}
             </select>
             <select
@@ -584,6 +602,14 @@ export default function AdminClient() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => setOwnershipTarget(player)}
+                          disabled={busy}
+                          className="rounded-md px-3 py-1.5 text-xs text-zinc-700 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
+                          title="Eignarréttur gagna"
+                        >
+                          Gögn
+                        </button>
+                        <button
                           onClick={() => { setMoveTarget(player); setMoveToTeam(""); }}
                           disabled={busy}
                           className="rounded-md px-3 py-1.5 text-xs text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-40"
@@ -603,6 +629,34 @@ export default function AdminClient() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Ownership drill-in modal */}
+      {ownershipTarget && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-6">
+          <div className="w-full max-w-4xl rounded-2xl bg-zinc-50 shadow-2xl">
+            <div className="flex items-center justify-between border-b bg-white px-6 py-4 rounded-t-2xl">
+              <div>
+                <div className="text-xs text-zinc-500">Eignarréttur gagna</div>
+                <h3 className="text-base font-semibold text-zinc-900">
+                  {ownershipTarget.full_name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setOwnershipTarget(null)}
+                className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Loka
+              </button>
+            </div>
+            <div className="p-6">
+              <PlayerOwnershipAdminPanel
+                playerId={ownershipTarget.id}
+                lang="IS"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -666,6 +720,51 @@ export default function AdminClient() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── COMPLIANCE ── */}
+      {tab === "compliance" && (
+        <div>
+          <div className="mb-4 flex items-center justify-end">
+            <button
+              onClick={() => setBulkDobOpen(true)}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Fjölda-DOB úr Excel
+            </button>
+          </div>
+          <ComplianceDashboard
+          key={complianceRefreshKey}
+          lang="IS"
+          onOpenPlayer={(playerId, fullName) => {
+            const existing = players.find((p) => p.id === playerId);
+            if (existing) {
+              setOwnershipTarget(existing);
+            } else {
+              // Fallback: synthesize a minimal Player row so the modal opens
+              setOwnershipTarget({
+                id: playerId,
+                full_name: fullName,
+                team_id: "",
+                team_name: "",
+                status: "ACTIVE",
+                is_active: true,
+                requested_at: null,
+                user_id: null,
+              });
+            }
+          }}
+          />
+        </div>
+      )}
+
+      {/* Bulk DOB editor modal */}
+      {bulkDobOpen && (
+        <BulkDobEditor
+          lang="IS"
+          onClose={() => setBulkDobOpen(false)}
+          onSaved={() => setComplianceRefreshKey((k) => k + 1)}
+        />
       )}
     </div>
   );

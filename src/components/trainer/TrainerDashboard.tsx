@@ -6,6 +6,7 @@ import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
 import PlanBuilder from "./PlanBuilder";
 import PlanAssigner from "./PlanAssigner";
+import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -84,7 +85,7 @@ interface PlanAssignment {
   status: string;
 }
 
-type TrainerTab = "clients" | "invitations" | "plans";
+type TrainerTab = "clients" | "invitations" | "plans" | "isometrics";
 
 /* ── Component ───────────────────────────────────────── */
 
@@ -339,7 +340,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
-        {(["clients", "invitations", "plans"] as TrainerTab[]).map((t) => (
+        {(["clients", "invitations", "plans", "isometrics"] as TrainerTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -716,6 +717,11 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Isometrics tab ────────────────────────────── */}
+      {tab === "isometrics" && (
+        <IsometricProtocolLibrary lang={lang === "EN" ? "EN" : "IS"} />
       )}
 
       {/* Plan Builder Modal */}

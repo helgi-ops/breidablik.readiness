@@ -5,6 +5,7 @@ export const TRAINER_COPY = {
       plans: "Áætlanir",
       exercises: "Æfingasafn",
       invitations: "Boð",
+      isometrics: "Ísómetrísk prótocol",
     },
     header: {
       title: "Einkaþjálfun",
@@ -87,6 +88,7 @@ export const TRAINER_COPY = {
       contrast: "Contrast",
       potentiation_cluster: "Potentiation Cluster",
       cluster: "Cluster Sets",
+      isometric: "Ísómetrískt",
     },
     methodSlots: {
       french_contrast: ["Þungt samsetning", "Plyó", "Létt/hraðað samsetning", "Reaktív plyó"],
@@ -109,6 +111,7 @@ export const TRAINER_COPY = {
       plans: "Plans",
       exercises: "Exercise Library",
       invitations: "Invitations",
+      isometrics: "Isometric Protocols",
     },
     header: {
       title: "Personal Training",
@@ -191,6 +194,7 @@ export const TRAINER_COPY = {
       contrast: "Contrast",
       potentiation_cluster: "Potentiation Cluster",
       cluster: "Cluster Sets",
+      isometric: "Isometric",
     },
     methodSlots: {
       french_contrast: ["Heavy Compound", "Plyometric", "Accentuated/Light Compound", "Reactive Plyo"],
