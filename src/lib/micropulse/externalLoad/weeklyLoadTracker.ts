@@ -6,10 +6,14 @@
  *
  * The coach sees: "We're on MD-2 and have reached 62% of our typical weekly load"
  * helping them calibrate remaining sessions to hit the right weekly total.
+ *
+ * Indoor support: when `team_settings.indoor_mode = true`, the tracker
+ * switches from the outdoor GPS KPI set to the indoor FMP/IMA KPI set
+ * (see `weeklyLoadTypes.ts`).
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { computeWeeklyTarget } from "./loadTargets";
+import { computeWeeklyTarget, getTeamIndoorMode } from "./loadTargets";
 
 // Re-export types
 export type {
@@ -24,7 +28,7 @@ import type {
   WeeklyLoadMetricKey,
 } from "./weeklyLoadTypes";
 
-import { WEEKLY_LOAD_METRICS } from "./weeklyLoadTypes";
+import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -63,27 +67,43 @@ type RawRow = {
   velocity_band6_total_distance: number | null;
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
+  fmp_dynamic_high_s: number | null;
+  fmp_dynamic_medium_s: number | null;
+  fmp_running_high_s: number | null;
+  ima_total: number | null;
 };
 
 function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
   switch (key) {
-    case "totalDistance": return row.total_distance;
-    case "totalPlayerLoad": return row.total_player_load ?? row.player_load;
-    case "velocityBand5": return row.velocity_band5_total_distance;
-    case "velocityBand6": return row.velocity_band6_total_distance;
-    case "accelB23": return row.accel_b2_3_tot_effs_gen2;
-    case "decelB23": return row.decel_b2_3_tot_effs_gen2;
+    // Outdoor (GPS)
+    case "totalDistance":     return row.total_distance;
+    case "totalPlayerLoad":   return row.total_player_load ?? row.player_load;
+    case "velocityBand5":     return row.velocity_band5_total_distance;
+    case "velocityBand6":     return row.velocity_band6_total_distance;
+    case "accelB23":          return row.accel_b2_3_tot_effs_gen2;
+    case "decelB23":          return row.decel_b2_3_tot_effs_gen2;
+    // Indoor (FMP + IMA)
+    case "fmpDynamicHigh":    return row.fmp_dynamic_high_s;
+    case "fmpDynamicMedium":  return row.fmp_dynamic_medium_s;
+    case "fmpRunningHigh":    return row.fmp_running_high_s;
+    case "imaTotal":          return row.ima_total;
   }
 }
 
 // ─── Main Computation ───────────────────────────────────────────────────────
 
+// Always select union of outdoor + indoor columns so that a team switching
+// modes mid-week still gets consistent aggregation without a re-query.
 const SELECT_COLS = [
   "player_id", "date",
+  // Outdoor
   "total_distance",
   "total_player_load", "player_load",
   "velocity_band5_total_distance", "velocity_band6_total_distance",
   "accel_b2_3_tot_effs_gen2", "decel_b2_3_tot_effs_gen2",
+  // Indoor (FMP + IMA)
+  "fmp_dynamic_high_s", "fmp_dynamic_medium_s", "fmp_running_high_s",
+  "ima_total",
 ].join(", ");
 
 export async function computeWeeklyLoad(args: {
@@ -94,10 +114,16 @@ export async function computeWeeklyLoad(args: {
   historicalWeeks?: number;
   /** Optional: compute for a single player instead of team average */
   playerId?: string;
+  /** Override auto-detected indoor mode. */
+  indoor?: boolean;
 }): Promise<WeeklyLoadResult> {
   const { teamId, historicalWeeks = 8, playerId } = args;
   const sb = getSupabaseAdmin();
   const today = args.date ?? toDateStr(new Date());
+
+  // Resolve indoor mode once up front — drives the active KPI list.
+  const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
+  const activeMetrics = getActiveWeeklyLoadMetrics(indoor);
 
   // 1. Determine current week (Monday–Sunday)
   const weekMonday = getWeekMonday(today);
@@ -130,7 +156,7 @@ export async function computeWeeklyLoad(args: {
       dayMap.set(row.date, new Map());
     }
     const metrics = dayMap.get(row.date)!;
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const v = extractMetric(row, key);
       if (v != null) {
         if (!metrics.has(key)) metrics.set(key, []);
@@ -142,8 +168,8 @@ export async function computeWeeklyLoad(args: {
   // Current week days with team averages
   const days: WeeklyLoadDay[] = currentWeekDates.map((date) => {
     const dayMetrics = dayMap.get(date);
-    const metrics: Record<string, number | null> = {};
-    for (const key of WEEKLY_LOAD_METRICS) {
+    const metrics: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
+    for (const key of activeMetrics) {
       const vals = dayMetrics?.get(key);
       metrics[key] = vals && vals.length > 0
         ? vals.reduce((a, b) => a + b, 0) / vals.length
@@ -155,7 +181,7 @@ export async function computeWeeklyLoad(args: {
       date,
       dayLabel,
       dayOfWeek,
-      metrics: metrics as Record<WeeklyLoadMetricKey, number | null>,
+      metrics,
       hasData: dayMetrics != null && dayMetrics.size > 0,
     };
   });
@@ -201,7 +227,7 @@ export async function computeWeeklyLoad(args: {
   for (const row of (histRows ?? []) as unknown as RawRow[]) {
     if (!histDayMap.has(row.date)) histDayMap.set(row.date, new Map());
     const metrics = histDayMap.get(row.date)!;
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const v = extractMetric(row, key);
       if (v != null) {
         if (!metrics.has(key)) metrics.set(key, []);
@@ -219,7 +245,7 @@ export async function computeWeeklyLoad(args: {
     daysWithDataPerWeek.get(wk)!.add(date);
 
     const weekMetrics = histWeekTotals.get(wk)!;
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const vals = metrics.get(key);
       if (vals && vals.length > 0) {
         const teamAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -233,37 +259,39 @@ export async function computeWeeklyLoad(args: {
     ([wk]) => (daysWithDataPerWeek.get(wk)?.size ?? 0) >= 3 // need at least 3 days of data
   );
 
-  const typicalWeekTotal: Record<WeeklyLoadMetricKey, number> = {} as any;
-  for (const key of WEEKLY_LOAD_METRICS) {
-    const weekValues = validWeeks.map(([, m]) => m.get(key) ?? 0).filter((v) => v > 0);
+  const typicalWeekTotal: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+  for (const key of activeMetrics) {
+    const weekValues = validWeeks
+      .map(([, m]) => m.get(key) ?? 0)
+      .filter((v) => v > 0);
     typicalWeekTotal[key] = weekValues.length > 0
       ? weekValues.reduce((a, b) => a + b, 0) / weekValues.length
       : 0;
   }
 
   // 7. Compute current week cumulative totals
-  const currentCumulative: Record<WeeklyLoadMetricKey, number> = {} as any;
-  for (const key of WEEKLY_LOAD_METRICS) {
+  const currentCumulative: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+  for (const key of activeMetrics) {
     currentCumulative[key] = days.reduce((sum, d) => sum + (d.metrics[key] ?? 0), 0);
   }
 
   // 8. Compute target from team_load_targets (baseline / match_demand / coach_weekly)
   let targetComp: Awaited<ReturnType<typeof computeWeeklyTarget>> | null = null;
   try {
-    targetComp = await computeWeeklyTarget({ teamId, referenceDate: today });
+    targetComp = await computeWeeklyTarget({ teamId, referenceDate: today, indoor });
   } catch {
     targetComp = null;
   }
 
   // 9. Build metric summaries
-  const metricSummaries = WEEKLY_LOAD_METRICS.map((key) => {
-    const current = currentCumulative[key];
-    const typical = typicalWeekTotal[key];
+  const metricSummaries = activeMetrics.map((key) => {
+    const current = currentCumulative[key] ?? 0;
+    const typical = typicalWeekTotal[key] ?? 0;
     const pctOfTypical = typical > 0 ? (current / typical) * 100 : null;
     // Expected % at this point in the week (linear assumption)
     const expectedPct = (daysElapsed / totalWeekDays) * 100;
     // Projected full week (linear extrapolation from days with data)
-    const daysWithLoad = days.filter((d) => d.metrics[key] != null && d.metrics[key]! > 0).length;
+    const daysWithLoad = days.filter((d) => d.metrics[key] != null && (d.metrics[key] as number) > 0).length;
     const projected = daysWithLoad > 0 ? (current / daysWithLoad) * totalWeekDays : null;
 
     // Target (non-baseline modes). Falls back to null if unavailable.
@@ -296,6 +324,8 @@ export async function computeWeeklyLoad(args: {
     days,
     metrics: metricSummaries,
     historicalWeeksUsed: validWeeks.length,
+    indoor,
+    activeMetrics,
     target: targetComp
       ? {
           mode: targetComp.mode,
@@ -308,12 +338,14 @@ export async function computeWeeklyLoad(args: {
           fullMatchRowsUsed: targetComp.full_match_rows_used,
           rowsSkippedPartial: targetComp.rows_skipped_partial,
           minMinutesUsed: targetComp.min_minutes_used,
+          indoor,
         }
       : {
           mode: "baseline" as const,
           corridorPct: 0.15,
           mesocyclePhase: null,
           mesocycleMultiplier: 1.0,
+          indoor,
         },
   };
 }

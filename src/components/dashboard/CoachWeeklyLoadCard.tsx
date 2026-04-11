@@ -205,6 +205,17 @@ export default function CoachWeeklyLoadCard({
     fetchData();
   }, [fetchData, viewMode, selectedPlayerId]);
 
+  // Reset primaryKey to a valid KPI for the active (outdoor/indoor) list
+  // whenever new data arrives. Prevents "Total Distance" from being selected
+  // on indoor teams where that KPI isn't computed.
+  useEffect(() => {
+    if (!data?.metrics || data.metrics.length === 0) return;
+    const valid = data.metrics.some((m) => m.metric === primaryKey);
+    if (!valid) {
+      setPrimaryKey(data.metrics[0].metric);
+    }
+  }, [data, primaryKey]);
+
   // Player mode with no selection: show selector only
   if (viewMode === "player" && !selectedPlayerId) {
     return (
@@ -263,6 +274,7 @@ export default function CoachWeeklyLoadCard({
   const targetMeta = data.target;
   const mode = targetMeta?.mode ?? "baseline";
   const corridorPct = targetMeta?.corridorPct ?? 0.15;
+  const indoor = targetMeta?.indoor === true || data.indoor === true;
 
   // Primary metric for the big display (swappable)
   const primaryMetric = data.metrics.find((m) => m.metric === primaryKey) ?? data.metrics[0];
@@ -352,6 +364,14 @@ export default function CoachWeeklyLoadCard({
             <span className={`text-[9px] font-semibold uppercase tracking-wider rounded-full border px-2 py-0.5 ${modeBadgeColor}`}>
               {modeLabel}
             </span>
+            {indoor && (
+              <span
+                className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5"
+                title={lang === "IS" ? "Innandyra — FMP/IMA KPI" : "Indoor — FMP/IMA KPIs"}
+              >
+                {lang === "IS" ? "Innandyra" : "Indoor"}
+              </span>
+            )}
             {mesoLabel && (
               <span className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-slate-200 bg-white text-slate-500 px-2 py-0.5">
                 {mesoLabel} ×{(targetMeta?.mesocycleMultiplier ?? 1).toFixed(2)}

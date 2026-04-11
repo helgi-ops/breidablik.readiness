@@ -7,10 +7,13 @@
  * parameters for each. Talks to /api/coach/load-targets (GET + PUT).
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { WeeklyLoadMetricKey, WeeklyLoadTargetMeta } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
-import { WEEKLY_LOAD_LABELS, WEEKLY_LOAD_METRICS } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import {
+  WEEKLY_LOAD_LABELS,
+  getActiveWeeklyLoadMetrics,
+} from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 async function authHeaders(): Promise<Record<string, string>> {
   try {
@@ -51,6 +54,7 @@ type Preview = {
   rows_skipped_partial?: number;
   min_minutes_used?: number;
   template_week_sum?: Partial<Record<WeeklyLoadMetricKey, number>>;
+  indoor?: boolean;
 };
 
 const COPY = {
@@ -78,6 +82,8 @@ const COPY = {
     lookbackDays: "Leikir aftur í tímann (dagar)",
     minTdFallback: "Lágmarks TD fyrir leik-detection (varaleið)",
     matchesFound: "leikir fundnir",
+    indoorBadge: "Innandyra (FMP)",
+    indoorHint: "Liðið er stillt á innandyra-ham — kerfið notar Football Movement Profile (FMP) og IMA mælingar í stað GPS-byggðra KPI.",
     minMinutes: "Lágmarks leikmínútur (FULL sía)",
     minMinutesHint: "Aðeins leikmenn sem spiluðu a.m.k. þetta margar mínútur eru teknir með í leikálags-meðaltalið. Stilltu á 0 til að slökkva á síunni.",
     fullRowsUsed: "leikmenn með FULL",
@@ -114,6 +120,8 @@ const COPY = {
     lookbackDays: "Lookback (days)",
     minTdFallback: "Min TD for match detection (fallback)",
     matchesFound: "matches found",
+    indoorBadge: "Indoor (FMP)",
+    indoorHint: "Team is in indoor mode — the system uses Football Movement Profile (FMP) and IMA metrics instead of GPS-based KPIs.",
     minMinutes: "Min minutes played (FULL filter)",
     minMinutesHint: "Only players who played at least this many minutes are included in the match demand average. Set to 0 to disable.",
     fullRowsUsed: "players with FULL",
@@ -145,6 +153,10 @@ export default function LoadTargetSettingsModal({
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+
+  // Active KPI list depends on the team's indoor flag (echoed by the preview).
+  const indoor = preview?.indoor === true;
+  const activeMetrics = useMemo(() => getActiveWeeklyLoadMetrics(indoor), [indoor]);
 
   // Load current config
   useEffect(() => {
@@ -232,8 +244,18 @@ export default function LoadTargetSettingsModal({
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-start justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-800">{t.title}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-800">{t.title}</h2>
+              {indoor && (
+                <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold">
+                  {t.indoorBadge}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">{t.subtitle}</p>
+            {indoor && (
+              <p className="text-[10px] text-amber-700 mt-1 max-w-md">{t.indoorHint}</p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -358,7 +380,7 @@ export default function LoadTargetSettingsModal({
                     {t.coachWeeklyTitle}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {WEEKLY_LOAD_METRICS.map((key) => {
+                    {activeMetrics.map((key) => {
                       const label = WEEKLY_LOAD_LABELS[key];
                       const val = config.coach_weekly_targets[key];
                       return (
@@ -460,7 +482,7 @@ export default function LoadTargetSettingsModal({
                 </div>
                 {preview && Object.values(preview.target_week_total ?? {}).some((v) => v != null) ? (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                    {WEEKLY_LOAD_METRICS.map((key) => {
+                    {activeMetrics.map((key) => {
                       const v = preview.target_week_total?.[key];
                       const label = WEEKLY_LOAD_LABELS[key];
                       return (

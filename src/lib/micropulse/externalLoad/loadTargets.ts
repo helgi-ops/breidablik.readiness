@@ -29,7 +29,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
-import { WEEKLY_LOAD_METRICS } from "./weeklyLoadTypes";
+import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,8 @@ export type TargetComputation = {
   min_minutes_used?: number;
   /** Weekly sum of template percentages per KPI — shows how the week adds up. */
   template_week_sum?: Partial<Record<WeeklyLoadMetricKey, number>>;
+  /** Indoor mode flag — selects FMP/IMA KPI set. */
+  indoor?: boolean;
 };
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -85,13 +87,36 @@ const DEFAULT_CONFIG: Omit<LoadTargetConfig, "team_id" | "updated_at"> = {
   match_day_detection_min_td: 8000,
   match_demand_min_minutes: 75,
   match_demand_template: {
-    "MD-5": { totalDistance: 1.10, totalPlayerLoad: 1.10, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 1.00, decelB23: 1.00 },
-    "MD-4": { totalDistance: 1.15, totalPlayerLoad: 1.15, velocityBand5: 1.00, velocityBand6: 0.70, accelB23: 1.10, decelB23: 1.10 },
-    "MD-3": { totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 0.90, decelB23: 0.90 },
-    "MD-2": { totalDistance: 0.75, totalPlayerLoad: 0.80, velocityBand5: 0.50, velocityBand6: 0.35, accelB23: 0.60, decelB23: 0.60 },
-    "MD-1": { totalDistance: 0.50, totalPlayerLoad: 0.55, velocityBand5: 0.30, velocityBand6: 0.20, accelB23: 0.40, decelB23: 0.40 },
-    "MD+1": { totalDistance: 0.40, totalPlayerLoad: 0.40, velocityBand5: 0.15, velocityBand6: 0.05, accelB23: 0.30, decelB23: 0.30 },
-    "MD":   { totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 1.00, velocityBand6: 1.00, accelB23: 1.00, decelB23: 1.00 },
+    // Indoor FMP/IMA keys are merged into the same jsonb template — the
+    // compute step iterates over whichever KPI subset is active for the team.
+    "MD-5": {
+      totalDistance: 1.10, totalPlayerLoad: 1.10, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 1.00, decelB23: 1.00,
+      fmpDynamicHigh: 0.70, fmpDynamicMedium: 0.85, fmpRunningHigh: 0.75, imaTotal: 0.90,
+    },
+    "MD-4": {
+      totalDistance: 1.15, totalPlayerLoad: 1.15, velocityBand5: 1.00, velocityBand6: 0.70, accelB23: 1.10, decelB23: 1.10,
+      fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.05, fmpRunningHigh: 1.05, imaTotal: 1.10,
+    },
+    "MD-3": {
+      totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 0.90, decelB23: 0.90,
+      fmpDynamicHigh: 0.80, fmpDynamicMedium: 0.90, fmpRunningHigh: 0.90, imaTotal: 0.90,
+    },
+    "MD-2": {
+      totalDistance: 0.75, totalPlayerLoad: 0.80, velocityBand5: 0.50, velocityBand6: 0.35, accelB23: 0.60, decelB23: 0.60,
+      fmpDynamicHigh: 0.50, fmpDynamicMedium: 0.65, fmpRunningHigh: 0.55, imaTotal: 0.60,
+    },
+    "MD-1": {
+      totalDistance: 0.50, totalPlayerLoad: 0.55, velocityBand5: 0.30, velocityBand6: 0.20, accelB23: 0.40, decelB23: 0.40,
+      fmpDynamicHigh: 0.30, fmpDynamicMedium: 0.40, fmpRunningHigh: 0.35, imaTotal: 0.40,
+    },
+    "MD+1": {
+      totalDistance: 0.40, totalPlayerLoad: 0.40, velocityBand5: 0.15, velocityBand6: 0.05, accelB23: 0.30, decelB23: 0.30,
+      fmpDynamicHigh: 0.15, fmpDynamicMedium: 0.30, fmpRunningHigh: 0.20, imaTotal: 0.30,
+    },
+    "MD": {
+      totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 1.00, velocityBand6: 1.00, accelB23: 1.00, decelB23: 1.00,
+      fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.00, fmpRunningHigh: 1.00, imaTotal: 1.00,
+    },
   },
   match_demand_overrides: {},
 };
@@ -108,16 +133,84 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   };
   switch (key) {
-    case "totalDistance":    return get("total_distance");
-    case "totalPlayerLoad":  return get("total_player_load") ?? get("player_load");
-    case "velocityBand5":    return get("velocity_band5_total_distance");
-    case "velocityBand6":    return get("velocity_band6_total_distance");
-    case "accelB23":         return get("accel_b2_3_tot_effs_gen2");
-    case "decelB23":         return get("decel_b2_3_tot_effs_gen2");
+    // Outdoor (GPS)
+    case "totalDistance":     return get("total_distance");
+    case "totalPlayerLoad":   return get("total_player_load") ?? get("player_load");
+    case "velocityBand5":     return get("velocity_band5_total_distance");
+    case "velocityBand6":     return get("velocity_band6_total_distance");
+    case "accelB23":          return get("accel_b2_3_tot_effs_gen2");
+    case "decelB23":          return get("decel_b2_3_tot_effs_gen2");
+    // Indoor (FMP / IMA)
+    case "fmpDynamicHigh":    return get("fmp_dynamic_high_s");
+    case "fmpDynamicMedium":  return get("fmp_dynamic_medium_s");
+    case "fmpRunningHigh":    return get("fmp_running_high_s");
+    case "imaTotal":          return get("ima_total");
   }
 }
 
+/** Columns we need to select from `player_external_load_daily` for match
+ *  demand averaging — union of outdoor + indoor columns. */
+const MATCH_DEMAND_SELECT_COLS = [
+  "date",
+  // Outdoor
+  "total_distance",
+  "total_player_load",
+  "player_load",
+  "velocity_band5_total_distance",
+  "velocity_band6_total_distance",
+  "accel_b2_3_tot_effs_gen2",
+  "decel_b2_3_tot_effs_gen2",
+  // Indoor (FMP + IMA)
+  "fmp_dynamic_high_s",
+  "fmp_dynamic_medium_s",
+  "fmp_running_high_s",
+  "ima_total",
+  // FULL-game filter duration sources
+  "fmp_total_duration_s",
+  "player_load_per_minute",
+].join(", ");
+
 // ─── Load the team's config (with defaults) ────────────────────────────────
+
+/**
+ * Merge saved template with defaults per-day-per-KPI so existing teams that
+ * were seeded with outdoor-only keys still get indoor defaults filled in
+ * without requiring a schema change on every upgrade.
+ */
+function mergeTemplateWithDefaults(
+  saved: LoadTargetConfig["match_demand_template"] | null | undefined,
+): LoadTargetConfig["match_demand_template"] {
+  if (!saved || typeof saved !== "object") return DEFAULT_CONFIG.match_demand_template;
+  const merged: LoadTargetConfig["match_demand_template"] = {};
+  const allDays = new Set<string>([
+    ...Object.keys(DEFAULT_CONFIG.match_demand_template),
+    ...Object.keys(saved),
+  ]);
+  for (const day of allDays) {
+    const defRow = DEFAULT_CONFIG.match_demand_template[day] ?? {};
+    const savedRow = (saved as Record<string, Partial<Record<WeeklyLoadMetricKey, number>>>)[day] ?? {};
+    merged[day] = { ...defRow, ...savedRow };
+  }
+  return merged;
+}
+
+/** Fetch `team_settings.indoor_mode` (with sport_type=basketball override). */
+export async function getTeamIndoorMode(teamId: string): Promise<boolean> {
+  const sb = getSupabaseAdmin();
+  try {
+    const { data } = await sb
+      .from("team_settings")
+      .select("indoor_mode, sport_type")
+      .eq("team_id", teamId)
+      .maybeSingle();
+    if (!data) return false;
+    // Basketball is always indoor regardless of toggle
+    if ((data as { sport_type?: string }).sport_type === "basketball") return true;
+    return (data as { indoor_mode?: boolean }).indoor_mode === true;
+  } catch {
+    return false;
+  }
+}
 
 export async function getTeamLoadTargetConfig(teamId: string): Promise<LoadTargetConfig> {
   const sb = getSupabaseAdmin();
@@ -146,8 +239,9 @@ export async function getTeamLoadTargetConfig(teamId: string): Promise<LoadTarge
     match_demand_lookback_days: Number(row.match_demand_lookback_days ?? DEFAULT_CONFIG.match_demand_lookback_days),
     match_day_detection_min_td: Number(row.match_day_detection_min_td ?? DEFAULT_CONFIG.match_day_detection_min_td),
     match_demand_min_minutes: Number(row.match_demand_min_minutes ?? DEFAULT_CONFIG.match_demand_min_minutes),
-    match_demand_template:
-      (row.match_demand_template as LoadTargetConfig["match_demand_template"]) ?? DEFAULT_CONFIG.match_demand_template,
+    match_demand_template: mergeTemplateWithDefaults(
+      row.match_demand_template as LoadTargetConfig["match_demand_template"] | null,
+    ),
     match_demand_overrides: (row.match_demand_overrides as LoadTargetConfig["match_demand_overrides"]) ?? {},
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
@@ -263,8 +357,9 @@ async function computeMatchDemandAverage(args: {
   teamId: string;
   matchDates: string[];
   minMinutes: number;
+  activeMetrics: readonly WeeklyLoadMetricKey[];
 }): Promise<MatchDemandAverageResult> {
-  const { teamId, matchDates, minMinutes } = args;
+  const { teamId, matchDates, minMinutes, activeMetrics } = args;
   if (matchDates.length === 0) {
     return { avg: {}, fullMatchRowsUsed: 0, rowsSkippedPartial: 0 };
   }
@@ -272,20 +367,7 @@ async function computeMatchDemandAverage(args: {
   const sb = getSupabaseAdmin();
   const { data } = await sb
     .from("player_external_load_daily")
-    .select(
-      [
-        "date",
-        "total_distance",
-        "total_player_load",
-        "player_load",
-        "velocity_band5_total_distance",
-        "velocity_band6_total_distance",
-        "accel_b2_3_tot_effs_gen2",
-        "decel_b2_3_tot_effs_gen2",
-        "fmp_total_duration_s",
-        "player_load_per_minute",
-      ].join(", ")
-    )
+    .select(MATCH_DEMAND_SELECT_COLS)
     .eq("team_id", teamId)
     .in("date", matchDates)
     .in("source", ["catapult", "manual"]);
@@ -312,7 +394,7 @@ async function computeMatchDemandAverage(args: {
     const date = String(row.date ?? "");
     if (!byDate.has(date)) byDate.set(date, new Map());
     const bucket = byDate.get(date)!;
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const v = metricFromRow(row, key);
       if (v != null) {
         if (!bucket.has(key)) bucket.set(key, []);
@@ -324,7 +406,7 @@ async function computeMatchDemandAverage(args: {
   const perDateAvg: Array<Partial<Record<WeeklyLoadMetricKey, number>>> = [];
   for (const [, bucket] of byDate) {
     const avg: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const arr = bucket.get(key);
       if (arr && arr.length) avg[key] = arr.reduce((a, b) => a + b, 0) / arr.length;
     }
@@ -332,7 +414,7 @@ async function computeMatchDemandAverage(args: {
   }
 
   const result: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-  for (const key of WEEKLY_LOAD_METRICS) {
+  for (const key of activeMetrics) {
     const vals = perDateAvg.map((a) => a[key]).filter((v): v is number => v != null);
     if (vals.length) result[key] = vals.reduce((a, b) => a + b, 0) / vals.length;
   }
@@ -344,9 +426,13 @@ async function computeMatchDemandAverage(args: {
 export async function computeWeeklyTarget(args: {
   teamId: string;
   referenceDate: string; // typically today, used to bound match-demand lookback
+  /** Override auto-detected indoor mode. Falls back to team_settings. */
+  indoor?: boolean;
 }): Promise<TargetComputation> {
   const { teamId, referenceDate } = args;
   const cfg = await getTeamLoadTargetConfig(teamId);
+  const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
+  const activeMetrics = getActiveWeeklyLoadMetrics(indoor);
 
   const meso = Number(cfg.mesocycle_multiplier || 1.0);
 
@@ -358,13 +444,14 @@ export async function computeWeeklyTarget(args: {
       mesocycle_phase: cfg.mesocycle_phase,
       mesocycle_multiplier: meso,
       target_week_total: {},
+      indoor,
     };
   }
 
   // ─── coach_weekly ────────────────────────────────────────────────────────
   if (cfg.mode === "coach_weekly") {
     const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const v = cfg.coach_weekly_targets[key];
       target[key] = v != null && Number.isFinite(Number(v)) ? Number(v) * meso : null;
     }
@@ -374,6 +461,7 @@ export async function computeWeeklyTarget(args: {
       mesocycle_phase: cfg.mesocycle_phase,
       mesocycle_multiplier: meso,
       target_week_total: target,
+      indoor,
     };
   }
 
@@ -384,7 +472,7 @@ export async function computeWeeklyTarget(args: {
   const templateWeekSum: Partial<Record<WeeklyLoadMetricKey, number>> = {};
   for (const dayKey of Object.keys(cfg.match_demand_template)) {
     const dayRow = cfg.match_demand_template[dayKey] ?? {};
-    for (const key of WEEKLY_LOAD_METRICS) {
+    for (const key of activeMetrics) {
       const pct = Number(dayRow[key] ?? 0);
       if (Number.isFinite(pct)) {
         templateWeekSum[key] = (templateWeekSum[key] ?? 0) + pct;
@@ -409,11 +497,12 @@ export async function computeWeeklyTarget(args: {
     teamId,
     matchDates,
     minMinutes: cfg.match_demand_min_minutes,
+    activeMetrics,
   });
   const autoMatchAvg = matchAvgResult.avg;
 
   const matchAvg: Partial<Record<WeeklyLoadMetricKey, number>> = {};
-  for (const key of WEEKLY_LOAD_METRICS) {
+  for (const key of activeMetrics) {
     const override = cfg.match_demand_overrides[key];
     if (override != null && Number.isFinite(Number(override))) {
       matchAvg[key] = Number(override);
@@ -424,7 +513,7 @@ export async function computeWeeklyTarget(args: {
 
   // 3. target = match_avg × template_week_sum × meso
   const target: Partial<Record<WeeklyLoadMetricKey, number | null>> = {};
-  for (const key of WEEKLY_LOAD_METRICS) {
+  for (const key of activeMetrics) {
     const avg = matchAvg[key];
     const sum = templateWeekSum[key];
     if (avg != null && sum != null) {
@@ -446,5 +535,6 @@ export async function computeWeeklyTarget(args: {
     rows_skipped_partial: matchAvgResult.rowsSkippedPartial,
     min_minutes_used: cfg.match_demand_min_minutes,
     template_week_sum: templateWeekSum,
+    indoor,
   };
 }
