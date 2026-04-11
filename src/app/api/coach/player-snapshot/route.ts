@@ -78,11 +78,36 @@ function subscoreSeverity(v: number | null | undefined): "RED" | "AMBER" | "OK" 
   return "OK";
 }
 
-function sleepDurationSeverity(hours: number | null | undefined): "RED" | "AMBER" | "OK" | null {
-  if (hours == null || !Number.isFinite(Number(hours))) return null;
-  const h = Number(hours);
-  if (h < 6) return "RED"; // < 6 klst er talið klínískt svefnskortur
-  if (h < 7) return "AMBER";
+/**
+ * sleep_duration is stored as a 1–5 categorical scale matching the check-in
+ * UI (not raw hours):
+ *   1 = < 5 hours
+ *   2 = 5–6 hours
+ *   3 = 6–7 hours
+ *   4 = 7–8 hours
+ *   5 = 8+ hours
+ *
+ * Treat it identically to the other 1–5 subscores: ≤2 RED, =3 AMBER, ≥4 OK.
+ */
+const SLEEP_DURATION_LABELS: Record<number, string> = {
+  1: "< 5 klst",
+  2: "5–6 klst",
+  3: "6–7 klst",
+  4: "7–8 klst",
+  5: "8+ klst",
+};
+
+function sleepDurationLabel(score: number | null | undefined): string {
+  if (score == null || !Number.isFinite(Number(score))) return "—";
+  const n = Number(score);
+  return SLEEP_DURATION_LABELS[n] ?? `${n}/5`;
+}
+
+function sleepDurationSeverity(score: number | null | undefined): "RED" | "AMBER" | "OK" | null {
+  if (score == null || !Number.isFinite(Number(score))) return null;
+  const n = Number(score);
+  if (n <= 2) return "RED"; // ≤ 6 klst
+  if (n === 3) return "AMBER"; // 6–7 klst
   return "OK";
 }
 
@@ -492,23 +517,27 @@ export async function GET(req: Request) {
       }
 
       const sleepDurSev = sleepDurationSeverity(r.sleep_duration);
+      const sleepDurText = sleepDurationLabel(r.sleep_duration);
       if (sleepDurSev === "RED") {
         drivers.push({
           key: "sleep_duration_low",
           label: "Svefntími undir 6 klst",
-          value: `${r.sleep_duration} klst`,
+          value: `${r.sleep_duration}/5 (${sleepDurText})`,
           severity: "RED",
           explanation:
-            `Leikmaður svaf aðeins ${r.sleep_duration} klst. Undir 6 klst reglulega tvöfaldar meiðslaáhættu (Milewski et al. 2014). ` +
-            `Á þessum degi er skynjuð erfiðleiki hærri en venjulega — plana ætti lægri ákafa eða frí.`,
+            `Leikmaður merkti svefntíma sem ${sleepDurText}. Undir 6 klst reglulega tvöfaldar meiðslaáhættu ` +
+            `(Milewski et al. 2014). Á þessum degi er skynjuð erfiðleiki hærri en venjulega — ` +
+            `plana ætti lægri ákafa eða frí.`,
         });
       } else if (sleepDurSev === "AMBER") {
         drivers.push({
           key: "sleep_duration_mid",
-          label: "Svefntími undir 7 klst",
-          value: `${r.sleep_duration} klst`,
+          label: "Svefntími 6–7 klst",
+          value: `${r.sleep_duration}/5 (${sleepDurText})`,
           severity: "AMBER",
-          explanation: `Svefntími (${r.sleep_duration} klst) er undir ákjósanlegu 7–9 klst. Meðal endurheimt.`,
+          explanation:
+            `Svefntími ${sleepDurText} er undir ákjósanlegu 7–9 klst. Meðal endurheimt — fylgstu ` +
+            `með hvort þetta er hluti af þróun.`,
         });
       }
 

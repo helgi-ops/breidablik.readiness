@@ -435,7 +435,19 @@ export default function PlayerHistoricalSnapshotCard({ teamId }: { teamId?: stri
                   value={data.readiness.total_score}
                 />
                 <WellnessCell label="Sleep quality" value={data.readiness.sleep_quality} suffix="/5" />
-                <WellnessCell label="Sleep duration" value={data.readiness.sleep_duration} suffix=" klst" />
+                <WellnessCell
+                  label="Sleep duration"
+                  value={data.readiness.sleep_duration}
+                  suffix={
+                    data.readiness.sleep_duration != null
+                      ? `/5 (${
+                          ({ 1: "<5", 2: "5–6", 3: "6–7", 4: "7–8", 5: "8+" } as Record<number, string>)[
+                            Number(data.readiness.sleep_duration)
+                          ] ?? ""
+                        } klst)`
+                      : ""
+                  }
+                />
                 <WellnessCell label="Fatigue / energy" value={data.readiness.fatigue_energy} suffix="/5" />
                 <WellnessCell label="Stress / mood" value={data.readiness.stress_mood} suffix="/5" />
                 <WellnessCell label="Muscle soreness" value={data.readiness.muscle_soreness} suffix="/5" />

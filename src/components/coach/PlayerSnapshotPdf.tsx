@@ -384,7 +384,13 @@ export function PlayerSnapshotPdfDocument({ data }: { data: PlayerSnapshotPdfDat
               <View style={styles.gridCell}>
                 <Text style={styles.gridLabel}>Sleep duration</Text>
                 <Text style={styles.gridValue}>
-                  {data.readiness.sleep_duration != null ? `${data.readiness.sleep_duration} klst` : "—"}
+                  {data.readiness.sleep_duration != null
+                    ? `${data.readiness.sleep_duration}/5 (${
+                        ({ 1: "<5", 2: "5–6", 3: "6–7", 4: "7–8", 5: "8+" } as Record<number, string>)[
+                          Number(data.readiness.sleep_duration)
+                        ] ?? ""
+                      } klst)`
+                    : "—"}
                 </Text>
               </View>
               <View style={styles.gridCell}>
