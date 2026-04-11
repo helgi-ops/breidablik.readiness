@@ -246,6 +246,77 @@ leikmaðurinn útilokaður frá útreikningnum.
 
 ---
 
+## Innandyra notkun (Indoor / FMP hamur)
+
+Mörg lið á Íslandi spila og æfa innandyra stóran hluta vetrar, þar sem GPS
+merki virka ekki. Til að álagsmarkmiðið virki líka þá þarf **Innandyra-ham**
+(Indoor mode) að vera virk á liðinu. Þegar kveikt er á innandyra-ham
+skiptir kerfið sjálfkrafa yfir í **Football Movement Profile (FMP)** mælingar
+úr Catapult skynjaranum, sem virka án GPS.
+
+### Hvar á að kveikja?
+
+Fer í **Stillingar liðs** (`/coach/settings`) og kveikir á `Innandyra-ham`
+rofann. Þetta stýrir bæði ákvarðanavél kerfisins (readiness, burden score)
+OG álagsmarkmiðinu — þú þarft ekki að stilla neitt sérstaklega á GPS síðunni.
+
+Körfuboltalið eru alltaf sjálfkrafa á innandyra-ham (stillt út frá
+íþróttategund).
+
+### Hvaða KPI notar kerfið þegar innandyra-ham er virk?
+
+Í stað GPS-tengdra KPI (Total Distance, Vel Band 5/6) notar kerfið þessa:
+
+| KPI | Hvað mælir | Einingar |
+|-----|------------|----------|
+| **Player Load** | Heildarálag — samsett úr hröðun í öllum áttum | stig |
+| **FMP Dynamic High** | Tími í háum, kvikum hreyfingum (sprint, COD) | sekúndur |
+| **FMP Dynamic Medium** | Tími í miðlungs kvikum hreyfingum | sekúndur |
+| **FMP Running High** | Tími í háu hlaupi (línulegu) | sekúndur |
+| **IMA Total** | Heildarfjöldi hraðra hreyfinga (áreiti) | fjöldi |
+
+Player Load er notað í báðum hömum og er því stöðugur þráður milli
+úti- og inni-æfinga.
+
+### Virkar allar þrjár aðferðirnar?
+
+Já, allar þrjár aðferðir virka nákvæmlega eins og í úti-ham:
+
+- **Söguleg meðaltöl:** Kerfið reiknar 8 vikna rolling average af FMP KPI-unum.
+- **Leikálag:** Kerfið finnur síðustu innandyra-leiki (futsal, hall-leikir)
+  og reiknar meðaltal úr FMP mælingum leikmanna sem stóðust FULL síuna.
+  Sjálfgefna MD-dagur prósentutaflan er þegar útfyllt með FMP-gildum,
+  svo kerfið virkar strax út úr kassanum.
+- **Markmið þjálfara:** Þú slærð inn vikuleg markmið fyrir FMP KPI-in í
+  stillingaglugganum (t.d. Player Load: 2500 stig, FMP Dynamic High: 180 s).
+
+Stillingaglugginn sér sjálfkrafa hvort liðið sé í innandyra-ham og sýnir
+réttu KPI-in. Þú sérð líka lítinn **„Innandyra"** merkimiða á Vikuálag
+spjaldinu svo augljóst sé að kerfið sé í FMP-ham.
+
+### Hvað ef liðið skiptir milli úti og inni á sama tímabili?
+
+Þegar þú slekkur á innandyra-ham skiptir kerfið aftur á GPS KPI-in.
+Sögulegu gögnin eru ekki snert — Player Load-gildin eru sömu, en þú
+færð að auki Total Distance, Vel Band o.fl. aftur í spjaldið.
+Sama `match_demand_template` jsonb geymir bæði úti- og inni-prósentur
+samhliða, svo ekkert týnist við skiptingu.
+
+### Ráð fyrir innandyra-lið
+
+- Ef þú ert bara með eina hall-æfingu á viku og restin er úti, haltu
+  kerfinu á **úti-ham**. Indoor-hamurinn er fyrir lið sem eru _aðallega_
+  innandyra.
+- Ef FULL sían útilokar of marga leikmenn þegar þú ert í innandyra-ham
+  (sem gerist oftar því futsal-leikir eru styttri), lækkaðu
+  **Lágmarks leikmínútur** niður í 30–40 mín til að fá nógu stórt sýni.
+- Default MD-prósenturnar eru útsprettur af útgildunum og eru **ekki
+  rannsóknavottaðar fyrir futsal sérstaklega** — vertu með þeim varlega
+  og aðlagaðu `match_demand_template` í gagnagrunninum ef þú finnur
+  betri tölur fyrir þinn aldursflokk.
+
+---
+
 ## Vísindaleg heimild — hvers vegna Leikálag aðferðin?
 
 Leikálag aðferðin er byggð á þessum rannsóknum:
