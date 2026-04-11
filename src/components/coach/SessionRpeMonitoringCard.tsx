@@ -82,6 +82,7 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
   const [editDuration, setEditDuration] = useState<number>(90);
   const [editRpe, setEditRpe] = useState<number>(5);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingEdit, setDeletingEdit] = useState(false);
   const [editError, setEditError] = useState("");
 
   const openEdit = (entry: SessionRpeEntry) => {
@@ -95,9 +96,42 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
   };
 
   const closeEdit = () => {
-    if (savingEdit) return;
+    if (savingEdit || deletingEdit) return;
     setEditing(null);
     setEditError("");
+  };
+
+  const deleteEntry = async () => {
+    if (!editing) return;
+    const ok = typeof window !== "undefined"
+      ? window.confirm(`Eyða RPE færslu fyrir ${editing.player_name}? Þetta er ekki hægt að taka til baka.`)
+      : true;
+    if (!ok) return;
+
+    setDeletingEdit(true);
+    setEditError("");
+    try {
+      const { data: authData, error: authErr } = await supabase.auth.getSession();
+      if (authErr) throw new Error(authErr.message);
+      const token = authData?.session?.access_token;
+      if (!token) throw new Error("Unauthorized");
+
+      const res = await fetch(`/api/coach/session-rpe/entries/${editing.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to delete entry.");
+
+      setEditing(null);
+      void loadSummary(dateKey);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to delete entry.";
+      setEditError(msg);
+    } finally {
+      setDeletingEdit(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -419,23 +453,33 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
 
               {editError ? <div className="text-xs text-rose-700">{editError}</div> : null}
 
-              <div className="flex items-center justify-end gap-2 pt-1">
+              <div className="flex items-center justify-between gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={closeEdit}
-                  disabled={savingEdit}
-                  className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700"
+                  onClick={() => void deleteEntry()}
+                  disabled={savingEdit || deletingEdit}
+                  className="inline-flex h-9 items-center rounded-md border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
                 >
-                  Hætta við
+                  {deletingEdit ? "Eyði..." : "Eyða færslu"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void saveEdit()}
-                  disabled={savingEdit}
-                  className="inline-flex h-9 items-center rounded-md bg-slate-900 px-3 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  {savingEdit ? "Vista..." : "Vista breytingar"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={closeEdit}
+                    disabled={savingEdit || deletingEdit}
+                    className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700"
+                  >
+                    Hætta við
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveEdit()}
+                    disabled={savingEdit || deletingEdit}
+                    className="inline-flex h-9 items-center rounded-md bg-slate-900 px-3 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingEdit ? "Vista..." : "Vista breytingar"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

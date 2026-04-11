@@ -135,6 +135,46 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   }
 }
 
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const sb = getSupabaseAdmin();
+    const { id } = await context.params;
+    const entryId = String(id ?? "").trim();
+
+    if (!entryId) {
+      return NextResponse.json({ ok: false, error: "Entry id is required" }, { status: 400 });
+    }
+
+    const { data: existingData, error: existingErr } = await sb
+      .from("session_rpe_entries")
+      .select("id, player_id, team_id")
+      .eq("id", entryId)
+      .maybeSingle();
+
+    if (existingErr) {
+      return NextResponse.json({ ok: false, error: existingErr.message }, { status: 500 });
+    }
+
+    const existing = (existingData ?? null) as { id: string; player_id: string; team_id: string | null } | null;
+    if (!existing) {
+      return NextResponse.json({ ok: false, error: "Entry not found" }, { status: 404 });
+    }
+
+    await requireCoachAccessForTeam(sb, req, existing.team_id ?? null);
+
+    const { error: delErr } = await sb.from("session_rpe_entries").delete().eq("id", entryId);
+    if (delErr) {
+      return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, deletedId: entryId });
+  } catch (error: unknown) {
+    const message = toMessage(error);
+    const code = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+    return NextResponse.json({ ok: false, error: message }, { status: code });
+  }
+}
+
 export async function GET() {
   return NextResponse.json({ ok: false, error: "Method Not Allowed" }, { status: 405 });
 }
