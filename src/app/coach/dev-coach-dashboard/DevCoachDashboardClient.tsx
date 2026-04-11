@@ -82,6 +82,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
+import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
@@ -7377,6 +7378,15 @@ export default function CoachPage() {
         <div className="space-y-8">
 
           {/* Weekly Load moved to GPS tab */}
+
+          {/* ── Player lookup (historical snapshot) ─────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Leikmannafyrirspurn</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <PlayerHistoricalSnapshotCard teamId={coachTeamId} />
+          </section>
 
           {/* ── Session RPE ───────────────────────────────────── */}
           <section>
