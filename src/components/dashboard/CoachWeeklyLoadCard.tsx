@@ -6,8 +6,10 @@ import type {
   WeeklyLoadResult,
   WeeklyLoadMetricKey,
   WeeklyLoadMetricSummary,
+  WeeklyLoadTargetMeta,
 } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { WEEKLY_LOAD_LABELS } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import LoadTargetSettingsModal from "./LoadTargetSettingsModal";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -22,8 +24,10 @@ const COPY = {
     loading: "Hleð vikuálagi...",
     noData: "Engin GPS gögn fundust fyrir þessa viku.",
     ofTypical: "af dæmigerðri viku",
+    ofTarget: "af markmiði",
     projected: "Áætlað",
     typical: "Dæmigert",
+    target: "Markmið",
     current: "Núverandi",
     day: "dagur",
     days: "dagar",
@@ -34,6 +38,15 @@ const COPY = {
     belowTarget: "Undir markmiði",
     aboveTarget: "Yfir markmiði",
     weekProgress: "Vikuframvinda",
+    mode: "Stilling",
+    modeBaseline: "Söguleg meðaltöl",
+    modeMatchDemand: "Leikálag",
+    modeCoachWeekly: "Markmið þjálfara",
+    settings: "Stillingar",
+    mesoBuild: "Uppbygging",
+    mesoMaintain: "Viðhald",
+    mesoTaper: "Lækkun",
+    matchesSampled: "leikir",
   },
   EN: {
     title: "Weekly Load",
@@ -41,8 +54,10 @@ const COPY = {
     loading: "Loading weekly load...",
     noData: "No GPS data found for this week.",
     ofTypical: "of typical week",
+    ofTarget: "of target",
     projected: "Projected",
     typical: "Typical",
+    target: "Target",
     current: "Current",
     day: "day",
     days: "days",
@@ -53,6 +68,15 @@ const COPY = {
     belowTarget: "Below target",
     aboveTarget: "Above target",
     weekProgress: "Week progress",
+    mode: "Mode",
+    modeBaseline: "Historical baseline",
+    modeMatchDemand: "Match demand",
+    modeCoachWeekly: "Coach target",
+    settings: "Settings",
+    mesoBuild: "Build",
+    mesoMaintain: "Maintain",
+    mesoTaper: "Taper",
+    matchesSampled: "matches",
   },
 } as const;
 
@@ -63,24 +87,56 @@ function fmtNum(v: number, digits = 0): string {
   return v.toFixed(digits);
 }
 
-function pctColor(pct: number | null, expectedPct: number): {
+function pctColor(pct: number | null, expectedPct: number, corridorPct = 0.15): {
   text: string; bg: string; ring: string; label: string; labelColor: string;
 } {
   if (pct == null) return { text: "text-slate-400", bg: "bg-slate-100", ring: "stroke-slate-300", label: "—", labelColor: "text-slate-400" };
   const ratio = pct / expectedPct;
-  if (ratio < 0.75) return { text: "text-blue-600", bg: "bg-blue-50", ring: "stroke-blue-400", label: "↓", labelColor: "text-blue-600" };
-  if (ratio <= 1.15) return { text: "text-emerald-600", bg: "bg-emerald-50", ring: "stroke-emerald-500", label: "✓", labelColor: "text-emerald-600" };
-  if (ratio <= 1.35) return { text: "text-amber-600", bg: "bg-amber-50", ring: "stroke-amber-400", label: "↑", labelColor: "text-amber-600" };
+  const low = 1 - corridorPct;
+  const high = 1 + corridorPct;
+  const amberHigh = 1 + corridorPct * 2;
+  if (ratio < low) return { text: "text-blue-600", bg: "bg-blue-50", ring: "stroke-blue-400", label: "↓", labelColor: "text-blue-600" };
+  if (ratio <= high) return { text: "text-emerald-600", bg: "bg-emerald-50", ring: "stroke-emerald-500", label: "✓", labelColor: "text-emerald-600" };
+  if (ratio <= amberHigh) return { text: "text-amber-600", bg: "bg-amber-50", ring: "stroke-amber-400", label: "↑", labelColor: "text-amber-600" };
   return { text: "text-rose-600", bg: "bg-rose-50", ring: "stroke-rose-500", label: "⚠", labelColor: "text-rose-600" };
 }
 
-function statusLabel(pct: number | null, expectedPct: number, lang: Lang): string {
+function statusLabel(pct: number | null, expectedPct: number, lang: Lang, corridorPct = 0.15): string {
   const t = COPY[lang];
   if (pct == null) return "—";
   const ratio = pct / expectedPct;
-  if (ratio < 0.75) return t.belowTarget;
-  if (ratio <= 1.15) return t.onTrack;
+  const low = 1 - corridorPct;
+  const high = 1 + corridorPct;
+  if (ratio < low) return t.belowTarget;
+  if (ratio <= high) return t.onTrack;
   return t.aboveTarget;
+}
+
+/**
+ * For a given metric summary, pick the reference value + pct to display.
+ * In non-baseline modes we prefer the coach/match-demand target when present;
+ * otherwise fall back to the historical typical week.
+ */
+function pickReference(
+  metric: WeeklyLoadMetricSummary,
+  mode: WeeklyLoadTargetMeta["mode"] | undefined
+): { pct: number | null; referenceValue: number; isTarget: boolean } {
+  const useTarget =
+    mode && mode !== "baseline" &&
+    metric.targetWeekTotal != null && metric.targetWeekTotal > 0 &&
+    metric.pctOfTarget != null;
+  if (useTarget) {
+    return {
+      pct: metric.pctOfTarget ?? null,
+      referenceValue: metric.targetWeekTotal as number,
+      isTarget: true,
+    };
+  }
+  return {
+    pct: metric.pctOfTypical,
+    referenceValue: metric.typicalWeekTotal,
+    isTarget: false,
+  };
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -103,6 +159,7 @@ export default function CoachWeeklyLoadCard({
   const [viewMode, setViewMode] = useState<ViewMode>("team");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [players, setPlayers] = useState<PlayerOption[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Fetch player roster once for the player selector
   useEffect(() => {
@@ -202,12 +259,32 @@ export default function CoachWeeklyLoadCard({
     );
   }
 
+  // Target mode metadata
+  const targetMeta = data.target;
+  const mode = targetMeta?.mode ?? "baseline";
+  const corridorPct = targetMeta?.corridorPct ?? 0.15;
+
   // Primary metric for the big display (swappable)
   const primaryMetric = data.metrics.find((m) => m.metric === primaryKey) ?? data.metrics[0];
-  const primaryPct = primaryMetric.pctOfTypical;
-  const primaryColor = pctColor(primaryPct, primaryMetric.expectedPctAtThisPoint);
-  const primaryStatus = statusLabel(primaryPct, primaryMetric.expectedPctAtThisPoint, lang);
+  const primaryRef = pickReference(primaryMetric, mode);
+  const primaryPct = primaryRef.pct;
+  const primaryColor = pctColor(primaryPct, primaryMetric.expectedPctAtThisPoint, corridorPct);
+  const primaryStatus = statusLabel(primaryPct, primaryMetric.expectedPctAtThisPoint, lang, corridorPct);
   const primaryLabel = WEEKLY_LOAD_LABELS[primaryMetric.metric];
+
+  const modeLabel =
+    mode === "match_demand" ? t.modeMatchDemand :
+    mode === "coach_weekly" ? t.modeCoachWeekly :
+    t.modeBaseline;
+  const modeBadgeColor =
+    mode === "match_demand" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
+    mode === "coach_weekly" ? "bg-violet-50 text-violet-700 border-violet-200" :
+    "bg-slate-50 text-slate-600 border-slate-200";
+  const mesoLabel =
+    targetMeta?.mesocyclePhase === "build" ? t.mesoBuild :
+    targetMeta?.mesocyclePhase === "maintain" ? t.mesoMaintain :
+    targetMeta?.mesocyclePhase === "taper" ? t.mesoTaper :
+    null;
 
   // Day labels for the week bar
   const dayLabelsIS = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
@@ -271,9 +348,30 @@ export default function CoachWeeklyLoadCard({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Mode badge */}
+            <span className={`text-[9px] font-semibold uppercase tracking-wider rounded-full border px-2 py-0.5 ${modeBadgeColor}`}>
+              {modeLabel}
+            </span>
+            {mesoLabel && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-slate-200 bg-white text-slate-500 px-2 py-0.5">
+                {mesoLabel} ×{(targetMeta?.mesocycleMultiplier ?? 1).toFixed(2)}
+              </span>
+            )}
             <span className="text-[10px] text-slate-400">
               {t.day} {data.daysElapsed} {t.of} {data.totalWeekDays}
             </span>
+            {/* Settings gear */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100 transition-colors"
+              title={t.settings}
+              aria-label={t.settings}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -293,14 +391,19 @@ export default function CoachWeeklyLoadCard({
                 <span className={`text-2xl font-bold tabular-nums ${primaryColor.text}`}>
                   {primaryPct != null ? `${Math.round(primaryPct)}%` : "—"}
                 </span>
-                <span className="text-xs text-slate-500">{t.ofTypical}</span>
+                <span className="text-xs text-slate-500">
+                  {primaryRef.isTarget ? t.ofTarget : t.ofTypical}
+                </span>
               </div>
               <div className={`mt-1 text-xs font-semibold ${primaryColor.labelColor}`}>
                 {primaryStatus}
               </div>
               <div className="mt-2 flex items-center gap-4 text-[10px] text-slate-500">
                 <span>{t.current}: <strong className="text-slate-700">{fmtNum(primaryMetric.currentTotal)} {primaryLabel.unit}</strong></span>
-                <span>{t.typical}: <strong className="text-slate-700">{fmtNum(primaryMetric.typicalWeekTotal)} {primaryLabel.unit}</strong></span>
+                <span>
+                  {primaryRef.isTarget ? t.target : t.typical}:{" "}
+                  <strong className="text-slate-700">{fmtNum(primaryRef.referenceValue)} {primaryLabel.unit}</strong>
+                </span>
                 {primaryMetric.projectedWeekTotal != null && (
                   <span>{t.projected}: <strong className="text-slate-700">{fmtNum(primaryMetric.projectedWeekTotal)} {primaryLabel.unit}</strong></span>
                 )}
@@ -322,15 +425,42 @@ export default function CoachWeeklyLoadCard({
       <div className="px-4 pb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
           {data.metrics.filter((m) => m.metric !== primaryKey).map((m) => (
-            <MetricMiniCard key={m.metric} metric={m} lang={lang} onClick={() => setPrimaryKey(m.metric)} />
+            <MetricMiniCard
+              key={m.metric}
+              metric={m}
+              lang={lang}
+              mode={mode}
+              corridorPct={corridorPct}
+              onClick={() => setPrimaryKey(m.metric)}
+            />
           ))}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-        {t.basedOn} {data.historicalWeeksUsed} {t.historicalWeeks}
+      <div className="px-4 py-2 text-[10px] text-slate-400 border-t border-slate-100 flex items-center justify-between">
+        <span>
+          {t.basedOn} {data.historicalWeeksUsed} {t.historicalWeeks}
+        </span>
+        {mode === "match_demand" && targetMeta?.matchesSampled != null && (
+          <span>
+            {targetMeta.matchesSampled} {t.matchesSampled}
+          </span>
+        )}
       </div>
+
+      {/* Settings modal */}
+      {showSettings && (
+        <LoadTargetSettingsModal
+          teamId={teamId}
+          lang={lang}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => {
+            setShowSettings(false);
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -471,15 +601,21 @@ function WeekBarChart({
 function MetricMiniCard({
   metric,
   lang,
+  mode,
+  corridorPct,
   onClick,
 }: {
   metric: WeeklyLoadMetricSummary;
   lang: Lang;
+  mode?: WeeklyLoadTargetMeta["mode"];
+  corridorPct?: number;
   onClick?: () => void;
 }) {
   const t = COPY[lang];
   const label = WEEKLY_LOAD_LABELS[metric.metric];
-  const color = pctColor(metric.pctOfTypical, metric.expectedPctAtThisPoint);
+  const ref = pickReference(metric, mode);
+  const color = pctColor(ref.pct, metric.expectedPctAtThisPoint, corridorPct ?? 0.15);
+  const projectionDenom = ref.referenceValue;
 
   return (
     <div
@@ -491,17 +627,17 @@ function MetricMiniCard({
       </div>
       <div className="mt-1 flex items-baseline gap-1">
         <span className={`text-lg font-bold tabular-nums ${color.text}`}>
-          {metric.pctOfTypical != null ? `${Math.round(metric.pctOfTypical)}%` : "—"}
+          {ref.pct != null ? `${Math.round(ref.pct)}%` : "—"}
         </span>
       </div>
       <div className="mt-1 text-[9px] text-slate-400">
-        {fmtNum(metric.currentTotal)} / {fmtNum(metric.typicalWeekTotal)} {label.unit}
+        {fmtNum(metric.currentTotal)} / {fmtNum(ref.referenceValue)} {label.unit}
       </div>
-      {metric.projectedWeekTotal != null && metric.typicalWeekTotal > 0 && (
+      {metric.projectedWeekTotal != null && projectionDenom > 0 && (
         <div className="mt-1 text-[9px] text-slate-400">
           {t.projected}: <span className="font-semibold text-slate-600">{fmtNum(metric.projectedWeekTotal)} {label.unit}</span>
           <span className="ml-1 text-[8px]">
-            ({Math.round((metric.projectedWeekTotal / metric.typicalWeekTotal) * 100)}%)
+            ({Math.round((metric.projectedWeekTotal / projectionDenom) * 100)}%)
           </span>
         </div>
       )}

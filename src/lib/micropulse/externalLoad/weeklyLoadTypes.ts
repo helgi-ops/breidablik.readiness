@@ -34,7 +34,7 @@ export type WeeklyLoadMetricSummary = {
   metric: WeeklyLoadMetricKey;
   /** Cumulative team-avg total so far this week */
   currentTotal: number;
-  /** Average full-week total from historical weeks */
+  /** Average full-week total from historical weeks (baseline reference) */
   typicalWeekTotal: number;
   /** currentTotal / typicalWeekTotal × 100 */
   pctOfTypical: number | null;
@@ -43,6 +43,30 @@ export type WeeklyLoadMetricSummary = {
   /** Linear projection of full week total */
   projectedWeekTotal: number | null;
   daysWithData: number;
+  /**
+   * Coach/match-demand target week total when a non-baseline mode is active.
+   * Null in baseline mode or when the target for this KPI is unavailable.
+   */
+  targetWeekTotal?: number | null;
+  /** currentTotal / targetWeekTotal × 100 (null when no target). */
+  pctOfTarget?: number | null;
+};
+
+/** Non-baseline target metadata attached to the weekly load result. */
+export type WeeklyLoadTargetMeta = {
+  mode: "baseline" | "match_demand" | "coach_weekly";
+  corridorPct: number;
+  mesocyclePhase: "build" | "maintain" | "taper" | null;
+  mesocycleMultiplier: number;
+  matchesSampled?: number;
+  matchDemandAvg?: Partial<Record<WeeklyLoadMetricKey, number>>;
+  templateWeekSum?: Partial<Record<WeeklyLoadMetricKey, number>>;
+  /** Number of player-match rows included after the FULL-game filter. */
+  fullMatchRowsUsed?: number;
+  /** Number of player-match rows skipped because the player did not play enough. */
+  rowsSkippedPartial?: number;
+  /** Minimum minutes threshold used for the FULL filter. */
+  minMinutesUsed?: number;
 };
 
 export type WeeklyLoadResult = {
@@ -55,4 +79,6 @@ export type WeeklyLoadResult = {
   days: WeeklyLoadDay[];
   metrics: WeeklyLoadMetricSummary[];
   historicalWeeksUsed: number;
+  /** Target metadata from team_load_targets. Present even in baseline mode. */
+  target?: WeeklyLoadTargetMeta;
 };

@@ -9,6 +9,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { computeWeeklyTarget } from "./loadTargets";
 
 // Re-export types
 export type {
@@ -246,7 +247,15 @@ export async function computeWeeklyLoad(args: {
     currentCumulative[key] = days.reduce((sum, d) => sum + (d.metrics[key] ?? 0), 0);
   }
 
-  // 8. Build metric summaries
+  // 8. Compute target from team_load_targets (baseline / match_demand / coach_weekly)
+  let targetComp: Awaited<ReturnType<typeof computeWeeklyTarget>> | null = null;
+  try {
+    targetComp = await computeWeeklyTarget({ teamId, referenceDate: today });
+  } catch {
+    targetComp = null;
+  }
+
+  // 9. Build metric summaries
   const metricSummaries = WEEKLY_LOAD_METRICS.map((key) => {
     const current = currentCumulative[key];
     const typical = typicalWeekTotal[key];
@@ -257,6 +266,13 @@ export async function computeWeeklyLoad(args: {
     const daysWithLoad = days.filter((d) => d.metrics[key] != null && d.metrics[key]! > 0).length;
     const projected = daysWithLoad > 0 ? (current / daysWithLoad) * totalWeekDays : null;
 
+    // Target (non-baseline modes). Falls back to null if unavailable.
+    const rawTarget = targetComp?.target_week_total?.[key];
+    const targetWeekTotal = rawTarget != null && Number.isFinite(Number(rawTarget)) ? Number(rawTarget) : null;
+    const pctOfTarget = targetWeekTotal != null && targetWeekTotal > 0
+      ? (current / targetWeekTotal) * 100
+      : null;
+
     return {
       metric: key,
       currentTotal: current,
@@ -265,6 +281,8 @@ export async function computeWeeklyLoad(args: {
       expectedPctAtThisPoint: expectedPct,
       projectedWeekTotal: projected,
       daysWithData: daysWithLoad,
+      targetWeekTotal,
+      pctOfTarget,
     };
   });
 
@@ -278,5 +296,24 @@ export async function computeWeeklyLoad(args: {
     days,
     metrics: metricSummaries,
     historicalWeeksUsed: validWeeks.length,
+    target: targetComp
+      ? {
+          mode: targetComp.mode,
+          corridorPct: targetComp.corridor_pct,
+          mesocyclePhase: targetComp.mesocycle_phase,
+          mesocycleMultiplier: targetComp.mesocycle_multiplier,
+          matchesSampled: targetComp.matches_sampled,
+          matchDemandAvg: targetComp.match_demand_avg,
+          templateWeekSum: targetComp.template_week_sum,
+          fullMatchRowsUsed: targetComp.full_match_rows_used,
+          rowsSkippedPartial: targetComp.rows_skipped_partial,
+          minMinutesUsed: targetComp.min_minutes_used,
+        }
+      : {
+          mode: "baseline" as const,
+          corridorPct: 0.15,
+          mesocyclePhase: null,
+          mesocycleMultiplier: 1.0,
+        },
   };
 }
