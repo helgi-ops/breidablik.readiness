@@ -39,6 +39,7 @@ type Config = {
   coach_weekly_targets: Partial<Record<WeeklyLoadMetricKey, number>>;
   match_demand_lookback_days: number;
   match_day_detection_min_td: number;
+  match_day_detection_min_player_load: number;
   match_demand_min_minutes: number;
   match_demand_template: Record<string, Partial<Record<WeeklyLoadMetricKey, number>>>;
   match_demand_overrides: Partial<Record<WeeklyLoadMetricKey, number>>;
@@ -81,6 +82,8 @@ const COPY = {
     matchDemandTitle: "Stillingar fyrir leikálag",
     lookbackDays: "Leikir aftur í tímann (dagar)",
     minTdFallback: "Lágmarks TD fyrir leik-detection (varaleið)",
+    minPlFallback: "Lágmarks Player Load fyrir leik-detection (innandyra)",
+    minPlFallbackHint: "Þar sem GPS virkar ekki innandyra, notar kerfið Player Load til að greina leiki frá æfingum þegar ekki er merkt í áætlun.",
     matchesFound: "leikir fundnir",
     indoorBadge: "Innandyra (FMP)",
     indoorHint: "Liðið er stillt á innandyra-ham — kerfið notar Football Movement Profile (FMP) og IMA mælingar í stað GPS-byggðra KPI.",
@@ -119,6 +122,8 @@ const COPY = {
     matchDemandTitle: "Match demand settings",
     lookbackDays: "Lookback (days)",
     minTdFallback: "Min TD for match detection (fallback)",
+    minPlFallback: "Min Player Load for match detection (indoor)",
+    minPlFallbackHint: "Since GPS does not work indoors, the system uses Player Load to distinguish matches from training when schedule metadata is missing.",
     matchesFound: "matches found",
     indoorBadge: "Indoor (FMP)",
     indoorHint: "Team is in indoor mode — the system uses Football Movement Profile (FMP) and IMA metrics instead of GPS-based KPIs.",
@@ -199,6 +204,7 @@ export default function LoadTargetSettingsModal({
         coach_weekly_targets: config.coach_weekly_targets,
         match_demand_lookback_days: config.match_demand_lookback_days,
         match_day_detection_min_td: config.match_day_detection_min_td,
+        match_day_detection_min_player_load: config.match_day_detection_min_player_load,
         match_demand_min_minutes: config.match_demand_min_minutes,
         match_demand_overrides: config.match_demand_overrides,
       };
@@ -426,19 +432,36 @@ export default function LoadTargetSettingsModal({
                     </div>
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-0.5">
-                        {t.minTdFallback}
+                        {indoor ? t.minPlFallback : t.minTdFallback}
                       </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={15000}
-                        step={100}
-                        value={config.match_day_detection_min_td}
-                        onChange={(e) => update("match_day_detection_min_td", Number(e.target.value))}
-                        className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm tabular-nums"
-                      />
+                      {indoor ? (
+                        <input
+                          type="number"
+                          min={0}
+                          max={2000}
+                          step={25}
+                          value={config.match_day_detection_min_player_load}
+                          onChange={(e) =>
+                            update("match_day_detection_min_player_load", Number(e.target.value))
+                          }
+                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm tabular-nums"
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          min={0}
+                          max={15000}
+                          step={100}
+                          value={config.match_day_detection_min_td}
+                          onChange={(e) => update("match_day_detection_min_td", Number(e.target.value))}
+                          className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm tabular-nums"
+                        />
+                      )}
                     </div>
                   </div>
+                  {indoor && (
+                    <p className="text-[10px] text-slate-400 mt-1">{t.minPlFallbackHint}</p>
+                  )}
                   {/* FULL filter */}
                   <div className="mt-3">
                     <label className="block text-[10px] text-slate-500 mb-0.5">

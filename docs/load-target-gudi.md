@@ -302,18 +302,53 @@ færð að auki Total Distance, Vel Band o.fl. aftur í spjaldið.
 Sama `match_demand_template` jsonb geymir bæði úti- og inni-prósentur
 samhliða, svo ekkert týnist við skiptingu.
 
+### Hvernig finnur kerfið leikina innandyra?
+
+Forgangsröð leik-detection er sú sama og úti:
+
+1. **`team_schedule_events.event_type = 'match'`** — besta leiðin, þú merkir
+   leikinn beint í áætlun liðsins.
+2. **`week_plans.day_type = 'GAME'`** — önnur leiðin, ef þú ert að nota
+   vikuplan-borðið.
+3. **Player Load fallback** — ef hvorugt ofangreint er til staðar, leitar
+   kerfið að dögum þar sem meðaltals Player Load fer yfir þröskuld
+   (default 550). Úti-ham notar Total Distance í staðinn (default 8000 m),
+   en innandyra er GPS ≈ 0 svo Player Load er eina leiðin.
+
+Þú getur stillt Player Load þröskuldinn í stillingaglugganum — hann birtist
+sjálfkrafa þegar liðið er í innandyra-ham, í stað TD inntakisins. Viðmið:
+
+- Dæmigerður innandyra-leikur (90 mín, 11v11): **550–850 PL**
+- Dæmigerð innandyra-æfing (60–90 mín): **250–500 PL**
+
+Ef þú finnur að of margar æfingar eru flokkaðar sem leikir, hækkaðu
+þröskuldinn í t.d. 650. Ef leikir eru að sleppa undir radarnum, lækkaðu
+í 450.
+
+### Viðvörun þegar engir leikir finnast
+
+Ef Leikálag-aðferðin er virk en kerfið finnur enga leiki á síðustu
+lookback-dögum (default 120), birtir Vikuálag-spjaldið gula viðvörun efst
+með tengli beint í stillingar. Þetta gerist oft í upphafi nýs tímabils
+eða þegar þjálfari nýtti ekki áætlunina — þá veistu strax að þú þarft
+annaðhvort að merkja leikina eða lækka þröskuldinn.
+
 ### Ráð fyrir innandyra-lið
 
 - Ef þú ert bara með eina hall-æfingu á viku og restin er úti, haltu
-  kerfinu á **úti-ham**. Indoor-hamurinn er fyrir lið sem eru _aðallega_
-  innandyra.
-- Ef FULL sían útilokar of marga leikmenn þegar þú ert í innandyra-ham
-  (sem gerist oftar því futsal-leikir eru styttri), lækkaðu
-  **Lágmarks leikmínútur** niður í 30–40 mín til að fá nógu stórt sýni.
-- Default MD-prósenturnar eru útsprettur af útgildunum og eru **ekki
-  rannsóknavottaðar fyrir futsal sérstaklega** — vertu með þeim varlega
-  og aðlagaðu `match_demand_template` í gagnagrunninum ef þú finnur
-  betri tölur fyrir þinn aldursflokk.
+  kerfinu á **úti-ham**. Innandyra-hamurinn er fyrir lið sem eru _aðallega_
+  innandyra (t.d. yfir veturinn þegar öll heimaleikir og æfingar eru
+  í höll).
+- **FULL sían (75 mín)** virkar sömuleiðis fyrir innandyra-fótbolta þar sem
+  leikir eru enn 90 mín — engin breyting þörf.
+- Default MD-prósenturnar eru útsprettur af útigildunum. Player Load er
+  þægilegur stöðugur þráður — hann er mældur eins úti og inni — en
+  FMP-prósenturnar eiga við um hreyfingarmynstur og ættu að vera nálægt
+  réttu. Ef þú finnur að markmiðin eru kerfisbundið of há eða lág,
+  aðlagaðu `match_demand_template` í gagnagrunninum.
+- Gættu þess að merkja innandyra-leikina í áætlun (`week_plans` eða
+  `team_schedule_events`). Ef þú gerir það ekki lítur kerfið á Player Load
+  fallback-inn — en beint áætlunar-hit er nákvæmara.
 
 ---
 

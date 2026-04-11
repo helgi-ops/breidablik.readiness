@@ -79,6 +79,7 @@ type PutBody = {
   coach_weekly_targets?: Record<string, number>;
   match_demand_lookback_days?: number;
   match_day_detection_min_td?: number;
+  match_day_detection_min_player_load?: number;
   match_demand_min_minutes?: number;
   match_demand_template?: Record<string, Record<string, number>>;
   match_demand_overrides?: Record<string, number>;
@@ -165,6 +166,17 @@ export async function PUT(req: Request) {
         return NextResponse.json({ ok: false, error: "match_day_detection_min_td must be numeric" }, { status: 400 });
       }
       patch.match_day_detection_min_td = clamp(n, 0, 15000);
+    }
+
+    if (body.match_day_detection_min_player_load !== undefined) {
+      const n = Math.round(Number(body.match_day_detection_min_player_load));
+      if (!Number.isFinite(n)) {
+        return NextResponse.json(
+          { ok: false, error: "match_day_detection_min_player_load must be numeric" },
+          { status: 400 },
+        );
+      }
+      patch.match_day_detection_min_player_load = clamp(n, 0, 2000);
     }
 
     if (body.match_demand_min_minutes !== undefined) {

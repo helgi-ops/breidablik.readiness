@@ -44,6 +44,11 @@ export type LoadTargetConfig = {
   coach_weekly_targets: Partial<Record<WeeklyLoadMetricKey, number>>;
   match_demand_lookback_days: number;
   match_day_detection_min_td: number;
+  /** Squad-average Player Load threshold used as a match-detection fallback
+   *  when the team is in indoor mode (GPS distance is ~0 indoors, so TD
+   *  cannot be used). Default 550 — distinguishes a competitive 90-min
+   *  match (~550-850 PL) from a typical training session (~250-500 PL). */
+  match_day_detection_min_player_load: number;
   /** Minimum minutes played in a match for a player row to be included in
    *  match demand averaging (≈ "FULL" game filter, default 75 min). */
   match_demand_min_minutes: number;
@@ -85,6 +90,7 @@ const DEFAULT_CONFIG: Omit<LoadTargetConfig, "team_id" | "updated_at"> = {
   coach_weekly_targets: {},
   match_demand_lookback_days: 120,
   match_day_detection_min_td: 8000,
+  match_day_detection_min_player_load: 550,
   match_demand_min_minutes: 75,
   match_demand_template: {
     // Indoor FMP/IMA keys are merged into the same jsonb template — the
@@ -238,6 +244,9 @@ export async function getTeamLoadTargetConfig(teamId: string): Promise<LoadTarge
     coach_weekly_targets: (row.coach_weekly_targets as LoadTargetConfig["coach_weekly_targets"]) ?? {},
     match_demand_lookback_days: Number(row.match_demand_lookback_days ?? DEFAULT_CONFIG.match_demand_lookback_days),
     match_day_detection_min_td: Number(row.match_day_detection_min_td ?? DEFAULT_CONFIG.match_day_detection_min_td),
+    match_day_detection_min_player_load: Number(
+      row.match_day_detection_min_player_load ?? DEFAULT_CONFIG.match_day_detection_min_player_load,
+    ),
     match_demand_min_minutes: Number(row.match_demand_min_minutes ?? DEFAULT_CONFIG.match_demand_min_minutes),
     match_demand_template: mergeTemplateWithDefaults(
       row.match_demand_template as LoadTargetConfig["match_demand_template"] | null,
@@ -254,8 +263,12 @@ async function findRecentMatchDates(args: {
   fromDate: string;
   toDate: string;
   minTdFallback: number;
+  /** Squad-average Player Load threshold used as fallback when indoor. */
+  minPlayerLoadFallback: number;
+  /** Indoor teams cannot rely on Total Distance (GPS); switch to PL-based fallback. */
+  indoor: boolean;
 }): Promise<string[]> {
-  const { teamId, fromDate, toDate, minTdFallback } = args;
+  const { teamId, fromDate, toDate, minTdFallback, minPlayerLoadFallback, indoor } = args;
   const sb = getSupabaseAdmin();
 
   const dateSet = new Set<string>();
@@ -292,26 +305,42 @@ async function findRecentMatchDates(args: {
     /* continue */
   }
 
-  // 3. Fallback — days where squad-average total_distance exceeds a threshold
+  // 3. Fallback — days where squad-average load metric exceeds a threshold
   //    (catches matches even if schedule metadata is missing).
+  //    Indoor teams have no GPS, so TD is ~0; use Player Load instead.
   if (dateSet.size === 0) {
+    const fallbackCol = indoor ? "total_player_load" : "total_distance";
+    const plFallbackCol = "player_load"; // fallback when total_player_load is null
+    const threshold = indoor ? minPlayerLoadFallback : minTdFallback;
+
     const { data: loadRows } = await sb
       .from("player_external_load_daily")
-      .select("date, total_distance")
+      .select(`date, ${fallbackCol}${indoor ? `, ${plFallbackCol}` : ""}`)
       .eq("team_id", teamId)
       .gte("date", fromDate)
       .lte("date", toDate)
       .in("source", ["catapult", "manual"]);
 
     const perDay = new Map<string, number[]>();
-    for (const row of (loadRows ?? []) as Array<{ date: string; total_distance: number | null }>) {
-      if (!row.date || row.total_distance == null) continue;
-      if (!perDay.has(row.date)) perDay.set(row.date, []);
-      perDay.get(row.date)!.push(Number(row.total_distance));
+    for (const row of (loadRows ?? []) as unknown as Array<Record<string, unknown>>) {
+      const date = String(row.date ?? "");
+      if (!date) continue;
+      // Prefer total_player_load, fall back to player_load when indoor.
+      let v: number | null = null;
+      const primary = row[fallbackCol];
+      if (typeof primary === "number" && Number.isFinite(primary)) {
+        v = primary;
+      } else if (indoor) {
+        const alt = row[plFallbackCol];
+        if (typeof alt === "number" && Number.isFinite(alt)) v = alt;
+      }
+      if (v == null) continue;
+      if (!perDay.has(date)) perDay.set(date, []);
+      perDay.get(date)!.push(v);
     }
     for (const [date, vals] of perDay) {
       const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-      if (avg >= minTdFallback) dateSet.add(date);
+      if (avg >= threshold) dateSet.add(date);
     }
   }
 
@@ -491,6 +520,8 @@ export async function computeWeeklyTarget(args: {
     fromDate,
     toDate: referenceDate,
     minTdFallback: cfg.match_day_detection_min_td,
+    minPlayerLoadFallback: cfg.match_day_detection_min_player_load,
+    indoor,
   });
 
   const matchAvgResult = await computeMatchDemandAverage({

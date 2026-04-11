@@ -47,6 +47,8 @@ const COPY = {
     mesoMaintain: "Viðhald",
     mesoTaper: "Lækkun",
     matchesSampled: "leikir",
+    noMatchesWarningTitle: "Engir leikir fundust",
+    noMatchesWarningBody: "Leikálag-aðferðin þarf nýlega leiki til að reikna markmið. Merktu leikina í áætlun (week_plans / schedule) eða stilltu leik-detection þröskuldinn í stillingum.",
   },
   EN: {
     title: "Weekly Load",
@@ -77,6 +79,8 @@ const COPY = {
     mesoMaintain: "Maintain",
     mesoTaper: "Taper",
     matchesSampled: "matches",
+    noMatchesWarningTitle: "No matches found",
+    noMatchesWarningBody: "Match demand mode needs recent matches to compute a target. Mark matches in the schedule (week_plans / schedule) or tune the match detection threshold in settings.",
   },
 } as const;
 
@@ -395,6 +399,43 @@ export default function CoachWeeklyLoadCard({
           </div>
         </div>
       </div>
+
+      {/* Warning: match_demand mode but no matches sampled */}
+      {mode === "match_demand" && (targetMeta?.matchesSampled ?? 0) === 0 && (
+        <div className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <div className="flex items-start gap-2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-amber-600 mt-0.5 shrink-0"
+            >
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold text-amber-800">
+                {t.noMatchesWarningTitle}
+              </div>
+              <div className="text-[10px] text-amber-700 mt-0.5 leading-snug">
+                {t.noMatchesWarningBody}
+              </div>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="text-[10px] font-semibold text-amber-800 underline mt-1 hover:text-amber-900"
+              >
+                {t.settings} →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Big primary metric + progress ring */}
       <div className="px-4 pb-4">
