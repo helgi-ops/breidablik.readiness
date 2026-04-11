@@ -43,6 +43,7 @@ type Config = {
   match_demand_min_minutes: number;
   match_demand_template: Record<string, Partial<Record<WeeklyLoadMetricKey, number>>>;
   match_demand_overrides: Partial<Record<WeeklyLoadMetricKey, number>>;
+  baseline_exclude_match_days: boolean;
 };
 
 type Preview = {
@@ -71,6 +72,10 @@ const COPY = {
     modeCoachWeeklyDesc: "Þjálfari setur vikulegt markmið handvirkt fyrir hvert KPI.",
     corridor: "Leyfilegt bil (±)",
     corridorHint: "Hve mikið má víkja frá markmiði áður en það telst of mikið/lítið álag.",
+    baselineExcludeMatches: "Útiloka leikjadaga úr grunnmeðaltali",
+    baselineExcludeMatchesHint:
+      "Þegar kveikt er á þessu telur kerfið leikjadaga EKKI með í 8 vikna \"venjulegri viku\" útreikningnum. Mælt með fyrir lið sem spila innandyra — 90-mín leikur innanhúss hækkar vikusummuna um 15–25% og skekkir grunnlínuna.",
+    baselineExcludeMatchesActive: "Virkt — leikjadagar eru ekki teknir með í grunnmeðaltalinu.",
     mesocycle: "Mesocycle fasi",
     mesoNone: "Ekkert",
     mesoBuild: "Uppbygging",
@@ -111,6 +116,10 @@ const COPY = {
     modeCoachWeeklyDesc: "Coach sets per-KPI weekly target by hand.",
     corridor: "Corridor (±)",
     corridorHint: "How much deviation from target counts as normal.",
+    baselineExcludeMatches: "Exclude match days from baseline",
+    baselineExcludeMatchesHint:
+      "When on, detected match days are removed from the 8-week \"typical week\" rolling average. Recommended for indoor teams — a 90-min indoor match inflates weekly totals by 15–25% and skews the baseline upward.",
+    baselineExcludeMatchesActive: "Active — match days are not included in the baseline rollup.",
     mesocycle: "Mesocycle phase",
     mesoNone: "None",
     mesoBuild: "Build",
@@ -207,6 +216,7 @@ export default function LoadTargetSettingsModal({
         match_day_detection_min_player_load: config.match_day_detection_min_player_load,
         match_demand_min_minutes: config.match_demand_min_minutes,
         match_demand_overrides: config.match_demand_overrides,
+        baseline_exclude_match_days: config.baseline_exclude_match_days,
       };
       const headers = await authHeaders();
       const r = await fetch("/api/coach/load-targets", {
@@ -341,6 +351,36 @@ export default function LoadTargetSettingsModal({
                   className="w-full"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">{t.corridorHint}</p>
+              </div>
+
+              {/* Baseline: exclude match days toggle */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.baseline_exclude_match_days === true}
+                    onChange={(e) => update("baseline_exclude_match_days", e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                      {t.baselineExcludeMatches}
+                      {indoor && (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px] font-semibold">
+                          {t.indoorBadge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      {t.baselineExcludeMatchesHint}
+                    </p>
+                    {config.baseline_exclude_match_days === true && (
+                      <p className="text-[10px] text-emerald-700 mt-1 font-medium">
+                        {t.baselineExcludeMatchesActive}
+                      </p>
+                    )}
+                  </div>
+                </label>
               </div>
 
               {/* Mesocycle */}

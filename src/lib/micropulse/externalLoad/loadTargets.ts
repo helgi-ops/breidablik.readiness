@@ -54,6 +54,11 @@ export type LoadTargetConfig = {
   match_demand_min_minutes: number;
   match_demand_template: Record<string, Partial<Record<WeeklyLoadMetricKey, number>>>;
   match_demand_overrides: Partial<Record<WeeklyLoadMetricKey, number>>;
+  /** When true, the baseline "typical week" rolling average excludes detected
+   *  match days so the baseline represents a typical *training* week only.
+   *  Recommended for indoor teams where a 90-min match significantly skews
+   *  weekly totals. Default false preserves historical behavior. */
+  baseline_exclude_match_days: boolean;
   updated_at: string;
 };
 
@@ -125,6 +130,7 @@ const DEFAULT_CONFIG: Omit<LoadTargetConfig, "team_id" | "updated_at"> = {
     },
   },
   match_demand_overrides: {},
+  baseline_exclude_match_days: false,
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -252,11 +258,45 @@ export async function getTeamLoadTargetConfig(teamId: string): Promise<LoadTarge
       row.match_demand_template as LoadTargetConfig["match_demand_template"] | null,
     ),
     match_demand_overrides: (row.match_demand_overrides as LoadTargetConfig["match_demand_overrides"]) ?? {},
+    baseline_exclude_match_days: Boolean(row.baseline_exclude_match_days ?? DEFAULT_CONFIG.baseline_exclude_match_days),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
 }
 
 // ─── Match-day discovery ───────────────────────────────────────────────────
+
+/**
+ * Public wrapper around match-date discovery for other server modules
+ * (e.g. the weekly load tracker's baseline-exclusion logic).
+ *
+ * Given a team and a date range, returns the dates on which the team played a
+ * match, using the same priority chain as the match_demand mode:
+ *   1. team_schedule_events.event_type = 'match'
+ *   2. week_plans.day_type = 'GAME'
+ *   3. Squad-average TD (outdoor) / Player Load (indoor) threshold fallback
+ *
+ * Reads thresholds + indoor flag from the team's saved `team_load_targets`
+ * config so behavior matches what coaches see in the modal.
+ */
+export async function findTeamMatchDates(args: {
+  teamId: string;
+  fromDate: string;
+  toDate: string;
+  /** Override auto-detected indoor mode. Falls back to team_settings. */
+  indoor?: boolean;
+}): Promise<string[]> {
+  const { teamId, fromDate, toDate } = args;
+  const cfg = await getTeamLoadTargetConfig(teamId);
+  const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
+  return findRecentMatchDates({
+    teamId,
+    fromDate,
+    toDate,
+    minTdFallback: cfg.match_day_detection_min_td,
+    minPlayerLoadFallback: cfg.match_day_detection_min_player_load,
+    indoor,
+  });
+}
 
 async function findRecentMatchDates(args: {
   teamId: string;

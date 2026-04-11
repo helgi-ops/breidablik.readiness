@@ -132,6 +132,12 @@ export type WeeklyLoadTargetMeta = {
   minMinutesUsed?: number;
   /** Indoor mode flag (KPI list + FMP/IMA-based match demand). */
   indoor?: boolean;
+  /** True when the baseline "typical week" rollup excluded detected match days. */
+  baselineExcludesMatchDays?: boolean;
+  /** Number of detected match dates removed from the historical baseline window. */
+  baselineMatchDatesExcluded?: number;
+  /** Number of player-day rows filtered out because their date was a match day. */
+  baselineRowsExcluded?: number;
 };
 
 export type WeeklyLoadResult = {

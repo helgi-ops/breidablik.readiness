@@ -13,7 +13,12 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { computeWeeklyTarget, getTeamIndoorMode } from "./loadTargets";
+import {
+  computeWeeklyTarget,
+  findTeamMatchDates,
+  getTeamIndoorMode,
+  getTeamLoadTargetConfig,
+} from "./loadTargets";
 
 // Re-export types
 export type {
@@ -125,6 +130,11 @@ export async function computeWeeklyLoad(args: {
   const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
   const activeMetrics = getActiveWeeklyLoadMetrics(indoor);
 
+  // Read team config once to know whether the baseline rollup should
+  // exclude match days (recommended for indoor teams).
+  const cfg = await getTeamLoadTargetConfig(teamId);
+  const excludeMatchDaysFromBaseline = cfg.baseline_exclude_match_days === true;
+
   // 1. Determine current week (Monday–Sunday)
   const weekMonday = getWeekMonday(today);
   const weekSunday = (() => {
@@ -209,6 +219,25 @@ export async function computeWeeklyLoad(args: {
   if (playerId) histQuery = histQuery.eq("player_id", playerId);
   const { data: histRows } = await histQuery;
 
+  // Optionally discover match dates within the historical window so we can
+  // exclude them from the baseline rollup. This yields a cleaner "typical
+  // training week" baseline — especially important for indoor teams where a
+  // 90-min match can inflate weekly totals by 15-25%.
+  let excludedMatchDates: Set<string> = new Set();
+  if (excludeMatchDaysFromBaseline) {
+    try {
+      const dates = await findTeamMatchDates({
+        teamId,
+        fromDate: histStart,
+        toDate: histEnd,
+        indoor,
+      });
+      excludedMatchDates = new Set(dates);
+    } catch {
+      excludedMatchDates = new Set();
+    }
+  }
+
   // 5. Group historical data by week → compute full-week team averages per day
   // For each historical week: sum all daily team averages = weekly total
   const histWeekTotals = new Map<string, Map<WeeklyLoadMetricKey, number>>();
@@ -222,9 +251,16 @@ export async function computeWeeklyLoad(args: {
     }
   }
 
-  // First, build per-day team averages for historical data
+  // First, build per-day team averages for historical data.
+  // Skip rows whose date is in the excluded match-date set (when the flag
+  // is on) so the baseline reflects training-only load.
   const histDayMap = new Map<string, Map<WeeklyLoadMetricKey, number[]>>();
+  let excludedHistRowCount = 0;
   for (const row of (histRows ?? []) as unknown as RawRow[]) {
+    if (excludedMatchDates.has(row.date)) {
+      excludedHistRowCount += 1;
+      continue;
+    }
     if (!histDayMap.has(row.date)) histDayMap.set(row.date, new Map());
     const metrics = histDayMap.get(row.date)!;
     for (const key of activeMetrics) {
@@ -339,6 +375,9 @@ export async function computeWeeklyLoad(args: {
           rowsSkippedPartial: targetComp.rows_skipped_partial,
           minMinutesUsed: targetComp.min_minutes_used,
           indoor,
+          baselineExcludesMatchDays: excludeMatchDaysFromBaseline,
+          baselineMatchDatesExcluded: excludedMatchDates.size,
+          baselineRowsExcluded: excludedHistRowCount,
         }
       : {
           mode: "baseline" as const,
@@ -346,6 +385,9 @@ export async function computeWeeklyLoad(args: {
           mesocyclePhase: null,
           mesocycleMultiplier: 1.0,
           indoor,
+          baselineExcludesMatchDays: excludeMatchDaysFromBaseline,
+          baselineMatchDatesExcluded: excludedMatchDates.size,
+          baselineRowsExcluded: excludedHistRowCount,
         },
   };
 }

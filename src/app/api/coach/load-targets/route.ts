@@ -83,6 +83,7 @@ type PutBody = {
   match_demand_min_minutes?: number;
   match_demand_template?: Record<string, Record<string, number>>;
   match_demand_overrides?: Record<string, number>;
+  baseline_exclude_match_days?: boolean;
 };
 
 function clamp(n: number, lo: number, hi: number) {
@@ -203,6 +204,10 @@ export async function PUT(req: Request) {
         cleaned[day] = innerClean;
       }
       patch.match_demand_template = cleaned;
+    }
+
+    if (body.baseline_exclude_match_days !== undefined) {
+      patch.baseline_exclude_match_days = Boolean(body.baseline_exclude_match_days);
     }
 
     if (body.match_demand_overrides !== undefined) {
