@@ -174,8 +174,8 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={`${row.player_id}-${row.date}`} className="border-t align-top">
+                  {rows.map((row, idx) => (
+                    <tr key={`${row.player_id}-${row.date}-${idx}`} className="border-t align-top">
                       <td className="py-1 pr-2 font-medium text-slate-800">{row.player_name}</td>
                       <td className="py-1 pr-2">
                         <span className="tabular-nums font-semibold text-slate-800">{row.mli ?? "—"}</span>
