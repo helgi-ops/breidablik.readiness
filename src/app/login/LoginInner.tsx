@@ -48,7 +48,7 @@ function extractCheckinDone(row: any): boolean {
   return Boolean(hasAnyMetric);
 }
 
-async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
+async function getPlayerLandingPath(): Promise<"/team" | "/player/checkin"> {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
   if (!userId) return "/player/checkin";
@@ -62,7 +62,7 @@ async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
     .maybeSingle();
 
   const role = (profile as any)?.role ?? null;
-  if (role && role !== "PLAYER") return "/player";
+  if (role && role !== "PLAYER") return "/team";
 
   const playerIdFromProfile = (profile as any)?.player_id as string | null;
   const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
@@ -77,7 +77,8 @@ async function getPlayerLandingPath(): Promise<"/player" | "/player/checkin"> {
 
     if (!error) {
       const done = extractCheckinDone(data);
-      return done ? "/player" : "/player/checkin";
+      // Checkin done → team page, not done → checkin first
+      return done ? "/team" : "/player/checkin";
     }
   }
 
@@ -120,7 +121,7 @@ export default function LoginInner() {
         if (cancelled) return;
         const landingPath = await getPlayerLandingPath();
         if (cancelled) return;
-        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
+        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
         router.replace(`/auth/redirect?next=${encodeURIComponent(finalNext)}`);
       } catch {
@@ -312,7 +313,7 @@ export default function LoginInner() {
         if (error) throw error;
 
         const landingPath = await getPlayerLandingPath();
-        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
+        const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
 
         const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
@@ -362,7 +363,7 @@ export default function LoginInner() {
           setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn. Þjálfari þarf að samþykkja skráningu þína áður en þú færð aðgang.");
         } else {
           const landingPath = await getPlayerLandingPath();
-          const nextIsPlayerFlow = next === "/player" || next === "/player/checkin";
+          const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
           const finalNext = nextIsPlayerFlow ? landingPath : next;
 
           const target = `/auth/redirect?next=${encodeURIComponent(finalNext)}`;
