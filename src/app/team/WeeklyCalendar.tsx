@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface ScheduleEvent {
@@ -66,7 +66,7 @@ function formatWeekRange(monday: Date): string {
 
 export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }: WeeklyCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(dateKey(new Date()));
 
   const monday = useMemo(() => {
     const base = getMonday(new Date());
@@ -94,10 +94,18 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
   const todayStr = dateKey(new Date());
   const isCurrentWeek = weekOffset === 0;
 
-  // Close popup when week changes
+  // When navigating weeks: select today if current week, otherwise first day with events
   useEffect(() => {
-    setSelectedDay(null);
-  }, [weekOffset]);
+    if (weekOffset === 0) {
+      setSelectedDay(todayStr);
+    } else {
+      const firstWithEvents = weekDates.find((d) => {
+        const evts = eventsByDate.get(dateKey(d));
+        return evts && evts.length > 0;
+      });
+      setSelectedDay(firstWithEvents ? dateKey(firstWithEvents) : dateKey(weekDates[0]));
+    }
+  }, [weekOffset, weekDates, eventsByDate, todayStr]);
 
   return (
     <div className="space-y-3">
@@ -158,7 +166,7 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
             <button
               key={key}
               type="button"
-              onClick={() => setSelectedDay(isSelected ? null : key)}
+              onClick={() => setSelectedDay(key)}
               className={`min-h-[100px] rounded-lg border p-1.5 transition text-left ${
                 isSelected
                   ? "border-blue-500 bg-blue-50 ring-2 ring-blue-300"
@@ -210,7 +218,7 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
         })}
       </div>
 
-      {/* Day detail popup */}
+      {/* Day detail panel — always visible */}
       {selectedDay && (
         <DayDetailPopup
           dateStr={selectedDay}
@@ -218,7 +226,6 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
           isToday={selectedDay === todayStr}
           isCoachOrAdmin={isCoachOrAdmin}
           onDeleteEvent={onDeleteEvent}
-          onClose={() => setSelectedDay(null)}
         />
       )}
     </div>
@@ -233,43 +240,13 @@ function DayDetailPopup({
   isToday,
   isCoachOrAdmin,
   onDeleteEvent,
-  onClose,
 }: {
   dateStr: string;
   events: ScheduleEvent[];
   isToday: boolean;
   isCoachOrAdmin: boolean;
   onDeleteEvent: (id: string) => void;
-  onClose: () => void;
 }) {
-  const popupRef = useRef<HTMLDivElement>(null);
-
-  // Close on click outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    // Delay listener to avoid closing immediately from the cell click
-    const timer = setTimeout(() => {
-      document.addEventListener("mousedown", handleClick);
-    }, 50);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", handleClick);
-    };
-  }, [onClose]);
-
-  // Close on Escape
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
   const date = new Date(dateStr + "T12:00:00");
   const dayIdx = (date.getDay() + 6) % 7; // Mon=0
   const dateFormatted = date.toLocaleDateString("is-IS", {
@@ -279,8 +256,7 @@ function DayDetailPopup({
 
   return (
     <div
-      ref={popupRef}
-      className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+      className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden"
     >
       {/* Header */}
       <div className={`px-4 py-3 flex items-center justify-between ${isToday ? "bg-blue-50" : "bg-gray-50"}`}>
@@ -297,12 +273,7 @@ function DayDetailPopup({
             )}
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-gray-200 transition text-gray-500"
-        >
-          <X className="w-4 h-4" />
-        </button>
+{/* always visible — tap a different day to switch */}
       </div>
 
       {/* Events */}
