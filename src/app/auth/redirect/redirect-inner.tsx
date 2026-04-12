@@ -4,6 +4,46 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+function utcYYYYMMDD(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+async function isCheckinDone(userId: string): Promise<boolean> {
+  const today = utcYYYYMMDD();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("player_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const playerIdFromProfile = (profile as any)?.player_id as string | null;
+  const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
+
+  for (const pid of candidatePlayerIds) {
+    const { data, error } = await supabase
+      .from("v_player_daily_decision_v3")
+      .select("fatigue_energy, sleep_quality, sleep_duration, stress_mood, muscle_soreness")
+      .eq("player_id", pid)
+      .eq("day_date", today)
+      .maybeSingle();
+
+    if (!error && data) {
+      const hasMetric = [
+        data.fatigue_energy,
+        data.sleep_quality,
+        data.sleep_duration,
+        data.stress_mood,
+        data.muscle_soreness,
+      ].some((v) => v != null);
+      if (hasMetric) return true;
+    }
+  }
+
+  return false;
+}
+
 export default function RedirectInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -41,11 +81,18 @@ export default function RedirectInner() {
 
       if (next) {
         if (role === "coach" && next.startsWith("/coach")) return router.replace(next);
-        if (role === "player" && next.startsWith("/player")) return router.replace(next);
+        if (role === "player" && (next.startsWith("/player") || next.startsWith("/team")))
+          return router.replace(next);
       }
 
       if (role === "coach") return router.replace("/coach");
-      if (role === "player") return router.replace("/player/checkin");
+
+      if (role === "player") {
+        // Check-in done → team page, not done → checkin first
+        const done = await isCheckinDone(user.id);
+        if (!mounted) return;
+        return router.replace(done ? "/team" : "/player/checkin");
+      }
 
       setError("Óþekkt role í profiles. Á að vera coach eða player.");
     }

@@ -31,7 +31,7 @@ const MICROPULSE_MANIFEST = {
   id: "/player",
   name: "MicroPulse",
   short_name: "MicroPulse",
-  start_url: "/player",
+  start_url: "/auth/redirect",
   scope: "/",
   display: "standalone",
   orientation: "portrait",
