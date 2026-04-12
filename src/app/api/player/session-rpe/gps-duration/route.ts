@@ -21,13 +21,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing or invalid date parameter (YYYY-MM-DD)" }, { status: 400 });
     }
 
+    // Try session_duration_minutes first; fall back to total_player_load / player_load_per_minute
     const { data, error } = await sb
       .from("player_external_load_daily")
-      .select("session_duration_minutes")
+      .select("session_duration_minutes, total_player_load, player_load_per_minute")
       .eq("player_id", playerId)
       .eq("date", date)
-      .not("session_duration_minutes", "is", null)
-      .order("session_duration_minutes", { ascending: false })
+      .order("total_player_load", { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
 
@@ -35,7 +35,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    const minutes = (data as { session_duration_minutes: number } | null)?.session_duration_minutes ?? null;
+    type Row = { session_duration_minutes: number | null; total_player_load: number | null; player_load_per_minute: number | null };
+    const row = data as Row | null;
+
+    let minutes: number | null = null;
+    if (row?.session_duration_minutes != null && row.session_duration_minutes > 0) {
+      minutes = row.session_duration_minutes;
+    } else if (
+      row?.total_player_load != null && row.total_player_load > 0 &&
+      row?.player_load_per_minute != null && row.player_load_per_minute > 0
+    ) {
+      // Fallback: estimate duration from player load metrics
+      minutes = Math.round(row.total_player_load / row.player_load_per_minute);
+    }
 
     return NextResponse.json({
       ok: true,
