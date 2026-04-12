@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import type { Lang } from "@/lib/lang";
 
 interface ScheduleEvent {
   id: string;
@@ -17,10 +18,12 @@ interface WeeklyCalendarProps {
   events: ScheduleEvent[];
   isCoachOrAdmin: boolean;
   onDeleteEvent: (eventId: string) => void;
+  lang: Lang;
 }
 
-const WEEKDAY_LABELS = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
-const WEEKDAY_LABELS_FULL = [
+const WEEKDAY_LABELS_IS = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
+const WEEKDAY_LABELS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_LABELS_FULL_IS = [
   "Mánudagur",
   "Þriðjudagur",
   "Miðvikudagur",
@@ -29,13 +32,22 @@ const WEEKDAY_LABELS_FULL = [
   "Laugardagur",
   "Sunnudagur",
 ];
+const WEEKDAY_LABELS_FULL_EN = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
-const EVENT_CONFIG: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {
-  training:  { icon: "🏋️", label: "Æfing",     color: "text-green-800",  bg: "bg-green-50",  border: "border-green-200" },
-  match:     { icon: "⚽",  label: "Leikur",    color: "text-red-800",    bg: "bg-red-50",    border: "border-red-200" },
-  meeting:   { icon: "📋",  label: "Fundur",    color: "text-blue-800",   bg: "bg-blue-50",   border: "border-blue-200" },
-  recovery:  { icon: "🧘",  label: "Endurreisn", color: "text-yellow-800", bg: "bg-yellow-50", border: "border-yellow-200" },
-  day_off:   { icon: "📅",  label: "Frí dagur", color: "text-gray-700",   bg: "bg-gray-50",   border: "border-gray-200" },
+const EVENT_CONFIG: Record<string, { icon: string; labelIS: string; labelEN: string; color: string; bg: string; border: string }> = {
+  training:  { icon: "🏋️", labelIS: "Æfing",      labelEN: "Training",  color: "text-green-800",  bg: "bg-green-50",  border: "border-green-200" },
+  match:     { icon: "⚽",  labelIS: "Leikur",     labelEN: "Match",     color: "text-red-800",    bg: "bg-red-50",    border: "border-red-200" },
+  meeting:   { icon: "📋",  labelIS: "Fundur",     labelEN: "Meeting",   color: "text-blue-800",   bg: "bg-blue-50",   border: "border-blue-200" },
+  recovery:  { icon: "🧘",  labelIS: "Endurreisn", labelEN: "Recovery",  color: "text-yellow-800", bg: "bg-yellow-50", border: "border-yellow-200" },
+  day_off:   { icon: "📅",  labelIS: "Frí dagur",  labelEN: "Day off",   color: "text-gray-700",   bg: "bg-gray-50",   border: "border-gray-200" },
 };
 
 function getMonday(d: Date): Date {
@@ -57,14 +69,15 @@ function dateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function formatWeekRange(monday: Date): string {
+function formatWeekRange(monday: Date, lang: Lang): string {
   const sunday = addDays(monday, 6);
-  const mStr = monday.toLocaleDateString("is-IS", { day: "numeric", month: "short" });
-  const sStr = sunday.toLocaleDateString("is-IS", { day: "numeric", month: "short" });
+  const locale = lang === "IS" ? "is-IS" : "en-GB";
+  const mStr = monday.toLocaleDateString(locale, { day: "numeric", month: "short" });
+  const sStr = sunday.toLocaleDateString(locale, { day: "numeric", month: "short" });
   return `${mStr} – ${sStr}`;
 }
 
-export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }: WeeklyCalendarProps) {
+export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent, lang }: WeeklyCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<string | null>(dateKey(new Date()));
 
@@ -114,21 +127,21 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
         <button
           onClick={() => setWeekOffset((o) => o - 1)}
           className="p-2 rounded-lg hover:bg-gray-100 transition text-gray-600"
-          aria-label="Fyrri vika"
+          aria-label={lang === "IS" ? "Fyrri vika" : "Previous week"}
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
 
         <div className="text-center">
           <span className="font-semibold text-gray-900 text-sm">
-            {formatWeekRange(monday)}
+            {formatWeekRange(monday, lang)}
           </span>
           {!isCurrentWeek && (
             <button
               onClick={() => setWeekOffset(0)}
               className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
             >
-              Í dag
+              {lang === "IS" ? "Í dag" : "Today"}
             </button>
           )}
         </div>
@@ -136,7 +149,7 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
         <button
           onClick={() => setWeekOffset((o) => o + 1)}
           className="p-2 rounded-lg hover:bg-gray-100 transition text-gray-600"
-          aria-label="Næsta vika"
+          aria-label={lang === "IS" ? "Næsta vika" : "Next week"}
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -145,7 +158,7 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
         {/* Weekday headers */}
-        {WEEKDAY_LABELS.map((label) => (
+        {(lang === "IS" ? WEEKDAY_LABELS_IS : WEEKDAY_LABELS_EN).map((label) => (
           <div
             key={label}
             className="text-center text-xs font-semibold text-gray-500 py-1"
@@ -226,6 +239,7 @@ export default function WeeklyCalendar({ events, isCoachOrAdmin, onDeleteEvent }
           isToday={selectedDay === todayStr}
           isCoachOrAdmin={isCoachOrAdmin}
           onDeleteEvent={onDeleteEvent}
+          lang={lang}
         />
       )}
     </div>
@@ -240,16 +254,19 @@ function DayDetailPopup({
   isToday,
   isCoachOrAdmin,
   onDeleteEvent,
+  lang,
 }: {
   dateStr: string;
   events: ScheduleEvent[];
   isToday: boolean;
   isCoachOrAdmin: boolean;
   onDeleteEvent: (id: string) => void;
+  lang: Lang;
 }) {
   const date = new Date(dateStr + "T12:00:00");
   const dayIdx = (date.getDay() + 6) % 7; // Mon=0
-  const dateFormatted = date.toLocaleDateString("is-IS", {
+  const locale = lang === "IS" ? "is-IS" : "en-GB";
+  const dateFormatted = date.toLocaleDateString(locale, {
     day: "numeric",
     month: "long",
   });
@@ -262,13 +279,13 @@ function DayDetailPopup({
       <div className={`px-4 py-3 flex items-center justify-between ${isToday ? "bg-blue-50" : "bg-gray-50"}`}>
         <div>
           <div className={`text-sm font-bold ${isToday ? "text-blue-800" : "text-gray-900"}`}>
-            {WEEKDAY_LABELS_FULL[dayIdx]}
+            {(lang === "IS" ? WEEKDAY_LABELS_FULL_IS : WEEKDAY_LABELS_FULL_EN)[dayIdx]}
           </div>
           <div className="text-xs text-gray-500">
             {dateFormatted}
             {isToday && (
               <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold">
-                Í dag
+                {lang === "IS" ? "Í dag" : "Today"}
               </span>
             )}
           </div>
@@ -279,7 +296,7 @@ function DayDetailPopup({
       {/* Events */}
       <div className="px-4 py-3 space-y-2.5">
         {events.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-2">Engir atburðir</div>
+          <div className="text-sm text-gray-400 text-center py-2">{lang === "IS" ? "Engir atburðir" : "No events"}</div>
         ) : (
           events.map((event) => {
             const cfg = EVENT_CONFIG[event.event_type] ?? EVENT_CONFIG.day_off;

@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import WeeklyCalendar from "./WeeklyCalendar";
+import { useLang } from "@/lib/lang";
 
 interface User {
   id: string;
@@ -83,6 +84,7 @@ export default function TeamPage() {
   const supabase = getSupabaseClient();
   const router = useRouter();
   const isPwa = usePwaMode();
+  const [lang, setLang] = useLang();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -241,7 +243,7 @@ export default function TeamPage() {
   };
 
   const handleDeleteAnnouncement = async (announcementId: string) => {
-    if (!confirm("Are you sure you want to delete this announcement?")) {
+    if (!confirm(lang === "IS" ? "Ertu viss um að þú viljir eyða þessari tilkynningu?" : "Are you sure you want to delete this announcement?")) {
       return;
     }
 
@@ -339,7 +341,7 @@ export default function TeamPage() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!confirm("Are you sure you want to delete this event?")) {
+    if (!confirm(lang === "IS" ? "Ertu viss um að þú viljir eyða þessum atburði?" : "Are you sure you want to delete this event?")) {
       return;
     }
 
@@ -396,11 +398,11 @@ export default function TeamPage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setSyncMessage(`Villa: ${data.error}`);
+        setSyncMessage(lang === "IS" ? `Villa: ${data.error}` : `Error: ${data.error}`);
         setSyncLoading(false);
         return;
       }
-      setSyncMessage(`Samstillt: ${data.synced} atburðir`);
+      setSyncMessage(lang === "IS" ? `Samstillt: ${data.synced} atburðir` : `Synced: ${data.synced} events`);
       // Refresh team data
       const teamResponse = await fetch(
         `/api/team/page?teamId=${profile?.team_id}`,
@@ -486,7 +488,7 @@ export default function TeamPage() {
   };
 
   const handleDeleteDocument = async (docId: string) => {
-    if (!confirm("Ertu viss um að þú viljir eyða þessu skjali?")) return;
+    if (!confirm(lang === "IS" ? "Ertu viss um að þú viljir eyða þessu skjali?" : "Are you sure you want to delete this document?")) return;
     try {
       const authSession = await supabase.auth.getSession();
       const res = await fetch("/api/team/documents", {
@@ -508,10 +510,10 @@ export default function TeamPage() {
   };
 
   const DOC_CATEGORIES = [
-    { value: "leikaaetlanir", label: "Leikáætlanir" },
-    { value: "fundir", label: "Fundir" },
-    { value: "aefingar", label: "Æfingar" },
-    { value: "general", label: "Annað" },
+    { value: "leikaaetlanir", label: lang === "IS" ? "Leikáætlanir" : "Match plans" },
+    { value: "fundir", label: lang === "IS" ? "Fundir" : "Meetings" },
+    { value: "aefingar", label: lang === "IS" ? "Æfingar" : "Training" },
+    { value: "general", label: lang === "IS" ? "Annað" : "Other" },
   ];
 
   const filteredDocuments = docFilter
@@ -531,10 +533,16 @@ export default function TeamPage() {
     const diffMs = date.getTime() - now.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return "í dag";
-    if (diffDays === 1) return "á morgun";
-    if (diffDays < 0) return Math.abs(diffDays) + " dögum síðan";
-    return "um " + diffDays + " daga";
+    if (lang === "IS") {
+      if (diffDays === 0) return "í dag";
+      if (diffDays === 1) return "á morgun";
+      if (diffDays < 0) return Math.abs(diffDays) + " dögum síðan";
+      return "um " + diffDays + " daga";
+    }
+    if (diffDays === 0) return "today";
+    if (diffDays === 1) return "tomorrow";
+    if (diffDays < 0) return Math.abs(diffDays) + " days ago";
+    return "in " + diffDays + " days";
   };
 
   if (loading) {
@@ -604,9 +612,17 @@ export default function TeamPage() {
                 <span className="px-2 py-1 bg-white/20 rounded-full">
                   {teamData.team?.sport}
                 </span>
-                <span className="px-2 py-1 bg-white/20 rounded-full">
-                  {teamData.roster?.length ?? 0} leikmenn
-                </span>
+                {/* IS / EN toggle */}
+                <div className="flex items-center rounded-full bg-white/20 p-0.5 text-xs font-semibold">
+                  <button
+                    onClick={() => setLang("IS")}
+                    className={`rounded-full px-2 py-0.5 transition-colors ${lang === "IS" ? "bg-white text-gray-900" : "text-white/70 hover:text-white"}`}
+                  >IS</button>
+                  <button
+                    onClick={() => setLang("EN")}
+                    className={`rounded-full px-2 py-0.5 transition-colors ${lang === "EN" ? "bg-white text-gray-900" : "text-white/70 hover:text-white"}`}
+                  >EN</button>
+                </div>
               </div>
             </div>
           </div>
@@ -616,7 +632,7 @@ export default function TeamPage() {
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         {/* Announcements Section */}
         <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Tilkynningar</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{lang === "IS" ? "Tilkynningar" : "Announcements"}</h2>
 
           {isCoachOrAdmin && (
             <button
@@ -624,7 +640,7 @@ export default function TeamPage() {
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
               <Plus className="w-4 h-4" />
-              Ný tilkynning
+              {lang === "IS" ? "Ný tilkynning" : "New announcement"}
             </button>
           )}
 
@@ -632,13 +648,13 @@ export default function TeamPage() {
             <div className="bg-white rounded-xl shadow-sm p-4 space-y-3 border border-gray-200">
               <input
                 type="text"
-                placeholder="Titill"
+                placeholder={lang === "IS" ? "Titill" : "Title"}
                 value={newAnnouncementTitle}
                 onChange={(e) => setNewAnnouncementTitle(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <textarea
-                placeholder="Efni tilkynningar"
+                placeholder={lang === "IS" ? "Efni tilkynningar" : "Announcement body"}
                 value={newAnnouncementBody}
                 onChange={(e) => setNewAnnouncementBody(e.target.value)}
                 rows={4}
@@ -651,7 +667,7 @@ export default function TeamPage() {
                   onChange={(e) => setNewAnnouncementPinned(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-sm text-gray-700">Festa efst</span>
+                <span className="text-sm text-gray-700">{lang === "IS" ? "Festa efst" : "Pin to top"}</span>
               </label>
               <div className="flex gap-2">
                 <button
@@ -659,13 +675,13 @@ export default function TeamPage() {
                   disabled={announcementLoading}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                 >
-                  {announcementLoading ? "Birta..." : "Birta"}
+                  {announcementLoading ? (lang === "IS" ? "Birta..." : "Publishing...") : (lang === "IS" ? "Birta" : "Publish")}
                 </button>
                 <button
                   onClick={() => setShowAnnouncementForm(false)}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
                 >
-                  Hætta við
+                  {lang === "IS" ? "Hætta við" : "Cancel"}
                 </button>
               </div>
             </div>
@@ -744,7 +760,7 @@ export default function TeamPage() {
 
           {teamData.announcements.length === 0 && (
             <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
-              Engar tilkynningar ennþá
+              {lang === "IS" ? "Engar tilkynningar ennþá" : "No announcements yet"}
             </div>
           )}
         </section>
@@ -752,7 +768,7 @@ export default function TeamPage() {
         {/* Weekly Schedule Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Dagskrá vikunnar</h2>
+            <h2 className="text-2xl font-bold text-gray-900">{lang === "IS" ? "Dagskrá vikunnar" : "Weekly Schedule"}</h2>
             {isCoachOrAdmin && (
               <div className="flex items-center gap-2">
                 <button
@@ -760,20 +776,20 @@ export default function TeamPage() {
                   disabled={syncLoading}
                   className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium disabled:opacity-50"
                 >
-                  {syncLoading ? "Samstilli..." : "Samstilla"}
+                  {syncLoading ? (lang === "IS" ? "Samstilli..." : "Syncing...") : (lang === "IS" ? "Samstilla" : "Sync")}
                 </button>
                 <button
                   onClick={() => setShowScheduleForm(!showScheduleForm)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
                 >
                   {showScheduleForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  {showScheduleForm ? "Hætta við" : "Bæta við"}
+                  {showScheduleForm ? (lang === "IS" ? "Hætta við" : "Cancel") : (lang === "IS" ? "Bæta við" : "Add")}
                 </button>
               </div>
             )}
           </div>
           {syncMessage && (
-            <div className={`text-sm px-3 py-2 rounded-lg ${syncMessage.startsWith("Villa") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+            <div className={`text-sm px-3 py-2 rounded-lg ${(syncMessage.startsWith("Villa") || syncMessage.startsWith("Error")) ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
               {syncMessage}
             </div>
           )}
@@ -808,28 +824,28 @@ export default function TeamPage() {
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
-                <option value="training">🏋️ Æfing</option>
-                <option value="match">⚽ Leikur</option>
-                <option value="meeting">📋 Fundur</option>
-                <option value="recovery">🧘 Endurreisn</option>
-                <option value="day_off">📅 Frí dagur</option>
+                <option value="training">🏋️ {lang === "IS" ? "Æfing" : "Training"}</option>
+                <option value="match">⚽ {lang === "IS" ? "Leikur" : "Match"}</option>
+                <option value="meeting">📋 {lang === "IS" ? "Fundur" : "Meeting"}</option>
+                <option value="recovery">🧘 {lang === "IS" ? "Endurreisn" : "Recovery"}</option>
+                <option value="day_off">📅 {lang === "IS" ? "Frí dagur" : "Day off"}</option>
               </select>
               <input
                 type="text"
-                placeholder="Titill atburðar"
+                placeholder={lang === "IS" ? "Titill atburðar" : "Event title"}
                 value={newEventTitle}
                 onChange={(e) => setNewEventTitle(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <input
                 type="text"
-                placeholder="Staðsetning (valfrjálst)"
+                placeholder={lang === "IS" ? "Staðsetning (valfrjálst)" : "Location (optional)"}
                 value={newEventLocation}
                 onChange={(e) => setNewEventLocation(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <textarea
-                placeholder="Lýsing (valfrjálst)"
+                placeholder={lang === "IS" ? "Lýsing (valfrjálst)" : "Description (optional)"}
                 value={newEventDescription}
                 onChange={(e) => setNewEventDescription(e.target.value)}
                 rows={2}
@@ -840,7 +856,7 @@ export default function TeamPage() {
                 disabled={scheduleLoading}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
               >
-                {scheduleLoading ? "Bæta við..." : "Bæta við"}
+                {scheduleLoading ? (lang === "IS" ? "Bæti við..." : "Adding...") : (lang === "IS" ? "Bæta við" : "Add event")}
               </button>
             </div>
           )}
@@ -849,13 +865,14 @@ export default function TeamPage() {
             events={teamData.schedule}
             isCoachOrAdmin={isCoachOrAdmin}
             onDeleteEvent={handleDeleteEvent}
+            lang={lang}
           />
         </section>
 
         {/* Documents Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Skjöl</h2>
+            <h2 className="text-2xl font-bold text-gray-900">{lang === "IS" ? "Skjöl" : "Documents"}</h2>
             {isCoachOrAdmin && (
               <button
                 onClick={() => setShowDocUploadForm(!showDocUploadForm)}
@@ -866,7 +883,7 @@ export default function TeamPage() {
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
-                {showDocUploadForm ? "Hætta við" : "Hlaða upp"}
+                {showDocUploadForm ? (lang === "IS" ? "Hætta við" : "Cancel") : (lang === "IS" ? "Hlaða upp" : "Upload")}
               </button>
             )}
           </div>
@@ -876,7 +893,7 @@ export default function TeamPage() {
             <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200 space-y-3">
               <input
                 type="text"
-                placeholder="Titill skjals"
+                placeholder={lang === "IS" ? "Titill skjals" : "Document title"}
                 value={docTitle}
                 onChange={(e) => setDocTitle(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
@@ -902,7 +919,7 @@ export default function TeamPage() {
                   />
                   <FileText className="w-8 h-8 mx-auto text-gray-400 mb-1" />
                   <span className="text-sm text-gray-500">
-                    {docFile ? docFile.name : "Veldu PDF skjal"}
+                    {docFile ? docFile.name : (lang === "IS" ? "Veldu PDF skjal" : "Choose PDF file")}
                   </span>
                   {docFile && (
                     <span className="block text-xs text-gray-400 mt-1">
@@ -916,7 +933,7 @@ export default function TeamPage() {
                 disabled={docLoading || !docTitle.trim() || !docFile}
                 className="w-full bg-green-600 text-white py-2 rounded-lg font-medium disabled:opacity-50 hover:bg-green-700 transition text-sm"
               >
-                {docLoading ? "Hleð upp..." : "Hlaða upp skjali"}
+                {docLoading ? (lang === "IS" ? "Hleð upp..." : "Uploading...") : (lang === "IS" ? "Hlaða upp skjali" : "Upload document")}
               </button>
             </div>
           )}
@@ -931,7 +948,7 @@ export default function TeamPage() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Allt
+              {lang === "IS" ? "Allt" : "All"}
             </button>
             {DOC_CATEGORIES.map((cat) => (
               <button
@@ -983,7 +1000,7 @@ export default function TeamPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
-                      title="Opna PDF"
+                      title={lang === "IS" ? "Opna PDF" : "Open PDF"}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -991,7 +1008,7 @@ export default function TeamPage() {
                       <button
                         onClick={() => handleDeleteDocument(doc.id)}
                         className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition"
-                        title="Eyða"
+                        title={lang === "IS" ? "Eyða" : "Delete"}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1001,7 +1018,7 @@ export default function TeamPage() {
               ))
             ) : (
               <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
-                Engin skjöl hlaðið upp enn
+                {lang === "IS" ? "Engin skjöl hlaðið upp enn" : "No documents uploaded yet"}
               </div>
             )}
           </div>
@@ -1022,16 +1039,16 @@ export default function TeamPage() {
         >
           <div className="flex">
             {[
-              { label: "Í dag", icon: (
+              { label: lang === "IS" ? "Í dag" : "Today", icon: (
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
               ), href: "/player?tab=today", active: false },
-              { label: "Spjall", icon: (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+              { label: lang === "IS" ? "Spjall" : "Chat", icon: (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="10" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none" /></svg>
               ), href: "/player?tab=chat", active: false },
-              { label: "Lið", icon: (
+              { label: lang === "IS" ? "Lið" : "Team", icon: (
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
               ), href: "/team", active: true },
-              { label: "Saga", icon: (
+              { label: lang === "IS" ? "Saga" : "History", icon: (
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
               ), href: "/player?tab=history", active: false },
             ].map((item) => (

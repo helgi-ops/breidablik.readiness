@@ -22,6 +22,7 @@ export function middleware(req: NextRequest) {
   const isProtected =
     pathname.startsWith("/coach") ||
     pathname.startsWith("/player") ||
+    pathname.startsWith("/team") ||
     pathname.startsWith("/auth/redirect");
 
   if (!isProtected) return NextResponse.next();
@@ -42,5 +43,5 @@ export function middleware(req: NextRequest) {
 
 // 🚨 CRITICAL: Do NOT include "/" here
 export const config = {
-  matcher: ["/coach/:path*", "/player/:path*", "/auth/redirect", "/reset-password"],
+  matcher: ["/coach/:path*", "/player/:path*", "/team/:path*", "/auth/redirect", "/reset-password"],
 };
