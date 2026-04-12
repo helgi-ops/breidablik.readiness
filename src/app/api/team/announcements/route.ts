@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendAnnouncementNotification } from "@/lib/notifications/sendAnnouncementNotification";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
@@ -78,6 +79,15 @@ export async function POST(req: NextRequest) {
       console.error("Error creating announcement:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Send push notifications to all team players (fire-and-forget)
+    sendAnnouncementNotification(supabase, {
+      teamId,
+      title: title.trim(),
+      body: announcementBody.trim(),
+    }).catch((err) => {
+      console.error("Failed to send announcement push notifications:", err);
+    });
 
     return NextResponse.json({ announcement }, { status: 201 });
   } catch (err) {

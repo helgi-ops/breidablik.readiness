@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import {
-  Calendar,
   Plus,
   X,
   Pin,
@@ -14,6 +13,7 @@ import {
   Upload,
   ExternalLink,
 } from "lucide-react";
+import WeeklyCalendar from "./WeeklyCalendar";
 
 interface User {
   id: string;
@@ -105,6 +105,8 @@ export default function TeamPage() {
   const [newEventDescription, setNewEventDescription] = useState("");
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Documents state
   interface TeamDocument {
@@ -374,6 +376,49 @@ export default function TeamPage() {
     }
   };
 
+  const handleSyncSheet = async () => {
+    setSyncLoading(true);
+    setSyncMessage(null);
+    try {
+      const authSession = await supabase.auth.getSession();
+      const now = new Date();
+      const response = await fetch("/api/team/schedule/sync-sheet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authSession.data?.session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({
+          teamId: profile?.team_id,
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setSyncMessage(`Villa: ${data.error}`);
+        setSyncLoading(false);
+        return;
+      }
+      setSyncMessage(`Samstillt: ${data.synced} atburðir`);
+      // Refresh team data
+      const teamResponse = await fetch(
+        `/api/team/page?teamId=${profile?.team_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authSession.data?.session?.access_token ?? ""}`,
+          },
+        }
+      );
+      const updatedTeamData: TeamData = await teamResponse.json();
+      setTeamData(updatedTeamData);
+      setSyncLoading(false);
+    } catch (err) {
+      setSyncMessage(err instanceof Error ? err.message : "Sync failed");
+      setSyncLoading(false);
+    }
+  };
+
   // ── Documents ────────────────────────────────────────────────────────────
 
   const fetchDocuments = async () => {
@@ -480,49 +525,6 @@ export default function TeamPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const getEventTypeColor = (type: string): string => {
-    switch (type) {
-      case "training":
-        return "bg-green-100 text-green-800";
-      case "match":
-        return "bg-red-100 text-red-800";
-      case "meeting":
-        return "bg-blue-100 text-blue-800";
-      case "recovery":
-        return "bg-yellow-100 text-yellow-800";
-      case "day_off":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getEventTypeIcon = (type: string) => {
-    switch (type) {
-      case "training":
-        return "🏋️";
-      case "match":
-        return "⚽";
-      case "meeting":
-        return "📋";
-      case "recovery":
-        return "🧘";
-      case "day_off":
-        return "📅";
-      default:
-        return "📅";
-    }
-  };
-
-  const formatDateIcelandic = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString("is-IS", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   const formatRelativeDate = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
@@ -533,17 +535,6 @@ export default function TeamPage() {
     if (diffDays === 1) return "á morgun";
     if (diffDays < 0) return Math.abs(diffDays) + " dögum síðan";
     return "um " + diffDays + " daga";
-  };
-
-  const getUpcomingEvents = (events: TeamData["schedule"]): TeamData["schedule"] => {
-    const now = new Date();
-    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-    return events
-      .filter((e) => {
-        const eventDate = new Date(e.event_date);
-        return eventDate >= now && eventDate <= twoWeeksFromNow;
-      })
-      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
   };
 
   if (loading) {
@@ -760,32 +751,49 @@ export default function TeamPage() {
 
         {/* Weekly Schedule Section */}
         <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">Dagskrá vikunnar</h2>
-
-          {isCoachOrAdmin && (
-            <button
-              onClick={() => setShowScheduleForm(!showScheduleForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus className="w-4 h-4" />
-              Bæta við
-            </button>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900">Dagskrá vikunnar</h2>
+            {isCoachOrAdmin && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSyncSheet}
+                  disabled={syncLoading}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium disabled:opacity-50"
+                >
+                  {syncLoading ? "Samstilli..." : "Samstilla"}
+                </button>
+                <button
+                  onClick={() => setShowScheduleForm(!showScheduleForm)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+                >
+                  {showScheduleForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {showScheduleForm ? "Hætta við" : "Bæta við"}
+                </button>
+              </div>
+            )}
+          </div>
+          {syncMessage && (
+            <div className={`text-sm px-3 py-2 rounded-lg ${syncMessage.startsWith("Villa") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+              {syncMessage}
+            </div>
           )}
 
           {showScheduleForm && isCoachOrAdmin && (
             <div className="bg-white rounded-xl shadow-sm p-4 space-y-3 border border-gray-200">
-              <input
-                type="date"
-                value={newEventDate}
-                onChange={(e) => setNewEventDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="time"
-                value={newEventTime}
-                onChange={(e) => setNewEventTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="date"
+                  value={newEventDate}
+                  onChange={(e) => setNewEventDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <input
+                  type="time"
+                  value={newEventTime}
+                  onChange={(e) => setNewEventTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
               <select
                 value={newEventType}
                 onChange={(e) =>
@@ -798,127 +806,50 @@ export default function TeamPage() {
                       | "day_off"
                   )
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
-                <option value="training">Æfing</option>
-                <option value="match">Leikur</option>
-                <option value="meeting">Fundur</option>
-                <option value="recovery">Endurreisn</option>
-                <option value="day_off">Frí dagur</option>
+                <option value="training">🏋️ Æfing</option>
+                <option value="match">⚽ Leikur</option>
+                <option value="meeting">📋 Fundur</option>
+                <option value="recovery">🧘 Endurreisn</option>
+                <option value="day_off">📅 Frí dagur</option>
               </select>
               <input
                 type="text"
                 placeholder="Titill atburðar"
                 value={newEventTitle}
                 onChange={(e) => setNewEventTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <input
                 type="text"
                 placeholder="Staðsetning (valfrjálst)"
                 value={newEventLocation}
                 onChange={(e) => setNewEventLocation(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <textarea
                 placeholder="Lýsing (valfrjálst)"
                 value={newEventDescription}
                 onChange={(e) => setNewEventDescription(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCreateEvent}
-                  disabled={scheduleLoading}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {scheduleLoading ? "Bæta við..." : "Bæta við"}
-                </button>
-                <button
-                  onClick={() => setShowScheduleForm(false)}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Hætta við
-                </button>
-              </div>
+              <button
+                onClick={handleCreateEvent}
+                disabled={scheduleLoading}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
+              >
+                {scheduleLoading ? "Bæta við..." : "Bæta við"}
+              </button>
             </div>
           )}
 
-          <div className="space-y-3">
-            {getUpcomingEvents(teamData.schedule).length > 0 ? (
-              getUpcomingEvents(teamData.schedule).map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-white rounded-xl shadow-sm p-4 border-l-4"
-                  style={{
-                    borderLeftColor:
-                      event.event_type === "training"
-                        ? "#22c55e"
-                        : event.event_type === "match"
-                          ? "#ef4444"
-                          : event.event_type === "meeting"
-                            ? "#3b82f6"
-                            : event.event_type === "recovery"
-                              ? "#eab308"
-                              : "#6b7280",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">
-                          {getEventTypeIcon(event.event_type)}
-                        </span>
-                        <span
-                          className={`text-xs font-semibold px-2 py-1 rounded ${getEventTypeColor(event.event_type)}`}
-                        >
-                          {event.event_type === "training"
-                            ? "Æfing"
-                            : event.event_type === "match"
-                              ? "Leikur"
-                              : event.event_type === "meeting"
-                                ? "Fundur"
-                                : event.event_type === "recovery"
-                                  ? "Endurreisn"
-                                  : "Frí dagur"}
-                        </span>
-                      </div>
-                      <h3 className="font-bold text-gray-900">
-                        {event.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {formatDateIcelandic(event.event_date)}
-                        {event.event_time && ` • ${event.event_time}`}
-                      </p>
-                      {event.location && (
-                        <p className="text-sm text-gray-600">
-                          📍 {event.location}
-                        </p>
-                      )}
-                      {event.description && (
-                        <p className="text-sm text-gray-700 mt-2">
-                          {event.description}
-                        </p>
-                      )}
-                    </div>
-                    {isCoachOrAdmin && (
-                      <button
-                        onClick={() => handleDeleteEvent(event.id)}
-                        className="text-gray-400 hover:text-red-600 transition flex-shrink-0"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-500">
-                Engir atburðir á næstu 14 dögum
-              </div>
-            )}
-          </div>
+          <WeeklyCalendar
+            events={teamData.schedule}
+            isCoachOrAdmin={isCoachOrAdmin}
+            onDeleteEvent={handleDeleteEvent}
+          />
         </section>
 
         {/* Documents Section */}

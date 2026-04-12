@@ -111,16 +111,21 @@ export async function GET(req: NextRequest) {
       created_at: a.created_at,
     })) ?? [];
 
-    // 3. Fetch schedule events (from today onwards)
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
+    // 3. Fetch schedule events (4 weeks back + 8 weeks forward for calendar)
+    const now = new Date();
+    const rangeStart = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000)
+      .toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
+    const rangeEnd = new Date(now.getTime() + 56 * 24 * 60 * 60 * 1000)
+      .toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
     const { data: schedule, error: scheduleError } = await supabase
       .from("team_schedule_events")
       .select("id, event_date, event_time, event_type, title, description, location")
       .eq("team_id", teamId)
-      .gte("event_date", today)
+      .gte("event_date", rangeStart)
+      .lte("event_date", rangeEnd)
       .order("event_date", { ascending: true })
       .order("event_time", { ascending: true })
-      .limit(14);
+      .limit(200);
 
     if (scheduleError) {
       console.error("Schedule error:", scheduleError);
