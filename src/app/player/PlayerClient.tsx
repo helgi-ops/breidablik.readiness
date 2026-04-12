@@ -3451,7 +3451,7 @@ export default function PlayerClient() {
 
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to load session RPE history.");
 
-      setSessionRpeHistory((json.entries ?? []).slice(0, 5));
+      setSessionRpeHistory((json.entries ?? []).slice(0, 10));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load session RPE history.";
       setSessionRpeHistoryError(msg);
@@ -4873,203 +4873,210 @@ export default function PlayerClient() {
               <div className="p-4 sm:p-5">
                 <SectionTitle kicker={t.rpe.kicker} title={t.rpe.title} sub={t.rpe.sub} />
 
-                <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-semibold text-zinc-900">RPE compliance today</div>
-                    {sessionRpeStatus ? (
-                      <span
-                        className={cx(
-                          "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                          sessionRpeStatus.state === "SUBMITTED_TODAY"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : sessionRpeStatus.state === "NOT_EXPECTED_TODAY"
-                            ? "border-slate-200 bg-slate-100 text-slate-700"
-                            : "border-amber-200 bg-amber-50 text-amber-800"
-                        )}
-                      >
-                        {sessionRpeStatus.state === "SUBMITTED_TODAY"
-                          ? "Submitted today"
+                {/* Status pill */}
+                {sessionRpeStatus && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span
+                      className={cx(
+                        "inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+                        sessionRpeStatus.state === "SUBMITTED_TODAY"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                           : sessionRpeStatus.state === "NOT_EXPECTED_TODAY"
-                          ? "No submission expected"
-                          : "Not yet submitted"}
+                          ? "border-slate-200 bg-slate-100 text-slate-700"
+                          : "border-amber-200 bg-amber-50 text-amber-800"
+                      )}
+                    >
+                      {sessionRpeStatus.state === "SUBMITTED_TODAY"
+                        ? lang === "IS" ? "Skráð í dag" : "Submitted today"
+                        : sessionRpeStatus.state === "NOT_EXPECTED_TODAY"
+                        ? lang === "IS" ? "Ekki vænt í dag" : "Not expected today"
+                        : lang === "IS" ? "Vantar skráningu" : "Not yet submitted"}
+                    </span>
+                    {sessionRpeStatus.latestSubmissionAt && (
+                      <span className="text-[11px] text-zinc-400">
+                        {new Date(sessionRpeStatus.latestSubmissionAt).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
                       </span>
-                    ) : null}
+                    )}
                   </div>
+                )}
 
-                  <div className="mt-1 text-zinc-600">
-                    {sessionRpeStatus?.state === "SUBMITTED_TODAY"
-                      ? "You have already submitted post-session RPE for today."
-                      : sessionRpeStatus?.state === "NOT_EXPECTED_TODAY"
-                      ? "No RPE submission is expected today."
-                      : "Please submit your post-session RPE after training."}
+                {/* ── RPE tap grid ─────────────────────────────── */}
+                <div className="mt-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-2">
+                    {lang === "IS" ? "Hversu erfið var æfingin?" : "How hard was the session?"}
                   </div>
-
-                  {sessionRpeStatus?.latestSubmissionAt ? (
-                    <div className="mt-1 text-zinc-500">
-                      Latest submission:{" "}
-                      {new Date(sessionRpeStatus.latestSubmissionAt).toLocaleTimeString("is-IS", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {sessionRpeStatus.todayEntriesCount > 1 ? ` · ${sessionRpeStatus.todayEntriesCount} sessions today` : ""}
-                    </div>
-                  ) : null}
-
-                  {sessionRpeStatusLoading ? <div className="mt-1 text-zinc-500">Loading status...</div> : null}
-                  {sessionRpeStatusError ? <div className="mt-1 text-rose-700">{sessionRpeStatusError}</div> : null}
+                  <div className="grid grid-cols-5 gap-2">
+                    {([1,2,3,4,5,6,7,8,9,10] as const).map((val) => {
+                      const selected = sessionRpeForm.rpe === String(val);
+                      const color =
+                        val <= 2 ? "emerald" :
+                        val <= 4 ? "green" :
+                        val <= 6 ? "amber" :
+                        val <= 8 ? "orange" :
+                        "red";
+                      const colorClasses = selected
+                        ? color === "emerald" ? "bg-emerald-500 border-emerald-600 text-white shadow-md"
+                        : color === "green" ? "bg-green-500 border-green-600 text-white shadow-md"
+                        : color === "amber" ? "bg-amber-500 border-amber-600 text-white shadow-md"
+                        : color === "orange" ? "bg-orange-500 border-orange-600 text-white shadow-md"
+                        : "bg-red-500 border-red-600 text-white shadow-md"
+                        : "bg-white border-zinc-200 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50";
+                      const label =
+                        val <= 2 ? (lang === "IS" ? "Mjög létt" : "Very easy") :
+                        val <= 4 ? (lang === "IS" ? "Létt" : "Easy") :
+                        val <= 6 ? (lang === "IS" ? "Miðlungs" : "Moderate") :
+                        val <= 8 ? (lang === "IS" ? "Erfitt" : "Hard") :
+                        val === 9 ? (lang === "IS" ? "Mjög erfitt" : "Very hard") :
+                        (lang === "IS" ? "Hámark" : "Maximal");
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setSessionRpeForm((prev) => ({ ...prev, rpe: String(val) }))}
+                          className={cx(
+                            "relative flex flex-col items-center justify-center rounded-xl border-2 py-3 transition-all",
+                            colorClasses
+                          )}
+                        >
+                          <span className="text-lg font-bold tabular-nums leading-none">{val}</span>
+                          <span className={cx("mt-0.5 text-[9px] font-medium leading-tight", selected ? "text-white/80" : "text-zinc-400")}>{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Date</label>
-                    <input
-                      type="date"
-                      value={sessionRpeForm.session_date}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_date: e.target.value }))}
-                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Session type</label>
-                    <select
-                      value={sessionRpeForm.session_type}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_type: e.target.value as SessionType }))}
-                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
-                    >
-                      {SESSION_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {formatSessionTypeLabel(type)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Session name (optional)</label>
-                    <input
-                      type="text"
-                      value={sessionRpeForm.session_name}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, session_name: e.target.value }))}
-                      placeholder="e.g. Team tactical + small sided games"
-                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
-                    />
-                  </div>
-
-                  <div>
+                {/* ── Duration + Load preview ─────────────────── */}
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  {/* Duration display / input */}
+                  <div className="flex-1 min-w-[140px]">
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Duration (minutes)
-                      {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">– loading GPS…</span>}
+                      {lang === "IS" ? "Lengd" : "Duration"}
+                      {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">…</span>}
                       {!gpsDurationLoading && gpsDuration != null && (
-                        <span className="ml-1 text-emerald-600 normal-case font-normal">– GPS: {gpsDuration} mín</span>
+                        <span className="ml-1 text-emerald-600 normal-case font-normal">GPS</span>
                       )}
                     </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={300}
-                      value={sessionRpeForm.duration_minutes}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
-                      className={[
-                        "mt-1 h-10 w-full rounded-lg border px-3 text-sm",
-                        gpsDuration != null && sessionRpeForm.duration_minutes === String(gpsDuration)
-                          ? "bg-emerald-50 border-emerald-200"
-                          : "bg-white",
-                      ].join(" ")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">RPE (0–10)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.5}
-                      value={sessionRpeForm.rpe}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, rpe: e.target.value }))}
-                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Notes (optional)</label>
-                    <textarea
-                      rows={2}
-                      value={sessionRpeForm.notes}
-                      onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, notes: e.target.value }))}
-                      className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm"
-                      placeholder="Optional context (travel, individual work, etc.)"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-700">
-                  <div className="font-semibold text-zinc-900">RPE guide</div>
-                  <div className="mt-1 grid gap-1 sm:grid-cols-2">
-                    <div>0–2 = very easy</div>
-                    <div>3–4 = easy</div>
-                    <div>5–6 = moderate</div>
-                    <div>7–8 = hard</div>
-                    <div>9 = very hard</div>
-                    <div>10 = maximal</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <div className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
-                    Session load preview:{" "}
-                    <span className="tabular-nums text-zinc-900">{sessionLoadPreview == null ? "—" : sessionLoadPreview}</span>
-                  </div>
-                  {sessionLoadPreview != null ? (
-                    <div
-                      className={cx(
-                        "rounded-full border px-3 py-1 text-xs font-semibold",
-                        formatLoadBandClass(getSessionLoadBand(sessionLoadPreview))
-                      )}
-                    >
-                      {getSessionLoadBand(sessionLoadPreview)}
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={1}
+                        max={300}
+                        value={sessionRpeForm.duration_minutes}
+                        onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                        placeholder={gpsDuration != null ? String(gpsDuration) : "mín"}
+                        className={cx(
+                          "h-10 w-full rounded-lg border px-3 text-sm tabular-nums",
+                          gpsDuration != null && sessionRpeForm.duration_minutes === String(gpsDuration)
+                            ? "bg-emerald-50 border-emerald-200"
+                            : "bg-white border-zinc-200"
+                        )}
+                      />
+                      <span className="text-xs text-zinc-400 whitespace-nowrap">mín</span>
                     </div>
-                  ) : null}
+                  </div>
+
+                  {/* Session load preview */}
+                  {sessionRpeForm.rpe && sessionRpeForm.duration_minutes && (
+                    <div className="pb-1">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-1">
+                        {lang === "IS" ? "Álag" : "Load"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl font-bold tabular-nums text-zinc-900">
+                          {sessionLoadPreview ?? "—"}
+                        </span>
+                        {sessionLoadPreview != null && (
+                          <span
+                            className={cx(
+                              "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                              formatLoadBandClass(getSessionLoadBand(sessionLoadPreview))
+                            )}
+                          >
+                            {getSessionLoadBand(sessionLoadPreview)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-3 flex items-center gap-3">
+                {/* ── Submit ──────────────────────────────────── */}
+                <div className="mt-4">
                   <button
                     type="button"
                     disabled={!sessionRpeValid || sessionRpeSubmitting}
                     onClick={() => submitSessionRpe()}
-                    className="rounded-lg border border-black bg-black px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className={cx(
+                      "w-full rounded-xl py-3 text-sm font-bold transition-all",
+                      sessionRpeValid
+                        ? "bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[0.98]"
+                        : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                    )}
                   >
-                    {sessionRpeSubmitting ? "Submitting..." : "Submit Session RPE"}
+                    {sessionRpeSubmitting
+                      ? (lang === "IS" ? "Sendir…" : "Submitting…")
+                      : (lang === "IS" ? "Skrá RPE" : "Submit RPE")}
                   </button>
-                  {!sessionRpeValid ? <div className="text-xs text-zinc-500">Enter valid duration (1–300) and RPE (0–10).</div> : null}
+                  {!sessionRpeValid && sessionRpeForm.rpe === "" && (
+                    <div className="mt-1.5 text-center text-[11px] text-zinc-400">
+                      {lang === "IS" ? "Veldu tölu hér að ofan" : "Tap a number above"}
+                    </div>
+                  )}
                 </div>
 
-                {sessionRpeSuccess ? <div className="mt-2 text-xs text-emerald-700">{sessionRpeSuccess}</div> : null}
-                {sessionRpeError ? <div className="mt-2 text-xs text-rose-700">{sessionRpeError}</div> : null}
+                {sessionRpeSuccess ? <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 text-center">{sessionRpeSuccess}</div> : null}
+                {sessionRpeError ? <div className="mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 text-center">{sessionRpeError}</div> : null}
 
-                <div className="mt-4 rounded-xl border bg-white p-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Recent submissions</div>
+                {/* ── Recent history (last 10) ────────────────── */}
+                <div className="mt-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-2">
+                    {lang === "IS" ? "Síðustu skráningar" : "Recent submissions"}
+                  </div>
                   {sessionRpeHistoryLoading ? (
-                    <div className="mt-2 text-xs text-zinc-500">Loading...</div>
+                    <div className="text-xs text-zinc-400">Loading...</div>
                   ) : sessionRpeHistoryError ? (
-                    <div className="mt-2 text-xs text-rose-700">{sessionRpeHistoryError}</div>
+                    <div className="text-xs text-rose-700">{sessionRpeHistoryError}</div>
                   ) : sessionRpeHistory.length === 0 ? (
-                    <div className="mt-2 text-xs text-zinc-500">No Session RPE entries yet.</div>
+                    <div className="text-xs text-zinc-400">{lang === "IS" ? "Engin RPE skráning ennþá." : "No RPE entries yet."}</div>
                   ) : (
-                    <div className="mt-2 space-y-2">
-                      {sessionRpeHistory.map((entry) => (
-                        <div key={entry.id} className="rounded-lg border bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-zinc-900">{entry.session_date}</span>
-                            <span>{formatSessionTypeLabel(entry.session_type)}</span>
-                            <span>{entry.duration_minutes} min</span>
-                            <span>RPE {entry.rpe}</span>
-                            <span className="font-semibold">Load {entry.session_load}</span>
+                    <div className="space-y-1.5">
+                      {sessionRpeHistory.map((entry) => {
+                        const load = entry.session_load ?? 0;
+                        const rpeVal = Number(entry.rpe) || 0;
+                        const rpeColor =
+                          rpeVal <= 3 ? "bg-emerald-500" :
+                          rpeVal <= 5 ? "bg-amber-400" :
+                          rpeVal <= 7 ? "bg-orange-500" :
+                          "bg-red-500";
+                        return (
+                          <div key={entry.id} className="flex items-center gap-2 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                            {/* RPE color dot */}
+                            <div className={cx("h-7 w-7 flex-shrink-0 rounded-lg flex items-center justify-center text-[11px] font-bold text-white", rpeColor)}>
+                              {entry.rpe}
+                            </div>
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="font-semibold text-zinc-700 tabular-nums">{entry.session_date.slice(5)}</span>
+                                <span className="text-zinc-400">·</span>
+                                <span className="text-zinc-500">{entry.duration_minutes} mín</span>
+                                <span className="text-zinc-400">·</span>
+                                <span className="font-semibold text-zinc-700 tabular-nums">{load} AU</span>
+                              </div>
+                            </div>
+                            {/* Load band */}
+                            <span
+                              className={cx(
+                                "rounded-full border px-1.5 py-0.5 text-[9px] font-semibold flex-shrink-0",
+                                formatLoadBandClass(getSessionLoadBand(load))
+                              )}
+                            >
+                              {getSessionLoadBand(load)}
+                            </span>
                           </div>
-                          {entry.session_name ? <div className="mt-1 text-zinc-600">{entry.session_name}</div> : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
