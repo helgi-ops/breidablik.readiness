@@ -366,7 +366,7 @@ export default function PlayerCheckinPage() {
               type="button"
               variant="secondary"
               className="w-1/2 rounded-xl"
-              onClick={() => router.push("/player")}
+              onClick={() => router.push("/team")}
             >
               Sleppa
             </Button>
@@ -427,8 +427,8 @@ export default function PlayerCheckinPage() {
           )}
 
           <CardFooter>
-            <Button className="w-full rounded-xl" onClick={() => (window.location.href = "/player")}>
-              Fara á leikmannasíðu
+            <Button className="w-full rounded-xl" onClick={() => (window.location.href = "/team")}>
+              Áfram
             </Button>
           </CardFooter>
         </Card>
