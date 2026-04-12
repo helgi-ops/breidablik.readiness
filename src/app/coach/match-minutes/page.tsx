@@ -42,6 +42,10 @@ export default function CoachMatchMinutesPage() {
   const [query, setQuery] = useState("");
   const [opponent, setOpponent] = useState("");
   const [opponentDirty, setOpponentDirty] = useState(false);
+  const [matchDate, setMatchDate] = useState("");
+  const [matchDateDirty, setMatchDateDirty] = useState(false);
+  const [isHome, setIsHome] = useState<boolean | null>(null);
+  const [isHomeDirty, setIsHomeDirty] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -60,9 +64,13 @@ export default function CoachMatchMinutesPage() {
 
     const loaded = (data as Row[]) ?? [];
     setRows(loaded);
-    // Seed opponent from first row that has one
+    // Seed opponent & match date from first row
     const first = loaded.find((r) => r.opponent);
     if (first?.opponent && !opponentDirty) setOpponent(first.opponent);
+    const firstWithDate = loaded.find((r) => r.last_match_date);
+    if (firstWithDate?.last_match_date && !matchDateDirty) setMatchDate(firstWithDate.last_match_date);
+    const firstWithHome = loaded.find((r) => r.is_home != null);
+    if (firstWithHome?.is_home != null && !isHomeDirty) setIsHome(firstWithHome.is_home);
     setLoading(false);
   }
 
@@ -114,11 +122,38 @@ export default function CoachMatchMinutesPage() {
     setSaving(true);
     setError("");
 
+    // Use the override date if the coach changed it, otherwise use the view date
+    const effectiveDate = matchDateDirty && matchDate ? matchDate : null;
+    const teamId = rows.find((r) => r.team_id)?.team_id;
+
+    // If match date, opponent, or home/away was changed, ensure match_schedule row exists
+    if (teamId && (matchDateDirty || opponentDirty || isHomeDirty)) {
+      const date = effectiveDate ?? rows.find((r) => r.last_match_date)?.last_match_date;
+      if (date) {
+        const schedulePayload: Record<string, unknown> = {
+          team_id: teamId,
+          match_date: date,
+        };
+        if (opponent.trim()) schedulePayload.opponent = opponent.trim();
+        if (isHome != null) schedulePayload.is_home = isHome;
+
+        const { error: schedErr } = await supabase
+          .from("match_schedule")
+          .upsert(schedulePayload, { onConflict: "team_id,match_date" });
+        if (schedErr) {
+          setError(schedErr.message);
+          setSaving(false);
+          return;
+        }
+      }
+    }
+
+    // Build minutes payload — use effective date for all players
     const payload = rows
-      .filter((r) => r.last_match_date)
+      .filter((r) => effectiveDate || r.last_match_date)
       .map((r) => ({
         player_id: r.player_id,
-        match_date: r.last_match_date,
+        match_date: effectiveDate ?? r.last_match_date,
         team_id: r.team_id,
         minutes_played: r.is_dnp ? 0 : r.minutes_played,
         is_dnp: r.is_dnp,
@@ -134,29 +169,9 @@ export default function CoachMatchMinutesPage() {
       return;
     }
 
-    // Save opponent to match_schedule if changed
-    if (opponentDirty && opponent.trim()) {
-      const first = rows.find((r) => r.last_match_date && r.team_id);
-      if (first?.last_match_date) {
-        const { error: oppErr } = await supabase
-          .from("match_schedule")
-          .upsert(
-            {
-              team_id: first.team_id,
-              match_date: first.last_match_date,
-              opponent: opponent.trim(),
-            },
-            { onConflict: "team_id,match_date" },
-          );
-        if (oppErr) {
-          setError(oppErr.message);
-          setSaving(false);
-          return;
-        }
-      }
-    }
-
     setOpponentDirty(false);
+    setMatchDateDirty(false);
+    setIsHomeDirty(false);
     await load();
     setSaving(false);
   }
@@ -193,27 +208,64 @@ export default function CoachMatchMinutesPage() {
             </div>
           </div>
 
-          {/* Opponent input */}
-          <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
-            <span className="text-sm font-medium whitespace-nowrap">Andstæðingur:</span>
-            <Input
-              placeholder="t.d. FH, Víkingur, Valur…"
-              value={opponent}
-              onChange={(e) => {
-                setOpponent(e.target.value);
-                setOpponentDirty(true);
-              }}
-              className="w-64"
-              disabled={saving}
-            />
-            {rows[0]?.last_match_date && (
-              <span className="text-xs text-muted-foreground">
-                Leikdagur: {rows[0].last_match_date}
-                {rows[0]?.is_home != null && (rows[0].is_home ? " (heima)" : " (úti)")}
-                {rows[0]?.competition && ` · ${rows[0].competition}`}
-              </span>
+          {/* Match info bar */}
+          <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium whitespace-nowrap">Leikdagur:</span>
+              <Input
+                type="date"
+                value={matchDate}
+                onChange={(e) => {
+                  setMatchDate(e.target.value);
+                  setMatchDateDirty(true);
+                }}
+                className="w-44"
+                disabled={saving}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium whitespace-nowrap">Andstæðingur:</span>
+              <Input
+                placeholder="t.d. FH, Víkingur, Valur…"
+                value={opponent}
+                onChange={(e) => {
+                  setOpponent(e.target.value);
+                  setOpponentDirty(true);
+                }}
+                className="w-48"
+                disabled={saving}
+              />
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={isHome === true ? "default" : "outline"}
+                className="h-8 px-3 text-xs"
+                disabled={saving}
+                onClick={() => { setIsHome(true); setIsHomeDirty(true); }}
+              >
+                Heima
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={isHome === false ? "default" : "outline"}
+                className="h-8 px-3 text-xs"
+                disabled={saving}
+                onClick={() => { setIsHome(false); setIsHomeDirty(true); }}
+              >
+                Úti
+              </Button>
+            </div>
+
+            {rows[0]?.competition && (
+              <Badge variant="secondary">{rows[0].competition}</Badge>
             )}
-            {opponentDirty && (
+
+            {(opponentDirty || matchDateDirty || isHomeDirty) && (
               <Badge variant="outline" className="text-amber-600 border-amber-300">
                 Óvistað
               </Badge>
