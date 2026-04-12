@@ -80,6 +80,8 @@ export type CatapultSessionMetric = {
   hrZone3TimeS?: number | null;
   hrZone4TimeS?: number | null;
   hrZone5TimeS?: number | null;
+  // Session duration in minutes (from Catapult GPS)
+  durationMinutes?: number | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -139,6 +141,8 @@ export type NormalizedExternalLoad = {
     hrZone3TimeS?: number | null;
     hrZone4TimeS?: number | null;
     hrZone5TimeS?: number | null;
+    // Session duration in minutes
+    durationMinutes?: number | null;
   };
   rawPayload?: unknown;
   activityCount?: number;

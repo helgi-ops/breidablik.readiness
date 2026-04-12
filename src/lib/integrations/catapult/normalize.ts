@@ -609,6 +609,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     codEvents,
     impacts,
     playerLoadPerMin,
+    durationMinutes: durationMinutes != null && durationMinutes > 0 ? Math.round(durationMinutes) : null,
     debug: {
       interestingKeys: extractInterestingMetricKeys(record),
       matched: {
@@ -787,6 +788,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       hrZone3TimeS: normalizedHr.hrZone3TimeS,
       hrZone4TimeS: normalizedHr.hrZone4TimeS,
       hrZone5TimeS: normalizedHr.hrZone5TimeS,
+      durationMinutes: normalizedIma.durationMinutes,
     });
   }
 
@@ -873,6 +875,8 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.hrZone3TimeS = sumNullable(current.hrZone3TimeS, metric.hrZone3TimeS);
     current.hrZone4TimeS = sumNullable(current.hrZone4TimeS, metric.hrZone4TimeS);
     current.hrZone5TimeS = sumNullable(current.hrZone5TimeS, metric.hrZone5TimeS);
+    // Session duration: sum across activities
+    current.durationMinutes = sumNullable(current.durationMinutes, metric.durationMinutes);
   }
 
   return Array.from(byAthleteDate.values());
@@ -933,6 +937,7 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       fmpDynamicMediumS: metric.fmpDynamicMediumS ?? null,
       fmpDynamicHighS: metric.fmpDynamicHighS ?? null,
       fmpTotalDurationS: metric.fmpTotalDurationS ?? null,
+      durationMinutes: metric.durationMinutes ?? null,
     },
   };
 }

@@ -72,6 +72,10 @@ export default function DevPlayerRPETab() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // GPS duration auto-fill
+  const [gpsDuration, setGpsDuration] = useState<number | null>(null);
+  const [gpsDurationLoading, setGpsDurationLoading] = useState(false);
+
   // Derived
   const durationNum = Number(form.duration_minutes);
   const rpeNum = Number(form.rpe);
@@ -126,11 +130,42 @@ export default function DevPlayerRPETab() {
     }
   }, []);
 
+  const loadGpsDuration = useCallback(async (date: string) => {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    setGpsDurationLoading(true);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`/api/player/session-rpe/gps-duration?date=${date}`, { headers });
+      const json = await res.json();
+      if (res.ok && json?.ok && json.duration_minutes != null) {
+        setGpsDuration(json.duration_minutes);
+        // Auto-fill only if the player hasn't manually typed a duration yet
+        setForm((prev) => {
+          if (prev.duration_minutes === "" || prev.duration_minutes === "0") {
+            return { ...prev, duration_minutes: String(json.duration_minutes) };
+          }
+          return prev;
+        });
+      } else {
+        setGpsDuration(null);
+      }
+    } catch {
+      setGpsDuration(null);
+    } finally {
+      setGpsDurationLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStatus();
     loadHistory();
     loadAcwr();
   }, [loadStatus, loadHistory, loadAcwr]);
+
+  // Fetch GPS duration whenever the selected date changes
+  useEffect(() => {
+    loadGpsDuration(form.session_date);
+  }, [loadGpsDuration, form.session_date]);
 
   async function handleSubmit() {
     if (!valid || submitting) return;
@@ -155,6 +190,7 @@ export default function DevPlayerRPETab() {
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Could not submit Session RPE.");
       setSubmitSuccess("Session RPE submitted.");
       setForm(DEFAULT_FORM);
+      setGpsDuration(null);
       await Promise.all([loadStatus(), loadHistory(), loadAcwr()]);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Could not submit Session RPE.");
@@ -323,14 +359,25 @@ export default function DevPlayerRPETab() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Duration (minutes)</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                Duration (minutes)
+                {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">– loading GPS…</span>}
+                {!gpsDurationLoading && gpsDuration != null && (
+                  <span className="ml-1 text-emerald-600 normal-case font-normal">– GPS: {gpsDuration} mín</span>
+                )}
+              </label>
               <input
                 type="number"
                 min={1}
                 max={300}
                 value={form.duration_minutes}
                 onChange={(e) => setForm((p) => ({ ...p, duration_minutes: e.target.value }))}
-                className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                className={cx(
+                  "mt-1 h-10 w-full rounded-lg border px-3 text-sm",
+                  gpsDuration != null && form.duration_minutes === String(gpsDuration)
+                    ? "bg-emerald-50 border-emerald-200"
+                    : "bg-white"
+                )}
               />
             </div>
             <div>

@@ -223,6 +223,7 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     fmp_dynamic_medium_pct: row.externalLoad.fmpDynamicMediumPct ?? null,
     fmp_dynamic_high_pct: row.externalLoad.fmpDynamicHighPct ?? null,
     fmp_running_high_pct: row.externalLoad.fmpRunningHighPct ?? null,
+    session_duration_minutes: row.externalLoad.durationMinutes ?? null,
   }));
 
   if (!payload.length) return 0;
