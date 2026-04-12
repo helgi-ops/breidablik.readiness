@@ -244,7 +244,40 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
     });
   }
 
-  if (input.matchMinutesHigh) {
+  // ── Match-minutes scoring (MD+1/MD+2 aware) ────────────────────────────────
+  // When actual minutes_played are available, scale systemic fatigue by how much
+  // the player participated AND by recovery day offset (MD+1 heavier, MD+2 lighter).
+  const mins = input.matchMinutesPlayed;
+  const md = input.mdDay?.toUpperCase?.() ?? "";
+  const isMdPlus1 = md === "MD+1";
+  const isMdPlus2 = md === "MD+2";
+
+  if (mins != null && mins > 0 && (isMdPlus1 || isMdPlus2)) {
+    // Graduated scoring:
+    //   MD+1: ≥75 min → +3, 45-74 → +2, 1-44 → +1
+    //   MD+2: ≥75 min → +2, 45-74 → +1, 1-44 → +0
+    let pts = 0;
+    let label = "";
+    if (isMdPlus1) {
+      if (mins >= 75) { pts = 3; label = `MD+1 full match (${mins} mín)`; }
+      else if (mins >= 45) { pts = 2; label = `MD+1 half-match (${mins} mín)`; }
+      else { pts = 1; label = `MD+1 sub appearance (${mins} mín)`; }
+    } else {
+      if (mins >= 75) { pts = 2; label = `MD+2 full match (${mins} mín)`; }
+      else if (mins >= 45) { pts = 1; label = `MD+2 half-match (${mins} mín)`; }
+      // <45 on MD+2 → no extra fatigue
+    }
+    if (pts > 0) {
+      systemicScore += pts;
+      drivers.push({
+        code: "MATCH_MINUTES_RECOVERY_DAY",
+        label,
+        points: pts,
+        category: "SYSTEMIC",
+      });
+    }
+  } else if (input.matchMinutesHigh) {
+    // Fallback: boolean flag when actual minutes aren't available
     systemicScore += 1;
     drivers.push({
       code: "HIGH_MATCH_MINUTES",

@@ -50,6 +50,8 @@ export type SessionContext = {
 
   md_day?: string | null;
   match_minutes_high?: boolean | null;
+  /** Actual minutes played by this player in the most recent match. */
+  match_minutes_played?: number | null;
   schedule_congestion?: boolean | null;
   travel_flag?: boolean | null;
   team_volatility_high?: boolean | null;
@@ -192,6 +194,7 @@ function buildFatigueInput(
     totalDistanceHighYesterday: (ctx.total_distance_m ?? 0) >= cfg.loadExposure.totalDistanceHighYesterday,
     intensityHighYesterday: ctx.intensity === "HIGH" || load.score >= 70,
     matchMinutesHigh: !!ctx.match_minutes_high,
+    matchMinutesPlayed: ctx.match_minutes_played ?? null,
     scheduleCongestion: !!ctx.schedule_congestion,
     travelFlag: !!ctx.travel_flag,
 

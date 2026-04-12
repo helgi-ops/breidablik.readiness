@@ -29,6 +29,9 @@ type Row = {
   last_match_date: string | null;
   minutes_played: number;
   is_dnp: boolean;
+  opponent: string | null;
+  is_home: boolean | null;
+  competition: string | null;
 };
 
 export default function CoachMatchMinutesPage() {
@@ -37,6 +40,8 @@ export default function CoachMatchMinutesPage() {
   const [error, setError] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [query, setQuery] = useState("");
+  const [opponent, setOpponent] = useState("");
+  const [opponentDirty, setOpponentDirty] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -53,7 +58,11 @@ export default function CoachMatchMinutesPage() {
       return;
     }
 
-    setRows((data as Row[]) ?? []);
+    const loaded = (data as Row[]) ?? [];
+    setRows(loaded);
+    // Seed opponent from first row that has one
+    const first = loaded.find((r) => r.opponent);
+    if (first?.opponent && !opponentDirty) setOpponent(first.opponent);
     setLoading(false);
   }
 
@@ -115,16 +124,39 @@ export default function CoachMatchMinutesPage() {
         is_dnp: r.is_dnp,
       }));
 
-    const { error } = await supabase
+    const { error: minErr } = await supabase
       .from("match_player_minutes")
       .upsert(payload, { onConflict: "player_id,match_date" });
 
-    if (error) {
-      setError(error.message);
+    if (minErr) {
+      setError(minErr.message);
       setSaving(false);
       return;
     }
 
+    // Save opponent to match_schedule if changed
+    if (opponentDirty && opponent.trim()) {
+      const first = rows.find((r) => r.last_match_date && r.team_id);
+      if (first?.last_match_date) {
+        const { error: oppErr } = await supabase
+          .from("match_schedule")
+          .upsert(
+            {
+              team_id: first.team_id,
+              match_date: first.last_match_date,
+              opponent: opponent.trim(),
+            },
+            { onConflict: "team_id,match_date" },
+          );
+        if (oppErr) {
+          setError(oppErr.message);
+          setSaving(false);
+          return;
+        }
+      }
+    }
+
+    setOpponentDirty(false);
     await load();
     setSaving(false);
   }
@@ -159,6 +191,33 @@ export default function CoachMatchMinutesPage() {
                 {saving ? "Saving…" : "Save all"}
               </Button>
             </div>
+          </div>
+
+          {/* Opponent input */}
+          <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
+            <span className="text-sm font-medium whitespace-nowrap">Andstæðingur:</span>
+            <Input
+              placeholder="t.d. FH, Víkingur, Valur…"
+              value={opponent}
+              onChange={(e) => {
+                setOpponent(e.target.value);
+                setOpponentDirty(true);
+              }}
+              className="w-64"
+              disabled={saving}
+            />
+            {rows[0]?.last_match_date && (
+              <span className="text-xs text-muted-foreground">
+                Leikdagur: {rows[0].last_match_date}
+                {rows[0]?.is_home != null && (rows[0].is_home ? " (heima)" : " (úti)")}
+                {rows[0]?.competition && ` · ${rows[0].competition}`}
+              </span>
+            )}
+            {opponentDirty && (
+              <Badge variant="outline" className="text-amber-600 border-amber-300">
+                Óvistað
+              </Badge>
+            )}
           </div>
 
           {error && (

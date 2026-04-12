@@ -58,6 +58,8 @@ export type FatigueInput = {
   totalDistanceHighYesterday: boolean;
   intensityHighYesterday: boolean;
   matchMinutesHigh: boolean;
+  /** Actual minutes played in the most recent match (null = unknown). */
+  matchMinutesPlayed: number | null;
   scheduleCongestion: boolean;
   travelFlag: boolean;
 

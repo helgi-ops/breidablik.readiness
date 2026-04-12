@@ -108,7 +108,7 @@ export function calibrationFixtures(): CalibrationCaseInput[] {
           sten_score: 3,
         }),
       ],
-      yday: { intensity: "MEDIUM", hsr_m: 700, acc_dec_total: 120, total_distance_m: 8400, max_velocity_pct: 88, match_minutes_high: true },
+      yday: { intensity: "MEDIUM", hsr_m: 700, acc_dec_total: 120, total_distance_m: 8400, max_velocity_pct: 88, match_minutes_high: true, match_minutes_played: 85, md_day: "MD+1" },
       focusPlayerId: "p5",
       expectedOutcome: "Recovery bias tendencies visible in adaptation",
       acceptableRange: "REDUCE_VOLUME or RECOVERY_ONLY",
