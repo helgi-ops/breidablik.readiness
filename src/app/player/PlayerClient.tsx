@@ -2738,6 +2738,8 @@ export default function PlayerClient() {
   const [sessionRpeSubmitting, setSessionRpeSubmitting] = useState(false);
   const [sessionRpeError, setSessionRpeError] = useState("");
   const [sessionRpeSuccess, setSessionRpeSuccess] = useState("");
+  const [gpsDuration, setGpsDuration] = useState<number | null>(null);
+  const [gpsDurationLoading, setGpsDurationLoading] = useState(false);
   const [sessionRpeHistory, setSessionRpeHistory] = useState<SessionRpeHistoryEntry[]>([]);
   const [sessionRpeHistoryLoading, setSessionRpeHistoryLoading] = useState(false);
   const [sessionRpeHistoryError, setSessionRpeHistoryError] = useState("");
@@ -2855,6 +2857,60 @@ export default function PlayerClient() {
     const safeDay = sanitizeDay(day);
     setSessionRpeForm((prev) => ({ ...prev, session_date: safeDay }));
   }, [day]);
+
+  // GPS duration auto-fill: query player_external_load_daily for the selected date
+  useEffect(() => {
+    const playerId = profile?.player_id ?? selectedPlayerId;
+    const dateStr = sanitizeDay(day);
+    if (!playerId || !dateStr) return;
+
+    let cancelled = false;
+    setGpsDurationLoading(true);
+
+    (async () => {
+      try {
+        // First try session_duration_minutes directly
+        const { data } = await supabase
+          .from("player_external_load_daily")
+          .select("session_duration_minutes, total_player_load, player_load_per_minute")
+          .eq("player_id", playerId)
+          .eq("date", dateStr)
+          .order("total_player_load", { ascending: false, nullsFirst: false } as any)
+          .limit(1)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        const row = data as { session_duration_minutes: number | null; total_player_load: number | null; player_load_per_minute: number | null } | null;
+        let mins: number | null = null;
+
+        if (row?.session_duration_minutes != null && row.session_duration_minutes > 0) {
+          mins = Math.round(row.session_duration_minutes);
+        } else if (row?.total_player_load != null && row.total_player_load > 0 && row?.player_load_per_minute != null && row.player_load_per_minute > 0) {
+          mins = Math.round(row.total_player_load / row.player_load_per_minute);
+        }
+
+        if (cancelled) return;
+        setGpsDuration(mins);
+
+        // Auto-fill only if the player hasn't manually typed a duration yet
+        if (mins != null) {
+          setSessionRpeForm((prev) => {
+            if (prev.duration_minutes === "" || prev.duration_minutes === "0") {
+              return { ...prev, duration_minutes: String(mins) };
+            }
+            return prev;
+          });
+        }
+      } catch {
+        if (!cancelled) setGpsDuration(null);
+      } finally {
+        if (!cancelled) setGpsDurationLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [profile?.player_id, selectedPlayerId, supabase, day]);
 
   async function ensureStage4Decision(playerId: string, dayInput: string) {
     const safeDay = sanitizeDay(dayInput);
@@ -4901,14 +4957,25 @@ export default function PlayerClient() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Duration (minutes)</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Duration (minutes)
+                      {gpsDurationLoading && <span className="ml-1 text-zinc-400 normal-case font-normal">– loading GPS…</span>}
+                      {!gpsDurationLoading && gpsDuration != null && (
+                        <span className="ml-1 text-emerald-600 normal-case font-normal">– GPS: {gpsDuration} mín</span>
+                      )}
+                    </label>
                     <input
                       type="number"
                       min={1}
                       max={300}
                       value={sessionRpeForm.duration_minutes}
                       onChange={(e) => setSessionRpeForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
-                      className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                      className={[
+                        "mt-1 h-10 w-full rounded-lg border px-3 text-sm",
+                        gpsDuration != null && sessionRpeForm.duration_minutes === String(gpsDuration)
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-white",
+                      ].join(" ")}
                     />
                   </div>
 
