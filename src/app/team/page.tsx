@@ -109,6 +109,7 @@ export default function TeamPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [nnIndex, setNnIndex] = useState(0);
 
   // Documents state
   interface TeamDocument {
@@ -450,6 +451,12 @@ export default function TeamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamData, profile]);
 
+  // Non Negotiables rotation timer (10s)
+  useEffect(() => {
+    const timer = setInterval(() => setNnIndex((i) => (i + 1) % 8), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleUploadDocument = async () => {
     if (!docTitle.trim() || !docFile || !profile?.team_id) return;
     setDocLoading(true);
@@ -633,11 +640,12 @@ export default function TeamPage() {
         {/* Non Negotiables Section */}
         <section>
           <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)" }}>
-            <div className="px-5 pt-5 pb-3">
+            <div className="px-5 pt-5 pb-3 flex items-center justify-between">
               <h2 className="text-lg font-extrabold tracking-wide text-white uppercase">Non Negotiables</h2>
+              <span className="text-xs text-emerald-300/70 font-medium">{nnIndex + 1} / 8</span>
             </div>
-            <div className="px-5 pb-5 space-y-3">
-              {[
+            {(() => {
+              const nnItems = [
                 { n: 1, title: lang === "IS" ? "Liðið fyrst og fremst" : "Team First", bullets: lang === "IS"
                   ? ["Fótbolti er liðsíþrótt, liðið gengur alltaf fyrir"]
                   : ["Football is a team sport, the team always comes first"]
@@ -670,23 +678,48 @@ export default function TeamPage() {
                   ? ["Mæta til að bæta sig og liðið á hverjum degi"]
                   : ["Show up to improve yourself and the team every day"]
                 },
-              ].map((item) => (
-                <div key={item.n} className="rounded-xl bg-white/10 backdrop-blur-sm px-4 py-3">
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-emerald-400/20 text-emerald-300 text-xs font-bold">{item.n}</span>
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wide">{item.title}</h3>
+              ];
+              const item = nnItems[nnIndex];
+              return (
+                <div className="px-5 pb-4">
+                  <div
+                    key={item.n}
+                    className="rounded-xl bg-white/10 backdrop-blur-sm px-4 py-4 transition-all duration-500 ease-in-out"
+                    style={{ animation: "nnFadeIn 0.5s ease-in-out" }}
+                  >
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-emerald-400/20 text-emerald-300 text-sm font-bold">{item.n}</span>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wide">{item.title}</h3>
+                    </div>
+                    <div className="mt-2 ml-9 space-y-1">
+                      {item.bullets.map((b, i) => (
+                        <p key={i} className="text-sm text-emerald-100/90 leading-relaxed flex items-start gap-1.5">
+                          <span className="text-emerald-400 mt-0.5">•</span>
+                          <span>{b}</span>
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-1.5 ml-8.5 space-y-0.5">
-                    {item.bullets.map((b, i) => (
-                      <p key={i} className="text-xs text-emerald-100/90 leading-relaxed flex items-start gap-1.5">
-                        <span className="text-emerald-400 mt-0.5">•</span>
-                        <span>{b}</span>
-                      </p>
+                  {/* Dot indicators */}
+                  <div className="flex items-center justify-center gap-1.5 mt-3">
+                    {nnItems.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setNnIndex(i)}
+                        className={`w-2 h-2 rounded-full transition-all duration-300 ${i === nnIndex ? "bg-emerald-300 w-4" : "bg-white/30 hover:bg-white/50"}`}
+                        aria-label={`Non Negotiable ${i + 1}`}
+                      />
                     ))}
                   </div>
+                  <style>{`
+                    @keyframes nnFadeIn {
+                      from { opacity: 0; transform: translateY(6px); }
+                      to { opacity: 1; transform: translateY(0); }
+                    }
+                  `}</style>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         </section>
 
