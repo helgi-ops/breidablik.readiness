@@ -34,6 +34,7 @@ import ExportActionsBar from "./ExportActionsBar";
 import ReportSchedulePanel from "./ReportSchedulePanel";
 import ReportRecipientManager from "./ReportRecipientManager";
 import ReportHistoryPanel from "./ReportHistoryPanel";
+import { downloadReportPdf } from "./ReportPdf";
 
 function defaultSchedule(templateKey: ReportTemplateKey): ReportScheduleConfig {
   const tpl = getReportTemplate(templateKey);
@@ -132,10 +133,11 @@ export default function ReportingCenterPage() {
     setHistory(loadReportHistory());
   }
 
-  function preparePdf() {
+  async function preparePdf() {
     if (!report) return;
     const pdfModel = exportReportAsPdfModel(report);
-    downloadText(`${report.templateKey.toLowerCase()}.pdf-model.json`, JSON.stringify(pdfModel, null, 2));
+    const dateStr = report.generatedForDate ?? new Date().toISOString().slice(0, 10);
+    await downloadReportPdf(pdfModel, `${report.templateKey.toLowerCase()}-${dateStr}.pdf`);
     for (const artifact of buildReportExportArtifacts(report, ["PDF"])) saveReportExportArtifact(artifact);
     setHistory(loadReportHistory());
   }

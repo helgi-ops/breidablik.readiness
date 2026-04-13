@@ -630,6 +630,66 @@ export default function TeamPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+        {/* Non Negotiables Section */}
+        <section>
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)" }}>
+            <div className="px-5 pt-5 pb-3">
+              <h2 className="text-lg font-extrabold tracking-wide text-white uppercase">Non Negotiables</h2>
+            </div>
+            <div className="px-5 pb-5 space-y-3">
+              {[
+                { n: 1, title: lang === "IS" ? "Liðið fyrst og fremst" : "Team First", bullets: lang === "IS"
+                  ? ["Fótbolti er liðsíþrótt, liðið gengur alltaf fyrir"]
+                  : ["Football is a team sport, the team always comes first"]
+                },
+                { n: 2, title: lang === "IS" ? "Hámarks standard" : "Highest Standard", bullets: lang === "IS"
+                  ? ["Leggum okkur alltaf 100% fram og mætum með tilgangi", "Krefjum hvorn annan um max effort á hverjum degi og á hverri æfingu"]
+                  : ["Always give 100% and show up with purpose", "Demand max effort from each other every day and every session"]
+                },
+                { n: 3, title: lang === "IS" ? "Taka ábyrgð – engar afsakanir" : "Take Responsibility – No Excuses", bullets: lang === "IS"
+                  ? ["Tökum ábyrgð á okkar frammistöðu og viðhorfi", "Ekki finna sökudólg. Við berum ábyrgð"]
+                  : ["Own your performance and attitude", "No blame. We take responsibility"]
+                },
+                { n: 4, title: lang === "IS" ? "Undirbúningur er ábyrgð" : "Preparation is Responsibility", bullets: lang === "IS"
+                  ? ["Leggum okkur alltaf 100% fram og mætum með tilgangi", "Krefjum hvorn annan um max effort á hverjum degi og á hverri æfingu"]
+                  : ["Always give 100% and show up with purpose", "Demand max effort from each other every day and every session"]
+                },
+                { n: 5, title: lang === "IS" ? "Virðing fyrir tíma" : "Respect for Time", bullets: lang === "IS"
+                  ? ["Mæta tímanlega – snemma er réttur tími", "Virðing fyrir tíma liðsfélaga, teymis og félagsins"]
+                  : ["Be on time – early is on time", "Respect the time of teammates, staff and the club"]
+                },
+                { n: 6, title: lang === "IS" ? "Líkamstjáning og samskipti" : "Body Language & Communication", bullets: lang === "IS"
+                  ? ["Neikvæð líkamstjáning / samskipti – hefur áhrif á frammistöðu", "Jákvæð líkamstjáning / samskipti gefa orku og momentum"]
+                  : ["Negative body language / communication affects performance", "Positive body language / communication gives energy and momentum"]
+                },
+                { n: 7, title: "Proactive", bullets: lang === "IS"
+                  ? ["Tökum af skarið, bíðum ekki með að bregðast við"]
+                  : ["Take initiative, don\u2019t wait to react"]
+                },
+                { n: 8, title: lang === "IS" ? "Grósku hugarfar" : "Growth Mindset", bullets: lang === "IS"
+                  ? ["Mæta til að bæta sig og liðið á hverjum degi"]
+                  : ["Show up to improve yourself and the team every day"]
+                },
+              ].map((item) => (
+                <div key={item.n} className="rounded-xl bg-white/10 backdrop-blur-sm px-4 py-3">
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-emerald-400/20 text-emerald-300 text-xs font-bold">{item.n}</span>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wide">{item.title}</h3>
+                  </div>
+                  <div className="mt-1.5 ml-8.5 space-y-0.5">
+                    {item.bullets.map((b, i) => (
+                      <p key={i} className="text-xs text-emerald-100/90 leading-relaxed flex items-start gap-1.5">
+                        <span className="text-emerald-400 mt-0.5">•</span>
+                        <span>{b}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Announcements Section */}
         <section className="space-y-4">
           <h2 className="text-2xl font-bold text-gray-900">{lang === "IS" ? "Tilkynningar" : "Announcements"}</h2>

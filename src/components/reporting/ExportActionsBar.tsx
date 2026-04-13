@@ -37,7 +37,7 @@ export default function ExportActionsBar({
           Export CSV
         </button>
         <button type="button" onClick={onPreparePdf} disabled={disabled} className="rounded border px-3 py-1.5 disabled:opacity-50">
-          Prepare PDF model
+          Download PDF
         </button>
         <button type="button" onClick={onDistribute} disabled={disabled || selectedFormats.length === 0} className="rounded border px-3 py-1.5 disabled:opacity-50">
           Queue distribution
