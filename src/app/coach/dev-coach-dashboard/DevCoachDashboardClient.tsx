@@ -415,8 +415,11 @@ type Row = {
 
   ui_key?: string;
 
-  _confidence_num?: number | null;
-  _needs_review?: boolean;
+  // `_confidence_num` and `_needs_review` removed — the backing
+  // `system_confidence` column was a hardcoded 0.95 placeholder with no
+  // real computation and on the wrong scale, producing false review
+  // flags. We rely on concrete signals (readiness colour, composite
+  // load, PL spike, fatigue type) instead.
   _adaptation?: {
     reduceVolumePct?: number;
     reduceContactsPct?: number;
@@ -831,16 +834,8 @@ function getDayState(input: DayStateInput): { state: DayState; reason: string } 
   return { state: "MISSING_INPUT", reason: "Expected readiness input is missing for today." };
 }
 
-const confNum = (v: any) => {
-  if (v == null) return null;
-  const n = typeof v === "string" ? Number(v) : v;
-  return Number.isFinite(n) ? n : null;
-};
-
-const needsReview = (confidence: any) => {
-  const c = confNum(confidence);
-  return c == null || c < 60;
-};
+// `confNum` and `needsReview` helpers removed — no remaining callers.
+// Reinstate once the confidence pipeline is real and coach-facing.
 
 const flagRank = (flag: any) => {
   const f = String(flag ?? "").toUpperCase();
@@ -2999,9 +2994,6 @@ export default function CoachPage() {
         const playerId = String(r.player_id);
         const entryId: string | null = (r.readiness_entry_id ?? null) as string | null;
 
-        const confidenceNum = confNum((r as any).system_confidence ?? null);
-        const reviewNeeded = needsReview((r as any).system_confidence ?? null);
-
         const baseColor = (String(r.final_color ?? "").toLowerCase() as FinalColor) || null;
         const baseFlag = (String(r.final_flag ?? "").toUpperCase() as FinalFlag) || null;
         const baseReason = (r.final_reason ?? null) as string | null;
@@ -3082,9 +3074,6 @@ export default function CoachPage() {
 
           ui_key: `${playerId}_${String(r.entry_date ?? entryDate)}`,
 
-          _confidence_num: confidenceNum,
-          _needs_review: reviewNeeded,
-
           training_modifier: tm,
           _z_today: zToday,
           _yesterday_z: yZ,
@@ -3096,11 +3085,6 @@ export default function CoachPage() {
       });
 
       list.sort((a: any, b: any) => {
-        // `_needs_review` sort priority removed: fed from a NULL column so
-        // it effectively put every player with an entry at the top for no
-        // reason. Re-add when confidence pipeline is live.
-        // if (a._needs_review !== b._needs_review) return a._needs_review ? -1 : 1;
-
         const as = a.total_score ?? 9999;
         const bs = b.total_score ?? 9999;
         if (as !== bs) return as - bs;
@@ -4392,11 +4376,6 @@ export default function CoachPage() {
     return `Weekly risk outlook: ${highCount} elevated, ${modCount} moderate, ${recCount} recovery recommended.`;
   }, [weekGrid, teamPerformanceRiskGroups]);
 
-  const needsReviewCount = useMemo(
-    () => rowsWithAdaptive.filter((r) => r._needs_review).length,
-    [rowsWithAdaptive]
-  );
-
   const flaggedReviewStats = useMemo(() => {
     const highNeuralLoad = rowsWithAdaptive.filter((r) =>
       ["HIGH", "CRITICAL"].includes(String(r._neural_load?.neuralLoadState ?? "").toUpperCase())
@@ -5665,17 +5644,6 @@ export default function CoachPage() {
                   <span className={`h-2 w-2 rounded-full ${cm.dot}`} />
                   <span className="tabular-nums">{scoreText}</span>
                 </span>
-                {/* "Needs review" pill disabled: the underlying
-                    `system_confidence` field is NULL in ~95% of
-                    stage4_decisions_final rows and isn't surfaced by
-                    v_coach_readiness_today_v8, so this pill lit up for every
-                    player with an entry. Restore when the confidence
-                    pipeline is fixed. */}
-                {/* {r._needs_review ? (
-                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
-                    Needs review
-                  </span>
-                ) : null} */}
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
                   {mdText}
                 </span>
@@ -6793,7 +6761,7 @@ export default function CoachPage() {
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 pb-3">
               <div>
                 <div className={sectionTitleClass}>Players needing review today</div>
-                <div className={sectionSubtitleClass}>{needsReviewCount} players flagged by the system</div>
+                <div className={sectionSubtitleClass}>{flaggedReviewStats.lowReadiness} with low readiness today</div>
               </div>
               <div className="text-[11px] uppercase tracking-wide text-gray-500">Operational workspace · scan · decide · confirm</div>
             </div>
