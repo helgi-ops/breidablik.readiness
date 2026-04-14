@@ -69,7 +69,9 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from("saved_sessions")
-      .select("id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at")
+      .select(
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points"
+      )
       .eq("team_id", auth.teamId)
       .is("deleted_at", null)
       .order("updated_at", { ascending: false });
@@ -99,6 +101,13 @@ export async function POST(req: NextRequest) {
     const targetPl = body.target_pl != null ? Number(body.target_pl) : null;
     const items = body.items ?? [];
     const totals = body.totals ?? null;
+    const sessionDate =
+      typeof body.session_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.session_date)
+        ? body.session_date
+        : null;
+    const focusPoints = Array.isArray(body.focus_points)
+      ? body.focus_points.map((f: unknown) => String(f ?? "").trim()).filter(Boolean).slice(0, 8)
+      : [];
 
     if (!Array.isArray(items) || items.length === 0)
       return NextResponse.json({ ok: false, error: "Session must have at least one drill" }, { status: 400 });
@@ -114,8 +123,10 @@ export async function POST(req: NextRequest) {
         target_pl: targetPl,
         items,
         totals,
+        session_date: sessionDate,
+        focus_points: focusPoints,
       })
-      .select("id, session_name, md_day, created_at")
+      .select("id, session_name, md_day, created_at, session_date, focus_points")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

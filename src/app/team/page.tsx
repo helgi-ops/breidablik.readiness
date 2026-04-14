@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import WeeklyCalendar from "./WeeklyCalendar";
+import TeamTrainingSection from "@/components/team/TeamTrainingSection";
 import { useLang } from "@/lib/lang";
 
 interface User {
@@ -722,6 +723,9 @@ export default function TeamPage() {
             })()}
           </div>
         </section>
+
+        {/* Team Training Section (published sessions from coach) */}
+        <TeamTrainingSection />
 
         {/* Announcements Section */}
         <section className="space-y-4">
