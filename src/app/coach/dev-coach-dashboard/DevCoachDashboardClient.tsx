@@ -3096,7 +3096,10 @@ export default function CoachPage() {
       });
 
       list.sort((a: any, b: any) => {
-        if (a._needs_review !== b._needs_review) return a._needs_review ? -1 : 1;
+        // `_needs_review` sort priority removed: fed from a NULL column so
+        // it effectively put every player with an entry at the top for no
+        // reason. Re-add when confidence pipeline is live.
+        // if (a._needs_review !== b._needs_review) return a._needs_review ? -1 : 1;
 
         const as = a.total_score ?? 9999;
         const bs = b.total_score ?? 9999;
@@ -5662,11 +5665,17 @@ export default function CoachPage() {
                   <span className={`h-2 w-2 rounded-full ${cm.dot}`} />
                   <span className="tabular-nums">{scoreText}</span>
                 </span>
-                {r._needs_review ? (
+                {/* "Needs review" pill disabled: the underlying
+                    `system_confidence` field is NULL in ~95% of
+                    stage4_decisions_final rows and isn't surfaced by
+                    v_coach_readiness_today_v8, so this pill lit up for every
+                    player with an entry. Restore when the confidence
+                    pipeline is fixed. */}
+                {/* {r._needs_review ? (
                   <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
                     Needs review
                   </span>
-                ) : null}
+                ) : null} */}
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
                   {mdText}
                 </span>
@@ -6795,9 +6804,13 @@ export default function CoachPage() {
                 <div className="text-[10px] uppercase tracking-wide text-gray-400">Today only</div>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {/* "Needs review" tile replaced by "Low readiness" until the
+                    confidence pipeline is fixed — see DailyBriefingCard.tsx
+                    for the full rationale. Low readiness (red+yellow) is a
+                    real, coach-facing signal. */}
                 <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Needs review</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{needsReviewCount}</div>
+                  <div className={statLabelClass}>Low readiness</div>
+                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
                 </div>
                 <div className="rounded-md border border-slate-200 bg-white p-2">
                   <div className={statLabelClass}>Neural bias</div>
