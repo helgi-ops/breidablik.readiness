@@ -287,10 +287,16 @@ function buildAttentionList(
       if (level === "ok") level = "monitor";
     }
 
-    if (row._needs_review) {
-      reasons.push(r.needsReview);
-      if (level === "ok") level = "monitor";
-    }
+    // NOTE: `_needs_review` is disabled as an attention trigger until the
+    // confidence pipeline is fixed. The `system_confidence` field is NULL
+    // in ~95% of rows in stage4_decisions_final and is not surfaced by
+    // `v_coach_readiness_today_v8`, so this flag was lighting up for every
+    // player with a readiness entry and adding noise instead of signal.
+    // Re-enable once confidence is populated and exposed in the view.
+    // if (row._needs_review) {
+    //   reasons.push(r.needsReview);
+    //   if (level === "ok") level = "monitor";
+    // }
 
     if (level !== "ok" && reasons.length > 0) {
       // Dedupe reasons preserving order
