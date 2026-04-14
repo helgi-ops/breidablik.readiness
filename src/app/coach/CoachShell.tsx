@@ -101,6 +101,33 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
 
+  // ── Onboarding guard ──
+  // If a COACH lands on /coach/** without a team_id on their profile, redirect
+  // them to the self-serve club-creation wizard so they can finish setup.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId || !alive) return;
+
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, team_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!alive || !prof) return;
+      const role = (prof as { role?: string }).role ?? "";
+      const teamId = (prof as { team_id?: string | null }).team_id;
+
+      if (String(role).toUpperCase() === "COACH" && !teamId) {
+        window.location.replace("/signup/create-team");
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   useEffect(() => {
     let alive = true;
 

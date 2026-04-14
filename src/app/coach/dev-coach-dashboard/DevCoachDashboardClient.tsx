@@ -88,6 +88,10 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
+import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
+import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import AddPlayerButton from "@/components/coach/AddPlayerButton";
+import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
@@ -4436,6 +4440,108 @@ export default function CoachPage() {
     return { neuralBiasApplied, highNextDayRisk, lockedRows };
   }, [rowsWithAdaptive]);
 
+  // ── Per-player composite load (for Readiness × Load quadrant) ──
+  // Keyed by player_id → { compositeScore (0–1), concernLevel, fatigueType }.
+  // Computed once at team scope so the quadrant can render composite risk
+  // on its x-axis instead of raw planned_pl.
+  //
+  // NBS fallback: the outdoor burden formula in signals.ts is weighted heavily
+  // on HIR + band6 exposure. For teams/sessions where those signals are absent
+  // (e.g. HIR baseline is 0 across the 28-day window, common for recreational
+  // GPS coverage), the burden score collapses to 0 even when `player_load` is
+  // populated. When that happens AND we have a real `playerLoadSpike`, derive
+  // a synthetic burden from the PL spike so the composite reflects actual
+  // training volume rather than reporting "no data".
+  const playerComposites = useMemo<
+    Record<string, {
+      compositeScore: number;
+      concernLevel: "none" | "low" | "moderate" | "high";
+      fatigueType: string | null;
+      /** Today PL ÷ 28d baseline PL, raw ratio. null when no PL data. */
+      playerLoadSpike: number | null;
+      /** loadRatio ∈ [0, 1] derived from spike: 0 = no training, 0.5 = on baseline, 1.0 = 2× baseline or more. */
+      loadRatio: number | null;
+    }>
+  >(() => {
+    const out: Record<string, {
+      compositeScore: number;
+      concernLevel: "none" | "low" | "moderate" | "high";
+      fatigueType: string | null;
+      playerLoadSpike: number | null;
+      loadRatio: number | null;
+    }> = {};
+
+    // Local clone of signals.ts normalizeRatio — keep weights consistent.
+    const normalizePlSpike = (spike: number | null | undefined): number | null => {
+      if (spike == null || !Number.isFinite(spike)) return null;
+      const elevated = 1.15;
+      const high = 1.6;
+      if (spike <= elevated) return 0;
+      if (spike >= high) return 1;
+      return Math.max(0, Math.min(1, (spike - elevated) / (high - elevated)));
+    };
+
+    for (const r of rowsWithAdaptive) {
+      const pid = String(r.player_id);
+      const catapultSignals = (r._catapult_signals as Record<string, unknown> | null | undefined) ?? null;
+
+      const rawNbs = catapultSignals?.neuromuscularBurdenScore;
+      const nbs = typeof rawNbs === "number" && Number.isFinite(rawNbs) ? rawNbs : null;
+      const rawPlSpike = catapultSignals?.playerLoadSpike;
+      const plSpike = typeof rawPlSpike === "number" && Number.isFinite(rawPlSpike) ? rawPlSpike : null;
+      const rawDataQuality = String(catapultSignals?.dataQuality ?? "");
+
+      // If the main burden formula collapsed to ~0 but we DO have a PL spike
+      // with usable baseline coverage, synthesize a burden score from it.
+      let effectiveNbs: number | null = nbs;
+      let synthesized = false;
+      if (
+        (nbs == null || nbs <= 0.05) &&
+        plSpike != null &&
+        rawDataQuality !== "insufficient"
+      ) {
+        const plBurden = normalizePlSpike(plSpike);
+        if (plBurden != null && plBurden > 0) {
+          effectiveNbs = plBurden;
+          synthesized = true;
+        }
+      }
+
+      // Recompute externalLoadState if we synthesized, otherwise trust the one
+      // signals.ts already computed (it already factors PL into elevated/high counts).
+      const reportedState = String(catapultSignals?.externalLoadState ?? "");
+      let externalLoadState: "normal" | "elevated" | "high" | "unknown" =
+        (["normal", "elevated", "high"].includes(reportedState)
+          ? (reportedState as "normal" | "elevated" | "high")
+          : "unknown");
+      if (synthesized && effectiveNbs != null) {
+        if (effectiveNbs >= 0.66) externalLoadState = "high";
+        else if (effectiveNbs >= 0.34) externalLoadState = "elevated";
+        else if (externalLoadState === "unknown") externalLoadState = "normal";
+      }
+
+      const result = computeCompositeLoadConcern({
+        rpeAcwr: null,
+        neuromuscularBurdenScore: effectiveNbs,
+        externalLoadState,
+      });
+      // loadRatio: map playerLoadSpike (today/baseline, ~0..3) onto [0,1]
+      // so that 1.0× baseline lands at x=0.5 and ≥2× lands at x=1.0.
+      const loadRatio = plSpike != null
+        ? Math.max(0, Math.min(1, plSpike / 2))
+        : null;
+
+      out[pid] = {
+        compositeScore: result.compositeScore,
+        concernLevel: result.concernLevel,
+        fatigueType: result.fatigueType ?? null,
+        playerLoadSpike: plSpike,
+        loadRatio,
+      };
+    }
+    return out;
+  }, [rowsWithAdaptive]);
+
   const readinessRiskReportData = useMemo<ReadinessRiskReportData>(() => {
     const flaggedRows = rowsWithAdaptive.filter((r) => {
       const flag = String(r.final_flag ?? "").toUpperCase();
@@ -5579,18 +5685,36 @@ export default function CoachPage() {
                     Neural bias
                   </span>
                 ) : null}
-                {compositeLoad.concernLevel === "high" ? (
-                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                    ⚠ Load há
-                  </span>
-                ) : compositeLoad.concernLevel === "moderate" ? (
-                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                    ↑ Load
-                  </span>
-                ) : compositeLoad.concernLevel === "low" ? (
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                    Load monitor
-                  </span>
+                {compositeLoad.concernLevel !== "none" ? (() => {
+                  const tone =
+                    compositeLoad.concernLevel === "high"
+                      ? { cls: "border-red-200 bg-red-50 text-red-700 font-semibold", label: "⚠ Load há" }
+                      : compositeLoad.concernLevel === "moderate"
+                      ? { cls: "border-orange-200 bg-orange-50 text-orange-700 font-semibold", label: "↑ Load" }
+                      : { cls: "border-slate-200 bg-slate-50 text-slate-600 font-medium", label: "Load monitor" };
+                  const scoreStr = compositeLoad.compositeScore.toFixed(2);
+                  const reasonLines =
+                    compositeLoad.escalationReasons.length > 0
+                      ? compositeLoad.escalationReasons
+                      : ["Composite load signal is elevated."];
+                  const tooltipText =
+                    `composite ${scoreStr} → ${compositeLoad.concernLevel}\n` +
+                    reasonLines.map((r) => `• ${r}`).join("\n");
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs cursor-help ${tone.cls}`}
+                      title={tooltipText}
+                      aria-label={tooltipText}
+                    >
+                      {tone.label}
+                      <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-current/40 text-[9px] font-bold opacity-70">
+                        i
+                      </span>
+                    </span>
+                  );
+                })() : null}
+                {compositeLoad.fatigueType && compositeLoad.fatigueType !== "normal" ? (
+                  <FatigueTypeChip type={compositeLoad.fatigueType} size="sm" />
                 ) : null}
                 {rpeDiscrepancy.level === "significant" ? (
                   <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
@@ -6377,6 +6501,17 @@ export default function CoachPage() {
             hasDecision={rows.some((r) => (r as Record<string, unknown>).training_action != null)}
             hasSport={teamSport != null && teamSport.length > 0}
           />
+          {/* Daily briefing — Gabbett (2020) Communicate step */}
+          <DailyBriefingCard
+            today={today}
+            lang={lang}
+            rows={rows as any}
+            playerComposites={playerComposites}
+            complianceSummary={complianceSummary as any}
+            mdDayToday={mdDayToday}
+            teamSignal={teamSignal as any}
+            dayStateLabel={dayStateInfo?.label ?? null}
+          />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
@@ -6435,54 +6570,9 @@ export default function CoachPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* ── Compliance strip ── */}
-              {complianceSummary && (() => {
-                const ci = complianceSummary.checkin;
-                const rp = complianceSummary.rpe;
-                const totalCi = ci.submitted + ci.imputed + ci.missing;
-                const totalRpe = rp.submitted + rp.imputed + rp.missing;
-                const ciMissingPct = totalCi > 0 ? Math.round((ci.missing / totalCi) * 100) : 0;
-                const rpeMissingPct = totalRpe > 0 ? Math.round((rp.missing / totalRpe) * 100) : 0;
-                const hasAnyMissing = ci.missing > 0 || rp.missing > 0;
-                return (
-                  <div className={`rounded-xl border px-4 py-2.5 ${hasAnyMissing ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-                    <div className="flex flex-wrap items-center gap-4 text-xs">
-                      <span className="font-semibold text-slate-700">Skil:</span>
-                      {/* Check-in */}
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-medium text-slate-600">Check-in</span>
-                        <span className="text-emerald-700">✓ {ci.submitted}</span>
-                        {ci.imputed > 0 && <span className="text-indigo-600">~ {ci.imputed}</span>}
-                        {ci.missing > 0 && <span className="font-semibold text-amber-700">✗ {ci.missing} ({ciMissingPct}%)</span>}
-                      </span>
-                      <span className="text-slate-300">|</span>
-                      {/* RPE */}
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-medium text-slate-600">RPE</span>
-                        <span className="text-emerald-700">✓ {rp.submitted}</span>
-                        {rp.imputed > 0 && <span className="text-indigo-600">~ {rp.imputed}</span>}
-                        {rp.missing > 0 && <span className="font-semibold text-amber-700">✗ {rp.missing} ({rpeMissingPct}%)</span>}
-                      </span>
-                      {complianceMissing.length > 0 && (
-                        <>
-                          <span className="text-slate-300">|</span>
-                          <span className="text-slate-500 italic">
-                            {complianceMissing.slice(0, 3).map((m) => m.full_name).join(", ")}
-                            {complianceMissing.length > 3 ? ` +${complianceMissing.length - 3}` : ""}
-                          </span>
-                        </>
-                      )}
-                      {!hasAnyMissing && (
-                        <span className="font-semibold text-emerald-700">Allir hafa skilað inn ✓</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
               {(() => {
                 const risk = computeTeamRisk(teamSignal, lang);
                 const ui = riskUi(risk.level);
-                const leadingAction = dominantTeamAction(teamSignal);
                 const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
                   ?.teamFatigueSummary;
                 const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
@@ -6490,16 +6580,9 @@ export default function CoachPage() {
                 const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
                 const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
                 const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
-                const totalPlayers = teamSignal?.n_players ?? 0;
                 const nFull = teamSignal?.n_full ?? 0;
                 const nReduced = teamSignal?.n_reduced ?? 0;
                 const nRecovery = teamSignal?.n_recovery ?? 0;
-                const commandTiles = [
-                  { label: "Risk level", value: risk.label, tone: "border-slate-200 bg-white" },
-                  { label: "Team action", value: leadingAction, tone: "border-slate-200 bg-white" },
-                  { label: "Needs review", value: String(needsReviewCount), tone: "border-slate-200 bg-white" },
-                  { label: "Total players", value: String(totalPlayers), tone: "border-slate-200 bg-white" },
-                ];
                 const statusTiles = [
                   { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
                   { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
@@ -6512,22 +6595,9 @@ export default function CoachPage() {
                 return (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
-                      <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${dayStateInfo.badge}`}>
-                          Diagnostic: {dayStateInfo.label}
-                      </div>
                       <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                         Team outlook: {teamOutlook.band}
                       </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      {commandTiles.map((tile) => (
-                        <div key={tile.label} className={`${summaryTileClass} ${tile.tone}`}>
-                          <div className={statLabelClass}>{tile.label}</div>
-                          <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-900">{tile.value}</div>
-                        </div>
-                      ))}
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -6569,6 +6639,77 @@ export default function CoachPage() {
                 ?? null;
               const mliData = playerMli[r.player_id];
               const metaData = playerMetabolic[r.player_id];
+
+              // Align Load-signals block with the GPS load shown above:
+              //
+              // The "Yesterday's GPS load" block uses `yRow` — today's row if
+              // present, otherwise yesterday's. The Load-signals block should
+              // reflect the SAME date. We therefore recompute Catapult signals
+              // + composite for that specific date when it differs from today,
+              // so coaches see burden/composite that matches the raw numbers.
+              const signalDate = yRow?.date ?? null;
+              const todayCatapultSignals = (r as any)._catapult_signals as
+                | CatapultExternalLoadSignals | null | undefined;
+              const todayCompEntry = playerComposites[String(r.player_id)];
+
+              type ResolvedSignals = {
+                nbs: number | null;
+                compositeScore: number | null;
+                concernLevel: "none" | "low" | "moderate" | "high" | null;
+                fatigueType: string | null;
+                playerLoadSpike: number | null;
+              };
+
+              let resolved: ResolvedSignals;
+              if (signalDate && signalDate === ed) {
+                // Signals already computed for today — trust the memo.
+                resolved = {
+                  nbs: typeof todayCatapultSignals?.neuromuscularBurdenScore === "number"
+                    ? todayCatapultSignals.neuromuscularBurdenScore
+                    : null,
+                  compositeScore: todayCompEntry?.compositeScore ?? null,
+                  concernLevel: todayCompEntry?.concernLevel ?? null,
+                  fatigueType: todayCompEntry?.fatigueType ?? null,
+                  playerLoadSpike: todayCompEntry?.playerLoadSpike ?? null,
+                };
+              } else if (signalDate) {
+                // Recompute for the date of the shown GPS load (usually yesterday).
+                const catapultRows = (((r as any)._catapult_history ?? []) as CatapultDailyLoadRow[]);
+                const ctx = buildCatapultReadinessContextFromRows({
+                  rows: catapultRows,
+                  date: signalDate,
+                });
+                const sig = ctx.signals;
+                const loadState = (["normal", "elevated", "high"].includes(String(sig?.externalLoadState ?? ""))
+                  ? (sig?.externalLoadState as "normal" | "elevated" | "high")
+                  : "unknown");
+                const comp = computeCompositeLoadConcern({
+                  rpeAcwr: null,
+                  neuromuscularBurdenScore: sig?.neuromuscularBurdenScore ?? null,
+                  externalLoadState: loadState,
+                });
+                resolved = {
+                  nbs: typeof sig?.neuromuscularBurdenScore === "number"
+                    ? sig.neuromuscularBurdenScore
+                    : null,
+                  compositeScore: comp.compositeScore,
+                  concernLevel: comp.concernLevel,
+                  fatigueType: comp.fatigueType ?? null,
+                  playerLoadSpike: typeof sig?.playerLoadSpike === "number"
+                    ? sig.playerLoadSpike
+                    : null,
+                };
+              } else {
+                // No GPS at all — leave everything null so chips hide.
+                resolved = {
+                  nbs: null,
+                  compositeScore: null,
+                  concernLevel: null,
+                  fatigueType: null,
+                  playerLoadSpike: null,
+                };
+              }
+
               return {
                 ...r,
                 _yesterday_load: yRow ? {
@@ -6584,129 +6725,22 @@ export default function CoachPage() {
                 _yesterday_metabolic_score: metaData?.score ?? null,
                 _yesterday_metabolic_band: metaData?.band ?? null,
                 _vbt_fatigue_flags: playerVbtFatigue[r.player_id] ?? null,
+                _today_nbs: resolved.nbs,
+                _today_composite_score: resolved.compositeScore,
+                _today_composite_concern: resolved.concernLevel,
+                _today_fatigue_type: resolved.fatigueType,
+                _today_player_load_spike: resolved.playerLoadSpike,
+                _load_signals_date: signalDate,
               };
             }) as any} />
           )}
 
-          {/* Readiness Today — team signal summary */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Readiness Today</CardTitle>
-              <CardDescription>
-                Coach: <span className="font-medium">{coachDisplayName ?? coachName ?? "—"}</span> · Date: <span className="font-medium">{today}</span> · MD-day:{" "}
-                <span className="font-medium">{mdDayToday}</span> · Source: <span className="font-medium">{planPreview?.source ?? "—"}</span> · Confidence:{" "}
-                <span className="font-medium">{formatConfidence(planPreview?.confidence)}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {teamSignal
-                ? (() => {
-                    const risk = computeTeamRisk(teamSignal, lang);
-                    const ui = riskUi(risk.level);
-                    const recLines = summaryLines(risk.recommendation, 3);
-                    return (
-                      <div className={`rounded-xl border ${ui.border} bg-white p-4 shadow-sm space-y-3`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${ui.pill}`}>{risk.label}</div>
-                          <div className="text-xs text-gray-500">
-                            Auto-lock: {AUTO_LOCK_MINUTES_BEFORE}m before session ({String(DEFAULT_SESSION_START.hour).padStart(2, "0")}:
-                            {String(DEFAULT_SESSION_START.minute).padStart(2, "0")})
-                          </div>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 text-sm">
-                          <div className="rounded-lg border bg-gray-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Total</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.n_players}</div>
-                          </div>
-                          <div className="rounded-lg border bg-green-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-green-700">Full</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{teamSignal.n_full}</div>
-                          </div>
-                          <div className="rounded-lg border bg-yellow-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-yellow-700">Reduced</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums text-yellow-700">{teamSignal.n_reduced}</div>
-                          </div>
-                          <div className="rounded-lg border bg-red-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-red-700">Recovery</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums text-red-700">{teamSignal.n_recovery}</div>
-                          </div>
-                          <div className="rounded-lg border bg-gray-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Avg confidence</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums">{teamSignal.avg_confidence ?? "-"}</div>
-                          </div>
-                          <div className="rounded-lg border bg-gray-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500">Needs review</div>
-                            <div className="mt-1 text-lg font-semibold tabular-nums">{needsReviewCount}</div>
-                          </div>
-                        </div>
-                        <div className={`grid gap-2 md:grid-cols-2 text-xs ${ui.text}`}>
-                          <div className="rounded-lg border bg-white p-3">
-                            <div className="font-semibold text-gray-700">Why</div>
-                            <div className="mt-1">{risk.why}</div>
-                          </div>
-                          <div className="rounded-lg border bg-white p-3">
-                            <div className="font-semibold text-gray-700">Team plan</div>
-                            <div className="mt-1 space-y-1">
-                              {recLines.length ? (
-                                recLines.map((line, idx) => (
-                                  <div key={`rec-${idx}`} className="leading-relaxed">
-                                    {line}
-                                  </div>
-                                ))
-                              ) : (
-                                <div>{risk.recommendation}</div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()
-                : null}
-            </CardContent>
-          </Card>
-
-          {/* Check-in reminders */}
-          <Card className="h-full border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle className={sectionTitleClass}>Check-in reminders</CardTitle>
-              <CardDescription className={sectionSubtitleClass}>Status for today and manual reminder trigger for players missing check-in.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-3">
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className={statLabelClass}>Total players</div>
-                  <div className={statValueClass}>{reminderStatus?.totalPlayers ?? "—"}</div>
-                </div>
-                <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                  <div className="text-[10px] uppercase tracking-wide text-green-700">Checked in</div>
-                  <div className="mt-1 text-lg font-semibold tabular-nums text-green-700">{reminderStatus?.checkedIn ?? "—"}</div>
-                </div>
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <div className="text-[10px] uppercase tracking-wide text-amber-700">Missing check-ins</div>
-                  <div className="mt-1 text-lg font-semibold tabular-nums text-amber-700">{reminderStatus?.missing ?? "—"}</div>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => sendManualReminder(today)} disabled={manualReminderSending || reminderStatusLoading}>
-                  {manualReminderSending ? "Sending..." : "Send reminder to missing players"}
-                </Button>
-                <Button variant="outline" onClick={() => loadReminderStatus(today)} disabled={manualReminderSending || reminderStatusLoading}>
-                  {reminderStatusLoading ? "Loading..." : "Refresh status"}
-                </Button>
-                <div className="text-xs text-gray-500">
-                  Last manual send:{" "}
-                  <span className="font-medium text-gray-700">
-                    {reminderStatus?.lastManualSendAt ? new Date(reminderStatus.lastManualSendAt).toLocaleString() : "—"}
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
-                <span className="font-semibold text-slate-700">Compliance diagnostic:</span> {complianceMessage}
-              </div>
-              {reminderStatusError ? <div className="text-xs text-rose-700">{reminderStatusError}</div> : null}
-            </CardContent>
-          </Card>
+          {/* Readiness × Load quadrant — at-a-glance decision support */}
+          <ReadinessLoadQuadrant
+            teamId={coachTeamId}
+            lang={lang}
+            playerComposites={playerComposites}
+          />
 
         </div>
       )}
@@ -6725,8 +6759,16 @@ export default function CoachPage() {
       {dashTab === "squad" && isAtLeastPro && (
         <div className="space-y-6">
 
-          {/* Broadcast message button */}
-          <div className="flex justify-end">
+          {/* Squad actions — add player + broadcast */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <AddPlayerButton
+              teamId={coachTeamId}
+              lang={lang as "IS" | "EN"}
+              onPlayerAdded={() => {
+                // Trigger a reload so the new player appears in the roster immediately.
+                if (typeof window !== "undefined") window.location.reload();
+              }}
+            />
             <button
               onClick={() => setBroadcastOpen(true)}
               className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors"

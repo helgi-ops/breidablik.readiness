@@ -322,11 +322,19 @@ function SignupForm() {
           </button>
         </form>
 
-        <div className="mt-4 text-center text-sm text-neutral-600">
-          {t.hasAccount}{" "}
-          <Link href="/login" className="font-medium text-neutral-900 underline">
-            {t.signIn}
-          </Link>
+        <div className="mt-4 space-y-1 text-center text-sm text-neutral-600">
+          <div>
+            {t.hasAccount}{" "}
+            <Link href="/login" className="font-medium text-neutral-900 underline">
+              {t.signIn}
+            </Link>
+          </div>
+          <div>
+            {lang === "IS" ? "Stofnar þú nýtt félag?" : "Starting a new club?"}{" "}
+            <Link href="/signup/create-team" className="font-medium text-neutral-900 underline">
+              {lang === "IS" ? "Stofna nýtt félag" : "Create a new club"}
+            </Link>
+          </div>
         </div>
 
       </div>

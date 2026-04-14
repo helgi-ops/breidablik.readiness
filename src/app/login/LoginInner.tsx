@@ -644,6 +644,13 @@ export default function LoginInner() {
             Gleymt lykilorð?
           </button>
         )}
+
+        <a
+          href="/signup/create-team"
+          style={{ textDecoration: "underline", color: "#0f766e" }}
+        >
+          Stofna nýtt félag →
+        </a>
       </div>
     </div>
   );

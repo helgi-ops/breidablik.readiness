@@ -83,6 +83,19 @@ export type DecisionSummaryRow = {
   _yesterday_mli_band?: string | null;
   _yesterday_metabolic_score?: number | null;
   _yesterday_metabolic_band?: string | null;
+  // ── Today's load interpretation (GPS burden + composite risk) ───────────
+  /** Neuromuscular burden score (0–1). null when data quality is insufficient. */
+  _today_nbs?: number | null;
+  /** Composite load concern score (0–1) — RPE ACWR + GPS burden + concern escalation. */
+  _today_composite_score?: number | null;
+  /** Composite load concern band: "none" | "low" | "moderate" | "high". */
+  _today_composite_concern?: "none" | "low" | "moderate" | "high" | null;
+  /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
+  _today_fatigue_type?: string | null;
+  /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
+  _today_player_load_spike?: number | null;
+  /** ISO date the load signals refer to (today if present, else yesterday). */
+  _load_signals_date?: string | null;
   // ── VBT fatigue flags (velocity loss ≥10% from first 2 sets) ───────────
   _vbt_fatigue_flags?: Array<{
     exerciseName: string;
@@ -973,9 +986,25 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
           </div>
         )}
         {/* Load metrics */}
-        {load.length > 0 && (
+        {load.length > 0 && (() => {
+          // Build date label from the same signalsDate the load-signals block uses,
+          // so the coach can see which day this GPS snapshot is for (e.g. 13.04).
+          const signalsDate = row._load_signals_date ?? null;
+          const todayIsoForLoad = new Date().toISOString().slice(0, 10);
+          const loadDateLabel = !signalsDate
+            ? null
+            : (() => {
+                const [, m, d] = signalsDate.split("-");
+                return d && m ? `${d}.${m}` : signalsDate;
+              })();
+          const loadHeading = !signalsDate
+            ? "Yesterday's GPS load"
+            : signalsDate === todayIsoForLoad
+            ? `Today's GPS load (${loadDateLabel})`
+            : `Latest GPS load (${loadDateLabel})`;
+          return (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Yesterday&apos;s GPS load</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">{loadHeading}</p>
             <div className="flex flex-wrap gap-3">
               {load.map((item) => {
                 const isComposite = item.label === "MLI" || item.label === "Metab";
@@ -1001,7 +1030,105 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
               })}
             </div>
           </div>
-        )}
+          );
+        })()}
+        {/* Today's load signals — interpretation of raw GPS into actionable bands */}
+        {(() => {
+          const nbs = row._today_nbs;
+          const comp = row._today_composite_score;
+          const concern = row._today_composite_concern ?? null;
+          const fatigue = row._today_fatigue_type ?? null;
+          const spike = row._today_player_load_spike ?? null;
+          const signalsDate = row._load_signals_date ?? null;
+          const hasAny =
+            (nbs != null && Number.isFinite(nbs)) ||
+            (comp != null && Number.isFinite(comp)) ||
+            (spike != null && Number.isFinite(spike));
+          if (!hasAny) return null;
+
+          // Heading reflects the date the signals were computed for —
+          // matches the "Yesterday's GPS load" block above when today has no sync.
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const signalsDateLabel = !signalsDate
+            ? null
+            : (() => {
+                const [, m, d] = signalsDate.split("-");
+                return d && m ? `${d}.${m}` : signalsDate;
+              })();
+          const heading = !signalsDate
+            ? "Load signals"
+            : signalsDate === todayIso
+            ? `Today's load signals (${signalsDateLabel})`
+            : `Load signals (${signalsDateLabel})`;
+
+          // NBS tone: <0.34 normal, 0.34–0.66 elevated, ≥0.66 high
+          const nbsTone = nbs == null ? null
+            : nbs >= 0.66 ? { cls: "border-rose-300 bg-rose-50 text-rose-700", label: "High" }
+            : nbs >= 0.34 ? { cls: "border-amber-300 bg-amber-50 text-amber-700", label: "Elevated" }
+            : { cls: "border-emerald-200 bg-emerald-50 text-emerald-700", label: "Normal" };
+          // Composite concern tone mirrors the 0.15/0.40/0.68 bands from
+          // computeCompositeLoadConcern so colours match the quadrant legend.
+          const compTone = concern == null ? null
+            : concern === "high" ? { cls: "border-rose-300 bg-rose-50 text-rose-700", label: "Há áhætta" }
+            : concern === "moderate" ? { cls: "border-orange-200 bg-orange-50 text-orange-700", label: "Hækkuð" }
+            : concern === "low" ? { cls: "border-slate-200 bg-slate-50 text-slate-600", label: "Væg" }
+            : { cls: "border-emerald-200 bg-emerald-50 text-emerald-700", label: "Engin" };
+
+          // Fatigue-type label (short, Icelandic). Only show when non-normal.
+          const fatigueLabel = !fatigue || fatigue === "normal" ? null
+            : fatigue === "mechanical_fatigue" ? "Vélrænt álag"
+            : fatigue === "metabolic_fatigue" ? "Efnaskiptaálag"
+            : fatigue === "global_fatigue" ? "Heildarþreyta"
+            : fatigue;
+
+          return (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+                {heading}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {nbs != null && nbsTone ? (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${nbsTone.cls}`}
+                    title="Neuromuscular burden score — weighted GPS signals (HIR, decel, density, max vel, band6) vs 28-day baseline."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">GPS burden</span>
+                    <span className="text-lg font-bold tabular-nums">{nbs.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{nbsTone.label}</span>
+                  </div>
+                ) : null}
+                {comp != null && compTone ? (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${compTone.cls}`}
+                    title="Composite load concern — RPE ACWR × 0.55 + GPS burden × 0.45, with escalation when external load state is elevated/high."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">Composite</span>
+                    <span className="text-lg font-bold tabular-nums">{comp.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{compTone.label}</span>
+                  </div>
+                ) : null}
+                {spike != null ? (
+                  <div
+                    className="flex flex-col rounded-lg border border-slate-200 bg-white px-3 py-2 min-w-[7rem]"
+                    title="Today's PlayerLoad ÷ 28-day baseline. 1.0 = on baseline. >1.15 begins to feed overload risk."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-400">PL vs baseline</span>
+                    <span className="text-lg font-bold tabular-nums text-slate-800">{spike.toFixed(2)}×</span>
+                    <span className="text-[10px] text-slate-500">
+                      {spike >= 1.5 ? "Heavy" : spike >= 1.15 ? "Above" : spike >= 0.85 ? "Normal" : "Light"}
+                    </span>
+                  </div>
+                ) : null}
+                {fatigueLabel ? (
+                  <div className="flex flex-col rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 min-w-[7rem]">
+                    <span className="text-[9px] font-semibold uppercase opacity-70 text-indigo-600">Fatigue type</span>
+                    <span className="text-sm font-bold text-indigo-800 leading-tight pt-1">{fatigueLabel}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })()}
         {/* Soreness ↔ Load connection note */}
         {(() => {
           const note = buildSorenessLoadNote(row);
