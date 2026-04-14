@@ -85,6 +85,15 @@ function num(v: unknown): number | null {
 }
 
 // ── GET ────────────────────────────────────────────────────────────────────────
+//
+// Scope semantics (?scope=...):
+//   "team"   (default — back-compat) team-owned drills for the requested team
+//   "my"     coach-owned drills owned by the caller (follow them between clubs)
+//   "public" public/system drill templates
+//   "all"    union of: my coach-owned + team-owned for the team + public
+//
+// Legacy: ?mine=1 still supported (maps to scope=my).
+//
 export async function GET(req: NextRequest) {
   const requestedTeamId = req.nextUrl.searchParams.get("team_id") || null;
   const auth = await getCoachTeam(req, requestedTeamId);
@@ -94,19 +103,31 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   const category = req.nextUrl.searchParams.get("category");
   const q = req.nextUrl.searchParams.get("q");
-  const mine = req.nextUrl.searchParams.get("mine");
+  const mineLegacy = req.nextUrl.searchParams.get("mine");
+  let scope = (req.nextUrl.searchParams.get("scope") || "team").toLowerCase();
+  if (mineLegacy === "1" || mineLegacy === "true") scope = "my";
+  if (!["team", "my", "public", "all"].includes(scope)) scope = "team";
 
   let query = supabase
     .from("drill_library")
     .select("*")
-    .eq("team_id", auth.teamId)
     .is("deleted_at", null)
     .order("category", { ascending: true })
     .order("drill_name", { ascending: true });
 
-  if (mine === "1" || mine === "true") {
-    query = query.eq("created_by", auth.userId);
+  if (scope === "team") {
+    query = query.eq("owner_type", "team").eq("team_id", auth.teamId);
+  } else if (scope === "my") {
+    query = query.eq("owner_type", "coach").eq("owner_coach_id", auth.userId);
+  } else if (scope === "public") {
+    query = query.eq("owner_type", "public");
+  } else {
+    // scope=all → coach-owned-by-me OR team-owned-for-team OR public
+    query = query.or(
+      `and(owner_type.eq.coach,owner_coach_id.eq.${auth.userId}),and(owner_type.eq.team,team_id.eq.${auth.teamId}),owner_type.eq.public`,
+    );
   }
+
   if (category && (CATEGORIES as readonly string[]).includes(category)) {
     query = query.eq("category", category);
   }
@@ -124,6 +145,7 @@ export async function GET(req: NextRequest) {
     drills: data ?? [],
     currentUserId: auth.userId,
     isAdmin: auth.role === "ADMIN",
+    scope,
   });
 }
 
@@ -146,8 +168,14 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
 
+  // Ownership: "team" (default, backwards compat) or "coach" (personal library).
+  const owner_type =
+    body.owner_type === "coach" ? "coach" : "team";
+
   const payload = {
-    team_id: auth.teamId,
+    team_id: owner_type === "team" ? auth.teamId : null,
+    owner_type,
+    owner_coach_id: owner_type === "coach" ? auth.userId : null,
     category,
     drill_name,
     description: body.description ?? null,

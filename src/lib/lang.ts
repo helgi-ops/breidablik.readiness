@@ -6,9 +6,9 @@ export type Lang = "IS" | "EN";
 
 const LANG_KEY = "mp_lang";
 
-/** Reads/writes language preference from localStorage. Defaults to "IS". */
+/** Reads/writes language preference from localStorage. Defaults to "EN". */
 export function useLang(): [Lang, (l: Lang) => void] {
-  const [lang, setLangState] = useState<Lang>("IS");
+  const [lang, setLangState] = useState<Lang>("EN");
 
   // Restore saved preference on mount
   useEffect(() => {

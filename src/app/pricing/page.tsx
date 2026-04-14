@@ -419,8 +419,30 @@ export default function PricingPage() {
     try {
       setLoading(true);
 
-      // TODO: Hook this into /api/demo-request or Supabase insert.
-      await new Promise((r) => setTimeout(r, 700));
+      const res = await fetch("/api/public/demo-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          org: form.org.trim(),
+          sport: form.sport?.trim() || null,
+          message: form.message?.trim() || null,
+          plan,
+          sport_env: sportEnv,
+          lang,
+          source: "pricing_page",
+        }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Something went wrong.");
+      }
 
       setSent(true);
       setForm({ name: "", email: "", org: "", sport: COPY[lang].sports[0], message: "" });

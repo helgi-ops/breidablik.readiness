@@ -1,0 +1,127 @@
+export const runtime = "nodejs";
+
+/**
+ * POST /api/coach/drill-library/[id]/claim
+ *
+ * Copies a team-owned or public drill into the caller's personal
+ * coach library (owner_type='coach', owner_coach_id=caller).
+ * The caller must be able to SEE the source drill — either they're
+ * on the team that owns it, or it's a public template.
+ *
+ * Use case: coach finds a drill shared at the team level and wants
+ * a personal copy they can take to the next club.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const authHeader = req.headers.get("authorization") ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (!token)
+    return NextResponse.json(
+      { ok: false, error: "Vantar auðkenningu" },
+      { status: 401 },
+    );
+
+  const supabase = getSupabase();
+  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
+  if (uErr || !userRes?.user)
+    return NextResponse.json({ ok: false, error: "Ógilt token" }, { status: 401 });
+
+  const userId = userRes.user.id;
+
+  // Fetch source drill (service role so we can read even if RLS would block —
+  // we do the access check ourselves below).
+  const { data: src, error: srcErr } = await supabase
+    .from("drill_library")
+    .select("*")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (srcErr)
+    return NextResponse.json({ ok: false, error: srcErr.message }, { status: 500 });
+  if (!src)
+    return NextResponse.json({ ok: false, error: "Drilla fannst ekki" }, { status: 404 });
+
+  // Access check:
+  //  - public → ok
+  //  - team   → caller must be on that team (coach_teams)
+  //  - coach  → already owned by caller? refuse no-op; otherwise refuse
+  if (src.owner_type === "coach") {
+    if (src.owner_coach_id === userId) {
+      return NextResponse.json(
+        { ok: false, error: "Drillan er þegar í þínu safni" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      { ok: false, error: "Þessi drilla er í persónulegu safni annars þjálfara" },
+      { status: 403 },
+    );
+  }
+
+  if (src.owner_type === "team") {
+    const { data: coachRow } = await supabase
+      .from("coach_teams")
+      .select("team_id")
+      .eq("coach_id", userId)
+      .eq("team_id", src.team_id)
+      .maybeSingle();
+    if (!coachRow)
+      return NextResponse.json(
+        { ok: false, error: "Þú hefur ekki aðgang að þessu liði" },
+        { status: 403 },
+      );
+  }
+  // owner_type === 'public' → no check needed
+
+  // Build the insert. Copy all content fields but force coach-ownership.
+  const {
+    id: _oldId,
+    team_id: _oldTeam,
+    owner_type: _oldOwner,
+    owner_coach_id: _oldCoach,
+    created_at: _ca,
+    updated_at: _ua,
+    deleted_at: _da,
+    created_by: _cb,
+    ...copyable
+  } = src as Record<string, unknown>;
+
+  const payload = {
+    ...copyable,
+    team_id: null,
+    owner_type: "coach" as const,
+    owner_coach_id: userId,
+    parent_template_id: src.id,
+    source: "claimed_copy",
+    created_by: userId,
+  };
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("drill_library")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (insErr)
+    return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, drill: inserted });
+}

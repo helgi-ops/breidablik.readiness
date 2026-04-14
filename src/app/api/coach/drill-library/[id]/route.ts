@@ -106,7 +106,7 @@ async function ensureDrillAccess(
 ) {
   const { data: drill, error } = await supabase
     .from("drill_library")
-    .select("id, team_id, created_by")
+    .select("id, team_id, created_by, owner_type, owner_coach_id")
     .eq("id", drillId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -114,29 +114,52 @@ async function ensureDrillAccess(
   if (error) return { error: error.message, status: 500 };
   if (!drill) return { error: "Drilla fannst ekki", status: 404 };
 
-  // Team access check
-  if (primaryTeamId !== drill.team_id) {
-    const { data: coachRow } = await supabase
-      .from("coach_teams")
-      .select("team_id")
-      .eq("coach_id", userId)
-      .eq("team_id", drill.team_id)
-      .maybeSingle();
+  // Read access check — varies by ownership
+  if (drill.owner_type === "coach") {
+    if (drill.owner_coach_id !== userId && role !== "ADMIN") {
+      return {
+        error: "Þessi drilla er í persónulegu safni annars þjálfara",
+        status: 403,
+      };
+    }
+  } else if (drill.owner_type === "team") {
+    if (primaryTeamId !== drill.team_id) {
+      const { data: coachRow } = await supabase
+        .from("coach_teams")
+        .select("team_id")
+        .eq("coach_id", userId)
+        .eq("team_id", drill.team_id)
+        .maybeSingle();
+      if (!coachRow)
+        return { error: "Þú hefur ekki aðgang að þessari drillu", status: 403 };
+    }
+  }
+  // owner_type === 'public' → always readable; write blocked below
 
-    if (!coachRow)
-      return { error: "Þú hefur ekki aðgang að þessari drillu", status: 403 };
+  // Write/delete ownership check
+  if (requireOwnership && role !== "ADMIN") {
+    if (drill.owner_type === "public") {
+      return {
+        error: "Almennar drillur er ekki hægt að breyta — afritaðu í Mitt Library fyrst.",
+        status: 403,
+      };
+    }
+    if (drill.owner_type === "coach") {
+      if (drill.owner_coach_id !== userId)
+        return { error: "Aðeins eigandi getur breytt drillu í sínu safni", status: 403 };
+    } else if (drill.owner_type === "team") {
+      // team-owned: only the creator may edit/delete, matching prior behavior
+      if (drill.created_by !== userId) {
+        return {
+          error:
+            "Þú getur aðeins breytt/eytt þínum eigin drillum. Afritaðu drilluna í Mitt Library til að breyta.",
+          status: 403,
+        };
+      }
+    }
   }
 
-  // Ownership check for edit/delete — only the creator or ADMIN can modify
-  if (requireOwnership && role !== "ADMIN" && drill.created_by !== userId) {
-    return {
-      error:
-        "Þú getur aðeins breytt/eytt þínum eigin drillum. Afritaðu drilluna í Mitt Library til að breyta.",
-      status: 403,
-    };
-  }
-
-  return { teamId: drill.team_id as string };
+  return { teamId: drill.team_id as string | null };
 }
 
 // ── PATCH ──────────────────────────────────────────────────────────────────────

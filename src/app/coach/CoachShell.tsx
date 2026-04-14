@@ -26,6 +26,11 @@ const adminLinks = [
   { href: "/coach/automation-center", label: "Automation" },
 ];
 
+// Only shown to users with profiles.role === 'admin'
+const superAdminLinks = [
+  { href: "/coach/leads", label: "Leads (demo/pilot)" },
+];
+
 function NavDropdown({
   label,
   links,
@@ -100,6 +105,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // ── Onboarding guard ──
   // If a COACH lands on /coach/** without a team_id on their profile, redirect
@@ -120,6 +126,10 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       if (!alive || !prof) return;
       const role = (prof as { role?: string }).role ?? "";
       const teamId = (prof as { team_id?: string | null }).team_id;
+
+      if (String(role).toLowerCase() === "admin") {
+        setIsAdmin(true);
+      }
 
       if (String(role).toUpperCase() === "COACH" && !teamId) {
         window.location.replace("/signup/create-team");
@@ -264,6 +274,14 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               links={adminLinks}
               pathname={pathname ?? ""}
             />
+
+            {isAdmin && (
+              <NavDropdown
+                label="MicroPulse"
+                links={superAdminLinks}
+                pathname={pathname ?? ""}
+              />
+            )}
           </nav>
         </div>
       </header>
