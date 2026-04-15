@@ -80,6 +80,7 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const presetTeamId = searchParams.get("team_id") ?? "";
   const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
+  const coachInviteToken = searchParams.get("coach_invite") ?? "";
 
   const [lang, setLang] = useState<Lang>("IS");
   const t = COPY[lang];
@@ -106,6 +107,39 @@ function SignupForm() {
   const [teamId, setTeamId] = useState(presetTeamId);
   const [presetTeamName, setPresetTeamName] = useState<string | null>(null);
   const [presetTeamGender, setPresetTeamGender] = useState<string | null>(null);
+  const [inviteEmailLocked, setInviteEmailLocked] = useState(false);
+  const [inviteLookupError, setInviteLookupError] = useState<string | null>(null);
+
+  // Coach-invite token: resolve team + lock email so the signup matches the invite.
+  useEffect(() => {
+    if (!coachInviteToken) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach-invites/${coachInviteToken}`, { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) {
+          setInviteLookupError(json?.error ?? "not_found");
+          return;
+        }
+        const invite = json.invite as { team_id: string; coach_email: string; status: string };
+        const team = json.team as { id: string; name: string; sport: string | null; gender: string | null } | null;
+        if (invite.status !== "pending") {
+          setInviteLookupError(invite.status);
+          return;
+        }
+        setEmail(invite.coach_email);
+        setInviteEmailLocked(true);
+        setTeamId(invite.team_id);
+        if (team) {
+          setPresetTeamName(team.name);
+          setPresetTeamGender(team.gender);
+          if (team.sport) setSport(team.sport as Sport);
+        }
+      } catch {
+        setInviteLookupError("network_error");
+      }
+    })();
+  }, [coachInviteToken]);
 
   // If team_id is preset, look up its name and sport immediately
   useEffect(() => {
@@ -152,17 +186,44 @@ function SignupForm() {
 
     try {
       setLoading(true);
+      // If this signup is from a coach-invite token, bounce back to the accept page after email confirmation / session.
+      const nextPath = coachInviteToken
+        ? `/invite/coach/${encodeURIComponent(coachInviteToken)}`
+        : "/coach";
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          data: { full_name: fullName.trim(), role: "COACH", sport, team_id: teamId, product_plan: "FREE" },
+          data: {
+            full_name: fullName.trim(),
+            role: "COACH",
+            sport,
+            team_id: teamId,
+            product_plan: "FREE",
+            ...(coachInviteToken ? { coach_invite_token: coachInviteToken } : {}),
+          },
           emailRedirectTo: typeof window !== "undefined"
-            ? `${window.location.origin}/auth/redirect?next=${encodeURIComponent("/coach")}`
+            ? `${window.location.origin}/auth/redirect?next=${encodeURIComponent(nextPath)}`
             : undefined,
         },
       });
       if (signUpError) throw signUpError;
+
+      // If we have an immediate session AND this was an invite signup, auto-accept.
+      if (data.session && coachInviteToken) {
+        try {
+          await fetch(`/api/coach-invites/${coachInviteToken}/accept`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          });
+        } catch {
+          /* accept page will retry; ignore */
+        }
+        window.location.href = nextPath;
+        return;
+      }
+
       setMessage(data.session ? t.successSession : t.success);
       setPassword("");
     } catch (submitError: unknown) {
@@ -224,7 +285,7 @@ function SignupForm() {
           </label>
 
           {/* Sport — hidden when team is preset (sport auto-detected) */}
-          {!presetTeamId && (
+          {!presetTeamId && !inviteEmailLocked && (
             <label className="grid gap-1.5 text-sm">
               <span className="text-neutral-700">{t.sport}</span>
               <select
@@ -241,18 +302,22 @@ function SignupForm() {
             </label>
           )}
 
-          {/* Team — locked banner when preset, otherwise dropdown */}
-          {presetTeamId ? (
+          {/* Team — locked banner when preset or invite-driven, otherwise dropdown */}
+          {(presetTeamId || inviteEmailLocked) ? (
             <div className="grid gap-1.5 text-sm">
               <span className="text-neutral-700">{t.team}</span>
               <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <span className="text-emerald-600">✓</span>
                 <span className="font-medium text-emerald-800">
                   {presetTeamName
-                    ? teamLabel({ id: presetTeamId, name: presetTeamName, sport, gender: presetTeamGender })
+                    ? teamLabel({ id: teamId || presetTeamId, name: presetTeamName, sport, gender: presetTeamGender })
                     : "…"}
                 </span>
-                <span className="ml-auto text-xs text-emerald-500">Tengt við link</span>
+                <span className="ml-auto text-xs text-emerald-500">
+                  {inviteEmailLocked
+                    ? (lang === "IS" ? "Tengt við boð" : "From invite")
+                    : "Tengt við link"}
+                </span>
               </div>
             </div>
           ) : sport && (
@@ -282,10 +347,24 @@ function SignupForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border px-3 py-2"
+              className="rounded-xl border px-3 py-2 disabled:bg-neutral-50 disabled:text-neutral-500"
               placeholder={t.emailPlaceholder}
               required
+              disabled={inviteEmailLocked}
+              readOnly={inviteEmailLocked}
             />
+            {inviteEmailLocked && (
+              <span className="text-xs text-emerald-600">
+                {lang === "IS" ? "Netfang tekið úr boði" : "Email locked by invite"}
+              </span>
+            )}
+            {inviteLookupError && (
+              <span className="text-xs text-red-600">
+                {lang === "IS"
+                  ? "Boðið fannst ekki eða er ekki lengur virkt."
+                  : "Invitation not found or no longer active."}
+              </span>
+            )}
           </label>
 
           {/* Password */}

@@ -4,6 +4,8 @@ export type SendTransactionalEmailInput = {
   to: string;
   subject: string;
   text: string;
+  html?: string;
+  replyTo?: string;
 };
 
 export type SendTransactionalEmailResult = {
@@ -32,6 +34,8 @@ export async function sendTransactionalEmail(input: SendTransactionalEmailInput)
       to: [input.to],
       subject: input.subject,
       text: input.text,
+      ...(input.html ? { html: input.html } : {}),
+      ...(input.replyTo ? { reply_to: input.replyTo } : {}),
     }),
     cache: "no-store",
   });
