@@ -640,7 +640,7 @@ export default function TeamPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         {/* Player streak / completion rate */}
-        {profile?.role === "player" && <StreakCard lang={lang} />}
+        <StreakCard lang={lang} />
 
         {/* Non Negotiables Section */}
         <section>
