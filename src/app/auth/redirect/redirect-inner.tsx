@@ -22,23 +22,15 @@ async function isCheckinDone(userId: string): Promise<boolean> {
   const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
 
   for (const pid of candidatePlayerIds) {
+    // Check readiness_entries directly — the view doesn't have individual metric columns
     const { data, error } = await supabase
-      .from("v_player_daily_decision_v3")
-      .select("fatigue_energy, sleep_quality, sleep_duration, stress_mood, muscle_soreness")
+      .from("readiness_entries")
+      .select("id")
       .eq("player_id", pid)
-      .eq("day_date", today)
+      .eq("entry_date", today)
       .maybeSingle();
 
-    if (!error && data) {
-      const hasMetric = [
-        data.fatigue_energy,
-        data.sleep_quality,
-        data.sleep_duration,
-        data.stress_mood,
-        data.muscle_soreness,
-      ].some((v) => v != null);
-      if (hasMetric) return true;
-    }
+    if (!error && data?.id) return true;
   }
 
   return false;
