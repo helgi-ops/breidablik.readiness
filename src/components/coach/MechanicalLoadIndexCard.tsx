@@ -101,6 +101,7 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
   }, [teamId]);
 
   const rows = data?.rows ?? [];
+  const anyCss = rows.some((r) => r.css != null);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -190,7 +191,12 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
                         </span>
                       </td>
                       <td className="py-1 pr-2 text-slate-600">
-                        DSS {row.dss ?? "—"} · ASS {row.ass ?? "—"} · CSS {row.css ?? "—"} · GDS {row.gds ?? "—"}
+                        {[
+                          `DSS ${row.dss ?? "—"}`,
+                          `ASS ${row.ass ?? "—"}`,
+                          ...(anyCss ? [`CSS ${row.css ?? "—"}`] : []),
+                          `GDS ${row.gds ?? "—"}`,
+                        ].join(" · ")}
                       </td>
                       <td className="py-1 pr-2 text-slate-600">{row.flags.length ? row.flags.join(" • ") : "—"}</td>
                       <td className="py-1">
