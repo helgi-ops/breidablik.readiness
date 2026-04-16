@@ -15,7 +15,7 @@
 // surface — everything it needs is already computed by the dashboard.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 // ── Types (loose — we only read fields we care about) ──────────────────────
@@ -30,6 +30,14 @@ type BriefingRow = {
   total_score?: number | null;
   _yesterday_z?: number | null;
   _z_today?: number | null;
+  _dz?: number | null;
+  // Wellness subscores on the 1–5 Likert scale. Surfaced here so the
+  // briefing card can explain *which variable* drove a YELLOW/RED flag
+  // without the coach having to open the player modal.
+  sleep_quality?: number | null;
+  fatigue_energy?: number | null;
+  stress_mood?: number | null;
+  muscle_soreness?: number | null;
   planned_day_type?: string | null;
   planned_focus?: string | null;
   md_day?: string | null;
@@ -72,6 +80,10 @@ export type DailyBriefingCardProps = {
   mdDayToday?: string | number | null;
   teamSignal?: TeamSignalLike;
   dayStateLabel?: string | null; // e.g. "Medium training"
+  // Optional: last 7 days of week plan day types keyed by ISO date. Used
+  // to contextualise today's readiness with info like "after OFF" or
+  // "after 2 OFF days" when yesterday had no real data.
+  recentDayTypes?: Record<string, string | null> | null;
 };
 
 // ── Copy (IS / EN) ─────────────────────────────────────────────────────────
@@ -96,6 +108,8 @@ const COPY = {
     attentionMonitor: "monitor",
     attentionNone: "allt í lagi",
     topAttention: "Top attention today",
+    showMore: (n: number) => `+${n} fleiri`,
+    showLess: "Sýna færri",
     compliance: "Compliance",
     checkin: "Check-in",
     rpe: "RPE",
@@ -115,6 +129,22 @@ const COPY = {
     chipScore: "Skor",
     chipComp: "Comp",
     chipPl: "PL",
+    // Context badge — appears on the top-of-card headline when yesterday
+    // (or previous days) were OFF. Neutral grey so it reads as context,
+    // not as an alert or driver. See handleOffDay comment in the header.
+    afterOffOne: "eftir OFF dag",
+    afterOffMany: (n: number) => `eftir ${n} OFF daga`,
+    // Diagnostic driver chips — orsök (cause), not recommendation.
+    // Kept short and numeric-first so they don't overlap with
+    // Decision summary (which tells the coach *what to do*).
+    drivers: {
+      sleep: (n: number) => `svefn ${n}/5`,
+      energy: (n: number) => `orka ${n}/5`,
+      stress: (n: number) => `streita ${n}/5`,
+      soreness: (n: number) => `strengir ${n}/5`,
+      dzDrop: (dz: number) => `Δz ${dz.toFixed(1)}`,
+      total: (n: number) => `total ${n}/25`,
+    },
     reasons: {
       redReadiness: "RAUTT readiness",
       yellowReadiness: "GULT readiness",
@@ -149,6 +179,8 @@ const COPY = {
     attentionMonitor: "monitor",
     attentionNone: "all clear",
     topAttention: "Top attention today",
+    showMore: (n: number) => `+${n} more`,
+    showLess: "Show fewer",
     compliance: "Compliance",
     checkin: "Check-in",
     rpe: "RPE",
@@ -168,6 +200,19 @@ const COPY = {
     chipScore: "Score",
     chipComp: "Comp",
     chipPl: "PL",
+    // Context badge — neutral grey, shown near the headline when
+    // yesterday had no real data (team OFF day).
+    afterOffOne: "after OFF day",
+    afterOffMany: (n: number) => `after ${n} OFF days`,
+    // Diagnostic driver chips — cause, not recommendation.
+    drivers: {
+      sleep: (n: number) => `sleep ${n}/5`,
+      energy: (n: number) => `energy ${n}/5`,
+      stress: (n: number) => `stress ${n}/5`,
+      soreness: (n: number) => `soreness ${n}/5`,
+      dzDrop: (dz: number) => `Δz ${dz.toFixed(1)}`,
+      total: (n: number) => `total ${n}/25`,
+    },
     reasons: {
       redReadiness: "RED readiness",
       yellowReadiness: "YELLOW readiness",
@@ -221,7 +266,55 @@ type AttentionItem = {
   composite: number | null;
   plSpike: number | null;
   fatigueType: string | null;
+  // ── Driver chips — the *orsök* layer. These are raw-data-level
+  // explanations of why readiness dropped to YELLOW/RED. Intentionally
+  // diagnostic (not prescriptive) so they don't duplicate Decision summary.
+  drivers: Array<{ kind: "sleep" | "energy" | "stress" | "soreness" | "dz" | "total"; value: number }>;
 };
+
+// Thresholds tuned against the existing 1–5 Likert scale:
+// score of 1 = severe, 2 = concerning. 3+ is within normal range so
+// we don't clutter the row with "normal" drivers.
+const WELLNESS_DRIVER_THRESHOLD = 2;
+// Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
+const DZ_DRIVER_THRESHOLD = 0.5;
+
+function deriveReadinessDrivers(row: BriefingRow): AttentionItem["drivers"] {
+  const drivers: AttentionItem["drivers"] = [];
+
+  const subs: Array<{ kind: AttentionItem["drivers"][number]["kind"]; value: number | null | undefined }> = [
+    { kind: "sleep", value: row.sleep_quality },
+    { kind: "energy", value: row.fatigue_energy },
+    { kind: "stress", value: row.stress_mood },
+    { kind: "soreness", value: row.muscle_soreness },
+  ];
+
+  const lowSubs = subs
+    .filter((s): s is { kind: AttentionItem["drivers"][number]["kind"]; value: number } =>
+      typeof s.value === "number" && s.value <= WELLNESS_DRIVER_THRESHOLD
+    )
+    .sort((a, b) => a.value - b.value);
+
+  // Take the two lowest wellness subscores that are ≤ threshold — these
+  // are the "which variable dropped you" answer. More than two is noise.
+  for (const s of lowSubs.slice(0, 2)) drivers.push({ kind: s.kind, value: s.value });
+
+  // Δz baseline drop — only when the coach sees a dev-driven flag.
+  const dz = typeof row._dz === "number" ? row._dz : null;
+  if (dz != null && dz <= -DZ_DRIVER_THRESHOLD) {
+    drivers.push({ kind: "dz", value: dz });
+  }
+
+  // Total score anchor — only when it's the *reason* the row is RED and
+  // no wellness subscore already explains it (avoids a redundant chip
+  // when sleep=1 already tells the full story).
+  const total = typeof row.total_score === "number" ? row.total_score : null;
+  if (total != null && total <= 17 && drivers.length === 0) {
+    drivers.push({ kind: "total", value: total });
+  }
+
+  return drivers;
+}
 
 function buildAttentionList(
   rows: BriefingRow[],
@@ -297,6 +390,7 @@ function buildAttentionList(
         composite: comp?.compositeScore ?? null,
         plSpike: comp?.playerLoadSpike ?? null,
         fatigueType: comp?.fatigueType ?? null,
+        drivers: deriveReadinessDrivers(row),
       });
     }
   }
@@ -322,6 +416,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     mdDayToday = null,
     teamSignal = null,
     dayStateLabel = null,
+    recentDayTypes = null,
   } = props;
 
   const t = COPY[lang];
@@ -330,6 +425,30 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     () => buildAttentionList(rows, playerComposites, lang),
     [rows, playerComposites, lang],
   );
+
+  // ── Post-OFF context ──────────────────────────────────────────────────
+  // Counts how many consecutive OFF days immediately precede `today`.
+  // Zero when yesterday was a training/game/recovery day. Surfaces as a
+  // neutral grey badge so the coach knows that comparisons to "yesterday"
+  // are unavailable without being misled by imputed numbers.
+  const consecutiveOffBeforeToday = useMemo(() => {
+    if (!recentDayTypes) return 0;
+    let count = 0;
+    for (let offset = 1; offset <= 7; offset++) {
+      const d = new Date(`${today}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - offset);
+      const key = d.toISOString().slice(0, 10);
+      const raw = recentDayTypes[key];
+      if (!raw) break; // no data → stop counting
+      if (String(raw).toUpperCase() !== "OFF") break;
+      count += 1;
+    }
+    return count;
+  }, [recentDayTypes, today]);
+
+  // Whether the attention list is expanded to show all rows or collapsed to
+  // the first 5. Toggled by the "+N more" / "Sýna færri" button below.
+  const [showAllAttention, setShowAllAttention] = useState(false);
 
   const alertCount = attention.filter((x) => x.level === "alert").length;
   const monitorCount = attention.filter((x) => x.level === "monitor").length;
@@ -478,6 +597,16 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           {monitorCount > 0 ? (
             <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold text-amber-700">
               {monitorCount} {t.attentionMonitor}
+            </span>
+          ) : null}
+          {/* Post-OFF context badge — neutral grey so it doesn't read as
+              alert or driver. Tells the coach why day-over-day numbers
+              may look unusual today (yesterday had no real session data). */}
+          {consecutiveOffBeforeToday > 0 ? (
+            <span className="ml-2 inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+              {consecutiveOffBeforeToday === 1
+                ? t.afterOffOne
+                : t.afterOffMany(consecutiveOffBeforeToday)}
             </span>
           ) : null}
         </div>
@@ -642,7 +771,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
               {t.topAttention}
             </div>
             <ul className="space-y-1.5">
-              {attention.slice(0, 5).map((item) => {
+              {(showAllAttention ? attention : attention.slice(0, 5)).map((item) => {
                 const tone =
                   item.level === "alert"
                     ? "border-rose-200 bg-rose-50"
@@ -685,6 +814,21 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                     ? t.reasons.globalFatigue
                     : null;
 
+                // Driver chip labels — plug raw numeric values into the
+                // localized formatter so the coach sees e.g. "svefn 2/5"
+                // or "Δz -0.9". Capped at 3 chips per row to stay scannable.
+                const driverChips = item.drivers.slice(0, 3).map((d) => {
+                  switch (d.kind) {
+                    case "sleep": return t.drivers.sleep(d.value);
+                    case "energy": return t.drivers.energy(d.value);
+                    case "stress": return t.drivers.stress(d.value);
+                    case "soreness": return t.drivers.soreness(d.value);
+                    case "dz": return t.drivers.dzDrop(d.value);
+                    case "total": return t.drivers.total(d.value);
+                    default: return "";
+                  }
+                }).filter(Boolean);
+
                 return (
                   <li
                     key={item.playerId}
@@ -717,6 +861,21 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           </span>
                         ) : null}
                       </div>
+                      {/* Driver chips — orsök layer. Separate row, orange
+                          accent so they read as "why" (not as "what to do"
+                          which is Decision summary's job). */}
+                      {driverChips.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          {driverChips.map((label, idx) => (
+                            <span
+                              key={`${item.playerId}-drv-${idx}`}
+                              className="rounded-full border border-orange-300 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-800"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="mt-0.5 text-xs text-slate-600">
                         {item.reasons.join(" · ")}
                       </div>
@@ -726,9 +885,19 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
               })}
             </ul>
             {attention.length > 5 ? (
-              <div className="mt-1.5 text-[11px] text-slate-400">
-                +{attention.length - 5} more
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllAttention((v) => !v)}
+                className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                aria-expanded={showAllAttention}
+              >
+                {showAllAttention
+                  ? t.showLess
+                  : t.showMore(attention.length - 5)}
+                <span aria-hidden="true" className="text-[10px]">
+                  {showAllAttention ? "▲" : "▼"}
+                </span>
+              </button>
             ) : null}
           </div>
         )}

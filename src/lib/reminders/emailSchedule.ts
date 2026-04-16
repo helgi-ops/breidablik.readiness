@@ -1,5 +1,6 @@
 import "server-only";
 import { getDateKeyInTimezone, getOperationalTimezone } from "@/lib/notifications/schedule";
+import type { TrainingSlotsConfig } from "@/lib/config/teamTrainingSlots";
 
 export type EmailReminderType = "readiness" | "rpe";
 
@@ -33,32 +34,46 @@ function hhmmToMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
-export function matchReadinessEmailSchedule(args?: { now?: Date; timeZone?: string; toleranceMinutes?: number }): EmailScheduleMatch {
+export function matchReadinessEmailSchedule(args?: {
+  now?: Date;
+  timeZone?: string;
+  toleranceMinutes?: number;
+  teamOverride?: TrainingSlotsConfig | null;
+}): EmailScheduleMatch {
   const now = args?.now ?? new Date();
   const timeZone = args?.timeZone ?? getOperationalTimezone();
   const tolerance = args?.toleranceMinutes ?? 6;
   const dateKey = getDateKeyInTimezone(now, timeZone);
   const { minuteOfDay } = localParts(now, timeZone);
-  const target = hhmmToMinutes("09:00");
+  const localTime = args?.teamOverride?.readiness_reminder_time ?? "09:00";
+  const target = hhmmToMinutes(localTime);
 
   if (Math.abs(minuteOfDay - target) > tolerance) return null;
   return {
     type: "readiness",
-    slotKey: "daily_0900",
-    localTime: "09:00",
+    slotKey: `daily_${localTime.replace(":", "")}`,
+    localTime,
     dateKey,
     timeZone,
   };
 }
 
-export function matchRpeEmailSchedule(args?: { now?: Date; timeZone?: string; toleranceMinutes?: number }): EmailScheduleMatch {
+export function matchRpeEmailSchedule(args?: {
+  now?: Date;
+  timeZone?: string;
+  toleranceMinutes?: number;
+  teamOverride?: TrainingSlotsConfig | null;
+}): EmailScheduleMatch {
   const now = args?.now ?? new Date();
   const timeZone = args?.timeZone ?? getOperationalTimezone();
   const tolerance = args?.toleranceMinutes ?? 6;
   const dateKey = getDateKeyInTimezone(now, timeZone);
   const { weekday, minuteOfDay } = localParts(now, timeZone);
 
-  const target = weekday === 2 || weekday === 4 ? "16:30" : "14:00";
+  const override = args?.teamOverride ?? null;
+  const defaultWeekday = override?.rpe_email_time_weekday ?? "14:00";
+  const defaultTueThu = override?.rpe_email_time_tue_thu ?? "16:30";
+  const target = weekday === 2 || weekday === 4 ? defaultTueThu : defaultWeekday;
   const targetMinute = hhmmToMinutes(target);
 
   if (Math.abs(minuteOfDay - targetMinute) > tolerance) return null;

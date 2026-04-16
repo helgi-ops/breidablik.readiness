@@ -102,14 +102,19 @@ export async function GET(req: NextRequest) {
       authorMap = Object.fromEntries(authors?.map((a) => [a.id, a.display_name]) ?? []);
     }
 
-    const announcementsWithAuthor = announcements?.map((a) => ({
-      id: a.id,
-      title: a.title,
-      body: a.body,
-      pinned: a.pinned,
-      author_name: authorMap[a.author_id] || "Unknown",
-      created_at: a.created_at,
-    })) ?? [];
+    // Auto-expire: hide non-pinned announcements older than 24 hours
+    const expiryMs = 24 * 60 * 60 * 1000;
+    const announcementNow = Date.now();
+    const announcementsWithAuthor = (announcements ?? [])
+      .filter((a) => a.pinned || (announcementNow - new Date(a.created_at).getTime()) < expiryMs)
+      .map((a) => ({
+        id: a.id,
+        title: a.title,
+        body: a.body,
+        pinned: a.pinned,
+        author_name: authorMap[a.author_id] || "Unknown",
+        created_at: a.created_at,
+      }));
 
     // 3. Fetch schedule events (4 weeks back + 8 weeks forward for calendar)
     const now = new Date();

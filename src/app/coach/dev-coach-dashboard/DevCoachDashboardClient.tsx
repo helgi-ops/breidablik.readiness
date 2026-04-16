@@ -1980,6 +1980,19 @@ export default function CoachPage() {
     return prettyMd(src).md;
   }, [weekGrid, planPreview?.md_day, mdContextToday]);
 
+  // Recent day types indexed by ISO date — used by DailyBriefingCard to
+  // render the "after OFF" context badge when yesterday had no real data.
+  // Keep the map stable across renders so the memo inside the card works.
+  const recentDayTypes = useMemo<Record<string, string | null>>(() => {
+    const map: Record<string, string | null> = {};
+    for (const row of (weekGrid ?? []) as Array<{ day_date?: string | null; day_type_final?: string | null }>) {
+      const key = dateKey(String(row.day_date ?? ""));
+      if (!key) continue;
+      map[key] = row.day_type_final ?? null;
+    }
+    return map;
+  }, [weekGrid]);
+
 
   /** -----------------------------
    * Utilities
@@ -6488,6 +6501,7 @@ export default function CoachPage() {
             mdDayToday={mdDayToday}
             teamSignal={teamSignal as any}
             dayStateLabel={dayStateInfo?.label ?? null}
+            recentDayTypes={recentDayTypes}
           />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>

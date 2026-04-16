@@ -15,6 +15,31 @@ type SubscriptionRow = {
   updated_at: string | null;
 };
 
+async function getOffDayTeamIds(
+  sb: SupabaseClient,
+  args: { dateKey: string; teamIds: string[] }
+): Promise<Set<string>> {
+  const offTeamIds = new Set<string>();
+  if (!args.teamIds.length) return offTeamIds;
+
+  const { data, error } = await sb
+    .from("week_plans")
+    .select("team_id, day_type")
+    .eq("day_date", args.dateKey)
+    .in("team_id", args.teamIds);
+
+  if (error) {
+    // If the lookup fails, fail open (don't block reminders) — error will surface elsewhere.
+    return offTeamIds;
+  }
+
+  for (const row of (data ?? []) as Array<{ team_id: string; day_type: string | null }>) {
+    const dayType = String(row.day_type ?? "").toUpperCase();
+    if (dayType === "OFF") offTeamIds.add(String(row.team_id));
+  }
+  return offTeamIds;
+}
+
 async function getLatestActiveSubscriptionByPlayer(sb: SupabaseClient, playerIds: string[]) {
   if (!playerIds.length) return new Map<string, SubscriptionRow>();
 
@@ -110,7 +135,20 @@ export async function sendRpeReminderToMissingPlayers(
     timeZone: args.timeZone,
   });
 
-  const missing = compliance.missingPlayers;
+  const allMissing = compliance.missingPlayers;
+
+  // Skip RPE reminders for teams whose week_plan marks today as OFF.
+  const teamIdsForOffCheck = Array.from(
+    new Set(allMissing.map((p) => p.team_id).filter((id): id is string => Boolean(id)))
+  );
+  const offTeamIds = await getOffDayTeamIds(sb, {
+    dateKey: args.dateKey,
+    teamIds: teamIdsForOffCheck,
+  });
+
+  const missing = allMissing.filter((p) => !(p.team_id && offTeamIds.has(String(p.team_id))));
+  const skippedOffDay = allMissing.length - missing.length;
+
   const subsByPlayer = await getLatestActiveSubscriptionByPlayer(
     sb,
     missing.map((p) => p.player_id)
@@ -169,11 +207,12 @@ export async function sendRpeReminderToMissingPlayers(
       missing_count: compliance.summary.missingCount,
       attempted_count: 0,
       sent_count: 0,
-      skipped_count: skippedNoToken + skippedDuplicate,
+      skipped_count: skippedNoToken + skippedDuplicate + skippedOffDay,
       failed_count: 0,
       removed_invalid_tokens: 0,
       skipped_no_token: skippedNoToken,
       skipped_duplicate: skippedDuplicate,
+      skipped_off_day: skippedOffDay,
     };
   }
 
@@ -236,10 +275,11 @@ export async function sendRpeReminderToMissingPlayers(
     missing_count: compliance.summary.missingCount,
     attempted_count: queued.length,
     sent_count: sentCount,
-    skipped_count: skippedNoToken + skippedDuplicate,
+    skipped_count: skippedNoToken + skippedDuplicate + skippedOffDay,
     failed_count: failedCount,
     removed_invalid_tokens: removedInvalidTokens,
     skipped_no_token: skippedNoToken,
     skipped_duplicate: skippedDuplicate,
+    skipped_off_day: skippedOffDay,
   };
 }

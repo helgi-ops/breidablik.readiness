@@ -155,6 +155,8 @@ export type CatapultAthleteMapRecord = {
   confidence: number;
   catapultAthleteName?: string | null;
   catapultEmail?: string | null;
+  /** Team that owns the Catapult account this athlete_id came from. Required once multiple teams each run their own Catapult account to prevent athlete_id collisions across accounts. */
+  sourceTeamId?: string | null;
 };
 
 export type CatapultSyncResult = {

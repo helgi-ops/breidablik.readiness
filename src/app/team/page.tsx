@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import WeeklyCalendar from "./WeeklyCalendar";
 import TeamTrainingSection from "@/components/team/TeamTrainingSection";
+import StreakCard from "@/components/player/StreakCard";
 import { useLang } from "@/lib/lang";
 
 interface User {
@@ -252,7 +253,7 @@ export default function TeamPage() {
     try {
       const authSession = await supabase.auth.getSession();
       const response = await fetch(
-        `/api/team/announcements?announcementId=${announcementId}`,
+        `/api/team/announcements?id=${announcementId}`,
         {
           method: "DELETE",
           headers: {
@@ -638,6 +639,9 @@ export default function TeamPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+        {/* Player streak / completion rate */}
+        {profile?.role === "player" && <StreakCard lang={lang} />}
+
         {/* Non Negotiables Section */}
         <section>
           <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)" }}>

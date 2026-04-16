@@ -1,4 +1,5 @@
 import { getOperationalTimezone } from "@/lib/notifications/schedule";
+import type { TrainingSlotsConfig } from "@/lib/config/teamTrainingSlots";
 
 export type RpeReminderType = "first" | "second" | "manual";
 
@@ -93,11 +94,24 @@ function minutesFromHHMM(hhmm: string) {
   return h * 60 + m;
 }
 
-export function getReminderSlotsForDate(date: Date, timeZone = getOperationalTimezone()): RpeReminderSlot[] {
-  const parts = getDateParts(date, timeZone);
-  const slots = rpeReminderConfig.weekdaySlots[parts.weekday] ?? [];
-  if (!rpeReminderConfig.weekendEnabled && (parts.weekday === 0 || parts.weekday === 6)) return [];
+function effectiveSlotsForWeekday(
+  weekday: number,
+  override: TrainingSlotsConfig | null | undefined
+): readonly string[] {
+  const overrideSlots = override?.weekday_slots?.[String(weekday) as "0" | "1" | "2" | "3" | "4" | "5" | "6"];
+  const overrideTimes = overrideSlots?.rpe_reminders;
+  if (overrideTimes && overrideTimes.length) return overrideTimes;
+  return rpeReminderConfig.weekdaySlots[weekday] ?? [];
+}
 
+export function getReminderSlotsForDate(
+  date: Date,
+  timeZone = getOperationalTimezone(),
+  teamOverride: TrainingSlotsConfig | null = null,
+): RpeReminderSlot[] {
+  const parts = getDateParts(date, timeZone);
+  if (!rpeReminderConfig.weekendEnabled && (parts.weekday === 0 || parts.weekday === 6)) return [];
+  const slots = effectiveSlotsForWeekday(parts.weekday, teamOverride);
   const day = DAY_LABELS[parts.weekday];
   return slots.map((time, index) => ({
     reminderType: index === 0 ? "first" : "second",
@@ -107,11 +121,14 @@ export function getReminderSlotsForDate(date: Date, timeZone = getOperationalTim
   }));
 }
 
-export function getReminderSlotsForDateKey(dateKey: string, timeZone = getOperationalTimezone()): RpeReminderSlot[] {
+export function getReminderSlotsForDateKey(
+  dateKey: string,
+  timeZone = getOperationalTimezone(),
+  teamOverride: TrainingSlotsConfig | null = null,
+): RpeReminderSlot[] {
   const weekday = getWeekdayFromDateKey(dateKey, timeZone);
   if (!rpeReminderConfig.weekendEnabled && (weekday === 0 || weekday === 6)) return [];
-
-  const slots = rpeReminderConfig.weekdaySlots[weekday] ?? [];
+  const slots = effectiveSlotsForWeekday(weekday, teamOverride);
   const day = DAY_LABELS[weekday];
   return slots.map((time, index) => ({
     reminderType: index === 0 ? "first" : "second",
@@ -125,12 +142,13 @@ export function getCurrentScheduledSlot(args?: {
   now?: Date;
   timeZone?: string;
   toleranceMinutes?: number;
+  teamOverride?: TrainingSlotsConfig | null;
 }): RpeReminderSlot | null {
   const now = args?.now ?? new Date();
   const timeZone = args?.timeZone ?? getOperationalTimezone();
   const tolerance = args?.toleranceMinutes ?? 6;
   const parts = getDateParts(now, timeZone);
-  const slots = getReminderSlotsForDate(now, timeZone);
+  const slots = getReminderSlotsForDate(now, timeZone, args?.teamOverride ?? null);
   if (!slots.length) return null;
 
   const minuteOfDay = parts.hour * 60 + parts.minute;
@@ -147,9 +165,14 @@ export function isPlayerExpectedForRpe(args: {
   dateKey: string;
   timeZone?: string;
   player?: { is_active?: boolean | null } | null;
+  teamOverride?: TrainingSlotsConfig | null;
 }): boolean {
   if (args.player?.is_active === false) return false;
-  const slots = getReminderSlotsForDateKey(args.dateKey, args.timeZone ?? getOperationalTimezone());
+  const slots = getReminderSlotsForDateKey(
+    args.dateKey,
+    args.timeZone ?? getOperationalTimezone(),
+    args.teamOverride ?? null,
+  );
   return slots.length > 0;
 }
 
