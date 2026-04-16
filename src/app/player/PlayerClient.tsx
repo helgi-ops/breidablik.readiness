@@ -25,11 +25,7 @@ import {
 import { buildPrescriptionDecision, type PrescriptionDecision } from "@/lib/micropulse/prescriptionEngine";
 import { applyCoachRules, type FinalRecommendationDecision } from "@/lib/micropulse/rulesEngine";
 import { buildSessionDraft, type SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
-import {
-  buildPlayerPublishedSessionView,
-  loadSessionDraftRecordByPlayerDate,
-  type PlayerPublishedSessionView,
-} from "@/lib/micropulse/sessionWorkflow";
+// Session workflow removed (localStorage-only prototype, not in use)
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
@@ -41,19 +37,7 @@ import {
   getDefaultCatapultTodayVsTeamMetricKeys,
   getDefaultCatapultWeeklyLoadMetricKeys,
 } from "@/lib/integrations/catapult/metricCatalog";
-import {
-  acknowledgeSession,
-  buildPlayerAcknowledgedNotification,
-  buildPlayerCompletedNotification,
-  buildPlayerSessionStatusView,
-  completeSession,
-  loadAssignmentsForPlayer,
-  markSessionSeen,
-  saveNotificationEvent,
-  type PlayerSessionStatusView,
-  type SessionAssignmentRecord,
-  updatePlayerSessionStatus,
-} from "@/lib/micropulse/sessionDelivery";
+// Session delivery removed (localStorage-only prototype, not in use)
 import {
   buildRuntimeRulesFromAdminConfig,
   createDefaultAdminConfigSnapshot,
@@ -66,8 +50,7 @@ import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
 import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
-import PublishedSessionView from "@/components/sessionWorkflow/PublishedSessionView";
-import PlayerSessionStatusCard from "@/components/sessionDelivery/PlayerSessionStatusCard";
+// PublishedSessionView + PlayerSessionStatusCard removed (session workflow feature removed)
 import ValdStatusCard from "@/components/player/ValdStatusCard";
 import { getExerciseRecommendation } from "@/lib/exercise-recommendations/recommend";
 import { hasFeature } from "@/lib/micropulse/product";
@@ -2751,9 +2734,7 @@ export default function PlayerClient() {
   const [prescriptionDecision, setPrescriptionDecision] = useState<PrescriptionDecision | null>(null);
   const [finalRecommendationDecision, setFinalRecommendationDecision] = useState<FinalRecommendationDecision | null>(null);
   const [sessionDraft, setSessionDraft] = useState<SessionDraft | null>(null);
-  const [publishedSessionView, setPublishedSessionView] = useState<PlayerPublishedSessionView | null>(null);
-  const [assignmentRecord, setAssignmentRecord] = useState<SessionAssignmentRecord | null>(null);
-  const [playerSessionStatusView, setPlayerSessionStatusView] = useState<PlayerSessionStatusView | null>(null);
+  // Session workflow state removed (feature removed)
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
   const [teamPlanTier, setTeamPlanTier] = useState<"FREE" | "PRO" | "ELITE">("FREE");
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
@@ -4040,33 +4021,7 @@ export default function PlayerClient() {
             }),
           );
 
-          const playerIdForWorkflow = profile?.player_id ?? null;
-          if (playerIdForWorkflow) {
-            const workflowRecord = loadSessionDraftRecordByPlayerDate(playerIdForWorkflow, safeDay);
-            const publishedView = workflowRecord ? buildPlayerPublishedSessionView(workflowRecord) : null;
-            setPublishedSessionView(publishedView);
-
-            const playerAssignments = loadAssignmentsForPlayer(playerIdForWorkflow)
-              .filter((a) => a.sessionDate === safeDay)
-              .sort((a, b) => b.version - a.version);
-            const activeAssignment = playerAssignments[0] ?? null;
-
-            if (activeAssignment && publishedView) {
-              const seenAssignment = activeAssignment.seenAt ? activeAssignment : markSessionSeen(activeAssignment);
-              if (!activeAssignment.seenAt) {
-                updatePlayerSessionStatus(seenAssignment);
-              }
-              setAssignmentRecord(seenAssignment);
-              setPlayerSessionStatusView(buildPlayerSessionStatusView(seenAssignment));
-            } else {
-              setAssignmentRecord(null);
-              setPlayerSessionStatusView(null);
-            }
-          } else {
-            setPublishedSessionView(null);
-            setAssignmentRecord(null);
-            setPlayerSessionStatusView(null);
-          }
+          // Session workflow loading removed (feature removed)
         }
 
         await loadFixModulesForPlayer(prof.player_id);
@@ -4100,23 +4055,7 @@ export default function PlayerClient() {
     }
   }, [loading, day, metrics]);
 
-  function handleAcknowledgePublishedSession() {
-    if (!assignmentRecord) return;
-    const next = acknowledgeSession(assignmentRecord);
-    updatePlayerSessionStatus(next);
-    saveNotificationEvent(buildPlayerAcknowledgedNotification(next, "IN_APP"));
-    setAssignmentRecord(next);
-    setPlayerSessionStatusView(buildPlayerSessionStatusView(next));
-  }
-
-  function handleCompletePublishedSession() {
-    if (!assignmentRecord) return;
-    const next = completeSession(assignmentRecord);
-    updatePlayerSessionStatus(next);
-    saveNotificationEvent(buildPlayerCompletedNotification(next, "IN_APP"));
-    setAssignmentRecord(next);
-    setPlayerSessionStatusView(buildPlayerSessionStatusView(next));
-  }
+  // Session workflow handlers removed (feature removed)
 
   const flag: Flag = useMemo(() => {
     const fromCoachView = parseFinalFlag(coachFinalFlag?.final_flag ?? null);
@@ -4831,18 +4770,7 @@ export default function PlayerClient() {
                           <div className="mt-1">{prescriptionDecision.coachInstruction}</div>
                         </div>
                       ) : null}
-                      {publishedSessionView ? (
-                        <div className="mt-2">
-                          <PublishedSessionView view={publishedSessionView} title="Today’s published session" />
-                          <div className="mt-2">
-                            <PlayerSessionStatusCard
-                              statusView={playerSessionStatusView}
-                              onAcknowledge={handleAcknowledgePublishedSession}
-                              onComplete={handleCompletePublishedSession}
-                            />
-                          </div>
-                        </div>
-                      ) : null}
+                      {/* Published session view removed (session workflow feature removed) */}
                       {sessionDraft ? (
                         <div className="mt-2 space-y-2">
                           <SessionDraftCard draft={sessionDraft} />

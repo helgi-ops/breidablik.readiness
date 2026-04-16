@@ -50,13 +50,7 @@ import {
   buildTeamSessionBuildSummary,
   type SessionDraft,
 } from "@/lib/micropulse/autoSessionBuilder";
-import {
-  buildWorkflowEvent,
-  loadSessionDraftRecordByPlayerDate,
-  saveSessionDraftRecord,
-  saveSessionWorkflowEvent,
-  type SessionDraftRecord,
-} from "@/lib/micropulse/sessionWorkflow";
+// Session workflow imports removed (feature removed)
 import {
   applyCoachRules,
   buildTeamRulesSummary,
@@ -4187,59 +4181,7 @@ export default function CoachPage() {
     return buildTeamSessionBuildSummary(drafts);
   }, [rowsWithSessionDraft]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    for (const row of rowsWithSessionDraft) {
-      const draft = row._session_draft ?? null;
-      if (!draft) continue;
-
-      const playerId = String(row.player_id);
-      const date = row.entry_date || todayISO();
-      const existing = loadSessionDraftRecordByPlayerDate(playerId, date);
-      if (existing) continue;
-
-      const createdAt = new Date().toISOString();
-      const record: SessionDraftRecord = {
-        id: `wf:${playerId}:${date}`,
-        playerId,
-        playerName: row.full_name,
-        teamId: row.team_id ?? undefined,
-        date,
-        originalGeneratedDraft: structuredClone(draft),
-        workingDraft: structuredClone(draft),
-        approvedDraft: null,
-        publishedDraft: null,
-        status: "GENERATED",
-        version: 1,
-        createdAt,
-        updatedAt: createdAt,
-        createdBy: "system:auto-session-builder",
-        lastEditedBy: null,
-        approvedBy: null,
-        approvedAt: null,
-        publishedBy: null,
-        publishedAt: null,
-      };
-
-      saveSessionDraftRecord(record);
-      saveSessionWorkflowEvent(
-        buildWorkflowEvent({
-          workflowId: record.id,
-          actionType: "GENERATED",
-          actorId: "system",
-          actorName: "Auto Session Builder",
-          summary: "Session draft generated from recommendation stack.",
-          metadata: {
-            playerId,
-            date,
-            draftAction: draft.draftAction,
-            sessionType: draft.sessionType,
-          },
-        }),
-      );
-    }
-  }, [rowsWithSessionDraft]);
+  // Session workflow auto-save useEffect removed (feature removed)
 
   const teamRulesSummary = useMemo(
     () =>
@@ -7122,11 +7064,7 @@ export default function CoachPage() {
                           {teamIntel.session_recommendation}
                         </div>
                       ) : null}
-                      <div className="mt-2 text-[11px]">
-                        <Link href="/coach/session-workflow" className="font-medium text-slate-700 underline underline-offset-2">
-                          Open Session Workflow
-                        </Link>
-                      </div>
+                      {/* Session workflow link removed */}
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

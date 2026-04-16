@@ -6,8 +6,7 @@ import {
   loadTeamOverrides,
   type OrgReportingView,
 } from "@/lib/micropulse/orgIntelligence";
-import { listAssignmentsForTeam } from "@/lib/micropulse/sessionDelivery";
-import { loadAllSessionDraftRecords } from "@/lib/micropulse/sessionWorkflow";
+// Session workflow/delivery imports removed (feature removed)
 import { getReportTemplate } from "./templates";
 import type { ReportBuildContext, ReportDocument, ReportTemplateKey } from "./types";
 
@@ -196,13 +195,7 @@ export function buildOrgMultiTeamSummaryReport(ctx: ReportBuildContext): ReportD
 
 export function buildDeliveryWorkflowReport(ctx: ReportBuildContext): ReportDocument {
   const tpl = getReportTemplate("DELIVERY_WORKFLOW_REPORT");
-  const workflows = loadAllSessionDraftRecords();
-  const assignments = listAssignmentsForTeam(ctx.teamId ?? undefined);
-
-  const pendingReviews = workflows.filter((w) => w.status === "IN_REVIEW").length;
-  const published = workflows.filter((w) => w.status === "PUBLISHED").length;
-  const completed = assignments.filter((a) => !!a.completedAt).length;
-
+  // Session workflow feature removed — return empty report shell
   return {
     id: reportId("report"),
     templateKey: tpl.key,
@@ -213,16 +206,9 @@ export function buildDeliveryWorkflowReport(ctx: ReportBuildContext): ReportDocu
     generatedForDate: ctx.generatedForDate ?? nowIso().slice(0, 10),
     organizationId: ctx.organizationId ?? null,
     teamId: ctx.teamId ?? null,
-    summaryLine: `${pendingReviews} pending reviews · ${published} published workflows · ${completed} completed deliveries.`,
-    keyPoints: [
-      `Pending reviews: ${pendingReviews}`,
-      `Published workflows: ${published}`,
-      `Completed deliveries: ${completed}`,
-    ],
-    sections: [
-      section("workflow", "Workflow records", "TABLE", workflows.slice(0, 50)),
-      section("delivery", "Delivery records", "TABLE", assignments.slice(0, 50)),
-    ],
+    summaryLine: "Session workflow feature removed.",
+    keyPoints: ["Session workflow feature has been removed."],
+    sections: [],
     exportFormats: tpl.recommendedFormats,
     metadata: { templateIntent: tpl.sectionIntent },
   };

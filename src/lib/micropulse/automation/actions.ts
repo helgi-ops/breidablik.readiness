@@ -1,7 +1,6 @@
 import type { RealtimeDomainEvent } from "@/lib/micropulse/realtime";
 import { saveRealtimeActivityItem } from "@/lib/micropulse/realtime/persistence";
-import { createReviewRequest } from "@/lib/micropulse/sessionDelivery/reviewRequests";
-import { saveNotificationEvent, saveReviewRequest } from "@/lib/micropulse/sessionDelivery/persistence";
+// Session delivery imports removed (feature removed)
 import type { AutomationActionExecutionRecord, AutomationRule, AutomationRuleAction } from "./types";
 
 function actionId() {
@@ -95,18 +94,8 @@ export function executeAutomationAction(
   try {
     switch (action.actionType) {
       case "CREATE_REVIEW_REQUEST": {
-        if (!event.workflowId) {
-          return { ...action, status: "SKIPPED", summary: "Skipped review request: missing workflowId." };
-        }
-        const { request, notifications } = createReviewRequest({
-          workflowId: event.workflowId,
-          requestedByName: "Automation",
-          requestedToName: String(actionConfig?.requestedToName ?? "Staff"),
-          reason: `Automation rule ${rule.name} fired.`,
-        });
-        saveReviewRequest(request);
-        for (const notification of notifications) saveNotificationEvent(notification);
-        return { ...action, status: "EXECUTED", executedAt: new Date().toISOString(), summary: request.summary };
+        // Session workflow feature removed — review requests no longer supported
+        return { ...action, status: "SKIPPED", summary: "Skipped: session workflow feature removed." };
       }
       case "SEND_NOTIFICATION": {
         // No direct generic channel send in v1; keep explicit pending intent for bounded downstream executors.
