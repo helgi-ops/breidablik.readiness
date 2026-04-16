@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabaseClient";
 import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
+import StreakCard from "@/components/player/StreakCard";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -610,6 +611,51 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
   );
 }
 
+// ── Streak card portal ──────────────────────────────────────────────────────
+
+function StreakCardPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+
+      // Insert after AteCommandCard slot, or after the header card
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) {
+        if (attempts < 25) window.setTimeout(place, 300);
+        return;
+      }
+
+      let slot = document.getElementById("dev-streak-card-slot");
+      if (!slot) {
+        slot = document.createElement("div");
+        slot.id = "dev-streak-card-slot";
+        slot.className = "mt-3";
+      }
+
+      const target = ateSlot ?? anchor;
+      if (slot.parentElement !== target.parentElement || slot.previousElementSibling !== target) {
+        target.parentElement!.insertBefore(slot, target.nextSibling);
+      }
+
+      setMountNode((prev) => (prev === slot ? prev : slot));
+    };
+
+    place();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!mountNode || activeTab !== "today") return null;
+
+  return createPortal(<StreakCard lang={lang} />, mountNode);
+}
+
 // ── PWA detection ────────────────────────────────────────────────────────────
 
 function usePwaMode(): boolean {
@@ -1104,6 +1150,7 @@ export default function DevPlayerClient() {
         <PlayerClient />
       </div>
       <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />
+      <StreakCardPortal activeTab={activeTab} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)
