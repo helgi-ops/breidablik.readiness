@@ -638,6 +638,32 @@ export default function TeamPage() {
         </div>
       </div>
 
+      {/* Browser-mode navigation for players (PWA has its own bottom nav) */}
+      {!isPwa && profile?.role === "player" && (
+        <div className="w-full bg-white border-b border-zinc-200">
+          <div className="max-w-3xl mx-auto px-4 flex items-center gap-1 py-2 text-sm">
+            {[
+              { label: lang === "IS" ? "Í dag" : "Today", href: "/player?tab=today", active: false },
+              { label: lang === "IS" ? "Spjall" : "Chat", href: "/player?tab=chat", active: false },
+              { label: lang === "IS" ? "Lið" : "Team", href: "/team", active: true },
+              { label: lang === "IS" ? "Saga" : "History", href: "/player?tab=history", active: false },
+            ].map((item) => (
+              <button
+                key={item.label}
+                className={`px-3 py-1.5 rounded-full font-medium transition-colors ${
+                  item.active
+                    ? "bg-green-100 text-green-800"
+                    : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                }`}
+                onClick={() => router.push(item.href)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         {/* Player streak / completion rate */}
         <StreakCard lang={lang} />
