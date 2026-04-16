@@ -132,11 +132,19 @@ export function computeCatapultExternalLoadBaseline(args: {
   date: string;
 }): { today: CatapultDailyLoadRow | null; baseline: CatapultExternalLoadBaseline } {
   const sorted = [...args.rows].sort((a, b) => a.date.localeCompare(b.date));
-  const today = sorted.find((row) => row.date === args.date) ?? null;
+  const exactToday = sorted.find((row) => row.date === args.date) ?? null;
+  // When today has no GPS data yet (morning check-in before training),
+  // fall back to the most recent previous day that has data.
+  // This way the quadrant shows "last session load" vs "today's readiness".
   const previousRows = sorted.filter((row) => row.date < args.date);
-  const acute3dRows = previousRows.slice(-3);
-  const acute7dRows = previousRows.slice(-7);
-  const chronic28dRows = previousRows.slice(-28);
+  const today = exactToday ?? (previousRows.length > 0 ? previousRows[previousRows.length - 1] : null);
+  // When using a fallback day as "today", exclude it from baseline so it isn't double-counted
+  const baselineRows = today && !exactToday
+    ? previousRows.filter((row) => row.date !== today.date)
+    : previousRows;
+  const acute3dRows = baselineRows.slice(-3);
+  const acute7dRows = baselineRows.slice(-7);
+  const chronic28dRows = baselineRows.slice(-28);
 
   return {
     today,

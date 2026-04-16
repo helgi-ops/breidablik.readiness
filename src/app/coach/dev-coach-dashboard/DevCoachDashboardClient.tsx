@@ -984,10 +984,16 @@ function summarizeExternalLoad(rows: ExternalLoadDailyRow[], targetDate: string)
   today: ExternalLoadDailyRow | null;
   baseline: ExternalLoadBaseline | null;
 } {
-  const today = rows.find((row) => row.date === targetDate) ?? null;
-  const baselineRows = rows
-    .filter((row) => row.date < targetDate)
-    .slice(-7);
+  const exactToday = rows.find((row) => row.date === targetDate) ?? null;
+  const previousRows = rows.filter((row) => row.date < targetDate);
+  // When today has no GPS data yet (morning check-in before training),
+  // fall back to the most recent previous day with data.
+  const today = exactToday ?? (previousRows.length > 0 ? previousRows[previousRows.length - 1] : null);
+  // Exclude fallback day from baseline to avoid double-counting
+  const baselineRows = (today && !exactToday
+    ? previousRows.filter((row) => row.date !== today.date)
+    : previousRows
+  ).slice(-7);
 
   if (!today && baselineRows.length === 0) {
     return { today: null, baseline: null };
