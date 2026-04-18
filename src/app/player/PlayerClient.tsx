@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { useLang } from "@/lib/lang";
 import type { Lang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
@@ -2692,6 +2692,10 @@ export default function PlayerClient() {
   const [catapultToday, setCatapultToday] = useState<CatapultDailyLoadRow | null>(null);
   const [catapultTeamToday, setCatapultTeamToday] = useState<CatapultDailyLoadRow[]>([]);
   const [catapultHistory, setCatapultHistory] = useState<CatapultDailyLoadRow[]>([]);
+
+  // GPS date navigation — allows browsing last 7 days independently of readiness date
+  const [gpsDate, setGpsDate] = useState<string>(day);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [tplToday, setTplToday] = useState<PlayerTemplateToday | null>(null);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
@@ -2837,7 +2841,85 @@ export default function PlayerClient() {
   useEffect(() => {
     const safeDay = sanitizeDay(day);
     setSessionRpeForm((prev) => ({ ...prev, session_date: safeDay }));
+    setGpsDate(safeDay);
   }, [day]);
+
+  // Reload GPS data when gpsDate changes (arrow navigation)
+  const reloadGpsForDate = useCallback(async (targetDate: string) => {
+    const playerId = profile?.player_id ?? selectedPlayerId;
+    if (!playerId || !profile?.team_id) return;
+    setGpsLoading(true);
+    try {
+      const histStart = new Date(`${targetDate}T00:00:00.000Z`);
+      histStart.setUTCDate(histStart.getUTCDate() - 34);
+      const catapultStartDate = histStart.toISOString().slice(0, 10);
+
+      const [{ data: todayRows }, { data: histRows }, { data: teamRows }] = await Promise.all([
+        supabase
+          .from("player_external_load_daily")
+          .select("*")
+          .in("source", ["catapult", "manual"])
+          .eq("player_id", playerId)
+          .eq("date", targetDate),
+        supabase
+          .from("player_external_load_daily")
+          .select("*")
+          .in("source", ["catapult", "manual"])
+          .eq("player_id", playerId)
+          .gte("date", catapultStartDate)
+          .lte("date", targetDate)
+          .order("date", { ascending: true }),
+        supabase
+          .from("player_external_load_daily")
+          .select("*")
+          .in("source", ["catapult", "manual"])
+          .eq("team_id", profile.team_id)
+          .eq("date", targetDate),
+      ]);
+
+      const normToday = ((todayRows ?? []) as Record<string, unknown>[])
+        .map(normalizeCatapultDailyLoadRow)
+        .filter((r): r is CatapultDailyLoadRow => r != null)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .at(-1) ?? null;
+      const normHistory = ((histRows ?? []) as Record<string, unknown>[])
+        .map(normalizeCatapultDailyLoadRow)
+        .filter((r): r is CatapultDailyLoadRow => r != null)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const normTeam = ((teamRows ?? []) as Record<string, unknown>[])
+        .map(normalizeCatapultDailyLoadRow)
+        .filter((r): r is CatapultDailyLoadRow => r != null);
+
+      setCatapultToday(normToday);
+      setCatapultHistory(normHistory);
+      setCatapultTeamToday(normTeam);
+    } catch (err) {
+      console.error("GPS date nav reload error:", err);
+    } finally {
+      setGpsLoading(false);
+    }
+  }, [profile?.player_id, profile?.team_id, selectedPlayerId, supabase]);
+
+  const gpsDateBack = useCallback(() => {
+    const d = new Date(`${gpsDate}T00:00:00.000Z`);
+    const earliest = new Date(`${day}T00:00:00.000Z`);
+    earliest.setUTCDate(earliest.getUTCDate() - 6);
+    d.setUTCDate(d.getUTCDate() - 1);
+    if (d < earliest) return;
+    const next = d.toISOString().slice(0, 10);
+    setGpsDate(next);
+    void reloadGpsForDate(next);
+  }, [gpsDate, day, reloadGpsForDate]);
+
+  const gpsDateForward = useCallback(() => {
+    const d = new Date(`${gpsDate}T00:00:00.000Z`);
+    const today = new Date(`${day}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    if (d > today) return;
+    const next = d.toISOString().slice(0, 10);
+    setGpsDate(next);
+    void reloadGpsForDate(next);
+  }, [gpsDate, day, reloadGpsForDate]);
 
   // GPS duration auto-fill: query player_external_load_daily for the selected date
   useEffect(() => {
@@ -4614,8 +4696,43 @@ export default function PlayerClient() {
                   </div>
 
                   <div className="mt-5">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Catapult</div>
-                    {catapultToday || catapultHistory.length ? (
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Catapult</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={gpsDateBack}
+                          disabled={gpsLoading || (() => { const d = new Date(`${gpsDate}T00:00:00.000Z`); const e = new Date(`${day}T00:00:00.000Z`); e.setUTCDate(e.getUTCDate() - 6); return d <= e; })()}
+                          className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          aria-label="Previous day"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                        </button>
+                        <span className={`text-xs font-semibold tabular-nums ${gpsDate === day ? "text-zinc-500" : "text-blue-600"}`}>
+                          {(() => {
+                            const d = new Date(`${gpsDate}T12:00:00.000Z`);
+                            if (gpsDate === day) return lang === "IS" ? "Í dag" : "Today";
+                            const yesterday = new Date(`${day}T12:00:00.000Z`);
+                            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                            if (gpsDate === yesterday.toISOString().slice(0, 10)) return lang === "IS" ? "Í gær" : "Yesterday";
+                            const weekday = d.toLocaleDateString(lang === "IS" ? "is-IS" : "en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+                            return weekday;
+                          })()}
+                        </span>
+                        <button
+                          onClick={gpsDateForward}
+                          disabled={gpsLoading || gpsDate >= day}
+                          className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          aria-label="Next day"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    {gpsLoading ? (
+                      <div className="mt-3 rounded-xl border bg-zinc-50 p-4 text-center text-sm text-zinc-400">
+                        {lang === "IS" ? "Sæki gögn..." : "Loading..."}
+                      </div>
+                    ) : catapultToday || catapultHistory.length ? (
                       <div className="mt-3 space-y-4">
                         {(() => {
                           const todayTiles = todayVsTeamMetrics.filter(
@@ -4623,7 +4740,7 @@ export default function PlayerClient() {
                           );
                           return todayTiles.length > 0 ? (
                             <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Today vs Team</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{gpsDate === day ? (lang === "IS" ? "Í dag vs lið" : "Today vs Team") : (lang === "IS" ? "Dagur vs lið" : "Day vs Team")}</div>
                               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                 {todayTiles.map((item) => {
                                   const tone = externalLoadTone(item.value, item.teamAverage);
@@ -4693,7 +4810,7 @@ export default function PlayerClient() {
                       </div>
                     ) : (
                       <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
-                        No Catapult external-load data available for this day yet.
+                        {lang === "IS" ? "Engin GPS gögn fyrir þennan dag." : "No Catapult external-load data available for this day."}
                       </div>
                     )}
                   </div>
