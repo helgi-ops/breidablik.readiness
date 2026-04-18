@@ -4696,35 +4696,44 @@ export default function PlayerClient() {
                   </div>
 
                   <div className="mt-5">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Catapult</div>
-                      <div className="flex items-center gap-2">
+                    <div className={`rounded-xl border px-4 py-3 ${gpsDate === day ? "border-zinc-200 bg-zinc-50" : "border-blue-200 bg-blue-50"}`}>
+                      <div className="flex items-center justify-between">
                         <button
                           onClick={gpsDateBack}
                           disabled={gpsLoading || (() => { const d = new Date(`${gpsDate}T00:00:00.000Z`); const e = new Date(`${day}T00:00:00.000Z`); e.setUTCDate(e.getUTCDate() - 6); return d <= e; })()}
-                          className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-25 disabled:cursor-not-allowed transition shadow-sm active:scale-95"
                           aria-label="Previous day"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
                         </button>
-                        <span className={`text-xs font-semibold tabular-nums ${gpsDate === day ? "text-zinc-500" : "text-blue-600"}`}>
-                          {(() => {
-                            const d = new Date(`${gpsDate}T12:00:00.000Z`);
-                            if (gpsDate === day) return lang === "IS" ? "Í dag" : "Today";
-                            const yesterday = new Date(`${day}T12:00:00.000Z`);
-                            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-                            if (gpsDate === yesterday.toISOString().slice(0, 10)) return lang === "IS" ? "Í gær" : "Yesterday";
-                            const weekday = d.toLocaleDateString(lang === "IS" ? "is-IS" : "en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-                            return weekday;
-                          })()}
-                        </span>
+                        <div className="flex flex-col items-center">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">GPS</div>
+                          <div className={`text-base font-bold tabular-nums ${gpsDate === day ? "text-zinc-700" : "text-blue-700"}`}>
+                            {(() => {
+                              if (gpsDate === day) return lang === "IS" ? "Í dag" : "Today";
+                              const yesterday = new Date(`${day}T12:00:00.000Z`);
+                              yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+                              if (gpsDate === yesterday.toISOString().slice(0, 10)) return lang === "IS" ? "Í gær" : "Yesterday";
+                              const d = new Date(`${gpsDate}T12:00:00.000Z`);
+                              return d.toLocaleDateString(lang === "IS" ? "is-IS" : "en-US", { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" });
+                            })()}
+                          </div>
+                          {gpsDate !== day && (
+                            <button
+                              onClick={() => { setGpsDate(day); void reloadGpsForDate(day); }}
+                              className="mt-1 text-[10px] font-medium text-blue-500 hover:text-blue-700 transition"
+                            >
+                              {lang === "IS" ? "Fara á í dag" : "Back to today"}
+                            </button>
+                          )}
+                        </div>
                         <button
                           onClick={gpsDateForward}
                           disabled={gpsLoading || gpsDate >= day}
-                          className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-25 disabled:cursor-not-allowed transition shadow-sm active:scale-95"
                           aria-label="Next day"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                         </button>
                       </div>
                     </div>
