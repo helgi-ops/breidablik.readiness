@@ -19,7 +19,6 @@ const operationsLinks = [
 
 const adminLinks = [
   { href: "/coach/settings", label: "Settings" },
-  { href: "/coach/org-reporting", label: "Org reporting" },
   { href: "/coach/reporting-center", label: "Reporting center" },
   { href: "/coach/integrations", label: "Integrations" },
   { href: "/coach/automation-center", label: "Automation" },

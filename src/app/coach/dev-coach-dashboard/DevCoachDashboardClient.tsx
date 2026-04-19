@@ -1739,7 +1739,7 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  type CoachTab = "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+  type CoachTab = "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
   const [dashTab, setDashTab] = useState<CoachTab>("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -6327,11 +6327,11 @@ export default function CoachPage() {
       {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
       {!isPwa && (() => {
         const labels = ct.tabs as Record<string, string>;
-        const proTabs = new Set(["squad", "intel", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
+        const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
         // Primary tabs always visible, overflow goes in "More" dropdown
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md", "drills"];
-        const MORE_TABS: Array<typeof dashTab> = ["intel", "volatility", "vald", "strength", "trend", "rtp"];
+        const MORE_TABS: Array<typeof dashTab> = ["volatility", "vald", "strength", "trend", "rtp"];
         const moreLabel = lang === "IS" ? "Meira" : "More";
 
         const isMoreActive = MORE_TABS.includes(dashTab);
@@ -6547,6 +6547,30 @@ export default function CoachPage() {
                           <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Compact intelligence row — unique metrics from removed intel tab */}
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className={`${compactTileClass} border-violet-200 bg-violet-50 text-violet-800`}>
+                        <div className="text-[10px] uppercase tracking-wide opacity-80">Volatility</div>
+                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamIntel?.volatility_pct != null ? `${teamIntel.volatility_pct}%` : "—"}</div>
+                        <div className="mt-1 text-xs opacity-75">{teamIntel?.n_volatile ?? 0} volatile</div>
+                      </div>
+                      <div className={`${compactTileClass} border-blue-200 bg-blue-50 text-blue-800`}>
+                        <div className="text-[10px] uppercase tracking-wide opacity-80">Avg risk</div>
+                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamPerformanceIntelligence?.averageRiskScore != null ? teamPerformanceIntelligence.averageRiskScore.toFixed(1) : "—"}</div>
+                        <div className="mt-1 text-xs opacity-75">Team average</div>
+                      </div>
+                      <div className={`${compactTileClass} border-slate-200 bg-slate-50 text-slate-800`}>
+                        <div className="text-[10px] uppercase tracking-wide opacity-80">Protected</div>
+                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamRulesSummary?.protectedPlayersCount ?? 0}</div>
+                        <div className="mt-1 text-xs opacity-75">{teamRulesSummary?.overriddenPlayersCount ?? 0} adjusted</div>
+                      </div>
+                      <div className={`${compactTileClass} border-slate-200 bg-slate-50 text-slate-800`}>
+                        <div className="text-[10px] uppercase tracking-wide opacity-80">Baseline</div>
+                        <div className="mt-1 text-lg font-semibold tabular-nums">{teamIntel?.baseline_maturity ?? "—"}</div>
+                        <div className="mt-1 text-xs opacity-75">{teamIntel?.n_players ?? 0} players</div>
+                      </div>
                     </div>
 
                     <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
@@ -6933,416 +6957,8 @@ export default function CoachPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════
-          INTELLIGENCE TAB
-      ══════════════════════════════════════════ */}
-      {dashTab === "intel" && !isAtLeastPro && (
-        <UpgradeWall
-          requiredPlan="PRO"
-          featureName="Team intelligence"
-          description="Neural fatigue model, volatility tracking, adaptive training engine, and explainable decisions."
-        />
-      )}
+      {/* Intelligence tab removed — unique metrics merged into today tab. See git history for original. */}
 
-      {dashTab === "intel" && isAtLeastPro && (
-        <div className="space-y-6">
-
-          {/* Performance Intelligence — Team */}
-          <Card className={`h-full border ${tm.border} shadow-sm`}>
-            <CardHeader className={`${tm.bg}`}>
-              <CardTitle className={`${sectionTitleClass} ${tm.text}`}>Performance Intelligence — Team</CardTitle>
-              <CardDescription className={`${sectionSubtitleClass} ${tm.text}`}>
-                Status: <span className="font-semibold">{teamIntel?.team_status ?? "—"}</span> · Baseline:{" "}
-                <span className="font-semibold">{teamIntel?.baseline_maturity ?? "—"}</span> · Players:{" "}
-                <span className="font-semibold">{teamIntel?.n_players ?? "—"}</span>
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {!teamIntel ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
-              ) : (
-                <>
-                  <div className="grid gap-3 lg:grid-cols-12">
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm lg:col-span-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Volatility</div>
-                      <div className="mt-3 text-3xl font-semibold tabular-nums text-emerald-950">{teamIntel.volatility_pct ?? 0}%</div>
-                      <div className="mt-2 text-sm text-emerald-800">volatile players: <span className="font-semibold">{teamIntel.n_volatile ?? 0}</span></div>
-                    </div>
-
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm lg:col-span-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-amber-700">Readiness Mix</div>
-                      <div className="mt-3 text-xl font-semibold tabular-nums text-amber-950">
-                        {teamIntel.pct_red ?? 0}% / {teamIntel.pct_yellow ?? 0}% / {(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%
-                      </div>
-                      <div className="mt-2 text-xs text-amber-800">
-                        RED / YELLOW / GREEN(+)
-                      </div>
-                      <div className="mt-1 text-xs text-amber-700">
-                        n: {teamIntel.n_red ?? 0} / {teamIntel.n_yellow ?? 0} / {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 shadow-sm lg:col-span-4">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-600">Status Snapshot</div>
-                      <div className="mt-3 text-2xl font-semibold text-slate-900">{teamIntel.team_status ?? "—"}</div>
-                      <div className="mt-2 text-xs text-slate-600">
-                        baseline: <span className="font-semibold text-slate-800">{teamIntel.baseline_maturity ?? "—"}</span> · players:{" "}
-                        <span className="font-semibold text-slate-800">{teamIntel.n_players ?? "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Team Summary</div>
-                      <div className="rounded-2xl border border-slate-200 bg-white">
-                        {[
-                          ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
-                          ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
-                          [
-                            "High / critical risk",
-                            String(
-                              (teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0) +
-                                (teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0)
-                            ),
-                          ],
-                          [
-                            "External load",
-                            teamExternalLoadSummary
-                              ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
-                              : "—",
-                          ],
-                        ].map(([label, value]) => (
-                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                            <div className="text-xs text-slate-500">{label}</div>
-                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {teamIntel.narrative ? (
-                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
-                          {teamIntel.narrative}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Monitoring Pattern</div>
-                      <div className="rounded-2xl border border-slate-200 bg-white">
-                        {[
-                          ["Risk bands", `Low ${teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0} · Mod ${teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0} · High ${teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0} · Critical ${teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}`],
-                          ["Recovery recommended", String(teamSignal?.n_recovery ?? 0)],
-                          ["Neural + volatility", teamNeuralVolatilitySummary.summaryText],
-                        ].map(([label, value]) => (
-                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                            <div className="text-xs text-slate-500">{label}</div>
-                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {teamIntel.monitoring_notes ? (
-                        <div className="mt-3 space-y-1 text-xs text-slate-600">
-                          {(Array.isArray(teamIntel.monitoring_notes) ? teamIntel.monitoring_notes : [teamIntel.monitoring_notes]).map((note: string, i: number) => (
-                            <div key={i} className="leading-relaxed">• {note}</div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Session Recommendation</div>
-                      <div className="rounded-2xl border border-slate-200 bg-white">
-                        {[
-                          ["Prescription", teamPrescriptionSummary.summaryText],
-                          ["Protect for match", teamExternalLoadSummary ? `${teamExternalLoadSummary.counts.totalPlayers} · Limited exposure ${teamExternalLoadSummary.counts.unknown}` : "—"],
-                        ].map(([label, value]) => (
-                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                            <div className="text-xs text-slate-500">{label}</div>
-                            <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {teamIntel.session_recommendation ? (
-                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">
-                          {teamIntel.session_recommendation}
-                        </div>
-                      ) : null}
-                      {/* Session workflow link removed */}
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Rules / Overrides</div>
-                      <div className="rounded-2xl border border-slate-200 bg-white">
-                        {[
-                          ["Adjusted players", String(teamRulesSummary.overriddenPlayersCount ?? 0)],
-                          ["Review required", String(teamRulesSummary.reviewRequiredCount ?? 0)],
-                          ["Protected players", String(teamRulesSummary.protectedPlayersCount ?? 0)],
-                        ].map(([label, value]) => (
-                          <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                            <div className="text-xs text-slate-500">{label}</div>
-                            <div className="text-xs font-semibold text-slate-800 tabular-nums">{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {teamRulesSummary.summaryText ? (
-                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-                          {teamRulesSummary.summaryText}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Supporting team intelligence */}
-          <section className="space-y-4">
-            <div className={`flex items-end justify-between gap-3 px-3 py-2 ${softSurfaceClass}`}>
-              <div>
-                <div className={sectionTitleClass}>Supporting team intelligence</div>
-                <div className={sectionSubtitleClass}>Performance context and team-level monitoring beneath the command summary.</div>
-                <div className="mt-1 text-xs text-slate-600">
-                  Team outlook: <span className="font-semibold text-slate-800">{teamOutlook.band}</span>
-                </div>
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-slate-500">Level 2</div>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Card className={summaryCardClass}>
-                <CardHeader className="pb-3">
-                  <CardTitle className={sectionTitleClass}>Team Intelligence</CardTitle>
-                  <CardDescription className={sectionSubtitleClass}>High-level team monitoring summary.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {!teamIntel ? (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{teamIntelEmptyMessage}</div>
-                  ) : (
-                    <div className="rounded-2xl border border-slate-200 bg-white">
-                      {[
-                        ["Status", teamIntel.team_status ?? "—"],
-                        ["Baseline maturity", teamIntel.baseline_maturity ?? "—"],
-                        ["Players", String(teamIntel.n_players ?? "—")],
-                        ["Volatility", `${teamIntel.volatility_pct ?? 0}%`],
-                        ["Volatile players", String(teamIntel.n_volatile ?? 0)],
-                        ["Low baseline", String(teamIntel.n_low_baseline ?? 0)],
-                        ["Avg risk", teamPerformanceIntelligence.averageRiskScore.toFixed(1)],
-                        ["Avg performance", teamPerformanceIntelligence.averagePerformanceScore.toFixed(1)],
-                        [
-                          "External load",
-                          teamExternalLoadSummary
-                            ? `${teamExternalLoadSummary.teamState} · ${teamExternalLoadSummary.counts.high} high · ${teamExternalLoadSummary.counts.elevated} elevated`
-                            : "—",
-                        ],
-                        [
-                          "Catapult coverage",
-                          teamExternalLoadSummary
-                            ? `${teamExternalLoadSummary.counts.totalPlayers - teamExternalLoadSummary.counts.unknown}/${teamExternalLoadSummary.counts.totalPlayers}`
-                            : "—",
-                        ],
-                        ["Neural volatility", teamNeuralVolatilitySummary.summaryText],
-                        ["External load note", teamExternalLoadSummary?.summaryLines[0] ?? "—"],
-                        ["Prescription", teamPrescriptionSummary.summaryText],
-                        ["Rules / override", teamRulesSummary.summaryText],
-                      ].map(([label, value]) => (
-                        <div key={label} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                          <div className="text-xs text-slate-500">{label}</div>
-                          <div className="text-xs font-semibold text-slate-800 tabular-nums text-right max-w-[55%]">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className={summaryCardClass}>
-                <CardHeader className="pb-3">
-                  <CardTitle className={sectionTitleClass}>Readiness Mix</CardTitle>
-                  <CardDescription className={sectionSubtitleClass}>Current team state distribution and risk map.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {!teamIntel ? (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{queueEmptyMessage}</div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-rose-700">Red</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums text-rose-800">{teamIntel.pct_red ?? 0}%</div>
-                        </div>
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-amber-700">Yellow</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums text-amber-800">{teamIntel.pct_yellow ?? 0}%</div>
-                        </div>
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                          <div className="text-[10px] uppercase tracking-wide text-emerald-700">Green</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-800">{(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%</div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 mt-3">
-                        <div className="h-4 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-                          <div className="flex h-full w-full">
-                            <div className="bg-rose-400/70" style={{ width: `${teamIntel.pct_red ?? 0}%` }} />
-                            <div className="bg-amber-400/70" style={{ width: `${teamIntel.pct_yellow ?? 0}%` }} />
-                            <div className="bg-emerald-400/70" style={{ width: `${(teamIntel.pct_green ?? 0) + (teamIntel.pct_green_plus ?? 0)}%` }} />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>n: {teamIntel.n_red ?? 0}</span>
-                          <span>n: {teamIntel.n_yellow ?? 0}</span>
-                          <span>n: {(teamIntel.n_green ?? 0) + (teamIntel.n_green_plus ?? 0)}</span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3">
-                        <div className="text-sm font-semibold text-slate-900">Team Risk Map</div>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-emerald-700">Low Risk</div>
-                            <div className="mt-1 text-xl font-semibold text-emerald-800">{teamPerformanceIntelligence.injuryRiskCounts.LOW ?? 0}</div>
-                          </div>
-                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-amber-700">Moderate</div>
-                            <div className="mt-1 text-xl font-semibold text-amber-800">{teamPerformanceIntelligence.injuryRiskCounts.MODERATE ?? 0}</div>
-                          </div>
-                          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-orange-700">High Risk</div>
-                            <div className="mt-1 text-xl font-semibold text-orange-800">{teamPerformanceIntelligence.injuryRiskCounts.HIGH ?? 0}</div>
-                          </div>
-                          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                            <div className="text-[10px] uppercase tracking-wide text-rose-700">Critical</div>
-                            <div className="mt-1 text-xl font-semibold text-rose-800">{teamPerformanceIntelligence.injuryRiskCounts.CRITICAL ?? 0}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          {/* Team intelligence signals: Fatigue + Neural Load + Unit Alerts */}
-          <div className="space-y-3 rounded-xl border bg-gray-50/40 p-3">
-            <div className="flex items-end justify-between gap-3">
-              <div className="text-sm font-semibold">Team intelligence</div>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive signals</div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-1">
-              {(fatigueSnapshot as any)?.teamFatigueSummary ? (
-                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="text-sm font-semibold">Team Fatigue</div>
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Executive summary</div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant pattern</div>
-                      <div className="mt-1 text-lg font-semibold">
-                        {String((fatigueSnapshot as any).teamFatigueSummary.dominantType ?? "—")}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High severity count</div>
-                      <div className="mt-1 text-lg font-semibold tabular-nums">
-                        {(fatigueSnapshot as any).teamFatigueSummary.highSeverityCount ??
-                          (fatigueSnapshot as any).teamFatigueSummary.highCount ??
-                          0}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {(fatigueSnapshot as any).teamFatigueSummary.summaryText ?? "No dominant fatigue pattern today."}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="text-sm font-semibold">Team Fatigue</div>
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {dayStateInfo.state === "MISSING_INPUT"
-                      ? "Fatigue summary is limited because expected check-ins are missing."
-                      : dayStateInfo.state === "OFF_DAY"
-                      ? "OFF day detected; fatigue summary is intentionally low-priority."
-                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
-                      ? "No input expected for this day context."
-                      : "No team fatigue summary available yet."}
-                  </div>
-                </div>
-              )}
-
-              {teamNeuralSummary ? (
-                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="text-sm font-semibold">Team Neural Load</div>
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Prediction summary</div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Dominant state</div>
-                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.dominantState}</div>
-                    </div>
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Trajectory</div>
-                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.trajectorySummary}</div>
-                    </div>
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">Next-day risk</div>
-                      <div className="mt-1 text-lg font-semibold">{teamNeuralSummary.nextDayRiskSummary}</div>
-                    </div>
-                    <div className="rounded-lg border bg-gray-50 p-3">
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">High-risk count</div>
-                      <div className="mt-1 text-lg font-semibold tabular-nums">{teamNeuralSummary.highRiskCount}</div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-600">{teamNeuralSummary.summaryText}</div>
-                  {!!(fatigueSnapshot as any)?.neural_bias_applied ? (
-                    <div className="text-xs text-gray-700">
-                      <span className="font-semibold">Neural bias applied.</span>{" "}
-                      <span className="text-gray-600">
-                        Why: {formatNeuralBiasReasons((fatigueSnapshot as any)?.neural_bias_reason_codes, 3) || "Neural load/risk threshold nudge."}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="text-sm font-semibold">Team Neural Load</div>
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500">Diagnostic empty state</div>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {dayStateInfo.state === "MISSING_INPUT"
-                      ? "Neural load summary is incomplete because expected inputs are missing."
-                      : dayStateInfo.state === "OFF_DAY"
-                      ? "OFF day detected; neural load monitoring is informational only."
-                      : dayStateInfo.state === "NO_INPUT_EXPECTED"
-                      ? "No neural input expected for this day context."
-                      : "No team neural summary available yet."}
-                  </div>
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* Performance Intelligence Panel */}
-          <PerformanceIntelligencePanel
-            teamOutlook={teamOutlook}
-            weeklyReport={weeklyRiskReport}
-            riskMap={teamRiskMap}
-          />
-
-        </div>
-      )}
 
       {/* ══════════════════════════════════════════
           LOAD & RPE TAB
@@ -8278,7 +7894,7 @@ function CoachPwaBottomNav({
   lang,
 }: {
   activeTab: string;
-  onChange: (tab: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
+  onChange: (tab: "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
   lang: "IS" | "EN";
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -8332,11 +7948,10 @@ function CoachPwaBottomNav({
   ];
 
   const MORE_TABS: Array<{
-    key: "today" | "squad" | "intel" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+    key: "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
     labelIS: string;
     labelEN: string;
   }> = [
-    { key: "intel",      labelIS: "Greind",         labelEN: "Intelligence" },
     { key: "drills",     labelIS: "Session",        labelEN: "Session" },
     { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
     { key: "vald",       labelIS: "VALD / CMJ",     labelEN: "VALD / CMJ" },
