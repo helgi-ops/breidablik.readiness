@@ -280,6 +280,16 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 pathname={pathname ?? ""}
               />
             )}
+
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
+              className="ml-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+            >
+              Sign out
+            </button>
           </nav>
         </div>
       </header>

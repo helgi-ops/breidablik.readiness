@@ -43,3 +43,20 @@ export { buildSessionApprovalDecision, approveSessionDraft } from "./approval";
 export { buildSessionPublishDecision, publishSessionDraft, unpublishSessionDraft } from "./publish";
 export { buildPlayerPublishedSessionView } from "./playerView";
 export { buildTeamWorkflowSummary } from "./teamAggregation";
+
+export type {
+  PlayerConstraintInput,
+  BlockConflictAction,
+  PlayerBlockConflict,
+  BlockConflictResult,
+  TeamBlockConflictSummary,
+  DrillSessionItem,
+} from "./drillConstraintMatcher";
+
+export {
+  matchTeamConstraintsToBlocks,
+  matchTeamConstraintsToDrills,
+  playerDecisionToConstraintInput,
+  getActionLabel,
+  getSeverityLabel,
+} from "./drillConstraintMatcher";

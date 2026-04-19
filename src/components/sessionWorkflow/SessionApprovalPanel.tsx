@@ -2,11 +2,15 @@
 
 import React from "react";
 import type { SessionApprovalDecision, SessionDraftRecord, SessionPublishDecision } from "@/lib/micropulse/sessionWorkflow";
+import type { TeamBlockConflictSummary } from "@/lib/micropulse/sessionWorkflow";
+import { TeamConflictSummaryPanel } from "./BlockConflictWarnings";
 
 type Props = {
   record: SessionDraftRecord;
   approvalDecision: SessionApprovalDecision;
   publishDecision: SessionPublishDecision;
+  /** Optional: team-wide drill-constraint conflict summary */
+  conflictSummary?: TeamBlockConflictSummary | null;
 };
 
 function Warnings({ title, items }: { title: string; items: string[] }) {
@@ -23,29 +27,34 @@ function Warnings({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export default function SessionApprovalPanel({ record, approvalDecision, publishDecision }: Props) {
+export default function SessionApprovalPanel({ record, approvalDecision, publishDecision, conflictSummary }: Props) {
   return (
-    <div className="rounded-xl border bg-white p-3 text-xs text-gray-700">
-      <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Approval & Publish</div>
-      <div className="mt-2 grid gap-2 md:grid-cols-2">
-        <div className="rounded border bg-gray-50 p-2">
-          <div className="font-semibold">Approval</div>
-          <div className="mt-1">{approvalDecision.summary}</div>
-          <div className="mt-1 text-[11px] text-gray-500">
-            Approved by: {record.approvedBy || "-"} {record.approvedAt ? `· ${new Date(record.approvedAt).toLocaleString()}` : ""}
+    <div className="space-y-3">
+      <div className="rounded-xl border bg-white p-3 text-xs text-gray-700">
+        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Approval & Publish</div>
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <div className="rounded border bg-gray-50 p-2">
+            <div className="font-semibold">Approval</div>
+            <div className="mt-1">{approvalDecision.summary}</div>
+            <div className="mt-1 text-[11px] text-gray-500">
+              Approved by: {record.approvedBy || "-"} {record.approvedAt ? `· ${new Date(record.approvedAt).toLocaleString()}` : ""}
+            </div>
+          </div>
+          <div className="rounded border bg-gray-50 p-2">
+            <div className="font-semibold">Publish</div>
+            <div className="mt-1">{publishDecision.summary}</div>
+            <div className="mt-1 text-[11px] text-gray-500">
+              Published by: {record.publishedBy || "-"} {record.publishedAt ? `· ${new Date(record.publishedAt).toLocaleString()}` : ""}
+            </div>
           </div>
         </div>
-        <div className="rounded border bg-gray-50 p-2">
-          <div className="font-semibold">Publish</div>
-          <div className="mt-1">{publishDecision.summary}</div>
-          <div className="mt-1 text-[11px] text-gray-500">
-            Published by: {record.publishedBy || "-"} {record.publishedAt ? `· ${new Date(record.publishedAt).toLocaleString()}` : ""}
-          </div>
-        </div>
+
+        <Warnings title="Approval warnings" items={approvalDecision.approvalWarnings} />
+        <Warnings title="Publish warnings" items={publishDecision.publishWarnings} />
       </div>
 
-      <Warnings title="Approval warnings" items={approvalDecision.approvalWarnings} />
-      <Warnings title="Publish warnings" items={publishDecision.publishWarnings} />
+      {/* Drill-constraint conflicts — safety net before approval */}
+      {conflictSummary && <TeamConflictSummaryPanel summary={conflictSummary} />}
     </div>
   );
 }

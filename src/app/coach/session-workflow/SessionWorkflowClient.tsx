@@ -14,11 +14,13 @@ import {
   getNextWorkflowStatus,
   loadAllSessionDraftRecords,
   loadSessionWorkflowEvents,
+  matchTeamConstraintsToBlocks,
   publishSessionDraft,
   saveSessionDraftRecord,
   saveSessionWorkflowEvent,
   unpublishSessionDraft,
   type SessionDraftRecord,
+  type PlayerConstraintInput,
 } from "@/lib/micropulse/sessionWorkflow";
 import type { SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
 import TeamWorkflowSummary from "@/components/sessionWorkflow/TeamWorkflowSummary";
@@ -129,6 +131,34 @@ export default function SessionWorkflowClient() {
     [selected],
   );
   const publishedView = useMemo(() => (selected ? buildPlayerPublishedSessionView(selected) : null), [selected]);
+
+  // ── Team-wide drill-constraint matching ──────────────────────────
+  // Build constraints from ALL players' drafts, then match against
+  // the selected player's blocks to show team-wide conflicts.
+  const teamConstraints: PlayerConstraintInput[] = useMemo(() => {
+    return records.map((r): PlayerConstraintInput => {
+      const draft = r.workingDraft;
+      const flag =
+        draft.draftAction === "RECOVERY" ? "RED" as const
+        : draft.draftAction === "HOLD" ? "GRAY" as const
+        : draft.draftAction === "MODIFIED" ? "YELLOW" as const
+        : "GREEN" as const;
+      return {
+        playerId: r.playerId ?? r.id,
+        playerName: r.playerName ?? "Unknown",
+        flag,
+        exposureLimits: draft.exposureLimits ?? [],
+        volumeReductionPercent: draft.volumeReductionPercent ?? null,
+        intensityCap: draft.intensityCap ?? null,
+        constraintReasons: draft.explanationLines ?? [],
+      };
+    });
+  }, [records]);
+
+  const conflictSummary = useMemo(() => {
+    if (!selected || teamConstraints.length === 0) return null;
+    return matchTeamConstraintsToBlocks(selected.workingDraft.blocks, teamConstraints);
+  }, [selected, teamConstraints]);
 
   function syncRecords(nextRecord?: SessionDraftRecord) {
     const next = refreshRecords();
@@ -360,7 +390,7 @@ export default function SessionWorkflowClient() {
               publishDecision={publishDecision}
             />
 
-            <SessionApprovalPanel record={selected} approvalDecision={approvalDecision} publishDecision={publishDecision} />
+            <SessionApprovalPanel record={selected} approvalDecision={approvalDecision} publishDecision={publishDecision} conflictSummary={conflictSummary} />
 
             <SessionAssignmentPanel
               assignment={selectedAssignment}
@@ -382,6 +412,7 @@ export default function SessionWorkflowClient() {
               workingDraft={selected.workingDraft}
               editable={selected.status !== "ARCHIVED"}
               onSaveDraft={saveEditedDraft}
+              teamConstraints={teamConstraints}
             />
 
             <div className="grid gap-4 xl:grid-cols-2">

@@ -3360,7 +3360,7 @@ export default function PlayerClient() {
           locked: false,
           source: "SESSION_CONTEXT_FALLBACK",
           confidence: null,
-          why: "Fallback plan from session context.",
+          why: null,
           inputs: null,
           training_system: null,
           variant: null,
@@ -4675,6 +4675,16 @@ export default function PlayerClient() {
                     <MiniDot className={(ui as any).dot} />
                     {flag}
                   </Chip>
+
+                  <button
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      window.location.href = "/login";
+                    }}
+                    className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                  >
+                    {lang === "IS" ? "Útskrá" : "Sign out"}
+                  </button>
                 </div>
               </div>
             </div>

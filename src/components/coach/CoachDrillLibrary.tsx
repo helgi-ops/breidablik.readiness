@@ -142,9 +142,7 @@ export type Drill = {
     | "seed"
     | "coach"
     | "catapult"
-    | "public_template"
-    | "shared_from_coach"
-    | "claimed_copy";
+    | "public_template";
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -817,10 +815,6 @@ export default function CoachDrillLibrary({
                                 ? "bg-purple-100 text-purple-700"
                                 : d.source === "public_template"
                                 ? "bg-emerald-100 text-emerald-700"
-                                : d.source === "shared_from_coach"
-                                ? "bg-indigo-100 text-indigo-700"
-                                : d.source === "claimed_copy"
-                                ? "bg-sky-100 text-sky-700"
                                 : "bg-gray-100 text-gray-600"
                             }`}
                           >

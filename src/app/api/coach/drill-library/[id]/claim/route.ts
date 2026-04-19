@@ -92,6 +92,7 @@ export async function POST(
   // owner_type === 'public' → no check needed
 
   // Build the insert. Copy all content fields but force coach-ownership.
+  // Exclude system columns AND generated columns (field_area_m2, area_per_player_m2).
   const {
     id: _oldId,
     team_id: _oldTeam,
@@ -101,16 +102,26 @@ export async function POST(
     updated_at: _ua,
     deleted_at: _da,
     created_by: _cb,
+    field_area_m2: _genArea,
+    area_per_player_m2: _genAreaPP,
     ...copyable
   } = src as Record<string, unknown>;
 
+  // parent_template_id has a FK to drill_library_public, so only keep it
+  // when the source drill itself came from a public template. For team or
+  // coach drills the original parent_template_id (if any) is already in
+  // copyable; for drills that never came from a public template it's null.
+  // We must NOT set it to src.id (which lives in drill_library, not
+  // drill_library_public).
   const payload = {
     ...copyable,
     team_id: null,
     owner_type: "coach" as const,
     owner_coach_id: userId,
-    parent_template_id: src.id,
-    source: "claimed_copy",
+    // Keep original parent_template_id if it was already set (from a public
+    // template copy chain), otherwise null. Never point at drill_library rows.
+    parent_template_id: (copyable as Record<string, unknown>).parent_template_id ?? null,
+    source: "coach",
     created_by: userId,
   };
 

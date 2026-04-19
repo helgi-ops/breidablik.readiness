@@ -15,6 +15,14 @@ import {
   checkBoutDuration,
 } from "@/lib/drill-recommendations";
 import { useLang, type Lang } from "@/lib/lang";
+import {
+  matchTeamConstraintsToDrills,
+  playerDecisionToConstraintInput,
+  type PlayerConstraintInput,
+  type TeamBlockConflictSummary,
+  type BlockConflictResult,
+  type DrillSessionItem,
+} from "@/lib/micropulse/sessionWorkflow";
 
 const SB_COPY = {
   IS: {
@@ -221,6 +229,7 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
+  const [filterStimulus, setFilterStimulus] = useState<"all" | "locomotive" | "mechanical" | "mixed" | "technical">("all");
   const [source, setSource] = useState<"mine" | "team">("mine");
   const storageKey = `session-builder:${teamId}`;
   const [sessionName, setSessionName] = useState("");
@@ -371,9 +380,23 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
         const hay = `${d.drill_name} ${d.drill_format ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
+      // Stimulus filter
+      if (filterStimulus !== "all") {
+        const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+        if (!stim) return false; // No GPS data → exclude when filtering by stimulus
+        if (filterStimulus === "locomotive") {
+          // Locomotive session: show locomotive + mixed
+          if (stim.type !== "locomotive" && stim.type !== "mixed") return false;
+        } else if (filterStimulus === "mechanical") {
+          // Mechanical session: show mechanical + mixed
+          if (stim.type !== "mechanical" && stim.type !== "mixed") return false;
+        } else {
+          if (stim.type !== filterStimulus) return false;
+        }
+      }
       return true;
     });
-  }, [drills, filterCategory, search]);
+  }, [drills, filterCategory, filterStimulus, search]);
 
   function addDrill(d: Drill) {
     setItems((prev) => [
@@ -632,6 +655,82 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
       }))
     );
   }, [items]);
+
+  // ── Team player constraints (drill-conflict warnings) ─────────────
+  const [teamConstraints, setTeamConstraints] = useState<PlayerConstraintInput[]>([]);
+  const [constraintsLoaded, setConstraintsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/team/decisions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        const json = await res.json();
+        if (!res.ok || !json.players) return;
+
+        const constraints: PlayerConstraintInput[] = [];
+        for (const p of json.players as Array<{
+          athleteId: string;
+          athleteName: string;
+          state: string;
+          constraints: string[];
+          loadAdjustment: number | null;
+        }>) {
+          const state = p.state as "GREEN" | "YELLOW" | "RED" | "GRAY";
+          // Only include players with actual constraints (not all-green)
+          if (
+            state === "RED" ||
+            state === "GRAY" ||
+            (p.constraints && p.constraints.length > 0 && !p.constraints.every((c) => c === "no_change"))
+          ) {
+            constraints.push(
+              playerDecisionToConstraintInput({
+                athleteId: p.athleteId,
+                athleteName: p.athleteName,
+                state,
+                constraints: p.constraints ?? [],
+                loadAdjustment: p.loadAdjustment ?? null,
+              })
+            );
+          }
+        }
+        if (!cancelled) {
+          setTeamConstraints(constraints);
+          setConstraintsLoaded(true);
+        }
+      } catch {
+        if (!cancelled) setConstraintsLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  // Match constraints against current session drills
+  const drillConflictSummary: TeamBlockConflictSummary | null = useMemo(() => {
+    if (!constraintsLoaded || teamConstraints.length === 0 || items.length === 0) return null;
+    const drillItems: DrillSessionItem[] = items.map((it) => ({
+      uid: it.uid,
+      drill: it.drill,
+      sets: it.sets,
+    }));
+    return matchTeamConstraintsToDrills(drillItems, teamConstraints);
+  }, [constraintsLoaded, teamConstraints, items]);
+
+  // Quick lookup: uid → BlockConflictResult
+  const conflictByDrill = useMemo(() => {
+    if (!drillConflictSummary) return new Map<string, BlockConflictResult>();
+    const map = new Map<string, BlockConflictResult>();
+    for (const b of drillConflictSummary.blocks) {
+      map.set(b.blockId, b);
+    }
+    return map;
+  }, [drillConflictSummary]);
 
   const target = targetPL ? parseFloat(targetPL) : null;
   const plMetric = mdPlanning?.metrics.totalPlayerLoad ?? null;
@@ -939,6 +1038,27 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                 </option>
               ))}
             </select>
+            <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-[10px]">
+              {([
+                { value: "all", label: lang === "IS" ? "Allt" : "All", color: "" },
+                { value: "locomotive", label: "LOC", color: "text-sky-700" },
+                { value: "mechanical", label: "MECH", color: "text-orange-700" },
+                { value: "mixed", label: "MIX", color: "text-violet-700" },
+                { value: "technical", label: "TECH", color: "text-emerald-700" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilterStimulus(opt.value)}
+                  className={`rounded px-2 py-0.5 font-semibold transition ${
+                    filterStimulus === opt.value
+                      ? `bg-white shadow-sm ${opt.color || "text-slate-900"}`
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <input
               placeholder={t.search}
               value={search}
@@ -974,9 +1094,21 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                   className="group flex cursor-pointer flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md"
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <span className="inline-flex shrink-0 items-center rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700">
-                      {catLabels[d.category]}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="inline-flex shrink-0 items-center rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700">
+                        {catLabels[d.category]}
+                      </span>
+                      {(() => {
+                        const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+                        if (!stim) return null;
+                        const sc = stimulusColorClasses(stim.type);
+                        return (
+                          <span className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${sc.bg} ${sc.text}`}>
+                            {stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH"}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); addDrill(d); }}
                       title={t.addToSession}
@@ -1013,6 +1145,11 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
 
         {/* RIGHT: selected drills */}
         <div className="space-y-3">
+          {/* Drill-constraint conflict summary banner */}
+          {drillConflictSummary && drillConflictSummary.totalConflicts > 0 && (
+            <DrillConflictSummaryBanner summary={drillConflictSummary} lang={lang} />
+          )}
+
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-700">
@@ -1042,10 +1179,15 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                     onDragEnd={() => { dragItemRef.current = null; setDragOverUid(null); }}
                     onDragOver={(e) => { e.preventDefault(); setDragOverUid(it.uid); }}
                     onDrop={(e) => { e.preventDefault(); handleDrop(it.uid); }}
-                    className={`flex items-start gap-2 p-2.5 transition-colors ${
+                    className={`flex flex-wrap items-start gap-2 p-2.5 transition-colors ${
                       dragOverUid === it.uid && dragItemRef.current !== it.uid
                         ? "bg-blue-50 border-t-2 border-blue-400"
-                        : ""
+                        : (() => {
+                            const c = conflictByDrill.get(it.uid);
+                            if (c?.severity === "danger") return "bg-red-50/40";
+                            if (c?.severity === "warning") return "bg-amber-50/30";
+                            return "";
+                          })()
                     }`}
                   >
                     <div className="flex flex-col items-center gap-0.5 pt-0.5 cursor-grab active:cursor-grabbing">
@@ -1105,6 +1247,12 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                     >
                       ✕
                     </button>
+                    {/* Per-drill constraint conflict badge */}
+                    {(() => {
+                      const conflict = conflictByDrill.get(it.uid);
+                      if (!conflict || conflict.conflicts.length === 0) return null;
+                      return <DrillConflictBadge result={conflict} lang={lang} />;
+                    })()}
                   </li>
                 );
               })}
@@ -1574,6 +1722,163 @@ function TotalCell({
           <span className="text-[10px] font-medium text-slate-400">{suffix}</span>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Drill Conflict Warning Components ──────────────────────────────
+
+const ACTION_STYLE_SB: Record<string, { bg: string; text: string; icon: string }> = {
+  skip:            { bg: "bg-red-100",    text: "text-red-800",    icon: "⛔" },
+  reduce_half:     { bg: "bg-amber-100",  text: "text-amber-800",  icon: "½" },
+  reduce_volume:   { bg: "bg-amber-50",   text: "text-amber-700",  icon: "↓" },
+  reduce_contact:  { bg: "bg-orange-100", text: "text-orange-800", icon: "🛡" },
+  lower_intensity: { bg: "bg-yellow-50",  text: "text-yellow-800", icon: "⬇" },
+};
+
+const ACTION_LABEL_SB: Record<string, Record<string, string>> = {
+  IS: { skip: "Sleppa", reduce_half: "Helmingur", reduce_volume: "Minnka", reduce_contact: "Minni snerting", lower_intensity: "Lægra álag" },
+  EN: { skip: "Skip", reduce_half: "Half volume", reduce_volume: "Reduce", reduce_contact: "Less contact", lower_intensity: "Lower intensity" },
+};
+
+const FLAG_DOT_SB: Record<string, string> = {
+  RED: "bg-red-500", YELLOW: "bg-amber-400", GREEN: "bg-emerald-500", GRAY: "bg-gray-400",
+};
+
+function DrillConflictBadge({ result, lang }: { result: BlockConflictResult; lang: Lang }) {
+  const [open, setOpen] = useState(false);
+  if (result.conflicts.length === 0) return null;
+
+  const badgeBg = result.severity === "danger" ? "bg-red-100 border-red-300" : "bg-amber-50 border-amber-200";
+  const badgeText = result.severity === "danger" ? "text-red-700" : "text-amber-700";
+  const labels = ACTION_LABEL_SB[lang];
+
+  return (
+    <div className="mt-1 w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-medium ${badgeBg} ${badgeText} transition-colors hover:opacity-80`}
+      >
+        <span>⚠</span>
+        <span>
+          {result.skipCount > 0 && `${result.skipCount} ${lang === "IS" ? "sleppa" : "skip"}`}
+          {result.skipCount > 0 && result.reduceCount > 0 && " · "}
+          {result.reduceCount > 0 && `${result.reduceCount} ${lang === "IS" ? "minnka" : "reduce"}`}
+        </span>
+        <span className="text-[9px]">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="mt-1 space-y-0.5 rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
+          {result.conflicts.map((c, idx) => {
+            const style = ACTION_STYLE_SB[c.action] ?? ACTION_STYLE_SB.skip;
+            return (
+              <div key={`${c.playerId}-${idx}`} className="flex items-center gap-1.5 text-[10px]">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${FLAG_DOT_SB[c.flag] ?? "bg-gray-400"}`} />
+                <span className="font-medium text-gray-900 min-w-[70px]">{c.playerName}</span>
+                <span className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-medium ${style.bg} ${style.text}`}>
+                  {style.icon} {labels[c.action] ?? c.action}
+                </span>
+                <span className="text-gray-500 truncate">{lang === "IS" ? c.reasonIs : c.reason}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DrillConflictSummaryBanner({ summary, lang }: { summary: TeamBlockConflictSummary; lang: Lang }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (summary.totalConflicts === 0) return null;
+
+  const borderColor = summary.hasCriticalConflict ? "border-red-300" : "border-amber-200";
+  const bgColor = summary.hasCriticalConflict ? "bg-red-50" : "bg-amber-50";
+  const textColor = summary.hasCriticalConflict ? "text-red-800" : "text-amber-800";
+  const headerIcon = summary.hasCriticalConflict ? "🚨" : "⚠";
+
+  const conflictWord = lang === "IS"
+    ? (summary.totalConflicts === 1 ? "árekstri" : "árekstrar")
+    : (summary.totalConflicts === 1 ? "conflict" : "conflicts");
+  const blockWord = lang === "IS"
+    ? (summary.blocksWithConflicts === 1 ? "drillu" : "drillum")
+    : (summary.blocksWithConflicts === 1 ? "drill" : "drills");
+  const playerWord = lang === "IS"
+    ? (summary.totalPlayersAffected === 1 ? "leikmaður" : "leikmenn")
+    : (summary.totalPlayersAffected === 1 ? "player" : "players");
+
+  return (
+    <div className={`rounded-xl border ${borderColor} ${bgColor} p-2.5 text-[11px] ${textColor}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between gap-2"
+      >
+        <div className="flex items-center gap-2">
+          <span>{headerIcon}</span>
+          <div>
+            <span className="font-semibold">
+              {summary.totalConflicts} {conflictWord} {lang === "IS" ? "í" : "in"} {summary.blocksWithConflicts} {blockWord}
+            </span>
+            <span className="ml-1.5 font-normal opacity-80">
+              — {summary.totalPlayersAffected} {playerWord}
+            </span>
+          </div>
+        </div>
+        <span className="text-[9px]">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {summary.blocks
+            .filter((b) => b.conflicts.length > 0)
+            .map((block) => (
+              <div key={block.blockId} className="rounded-lg border border-gray-200 bg-white p-2">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-semibold text-gray-900 text-[11px]">{block.blockTitle}</span>
+                  {block.exposureTags.length > 0 && (
+                    <div className="flex gap-0.5">
+                      {block.exposureTags.map((tag) => (
+                        <span key={tag} className="rounded bg-gray-100 px-1 py-0.5 text-[9px] text-gray-600">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  {block.conflicts.map((c, idx) => {
+                    const style = ACTION_STYLE_SB[c.action] ?? ACTION_STYLE_SB.skip;
+                    return (
+                      <div key={`${c.playerId}-${idx}`} className="flex items-center gap-1.5 text-[10px]">
+                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${FLAG_DOT_SB[c.flag] ?? "bg-gray-400"}`} />
+                        <span className="font-medium text-gray-900 min-w-[70px]">{c.playerName}</span>
+                        <span className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-medium ${style.bg} ${style.text}`}>
+                          {style.icon} {ACTION_LABEL_SB[lang][c.action] ?? c.action}
+                        </span>
+                        <span className="text-gray-500 truncate">{lang === "IS" ? c.reasonIs : c.reason}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {summary.hasCriticalConflict && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-100 p-1.5 text-[11px] text-red-900">
+          <span>🚨</span>
+          <span className="font-semibold">
+            {lang === "IS"
+              ? "Rauðir leikmenn með háálags-drillur — athugar þarf áður en samþykkt"
+              : "RED players in high-load drills — review before proceeding"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
