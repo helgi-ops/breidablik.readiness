@@ -47,6 +47,7 @@ import {
   type AdminConfigSnapshot,
 } from "@/lib/micropulse/adminConfig";
 import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
+import { buildPlayerExplanation, type ExplanationLine } from "@/lib/micropulse/decision/playerExplanation";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
 import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
@@ -3827,7 +3828,9 @@ export default function PlayerClient() {
             stress_mood,
             muscle_soreness,
             total_score,
-            created_at
+            created_at,
+            training_modifier,
+            computed_auto_flag
           `
           )
           .eq("player_id", prof.player_id)
@@ -4148,6 +4151,60 @@ export default function PlayerClient() {
     return readinessToFlag(plan?.readiness_level);
   }, [coachFinalFlag?.final_flag, plan?.readiness_level, stage4Final?.system_decision]);
   const ui = useMemo(() => flagUi(normalizeFlag(flag), lang), [flag, lang]);
+
+  // ── "Af hverju?" explanation lines ──────────────────────────────────
+  const explanationLines: ExplanationLine[] = useMemo(() => {
+    // Parse training_modifier safely
+    const tmRaw = (metrics as any)?.training_modifier;
+    const tm: Record<string, any> | null =
+      tmRaw == null
+        ? null
+        : typeof tmRaw === "string"
+        ? (() => { try { return JSON.parse(tmRaw); } catch { return null; } })()
+        : typeof tmRaw === "object"
+        ? tmRaw
+        : null;
+    const pi = tm?.pi ?? null;
+
+    // Compute best available ACWR (use totalDistance if available)
+    const acwrMetric = weeklyLoadMetrics.find((m) => m.key === "totalDistance" && m.acwrSupported);
+    const bestAcwr = acwrMetric?.weekly.acwr ?? null;
+
+    // Check for GPS spike: any metric > 1.5× team average
+    const hasGpsSpike = todayVsTeamMetrics.some((m) => {
+      if (m.value == null || m.teamAverage == null || m.teamAverage <= 0) return false;
+      return m.value / m.teamAverage > 1.5;
+    });
+
+    // Map flag to the expected union
+    const normFlag = flag === "GREEN" ? "GREEN" as const : flag === "YELLOW" ? "YELLOW" as const : flag === "RED" ? "RED" as const : null;
+
+    return buildPlayerExplanation({
+      lang,
+      finalFlag: normFlag,
+      pi: pi
+        ? {
+            abs: pi.abs ?? null,
+            dev: pi.dev ?? null,
+            final: pi.final ?? null,
+            z: typeof pi.z === "number" ? pi.z : null,
+            sten: typeof pi.sten === "number" ? pi.sten : null,
+            n: typeof pi.n === "number" ? pi.n : typeof pi.baseline_n === "number" ? pi.baseline_n : null,
+            delta_z: typeof pi.delta_z === "number" ? pi.delta_z : null,
+            low_count: typeof pi.low_count === "number" ? pi.low_count : null,
+            very_low_count: typeof pi.very_low_count === "number" ? pi.very_low_count : null,
+            override_note: pi.override_note ?? null,
+          }
+        : null,
+      // MLI and metabolic not computed client-side; leave null — they only fire for VERY_HIGH/EXTREME bands
+      mli: null,
+      metabolic: null,
+      gpsSpike: hasGpsSpike || null,
+      acwr: bestAcwr ?? undefined,
+      valdAdjustment: null,
+      rpeZScore: undefined,
+    });
+  }, [flag, lang, metrics, weeklyLoadMetrics, todayVsTeamMetrics]);
 
   useEffect(() => {
     const run = async () => {
@@ -4652,6 +4709,41 @@ export default function PlayerClient() {
                 </div>
               ) : null}
             </div>
+
+            {/* "Af hverju?" explanation card — only shows for YELLOW/RED */}
+            {explanationLines.length > 0 && (
+              <div data-player-card="explanation" className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">💡</span>
+                  <span className="text-sm font-bold text-amber-900">
+                    {lang === "IS" ? "Af hverju er ég ekki græn/n?" : "Why am I not green?"}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {explanationLines.map((line, idx) => (
+                    <div
+                      key={idx}
+                      className={`rounded-xl border px-3 py-2.5 text-sm ${
+                        line.severity === "high"
+                          ? "border-red-200 bg-red-50 text-red-900"
+                          : line.severity === "moderate"
+                          ? "border-amber-200 bg-amber-50 text-amber-900"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-800"
+                      }`}
+                    >
+                      <span className="font-semibold">{line.category}</span>
+                      <span className="mx-1.5 text-zinc-400">·</span>
+                      <span>{line.text}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-amber-700/80">
+                  {lang === "IS"
+                    ? "Þessir þættir drógu niður heildarmat þitt í dag."
+                    : "These factors pulled your overall assessment down today."}
+                </div>
+              </div>
+            )}
 
             {/* Metrics */}
             <CardShell data-player-card="metrics">
