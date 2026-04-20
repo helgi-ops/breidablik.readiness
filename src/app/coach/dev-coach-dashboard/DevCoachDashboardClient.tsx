@@ -88,6 +88,7 @@ import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
+import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import TrainerDashboard from "@/components/trainer/TrainerDashboard";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
@@ -133,6 +134,7 @@ import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGrap
 import {
   buildCatapultReadinessContextFromRows,
   buildTeamExternalLoadSummary,
+  computeHidTrend,
   normalizeCatapultDailyLoadRow,
   type CatapultExternalLoadBaseline,
   type CatapultDailyLoadRow,
@@ -1822,6 +1824,7 @@ export default function CoachPage() {
   const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
 
   // GPS tab — all players fetched independently of readiness rows
+  const [gpsDate, setGpsDate] = useState<string>(() => todayISO()); // browsable date for GPS tab
   const [gpsAllPlayers, setGpsAllPlayers] = useState<Array<{
     id: string;
     name: string;
@@ -3456,7 +3459,8 @@ export default function CoachPage() {
     (async () => {
       setGpsLoading(true);
       try {
-        const startDate = addDaysISO(today, -35);
+        const refDate = gpsDate; // browsable reference date
+        const startDate = addDaysISO(refDate, -35);
         const { data: playerData } = await supabase
           .from("players")
           .select("id, full_name, position")
@@ -3472,7 +3476,7 @@ export default function CoachPage() {
           .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
           .gte("date", startDate)
-          .lte("date", today)
+          .lte("date", refDate)
           .order("date");
 
         if (!alive) return;
@@ -3501,7 +3505,7 @@ export default function CoachPage() {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashTab, coachVerified, today]);
+  }, [dashTab, coachVerified, gpsDate]);
 
   /** -----------------------------
    * Derived UI data
@@ -6621,11 +6625,26 @@ export default function CoachPage() {
                 concernLevel: "none" | "low" | "moderate" | "high" | null;
                 fatigueType: string | null;
                 playerLoadSpike: number | null;
+                // Deceleration-specific metrics
+                decelBurden: number | null;
+                decelBurdenBand: string | null;
+                accelDecelRatio: number | null;
+                loadProfile: string | null;
+                hidPercentage: number | null;
+                // HID% trend
+                hidDeclinePct: number | null;
+                hidFatigueFlag: boolean;
               };
+
+              // Compute HID% trend from catapult history
+              const catapultHistoryRows = (((r as any)._catapult_history ?? []) as CatapultDailyLoadRow[]);
 
               let resolved: ResolvedSignals;
               if (signalDate && signalDate === ed) {
                 // Signals already computed for today — trust the memo.
+                const recentHidRows = catapultHistoryRows.filter((row) => row.date < ed).slice(-7);
+                const todayGpsRow = catapultHistoryRows.find((row) => row.date === ed) ?? null;
+                const hidTrend = computeHidTrend(recentHidRows, todayGpsRow);
                 resolved = {
                   nbs: typeof todayCatapultSignals?.neuromuscularBurdenScore === "number"
                     ? todayCatapultSignals.neuromuscularBurdenScore
@@ -6634,22 +6653,35 @@ export default function CoachPage() {
                   concernLevel: todayCompEntry?.concernLevel ?? null,
                   fatigueType: todayCompEntry?.fatigueType ?? null,
                   playerLoadSpike: todayCompEntry?.playerLoadSpike ?? null,
+                  decelBurden: typeof todayCatapultSignals?.decelBurdenScore === "number" ? todayCatapultSignals.decelBurdenScore : null,
+                  decelBurdenBand: todayCatapultSignals?.decelBurdenBand ?? null,
+                  accelDecelRatio: typeof todayCatapultSignals?.accelDecelRatio === "number" ? todayCatapultSignals.accelDecelRatio : null,
+                  loadProfile: todayCatapultSignals?.loadProfile ?? null,
+                  hidPercentage: typeof todayCatapultSignals?.hidPercentage === "number" ? todayCatapultSignals.hidPercentage : null,
+                  hidDeclinePct: hidTrend.hidDeclinePct,
+                  hidFatigueFlag: hidTrend.hidFatigueFlag,
                 };
               } else if (signalDate) {
                 // Recompute for the date of the shown GPS load (usually yesterday).
-                const catapultRows = (((r as any)._catapult_history ?? []) as CatapultDailyLoadRow[]);
                 const ctx = buildCatapultReadinessContextFromRows({
-                  rows: catapultRows,
+                  rows: catapultHistoryRows,
                   date: signalDate,
                 });
                 const sig = ctx.signals;
                 const loadState = (["normal", "elevated", "high"].includes(String(sig?.externalLoadState ?? ""))
                   ? (sig?.externalLoadState as "normal" | "elevated" | "high")
                   : "unknown");
+                // HID% trend for the signal date
+                const recentHidRows = catapultHistoryRows.filter((row) => row.date < signalDate).slice(-7);
+                const hidTrend = computeHidTrend(recentHidRows, ctx.today);
                 const comp = computeCompositeLoadConcern({
                   rpeAcwr: null,
                   neuromuscularBurdenScore: sig?.neuromuscularBurdenScore ?? null,
                   externalLoadState: loadState,
+                  decelBurdenScore: sig?.decelBurdenScore ?? null,
+                  accelDecelRatio: sig?.accelDecelRatio ?? null,
+                  hidFatigueFlag: hidTrend.hidFatigueFlag,
+                  hidDeclinePct: hidTrend.hidDeclinePct,
                 });
                 resolved = {
                   nbs: typeof sig?.neuromuscularBurdenScore === "number"
@@ -6661,6 +6693,13 @@ export default function CoachPage() {
                   playerLoadSpike: typeof sig?.playerLoadSpike === "number"
                     ? sig.playerLoadSpike
                     : null,
+                  decelBurden: typeof sig?.decelBurdenScore === "number" ? sig.decelBurdenScore : null,
+                  decelBurdenBand: sig?.decelBurdenBand ?? null,
+                  accelDecelRatio: typeof sig?.accelDecelRatio === "number" ? sig.accelDecelRatio : null,
+                  loadProfile: sig?.loadProfile ?? null,
+                  hidPercentage: typeof sig?.hidPercentage === "number" ? sig.hidPercentage : null,
+                  hidDeclinePct: hidTrend.hidDeclinePct,
+                  hidFatigueFlag: hidTrend.hidFatigueFlag,
                 };
               } else {
                 // No GPS at all — leave everything null so chips hide.
@@ -6670,6 +6709,13 @@ export default function CoachPage() {
                   concernLevel: null,
                   fatigueType: null,
                   playerLoadSpike: null,
+                  decelBurden: null,
+                  decelBurdenBand: null,
+                  accelDecelRatio: null,
+                  loadProfile: null,
+                  hidPercentage: null,
+                  hidDeclinePct: null,
+                  hidFatigueFlag: false,
                 };
               }
 
@@ -6694,6 +6740,15 @@ export default function CoachPage() {
                 _today_fatigue_type: resolved.fatigueType,
                 _today_player_load_spike: resolved.playerLoadSpike,
                 _load_signals_date: signalDate,
+                // Deceleration-specific metrics
+                _today_decel_burden: resolved.decelBurden,
+                _today_decel_burden_band: resolved.decelBurdenBand,
+                _today_accel_decel_ratio: resolved.accelDecelRatio,
+                _today_load_profile: resolved.loadProfile,
+                _today_hid_percentage: resolved.hidPercentage,
+                // HID% trend
+                _today_hid_decline_pct: resolved.hidDeclinePct,
+                _today_hid_fatigue_flag: resolved.hidFatigueFlag,
               };
             }) as any} />
           )}
@@ -7161,7 +7216,7 @@ export default function CoachPage() {
         }
 
         function computeSnapshot(history: Array<Record<string, unknown>>, aliases: string[], digits: number) {
-          const refDate = today; // component-level today date
+          const refDate = gpsDate; // browsable reference date
           const acuteStart = dateMinusDays(refDate, 6);   // last 7 calendar days inclusive
           const chronicStart = dateMinusDays(refDate, 27); // last 28 calendar days inclusive
 
@@ -7210,7 +7265,7 @@ export default function CoachPage() {
 
         // ── Today's session overview ──────────────────────────────────────
         const todayPlayerRows = gpsAllPlayers.map((p) => {
-          const row = p.history.find((r) => String(r.date ?? "").slice(0, 10) === today);
+          const row = p.history.find((r) => String(r.date ?? "").slice(0, 10) === gpsDate);
           if (!row) return null;
           const vb5 = getVal(row, ["velocity_band5_total_distance", "velocityBand5TotalDistance"]) ?? 0;
           const vb6 = getVal(row, ["velocity_band6_total_distance", "velocityBand6TotalDistance"]) ?? 0;
@@ -7270,8 +7325,56 @@ export default function CoachPage() {
 
         const fmtN = (v: number | null, d = 0) => v == null ? "—" : v.toFixed(d);
 
+        const isViewingToday = gpsDate === today;
+        const gpsDateLabel = (() => {
+          const d = new Date(`${gpsDate}T00:00:00Z`);
+          const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+          const weekdayIS = ["Sun", "Mán", "Þri", "Mið", "Fim", "Fös", "Lau"][d.getUTCDay()];
+          return `${lang === "IS" ? weekdayIS : weekday} ${gpsDate}`;
+        })();
+
         return (
           <div className="space-y-4">
+
+            {/* ── Date Navigator ────────────────────────────────── */}
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex items-center gap-2">
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                  onClick={() => setGpsDate(addDaysISO(gpsDate, -1))}
+                  title={lang === "IS" ? "Dagur til baka" : "Previous day"}
+                >
+                  ←
+                </button>
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                  onClick={() => setGpsDate(addDaysISO(gpsDate, 1))}
+                  disabled={gpsDate >= today}
+                  title={lang === "IS" ? "Dagur áfram" : "Next day"}
+                  style={{ opacity: gpsDate >= today ? 0.4 : 1 }}
+                >
+                  →
+                </button>
+                <input
+                  type="date"
+                  value={gpsDate}
+                  max={today}
+                  onChange={(e) => { if (e.target.value) setGpsDate(e.target.value); }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:ring-2 focus:ring-slate-300 focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-800">{gpsDateLabel}</span>
+                {!isViewingToday && (
+                  <button
+                    className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"
+                    onClick={() => setGpsDate(today)}
+                  >
+                    {lang === "IS" ? "Í dag" : "Today"}
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* ── Cumulative Weekly Load ────────────────────────── */}
             <section>
@@ -7279,7 +7382,7 @@ export default function CoachPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{lang === "IS" ? "Vikuálag" : "Weekly Load"}</span>
                 <div className="flex-1 h-px bg-slate-100" />
               </div>
-              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} />}
+              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} date={gpsDate} />}
             </section>
 
             {/* ── Today's Training Overview ── */}
@@ -7288,7 +7391,7 @@ export default function CoachPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-                      Æfing Dagsins · {today}
+                      {isViewingToday ? `Æfing Dagsins · ${gpsDate}` : `Æfing · ${gpsDate}`}
                     </CardTitle>
                     <CardDescription className="mt-1 text-sm text-slate-500">
                       {isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
@@ -7303,7 +7406,7 @@ export default function CoachPage() {
                 {gpsLoading ? (
                   <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
                 ) : todayPlayerRows.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-slate-400">{lang === "EN" ? "No GPS data recorded today." : "Engin GPS gögn skráð í dag."}</div>
+                  <div className="py-6 text-center text-sm text-slate-400">{lang === "EN" ? `No GPS data recorded for ${gpsDate}.` : `Engin GPS gögn skráð ${gpsDate}.`}</div>
                 ) : (
                   <>
                     {/* Squad average KPI tiles */}
@@ -7412,6 +7515,15 @@ export default function CoachPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ── Load Intelligence (computed signals overview) ── */}
+            {!gpsLoading && gpsAllPlayers.length > 0 && (
+              <GpsLoadIntelligence
+                players={gpsAllPlayers}
+                date={gpsDate}
+                lang={lang as "IS" | "EN"}
+              />
+            )}
 
             <Card>
               <CardHeader className="pb-3">

@@ -130,6 +130,46 @@ export function evaluateInjuryRiskRules(
     riskScore += 1;
   }
 
+  // Deceleration-specific rules (McBurnie et al. 2022)
+  // High decel burden → tissue damage, CK elevation, mechanical fatigue failure
+  if (hasNumber(input.decelBurdenScore) && (input.decelBurdenScore as number) >= 0.70) {
+    triggeredRules.push("DECEL_BURDEN_HIGH");
+    riskScore += 2;
+  } else if (hasNumber(input.decelBurdenScore) && (input.decelBurdenScore as number) >= 0.45) {
+    triggeredRules.push("DECEL_BURDEN_ELEVATED");
+    riskScore += 1;
+  }
+
+  // Residual Decel accumulation: multi-day eccentric stress buildup
+  if (input.residualDecelBand === "HIGH") {
+    triggeredRules.push("RESIDUAL_DECEL_HIGH");
+    riskScore += 2;
+  } else if (input.residualDecelBand === "CAUTION") {
+    triggeredRules.push("RESIDUAL_DECEL_CAUTION");
+    riskScore += 1;
+  }
+
+  // HID% fatigue trend (Harper et al. 2019 meta-analysis)
+  // Declining high-intensity distance with stable total distance signals
+  // neuromuscular fatigue — inability to reach high speeds increases
+  // compensatory movement patterns and soft-tissue injury risk.
+  if (input.hidFatigueFlag === true) {
+    triggeredRules.push("HID_DECLINE_FATIGUE");
+    riskScore += 1;
+  }
+
+  // Eccentric-dominant load profile: high hamstring/calf strain risk
+  // Especially dangerous when combined with soreness or poor recovery
+  if (hasNumber(input.accelDecelRatio) && (input.accelDecelRatio as number) < 0.7) {
+    if (sorenessPain || poorRecovery) {
+      triggeredRules.push("ECCENTRIC_DOMINANT_WITH_SORENESS");
+      riskScore += 2;
+    } else {
+      triggeredRules.push("ECCENTRIC_DOMINANT_LOAD");
+      riskScore += 1;
+    }
+  }
+
   let injuryRiskLevel: "LOW" | "MODERATE" | "HIGH" = "LOW";
   if (riskScore >= 8) injuryRiskLevel = "HIGH";
   else if (riskScore >= 4) injuryRiskLevel = "MODERATE";

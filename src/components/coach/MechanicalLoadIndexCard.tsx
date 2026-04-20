@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 type MechanicalLoadBand = "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | "EXTREME";
 type ResidualMechanicalLoadBand = "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
@@ -61,6 +62,33 @@ function confidenceClass(confidence: MechanicalLoadConfidence) {
   if (confidence === "high") return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (confidence === "medium") return "border-amber-200 bg-amber-50 text-amber-800";
   return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+// ── Info popover helper ──────────────────────────────────────────────────────
+
+function InfoTh({ children, title, body, className = "" }: { children: React.ReactNode; title: string; body: string; className?: string }) {
+  return (
+    <th className={`py-1 pr-2 ${className}`}>
+      <div className="flex items-center gap-1">
+        {children}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors shrink-0"
+              aria-label={`Info: ${title}`}
+            >
+              i
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="center" className="w-72">
+            <p className="text-xs font-semibold text-slate-900 mb-1">{title}</p>
+            <p className="text-xs text-slate-600 leading-relaxed">{body}</p>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </th>
+  );
 }
 
 export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | null }) {
@@ -167,11 +195,27 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
                 <thead>
                   <tr className="text-left text-slate-500">
                     <th className="py-1 pr-2">Player</th>
-                    <th className="py-1 pr-2">MLI</th>
-                    <th className="py-1 pr-2">Residual</th>
-                    <th className="py-1 pr-2">Sub-scores</th>
-                    <th className="py-1 pr-2">Flags</th>
-                    <th className="py-1">Confidence</th>
+                    <InfoTh
+                      title="MLI (Mechanical Load Index)"
+                      body="Vélrænt álagsskor reiknað úr deceleration, acceleration, stefnubreytingum og density. Mælir álag á vöðva, lið og sinar. Flokkar: Low / Moderate / High / Very High / Extreme."
+                    >MLI</InfoTh>
+                    <InfoTh
+                      title="Residual MLI (3 dagar)"
+                      body="Uppsafnað vélrænt álag síðustu 3 daga. Vegið: í dag 50%, gær 30%, fyrri dagur 20%. Sýnir hvort leikmaður fær nægan bata á milli æfinga. Flokkar: Normal / Elevated / Caution / High."
+                    >Residual</InfoTh>
+                    <InfoTh
+                      title="Sub-scores"
+                      body="DSS = Deceleration Stress Score. ASS = Acceleration Stress Score. CSS = Change-of-direction Stress Score (ef til). GDS = G-force Density Score (player load/mín). Hvert skor er 0–100 miðað við 28d baseline."
+                    >Sub-scores</InfoTh>
+                    <InfoTh
+                      title="Flags"
+                      body="Sjálfvirk viðvörunarmerki. T.d. hátt deceleration álag, mikil stefnubreyting, eða óvenjulega há density. Flaggar koma fram þegar einstakir undirþættir fara langt yfir viðmið."
+                    >Flags</InfoTh>
+                    <InfoTh
+                      title="Confidence"
+                      body="Hversu traust gögnin eru. High = fullnægjandi Catapult gögn og ≥14d baseline. Medium = styttri baseline eða minni gagnagæði. Low = lágmarks gögn."
+                      className="pr-0"
+                    >Confidence</InfoTh>
                   </tr>
                 </thead>
                 <tbody>

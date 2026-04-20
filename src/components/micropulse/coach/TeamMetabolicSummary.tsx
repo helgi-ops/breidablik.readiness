@@ -13,6 +13,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import type { MetabolicLoadBand, CompositeFatigueType, MetabolicLoadConfidence, MetabolicRecommendationCode } from "@/lib/micropulse/metabolicLoad";
 
 // ─── Types (matches API response shape) ───────────────────────────────────
@@ -122,6 +123,33 @@ function fmtRpeZ(v: number | null): { label: string; className: string } {
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ─── Info popover helper ────────────────────────────────────────────────────
+
+function InfoTh({ children, title, body, className = "" }: { children: React.ReactNode; title: string; body: string; className?: string }) {
+  return (
+    <th className={`py-1 pr-2 ${className}`}>
+      <div className="flex items-center gap-1">
+        {children}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors shrink-0"
+              aria-label={`Info: ${title}`}
+            >
+              i
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="center" className="w-72">
+            <p className="text-xs font-semibold text-slate-900 mb-1">{title}</p>
+            <p className="text-xs text-slate-600 leading-relaxed">{body}</p>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </th>
+  );
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -252,16 +280,47 @@ export default function TeamMetabolicSummary({
                 <thead>
                   <tr className="text-left text-slate-500">
                     <th className="py-1 pr-2">Player</th>
-                    <th className="py-1 pr-2">Score</th>
-                    <th className="py-1 pr-2">Fatigue type</th>
-                    <th className="py-1 pr-2">Avg W/kg</th>
-                    <th className="py-1 pr-2">Peak W/kg</th>
-                    <th className="py-1 pr-2">HMLD</th>
-                    <th className="py-1 pr-2">T&gt;thresh</th>
-                    <th className="py-1 pr-2">RPE z</th>
-                    <th className="py-1 pr-2">Δ 5d</th>
-                    <th className="py-1 pr-2">Vol 7d</th>
-                    <th className="py-1">Confidence</th>
+                    <InfoTh
+                      title="Metabolic Load Score"
+                      body="Vegið z-score samsett skor sem mælir orkukerfisálag. Byggist á metabolic power, HMLD vegalengd og tíma yfir HML viðmiðum. Flokkar: low / moderate / high / very high."
+                    >Score</InfoTh>
+                    <InfoTh
+                      title="Fatigue Type"
+                      body="Hvaða tegund þreytu ræður. Global = bæði innra og ytra álag hátt. Mechanical = vélrænt álag (decel/accel) drifkraftur. Metabolic = orkukerfisálag (metabolic power) drifkraftur. Normal = ekkert óeðlilegt."
+                    >Fatigue type</InfoTh>
+                    <InfoTh
+                      title="Avg W/kg (Meðal metabolic power)"
+                      body="Meðal metabolic power á kg líkamsþunga yfir æfinguna. Mælir meðalorkunotkun — hærra gildi = meiri heildarorkukrafa á vöðvakerfi."
+                    >Avg W/kg</InfoTh>
+                    <InfoTh
+                      title="Peak W/kg (Hámarks metabolic power)"
+                      body="Hæsta metabolic power á kg sem leikmaður náði í æfingunni. Sýnir hámarksorkukröfu — mikilvægt til að meta spretts- og háhraðaálag."
+                    >Peak W/kg</InfoTh>
+                    <InfoTh
+                      title="HMLD (High Metabolic Load Distance)"
+                      body="Vegalengd hlaupið yfir metabolic power viðmiðum (≈25.5 W/kg). Sýnir hversu mikla háorkuvinnu leikmaður vann — meira en bara hraði, tekur líka til acceleration."
+                    >HMLD</InfoTh>
+                    <InfoTh
+                      title="T>thresh (Tími yfir viðmiðum)"
+                      body="Fjöldi sekúndna sem leikmaður var yfir metabolic power viðmiðum. Lengri tími = meira álag á orkukerfi, aðallega hjarta- og æðakerfi."
+                    >T&gt;thresh</InfoTh>
+                    <InfoTh
+                      title="RPE z-score"
+                      body="Staðlað frávik RPE (Rate of Perceived Exertion) frá 28d meðaltali. ≥1.5 = leikmaður finnur fyrir verulega meira álagi en venjulega. Neikvætt gildi = léttari en venjulega."
+                    >RPE z</InfoTh>
+                    <InfoTh
+                      title="Δ 5d (5 daga breyting)"
+                      body="Breyting á metabolic load skori miðað við 5 daga meðaltal. ↑ = hækkandi álag, ↓ = minnkandi. Stórar breytingar (>5 stig) benda til ójafns álagsmunstur."
+                    >Δ 5d</InfoTh>
+                    <InfoTh
+                      title="Vol 7d (7 daga sveiflur)"
+                      body="Dreifni (volatility) í metabolic load síðustu 7 daga. Hátt gildi (>15) = mjög sveiflukennt álag sem eykur meiðslaáhættu. Lágt gildi = stöðugt álag."
+                    >Vol 7d</InfoTh>
+                    <InfoTh
+                      title="Confidence"
+                      body="Hversu traust gögnin eru. High = fullnægjandi GNSS gögn og ≥14d baseline. Medium = styttri baseline eða minni gagnagæði. Low = lágmarks gögn."
+                      className="pr-0"
+                    >Confidence</InfoTh>
                   </tr>
                 </thead>
                 <tbody>

@@ -74,6 +74,7 @@ export type DecisionSummaryRow = {
   // ── Readiness questionnaire scores (1–5 scale) ──────────────────────────
   sleep_quality?: number | null;
   muscle_soreness?: number | null;   // 1 = very sore (bad), 4 = fresh, 5 = very fresh
+  sore_areas?: string[] | null;     // e.g. ["hamstrings", "lower_back"]
   fatigue_energy?: number | null;
   stress_mood?: number | null;
   // ── Yesterday GPS load (populated by dashboard from _catapult_history) ──
@@ -96,6 +97,27 @@ export type DecisionSummaryRow = {
   _today_player_load_spike?: number | null;
   /** ISO date the load signals refer to (today if present, else yesterday). */
   _load_signals_date?: string | null;
+
+  // ── Deceleration-specific metrics (McBurnie et al. 2022) ──────────────
+  /** Standalone decel burden score (0–1). Eccentric braking load KPI. */
+  _today_decel_burden?: number | null;
+  /** Decel burden band: "low" | "moderate" | "elevated" | "high". */
+  _today_decel_burden_band?: string | null;
+  /** Accel:Decel ratio from high-intensity efforts. */
+  _today_accel_decel_ratio?: number | null;
+  /** Load profile: "eccentric_dominant" | "balanced" | "concentric_dominant". */
+  _today_load_profile?: string | null;
+  /** High-Intensity Distance as fraction of total distance (0–1). */
+  _today_hid_percentage?: number | null;
+  /** HID% relative decline vs 7-day avg (0–1 scale). Positive = lower than avg. */
+  _today_hid_decline_pct?: number | null;
+  /** True when HID% decline ≥20% with stable total distance (fatigue signal). */
+  _today_hid_fatigue_flag?: boolean;
+  /** Residual Decel Index — 3-day weighted accumulation. */
+  _today_residual_decel?: number | null;
+  /** Residual Decel band: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH". */
+  _today_residual_decel_band?: string | null;
+
   // ── VBT fatigue flags (velocity loss ≥10% from first 2 sets) ───────────
   _vbt_fatigue_flags?: Array<{
     exerciseName: string;
@@ -985,6 +1007,22 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
             })}
           </div>
         )}
+        {/* Sore / stiff areas — shown when player reported specific body parts */}
+        {row.sore_areas && row.sore_areas.length > 0 && (
+          <div className="rounded-lg border border-red-200 bg-red-50/60 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-red-400 font-semibold mb-1.5">Sore / stiff areas</p>
+            <div className="flex flex-wrap gap-1.5">
+              {row.sore_areas.map((area) => (
+                <span
+                  key={area}
+                  className="inline-flex rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-red-700 capitalize"
+                >
+                  {area.replace(/_/g, " ")}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Load metrics */}
         {load.length > 0 && (() => {
           // Build date label from the same signalsDate the load-signals block uses,
@@ -1123,6 +1161,123 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                   <div className="flex flex-col rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 min-w-[7rem]">
                     <span className="text-[9px] font-semibold uppercase opacity-70 text-indigo-600">Fatigue type</span>
                     <span className="text-sm font-bold text-indigo-800 leading-tight pt-1">{fatigueLabel}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })()}
+        {/* Deceleration metrics — McBurnie et al. 2022 */}
+        {(() => {
+          const decelBurden = row._today_decel_burden;
+          const decelBand = row._today_decel_burden_band;
+          const adRatio = row._today_accel_decel_ratio;
+          const loadProf = row._today_load_profile;
+          const hidPct = row._today_hid_percentage;
+          const resDecel = row._today_residual_decel;
+          const resDecelBand = row._today_residual_decel_band;
+          const hasDecel =
+            (decelBurden != null && Number.isFinite(decelBurden)) ||
+            (adRatio != null && Number.isFinite(adRatio)) ||
+            (hidPct != null && Number.isFinite(hidPct));
+          if (!hasDecel) return null;
+
+          const decelTone = decelBand == null ? null
+            : decelBand === "high" ? { cls: "border-rose-300 bg-rose-50 text-rose-700", label: "High" }
+            : decelBand === "elevated" ? { cls: "border-amber-300 bg-amber-50 text-amber-700", label: "Elevated" }
+            : decelBand === "moderate" ? { cls: "border-slate-200 bg-slate-50 text-slate-600", label: "Moderate" }
+            : { cls: "border-emerald-200 bg-emerald-50 text-emerald-700", label: "Low" };
+
+          const profileLabel = loadProf === "eccentric_dominant" ? "Eccentric"
+            : loadProf === "concentric_dominant" ? "Concentric"
+            : loadProf === "balanced" ? "Balanced" : null;
+          const profileTone = loadProf === "eccentric_dominant"
+            ? "border-orange-200 bg-orange-50 text-orange-700"
+            : loadProf === "concentric_dominant"
+            ? "border-blue-200 bg-blue-50 text-blue-700"
+            : "border-slate-200 bg-slate-50 text-slate-600";
+
+          const resDecelTone = resDecelBand === "HIGH"
+            ? "border-rose-300 bg-rose-50 text-rose-700"
+            : resDecelBand === "CAUTION"
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-slate-200 bg-slate-50 text-slate-600";
+
+          return (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+                Deceleration profile
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {decelBurden != null && decelTone ? (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${decelTone.cls}`}
+                    title="Standalone decel burden — high-intensity braking load vs 28d baseline. Tracks eccentric tissue stress independently from NBS."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">Decel burden</span>
+                    <span className="text-lg font-bold tabular-nums">{decelBurden.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{decelTone.label}</span>
+                  </div>
+                ) : null}
+                {adRatio != null && profileLabel ? (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${profileTone}`}
+                    title="Accel÷Decel ratio from high-intensity efforts. <0.7 = eccentric-dominant (hamstring/calf risk), >1.3 = concentric-dominant (glute/quad load)."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">Accel:Decel</span>
+                    <span className="text-lg font-bold tabular-nums">{adRatio.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{profileLabel}</span>
+                  </div>
+                ) : null}
+                {hidPct != null ? (() => {
+                  const hidFatigue = row._today_hid_fatigue_flag === true;
+                  const hidDecline = row._today_hid_decline_pct;
+                  const hasTrend = hidDecline != null && Number.isFinite(hidDecline);
+                  // Color: fatigue flag → amber/rose; otherwise neutral
+                  const hidBorderCls = hidFatigue
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200 bg-white";
+                  const hidValueCls = hidFatigue ? "text-amber-700" : "text-slate-800";
+                  // Trend arrow
+                  const trendArrow = !hasTrend ? null
+                    : (hidDecline as number) >= 0.20 ? "↓↓"
+                    : (hidDecline as number) >= 0.10 ? "↓"
+                    : (hidDecline as number) <= -0.10 ? "↑" : "→";
+                  const trendColor = !hasTrend ? ""
+                    : (hidDecline as number) >= 0.20 ? "text-rose-600"
+                    : (hidDecline as number) >= 0.10 ? "text-amber-600"
+                    : (hidDecline as number) <= -0.10 ? "text-emerald-600" : "text-slate-400";
+
+                  return (
+                    <div
+                      className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${hidBorderCls}`}
+                      title={hidFatigue
+                        ? `HID% dropped ${((hidDecline ?? 0) * 100).toFixed(0)}% vs 7-day avg — neuromuscular fatigue signal (Harper et al. 2019). Athlete covers distance but at lower intensity.`
+                        : "High-Intensity Distance % — HIR (Band5+Band6) as fraction of total distance. Declining trend signals fatigue."}
+                    >
+                      <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-400">HID%</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className={`text-lg font-bold tabular-nums ${hidValueCls}`}>{(hidPct * 100).toFixed(1)}%</span>
+                        {trendArrow ? (
+                          <span className={`text-sm font-bold ${trendColor}`} title={hasTrend ? `${((hidDecline as number) * 100).toFixed(0)}% vs 7d avg` : undefined}>
+                            {trendArrow}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-[10px] text-slate-500">
+                        {hidFatigue ? "Fatigue trend" : hidPct >= 0.30 ? "High intensity" : hidPct >= 0.20 ? "Moderate" : "Low intensity"}
+                      </span>
+                    </div>
+                  );
+                })() : null}
+                {resDecel != null && resDecelBand ? (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${resDecelTone}`}
+                    title="Residual Decel Index — 3-day weighted accumulation of deceleration burden. ≥100 CAUTION, ≥135 HIGH."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">Residual Decel</span>
+                    <span className="text-lg font-bold tabular-nums">{resDecel.toFixed(0)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{resDecelBand}</span>
                   </div>
                 ) : null}
               </div>

@@ -47,6 +47,21 @@ export function getBand6Distance(row: CatapultDailyLoadRow | null | undefined): 
   return row?.velocityBand6TotalDistance ?? 0;
 }
 
+/** High-intensity deceleration efforts (Band 2-3). */
+export function getHighDecelEfforts(row: CatapultDailyLoadRow | null | undefined): number {
+  return row?.decelBand2to3Efforts ?? 0;
+}
+
+/** High-intensity acceleration efforts (Band 2-3). */
+export function getHighAccelEfforts(row: CatapultDailyLoadRow | null | undefined): number {
+  return row?.accelBand2to3Efforts ?? 0;
+}
+
+/** Total distance covered. */
+export function getTotalDistance(row: CatapultDailyLoadRow | null | undefined): number {
+  return row?.totalDistance ?? 0;
+}
+
 /**
  * HIR (High-Intensity Running) distance.
  * If the dedicated `hirDist` field is populated, use it.
@@ -169,6 +184,9 @@ export function computeCatapultExternalLoadBaseline(args: {
         maxVelocity: average(chronic28dRows.map((row) => row.maxVelocity ?? 0)),
         densityStress: average(chronic28dRows.map((row) => getDensityStress(row))),
         band6Distance: average(chronic28dRows.map((row) => getBand6Distance(row))),
+        highDecelEfforts: average(chronic28dRows.map((row) => getHighDecelEfforts(row))),
+        highAccelEfforts: average(chronic28dRows.map((row) => getHighAccelEfforts(row))),
+        totalDistance: average(chronic28dRows.map((row) => getTotalDistance(row))),
         // FMP (Indoor Mode)
         fmpDynamicHighS: average(chronic28dRows.map((row) => row.fmpDynamicHighS ?? 0)),
         fmpDynamicMediumS: average(chronic28dRows.map((row) => row.fmpDynamicMediumS ?? 0)),

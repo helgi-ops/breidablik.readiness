@@ -151,9 +151,12 @@ type ViewMode = "team" | "player";
 export default function CoachWeeklyLoadCard({
   teamId,
   lang,
+  date,
 }: {
   teamId: string;
   lang: Lang;
+  /** Optional reference date (ISO). When set, shows the week containing this date. */
+  date?: string;
 }) {
   const t = COPY[lang];
   const [data, setData] = useState<WeeklyLoadResult | null>(null);
@@ -188,6 +191,7 @@ export default function CoachWeeklyLoadCard({
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ teamId });
+    if (date) params.set("date", date);
     if (viewMode === "player" && selectedPlayerId) {
       params.set("playerId", selectedPlayerId);
     }
@@ -202,7 +206,7 @@ export default function CoachWeeklyLoadCard({
         setError(err.message ?? "Fetch failed");
         setLoading(false);
       });
-  }, [teamId, viewMode, selectedPlayerId]);
+  }, [teamId, date, viewMode, selectedPlayerId]);
 
   useEffect(() => {
     if (viewMode === "player" && !selectedPlayerId) return;

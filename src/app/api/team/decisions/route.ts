@@ -5,7 +5,7 @@ import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
-import { buildCatapultReadinessContextFromRows, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
+import { buildCatapultReadinessContextFromRows, computeHidTrend, computeResidualDecel, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
 import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
 import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
@@ -486,6 +486,27 @@ async function buildPlayerSource(args: {
     sportType: args.sportType,
   });
   const externalToday = catapultContext.today;
+
+  // ── Residual Decel Index (3-day weighted deceleration accumulation) ──
+  // Compute decel burden for yesterday and 2 days ago from the same catapult rows
+  const catRows = args.catapultRows.filter((row): row is NonNullable<typeof row> => row != null);
+  const yesterdayDate = (() => { const d = new Date(`${args.date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
+  const twoDaysAgoDate = (() => { const d = new Date(`${args.date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 2); return d.toISOString().slice(0, 10); })();
+  const ydayCtx = buildCatapultReadinessContextFromRows({ rows: catRows, date: yesterdayDate, indoorMode: args.indoorMode, sportType: args.sportType });
+  const twoDayCtx = buildCatapultReadinessContextFromRows({ rows: catRows, date: twoDaysAgoDate, indoorMode: args.indoorMode, sportType: args.sportType });
+  const residualDecelResult = computeResidualDecel(
+    catapultContext.signals.decelBurdenScore,
+    ydayCtx.signals.decelBurdenScore,
+    twoDayCtx.signals.decelBurdenScore,
+  );
+
+  // ── HID% Fatigue Trend (Harper et al. 2019) ──
+  // Compare today's HID% against 7-day rolling average from catapult history.
+  // Filter recent rows to exclude today so we compare against prior days.
+  const todayGpsRow = catapultContext.today;
+  const recentHidRows = catRows.filter((row) => row.date < args.date).slice(-7);
+  const hidTrendResult = computeHidTrend(recentHidRows, todayGpsRow);
+
   const acwrValue = toFinite((tm?.acwr as unknown) ?? ((tm?.load as Record<string, unknown> | undefined)?.acwr as unknown));
   const volatilityValue = toFinite((tm?.pi as Record<string, unknown> | undefined)?.volatility);
   const hrvValue = toFinite(tm?.hrv);
@@ -621,6 +642,13 @@ async function buildPlayerSource(args: {
       valdReasons: valdInjurySignals?.reasons ?? [],
       globalFatigueFlag,
       residualMliBand: mliResultEarly?.residualBand ?? undefined,
+      // Deceleration-specific (McBurnie et al. 2022)
+      decelBurdenScore: catapultContext.signals.decelBurdenScore ?? undefined,
+      residualDecelBand: residualDecelResult.residualDecelBand ?? undefined,
+      accelDecelRatio: catapultContext.signals.accelDecelRatio ?? undefined,
+      // HID% fatigue trend (Harper et al. 2019)
+      hidDeclinePct: hidTrendResult.hidDeclinePct ?? undefined,
+      hidFatigueFlag: hidTrendResult.hidFatigueFlag,
     },
     readinessDecision
   );
@@ -633,6 +661,13 @@ async function buildPlayerSource(args: {
     residualMli: mliResultEarly?.residualMli ?? null,
     metabolicLoadScore: metaResultEarly?.metabolicLoadScore ?? null,
     metabolicConfidence: metaResultEarly?.confidence ?? null,
+    // Deceleration-specific inputs (McBurnie et al. 2022)
+    decelBurdenScore: catapultContext.signals.decelBurdenScore ?? null,
+    residualDecel: residualDecelResult.residualDecel,
+    accelDecelRatio: catapultContext.signals.accelDecelRatio ?? null,
+    // HID% fatigue trend (Harper et al. 2019)
+    hidFatigueFlag: hidTrendResult.hidFatigueFlag,
+    hidDeclinePct: hidTrendResult.hidDeclinePct,
   });
 
   const playerRpeToday = toFinite(tm?.rpe) ?? toFinite(tm?.session_rpe) ?? null;

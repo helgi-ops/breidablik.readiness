@@ -7,6 +7,10 @@ export type {
   ExternalLoadState,
   ExternalLoadDataQuality,
   CatapultReadinessContext,
+  DecelBurdenBand,
+  LoadProfileType,
+  ResidualDecelBand,
+  ResidualDecelResult,
 } from "./types";
 export type {
   TeamExternalLoadAlert,
@@ -25,7 +29,8 @@ export {
   getDensityStress,
   normalizeCatapultDailyLoadRow,
 } from "./baselines";
-export { computeCatapultExternalLoadSignals, CATAPULT_SIGNAL_WEIGHTS } from "./signals";
+export { computeCatapultExternalLoadSignals, computeHidTrend, computeResidualDecel, CATAPULT_SIGNAL_WEIGHTS } from "./signals";
+export type { HidTrendResult } from "./types";
 export { buildExternalLoadExplanations } from "./explanations";
 export {
   buildCatapultActionHint,

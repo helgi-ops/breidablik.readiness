@@ -104,6 +104,35 @@ export type CompositeLoadInput = {
    * Metabolic confidence — only trust score when "medium" or "high".
    */
   metabolicConfidence?: "low" | "medium" | "high" | null;
+
+  // ── Deceleration-specific inputs (McBurnie et al. 2022) ──────────
+
+  /**
+   * Standalone decel burden score (0–1) from signals.ts.
+   * Isolates high-intensity braking load as independent KPI.
+   */
+  decelBurdenScore?: number | null;
+  /**
+   * Residual Decel Index — 3-day weighted accumulation.
+   * Same pattern as Residual MLI but decel-specific.
+   * Bands: <60 NORMAL, 60-99 ELEVATED, 100-134 CAUTION, ≥135 HIGH.
+   */
+  residualDecel?: number | null;
+  /**
+   * Accel:decel ratio from high-intensity efforts.
+   * < 0.7 eccentric-dominant, > 1.3 concentric-dominant.
+   */
+  accelDecelRatio?: number | null;
+
+  // ── HID% fatigue trend (Harper et al. 2019) ──────────────────────
+
+  /**
+   * True when HID% declined ≥20% vs 7-day avg with stable total distance.
+   * Signals neuromuscular fatigue — athlete can't reach high speeds.
+   */
+  hidFatigueFlag?: boolean;
+  /** Relative HID% decline (0–1 scale). Null when trend unavailable. */
+  hidDeclinePct?: number | null;
 };
 
 export type CompositeLoadResult = {
@@ -111,7 +140,7 @@ export type CompositeLoadResult = {
   /** 0–1 composite score before thresholding */
   compositeScore: number;
   /** Which signals contributed */
-  sources: Array<"rpe_acwr" | "gps_burden" | "residual_mli" | "metabolic">;
+  sources: Array<"rpe_acwr" | "gps_burden" | "residual_mli" | "metabolic" | "decel_burden" | "residual_decel" | "hid_fatigue">;
   /** Human-readable summary for logging */
   summary: string;
   /**
@@ -235,6 +264,34 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
     if (!sources.includes("residual_mli")) sources.push("residual_mli");
   }
 
+  // ── Residual Decel safety net (mirrors Residual MLI pattern) ──
+  // If accumulated eccentric decel load over 3 days is in CAUTION or HIGH,
+  // ensure concern level is at least "moderate". This catches the
+  // "mechanical fatigue failure" phenomenon (McBurnie et al. 2022).
+  const residualDecelVal = input.residualDecel;
+  let residualDecelBandLabel: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH" | null = null;
+  if (residualDecelVal != null && Number.isFinite(residualDecelVal)) {
+    if (residualDecelVal >= 135) residualDecelBandLabel = "HIGH";
+    else if (residualDecelVal >= 100) residualDecelBandLabel = "CAUTION";
+    else if (residualDecelVal >= 60) residualDecelBandLabel = "ELEVATED";
+    else residualDecelBandLabel = "NORMAL";
+
+    if (residualDecelBandLabel === "HIGH") {
+      compositeScore = Math.max(compositeScore, 0.68); // → "high"
+      if (!sources.includes("residual_decel")) sources.push("residual_decel");
+    } else if (residualDecelBandLabel === "CAUTION") {
+      compositeScore = Math.max(compositeScore, 0.40); // → "moderate"
+      if (!sources.includes("residual_decel")) sources.push("residual_decel");
+    }
+  }
+
+  // ── Decel burden escalation ──
+  // If today's decel burden is elevated/high, push into sources
+  const decelBurdenVal = input.decelBurdenScore;
+  if (decelBurdenVal != null && decelBurdenVal >= 0.45) {
+    if (!sources.includes("decel_burden")) sources.push("decel_burden");
+  }
+
   const concernLevel = scoreToConcernLevel(compositeScore);
 
   // ── Coach-facing escalation reasons ──
@@ -265,6 +322,38 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
         `Residual MLI is ${input.residualMli?.toFixed(0) ?? "?"} (CAUTION) — multi-day mechanical load building up.`
       );
     }
+    // Decel-specific escalation reasons
+    if (decelBurdenVal != null && decelBurdenVal >= 0.70) {
+      escalationReasons.push(
+        "Decel burden is HIGH — eccentric braking load significantly above baseline. Avoid COD-heavy drills."
+      );
+    } else if (decelBurdenVal != null && decelBurdenVal >= 0.45) {
+      escalationReasons.push(
+        "Decel burden is elevated — high-intensity braking actions above normal. Monitor hamstring/calf load."
+      );
+    }
+    if (residualDecelBandLabel === "HIGH") {
+      escalationReasons.push(
+        `Residual Decel is ${residualDecelVal?.toFixed(0) ?? "?"} (HIGH) — 3-day accumulated deceleration stress. Recovery priority.`
+      );
+    } else if (residualDecelBandLabel === "CAUTION") {
+      escalationReasons.push(
+        `Residual Decel is ${residualDecelVal?.toFixed(0) ?? "?"} (CAUTION) — deceleration load accumulating over multiple days.`
+      );
+    }
+    if (input.accelDecelRatio != null && input.accelDecelRatio < 0.7) {
+      escalationReasons.push(
+        `Accel:Decel ratio ${input.accelDecelRatio.toFixed(2)} — eccentric-dominant session. Elevated hamstring/calf strain risk.`
+      );
+    }
+    // HID% fatigue trend (Harper et al. 2019)
+    if (input.hidFatigueFlag === true) {
+      const declinePctStr = input.hidDeclinePct != null ? `${(input.hidDeclinePct * 100).toFixed(0)}%` : "?";
+      escalationReasons.push(
+        `HID% declined ${declinePctStr} vs 7-day avg — neuromuscular fatigue signal. Athlete covers distance but at lower intensity.`
+      );
+      if (!sources.includes("hid_fatigue")) sources.push("hid_fatigue");
+    }
   }
 
   // ── Fatigue type classification ──
@@ -290,8 +379,12 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
   const gpsStr = externalScore != null ? externalScore.toFixed(2) : "n/a";
   const metStr = metabolicScore != null ? `${input.metabolicLoadScore?.toFixed(0)}(${metabolicScore.toFixed(2)})` : "n/a";
   const resStr = input.residualMli != null ? `${input.residualMli.toFixed(0)}[${resBand}]` : "n/a";
+  const decelStr = decelBurdenVal != null ? decelBurdenVal.toFixed(2) : "n/a";
+  const resDecelStr = residualDecelVal != null ? `${residualDecelVal.toFixed(0)}[${residualDecelBandLabel}]` : "n/a";
+  const adRatioStr = input.accelDecelRatio != null ? input.accelDecelRatio.toFixed(2) : "n/a";
+  const hidFatigueStr = input.hidFatigueFlag ? `YES(${((input.hidDeclinePct ?? 0) * 100).toFixed(0)}%)` : "no";
   const summary =
-    `composite=${compositeScore.toFixed(2)} (rpe_acwr=${acwrStr}, gps_burden=${gpsStr}, metabolic=${metStr}, residual_mli=${resStr}) → ${concernLevel}`;
+    `composite=${compositeScore.toFixed(2)} (rpe_acwr=${acwrStr}, gps_burden=${gpsStr}, metabolic=${metStr}, residual_mli=${resStr}, decel_burden=${decelStr}, residual_decel=${resDecelStr}, ad_ratio=${adRatioStr}, hid_fatigue=${hidFatigueStr}) → ${concernLevel}`;
 
   return { concernLevel, compositeScore, sources, summary, escalationReasons, fatigueType };
 }

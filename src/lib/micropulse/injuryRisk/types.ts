@@ -52,4 +52,23 @@ export type InjuryRiskInput = {
    * "CAUTION" (110–134) or "HIGH" (≥135) signals accumulated risk.
    */
   residualMliBand?: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
+
+  // ── Deceleration-specific inputs (McBurnie et al. 2022) ──────────
+
+  /** Standalone decel burden score (0–1). ≥0.70 = high eccentric load. */
+  decelBurdenScore?: number;
+  /** Residual Decel band — 3-day accumulated deceleration stress. */
+  residualDecelBand?: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
+  /** Accel:decel ratio. <0.7 = eccentric-dominant (hamstring/calf risk). */
+  accelDecelRatio?: number;
+
+  // ── HID% fatigue trend (Harper et al. 2019) ────────────────────────
+
+  /**
+   * Relative HID% decline vs 7-day average (0–1 scale).
+   * ≥0.20 with stable total distance = neuromuscular fatigue signal.
+   */
+  hidDeclinePct?: number;
+  /** True when HID% fatigue conditions met (decline ≥20% + stable distance). */
+  hidFatigueFlag?: boolean;
 };
