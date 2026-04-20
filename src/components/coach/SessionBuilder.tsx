@@ -660,29 +660,108 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
   const [teamConstraints, setTeamConstraints] = useState<PlayerConstraintInput[]>([]);
   const [constraintsLoaded, setConstraintsLoaded] = useState(false);
 
+  // ── Readiness overview for non-green players ─────────────────────
+  type ReadinessOverviewPlayer = {
+    athleteId: string;
+    athleteName: string;
+    state: "YELLOW" | "RED" | "GRAY";
+    constraints: string[];
+    loadAdjustment: number | null;
+    coachSummary: string;
+  };
+  const [readinessOverviewPlayers, setReadinessOverviewPlayers] = useState<ReadinessOverviewPlayer[]>([]);
+
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
     (async () => {
       try {
+        // 1. Try API first
         const token = await getAuthToken();
-        if (!token || cancelled) return;
-        const res = await fetch(`/api/team/decisions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (cancelled) return;
-        const json = await res.json();
-        if (!res.ok || !json.players) return;
-
-        const constraints: PlayerConstraintInput[] = [];
-        for (const p of json.players as Array<{
+        let apiPlayers: Array<{
           athleteId: string;
           athleteName: string;
           state: string;
           constraints: string[];
           loadAdjustment: number | null;
-        }>) {
+          coachSummary?: string;
+        }> | null = null;
+
+        if (token) {
+          try {
+            const res = await fetch(`/api/team/decisions`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json().catch(() => ({}));
+            if (res.ok && json.players?.length > 0) {
+              apiPlayers = json.players;
+            }
+          } catch { /* API unavailable, fall through */ }
+        }
+
+        // 2. Fallback: fetch directly from Supabase v_player_today_decision
+        if (!apiPlayers && !cancelled) {
+          const supabase = getSupabaseClient();
+          let decisionRows: Record<string, unknown>[] | null = null;
+          const { data: rows } = await supabase
+            .from("v_player_today_decision")
+            .select("player_id, team_id, effective_readiness, coach_training_action")
+            .eq("team_id", teamId);
+          if (rows && rows.length > 0) {
+            decisionRows = rows as Record<string, unknown>[];
+          }
+
+          if (decisionRows && decisionRows.length > 0) {
+            // Get player names
+            const playerIds = decisionRows.map((r: Record<string, unknown>) => String(r.player_id));
+            const { data: playerNames } = await supabase
+              .from("players")
+              .select("id, full_name")
+              .in("id", playerIds);
+            const nameMap = new Map((playerNames ?? []).map((p: Record<string, unknown>) => [String(p.id), String(p.full_name ?? "")]));
+
+            apiPlayers = decisionRows.map((r: Record<string, unknown>) => {
+              const readiness = String(r.effective_readiness ?? "GREEN");
+              const action = String(r.coach_training_action ?? "");
+              const state = readiness === "YELLOW" ? "YELLOW" : readiness === "RED" ? "RED" : readiness === "GRAY" ? "GRAY" : "GREEN";
+              const constraints: string[] = [];
+              if (state === "YELLOW") { constraints.push("limit_total_volume", "avoid_max_intensity"); }
+              if (state === "RED") { constraints.push("recovery_only"); }
+              if (state === "GRAY") { constraints.push("technique_only"); }
+              return {
+                athleteId: String(r.player_id),
+                athleteName: nameMap.get(String(r.player_id)) ?? "?",
+                state,
+                constraints,
+                loadAdjustment: action === "REDUCED" ? -0.15 : null,
+                coachSummary: action === "REDUCED" ? "Reduced load" : "",
+              };
+            });
+          }
+        }
+
+        if (cancelled || !apiPlayers) {
+          if (!cancelled) setConstraintsLoaded(true);
+          return;
+        }
+
+        const constraints: PlayerConstraintInput[] = [];
+        const overviewPlayers: ReadinessOverviewPlayer[] = [];
+        for (const p of apiPlayers) {
           const state = p.state as "GREEN" | "YELLOW" | "RED" | "GRAY";
+
+          // Collect non-green players for readiness overview
+          if (state === "YELLOW" || state === "RED" || state === "GRAY") {
+            overviewPlayers.push({
+              athleteId: p.athleteId,
+              athleteName: p.athleteName,
+              state,
+              constraints: p.constraints ?? [],
+              loadAdjustment: p.loadAdjustment ?? null,
+              coachSummary: p.coachSummary ?? "",
+            });
+          }
+
           // Only include players with actual constraints (not all-green)
           if (
             state === "RED" ||
@@ -702,6 +781,7 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
         }
         if (!cancelled) {
           setTeamConstraints(constraints);
+          setReadinessOverviewPlayers(overviewPlayers);
           setConstraintsLoaded(true);
         }
       } catch {
@@ -997,6 +1077,11 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
           totals={totals}
           lang={lang}
         />
+      )}
+
+      {/* ═══ READINESS OVERVIEW: non-green players ═══ */}
+      {constraintsLoaded && readinessOverviewPlayers.length > 0 && (
+        <ReadinessOverviewPanel players={readinessOverviewPlayers} lang={lang} />
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
@@ -1877,6 +1962,157 @@ function DrillConflictSummaryBanner({ summary, lang }: { summary: TeamBlockConfl
               ? "Rauðir leikmenn með háálags-drillur — athugar þarf áður en samþykkt"
               : "RED players in high-load drills — review before proceeding"}
           </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Readiness Overview Panel ──────────────────────────────────────────────
+
+const CONSTRAINT_LABELS_IS: Record<string, string> = {
+  limit_total_volume: "Minnka magn",
+  avoid_max_intensity: "Forðast hámarksákefð",
+  limit_high_speed_running: "Takmarka háhraðahlaup",
+  limit_accel_decel_density: "Takmarka accel/decel",
+  avoid_eccentric_overload: "Forðast eccentric overload",
+  recovery_only: "Aðeins bati",
+  technique_only: "Aðeins tækni",
+  no_change: "Engin breyting",
+};
+
+const CONSTRAINT_LABELS_EN: Record<string, string> = {
+  limit_total_volume: "Reduce volume",
+  avoid_max_intensity: "Avoid max intensity",
+  limit_high_speed_running: "Limit high-speed running",
+  limit_accel_decel_density: "Limit accel/decel density",
+  avoid_eccentric_overload: "Avoid eccentric overload",
+  recovery_only: "Recovery only",
+  technique_only: "Technique only",
+  no_change: "No change",
+};
+
+function ReadinessOverviewPanel({
+  players,
+  lang,
+}: {
+  players: Array<{
+    athleteId: string;
+    athleteName: string;
+    state: "YELLOW" | "RED" | "GRAY";
+    constraints: string[];
+    loadAdjustment: number | null;
+    coachSummary: string;
+  }>;
+  lang: Lang;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const labels = lang === "IS" ? CONSTRAINT_LABELS_IS : CONSTRAINT_LABELS_EN;
+
+  const yellowCount = players.filter((p) => p.state === "YELLOW").length;
+  const redCount = players.filter((p) => p.state === "RED").length;
+  const grayCount = players.filter((p) => p.state === "GRAY").length;
+
+  const stateBadge = (state: "YELLOW" | "RED" | "GRAY") => {
+    if (state === "RED") return "bg-rose-100 text-rose-700 border-rose-200";
+    if (state === "YELLOW") return "bg-amber-100 text-amber-700 border-amber-200";
+    return "bg-slate-100 text-slate-500 border-slate-200";
+  };
+
+  const stateLabel = (state: "YELLOW" | "RED" | "GRAY") => {
+    if (state === "RED") return lang === "IS" ? "Rauður" : "Red";
+    if (state === "YELLOW") return lang === "IS" ? "Gulur" : "Yellow";
+    return lang === "IS" ? "Óviss" : "Unknown";
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/50 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-2.5"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-base">⚠</span>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-slate-900">
+              {lang === "IS" ? "Readiness — aðlögun þarf" : "Readiness — adjustments needed"}
+            </div>
+            <div className="text-[11px] text-slate-600">
+              {yellowCount > 0 && (
+                <span className="inline-flex items-center gap-1 mr-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                  {yellowCount} {lang === "IS" ? "gulir" : "yellow"}
+                </span>
+              )}
+              {redCount > 0 && (
+                <span className="inline-flex items-center gap-1 mr-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-rose-500" />
+                  {redCount} {lang === "IS" ? "rauðir" : "red"}
+                </span>
+              )}
+              {grayCount > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
+                  {grayCount} {lang === "IS" ? "óvissir" : "unknown"}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <span className="text-xs text-slate-400">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-amber-200 px-4 py-2.5">
+          <div className="space-y-1.5">
+            {players.map((p) => (
+              <div
+                key={p.athleteId}
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+              >
+                {/* State badge */}
+                <span
+                  className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${stateBadge(p.state)}`}
+                >
+                  {stateLabel(p.state)}
+                </span>
+
+                {/* Player name */}
+                <span className="min-w-[120px] text-sm font-medium text-slate-900">
+                  {p.athleteName}
+                </span>
+
+                {/* Load adjustment */}
+                {p.loadAdjustment != null && p.loadAdjustment < 0 && (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-amber-800">
+                    {Math.round(p.loadAdjustment * 100)}%
+                  </span>
+                )}
+
+                {/* Constraints */}
+                <div className="flex flex-wrap gap-1">
+                  {p.constraints
+                    .filter((c) => c !== "no_change")
+                    .map((c) => (
+                      <span
+                        key={c}
+                        className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+                      >
+                        {labels[c] ?? c}
+                      </span>
+                    ))}
+                </div>
+
+                {/* Coach summary (truncated) */}
+                {p.coachSummary && (
+                  <span className="ml-auto text-[10px] text-slate-500 truncate max-w-[250px]" title={p.coachSummary}>
+                    {p.coachSummary}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

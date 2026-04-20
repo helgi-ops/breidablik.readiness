@@ -132,6 +132,7 @@ async function requireCoachContext(req: Request): Promise<{ teamId: string }> {
 }
 
 async function fetchCoachRows(sb: ReturnType<typeof getAdminClient>, teamId: string, date: string): Promise<CoachRow[]> {
+  // Try team_id first (standard column name)
   const query = sb
     .from("v_coach_readiness_today_v8")
     .select("*")
@@ -141,11 +142,24 @@ async function fetchCoachRows(sb: ReturnType<typeof getAdminClient>, teamId: str
     .order("full_name", { ascending: true });
 
   const { data, error } = await query;
-  if (!error) return (data ?? []) as CoachRow[];
+  if (!error && data && data.length > 0) return data as CoachRow[];
 
+  // If no rows, the view column may be "team" instead of "team_id"
+  if (!error && data && data.length === 0) {
+    const alt = await sb
+      .from("v_coach_readiness_today_v8")
+      .select("*")
+      .eq("entry_date", date)
+      .eq("team", teamId)
+      .order("total_score", { ascending: true })
+      .order("full_name", { ascending: true });
+    if (!alt.error && alt.data && alt.data.length > 0) return alt.data as CoachRow[];
+  }
+
+  // Fallback: view column may be "team" instead of "team_id"
   const fallback = await sb.from("v_coach_readiness_today_v8").select("*").eq("entry_date", date).order("total_score", { ascending: true }).order("full_name", { ascending: true });
   if (fallback.error) throw fallback.error;
-  return ((fallback.data ?? []) as CoachRow[]).filter((row) => String(row.team_id ?? "") === teamId);
+  return ((fallback.data ?? []) as CoachRow[]).filter((row) => String(row.team_id ?? (row as Record<string, unknown>).team ?? "") === teamId);
 }
 
 async function fetchTrainingModifiers(
