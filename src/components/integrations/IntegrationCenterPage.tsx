@@ -23,6 +23,7 @@ import ImportHistoryPanel from "./ImportHistoryPanel";
 import ImportConflictPanel from "./ImportConflictPanel";
 import ManualImportPanel from "./ManualImportPanel";
 import LiveIntegrationCenterPage from "@/components/integrationsLive/LiveIntegrationCenterPage";
+import CatapultSetupWizard from "./CatapultSetupWizard";
 import { buildRealtimeDomainEvent, publishRealtimeEvent, useIntegrationRealtime } from "@/lib/micropulse/realtime";
 import LiveStatusBanner from "@/components/realtime/LiveStatusBanner";
 import ActivityFeedPanel from "@/components/realtime/ActivityFeedPanel";
@@ -191,6 +192,7 @@ export default function IntegrationCenterPage() {
         </div>
       </div>
 
+      <CatapultSetupWizard />
       <IntegrationConnectionsPanel descriptors={descriptors} connections={state.connections} onToggleEnabled={toggleConnectionEnabled} />
       <LiveStatusBanner health={integrationRealtime.summary} label="Live integration updates" />
       <IntegrationStatusTable connections={state.connections} imports={state.imports} conflicts={state.conflicts} summary={statusSummary} />

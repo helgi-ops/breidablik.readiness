@@ -105,13 +105,16 @@ export const CATAPULT_FMP_PARAMETERS = [
   "FMP Total Running Duration Average (Session)",
 ];
 
-type CatapultConfig = {
+export type CatapultConfig = {
   baseUrl: string;
   apiKey: string;
   orgId: string;
+  teamId?: string; // MicroPulse team_id (for logging/context)
 };
 
 type JsonObject = Record<string, unknown>;
+
+const DEFAULT_BASE_URL = "https://backend-eu.openfield.catapultsports.com";
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -119,12 +122,89 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function getConfig(): CatapultConfig {
+/** Legacy: read Catapult credentials from environment variables */
+export function getConfigFromEnv(): CatapultConfig {
   return {
-    baseUrl: (process.env.CATAPULT_API_BASE?.trim() || "https://backend-eu.openfield.catapultsports.com").replace(/\/+$/, ""),
+    baseUrl: (process.env.CATAPULT_API_BASE?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
     apiKey: requiredEnv("CATAPULT_API_KEY"),
     orgId: requiredEnv("CATAPULT_ORG_ID"),
   };
+}
+
+/**
+ * Read Catapult credentials for a specific team from team_settings.
+ * Falls back to env vars if no DB credentials found.
+ */
+export async function getConfigForTeam(teamId: string): Promise<CatapultConfig | null> {
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
+    const { data } = await sb
+      .from("team_settings")
+      .select("catapult_api_key, catapult_org_id, catapult_api_base")
+      .eq("team_id", teamId)
+      .maybeSingle();
+    const row = data as { catapult_api_key?: string | null; catapult_org_id?: string | null; catapult_api_base?: string | null } | null;
+    if (row?.catapult_api_key && row?.catapult_org_id) {
+      return {
+        baseUrl: (row.catapult_api_base?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
+        apiKey: row.catapult_api_key.trim(),
+        orgId: row.catapult_org_id.trim(),
+        teamId,
+      };
+    }
+  } catch {
+    // DB unavailable — fall through
+  }
+  return null;
+}
+
+/**
+ * Fetch all teams that have Catapult credentials configured in team_settings.
+ */
+export async function getTeamsWithCatapultCredentials(): Promise<CatapultConfig[]> {
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
+    const { data } = await sb
+      .from("team_settings")
+      .select("team_id, catapult_api_key, catapult_org_id, catapult_api_base")
+      .not("catapult_api_key", "is", null)
+      .not("catapult_org_id", "is", null);
+    if (!data) return [];
+    return (data as Array<{ team_id: string; catapult_api_key: string; catapult_org_id: string; catapult_api_base?: string | null }>)
+      .filter(r => r.catapult_api_key && r.catapult_org_id)
+      .map(r => ({
+        baseUrl: (r.catapult_api_base?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
+        apiKey: r.catapult_api_key.trim(),
+        orgId: r.catapult_org_id.trim(),
+        teamId: r.team_id,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ── Module-level config override for multi-team sync ──────────────
+// Set before calling fetch functions to route requests to the right org.
+let _activeConfig: CatapultConfig | null = null;
+
+/** Set the active Catapult config for subsequent API calls. Pass null to reset to env vars. */
+export function setActiveCatapultConfig(config: CatapultConfig | null): void {
+  _activeConfig = config;
+}
+
+function getConfig(): CatapultConfig {
+  if (_activeConfig) return _activeConfig;
+  return getConfigFromEnv();
 }
 
 function asRecord(value: unknown): JsonObject | null {

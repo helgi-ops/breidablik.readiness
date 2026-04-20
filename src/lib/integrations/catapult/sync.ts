@@ -1,7 +1,8 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes } from "./api";
+import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes, setActiveCatapultConfig } from "./api";
+import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, toNormalizedExternalLoad } from "./normalize";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
@@ -236,6 +237,24 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
 }
 
 export async function syncCatapultDailyMetrics(
+  inputDate?: string | null,
+  options?: { debugIma?: boolean; config?: CatapultConfig }
+): Promise<CatapultSyncResult> {
+  // Set active config for this sync run (multi-team support)
+  if (options?.config) {
+    setActiveCatapultConfig(options.config);
+  }
+  try {
+    return await _syncCatapultDailyMetricsInner(inputDate, options);
+  } finally {
+    // Always reset config after sync to avoid leaking between teams
+    if (options?.config) {
+      setActiveCatapultConfig(null);
+    }
+  }
+}
+
+async function _syncCatapultDailyMetricsInner(
   inputDate?: string | null,
   options?: { debugIma?: boolean }
 ): Promise<CatapultSyncResult> {

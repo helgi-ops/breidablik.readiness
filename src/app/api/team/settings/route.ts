@@ -94,6 +94,17 @@ export async function PATCH(req: Request) {
       updates.notes = body.notes;
     }
 
+    // Catapult integration credentials
+    if (typeof body.catapult_api_key === "string" || body.catapult_api_key === null) {
+      updates.catapult_api_key = body.catapult_api_key;
+    }
+    if (typeof body.catapult_org_id === "string" || body.catapult_org_id === null) {
+      updates.catapult_org_id = body.catapult_org_id;
+    }
+    if (typeof body.catapult_api_base === "string" || body.catapult_api_base === null) {
+      updates.catapult_api_base = body.catapult_api_base;
+    }
+
     const { data, error } = await sb
       .from("team_settings")
       .upsert(
