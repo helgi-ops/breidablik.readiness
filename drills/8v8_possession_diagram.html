@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8v8 Possession — MicroPulse</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a1628;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .container {
+    width: 860px;
+    background: #0d1f3c;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #0f2847 0%, #132d4f 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .header h1 {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .header h1 span { color: #34d399; }
+  .header .meta {
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    text-align: right;
+    line-height: 1.5;
+  }
+
+  /* Info bar */
+  .info-bar {
+    display: flex;
+    gap: 0;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .info-bar .item {
+    flex: 1;
+    padding: 10px 16px;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    text-align: center;
+  }
+  .info-bar .item:last-child { border-right: none; }
+  .info-bar .label {
+    color: rgba(255,255,255,0.4);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+  }
+  .info-bar .value {
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .info-bar .value.green { color: #34d399; }
+
+  /* Pitch */
+  .pitch-wrap { padding: 20px; }
+  svg text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Focus areas */
+  .focus-bar {
+    display: flex;
+    gap: 10px;
+    padding: 12px 24px 16px;
+    justify-content: center;
+  }
+  .focus-tag {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 6px 16px;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .focus-tag.primary {
+    background: rgba(52,211,153,0.12);
+    border-color: rgba(52,211,153,0.3);
+    color: #34d399;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 20px;
+    padding: 0 24px 16px;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header" style="justify-content: center; text-align: center;">
+    <h1><span>Micro</span>Pulse — 8v8 Possession</h1>
+  </div>
+
+  <!-- Info bar -->
+  <div class="info-bar">
+    <div class="item">
+      <div class="label">Format</div>
+      <div class="value">8v8</div>
+    </div>
+    <div class="item">
+      <div class="label">Leikmenn</div>
+      <div class="value">16</div>
+    </div>
+    <div class="item">
+      <div class="label">Tími</div>
+      <div class="value">10–15 mín bouts</div>
+    </div>
+    <div class="item">
+      <div class="label">Stimulus</div>
+      <div class="value green">Mixed</div>
+    </div>
+    <div class="item">
+      <div class="label">HSR</div>
+      <div class="value">52 m</div>
+    </div>
+    <div class="item">
+      <div class="label">Acc+Dec</div>
+      <div class="value">16</div>
+    </div>
+  </div>
+
+  <!-- Focus tags -->
+  <div class="focus-bar">
+    <div class="focus-tag primary">Gagnstætt svæði</div>
+    <div class="focus-tag primary">Varnarshift</div>
+  </div>
+
+  <!-- Pitch SVG -->
+  <div class="pitch-wrap">
+    <svg viewBox="0 0 820 580" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Pitch grass stripes -->
+        <linearGradient id="grass" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#2d6b30"/>
+          <stop offset="7.7%" stop-color="#2d6b30"/>
+          <stop offset="7.7%" stop-color="#327034"/>
+          <stop offset="15.4%" stop-color="#327034"/>
+          <stop offset="15.4%" stop-color="#2d6b30"/>
+          <stop offset="23.1%" stop-color="#2d6b30"/>
+          <stop offset="23.1%" stop-color="#327034"/>
+          <stop offset="30.8%" stop-color="#327034"/>
+          <stop offset="30.8%" stop-color="#2d6b30"/>
+          <stop offset="38.5%" stop-color="#2d6b30"/>
+          <stop offset="38.5%" stop-color="#327034"/>
+          <stop offset="46.2%" stop-color="#327034"/>
+          <stop offset="46.2%" stop-color="#2d6b30"/>
+          <stop offset="53.9%" stop-color="#2d6b30"/>
+          <stop offset="53.9%" stop-color="#327034"/>
+          <stop offset="61.5%" stop-color="#327034"/>
+          <stop offset="61.5%" stop-color="#2d6b30"/>
+          <stop offset="69.2%" stop-color="#2d6b30"/>
+          <stop offset="69.2%" stop-color="#327034"/>
+          <stop offset="76.9%" stop-color="#327034"/>
+          <stop offset="76.9%" stop-color="#2d6b30"/>
+          <stop offset="84.6%" stop-color="#2d6b30"/>
+          <stop offset="84.6%" stop-color="#327034"/>
+          <stop offset="92.3%" stop-color="#327034"/>
+          <stop offset="92.3%" stop-color="#2d6b30"/>
+          <stop offset="100%" stop-color="#2d6b30"/>
+        </linearGradient>
+
+        <!-- Player shadow -->
+        <filter id="shadow">
+          <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/>
+        </filter>
+
+        <!-- Goal net pattern -->
+        <pattern id="net" x="0" y="0" width="5" height="5" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="5" y2="5" stroke="rgba(255,255,255,0.35)" stroke-width="0.5"/>
+          <line x1="5" y1="0" x2="0" y2="5" stroke="rgba(255,255,255,0.35)" stroke-width="0.5"/>
+        </pattern>
+      </defs>
+
+      <!-- Pitch background -->
+      <rect x="0" y="0" width="820" height="580" rx="8" fill="url(#grass)"/>
+
+      <!-- ====== PITCH MARKINGS (faded, contextual) ====== -->
+      <!-- Outer touchlines (full pitch context, faded) -->
+      <rect x="20" y="20" width="780" height="540" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+
+      <!-- Center line (faded) -->
+      <line x1="410" y1="20" x2="410" y2="560" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+      <!-- Center circle (faded) -->
+      <circle cx="410" cy="290" r="58" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+      <!-- Left penalty area (faded, for context) -->
+      <rect x="20" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+      <rect x="20" y="210" width="38" height="160" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+      <!-- Left penalty arc -->
+      <path d="M 115 245 A 40 40 0 0 1 115 335" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+      <!-- Right penalty area -->
+      <rect x="705" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      <rect x="762" y="210" width="38" height="160" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      <!-- Right penalty arc -->
+      <path d="M 705 245 A 40 40 0 0 0 705 335" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+      <!-- ====== DRILL ZONE BOUNDARIES ====== -->
+      <!-- Outer solid horizontal lines (top & bottom of playing area) -->
+      <line x1="170" y1="55" x2="790" y2="55" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+      <line x1="170" y1="525" x2="790" y2="525" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+
+      <!-- Inner dotted horizontal lines (narrower zone) -->
+      <line x1="170" y1="95" x2="790" y2="95" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-dasharray="6,5"/>
+      <line x1="170" y1="485" x2="790" y2="485" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-dasharray="6,5"/>
+
+      <!-- ONE vertical dotted center divider -->
+      <line x1="480" y1="55" x2="480" y2="525" stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-dasharray="8,6"/>
+
+      <!-- ====== GOALS ====== -->
+      <!-- Left side: two mini goals -->
+      <rect x="158" y="208" width="14" height="34" fill="url(#net)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" rx="1"/>
+      <rect x="158" y="338" width="14" height="34" fill="url(#net)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" rx="1"/>
+
+      <!-- Right side: full goal -->
+      <rect x="792" y="245" width="16" height="90" fill="url(#net)" stroke="rgba(255,255,255,0.7)" stroke-width="2" rx="1"/>
+
+      <!-- ====== TITLE ====== -->
+      <text x="490" y="42" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="16" font-weight="700" letter-spacing="0.5">8v8 possession</text>
+
+      <!-- ====== BLUE TEAM (8 players) ====== -->
+      <!-- Matching reference image positions - blue spread across left & center -->
+
+      <!-- Top left -->
+      <ellipse cx="265" cy="110" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Left wing (near mini goal top) -->
+      <ellipse cx="205" cy="255" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Left lower (near mini goal bottom) -->
+      <ellipse cx="210" cy="440" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Center-left upper -->
+      <ellipse cx="390" cy="235" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Center-left lower -->
+      <ellipse cx="380" cy="335" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Center-right upper -->
+      <ellipse cx="540" cy="210" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Right-center -->
+      <ellipse cx="560" cy="365" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Bottom -->
+      <ellipse cx="345" cy="500" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- ====== GREEN TEAM (8 players) ====== -->
+      <!-- Matching reference image - green spread across center & right -->
+
+      <!-- Top center -->
+      <ellipse cx="445" cy="110" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Upper-left mid -->
+      <ellipse cx="330" cy="195" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Center -->
+      <ellipse cx="490" cy="280" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Center lower -->
+      <ellipse cx="505" cy="340" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Right upper -->
+      <ellipse cx="670" cy="170" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Right center -->
+      <ellipse cx="680" cy="430" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Lower mid -->
+      <ellipse cx="355" cy="380" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- Bottom -->
+      <ellipse cx="555" cy="500" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#shadow)"/>
+
+      <!-- ====== BRANDING ====== -->
+      <text x="490" y="565" text-anchor="middle" fill="rgba(255,255,255,0.08)" font-size="32" font-weight="800" letter-spacing="6">MICROPULSE</text>
+
+    </svg>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#3b82f6;"></div>
+      Lið A (blátt)
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#22c55e;"></div>
+      Lið B (grænt)
+    </div>
+    <div class="legend-item">
+      <svg width="20" height="12" style="vertical-align:middle"><rect x="1" y="1" width="18" height="10" fill="url(#net2)" stroke="rgba(255,255,255,0.5)" stroke-width="1" rx="1"/></svg>
+      Smámörk / Mörk
+    </div>
+    <div class="legend-item">
+      <svg width="24" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-dasharray="4,3"/></svg>
+      Svæðislína
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

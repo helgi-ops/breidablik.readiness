@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MicroPulse – RPE Discrepancy UI Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; padding: 24px; color: #0f172a; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+  .cards { display: flex; flex-direction: column; gap: 16px; max-width: 820px; margin: 0 auto; }
+
+  /* Player card */
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .player-name { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; color: #0f172a; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+  /* Badge base */
+  .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 4px 12px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+
+  /* Score badges */
+  .badge-green { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+  .badge-green .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+  .badge-yellow { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+  .badge-yellow .dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+  .badge-red { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .badge-red .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+
+  /* MD badge */
+  .badge-slate { background: #f8fafc; border-color: #e2e8f0; color: #475569; font-weight: 500; }
+
+  /* RPE discrepancy badges */
+  .badge-rpe-significant { background: #fef2f2; border-color: #fecaca; color: #b91c1c; font-weight: 700; }
+  .badge-rpe-notable { background: #fffbeb; border-color: #fde68a; color: #92400e; font-weight: 600; }
+
+  /* Load badges */
+  .badge-load-high { background: #fef2f2; border-color: #fecaca; color: #b91c1c; font-weight: 700; }
+  .badge-load-moderate { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: 600; }
+
+  /* Notes badge */
+  .badge-notes { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; font-weight: 600; }
+
+  /* Sore areas badge */
+  .badge-sore { background: #fef2f2; border-color: #fecaca; color: #b91c1c; font-weight: 600; }
+
+  /* Locked badge */
+  .badge-locked { background: #f1f5f9; border-color: #e2e8f0; color: #475569; font-weight: 500; }
+
+  /* Action pills */
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .action-btn { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; cursor: pointer; }
+  .action-btn:hover { background: #f1f5f9; }
+
+  /* Explanation row */
+  .explanation { margin-top: 12px; padding: 10px 14px; background: #fefce8; border: 1px solid #fde68a; border-radius: 10px; font-size: 12px; color: #854d0e; display: flex; align-items: flex-start; gap: 8px; }
+  .explanation.red { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .explanation-icon { flex-shrink: 0; margin-top: 1px; }
+
+  /* Annotation callouts */
+  .annotation { margin-top: 8px; padding: 10px 16px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 0 8px 8px 0; font-size: 12px; color: #1e40af; }
+  .annotation strong { font-weight: 700; }
+
+  /* Section label */
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 10px; margin-top: 24px; }
+  .section-label:first-child { margin-top: 0; }
+
+  /* Header bar */
+  .header-bar { background: #1e3a8a; color: white; padding: 16px 24px; border-radius: 12px; margin-bottom: 20px; max-width: 820px; margin-left: auto; margin-right: auto; }
+  .header-bar h1 { color: white; font-size: 16px; }
+  .header-bar .subtitle { color: #93c5fd; margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<div class="header-bar">
+  <h1>Coach Today – RPE Discrepancy dæmi</h1>
+  <div class="subtitle">Svona líta RPE viðvaranir út á leikmannakortum</div>
+</div>
+
+<div class="cards">
+
+  <!-- SECTION: Normal -->
+  <div class="section-label">Dæmi 1 – Eðlilegt ástand (ekkert RPE misræmi)</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Aron Þór Sigurðsson</div>
+        <div class="badges">
+          <span class="badge badge-green"><span class="dot"></span> 82</span>
+          <span class="badge badge-slate">MD-2</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation">Ekkert RPE merki – RPE leikmans er í samræmi við lið og GPS. Allt í lagi.</div>
+  </div>
+
+  <!-- SECTION: Notable (amber) -->
+  <div class="section-label">Dæmi 2 – Notable misræmi (delta 2.0–3.5)</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Kristján Örn Sigurðsson</div>
+        <div class="badges">
+          <span class="badge badge-yellow"><span class="dot"></span> 64</span>
+          <span class="badge badge-slate">MD-1</span>
+          <span class="badge badge-rpe-notable">RPE ↑ vs lið</span>
+        </div>
+      </div>
+    </div>
+    <div class="explanation">
+      <span class="explanation-icon">⚡</span>
+      <span>RPE 2.5 stig yfir miðgildi liðs – leikmaður upplifði æfinguna erfiðari en liðsfélagar. Skoða líðan.</span>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation"><strong>RPE ↑ vs lið</strong> (gult) – Athyglisvert. Leikmaður gaf RPE 8, miðgildi liðs var 5.5. Delta = +2.5. Yfir 2.0 þröskuldi en undir 3.5.</div>
+  </div>
+
+  <!-- SECTION: Notable underreport -->
+  <div class="section-label">Dæmi 3 – Notable underreport (leikmaður gefur lægra en liðið)</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Daníel Grétarsson</div>
+        <div class="badges">
+          <span class="badge badge-green"><span class="dot"></span> 76</span>
+          <span class="badge badge-slate">MD-3</span>
+          <span class="badge badge-rpe-notable">RPE ↓ vs lið</span>
+        </div>
+      </div>
+    </div>
+    <div class="explanation">
+      <span class="explanation-icon">⚡</span>
+      <span>RPE 2.2 stig undir miðgildi liðs – leikmaður upplifði æfinguna auðveldari en liðsfélagar. Gæti bent til vanmats.</span>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation"><strong>RPE ↓ vs lið</strong> (gult) – Leikmaður gaf RPE 4, miðgildi liðs var 6.2. Delta = −2.2. Hugsanlega vanmetur þreytu.</div>
+  </div>
+
+  <!-- SECTION: Significant (red) -->
+  <div class="section-label">Dæmi 4 – Significant misræmi (delta > 3.5) 🔴</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Viktor Bjarki Hannsson</div>
+        <div class="badges">
+          <span class="badge badge-red"><span class="dot"></span> 41</span>
+          <span class="badge badge-slate">MD-2</span>
+          <span class="badge badge-load-high">⚠ Load há</span>
+          <span class="badge badge-rpe-significant">⚠ RPE ↑↑ vs lið</span>
+        </div>
+      </div>
+    </div>
+    <div class="explanation red">
+      <span class="explanation-icon">🚨</span>
+      <span>RPE 4.0 stig yfir miðgildi liðs – verulegur munur. Ræða við leikmann um líðan, svefn eða veikindi.</span>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation"><strong>⚠ RPE ↑↑ vs lið</strong> (rautt) – Verulegt! Leikmaður gaf RPE 9, miðgildi liðs var 5.0. Delta = +4.0. Yfir 3.5 þröskuldi. Þjálfari þarf að bregðast við.</div>
+  </div>
+
+  <!-- SECTION: Significant underreport -->
+  <div class="section-label">Dæmi 5 – Significant underreport 🔴</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Birkir Már Sævarsson</div>
+        <div class="badges">
+          <span class="badge badge-yellow"><span class="dot"></span> 58</span>
+          <span class="badge badge-slate">MD-1</span>
+          <span class="badge badge-rpe-significant">⚠ RPE ↓↓ vs lið</span>
+        </div>
+      </div>
+    </div>
+    <div class="explanation red">
+      <span class="explanation-icon">🚨</span>
+      <span>RPE 4.5 stig undir miðgildi liðs – leikmaður gefur markvert lægra RPE en allir aðrir. Gæti vanmetið eigin þreytu verulega.</span>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation"><strong>⚠ RPE ↓↓ vs lið</strong> (rautt) – Leikmaður gaf RPE 3, miðgildi liðs var 7.5. Delta = −4.5. Mjög óvenjulegt – þjálfari ætti að ræða við leikmand.</div>
+  </div>
+
+  <!-- SECTION: Multiple badges -->
+  <div class="section-label">Dæmi 6 – Mörg merki saman (eins og raunverulegt kort gæti litið út)</div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="player-name">Guðmundur Ólafsson</div>
+        <div class="badges">
+          <span class="badge badge-red"><span class="dot"></span> 38</span>
+          <span class="badge badge-slate">MD-1</span>
+          <span class="badge badge-load-high">⚠ Load há</span>
+          <span class="badge badge-rpe-significant">⚠ RPE ↑↑ vs lið</span>
+          <span class="badge badge-sore">Sár svæði (2)</span>
+          <span class="badge badge-notes">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
+            Athugasemd
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="explanation red">
+      <span class="explanation-icon">🚨</span>
+      <span>RPE 3.8 stig yfir miðgildi liðs · GPS-álag hátt · 2 sár svæði tilkynnt. Þjálfari þarf að meta hvort ætti að draga úr álagi á morgun.</span>
+    </div>
+    <div class="actions">
+      <button class="action-btn">📊 Saga</button>
+      <button class="action-btn">💬 Athugasemd</button>
+      <button class="action-btn">🔒 Læsa</button>
+    </div>
+    <div class="annotation">Svona gæti raunverulegt kort litið út þegar margt kemur saman. Þjálfari sér allar viðvaranir í einum augnaráð.</div>
+  </div>
+
+</div>
+
+<div style="max-width:820px;margin:32px auto 0;padding:16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+  <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Samantekt merkja</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px;">
+    <span class="badge badge-rpe-notable">RPE ↑ vs lið</span> <span style="color:#64748b;font-size:12px;padding-top:3px">= Notable hækkun (Δ 2.0–3.5)</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px;margin-top:6px;">
+    <span class="badge badge-rpe-notable">RPE ↓ vs lið</span> <span style="color:#64748b;font-size:12px;padding-top:3px">= Notable lækkun (Δ 2.0–3.5)</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px;margin-top:6px;">
+    <span class="badge badge-rpe-significant">⚠ RPE ↑↑ vs lið</span> <span style="color:#64748b;font-size:12px;padding-top:3px">= Significant hækkun (Δ > 3.5)</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px;margin-top:6px;">
+    <span class="badge badge-rpe-significant">⚠ RPE ↓↓ vs lið</span> <span style="color:#64748b;font-size:12px;padding-top:3px">= Significant lækkun (Δ > 3.5)</span>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10v10+4 Possession 65×43 — Tactical Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; color: #fff; padding: 20px; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; letter-spacing: 1px; }
+  .subtitle { font-size: 0.85rem; color: #8888aa; margin-bottom: 16px; }
+  .pitch-container { position: relative; width: 720px; height: 476px; background: #2d8a4e; border-radius: 8px; overflow: hidden; border: 3px solid #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  /* Pitch markings */
+  .pitch-container::before { content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: 100%; background: rgba(255,255,255,0.35); }
+  .center-circle { position: absolute; left: 50%; top: 50%; width: 100px; height: 100px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%,-50%); }
+  .center-dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; background: rgba(255,255,255,0.4); border-radius: 50%; transform: translate(-50%,-50%); }
+  /* Pitch grass stripes */
+  .grass-stripe { position: absolute; top: 0; height: 100%; background: rgba(255,255,255,0.03); }
+  .gs1 { left: 0; width: 14.28%; }
+  .gs3 { left: 28.56%; width: 14.28%; }
+  .gs5 { left: 57.12%; width: 14.28%; }
+  .gs7 { left: 85.68%; width: 14.32%; }
+  /* Dimension labels */
+  .dim-label { position: absolute; font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; }
+  .dim-top { top: 4px; left: 50%; transform: translateX(-50%); }
+  .dim-side { left: 4px; top: 50%; transform: rotate(-90deg) translateX(-50%); transform-origin: left center; }
+  /* Players */
+  .player { position: absolute; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; transition: left 1.8s ease-in-out, top 1.8s ease-in-out; z-index: 2; cursor: default; }
+  .player::after { content: attr(data-label); position: absolute; bottom: -14px; font-size: 8px; white-space: nowrap; color: rgba(255,255,255,0.7); font-weight: 500; }
+  .team-a { background: #e63946; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(230,57,70,0.5); }
+  .team-b { background: #457b9d; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(69,123,157,0.5); }
+  .joker { background: #f4a261; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(244,162,97,0.6); }
+  /* Ball */
+  .ball { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 1px solid #ccc; z-index: 3; transition: left 1.2s ease-in-out, top 1.2s ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+  /* Pass lines */
+  .pass-line { position: absolute; z-index: 1; pointer-events: none; }
+  .pass-line line { stroke: rgba(255,255,255,0.4); stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .pass-line line.active { stroke: #ffd166; stroke-width: 2; stroke-dasharray: none; animation: passGlow 1.5s ease-in-out infinite; }
+  @keyframes passGlow { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+  /* Legend */
+  .legend { display: flex; gap: 24px; margin-top: 16px; font-size: 0.8rem; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; }
+  .legend-dot.red { background: #e63946; }
+  .legend-dot.blue { background: #457b9d; }
+  .legend-dot.orange { background: #f4a261; }
+  /* Controls */
+  .controls { display: flex; gap: 12px; margin-top: 16px; }
+  .btn { padding: 8px 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff; font-size: 0.85rem; cursor: pointer; transition: background 0.2s; }
+  .btn:hover { background: rgba(255,255,255,0.2); }
+  .btn.active { background: #e63946; border-color: #e63946; }
+  /* Info panel */
+  .info { max-width: 720px; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px 20px; font-size: 0.82rem; line-height: 1.6; color: #ccc; }
+  .info h3 { color: #f4a261; margin-bottom: 6px; font-size: 0.95rem; }
+  .phase-indicator { position: absolute; top: 10px; right: 12px; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; z-index: 5; color: #ffd166; }
+</style>
+</head>
+<body>
+
+<h1>10v10+4 POSSESSION 65×43</h1>
+<p class="subtitle">Breiðablik UBK — Drill Library · Taktísk hreyfimynd</p>
+
+<div class="pitch-container" id="pitch">
+  <div class="grass-stripe gs1"></div>
+  <div class="grass-stripe gs3"></div>
+  <div class="grass-stripe gs5"></div>
+  <div class="grass-stripe gs7"></div>
+  <div class="center-circle"></div>
+  <div class="center-dot"></div>
+  <div class="dim-label dim-top">65 m</div>
+  <div class="dim-label dim-side">43 m</div>
+  <div class="phase-indicator" id="phase-label">Fasi 1: Uppbygging</div>
+
+  <!-- Pass lines SVG -->
+  <svg class="pass-line" id="pass-svg" width="720" height="476" style="position:absolute;top:0;left:0;"></svg>
+
+  <!-- Ball -->
+  <div class="ball" id="ball"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot red"></div> Lið A (rautt)</div>
+  <div class="legend-item"><div class="legend-dot blue"></div> Lið B (blátt)</div>
+  <div class="legend-item"><div class="legend-dot orange"></div> Jokers (+4)</div>
+</div>
+
+<div class="controls">
+  <button class="btn active" onclick="setSpeed(1)">1× Hraði</button>
+  <button class="btn" onclick="setSpeed(2)">2× Hraði</button>
+  <button class="btn" onclick="togglePause()">⏸ Pása</button>
+  <button class="btn" onclick="resetAnimation()">↺ Byrja aftur</button>
+</div>
+
+<div class="info">
+  <h3>Um æfinguna</h3>
+  <p>Tvö 10 manna lið keppa um boltatöku á 65×43 m velli. 4 jokers (appelsínugulir) eru <strong>fastir á vallarbrúnum</strong> — einn á hverri hlið. Þeir spila alltaf með sóknarliðinu og gefa <strong>14 gegn 10 yfirburð í sókn</strong>. Þegar boltinn er tekinn snúast hlutverkin — jokers þurfa ekki að hreyfa sig, þeir spila bara með nýja sóknarliðinu. Leikmenn taka raunhæfar stöður (varnarlið, miðjumenn, sóknarlið) til að þjálfa stöðuvitund og sendingamynstur undir léttu álagi (~75.8% HRmax). Hentar vel sem taktískt álag á MD-2 eða MD-1.</p>
+</div>
+
+<script>
+const pitch = document.getElementById('pitch');
+const ballEl = document.getElementById('ball');
+const phaseLbl = document.getElementById('phase-label');
+const passSvg = document.getElementById('pass-svg');
+
+// Pitch dimensions in pixels
+const PW = 720, PH = 476;
+
+// Team A (red) - 10 players: positions based on 4-3-3
+const teamA_phases = [
+  // Phase 1: Team A in possession, building from back
+  [
+    {x:60,y:238},{x:160,y:100},{x:160,y:190},{x:160,y:290},{x:160,y:380},
+    {x:300,y:140},{x:300,y:238},{x:300,y:340},
+    {x:440,y:100},{x:440,y:238},{x:440,y:380}
+  ],
+  // Phase 2: Team A circulates to right side
+  [
+    {x:70,y:238},{x:180,y:80},{x:180,y:180},{x:180,y:300},{x:180,y:400},
+    {x:320,y:120},{x:310,y:250},{x:320,y:360},
+    {x:460,y:120},{x:470,y:238},{x:460,y:360}
+  ],
+  // Phase 3: Ball lost, Team A defends
+  [
+    {x:80,y:238},{x:200,y:120},{x:200,y:200},{x:200,y:280},{x:200,y:370},
+    {x:320,y:160},{x:330,y:238},{x:320,y:320},
+    {x:420,y:150},{x:430,y:238},{x:420,y:340}
+  ],
+  // Phase 4: Team A pressing to regain
+  [
+    {x:90,y:238},{x:220,y:110},{x:220,y:200},{x:220,y:290},{x:220,y:380},
+    {x:360,y:150},{x:370,y:238},{x:360,y:330},
+    {x:480,y:140},{x:490,y:238},{x:480,y:350}
+  ]
+];
+
+// Team B (blue) - 10 players
+const teamB_phases = [
+  // Phase 1: Team B defending
+  [
+    {x:660,y:238},{x:560,y:100},{x:560,y:190},{x:560,y:290},{x:560,y:380},
+    {x:480,y:140},{x:480,y:238},{x:480,y:340},
+    {x:380,y:100},{x:380,y:238},{x:380,y:380}
+  ],
+  // Phase 2: pressing right side
+  [
+    {x:650,y:238},{x:540,y:90},{x:540,y:180},{x:540,y:300},{x:540,y:400},
+    {x:460,y:160},{x:450,y:250},{x:460,y:340},
+    {x:370,y:140},{x:380,y:260},{x:370,y:380}
+  ],
+  // Phase 3: Team B gains possession, builds up
+  [
+    {x:640,y:238},{x:520,y:100},{x:520,y:200},{x:520,y:290},{x:520,y:380},
+    {x:420,y:140},{x:410,y:238},{x:420,y:340},
+    {x:300,y:110},{x:290,y:238},{x:300,y:370}
+  ],
+  // Phase 4: Team B circulates
+  [
+    {x:630,y:238},{x:510,y:90},{x:510,y:190},{x:510,y:300},{x:510,y:390},
+    {x:400,y:130},{x:390,y:238},{x:400,y:350},
+    {x:280,y:100},{x:270,y:238},{x:280,y:380}
+  ]
+];
+
+// Jokers (orange) - 4 players FIXED, one on each side of the pitch
+// Top (north), Bottom (south), Left (west), Right (east)
+const JOKER_FIXED = [
+  {x:360, y:22},   // North - top center
+  {x:360, y:454},  // South - bottom center
+  {x:16,  y:238},  // West - left center
+  {x:704, y:238}   // East - right center
+];
+const joker_phases = [
+  JOKER_FIXED, JOKER_FIXED, JOKER_FIXED, JOKER_FIXED
+];
+
+// Ball positions per phase
+const ball_phases = [
+  {x:300,y:238}, // Phase 1: midfield, Team A
+  {x:350,y:120}, // Phase 2: right side
+  {x:420,y:238}, // Phase 3: Team B has it
+  {x:390,y:340}  // Phase 4: Team B circulates left
+];
+
+const phaseLabels = [
+  "Fasi 1: Lið A byggir upp",
+  "Fasi 2: Hliðarskipti til hægri",
+  "Fasi 3: Lið B nær bolta — snúningur",
+  "Fasi 4: Lið B dreifir leik"
+];
+
+// Pass connections per phase [from, to] as player indices
+const passConnections = [
+  [[2,5],[5,6],[6,9],[0,2]], // Phase 1
+  [[1,5],[5,8],[8,9],[3,7]], // Phase 2
+  [[2,5],[5,8],[8,9],[4,7]], // Phase 3 (Team B)
+  [[1,5],[5,9],[6,8],[3,7]]  // Phase 4
+];
+
+let players = [];
+let currentPhase = 0;
+let speed = 1;
+let paused = false;
+let timer = null;
+
+function createPlayers() {
+  // Team A
+  for (let i = 0; i < 11; i++) {
+    const el = document.createElement('div');
+    el.className = 'player team-a';
+    const labels = ['GK','CB','CB','CB','CB','CM','CM','CM','LW','ST','RW'];
+    el.textContent = i === 0 ? 'GK' : '';
+    el.setAttribute('data-label', labels[i]);
+    pitch.appendChild(el);
+    players.push({ el, team: 'a', idx: i });
+  }
+  // Team B
+  for (let i = 0; i < 11; i++) {
+    const el = document.createElement('div');
+    el.className = 'player team-b';
+    const labels = ['GK','CB','CB','CB','CB','CM','CM','CM','LW','ST','RW'];
+    el.textContent = i === 0 ? 'GK' : '';
+    el.setAttribute('data-label', labels[i]);
+    pitch.appendChild(el);
+    players.push({ el, team: 'b', idx: i });
+  }
+  // Jokers - fixed, one per side
+  const jokerLabels = ['N','S','W','E'];
+  for (let i = 0; i < 4; i++) {
+    const el = document.createElement('div');
+    el.className = 'player joker';
+    el.textContent = 'J';
+    el.setAttribute('data-label', jokerLabels[i]);
+    pitch.appendChild(el);
+    players.push({ el, team: 'j', idx: i });
+  }
+}
+
+function positionPhase(phase) {
+  const aPos = teamA_phases[phase];
+  const bPos = teamB_phases[phase];
+  const jPos = joker_phases[phase];
+  const ballPos = ball_phases[phase];
+
+  players.forEach(p => {
+    let pos;
+    if (p.team === 'a') pos = aPos[p.idx];
+    else if (p.team === 'b') pos = bPos[p.idx];
+    else pos = jPos[p.idx];
+    // Add slight random offset for natural feel
+    const rx = (Math.random() - 0.5) * 8;
+    const ry = (Math.random() - 0.5) * 8;
+    p.el.style.left = (pos.x + rx - 14) + 'px';
+    p.el.style.top = (pos.y + ry - 14) + 'px';
+  });
+
+  ballEl.style.left = (ballPos.x - 7) + 'px';
+  ballEl.style.top = (ballPos.y - 7) + 'px';
+  phaseLbl.textContent = phaseLabels[phase];
+
+  // Draw pass lines
+  drawPasses(phase);
+}
+
+function drawPasses(phase) {
+  passSvg.innerHTML = '';
+  const conns = passConnections[phase];
+  const isTeamB = phase >= 2;
+  const positions = isTeamB ? teamB_phases[phase] : teamA_phases[phase];
+
+  conns.forEach((conn, i) => {
+    const from = positions[conn[0]];
+    const to = positions[conn[1]];
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', from.x);
+    line.setAttribute('y1', from.y);
+    line.setAttribute('x2', to.x);
+    line.setAttribute('y2', to.y);
+    if (i === 0) line.classList.add('active');
+    passSvg.appendChild(line);
+  });
+}
+
+function nextPhase() {
+  if (paused) return;
+  currentPhase = (currentPhase + 1) % 4;
+  positionPhase(currentPhase);
+}
+
+function startLoop() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(nextPhase, 4000 / speed);
+}
+
+function setSpeed(s) {
+  speed = s;
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  startLoop();
+}
+
+function togglePause() {
+  paused = !paused;
+  const btn = event.target;
+  btn.textContent = paused ? '▶ Halda áfram' : '⏸ Pása';
+  btn.classList.toggle('active', paused);
+}
+
+function resetAnimation() {
+  currentPhase = 0;
+  positionPhase(0);
+  paused = false;
+  document.querySelectorAll('.btn').forEach(b => {
+    if (b.textContent.includes('Pása') || b.textContent.includes('Halda')) {
+      b.textContent = '⏸ Pása';
+      b.classList.remove('active');
+    }
+  });
+  startLoop();
+}
+
+// Initialize
+createPlayers();
+positionPhase(0);
+startLoop();
+</script>
+</body>
+</html>

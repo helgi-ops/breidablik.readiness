@@ -1,0 +1,76 @@
+<svg viewBox="0 0 820 580" xmlns="http://www.w3.org/2000/svg" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <defs>
+    <linearGradient id="grass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2d6b30"/><stop offset="7.7%" stop-color="#2d6b30"/>
+      <stop offset="7.7%" stop-color="#327034"/><stop offset="15.4%" stop-color="#327034"/>
+      <stop offset="15.4%" stop-color="#2d6b30"/><stop offset="23.1%" stop-color="#2d6b30"/>
+      <stop offset="23.1%" stop-color="#327034"/><stop offset="30.8%" stop-color="#327034"/>
+      <stop offset="30.8%" stop-color="#2d6b30"/><stop offset="38.5%" stop-color="#2d6b30"/>
+      <stop offset="38.5%" stop-color="#327034"/><stop offset="46.2%" stop-color="#327034"/>
+      <stop offset="46.2%" stop-color="#2d6b30"/><stop offset="53.9%" stop-color="#2d6b30"/>
+      <stop offset="53.9%" stop-color="#327034"/><stop offset="61.5%" stop-color="#327034"/>
+      <stop offset="61.5%" stop-color="#2d6b30"/><stop offset="69.2%" stop-color="#2d6b30"/>
+      <stop offset="69.2%" stop-color="#327034"/><stop offset="76.9%" stop-color="#327034"/>
+      <stop offset="76.9%" stop-color="#2d6b30"/><stop offset="84.6%" stop-color="#2d6b30"/>
+      <stop offset="84.6%" stop-color="#327034"/><stop offset="92.3%" stop-color="#327034"/>
+      <stop offset="92.3%" stop-color="#2d6b30"/><stop offset="100%" stop-color="#2d6b30"/>
+    </linearGradient>
+    <filter id="s"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/></filter>
+    <pattern id="net" x="0" y="0" width="5" height="5" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="5" y2="5" stroke="rgba(255,255,255,0.35)" stroke-width="0.5"/>
+      <line x1="5" y1="0" x2="0" y2="5" stroke="rgba(255,255,255,0.35)" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Pitch -->
+  <rect width="820" height="580" rx="8" fill="url(#grass)"/>
+
+  <!-- Pitch markings (faded context) -->
+  <rect x="20" y="20" width="780" height="540" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+  <line x1="410" y1="20" x2="410" y2="560" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <circle cx="410" cy="290" r="58" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <rect x="20" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <rect x="20" y="210" width="38" height="160" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <path d="M 115 245 A 40 40 0 0 1 115 335" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <rect x="705" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  <rect x="762" y="210" width="38" height="160" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  <path d="M 705 245 A 40 40 0 0 0 705 335" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Drill zone boundaries -->
+  <line x1="170" y1="55" x2="790" y2="55" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+  <line x1="170" y1="525" x2="790" y2="525" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+  <line x1="170" y1="95" x2="790" y2="95" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-dasharray="6,5"/>
+  <line x1="170" y1="485" x2="790" y2="485" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-dasharray="6,5"/>
+  <line x1="480" y1="55" x2="480" y2="525" stroke="rgba(255,255,255,0.45)" stroke-width="2" stroke-dasharray="8,6"/>
+
+  <!-- Goals -->
+  <rect x="158" y="208" width="14" height="34" fill="url(#net)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" rx="1"/>
+  <rect x="158" y="338" width="14" height="34" fill="url(#net)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" rx="1"/>
+  <rect x="792" y="245" width="16" height="90" fill="url(#net)" stroke="rgba(255,255,255,0.7)" stroke-width="2" rx="1"/>
+
+  <!-- Title -->
+  <text x="490" y="42" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="16" font-weight="700" letter-spacing="0.5">8v8 possession</text>
+
+  <!-- Blue team -->
+  <ellipse cx="265" cy="110" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="205" cy="255" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="210" cy="440" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="390" cy="235" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="380" cy="335" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="540" cy="210" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="560" cy="365" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="345" cy="500" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+
+  <!-- Green team -->
+  <ellipse cx="445" cy="110" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="330" cy="195" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="490" cy="280" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="505" cy="340" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="670" cy="170" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="680" cy="430" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="355" cy="380" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="555" cy="500" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+
+  <!-- MicroPulse branding -->
+  <text x="490" y="565" text-anchor="middle" fill="rgba(255,255,255,0.08)" font-size="32" font-weight="800" letter-spacing="6">MICROPULSE</text>
+</svg>

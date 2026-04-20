@@ -1,0 +1,70 @@
+<svg viewBox="0 0 820 580" xmlns="http://www.w3.org/2000/svg" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <defs>
+    <linearGradient id="grass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2d6b30"/><stop offset="7.7%" stop-color="#2d6b30"/>
+      <stop offset="7.7%" stop-color="#327034"/><stop offset="15.4%" stop-color="#327034"/>
+      <stop offset="15.4%" stop-color="#2d6b30"/><stop offset="23.1%" stop-color="#2d6b30"/>
+      <stop offset="23.1%" stop-color="#327034"/><stop offset="30.8%" stop-color="#327034"/>
+      <stop offset="30.8%" stop-color="#2d6b30"/><stop offset="38.5%" stop-color="#2d6b30"/>
+      <stop offset="38.5%" stop-color="#327034"/><stop offset="46.2%" stop-color="#327034"/>
+      <stop offset="46.2%" stop-color="#2d6b30"/><stop offset="53.9%" stop-color="#2d6b30"/>
+      <stop offset="53.9%" stop-color="#327034"/><stop offset="61.5%" stop-color="#327034"/>
+      <stop offset="61.5%" stop-color="#2d6b30"/><stop offset="69.2%" stop-color="#2d6b30"/>
+      <stop offset="69.2%" stop-color="#327034"/><stop offset="76.9%" stop-color="#327034"/>
+      <stop offset="76.9%" stop-color="#2d6b30"/><stop offset="84.6%" stop-color="#2d6b30"/>
+      <stop offset="84.6%" stop-color="#327034"/><stop offset="92.3%" stop-color="#327034"/>
+      <stop offset="92.3%" stop-color="#2d6b30"/><stop offset="100%" stop-color="#2d6b30"/>
+    </linearGradient>
+    <filter id="s"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/></filter>
+  </defs>
+
+  <rect width="820" height="580" rx="8" fill="url(#grass)"/>
+
+  <!-- Faded pitch markings -->
+  <rect x="20" y="20" width="780" height="540" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+  <line x1="410" y1="20" x2="410" y2="560" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <circle cx="410" cy="290" r="58" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <rect x="20" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <rect x="705" y="160" width="95" height="260" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Large possession zone (diamond-ish rectangle) -->
+  <polygon points="180,175 640,175 720,290 640,405 180,405 100,290"
+    fill="rgba(255,255,255,0.03)"
+    stroke="rgba(255,255,255,0.55)"
+    stroke-width="2"
+    stroke-dasharray="8,6"/>
+
+  <!-- Title -->
+  <text x="410" y="42" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="16" font-weight="700" letter-spacing="0.5">9v9 + 4 possession</text>
+
+  <!-- Jokers on sidelines (orange) -->
+  <ellipse cx="410" cy="165" rx="11" ry="8" fill="#f59e0b" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="410" cy="415" rx="11" ry="8" fill="#f59e0b" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="90"  cy="290" rx="11" ry="8" fill="#f59e0b" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="730" cy="290" rx="11" ry="8" fill="#f59e0b" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+
+  <!-- Blue team (9 players) -->
+  <ellipse cx="230" cy="215" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="280" cy="285" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="230" cy="365" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="320" cy="230" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="350" cy="350" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="380" cy="275" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="440" cy="320" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="470" cy="210" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="500" cy="370" rx="11" ry="8" fill="#3b82f6" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+
+  <!-- Green team (9 players) -->
+  <ellipse cx="270" cy="250" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="340" cy="290" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="290" cy="335" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="400" cy="225" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="420" cy="370" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="475" cy="275" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="520" cy="320" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="555" cy="245" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+  <ellipse cx="595" cy="340" rx="11" ry="8" fill="#22c55e" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" filter="url(#s)"/>
+
+  <!-- MicroPulse branding -->
+  <text x="410" y="565" text-anchor="middle" fill="rgba(255,255,255,0.08)" font-size="32" font-weight="800" letter-spacing="6">MICROPULSE</text>
+</svg>

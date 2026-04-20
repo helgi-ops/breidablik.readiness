@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MicroPulse — Kynning</title>
+<style>
+  :root {
+    --primary: #0D473B;
+    --accent: #10B981;
+    --light-bg: #F0FDF4;
+    --dark: #1E293B;
+    --muted: #4B5563;
+    --white: #FFFFFF;
+    --light-on-dark: #D1D5DB;
+    --amber: #F59E0B;
+    --red: #EF4444;
+    --purple: #7C3AED;
+    --blue: #2563EB;
+    --emerald-bg: #ECFDF5;
+    --amber-bg: #FFFBEB;
+    --red-bg: #FEF2F2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #111;
+    color: var(--dark);
+    overflow: hidden;
+  }
+
+  .slide {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    padding: 3rem 5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .slide.active { display: flex; flex-direction: column; }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 5px;
+    background: var(--accent);
+  }
+
+  /* Navigation */
+  .nav-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(10px);
+    padding: 0.6rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+  .nav-bar button {
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: opacity 0.2s;
+  }
+  .nav-bar button:hover { opacity: 0.85; }
+  .nav-bar button:disabled { opacity: 0.3; cursor: default; }
+
+  /* Backgrounds */
+  .bg-dark { background: var(--primary); color: var(--white); }
+  .bg-light { background: var(--white); }
+
+  /* Title slide */
+  .title-slide { justify-content: center; padding-left: 6rem; }
+  .title-slide h1 { font-size: 4rem; font-weight: 800; margin-bottom: 0.5rem; }
+  .title-slide .subtitle { font-size: 1.6rem; color: var(--accent); margin-bottom: 1.5rem; }
+  .title-slide .desc { font-size: 1.1rem; color: var(--light-on-dark); margin-bottom: 3rem; }
+  .title-slide .footer-line { font-size: 0.95rem; color: var(--light-on-dark); }
+  .title-deco {
+    position: absolute; right: 4rem; top: 8%;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+  }
+  .title-deco-2 {
+    position: absolute; right: 8rem; bottom: 12%;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.12);
+  }
+
+  /* Section header */
+  .section-header h2 { font-size: 2.2rem; font-weight: 700; color: var(--primary); margin-bottom: 0.4rem; }
+  .section-header.on-dark h2 { color: var(--white); }
+  .section-header p { font-size: 1.05rem; color: var(--muted); margin-bottom: 2rem; }
+  .section-header.on-dark p { color: var(--light-on-dark); }
+
+  /* Cards grid */
+  .cards-grid {
+    display: grid;
+    gap: 1.2rem;
+    flex: 1;
+    align-content: start;
+  }
+  .cards-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .cards-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .cards-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  .card {
+    background: var(--light-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .card-header { display: flex; align-items: center; gap: 0.75rem; }
+  .card-icon {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .card-title { font-size: 1.05rem; font-weight: 700; color: var(--dark); }
+  .card-body { font-size: 0.92rem; color: var(--muted); line-height: 1.5; }
+
+  /* Metric tiles */
+  .tiles-row {
+    display: flex; gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .tile {
+    flex: 1; padding: 1rem 1.2rem; border-radius: 10px;
+    border: 1px solid #E5E7EB;
+  }
+  .tile-label { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .tile-value { font-size: 2rem; font-weight: 800; margin-top: 0.25rem; }
+
+  /* Flow diagram */
+  .flow-row {
+    display: flex; align-items: flex-start; justify-content: center; gap: 1rem;
+    margin-top: 2rem;
+  }
+  .flow-step { text-align: center; flex: 1; }
+  .flow-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: var(--accent); color: white;
+    font-size: 2rem; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem;
+  }
+  .flow-step h4 { color: white; font-size: 1.2rem; margin-bottom: 0.5rem; }
+  .flow-step p { color: var(--light-on-dark); font-size: 0.95rem; line-height: 1.5; }
+  .flow-arrow {
+    display: flex; align-items: center; padding-top: 1.5rem;
+    color: var(--accent); font-size: 2rem;
+  }
+
+  /* Analytics columns */
+  .analytics-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; flex: 1; align-content: start; }
+  .analytics-card {
+    background: var(--light-bg); border-radius: 12px; padding: 1.8rem;
+    border-top: 4px solid; position: relative;
+  }
+  .analytics-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.8rem; }
+  .analytics-card p { font-size: 0.9rem; color: var(--muted); line-height: 1.7; }
+
+  /* Steps list */
+  .steps-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+  .step-item { display: flex; align-items: center; gap: 1.2rem; }
+  .step-num {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--accent); color: white;
+    font-size: 1.1rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-text { font-size: 1.15rem; color: white; }
+
+  /* Closing */
+  .closing { justify-content: center; align-items: center; text-align: center; }
+  .closing h1 { font-size: 3.5rem; font-weight: 800; color: white; margin-bottom: 0.5rem; }
+  .closing .tagline { font-size: 1.5rem; color: var(--accent); margin-bottom: 3rem; }
+  .closing .contact { font-size: 1rem; color: var(--light-on-dark); }
+
+  /* Banner */
+  .highlight-banner {
+    background: var(--emerald-bg); border-radius: 8px;
+    padding: 0.8rem 1.5rem; text-align: center;
+    font-size: 0.95rem; font-weight: 600; color: var(--primary);
+    margin-top: auto;
+  }
+
+  /* Keyboard hint */
+  .key-hint {
+    position: fixed; top: 1rem; right: 1rem;
+    background: rgba(0,0,0,0.6); color: #999;
+    padding: 0.3rem 0.6rem; border-radius: 4px;
+    font-size: 0.7rem; z-index: 101;
+    opacity: 0; animation: fadeIn 2s 3s forwards;
+  }
+  @keyframes fadeIn { to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div class="key-hint">← → arrow keys to navigate</div>
+
+<!-- SLIDE 1: TITLE -->
+<div class="slide bg-dark title-slide active" id="s1">
+  <div class="title-deco"></div>
+  <div class="title-deco-2"></div>
+  <h1>MicroPulse</h1>
+  <div class="subtitle">Readiness &amp; Performance Intelligence</div>
+  <div class="desc">Gagnvirkur ákvörðunarstuðningur fyrir íslenskan knattspyrnu</div>
+  <div class="footer-line">Breiðablik UBK &nbsp;|&nbsp; 2026</div>
+</div>
+
+<!-- SLIDE 2: VANDAMÁLIÐ -->
+<div class="slide bg-light" id="s2">
+  <div class="section-header">
+    <h2>Vandamálið</h2>
+    <p>Þjálfarar taka ákvarðanir á hverjum degi um álag, hvíld og val á leikmönnum — oft án heildarmyndar.</p>
+  </div>
+  <div class="cards-grid cols-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--accent)">A</div>
+        <div class="card-title">Álag er ósýnilegt</div>
+      </div>
+      <div class="card-body">GPS, vélrænt álag og efnaskiptaálag er ekki samþætt við readiness gögn.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--blue)">G</div>
+        <div class="card-title">Gögn á mismunandi stöðum</div>
+      </div>
+      <div class="card-body">Catapult, VALD, checkin og RPE gögn eru í aðskildum kerfum.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--purple)">T</div>
+        <div class="card-title">Tímafrek handvirk vinna</div>
+      </div>
+      <div class="card-body">Þjálfarar eyða tíma í að safna saman upplýsingum í stað þess að nota þær.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--red)">M</div>
+        <div class="card-title">Meiðslaáhætta</div>
+      </div>
+      <div class="card-body">Án samþættra gagna er erfitt að greina uppsafnað álag og fyrirbyggja meiðsli.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 3: LAUSNIN -->
+<div class="slide bg-light" id="s3">
+  <div class="section-header">
+    <h2>Lausnin: MicroPulse</h2>
+    <p>Eitt kerfi sem tengir allt saman og gefur þjálfaranum skýra heildarmynd á hverjum degi.</p>
+  </div>
+  <div class="cards-grid cols-4">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--accent)">R</div>
+        <div class="card-title">Readiness Checkin</div>
+      </div>
+      <div class="card-body">Leikmenn svara 5 spurningum daglega. Kerfið reiknar z-score og STEN miðað við eigin baseline.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--blue)">G</div>
+        <div class="card-title">GPS &amp; Álagsgreining</div>
+      </div>
+      <div class="card-body">Catapult gögn fara sjálfvirkt inn. MLI, Metabolic Load, ACWR og GPS spike greining.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--purple)">Á</div>
+        <div class="card-title">Ákvörðunarvélin</div>
+      </div>
+      <div class="card-body">4-þrepa decision engine. FULL, REDUCED eða RECOVERY. Sjálfvirk ráðlegging.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--primary)">S</div>
+        <div class="card-title">Skýrslur &amp; Innsýn</div>
+      </div>
+      <div class="card-body">Dagskýrsla, vikuskýrsla, trends, volatility greining. PDF útflutningur.</div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:auto;color:var(--muted);font-size:0.9rem;">Allt keyrir í skýinu &nbsp;|&nbsp; Supabase + Next.js &nbsp;|&nbsp; Aðgengilegt í síma og tölvu</div>
+</div>
+
+<!-- SLIDE 4: ÞJÁLFARAYFIRLIT -->
+<div class="slide bg-light" id="s4">
+  <div class="section-header">
+    <h2>Þjálfarayfirlit — Today</h2>
+    <p>Allt sem þjálfarinn þarf til að taka ákvörðun á einum stað.</p>
+  </div>
+  <div class="tiles-row">
+    <div class="tile" style="background:var(--emerald-bg)">
+      <div class="tile-label">Full</div>
+      <div class="tile-value" style="color:var(--accent)">12</div>
+    </div>
+    <div class="tile" style="background:var(--amber-bg)">
+      <div class="tile-label">Reduced</div>
+      <div class="tile-value" style="color:var(--amber)">4</div>
+    </div>
+    <div class="tile" style="background:var(--red-bg)">
+      <div class="tile-label">Recovery</div>
+      <div class="tile-value" style="color:var(--red)">2</div>
+    </div>
+    <div class="tile" style="background:#F5F3FF">
+      <div class="tile-label">Volatility</div>
+      <div class="tile-value" style="color:var(--purple)">18%</div>
+    </div>
+    <div class="tile" style="background:#EFF6FF">
+      <div class="tile-label">Avg Risk</div>
+      <div class="tile-value" style="color:var(--blue)">3.2</div>
+    </div>
+    <div class="tile" style="background:var(--light-bg)">
+      <div class="tile-label">Protected</div>
+      <div class="tile-value" style="color:var(--primary)">3</div>
+    </div>
+  </div>
+  <div class="cards-grid cols-3">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--accent)">C</div>
+        <div class="card-title">Coach Recommendation</div>
+      </div>
+      <div class="card-body">Kerfið leggur til æfingatýpu miðað við stöðu liðsins — t.d. Full load eða Létt tækni.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--blue)">D</div>
+        <div class="card-title">Readiness dreifing</div>
+      </div>
+      <div class="card-body">Sjáðu hversu margir eru grænir, gulir og rauðir í einu augnaráði.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--purple)">E</div>
+        <div class="card-title">External load</div>
+      </div>
+      <div class="card-body">GPS álag, MLI og metabolic score — allt frá Catapult, sjálfvirkt.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: LEIKMANNAUPPLIFUN -->
+<div class="slide bg-light" id="s5">
+  <div class="section-header">
+    <h2>Leikmannaupplifun</h2>
+    <p>Leikmenn fá sína eigin síðu í síma — PWA sem virkar eins og app.</p>
+  </div>
+  <div class="cards-grid cols-4">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--accent)">1</div>
+        <div class="card-title">Daglegt checkin</div>
+      </div>
+      <div class="card-body">5 spurningar um orku, svefn, stress, vöðvaeymsli. Tekur 30 sekúndur.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--blue)">2</div>
+        <div class="card-title">Readiness staða</div>
+      </div>
+      <div class="card-body">Leikmaðurinn sér sitt eigin lit og hversu álagið er í dag.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--purple)">3</div>
+        <div class="card-title">Af hverju?</div>
+      </div>
+      <div class="card-body">Ef leikmaður er gulur/rauður sýnir kerfið hvaða þættir drógu niður — z-score, GPS spike, ACWR.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--primary)">4</div>
+        <div class="card-title">GPS yfirlit</div>
+      </div>
+      <div class="card-body">Leikmenn sjá Catapult gögnin sín frá síðustu 7 dögum — hraði, vegalengd, álag.</div>
+    </div>
+  </div>
+  <div class="highlight-banner">Nýtt: „Af hverju er ég ekki græn/n?" — útskýrir ákvarðanirnar á tungumáli leikmanna</div>
+</div>
+
+<!-- SLIDE 6: GREININGARTÓL -->
+<div class="slide bg-light" id="s6">
+  <div class="section-header">
+    <h2>Greiningartól</h2>
+    <p>Þrjú tól sem hjálpa þjálfaranum að sjá lengra en í dag.</p>
+  </div>
+  <div class="analytics-cols">
+    <div class="analytics-card" style="border-color:var(--purple)">
+      <h3 style="color:var(--purple)">Volatility — Sveiflur</h3>
+      <p>Sýnir hverjir eru óstöðugir síðustu 10 daga.<br><br>4 línur á graf: checkin, z-score, vöðvaeymsli, svefn.<br><br>HIGH volatility = aukin meiðslaáhætta.<br><br>Hjálpar þjálfaranum að velja hverjir þurfa stýrða nálgun.</p>
+    </div>
+    <div class="analytics-card" style="border-color:var(--blue)">
+      <h3 style="color:var(--blue)">Trends — Þróun</h3>
+      <p>Langtímayfirlit eins leikmanns (30/60/90 dagar).<br><br>Readiness, STEN, GPS-álag og ákvarðanir.<br><br>Sér hvort leikmaður er á uppleið eða niðurleið.<br><br>Gagnlegt til að meta endurkomu úr meiðslum.</p>
+    </div>
+    <div class="analytics-card" style="border-color:var(--accent)">
+      <h3 style="color:var(--accent)">Skýrslur — Reporting</h3>
+      <p>Dagskýrsla: hverjir checkuðu inn, dreifing, athugasemd.<br><br>Vikuskýrsla: readiness þróun yfir vikuna.<br><br>Sækja PDF einum smelli — deila með liðinu.<br><br>Raungögn úr Supabase, ekki placeholder.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: GAGNAFLÆÐI -->
+<div class="slide bg-dark" id="s7">
+  <div class="section-header on-dark">
+    <h2>Gagnaflæði</h2>
+    <p>Frá gögnum til ákvörðunar — allt sjálfvirkt</p>
+  </div>
+  <div class="flow-row">
+    <div class="flow-step">
+      <div class="flow-circle">1</div>
+      <h4>Inntak</h4>
+      <p>Checkin<br>Catapult GPS<br>VALD / CMJ<br>Whoop</p>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-circle">2</div>
+      <h4>Úrvinnsla</h4>
+      <p>Z-score<br>MLI / Metabolic<br>ACWR<br>Volatility</p>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-circle">3</div>
+      <h4>Ákvörðun</h4>
+      <p>4-þrepa vélin<br>FULL / REDUCED<br>/ RECOVERY<br>Coach override</p>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-circle">4</div>
+      <h4>Birting</h4>
+      <p>Today dashboard<br>PWA leikmanns<br>PDF skýrslur<br>Trends</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 8: TÆKNILEG UPPBYGGING -->
+<div class="slide bg-light" id="s8">
+  <div class="section-header">
+    <h2>Tæknileg uppbygging</h2>
+    <p>Öruggt, skalanlegt og tilbúið til að vaxa.</p>
+  </div>
+  <div class="cards-grid cols-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--accent)">S</div>
+        <div class="card-title">Supabase (PostgreSQL)</div>
+      </div>
+      <div class="card-body">Öll gögn í öruggum skýjagrunni með RLS (Row Level Security) — hvert lið sér aðeins sín gögn.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--blue)">N</div>
+        <div class="card-title">Next.js + Vercel</div>
+      </div>
+      <div class="card-body">Hraðvirkt vefapp sem keyrir á Vercel. PWA fyrir leikmenn, responsive þjálfaraviðmót.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--red)">L</div>
+        <div class="card-title">Gagnöryggi</div>
+      </div>
+      <div class="card-body">Team-based RLS. Þjálfarar sjá sín lið, leikmenn sjá sín gögn. Enginn getur séð annarra gögn.</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--purple)">V</div>
+        <div class="card-title">Skalanlegt</div>
+      </div>
+      <div class="card-body">Byggt fyrir mörg lið frá grunni. Week setup, readiness og ákvarðanir allt tengt team_id.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 9: NÆSTU SKREF -->
+<div class="slide bg-dark" id="s9">
+  <div class="section-header on-dark">
+    <h2>Næstu skref</h2>
+    <p>&nbsp;</p>
+  </div>
+  <div class="steps-list">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-text">Kynna kerfið fyrir öllum þjálfurum — aðlögun og þjálfun</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-text">Tengja fleiri lið innan félagsins (unglingalið, kvennalið)</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-text">Bæta við VALD / CMJ greiningu fyrir taugavöðvamat</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-text">Sjálfvirk PDF dagskýrsla á tölvupóst á hverjum morgni</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">5</div>
+      <div class="step-text">Langtíma: opna kerfið fyrir önnur íslensk félög</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 10: LOKAORÐ -->
+<div class="slide bg-dark closing" id="s10">
+  <div class="title-deco"></div>
+  <div class="title-deco-2"></div>
+  <h1>MicroPulse</h1>
+  <div class="tagline">Betri ákvarðanir. Minni meiðsli. Meiri árangur.</div>
+  <div class="contact">helgi@metabolic.is &nbsp;|&nbsp; Breiðablik UBK</div>
+</div>
+
+<!-- NAV BAR -->
+<div class="nav-bar">
+  <button id="prevBtn" onclick="navigate(-1)">← Til baka</button>
+  <span id="slideCounter">1 / 10</span>
+  <button id="nextBtn" onclick="navigate(1)">Áfram →</button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+
+  function show(idx) {
+    slides.forEach(s => s.classList.remove('active'));
+    slides[idx].classList.add('active');
+    document.getElementById('slideCounter').textContent = (idx + 1) + ' / ' + total;
+    document.getElementById('prevBtn').disabled = idx === 0;
+    document.getElementById('nextBtn').disabled = idx === total - 1;
+  }
+
+  function navigate(dir) {
+    const next = current + dir;
+    if (next >= 0 && next < total) { current = next; show(current); }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); navigate(1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); navigate(-1); }
+    if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+
+  show(0);
+</script>
+</body>
+</html>

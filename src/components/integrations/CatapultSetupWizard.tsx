@@ -246,13 +246,18 @@ export default function CatapultSetupWizard() {
           {step === "credentials" && (
             <div className="space-y-4">
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                <div className="text-xs font-semibold text-blue-900 mb-1.5">Hvar finn ég þessar upplýsingar?</div>
+                <div className="text-xs font-semibold text-blue-900 mb-2">Hvar finn ég API Key?</div>
                 <ol className="text-xs text-blue-800 space-y-1.5 list-decimal pl-4">
-                  <li>Skráðu þig inn á <strong>Catapult OpenField Cloud</strong> (openfield.catapultsports.com)</li>
-                  <li>Farðu í <strong>Settings</strong> (tannhjólið) → <strong>API</strong></li>
-                  <li>Smelltu á <strong>&quot;Generate API Key&quot;</strong> eða afritaðu núverandi key</li>
-                  <li><strong>Organization ID</strong> sést í URL-inu: <code className="rounded bg-blue-100 px-1">openfield.catapultsports.com/org/<strong>1234</strong>/...</code></li>
+                  <li>Skráðu þig inn á <strong>OpenField Cloud</strong> (eu.openfield.catapultsports.com)</li>
+                  <li>Farðu í <strong>Settings</strong> tab efst → <strong>API Tokens</strong> í vinstri valmynd</li>
+                  <li>Sláðu inn nafn (t.d. &quot;MicroPulse&quot;), hakaðu við <strong>&quot;Token never expires&quot;</strong></li>
+                  <li>Veldu scope: <strong>Summary Data</strong></li>
+                  <li>Smelltu á <strong>Create</strong> og afritaðu token-ið</li>
                 </ol>
+                <div className="mt-3 text-xs font-semibold text-blue-900 mb-1.5">Hvar finn ég Organization ID?</div>
+                <p className="text-xs text-blue-800">
+                  Org ID sést í URL-inu þegar þú ert innskráð/ur á OpenField: <code className="rounded bg-blue-100 px-1">eu.openfield.catapultsports.com/org/<strong>1234</strong>/...</code> — tölustafir á eftir <code>/org/</code>.
+                </p>
               </div>
 
               <div>
