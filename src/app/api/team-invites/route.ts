@@ -6,9 +6,34 @@ export const runtime = "nodejs";
 
 async function requireCoach(req: Request): Promise<{ userId: string; teamId: string }> {
   const sb = getSupabaseAdmin();
-  const { coachUserId, teamId } = await requireCoachAccessForTeam(sb, req);
-  if (!teamId) throw new Error("No team context");
-  return { userId: coachUserId, teamId };
+
+  // Debug: check bearer token
+  const auth = req.headers.get("authorization") || "";
+  const hasBearer = auth.startsWith("Bearer ");
+  console.log("[team-invites] auth header present:", hasBearer, "length:", auth.length);
+
+  // Debug: check cookie-based session
+  try {
+    const { createServerClient } = await import("@supabase/ssr");
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const sbCookies = allCookies.filter(c => c.name.startsWith("sb-"));
+    console.log("[team-invites] total cookies:", allCookies.length, "sb-cookies:", sbCookies.length, "names:", sbCookies.map(c => c.name));
+  } catch (e) {
+    console.log("[team-invites] cookie check error:", e);
+  }
+
+  try {
+    const { coachUserId, teamId, role } = await requireCoachAccessForTeam(sb, req);
+    console.log("[team-invites] auth OK — userId:", coachUserId, "teamId:", teamId, "role:", role);
+    if (!teamId) throw new Error("No team context");
+    return { userId: coachUserId, teamId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[team-invites] auth FAILED:", msg);
+    throw err;
+  }
 }
 
 /**
