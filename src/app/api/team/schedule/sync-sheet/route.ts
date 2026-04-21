@@ -46,16 +46,43 @@ const IS_WEEKDAY: Record<string, number> = {
   laugardagur: 6,
 };
 
-/* ── Sheet config ────────────────────────────────────────────────────────── */
+/* ── Sheet config (per-team from team_settings, fallback to legacy Breiðablik) ── */
 
-const SHEET_ID = "1ag3rCwMO8JE0Qn8ptJ2AlaaIuMBBLp9mK4STTtcx7cQ";
-
-/** Month tab gids – add new months here */
-const MONTH_GIDS: Record<string, string> = {
-  "2026-02": "0",         // Febrúar (default first tab)
-  "2026-03": "1",         // Mars – will discover real gid
-  "2026-04": "530492931",  // Apríl
+const LEGACY_SHEET_ID = "1ag3rCwMO8JE0Qn8ptJ2AlaaIuMBBLp9mK4STTtcx7cQ";
+const LEGACY_MONTH_GIDS: Record<string, string> = {
+  "2026-02": "0",
+  "2026-03": "1",
+  "2026-04": "530492931",
 };
+const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
+
+/**
+ * Reads schedule sheet config from team_settings.
+ * Expected JSON in settings column: { schedule_sheet_id: "...", schedule_month_gids: { "2026-04": "..." } }
+ * Falls back to hardcoded config for Breiðablik.
+ */
+async function getSheetConfig(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ sheetId: string; monthGids: Record<string, string> } | null> {
+  const { data } = await supabase
+    .from("team_settings")
+    .select("settings")
+    .eq("team_id", teamId)
+    .maybeSingle();
+
+  const s = (data as any)?.settings;
+  if (s?.schedule_sheet_id) {
+    return {
+      sheetId: s.schedule_sheet_id,
+      monthGids: s.schedule_month_gids ?? {},
+    };
+  }
+
+  // Legacy fallback for Breiðablik
+  if (teamId === BREIDABLIK_TEAM_ID) {
+    return { sheetId: LEGACY_SHEET_ID, monthGids: LEGACY_MONTH_GIDS };
+  }
+
+  return null;
+}
 
 /* ── CSV parsing ─────────────────────────────────────────────────────────── */
 
@@ -255,17 +282,26 @@ export async function POST(req: NextRequest) {
   }
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-  const gid = MONTH_GIDS[monthKey];
+
+  const sheetConfig = await getSheetConfig(supabase, teamId);
+  if (!sheetConfig) {
+    return NextResponse.json(
+      { error: "Ekkert dagatal tengt þessu liði. Biðdu admin um að setja upp Google Sheet í team settings." },
+      { status: 400 },
+    );
+  }
+
+  const gid = sheetConfig.monthGids[monthKey];
   if (!gid) {
     return NextResponse.json(
-      { error: `No sheet tab configured for ${monthKey}. Available: ${Object.keys(MONTH_GIDS).join(", ")}` },
+      { error: `Enginn flipi stilltur fyrir ${monthKey}. Stilltu schedule_month_gids í team settings.` },
       { status: 400 },
     );
   }
 
   try {
     // Fetch CSV from Google Sheets
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&headers=0`;
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetConfig.sheetId}/gviz/tq?tqx=out:csv&gid=${gid}&headers=0`;
     const csvResp = await fetch(csvUrl);
     if (!csvResp.ok) {
       return NextResponse.json({ error: "Failed to fetch Google Sheet" }, { status: 502 });
