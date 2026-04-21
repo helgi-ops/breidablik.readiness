@@ -6,34 +6,81 @@ export const runtime = "nodejs";
 
 async function requireCoach(req: Request): Promise<{ userId: string; teamId: string }> {
   const sb = getSupabaseAdmin();
+  const debug: Record<string, unknown> = {};
 
-  // Debug: check bearer token
-  const auth = req.headers.get("authorization") || "";
-  const hasBearer = auth.startsWith("Bearer ");
-  console.log("[team-invites] auth header present:", hasBearer, "length:", auth.length);
+  // Step 1: Check bearer token
+  const authHeader = req.headers.get("authorization") || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  debug.hasBearer = !!bearerToken;
+  debug.bearerLen = bearerToken.length;
 
-  // Debug: check cookie-based session
-  try {
-    const { createServerClient } = await import("@supabase/ssr");
-    const { cookies } = await import("next/headers");
-    const cookieStore = await cookies();
-    const allCookies = cookieStore.getAll();
-    const sbCookies = allCookies.filter(c => c.name.startsWith("sb-"));
-    console.log("[team-invites] total cookies:", allCookies.length, "sb-cookies:", sbCookies.length, "names:", sbCookies.map(c => c.name));
-  } catch (e) {
-    console.log("[team-invites] cookie check error:", e);
+  // Step 2: Try to get user from bearer
+  let userId: string | null = null;
+  if (bearerToken) {
+    const { data: u, error: ue } = await sb.auth.getUser(bearerToken);
+    debug.bearerUserId = u?.user?.id ?? null;
+    debug.bearerError = ue?.message ?? null;
+    if (!ue && u?.user?.id) userId = u.user.id;
   }
 
-  try {
-    const { coachUserId, teamId, role } = await requireCoachAccessForTeam(sb, req);
-    console.log("[team-invites] auth OK — userId:", coachUserId, "teamId:", teamId, "role:", role);
-    if (!teamId) throw new Error("No team context");
-    return { userId: coachUserId, teamId };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[team-invites] auth FAILED:", msg);
-    throw err;
+  // Step 3: Try cookie fallback
+  if (!userId) {
+    try {
+      const { createServerClient } = await import("@supabase/ssr");
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const allCookies = cookieStore.getAll();
+      const sbCookies = allCookies.filter((c: { name: string }) => c.name.startsWith("sb-"));
+      debug.totalCookies = allCookies.length;
+      debug.sbCookieCount = sbCookies.length;
+      debug.sbCookieNames = sbCookies.map((c: { name: string }) => c.name);
+
+      if (sbCookies.length > 0) {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        const serverClient = createServerClient(url, anon, {
+          cookies: {
+            getAll() { return cookieStore.getAll().map((c: { name: string; value: string }) => ({ name: c.name, value: c.value })); },
+            setAll() { /* read-only */ },
+          },
+        });
+        const { data, error } = await serverClient.auth.getUser();
+        debug.cookieUserId = data?.user?.id ?? null;
+        debug.cookieError = error?.message ?? null;
+        if (!error && data?.user?.id) userId = data.user.id;
+      }
+    } catch (e) {
+      debug.cookieFallbackError = e instanceof Error ? e.message : String(e);
+    }
   }
+
+  debug.resolvedUserId = userId;
+
+  if (!userId) {
+    throw Object.assign(new Error("Unauthorized"), { debug });
+  }
+
+  // Step 4: Check profile role
+  const { data: prof, error: profErr } = await sb
+    .from("profiles")
+    .select("role, team_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  debug.profile = prof;
+  debug.profileError = profErr?.message ?? null;
+
+  const role = String((prof as any)?.role ?? "").toUpperCase();
+  debug.resolvedRole = role;
+
+  if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) {
+    throw Object.assign(new Error("Forbidden"), { debug });
+  }
+
+  const teamId = (prof as any)?.team_id;
+  if (!teamId) throw Object.assign(new Error("No team context"), { debug });
+
+  return { userId, teamId };
 }
 
 /**
@@ -50,10 +97,10 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
     if (error) throw error;
     return NextResponse.json({ links: data ?? [] });
-  } catch (err) {
+  } catch (err: any) {
     const msg = err instanceof Error ? err.message : "Error";
     const status = msg === "Unauthorized" ? 401 : msg === "Forbidden" ? 403 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return NextResponse.json({ error: msg, debug: err?.debug ?? null }, { status });
   }
 }
 
