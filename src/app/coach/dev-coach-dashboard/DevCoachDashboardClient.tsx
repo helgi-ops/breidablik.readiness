@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
@@ -1780,6 +1780,7 @@ export default function CoachPage() {
   const [coachName, setCoachName] = useState<string>("");
   const [coachDisplayName, setCoachDisplayName] = useState<string>("—");
   const [coachVerified, setCoachVerified] = useState(false);
+  const initialLoadDone = useRef(false);
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
@@ -2596,9 +2597,16 @@ export default function CoachPage() {
   async function loadTeamIntelligenceToday(teamIdOverride?: string | null) {
     try {
       const effectiveTeamId = teamIdOverride ?? coachTeamId;
-      let q = supabase.from("v_coach_team_intelligence_today").select("*");
-      if (effectiveTeamId) q = q.eq("team_id", effectiveTeamId);
-      const { data, error } = await q.maybeSingle();
+      if (!effectiveTeamId) {
+        // Without a team_id filter the view returns multiple rows → maybeSingle fails.
+        setTeamIntel(null);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("v_coach_team_intelligence_today")
+        .select("*")
+        .eq("team_id", effectiveTeamId)
+        .maybeSingle();
       if (error) {
         console.error("Team intel error:", error.message);
         setTeamIntel(null);
@@ -2718,6 +2726,11 @@ export default function CoachPage() {
 
     try {
       const startDate = addDaysISO(entryDate, -35); // 35 days to ensure full 28-day chronic window
+
+      // Abort after 15 s so a slow RLS policy can't hang the whole page
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+
       const { data, error } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
@@ -2725,7 +2738,10 @@ export default function CoachPage() {
         .in("player_id", playerIds)
         .gte("date", startDate)
         .lte("date", entryDate)
-        .order("date", { ascending: true });
+        .order("date", { ascending: true })
+        .abortSignal(controller.signal);
+
+      clearTimeout(timeout);
 
       if (error) throw error;
 
@@ -3134,14 +3150,14 @@ export default function CoachPage() {
         };
       });
 
-      const withExternalLoad = await hydrateExternalLoad(entryDate, withSpark);
-
-      setRows(withExternalLoad);
+      // Set rows immediately WITHOUT external load so the dashboard renders fast.
+      // External load data is hydrated in the background (non-blocking).
+      setRows(withSpark);
       setTotal(count ?? 0);
 
       setDraftAction(() => {
         const next: Record<string, TrainingAction> = {};
-        for (const r of withExternalLoad) {
+        for (const r of withSpark) {
           const pid = String(r.player_id);
           next[pid] = (r.training_action ?? "FULL") as TrainingAction;
         }
@@ -3150,7 +3166,7 @@ export default function CoachPage() {
 
       setDraftMessage(() => {
         const next: Record<string, string> = {};
-        for (const r of withExternalLoad) {
+        for (const r of withSpark) {
           const pid = String(r.player_id);
           next[pid] = r.coach_message ?? "";
         }
@@ -3158,7 +3174,17 @@ export default function CoachPage() {
       });
 
       setSaved({});
-      await lockAllForTodayIfNeeded(entryDate, withExternalLoad);
+      await lockAllForTodayIfNeeded(entryDate, withSpark);
+
+      // Fire-and-forget: hydrate external load in background, update rows when done.
+      // Uses AbortController with 15 s timeout so a slow RLS policy can't hang forever.
+      hydrateExternalLoad(entryDate, withSpark)
+        .then((withExternalLoad) => {
+          setRows(withExternalLoad);
+        })
+        .catch(() => {
+          // already logged inside hydrateExternalLoad
+        });
     } catch (e: any) {
       setError(e?.message ?? "Unknown error");
       setRows([]);
@@ -3391,6 +3417,7 @@ export default function CoachPage() {
         if (!teamId) return;
         setCoachVerified(true);
         await loadToday(teamId);
+        initialLoadDone.current = true;
       } finally {
         setLoading(false);
       }
@@ -3433,9 +3460,10 @@ export default function CoachPage() {
     };
   }, [coachName]);
 
-  // reload on filters/page/search
+  // reload on filters/page/search (skip the very first trigger — mount effect already loaded)
   useEffect(() => {
     if (!coachVerified) return;
+    if (!initialLoadDone.current) return; // mount effect handles the first load
     loadToday();
     fetchCompliance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
