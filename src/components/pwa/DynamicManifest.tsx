@@ -31,6 +31,8 @@ export default function DynamicManifest() {
           params.set("role", "coach");
         }
 
+        let teamLogoUrl: string | null = null;
+
         if (user) {
           const { data: profile } = await supabase
             .from("profiles")
@@ -40,6 +42,17 @@ export default function DynamicManifest() {
 
           if (profile?.team_id) {
             params.set("team_id", profile.team_id);
+
+            // Fetch club logo for apple-touch-icon / favicon override
+            const { data: team } = await supabase
+              .from("teams")
+              .select("plan_tier, club_logo_url")
+              .eq("id", profile.team_id)
+              .maybeSingle();
+
+            if (team?.plan_tier === "ELITE" && team.club_logo_url) {
+              teamLogoUrl = team.club_logo_url;
+            }
           }
         }
 
@@ -54,6 +67,26 @@ export default function DynamicManifest() {
           document.head.appendChild(link);
         }
         link.href = manifestUrl;
+
+        // Also update apple-touch-icon and favicon if team has a custom logo.
+        // iOS Safari uses apple-touch-icon for "Add to Home Screen", not the manifest.
+        if (teamLogoUrl) {
+          let appleIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+          if (!appleIcon) {
+            appleIcon = document.createElement("link");
+            appleIcon.rel = "apple-touch-icon";
+            document.head.appendChild(appleIcon);
+          }
+          appleIcon.href = teamLogoUrl;
+
+          let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+          if (!favicon) {
+            favicon = document.createElement("link");
+            favicon.rel = "icon";
+            document.head.appendChild(favicon);
+          }
+          favicon.href = teamLogoUrl;
+        }
       } catch {
         // Non-critical — keep whatever static manifest the server rendered
       }
