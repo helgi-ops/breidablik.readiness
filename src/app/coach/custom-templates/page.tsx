@@ -990,6 +990,52 @@ async function extractXLSXText(file: File): Promise<string> {
   return lines.join("\n");
 }
 
+/** Dynamically load PDF.js from CDN (runs only in browser, cached after first load) */
+async function loadPdfJS(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).pdfjsLib) return (window as any).pdfjsLib;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      const lib = (window as any).pdfjsLib;
+      if (!lib) { reject(new Error("pdfjsLib not found")); return; }
+      lib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      resolve(lib);
+    };
+    s.onerror = () => reject(new Error("Tókst ekki að hlaða PDF.js"));
+    document.head.appendChild(s);
+  });
+}
+
+/** Extract flat text from a PDF file using PDF.js */
+async function extractPDFText(file: File): Promise<string> {
+  const pdfjsLib = await loadPdfJS();
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const lines: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Group text items by y-position to reconstruct lines
+    const byY = new Map<number, string[]>();
+    for (const item of content.items as Array<{ str: string; transform: number[] }>) {
+      if (!item.str.trim()) continue;
+      const y = Math.round(item.transform[5]); // round y to group nearby text
+      const arr = byY.get(y) ?? [];
+      arr.push(item.str);
+      byY.set(y, arr);
+    }
+    // Sort by y descending (top of page first) and join each line
+    const sortedYs = [...byY.keys()].sort((a, b) => b - a);
+    for (const y of sortedYs) {
+      const line = (byY.get(y) ?? []).join(" ").trim();
+      if (line) lines.push(line);
+    }
+  }
+  return lines.join("\n");
+}
+
 // ─── Exercise library ─────────────────────────────────────────────────────────
 
 type ExerciseEntry = {
@@ -1442,10 +1488,12 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       if (ext === "xlsx" || ext === "xls") {
         text = await extractXLSXText(file);
+      } else if (ext === "pdf") {
+        text = await extractPDFText(file);
       } else if (ext === "csv" || ext === "txt") {
         text = await file.text();
       } else {
-        throw new Error("Óstudd skráargerð. Notaðu Excel (.xlsx), CSV (.csv) eða texta (.txt).");
+        throw new Error("Óstudd skráargerð. Notaðu Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texta (.txt).");
       }
       if (!text.trim()) throw new Error("Skráin virtist tóm.");
       const blocks = parseTrainingText(text);
@@ -1481,7 +1529,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
       <input
         ref={fileRef}
         type="file"
-        accept=".xlsx,.xls,.csv,.txt"
+        accept=".xlsx,.xls,.csv,.txt,.pdf"
         className="hidden"
         onChange={handleInputChange}
       />
@@ -1496,7 +1544,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
           <span className="text-2xl">📎</span>
           <p className="text-sm font-medium text-slate-700">Hlaða upp æfingakerfi</p>
           <p className="text-[11px] text-muted-foreground text-center">
-            Excel (.xlsx), CSV (.csv) eða texti (.txt)<br />
+            Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texti (.txt)<br />
             Smelltu eða dragðu skrá hingað
           </p>
         </div>
