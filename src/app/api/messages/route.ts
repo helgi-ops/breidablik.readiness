@@ -211,7 +211,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing playerId or body" }, { status: 400 });
   }
 
-  const senderRole = profile.role === "admin" ? "admin" : profile.role === "coach" ? "coach" : "player";
+  const roleLower = String(profile.role ?? "").toLowerCase();
+  const senderRole = (roleLower === "admin" || roleLower === "staff") ? "coach" : roleLower === "coach" ? "coach" : "player";
 
   // Verify access: players must be themselves
   if (senderRole === "player" && profile.player_id !== playerId) {
@@ -227,7 +228,7 @@ export async function POST(req: NextRequest) {
 
   if (!player) return NextResponse.json({ error: "Player not found" }, { status: 404 });
 
-  if (senderRole !== "player" && senderRole !== "admin" && profile.team_id !== player.team_id) {
+  if (senderRole === "coach" && profile.team_id !== player.team_id) {
     return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
   }
 
