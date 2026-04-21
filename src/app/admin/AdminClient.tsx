@@ -267,9 +267,11 @@ export default function AdminClient() {
   async function movePlayer() {
     if (!moveTarget || !moveToTeam) return;
     setBusy(true);
+    // Look up new team name for the legacy `team` text column
+    const targetTeam = teams.find((t) => t.id === moveToTeam);
     const { error } = await supabase
       .from("players")
-      .update({ team_id: moveToTeam })
+      .update({ team_id: moveToTeam, team: targetTeam?.name ?? null })
       .eq("id", moveTarget.id);
     if (error) showToast("Villa við að færa leikmann");
     else {
