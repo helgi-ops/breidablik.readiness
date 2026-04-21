@@ -110,7 +110,7 @@ export default function JoinPage() {
         <img
           src="https://ameccgiqgokibirwfyfa.supabase.co/storage/v1/object/public/Logos/Modern%20MicroPulse%20Logo%20with%20Clear%20Pulse%20Line%20-%20transparent.png"
           alt="MicroPulse"
-          className="mx-auto mb-6 h-28 w-auto"
+          className="mx-auto mb-8 h-48 w-auto"
         />
         <h1 className="text-2xl font-semibold text-neutral-900">
           {isCoachInvite ? "Þjálfaraboð" : "Skráðu þig í lið"}
