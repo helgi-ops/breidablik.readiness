@@ -90,6 +90,7 @@ export default function LoginInner() {
   const sp = useSearchParams();
 
   const next = sp.get("next") || "/player/checkin";
+  const teamInviteToken = sp.get("team_invite") || "";
 
   // Optional prefill
   const teamFromQuery = sp.get("team") || "";
@@ -177,6 +178,33 @@ export default function LoginInner() {
     if (sportFromQuery && sportFromQuery !== sport) setSport(sportFromQuery as Sport);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sportFromQueryRaw]);
+
+  // ✅ Team invite link: resolve token → lock team/gender/sport and auto-switch to signup
+  const [teamInviteLocked, setTeamInviteLocked] = useState(false);
+  const [teamInviteTeamName, setTeamInviteTeamName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!teamInviteToken) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/team-invites/${teamInviteToken}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!alive) return;
+        const team = json.team as { id: string; name: string; sport: string | null; gender: string | null } | null;
+        if (!team) return;
+        setTeamId(team.id);
+        setTeamInviteTeamName(team.name);
+        setTeamInviteLocked(true);
+        setMode("signup");
+        if (team.gender === "M" || team.gender === "F") setGender(team.gender as Gender);
+        if (team.sport === "football" || team.sport === "basketball" || team.sport === "handball")
+          setSport(team.sport as Sport);
+      } catch { /* ignore */ }
+    })();
+    return () => { alive = false; };
+  }, [teamInviteToken]);
 
   // ✅ If team is prefilled but gender/sport is not, infer from that team row
   useEffect(() => {
@@ -289,16 +317,13 @@ export default function LoginInner() {
 
   const canSignup = useMemo(() => {
     if (mode !== "signup") return true;
-    return (
-      Boolean(fullName.trim()) &&
-      Boolean(email.trim()) &&
-      Boolean(password) &&
-      Boolean(gender) &&
-      Boolean(sport) &&
-      Boolean(teamId) &&
-      teamHasCoach === true
-    );
-  }, [mode, fullName, email, password, gender, sport, teamId, teamHasCoach]);
+    const base = Boolean(fullName.trim()) && Boolean(email.trim()) && Boolean(password) && Boolean(teamId);
+    if (teamInviteLocked) {
+      // Invite link already verified team has a coach; gender/sport are pre-set
+      return base && Boolean(gender) && Boolean(sport);
+    }
+    return base && Boolean(gender) && Boolean(sport) && teamHasCoach === true;
+  }, [mode, fullName, email, password, gender, sport, teamId, teamHasCoach, teamInviteLocked]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -435,8 +460,8 @@ export default function LoginInner() {
               />
             </label>
 
-            {/* Gender */}
-            <div style={{ display: "grid", gap: 6 }}>
+            {/* Gender — hidden when invite locked */}
+            {!teamInviteLocked && <div style={{ display: "grid", gap: 6 }}>
               <span>Kyn</span>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -483,10 +508,10 @@ export default function LoginInner() {
                 </button>
               </div>
               <small style={{ opacity: 0.7 }}>Veldu kyn til að sjá rétt sport og lið.</small>
-            </div>
+            </div>}
 
-            {/* Sport (after gender) */}
-            {gender && (
+            {/* Sport (after gender) — hidden when invite locked */}
+            {!teamInviteLocked && gender && (
               <label style={{ display: "grid", gap: 6 }}>
                 <span>Sport</span>
                 <select
@@ -509,8 +534,17 @@ export default function LoginInner() {
               </label>
             )}
 
-            {/* Team (after gender + sport) */}
-            {gender && sport && (
+            {/* Team — locked when from invite link, otherwise dropdown */}
+            {teamInviteLocked ? (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>Lið</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, border: "1px solid #a5d6a7", background: "#e8f5e9" }}>
+                  <span style={{ color: "#2e7d32" }}>✓</span>
+                  <span style={{ fontWeight: 600, color: "#1b5e20" }}>{teamInviteTeamName ?? "..."}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#66bb6a" }}>Frá boðslink</span>
+                </div>
+              </label>
+            ) : gender && sport && (
               <label style={{ display: "grid", gap: 6 }}>
                 <span>Lið</span>
                 <select

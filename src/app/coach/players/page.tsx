@@ -21,6 +21,7 @@ import {
 
 // Checkbox
 import { Checkbox } from "@/components/ui/checkbox";
+import TeamInviteLinks from "@/components/coach/TeamInviteLinks";
 
 // ── Copy ──────────────────────────────────────────────────────────────────────
 
@@ -376,6 +377,9 @@ export default function CoachPlayersPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+
+      {/* ── Invite links ── */}
+      <TeamInviteLinks />
 
       {/* ── Pending requests ── */}
       {(loading || pendingPlayers.length > 0) && (
