@@ -2921,7 +2921,9 @@ export default function CoachPage() {
         .order("full_name", { ascending: true })
         .range(from, to);
 
-      if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
+      // Always filter by team — use coachTeamId (UUID) via team_id column
+      if (coachTeamId) q = q.eq("team_id", coachTeamId);
+      else if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
       if (filter !== "all") q = q.eq("final_color", filter);
       if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
 
@@ -3433,7 +3435,7 @@ export default function CoachPage() {
     loadToday();
     fetchCompliance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, teamFilter, filter, search, coachVerified]);
+  }, [page, teamFilter, filter, search, coachVerified, coachTeamId]);
 
   // load templates
   useEffect(() => {
