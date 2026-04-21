@@ -674,8 +674,8 @@ export default function TeamPage() {
         {/* Player streak / completion rate */}
         <StreakCard lang={lang} />
 
-        {/* Non Negotiables Section */}
-        <section>
+        {/* Non Negotiables Section — Breiðablik only */}
+        {profile?.team_id === "94b52a06-0b83-48da-8664-639ec3486a0c" && <section>
           <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)" }}>
             <div className="px-5 pt-5 pb-3 flex items-center justify-between">
               <h2 className="text-lg font-extrabold tracking-wide text-white uppercase">Non Negotiables</h2>
@@ -758,7 +758,7 @@ export default function TeamPage() {
               );
             })()}
           </div>
-        </section>
+        </section>}
 
         {/* Team Training Section (published sessions from coach) */}
         <TeamTrainingSection />
