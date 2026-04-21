@@ -2436,14 +2436,14 @@ export default function CoachPage() {
     const uid = auth?.user?.id;
     if (!uid) {
       router.replace(`/login?next=${encodeURIComponent("/coach")}`);
-      return false;
+      return null;
     }
 
     const { data: prof, error: profErr } = await supabase.from("profiles").select("role, display_name, team_id").eq("id", uid).maybeSingle();
     if (profErr) {
       console.error("profiles load error:", profErr.message);
       setError(profErr.message);
-      return false;
+      return null;
     }
 
     const role = (prof as any)?.role ?? null;
@@ -2468,10 +2468,10 @@ export default function CoachPage() {
     const r = String(role ?? "").toLowerCase();
     if (r !== "coach" && r !== "admin") {
       router.replace(`/login?next=${encodeURIComponent("/coach")}`);
-      return false;
+      return null;
     }
 
-    return true;
+    return resolvedTeamId;
   }
 
   /** Handle team switch from TeamSwitcher */
@@ -2844,7 +2844,7 @@ export default function CoachPage() {
   /** -----------------------------
    * Load Today (core)
    * ----------------------------- */
-  async function loadToday() {
+  async function loadToday(teamIdOverride?: string | null) {
     try {
       setError("");
       setLoading(true);
@@ -2922,7 +2922,8 @@ export default function CoachPage() {
         .range(from, to);
 
       // Always filter by team — use coachTeamId (UUID) via team_id column
-      if (coachTeamId) q = q.eq("team_id", coachTeamId);
+      const effectiveTeamId = teamIdOverride ?? coachTeamId;
+      if (effectiveTeamId) q = q.eq("team_id", effectiveTeamId);
       else if (teamFilter && teamFilter !== "all") q = q.eq("team", teamFilter);
       if (filter !== "all") q = q.eq("final_color", filter);
       if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
@@ -3383,10 +3384,10 @@ export default function CoachPage() {
     (async () => {
       try {
         setLoading(true);
-        const ok = await ensureCoachAccess();
-        if (!ok) return;
+        const teamId = await ensureCoachAccess();
+        if (!teamId) return;
         setCoachVerified(true);
-        await loadToday();
+        await loadToday(teamId);
       } finally {
         setLoading(false);
       }
