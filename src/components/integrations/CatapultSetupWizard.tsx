@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Step = "credentials" | "parameters" | "test";
 type ConnectionStatus = "idle" | "testing" | "success" | "error";
+type BackfillStatus = "idle" | "running" | "done" | "error";
 
 // ── Auth helper ──────────────────────────────────────────────────────
 
@@ -58,6 +59,9 @@ export default function CatapultSetupWizard() {
   const [connStatus, setConnStatus] = useState<ConnectionStatus>("idle");
   const [connMessage, setConnMessage] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState<BackfillStatus>("idle");
+  const [backfillMessage, setBackfillMessage] = useState("");
+  const [backfillDays, setBackfillDays] = useState("60");
 
   // Load existing credentials on mount
   useEffect(() => {
@@ -153,6 +157,35 @@ export default function CatapultSetupWizard() {
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch { /* best effort */ }
+  }
+
+  async function runBackfill() {
+    const days = Math.min(Math.max(parseInt(backfillDays, 10) || 60, 1), 90);
+    setBackfillStatus("running");
+    setBackfillMessage(`Sæki ${days} daga af gögnum...`);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("Ekki innskráð/ur");
+      const dateTo = new Date().toISOString().slice(0, 10);
+      const dateFrom = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const res = await fetch(
+        `/api/integrations/catapult/backfill?dateFrom=${dateFrom}&dateTo=${dateTo}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Backfill mistókst");
+      const okCount = (data.results ?? []).filter((r: { status: string }) => r.status === "ok").length;
+      const errCount = data.errors ?? 0;
+      setBackfillStatus("done");
+      setBackfillMessage(
+        errCount > 0
+          ? `Sótt: ${okCount} dagar, ${errCount} villur.`
+          : `Sótt ${okCount} dagar af GPS gögnum!`
+      );
+    } catch (err) {
+      setBackfillStatus("error");
+      setBackfillMessage(err instanceof Error ? err.message : "Villa");
+    }
   }
 
   // ── Step indicator ─────────────────────────────────────────────────
@@ -413,6 +446,44 @@ export default function CatapultSetupWizard() {
                   >
                     Keyra sync núna
                   </button>
+                </div>
+              )}
+
+              {/* ── Backfill section ─────────────────────── */}
+              {connStatus === "success" && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-3">
+                  <div className="text-xs font-semibold text-indigo-900">Sækja gömul gögn</div>
+                  <p className="text-xs text-indigo-800">
+                    Sæktu eldri GPS gögn svo þú getir strax séð álagssögu leikmanna. Þetta tekur nokkrar mínútur.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-indigo-800 shrink-0">Fjöldi daga:</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={backfillDays}
+                      onChange={e => setBackfillDays(e.target.value)}
+                      className="w-16 rounded-lg border border-indigo-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={runBackfill}
+                      disabled={backfillStatus === "running"}
+                      className="rounded-lg bg-indigo-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {backfillStatus === "running" ? "Sæki gögn..." : "Sækja"}
+                    </button>
+                  </div>
+                  {backfillMessage && (
+                    <div className={`text-xs font-medium ${
+                      backfillStatus === "done" ? "text-emerald-800" :
+                      backfillStatus === "error" ? "text-red-800" :
+                      "text-indigo-800"
+                    }`}>
+                      {backfillMessage}
+                    </div>
+                  )}
                 </div>
               )}
 
