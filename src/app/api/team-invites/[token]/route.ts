@@ -1,19 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
-
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function getAdmin() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 type LinkRow = {
   id: string;
@@ -43,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
-    const sb = getAdmin();
+    const sb = getSupabaseAdmin();
     const { data: link, error } = await sb
       .from("team_invite_links")
       .select("id, team_id, token, target_role, label, is_active, expires_at")

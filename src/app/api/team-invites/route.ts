@@ -1,42 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 
 export const runtime = "nodejs";
 
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function getAdmin() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
-
-type Profile = { role: string | null; team_id: string | null };
-
 async function requireCoach(req: Request): Promise<{ userId: string; teamId: string }> {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) throw new Error("Unauthorized");
-
-  const sb = getAdmin();
-  const { data: u, error: ue } = await sb.auth.getUser(token);
-  if (ue || !u?.user?.id) throw new Error("Unauthorized");
-
-  const { data: p, error: pe } = await sb
-    .from("profiles")
-    .select("role, team_id")
-    .eq("id", u.user.id)
-    .maybeSingle();
-  if (pe) throw new Error(pe.message);
-  const prof = p as Profile | null;
-  const role = String(prof?.role ?? "").toUpperCase();
-  if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) throw new Error("Forbidden");
-  if (!prof?.team_id) throw new Error("No team context");
-  return { userId: u.user.id, teamId: prof.team_id };
+  const sb = getSupabaseAdmin();
+  const { coachUserId, teamId } = await requireCoachAccessForTeam(sb, req);
+  if (!teamId) throw new Error("No team context");
+  return { userId: coachUserId, teamId };
 }
 
 /**
@@ -45,7 +17,7 @@ async function requireCoach(req: Request): Promise<{ userId: string; teamId: str
 export async function GET(req: Request) {
   try {
     const { teamId } = await requireCoach(req);
-    const sb = getAdmin();
+    const sb = getSupabaseAdmin();
     const { data, error } = await sb
       .from("team_invite_links")
       .select("id, token, target_role, label, is_active, created_at, expires_at")
@@ -75,7 +47,7 @@ export async function POST(req: Request) {
     const label = body.label ? String(body.label).trim().slice(0, 100) : null;
     const expiresInDays = Math.min(Math.max(Number(body.expiresInDays) || 90, 1), 365);
 
-    const sb = getAdmin();
+    const sb = getSupabaseAdmin();
     const { data, error } = await sb
       .from("team_invite_links")
       .insert({
@@ -110,7 +82,7 @@ export async function DELETE(req: Request) {
     const linkId = url.searchParams.get("id") ?? "";
     if (!linkId) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-    const sb = getAdmin();
+    const sb = getSupabaseAdmin();
     const { error } = await sb
       .from("team_invite_links")
       .update({ is_active: false })
