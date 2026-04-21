@@ -71,13 +71,16 @@ export default function RedirectInner() {
 
       const role = (profile?.role ?? "").toLowerCase();
 
+      const isCoachLike = role === "coach" || role === "admin" || role === "staff";
+
       if (next) {
-        if (role === "coach" && next.startsWith("/coach")) return router.replace(next);
+        if (isCoachLike && next.startsWith("/coach")) return router.replace(next);
+        if (isCoachLike && next.startsWith("/team")) return router.replace(next);
         if (role === "player" && (next.startsWith("/player") || next.startsWith("/team")))
           return router.replace(next);
       }
 
-      if (role === "coach") return router.replace("/coach");
+      if (isCoachLike) return router.replace("/coach");
 
       if (role === "player") {
         // Check-in done → team page, not done → checkin first
