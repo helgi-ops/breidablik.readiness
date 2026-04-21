@@ -2593,9 +2593,12 @@ export default function CoachPage() {
     }
   }
 
-  async function loadTeamIntelligenceToday() {
+  async function loadTeamIntelligenceToday(teamIdOverride?: string | null) {
     try {
-      const { data, error } = await supabase.from("v_coach_team_intelligence_today").select("*").maybeSingle();
+      const effectiveTeamId = teamIdOverride ?? coachTeamId;
+      let q = supabase.from("v_coach_team_intelligence_today").select("*");
+      if (effectiveTeamId) q = q.eq("team_id", effectiveTeamId);
+      const { data, error } = await q.maybeSingle();
       if (error) {
         console.error("Team intel error:", error.message);
         setTeamIntel(null);
@@ -2886,7 +2889,7 @@ export default function CoachPage() {
       }
 
       // Team intelligence + plan preview + grid
-      await loadTeamIntelligenceToday();
+      await loadTeamIntelligenceToday(teamIdOverride);
       const pp = await loadPlanPreview();
       const grid = await loadWeekGrid(entryDate);
 
