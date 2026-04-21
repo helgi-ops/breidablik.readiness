@@ -2429,6 +2429,7 @@ export default function CoachPage() {
   }
 
   async function ensureCoachAccess() {
+    console.log("[ensureCoachAccess] start");
     setError("");
 
     const { data: auth, error: authErr } = await supabase.auth.getUser();
@@ -2467,7 +2468,9 @@ export default function CoachPage() {
     }
 
     const r = String(role ?? "").toLowerCase();
+    console.log("[ensureCoachAccess] role=", r, "teamId=", resolvedTeamId);
     if (r !== "coach" && r !== "admin") {
+      console.log("[ensureCoachAccess] rejected, redirecting");
       router.replace(`/login?next=${encodeURIComponent("/coach")}`);
       return null;
     }
@@ -2870,9 +2873,13 @@ export default function CoachPage() {
 
       const entryDate = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" }) || todayISO();
 
+      console.log("[loadToday] start, entryDate=", entryDate, "teamIdOverride=", teamIdOverride);
+
       // Ensure Stage4 rows exist (best effort)
       try {
+        console.log("[loadToday] stage4_bootstrap...");
         await supabase.rpc("stage4_bootstrap_for_date", { p_date: entryDate });
+        console.log("[loadToday] stage4_bootstrap OK");
       } catch (e: any) {
         console.warn("stage4_bootstrap_for_date failed (loadToday, continuing):", e?.message ?? e);
       }
@@ -2904,10 +2911,14 @@ export default function CoachPage() {
         setMdContextToday(null);
       }
 
+      console.log("[loadToday] team intel...");
       // Team intelligence + plan preview + grid
       await loadTeamIntelligenceToday(teamIdOverride);
+      console.log("[loadToday] plan preview...");
       const pp = await loadPlanPreview();
+      console.log("[loadToday] week grid...");
       const grid = await loadWeekGrid(entryDate);
+      console.log("[loadToday] grid done, querying readiness...");
 
       // Auto-set OFF for yesterday (UI only)
       try {
@@ -2948,6 +2959,7 @@ export default function CoachPage() {
       if (search.trim().length > 0) q = q.ilike("full_name", `%${search.trim()}%`);
 
       const { data, error, count } = await q;
+      console.log("[loadToday] readiness query done, rows=", data?.length ?? 0, "error=", error?.message ?? "none");
       if (error) {
         setError(error.message);
         setRows([]);
@@ -3410,6 +3422,15 @@ export default function CoachPage() {
    * Effects
    * ----------------------------- */
   useEffect(() => {
+    // Safety net: if loading is still true after 20 s, force it off so the
+    // coach can at least see the (empty) dashboard shell and switch tabs.
+    const safetyTimer = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) console.error("[loadToday] SAFETY TIMEOUT — forcing loading=false after 20 s");
+        return false;
+      });
+    }, 20_000);
+
     (async () => {
       try {
         setLoading(true);
@@ -3420,6 +3441,7 @@ export default function CoachPage() {
         initialLoadDone.current = true;
       } finally {
         setLoading(false);
+        clearTimeout(safetyTimer);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
