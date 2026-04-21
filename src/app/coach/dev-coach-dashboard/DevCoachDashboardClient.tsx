@@ -1781,6 +1781,7 @@ export default function CoachPage() {
   const [coachDisplayName, setCoachDisplayName] = useState<string>("—");
   const [coachVerified, setCoachVerified] = useState(false);
   const initialLoadDone = useRef(false);
+  const loadTodayRunning = useRef(false);
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
@@ -2867,6 +2868,13 @@ export default function CoachPage() {
    * Load Today (core)
    * ----------------------------- */
   async function loadToday(teamIdOverride?: string | null) {
+    // Prevent concurrent loadToday calls — the second call would reset loading
+    // to true while the first is still running, causing the page to get stuck.
+    if (loadTodayRunning.current) {
+      console.log("[loadToday] SKIPPED — already running");
+      return;
+    }
+    loadTodayRunning.current = true;
     try {
       setError("");
       setLoading(true);
@@ -3203,6 +3211,7 @@ export default function CoachPage() {
       setTotal(0);
     } finally {
       setLoading(false);
+      loadTodayRunning.current = false;
     }
   }
 
@@ -3436,9 +3445,12 @@ export default function CoachPage() {
         setLoading(true);
         const teamId = await ensureCoachAccess();
         if (!teamId) return;
+        // Mark BEFORE loadToday so the dependency effect (which fires when
+        // coachVerified/coachTeamId change) knows the mount effect owns the
+        // initial load and skips its own call.
+        initialLoadDone.current = true;
         setCoachVerified(true);
         await loadToday(teamId);
-        initialLoadDone.current = true;
       } finally {
         setLoading(false);
         clearTimeout(safetyTimer);
