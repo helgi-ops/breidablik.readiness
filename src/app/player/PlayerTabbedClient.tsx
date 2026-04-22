@@ -924,6 +924,14 @@ export default function DevPlayerClient() {
     let observer: MutationObserver | null = null;
     setLayoutReady(false);
 
+    // Safety timeout: if DOM detection never finds the expected cards
+    // (e.g. auth failure, no plan, pending status), force visibility after 6s
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) {
+        setLayoutReady(true);
+      }
+    }, 6000);
+
     const apply = () => {
       if (cancelled) return;
       attempts += 1;
@@ -1049,6 +1057,7 @@ export default function DevPlayerClient() {
     apply();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimer);
       observer?.disconnect();
     };
   }, [activeTab, isPwa]);
