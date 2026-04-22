@@ -48,7 +48,7 @@ function extractCheckinDone(row: any): boolean {
   return Boolean(hasAnyMetric);
 }
 
-async function getPlayerLandingPath(): Promise<"/team" | "/player/checkin"> {
+async function getLandingPath(): Promise<string> {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
   if (!userId) return "/player/checkin";
@@ -61,8 +61,10 @@ async function getPlayerLandingPath(): Promise<"/team" | "/player/checkin"> {
     .eq("id", userId)
     .maybeSingle();
 
-  const role = (profile as any)?.role ?? null;
-  if (role && role !== "PLAYER") return "/team";
+  const role = ((profile as any)?.role ?? "").toUpperCase();
+
+  // Coach / admin / staff → always go to coach dashboard
+  if (role === "COACH" || role === "ADMIN" || role === "STAFF") return "/coach";
 
   const playerIdFromProfile = (profile as any)?.player_id as string | null;
   const candidatePlayerIds = [playerIdFromProfile, userId].filter(Boolean) as string[];
@@ -120,7 +122,7 @@ export default function LoginInner() {
         if (!session) { setCheckingSession(false); return; }
         // Valid session exists — route through /auth/redirect so role-based routing is applied
         if (cancelled) return;
-        const landingPath = await getPlayerLandingPath();
+        const landingPath = await getLandingPath();
         if (cancelled) return;
         const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
@@ -337,7 +339,7 @@ export default function LoginInner() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        const landingPath = await getPlayerLandingPath();
+        const landingPath = await getLandingPath();
         const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
         const finalNext = nextIsPlayerFlow ? landingPath : next;
 
@@ -387,7 +389,7 @@ export default function LoginInner() {
         if (!data.session) {
           setMsg("Athugaðu póstinn þinn til að staðfesta aðganginn. Þjálfari þarf að samþykkja skráningu þína áður en þú færð aðgang.");
         } else {
-          const landingPath = await getPlayerLandingPath();
+          const landingPath = await getLandingPath();
           const nextIsPlayerFlow = next === "/player" || next === "/player/checkin" || next === "/team";
           const finalNext = nextIsPlayerFlow ? landingPath : next;
 
