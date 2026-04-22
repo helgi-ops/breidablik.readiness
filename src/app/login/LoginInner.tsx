@@ -305,13 +305,28 @@ export default function LoginInner() {
         setTeamHasCoach(null);
         return;
       }
-      const { count } = await supabase
+      // Check coach_teams table (coaches use this, not profiles.team_id)
+      const { count: ctCount } = await supabase
+        .from("coach_teams")
+        .select("coach_id", { count: "exact", head: true })
+        .eq("team_id", teamId);
+
+      if (!alive) return;
+
+      if ((ctCount ?? 0) > 0) {
+        setTeamHasCoach(true);
+        return;
+      }
+
+      // Fallback: also check profiles (case-insensitive role match)
+      const { count: profCount } = await supabase
         .from("profiles")
         .select("id", { count: "exact", head: true })
         .eq("team_id", teamId)
-        .eq("role", "coach");
+        .ilike("role", "coach");
+
       if (!alive) return;
-      setTeamHasCoach((count ?? 0) > 0);
+      setTeamHasCoach((profCount ?? 0) > 0);
     }
     checkCoach();
     return () => { alive = false; };
