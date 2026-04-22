@@ -21,6 +21,7 @@ const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboa
   { key: "vald",      labelKey: "vald",      fullLabelIS: "Taugavöðvaprófun",         fullLabelEN: "Neuromuscular Testing",    minTier: "elite" },
   { key: "strength",  labelKey: "today",     fullLabelIS: "Styrkur / VBT",            fullLabelEN: "Strength / VBT",           minTier: "pro"   },
   { key: "history",   labelKey: "history",   fullLabelIS: "Saga",                     fullLabelEN: "History",                  minTier: "free"  },
+  { key: "privacy",   labelKey: "today",     fullLabelIS: "Friðhelgi",                fullLabelEN: "Privacy",                  minTier: "free"  },
 ];
 
 function tierRank(t: PlanTier): number {

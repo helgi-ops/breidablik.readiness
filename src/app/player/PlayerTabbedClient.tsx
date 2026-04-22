@@ -14,6 +14,7 @@ import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import DevPlayerStrengthTab from "./dev-player-dashboard/DevPlayerStrengthTab";
 import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt";
+import PlayerAccessPanel from "./PlayerAccessPanel";
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -742,6 +743,14 @@ function IconTeam({ active }: { active: boolean }) {
   );
 }
 
+function IconShield({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
 // ── PWA bottom navigation bar ────────────────────────────────────────────────
 
 const PWA_NAV_TAB_KEYS = [
@@ -753,6 +762,7 @@ const PWA_NAV_TAB_KEYS = [
   { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
   { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
+  { key: "privacy"   as DevPlayerTab, tabKey: "privacy"   as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
 ];
 
 function PWABottomNav({
@@ -822,6 +832,7 @@ export default function DevPlayerClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [lang] = useLang();
   const activeTab = useMemo(() => normalizeDevPlayerTab(searchParams?.get("tab")), [searchParams]);
   const [tabsMountNode, setTabsMountNode] = useState<HTMLElement | null>(null);
   const [panelMountNode, setPanelMountNode] = useState<HTMLElement | null>(null);
@@ -973,7 +984,8 @@ export default function DevPlayerClient() {
       const showVald = activeTab === "vald";
       const showStrength = activeTab === "strength";
       const showChat = activeTab === "chat";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat;
+      const showPrivacy = activeTab === "privacy";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -1180,6 +1192,14 @@ export default function DevPlayerClient() {
                     entryDate={new Date().toISOString().slice(0, 10)}
                     viewerRole="player"
                     compact={false}
+                  />
+                </div>
+              )}
+              {activeTab === "privacy" && (
+                <div className="mx-auto max-w-3xl pb-24">
+                  <PlayerAccessPanel
+                    playerId={chatPlayerId}
+                    lang={lang as "IS" | "EN"}
                   />
                 </div>
               )}

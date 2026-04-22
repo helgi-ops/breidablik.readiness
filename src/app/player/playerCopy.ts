@@ -14,6 +14,7 @@ export const PLAYER_COPY = {
       vald: "VALD",
       chat: "Spjall",
       team: "Lið",
+      privacy: "Friðhelgi",
     },
     decision: {
       kicker: "Í dag",
@@ -102,6 +103,7 @@ export const PLAYER_COPY = {
       vald: "VALD",
       chat: "Chat",
       team: "Team",
+      privacy: "Privacy",
     },
     decision: {
       kicker: "Today",

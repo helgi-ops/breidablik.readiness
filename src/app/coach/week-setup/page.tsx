@@ -63,13 +63,13 @@ type WeekRow = {
 };
 
 const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
-  { value: "FORCE", label: "Force" },
-  { value: "NEURAL_VELOCITY", label: "Neural / Velocity" },
-  { value: "VELOCITY", label: "Velocity" },
-  { value: "POLISH_CALM", label: "Polish / Calm" },
-  { value: "ACTIVATION", label: "Activation" },
-  { value: "RECOVERY", label: "Recovery" },
-  { value: "GAME", label: "Game" }, // ✅ NEW
+  { value: "FORCE", label: "Force / MD-4" },
+  { value: "NEURAL_VELOCITY", label: "Neural / Velocity / MD-3" },
+  { value: "VELOCITY", label: "Velocity / MD-2" },
+  { value: "POLISH_CALM", label: "Polish / Calm / MD-2" },
+  { value: "ACTIVATION", label: "Activation / MD-1" },
+  { value: "RECOVERY", label: "Recovery / MD+1 & MD+2" },
+  { value: "GAME", label: "Game / MD" },
   { value: "OFF", label: "Off" },
 ];
 
