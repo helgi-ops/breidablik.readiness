@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
 import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
+import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotificationPrompt";
 
 const operationsLinks = [
   { href: "/coach/match-minutes", label: "Match minutes" },
@@ -295,6 +296,13 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       </header>
 
       <main className={isDisplayRoute ? "w-full px-4 py-6" : "mx-auto max-w-6xl px-4 py-6"}>
+        {/* One-time push-notification opt-in. Self-suppresses after dismissal
+            or once permission is already granted/denied. */}
+        {!isDisplayRoute && (
+          <div className="mb-4">
+            <PWANotificationPrompt />
+          </div>
+        )}
         {children}
       </main>
 

@@ -118,14 +118,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing message body" }, { status: 400 });
   }
 
-  const senderRole = profile.role === "admin" ? "admin" : profile.role === "coach" ? "coach" : "player";
+  // DB stores roles as uppercase ("COACH", "ADMIN", "PLAYER") — normalize before compare
+  const normalizedRole = String(profile.role ?? "").toLowerCase();
+  const senderRole =
+    normalizedRole === "admin" ? "admin" : normalizedRole === "coach" || normalizedRole === "staff" ? "coach" : "player";
 
   // Only coaches and admins can broadcast
   if (senderRole === "player") {
     return NextResponse.json({ error: "Only coaches and admins can broadcast messages" }, { status: 403 });
   }
 
-  if (!profile.team_id) {
+  // Coaches may not have profile.team_id set — fall back to coach_teams
+  let teamId: string | null = profile.team_id ?? null;
+  if (!teamId && senderRole === "coach") {
+    const { data: ct } = await supabase
+      .from("coach_teams")
+      .select("team_id, is_primary")
+      .eq("coach_id", uid)
+      .order("is_primary", { ascending: false })
+      .limit(1);
+    teamId = (ct?.[0]?.team_id as string | undefined) ?? null;
+  }
+
+  if (!teamId) {
     return NextResponse.json({ error: "Coach has no team assigned" }, { status: 400 });
   }
 
@@ -133,7 +148,7 @@ export async function POST(req: NextRequest) {
   let playerIds = requestedPlayerIds;
   if (playerIds.length === 0 || (playerIds.length === 1 && playerIds[0] === "all")) {
     // Fetch all active players on the team
-    playerIds = await fetchActivePlayersOnTeam(supabase, profile.team_id);
+    playerIds = await fetchActivePlayersOnTeam(supabase, teamId);
   }
 
   if (playerIds.length === 0) {
@@ -146,7 +161,7 @@ export async function POST(req: NextRequest) {
   // Prepare batch insert: one message per player
   const messages = playerIds.map((playerId: string) => ({
     player_id: playerId,
-    team_id: profile.team_id,
+    team_id: teamId,
     entry_date: date,
     sender_id: uid,
     sender_role: senderRole,

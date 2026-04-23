@@ -77,21 +77,32 @@ export async function POST(req: Request) {
     }
 
     const playerId = await resolvePlayerIdForUser(sb, userId);
-    if (!playerId) {
-      return NextResponse.json({ ok: false, error: "Authenticated user is not mapped to a player" }, { status: 400 });
+    const nowIso = new Date().toISOString();
+
+    if (playerId) {
+      const { error: updateErr } = await sb
+        .from("player_push_subscriptions")
+        .update({ is_active: false, updated_at: nowIso })
+        .eq("player_id", playerId)
+        .eq("endpoint", endpoint);
+
+      if (updateErr) {
+        return NextResponse.json({ ok: false, error: updateErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, kind: "player", playerId });
     }
 
-    const { error: updateErr } = await sb
-      .from("player_push_subscriptions")
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq("player_id", playerId)
+    // Coach/admin path
+    const { error: coachUpdateErr } = await sb
+      .from("coach_push_subscriptions")
+      .update({ is_active: false, updated_at: nowIso })
+      .eq("profile_id", userId)
       .eq("endpoint", endpoint);
 
-    if (updateErr) {
-      return NextResponse.json({ ok: false, error: updateErr.message }, { status: 500 });
+    if (coachUpdateErr) {
+      return NextResponse.json({ ok: false, error: coachUpdateErr.message }, { status: 500 });
     }
-
-    return NextResponse.json({ ok: true, playerId });
+    return NextResponse.json({ ok: true, kind: "coach", profileId: userId });
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: messageFromError(error) }, { status: 500 });
   }

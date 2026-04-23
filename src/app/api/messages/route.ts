@@ -80,6 +80,13 @@ async function notifyPlayer(
 
 /**
  * Notify coaches on the same team as the player.
+ *
+ * A coach is "on the team" if EITHER:
+ *   - profiles.team_id matches the player's team, OR
+ *   - coach_teams has a matching (coach_id, team_id) row.
+ *
+ * Push subscriptions for coaches live in coach_push_subscriptions
+ * (keyed on profile_id), separate from player_push_subscriptions.
  */
 async function notifyCoachesOnTeam(
   supabase: ReturnType<typeof getSupabase>,
@@ -94,28 +101,37 @@ async function notifyCoachesOnTeam(
     .eq("id", playerId)
     .maybeSingle();
 
-  if (!player) return;
+  if (!player?.team_id) return;
+  const teamId = player.team_id;
 
-  // Get coach profiles on the same team
-  const { data: coachProfiles } = await supabase
+  // Coaches via profiles.team_id (case-insensitive role)
+  const { data: profileCoaches } = await supabase
     .from("profiles")
-    .select("id, player_id, display_name")
-    .eq("team_id", player.team_id)
-    .in("role", ["COACH", "coach", "ADMIN", "admin"]);
+    .select("id, role")
+    .eq("team_id", teamId);
 
-  if (!coachProfiles || coachProfiles.length === 0) return;
+  const profileCoachIds = (profileCoaches ?? [])
+    .filter((c: any) => {
+      const r = String(c.role ?? "").toLowerCase();
+      return r === "coach" || r === "admin" || r === "staff";
+    })
+    .map((c: any) => c.id as string);
 
-  // Get player_ids that have push subscriptions
-  const coachPlayerIds = coachProfiles
-    .filter((cp) => cp.player_id)
-    .map((cp) => cp.player_id);
+  // Coaches via coach_teams (covers coaches without profiles.team_id set)
+  const { data: ctRows } = await supabase
+    .from("coach_teams")
+    .select("coach_id")
+    .eq("team_id", teamId);
+  const coachTeamsIds = (ctRows ?? []).map((r: any) => r.coach_id as string);
 
-  if (coachPlayerIds.length === 0) return;
+  const coachIds = Array.from(new Set([...profileCoachIds, ...coachTeamsIds])).filter(Boolean);
+  if (coachIds.length === 0) return;
 
+  // Fetch their push subscriptions
   const { data: subscriptions } = await supabase
-    .from("player_push_subscriptions")
+    .from("coach_push_subscriptions")
     .select("id, endpoint, p256dh, auth")
-    .in("player_id", coachPlayerIds)
+    .in("profile_id", coachIds)
     .eq("is_active", true);
 
   if (!subscriptions || subscriptions.length === 0) return;
@@ -135,7 +151,7 @@ async function notifyCoachesOnTeam(
     } catch (err) {
       if (isSubscriptionGone(err)) {
         await supabase
-          .from("player_push_subscriptions")
+          .from("coach_push_subscriptions")
           .update({ is_active: false })
           .eq("id", sub.id);
       }
@@ -228,8 +244,21 @@ export async function POST(req: NextRequest) {
 
   if (!player) return NextResponse.json({ error: "Player not found" }, { status: 404 });
 
-  if (senderRole === "coach" && profile.team_id !== player.team_id) {
-    return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
+  if (senderRole === "coach") {
+    // Coaches may have team_id set in coach_teams instead of profiles.team_id
+    let coachOwnsTeam = profile.team_id === player.team_id;
+    if (!coachOwnsTeam) {
+      const { data: ct } = await supabase
+        .from("coach_teams")
+        .select("team_id")
+        .eq("coach_id", uid)
+        .eq("team_id", player.team_id)
+        .limit(1);
+      coachOwnsTeam = Array.isArray(ct) && ct.length > 0;
+    }
+    if (!coachOwnsTeam) {
+      return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
+    }
   }
 
   const date =

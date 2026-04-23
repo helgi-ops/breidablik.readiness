@@ -17,6 +17,7 @@ type RegisterBody = {
 
 type ProfileRow = {
   player_id: string | null;
+  role?: string | null;
 };
 
 type PlayerRow = {
@@ -69,6 +70,19 @@ async function resolvePlayerIdForUser(sb: ReturnType<typeof getAdminClient>, use
   return (profile as ProfileRow | null)?.player_id ?? null;
 }
 
+async function resolveRoleForUser(
+  sb: ReturnType<typeof getAdminClient>,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await sb
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ProfileRow | null)?.role ?? null;
+}
+
 export async function POST(req: Request) {
   try {
     const sb = getAdminClient();
@@ -88,31 +102,56 @@ export async function POST(req: Request) {
     }
 
     const playerId = await resolvePlayerIdForUser(sb, userId);
-    if (!playerId) {
-      return NextResponse.json({ ok: false, error: "Authenticated user is not mapped to a player" }, { status: 400 });
-    }
-
     const nowIso = new Date().toISOString();
+    const userAgent = String(body.userAgent ?? req.headers.get("user-agent") ?? "").trim() || null;
 
-    const { error: upsertErr } = await sb.from("player_push_subscriptions").upsert(
-      {
-        player_id: playerId,
-        endpoint,
-        p256dh,
-        auth,
-        user_agent: String(body.userAgent ?? req.headers.get("user-agent") ?? "").trim() || null,
-        is_active: true,
-        updated_at: nowIso,
-        last_seen_at: nowIso,
-      },
-      { onConflict: "endpoint" }
-    );
-
-    if (upsertErr) {
-      return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 500 });
+    // Player path: store in player_push_subscriptions (existing behavior)
+    if (playerId) {
+      const { error: upsertErr } = await sb.from("player_push_subscriptions").upsert(
+        {
+          player_id: playerId,
+          endpoint,
+          p256dh,
+          auth,
+          user_agent: userAgent,
+          is_active: true,
+          updated_at: nowIso,
+          last_seen_at: nowIso,
+        },
+        { onConflict: "endpoint" }
+      );
+      if (upsertErr) {
+        return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, kind: "player", playerId });
     }
 
-    return NextResponse.json({ ok: true, playerId });
+    // Coach/admin path: store in coach_push_subscriptions keyed on profile_id
+    const role = String((await resolveRoleForUser(sb, userId)) ?? "").toLowerCase();
+    if (role === "coach" || role === "admin" || role === "staff") {
+      const { error: upsertErr } = await sb.from("coach_push_subscriptions").upsert(
+        {
+          profile_id: userId,
+          endpoint,
+          p256dh,
+          auth,
+          user_agent: userAgent,
+          is_active: true,
+          updated_at: nowIso,
+          last_seen_at: nowIso,
+        },
+        { onConflict: "endpoint" }
+      );
+      if (upsertErr) {
+        return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, kind: "coach", profileId: userId });
+    }
+
+    return NextResponse.json(
+      { ok: false, error: "Authenticated user is neither a player nor a coach/admin" },
+      { status: 400 },
+    );
   } catch (error: unknown) {
     return NextResponse.json({ ok: false, error: messageFromError(error) }, { status: 500 });
   }

@@ -41,7 +41,17 @@ export default function ConversationsPage() {
         .eq("id", auth.user.id)
         .maybeSingle();
 
-      const teamId = (profile as any)?.team_id;
+      // Coaches often have team_id in coach_teams instead of profiles.team_id
+      let teamId: string | null = (profile as any)?.team_id ?? null;
+      if (!teamId) {
+        const { data: ct } = await supabase
+          .from("coach_teams")
+          .select("team_id, is_primary")
+          .eq("coach_id", auth.user.id)
+          .order("is_primary", { ascending: false })
+          .limit(1);
+        teamId = ((ct as any)?.[0]?.team_id ?? null) as string | null;
+      }
       if (!teamId) return;
       setCoachTeamId(teamId);
 
