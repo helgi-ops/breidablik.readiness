@@ -108,6 +108,8 @@ const COPY = {
         note: "Scale performance intelligence across teams, departments, and leadership.",
         bullets: [
           "Everything in Pro",
+          "3 teams included (men + women + 1 youth)",
+          "Additional teams: 25.000 kr/mo per team",
           "Performance Intelligence platform",
           "Injury risk modelling",
           "Load forecasting",
@@ -276,6 +278,8 @@ const COPY = {
         note: "Skalaðu performance intelligence yfir lið, deildir og stjórnendur.",
         bullets: [
           "Allt í Pro +",
+          "3 lið innifalin (karlar + konur + 1 yngri flokkur)",
+          "Auka lið: 25.000 kr/mán per lið",
           "Performance Intelligence platform",
           "Injury risk modelling",
           "Load forecasting",
