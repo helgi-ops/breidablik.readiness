@@ -70,22 +70,49 @@ export default function DynamicManifest() {
 
         // Also update apple-touch-icon and favicon if team has a custom logo.
         // iOS Safari uses apple-touch-icon for "Add to Home Screen", not the manifest.
+        //
+        // Implementation notes:
+        // - Next.js auto-injects MULTIPLE <link rel="icon"> tags (one for the
+        //   src/app/favicon.ico file, another from metadata.icons.icon). If we
+        //   only update the first one, the browser may still pick the other
+        //   for the tab favicon. So we remove ALL existing icon-related links
+        //   and add fresh ones pointing to the team logo.
+        // - Browsers cache favicons aggressively and often ignore href changes
+        //   on existing <link> tags. Removing+recreating the tag (and adding a
+        //   cache-buster query param) forces a refetch.
         if (teamLogoUrl) {
-          let appleIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
-          if (!appleIcon) {
-            appleIcon = document.createElement("link");
-            appleIcon.rel = "apple-touch-icon";
-            document.head.appendChild(appleIcon);
-          }
-          appleIcon.href = teamLogoUrl;
+          const cacheBuster = `?v=${encodeURIComponent(teamLogoUrl).slice(-12)}`;
+          const hrefWithBust = teamLogoUrl + (teamLogoUrl.includes("?") ? "&" : "") + `t=${cacheBuster.slice(3)}`;
 
-          let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-          if (!favicon) {
-            favicon = document.createElement("link");
-            favicon.rel = "icon";
-            document.head.appendChild(favicon);
-          }
-          favicon.href = teamLogoUrl;
+          // Remove every favicon-class link tag the page may have inherited
+          // from Next.js auto-injection or from a previous run of this effect.
+          document
+            .querySelectorAll<HTMLLinkElement>(
+              'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"], link[rel~="icon"]'
+            )
+            .forEach((el) => el.parentNode?.removeChild(el));
+
+          // Add fresh tags. Apple-touch-icon for iOS, generic icon for desktop.
+          const apple = document.createElement("link");
+          apple.rel = "apple-touch-icon";
+          apple.href = hrefWithBust;
+          document.head.appendChild(apple);
+
+          const icon = document.createElement("link");
+          icon.rel = "icon";
+          icon.href = hrefWithBust;
+          // type hint helps Chromium pick this over its cached default
+          if (/\.png(\?|$)/i.test(teamLogoUrl)) icon.type = "image/png";
+          else if (/\.jpe?g(\?|$)/i.test(teamLogoUrl)) icon.type = "image/jpeg";
+          else if (/\.svg(\?|$)/i.test(teamLogoUrl)) icon.type = "image/svg+xml";
+          document.head.appendChild(icon);
+
+          // Some browsers honor a separate "shortcut icon" tag — add for legacy
+          // safety so older Chromium / Edge installs also pick up the new icon.
+          const shortcut = document.createElement("link");
+          shortcut.rel = "shortcut icon";
+          shortcut.href = hrefWithBust;
+          document.head.appendChild(shortcut);
         }
       } catch {
         // Non-critical — keep whatever static manifest the server rendered

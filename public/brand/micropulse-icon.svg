@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MicroPulse icon">
+  <!--
+    Square MicroPulse app icon: green tile + cyan pulse waveform centered.
+    Used as PWA icon, browser favicon, apple-touch-icon. Sized 1:1 so it
+    reads cleanly at 16px (favicon) through 512px (PWA install splash).
+  -->
+  <defs>
+    <style>
+      .bg  { fill: #005a2b; }
+      .dot { fill: #29B7E6; }
+    </style>
+  </defs>
+
+  <!-- Background tile, slightly rounded (iOS-style ~22% radius) -->
+  <rect class="bg" x="0" y="0" width="512" height="512" rx="112" ry="112"/>
+
+  <!--
+    Pulse waveform (same QRS-style spike as micropulse-mark.svg) but
+    redrawn at icon scale. Original waveform spans cx 20→376 in a 400-wide
+    viewBox; here it's centered in a 512-square with cx ~76→436 and
+    baseline at cy 280, peak at cy 140. Dot radius 14 for legibility.
+  -->
+  <g class="dot">
+    <!-- Baseline left -->
+    <circle cx="76"  cy="280" r="14"/>
+    <circle cx="106" cy="280" r="14"/>
+    <circle cx="136" cy="280" r="14"/>
+    <circle cx="166" cy="280" r="14"/>
+
+    <!-- Approach to peak -->
+    <circle cx="196" cy="262" r="14"/>
+    <circle cx="220" cy="232" r="14"/>
+
+    <!-- Sharp QRS peak -->
+    <circle cx="236" cy="196" r="14"/>
+    <circle cx="248" cy="160" r="14"/>
+    <circle cx="260" cy="140" r="14"/>
+    <circle cx="272" cy="160" r="14"/>
+    <circle cx="284" cy="196" r="14"/>
+
+    <!-- Trough -->
+    <circle cx="304" cy="240" r="14"/>
+    <circle cx="320" cy="262" r="14"/>
+    <circle cx="336" cy="280" r="14"/>
+
+    <!-- Recovery bump -->
+    <circle cx="366" cy="270" r="14"/>
+    <circle cx="396" cy="280" r="14"/>
+    <circle cx="426" cy="280" r="14"/>
+  </g>
+</svg>
