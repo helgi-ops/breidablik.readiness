@@ -71,48 +71,54 @@ export default function DynamicManifest() {
         // Also update apple-touch-icon and favicon if team has a custom logo.
         // iOS Safari uses apple-touch-icon for "Add to Home Screen", not the manifest.
         //
-        // Implementation notes:
-        // - Next.js auto-injects MULTIPLE <link rel="icon"> tags (one for the
-        //   src/app/favicon.ico file, another from metadata.icons.icon). If we
-        //   only update the first one, the browser may still pick the other
-        //   for the tab favicon. So we remove ALL existing icon-related links
-        //   and add fresh ones pointing to the team logo.
-        // - Browsers cache favicons aggressively and often ignore href changes
-        //   on existing <link> tags. Removing+recreating the tag (and adding a
-        //   cache-buster query param) forces a refetch.
+        // SAFE DOM mutation strategy:
+        // - Next.js / React track the icon link tags they inject (favicon.ico,
+        //   metadata.icons.icon). If we removeChild() those out from under the
+        //   reconciler, HMR / re-render crashes with
+        //   "can't access property removeChild, finishedRoot.parentNode is null".
+        // - Solution: never remove third-party-managed tags. Mutate their href
+        //   in place (with cache-buster) AND append our own data-mp-icon=1
+        //   tagged tags at the END of <head> so browser spec picks them last
+        //   (last-defined link wins for icon resolution).
+        // - On re-run (HMR / path change) we only remove tags WE added.
         if (teamLogoUrl) {
-          const cacheBuster = `?v=${encodeURIComponent(teamLogoUrl).slice(-12)}`;
-          const hrefWithBust = teamLogoUrl + (teamLogoUrl.includes("?") ? "&" : "") + `t=${cacheBuster.slice(3)}`;
+          const cb = Date.now() % 1_000_000;
+          const finalHref = teamLogoUrl + (teamLogoUrl.includes("?") ? "&" : "?") + `_cb=${cb}`;
 
-          // Remove every favicon-class link tag the page may have inherited
-          // from Next.js auto-injection or from a previous run of this effect.
+          // 1. Mutate href on ALL existing icon-class tags (whoever owns them).
+          //    Browser will refetch because the URL changed.
           document
             .querySelectorAll<HTMLLinkElement>(
-              'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"], link[rel~="icon"]'
+              'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]'
             )
+            .forEach((el) => { el.href = finalHref; });
+
+          // 2. Remove ONLY tags we previously appended in this effect, so a
+          //    second run doesn't pile up duplicates.
+          document
+            .querySelectorAll<HTMLLinkElement>('link[data-mp-icon="1"]')
             .forEach((el) => el.parentNode?.removeChild(el));
 
-          // Add fresh tags. Apple-touch-icon for iOS, generic icon for desktop.
-          const apple = document.createElement("link");
-          apple.rel = "apple-touch-icon";
-          apple.href = hrefWithBust;
-          document.head.appendChild(apple);
+          // 3. Append fresh tags at the end of <head>. Last-defined wins for
+          //    favicon resolution in Chromium/Firefox/Safari, so this overrides
+          //    any earlier static link Next.js injected.
+          const mkLink = (rel: string, type?: string) => {
+            const el = document.createElement("link");
+            el.rel = rel;
+            el.href = finalHref;
+            if (type) el.type = type;
+            el.setAttribute("data-mp-icon", "1");
+            return el;
+          };
 
-          const icon = document.createElement("link");
-          icon.rel = "icon";
-          icon.href = hrefWithBust;
-          // type hint helps Chromium pick this over its cached default
-          if (/\.png(\?|$)/i.test(teamLogoUrl)) icon.type = "image/png";
-          else if (/\.jpe?g(\?|$)/i.test(teamLogoUrl)) icon.type = "image/jpeg";
-          else if (/\.svg(\?|$)/i.test(teamLogoUrl)) icon.type = "image/svg+xml";
-          document.head.appendChild(icon);
+          let mimeType: string | undefined;
+          if (/\.png(\?|$)/i.test(teamLogoUrl))      mimeType = "image/png";
+          else if (/\.jpe?g(\?|$)/i.test(teamLogoUrl)) mimeType = "image/jpeg";
+          else if (/\.svg(\?|$)/i.test(teamLogoUrl))   mimeType = "image/svg+xml";
 
-          // Some browsers honor a separate "shortcut icon" tag — add for legacy
-          // safety so older Chromium / Edge installs also pick up the new icon.
-          const shortcut = document.createElement("link");
-          shortcut.rel = "shortcut icon";
-          shortcut.href = hrefWithBust;
-          document.head.appendChild(shortcut);
+          document.head.appendChild(mkLink("apple-touch-icon"));
+          document.head.appendChild(mkLink("icon", mimeType));
+          document.head.appendChild(mkLink("shortcut icon"));
         }
       } catch {
         // Non-critical — keep whatever static manifest the server rendered
