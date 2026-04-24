@@ -990,6 +990,26 @@ async function extractXLSXText(file: File): Promise<string> {
   return lines.join("\n");
 }
 
+/** Dynamically load Mammoth.js from CDN (runs only in browser, cached after first load) */
+async function loadMammothJS(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).mammoth) return (window as any).mammoth;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
+    s.onload = () => resolve((window as any).mammoth);
+    s.onerror = () => reject(new Error("Tókst ekki að hlaða Mammoth"));
+    document.head.appendChild(s);
+  });
+}
+
+/** Extract flat text from a Word .docx file using Mammoth */
+async function extractDOCXText(file: File): Promise<string> {
+  const mammoth = await loadMammothJS();
+  const buffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+  return (result?.value || "").trim();
+}
+
 /** Dynamically load PDF.js from CDN (runs only in browser, cached after first load) */
 async function loadPdfJS(): Promise<any> {
   if (typeof window !== "undefined" && (window as any).pdfjsLib) return (window as any).pdfjsLib;
@@ -1490,10 +1510,14 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
         text = await extractXLSXText(file);
       } else if (ext === "pdf") {
         text = await extractPDFText(file);
+      } else if (ext === "docx") {
+        text = await extractDOCXText(file);
+      } else if (ext === "doc") {
+        throw new Error("Eldra Word format (.doc) er ekki stutt. Vinsamlegast vistaðu skjalið sem .docx og reyndu aftur.");
       } else if (ext === "csv" || ext === "txt") {
         text = await file.text();
       } else {
-        throw new Error("Óstudd skráargerð. Notaðu Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texta (.txt).");
+        throw new Error("Óstudd skráargerð. Notaðu Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texta (.txt).");
       }
       if (!text.trim()) throw new Error("Skráin virtist tóm.");
       const blocks = parseTrainingText(text);
@@ -1529,7 +1553,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
       <input
         ref={fileRef}
         type="file"
-        accept=".xlsx,.xls,.csv,.txt,.pdf"
+        accept=".xlsx,.xls,.csv,.txt,.pdf,.docx"
         className="hidden"
         onChange={handleInputChange}
       />
@@ -1544,7 +1568,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
           <span className="text-2xl">📎</span>
           <p className="text-sm font-medium text-slate-700">Hlaða upp æfingakerfi</p>
           <p className="text-[11px] text-muted-foreground text-center">
-            Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texti (.txt)<br />
+            Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texti (.txt)<br />
             Smelltu eða dragðu skrá hingað
           </p>
         </div>
