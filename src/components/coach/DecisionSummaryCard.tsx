@@ -144,6 +144,20 @@ export type DecisionSummaryRow = {
   _indoor_acwr_value?: number | null;
   /** ACWR flag: green/yellow/red. */
   _indoor_acwr_flag?: "green" | "yellow" | "red" | null;
+
+  // ── Active injury status (player_injuries table) — overrides load verdict ──
+  /** Injury status: 'injured' (acute) | 'rehabilitation' | 'rtp_training' | 'cleared'. */
+  _injury_status?: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+  /** Return-to-play stage: 0=acute, 1-2=physio rehab, 3=running, 4=modified team, 5=cleared. */
+  _injury_rtp_stage?: number | null;
+  /** Affected body part for context (e.g. "Ankle", "Knee", "Hamstring"). */
+  _injury_body_part?: string | null;
+  /** Injury type (e.g. "Sprain", "Strain"). */
+  _injury_type?: string | null;
+  /** Estimated return date as ISO string. */
+  _injury_estimated_return?: string | null;
+  /** Severity: minor / moderate / severe. */
+  _injury_severity?: string | null;
 };
 
 // ── Action resolution (matches Squad tab logic exactly) ───────────────────
@@ -571,6 +585,60 @@ const ICELANDIC_VERDICT: Record<string, IcelandicVerdict> = {
   },
 };
 
+// Injury-driven verdicts override load-based verdicts.
+// Source: player_injuries.status × rtp_stage (return-to-play protocol)
+const INJURY_VERDICT: Record<string, IcelandicVerdict> = {
+  // status='injured' (rtp_stage 0) — acute phase, complete rest
+  injured: {
+    icon: "🚫",
+    label: "Frá æfingu — meiðsl",
+    sentence: "Acute meiðsli — engin æfing",
+    recommendation: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar.",
+  },
+  // status='rehabilitation' (rtp_stage 1-2) — physio/rehab work only
+  rehabilitation: {
+    icon: "🏥",
+    label: "Endurhæfing",
+    sentence: "Í endurhæfingu hjá sjúkraþjálfara",
+    recommendation: "Aðeins physio-prescribed exercises. Engin team-vinna eða running.",
+  },
+  // status='rtp_training' (rtp_stage 3-4) — gradually returning to running/team
+  rtp_training: {
+    icon: "🩹",
+    label: "Return-to-play",
+    sentence: "Í endurkomu — modified team work",
+    recommendation: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5.",
+  },
+  // status='cleared' — back to normal verdict logic
+};
+
+// Illness-driven verdicts (separate from musculoskeletal injuries).
+// Detected when player_injuries.body_part = 'Illness' (or similar).
+// Critical: sick player with fever shouldn't train — myocarditis risk + spreads to teammates.
+const ILLNESS_VERDICT: Record<string, IcelandicVerdict> = {
+  // Acute illness (status='injured' + body_part='Illness') — full rest
+  acute: {
+    icon: "🤒",
+    label: "Veikur",
+    sentence: "Veikur — engin æfing",
+    recommendation: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu.",
+  },
+  // Recovering (status in 'rehabilitation'/'rtp_training' + body_part='Illness') — light training
+  recovering: {
+    icon: "🫧",
+    label: "Að jafna sig",
+    sentence: "Á batavegi — léttari æfing",
+    recommendation: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session.",
+  },
+};
+
+/** True if this injury record is actually an illness (not musculoskeletal). */
+function isIllnessRecord(bodyPart: string | null | undefined): boolean {
+  if (!bodyPart) return false;
+  const bp = bodyPart.toLowerCase();
+  return bp.includes("illness") || bp.includes("sjúk") || bp.includes("veik") || bp.includes("flu") || bp.includes("cold");
+}
+
 const UNKNOWN_VERDICT: IcelandicVerdict = {
   icon: "❓",
   label: "Engin gögn",
@@ -578,7 +646,25 @@ const UNKNOWN_VERDICT: IcelandicVerdict = {
   recommendation: "Treysta á eyemark þjálfara í dag",
 };
 
-function getIcelandicVerdict(action: string | null): IcelandicVerdict {
+/**
+ * Resolve plain-Icelandic verdict.
+ * Priority: illness override → injury override → load-based action → unknown.
+ * Illness/injury from player_injuries always takes precedence over load metrics
+ * because a sick or injured player must NEVER receive "Tilbúinn" from stale load data.
+ */
+function getIcelandicVerdict(
+  action: string | null,
+  injuryStatus?: string | null,
+  bodyPart?: string | null,
+): IcelandicVerdict {
+  // Illness override — body_part='Illness' marker takes precedence over injury verdicts
+  if (injuryStatus && injuryStatus !== "cleared" && isIllnessRecord(bodyPart)) {
+    return injuryStatus === "injured" ? ILLNESS_VERDICT.acute : ILLNESS_VERDICT.recovering;
+  }
+  // Injury override — musculoskeletal injuries (non-illness)
+  if (injuryStatus && injuryStatus !== "cleared" && INJURY_VERDICT[injuryStatus]) {
+    return INJURY_VERDICT[injuryStatus];
+  }
   if (!action) return UNKNOWN_VERDICT;
   return ICELANDIC_VERDICT[action] ?? UNKNOWN_VERDICT;
 }
@@ -657,7 +743,12 @@ const RECOVERY_FOCUS_LABEL: Record<string, string> = {
 const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row, onClose }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
-  const verdict = getIcelandicVerdict(displayAction);
+  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part);
+  const isInjured =
+    row._injury_status === "injured" ||
+    row._injury_status === "rehabilitation" ||
+    row._injury_status === "rtp_training";
+  const isIll = isInjured && isIllnessRecord(row._injury_body_part);
   const final = row._final_recommendation_decision?.finalRecommendation ?? null;
 
   const confidenceRaw = final?.confidence ?? row._final_recommendation_decision?.confidence ?? null;
@@ -751,10 +842,56 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
             );
           })()}
 
+          {/* Active Injury / Illness context — shown FIRST when player is injured/sick/RTP */}
+          {isInjured && (
+            <div
+              className={`rounded-xl border-2 px-5 py-4 ${
+                isIll ? "border-teal-300 bg-teal-50" : "border-violet-300 bg-violet-50"
+              }`}
+            >
+              <div className="flex flex-wrap items-baseline gap-2 mb-2">
+                <p
+                  className={`text-xs uppercase tracking-widest font-semibold ${
+                    isIll ? "text-teal-700" : "text-violet-700"
+                  }`}
+                >
+                  {isIll ? "🤒 Active veikindi" : "Active meiðsli"}
+                </p>
+                {row._injury_severity && (
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                      isIll ? "bg-teal-100 text-teal-700" : "bg-violet-100 text-violet-700"
+                    }`}
+                  >
+                    {row._injury_severity}
+                  </span>
+                )}
+                {!isIll && row._injury_rtp_stage != null && (
+                  <span className="rounded-md bg-white border border-violet-200 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                    RTP stage {row._injury_rtp_stage}/5
+                  </span>
+                )}
+              </div>
+              <p className="text-base font-bold text-slate-900">
+                {isIll
+                  ? row._injury_type ?? "Veikindi"
+                  : `${row._injury_body_part ?? "Meiðsl"}${row._injury_type ? ` — ${row._injury_type}` : ""}`}
+              </p>
+              {row._injury_estimated_return && (
+                <p className={`mt-1 text-sm ${isIll ? "text-teal-700" : "text-violet-700"}`}>
+                  Áætluð endurkoma:{" "}
+                  <span className="font-semibold">{row._injury_estimated_return}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Þjálfara-leiðbeining — concrete recommendation in plain Icelandic */}
           <div
             className={`rounded-xl border px-5 py-4 ${
-              displayAction === "RECOVERY" || displayAction === "HOLD"
+              isInjured
+                ? "bg-violet-50 border-violet-200"
+                : displayAction === "RECOVERY" || displayAction === "HOLD"
                 ? "bg-rose-50 border-rose-200"
                 : displayAction === "MODIFIED"
                 ? "bg-amber-50 border-amber-200"
@@ -1527,7 +1664,12 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
 const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row, onClick }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
-  const verdict = getIcelandicVerdict(displayAction);
+  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part);
+  const isInjured =
+    row._injury_status === "injured" ||
+    row._injury_status === "rehabilitation" ||
+    row._injury_status === "rtp_training";
+  const isIll = isInjured && isIllnessRecord(row._injury_body_part);
   const final = row._final_recommendation_decision?.finalRecommendation ?? null;
   const isAlert = displayAction === "RECOVERY" || displayAction === "HOLD";
   const isWarning = displayAction === "MODIFIED";
@@ -1566,7 +1708,13 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <span
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${cfg.badgeBgClass} ${cfg.badgeTextClass}`}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${
+                isIll
+                  ? "bg-teal-600 text-white"
+                  : isInjured
+                  ? "bg-violet-600 text-white"
+                  : `${cfg.badgeBgClass} ${cfg.badgeTextClass}`
+              }`}
               title={verdict.recommendation}
             >
               {verdict.icon} {verdict.label}
@@ -1578,6 +1726,21 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
             )}
           </div>
         </div>
+        {/* Injury / illness context line — body part + estimated return */}
+        {isInjured && (row._injury_body_part || row._injury_estimated_return) && (
+          <p
+            className={`text-[11px] font-medium leading-snug ${
+              isIll ? "text-teal-700" : "text-violet-700"
+            }`}
+          >
+            {isIll ? "Veikindi" : row._injury_body_part ?? "Meiðsl"}
+            {row._injury_type ? ` (${row._injury_type})` : ""}
+            {row._injury_estimated_return
+              ? ` · Áætluð endurkoma ${row._injury_estimated_return.slice(5)}`
+              : ""}
+            {!isIll && row._injury_rtp_stage != null ? ` · RTP stage ${row._injury_rtp_stage}/5` : ""}
+          </p>
+        )}
 
         {/* Primary driver — full text, no truncation for red/yellow */}
         {primarySentence && (

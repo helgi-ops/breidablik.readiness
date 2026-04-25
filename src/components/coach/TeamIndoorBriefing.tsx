@@ -17,7 +17,16 @@
 import * as React from "react";
 import Link from "next/link";
 
-type Action = "FULL" | "MODIFIED" | "RECOVERY" | "NO_DATA";
+type Action =
+  | "FULL"
+  | "MODIFIED"
+  | "RECOVERY"
+  | "NO_DATA"
+  | "INJURED"
+  | "REHAB"
+  | "RTP"
+  | "ILL"
+  | "RECOVERING_ILL";
 
 export type IndoorBriefingPlayer = {
   player_id: string;
@@ -28,13 +37,29 @@ export type IndoorBriefingPlayer = {
   acwr_flag: "green" | "yellow" | "red" | null;
   mcburnie_flag: "green" | "yellow" | "red" | null;
   sessions_7d: number;
+  // Injury / illness fields — override load-based action when set
+  injury_status?: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+  injury_body_part?: string | null;
+  injury_rtp_stage?: number | null;
+  injury_estimated_return?: string | null;
 };
+
+function isIllnessRecord(bodyPart: string | null | undefined): boolean {
+  if (!bodyPart) return false;
+  const bp = bodyPart.toLowerCase();
+  return bp.includes("illness") || bp.includes("sjúk") || bp.includes("veik") || bp.includes("flu") || bp.includes("cold");
+}
 
 const ACTION_COLORS: Record<Action, string> = {
   FULL: "bg-emerald-500 text-white",
   MODIFIED: "bg-amber-500 text-white",
   RECOVERY: "bg-rose-500 text-white",
   NO_DATA: "bg-slate-300 text-slate-700",
+  INJURED: "bg-violet-600 text-white",
+  REHAB: "bg-violet-600 text-white",
+  RTP: "bg-violet-500 text-white",
+  ILL: "bg-teal-600 text-white",
+  RECOVERING_ILL: "bg-teal-500 text-white",
 };
 
 const ACTION_LABELS: Record<Action, string> = {
@@ -42,6 +67,11 @@ const ACTION_LABELS: Record<Action, string> = {
   MODIFIED: "Léttari æfing",
   RECOVERY: "Hvíld",
   NO_DATA: "Engin gögn",
+  INJURED: "Frá æfingu — meiðsl",
+  REHAB: "Endurhæfing",
+  RTP: "Return-to-play",
+  ILL: "Veikur",
+  RECOVERING_ILL: "Að jafna sig",
 };
 
 const ACTION_ICONS: Record<Action, string> = {
@@ -49,9 +79,33 @@ const ACTION_ICONS: Record<Action, string> = {
   MODIFIED: "⚠️",
   RECOVERY: "🛑",
   NO_DATA: "❓",
+  INJURED: "🚫",
+  REHAB: "🏥",
+  RTP: "🩹",
+  ILL: "🤒",
+  RECOVERING_ILL: "🫧",
 };
 
+function injuryStatusToAction(
+  status: string | null | undefined,
+  bodyPart: string | null | undefined,
+): Action | null {
+  if (!status || status === "cleared") return null;
+  // Illness override — body_part='Illness' (or sjúk/veik/flu/cold) takes precedence
+  if (isIllnessRecord(bodyPart)) {
+    return status === "injured" ? "ILL" : "RECOVERING_ILL";
+  }
+  if (status === "injured") return "INJURED";
+  if (status === "rehabilitation") return "REHAB";
+  if (status === "rtp_training") return "RTP";
+  return null;
+}
+
 function recommendAction(p: IndoorBriefingPlayer): Action {
+  // Injury / illness override — takes precedence over load-based verdict
+  const injuryAction = injuryStatusToAction(p.injury_status, p.injury_body_part);
+  if (injuryAction) return injuryAction;
+
   if (p.sessions_7d === 0 || (!p.composite_band && !p.acwr_flag && !p.mcburnie_flag)) {
     return "NO_DATA";
   }
@@ -70,6 +124,29 @@ function recommendAction(p: IndoorBriefingPlayer): Action {
 }
 
 function buildReason(p: IndoorBriefingPlayer): string {
+  // Illness reason — takes precedence over injury (more urgent + contagion risk)
+  if (isIllnessRecord(p.injury_body_part)) {
+    if (p.injury_status === "injured") return "Veikindi — engin æfing";
+    return "Á batavegi eftir veikindi";
+  }
+  // Injury reason
+  if (p.injury_status === "injured") {
+    return p.injury_body_part
+      ? `${p.injury_body_part} (acute meiðsl)`
+      : "Acute meiðsl — engin æfing";
+  }
+  if (p.injury_status === "rehabilitation") {
+    return p.injury_body_part
+      ? `${p.injury_body_part} — endurhæfing hjá sjúkraþjálfara`
+      : "Endurhæfing hjá sjúkraþjálfara";
+  }
+  if (p.injury_status === "rtp_training") {
+    const stage = p.injury_rtp_stage != null ? ` (stage ${p.injury_rtp_stage}/5)` : "";
+    return p.injury_body_part
+      ? `${p.injury_body_part} — return-to-play${stage}`
+      : `Return-to-play${stage}`;
+  }
+  // Load-based reason
   const parts: string[] = [];
   if (p.composite_band === "spike") parts.push("æfði miklu meira en venjulega");
   else if (p.composite_band === "heavy") parts.push("þung session í gær");
@@ -86,44 +163,81 @@ function buildReason(p: IndoorBriefingPlayer): string {
 }
 
 export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[] }) {
-  // Skip rendering entirely when no player has indoor data
-  const withIndoor = players.filter((p) => p.sessions_7d > 0);
-  if (withIndoor.length === 0) return null;
+  // Include players with indoor data OR active injury/illness (so injured + sick
+  // players surface even when they have no recent indoor session).
+  const relevant = players.filter(
+    (p) =>
+      p.sessions_7d > 0 ||
+      (p.injury_status && p.injury_status !== "cleared"),
+  );
+  if (relevant.length === 0) return null;
 
   const actionsCount: Record<Action, number> = {
     FULL: 0,
     MODIFIED: 0,
     RECOVERY: 0,
     NO_DATA: 0,
+    INJURED: 0,
+    REHAB: 0,
+    RTP: 0,
+    ILL: 0,
+    RECOVERING_ILL: 0,
   };
   const concernPlayers: Array<{ name: string; action: Action; reason: string }> = [];
 
-  for (const p of withIndoor) {
+  for (const p of relevant) {
     const action = recommendAction(p);
     actionsCount[action]++;
-    if (action === "RECOVERY" || action === "MODIFIED") {
+    // Surface in concerns: any RECOVERY/MODIFIED/injury action
+    if (action !== "FULL" && action !== "NO_DATA") {
       concernPlayers.push({ name: p.full_name, action, reason: buildReason(p) });
     }
   }
 
-  // Team-level synthesis — plain Icelandic
+  const totalInjured = actionsCount.INJURED + actionsCount.REHAB + actionsCount.RTP;
+  const totalIll = actionsCount.ILL + actionsCount.RECOVERING_ILL;
+
+  // Team-level synthesis — plain Icelandic, injury+illness aware
   let teamAction: Action = "FULL";
   let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
-  if (actionsCount.RECOVERY >= 3) {
+  // Build sentence parts so we mention illnesses, injuries, and load concerns
+  const sentenceParts: string[] = [];
+  if (totalIll > 0) {
+    sentenceParts.push(`${totalIll} ${totalIll === 1 ? "veikur" : "veikir"}`);
+    teamAction = "MODIFIED";
+  }
+  if (totalInjured > 0) {
+    sentenceParts.push(`${totalInjured} í meiðslum/RTP`);
+    teamAction = "MODIFIED";
+  }
+  if (actionsCount.RECOVERY >= 1) {
+    sentenceParts.push(`${actionsCount.RECOVERY} ${actionsCount.RECOVERY === 1 ? "þarf" : "þurfa"} hvíld`);
     teamAction = "RECOVERY";
-    teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa hvíld — íhuga að lækka heildarintensity team-session`;
-  } else if (actionsCount.RECOVERY >= 1) {
-    teamAction = "MODIFIED";
-    teamSentence = `${actionsCount.RECOVERY} leikmenn í hvíld og ${actionsCount.MODIFIED} þurfa léttari æfingu — flest liðið OK`;
-  } else if (actionsCount.MODIFIED >= 5) {
-    teamAction = "MODIFIED";
-    teamSentence = `${actionsCount.MODIFIED} leikmenn þurfa léttari æfingu — íhuga lægra team-volume í dag`;
-  } else if (actionsCount.MODIFIED >= 1) {
-    teamSentence = `${actionsCount.FULL} leikmenn tilbúnir í fullt, ${actionsCount.MODIFIED} þurfa léttari æfingu`;
+  }
+  if (actionsCount.MODIFIED >= 1) {
+    sentenceParts.push(`${actionsCount.MODIFIED} ${actionsCount.MODIFIED === 1 ? "þarf" : "þurfa"} léttari æfingu`);
+    if (teamAction === "FULL") teamAction = "MODIFIED";
+  }
+  if (sentenceParts.length > 0) {
+    teamSentence = `${actionsCount.FULL} tilbúnir, ${sentenceParts.join(", ")}`;
   }
 
+  // Sort concerns: illness first (contagion + cardio risk), then injuries, then load
+  const actionOrder: Record<Action, number> = {
+    ILL: 0,
+    RECOVERING_ILL: 1,
+    INJURED: 2,
+    REHAB: 3,
+    RTP: 4,
+    RECOVERY: 5,
+    MODIFIED: 6,
+    FULL: 7,
+    NO_DATA: 8,
+  };
   concernPlayers.sort((a, b) => {
-    if (a.action !== b.action) return a.action === "RECOVERY" ? -1 : 1;
+    const ao = actionOrder[a.action];
+    const bo = actionOrder[b.action];
+    if (ao !== bo) return ao - bo;
     return a.name.localeCompare(b.name);
   });
 
@@ -157,6 +271,16 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
           <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
             🛑 {actionsCount.RECOVERY} hvíld
           </span>
+          {totalInjured > 0 && (
+            <span className="rounded-md bg-violet-100 px-2 py-0.5 font-semibold text-violet-700">
+              🏥 {totalInjured} meiddir
+            </span>
+          )}
+          {totalIll > 0 && (
+            <span className="rounded-md bg-teal-100 px-2 py-0.5 font-semibold text-teal-700">
+              🤒 {totalIll} veikir
+            </span>
+          )}
           {/* Prominent button to drill into full Indoor Load page */}
           <Link
             href="/coach/indoor-load"

@@ -106,7 +106,23 @@ const SCORE_BAND_LABELS: Record<ScoreBand, string> = {
 };
 
 // Action recommendation types — what should the coach DO with this player today?
-type Action = "FULL" | "MODIFIED" | "RECOVERY" | "NO_DATA";
+type Action =
+  | "FULL"
+  | "MODIFIED"
+  | "RECOVERY"
+  | "NO_DATA"
+  | "INJURED"
+  | "REHAB"
+  | "RTP"
+  | "ILL"
+  | "RECOVERING_ILL";
+
+/** True if this injury record is actually an illness (not musculoskeletal). */
+function isIllnessRecord(bodyPart: string | null | undefined): boolean {
+  if (!bodyPart) return false;
+  const bp = bodyPart.toLowerCase();
+  return bp.includes("illness") || bp.includes("sjúk") || bp.includes("veik") || bp.includes("flu") || bp.includes("cold");
+}
 
 const ACTION_LABELS: Record<
   Action,
@@ -151,6 +167,41 @@ const ACTION_LABELS: Record<
     sentence: "Ekki nóg gögn til að meta",
     recommendation: "Treysta á eyemark þjálfara í dag",
   },
+  INJURED: {
+    label: "Frá æfingu — meiðsl",
+    color: "bg-violet-600 text-white",
+    icon: "🚫",
+    sentence: "Acute meiðsli — engin æfing",
+    recommendation: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar.",
+  },
+  REHAB: {
+    label: "Endurhæfing",
+    color: "bg-violet-600 text-white",
+    icon: "🏥",
+    sentence: "Í endurhæfingu hjá sjúkraþjálfara",
+    recommendation: "Aðeins physio-prescribed exercises. Engin team-vinna eða running.",
+  },
+  RTP: {
+    label: "Return-to-play",
+    color: "bg-violet-500 text-white",
+    icon: "🩹",
+    sentence: "Í endurkomu — modified team work",
+    recommendation: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5.",
+  },
+  ILL: {
+    label: "Veikur",
+    color: "bg-teal-600 text-white",
+    icon: "🤒",
+    sentence: "Veikur — engin æfing",
+    recommendation: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu.",
+  },
+  RECOVERING_ILL: {
+    label: "Að jafna sig",
+    color: "bg-teal-500 text-white",
+    icon: "🫧",
+    sentence: "Á batavegi — léttari æfing",
+    recommendation: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session.",
+  },
 };
 
 /** Build natural Icelandic reason text for why a player is in MODIFIED or RECOVERY band. */
@@ -176,16 +227,28 @@ function buildIcelandicReason(args: {
 }
 
 /**
- * Synthesize player's load signals into a single coaching action.
+ * Synthesize player's load signals + injury status into a single coaching action.
  *
- * Logic (priority order):
+ * Priority order (injury overrides load):
+ *   - status='injured' → INJURED
+ *   - status='rehabilitation' → REHAB
+ *   - status='rtp_training' → RTP
  *   - Any RED flag (composite=spike, acwr=red, mcburnie=red) → RECOVERY
  *   - Two+ YELLOW flags → MODIFIED
  *   - One YELLOW flag → MODIFIED (cautious)
  *   - All GREEN → FULL
  *   - No data → NO_DATA
  */
-function recommendAction(status: IndoorStatus | null): Action {
+function recommendAction(status: IndoorStatus | null, injury: InjuryInfo | null): Action {
+  // Illness override — body_part='Illness' marker takes precedence over injury verdicts
+  if (injury?.status && injury.status !== "cleared" && isIllnessRecord(injury.body_part)) {
+    return injury.status === "injured" ? "ILL" : "RECOVERING_ILL";
+  }
+  // Injury override — takes precedence over load signals
+  if (injury?.status === "injured") return "INJURED";
+  if (injury?.status === "rehabilitation") return "REHAB";
+  if (injury?.status === "rtp_training") return "RTP";
+
   if (!status || status.indoor_sessions_28d === 0) return "NO_DATA";
 
   const compositeFlag: "green" | "yellow" | "red" | null =
@@ -217,10 +280,20 @@ const FMP_BAND_COLORS: Array<{ key: keyof FmpBands; label: string; color: string
   { key: "dynamic_high_s", label: "Dynamic High", color: "bg-rose-500" },
 ];
 
+type InjuryInfo = {
+  status: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+  rtp_stage: number | null;
+  body_part: string | null;
+  injury_type: string | null;
+  estimated_return: string | null;
+  severity: string | null;
+};
+
 type Row = {
   player_id: string;
   full_name: string;
   status: IndoorStatus | null;
+  injury: InjuryInfo | null;
 };
 
 const FLAG_COLORS: Record<Flag | "none", string> = {
@@ -281,31 +354,88 @@ export default function CoachIndoorLoadPage() {
         return;
       }
 
-      const results = await Promise.all(
-        players.map(async (p) => {
-          const { data, error: rpcErr } = await sb.rpc("get_indoor_load_status", {
-            p_player_id: p.id,
-          });
-          if (rpcErr) console.warn(`Indoor status failed for ${p.full_name}:`, rpcErr);
-          return {
-            player_id: p.id,
-            full_name: (p.full_name ?? "—").trim(),
-            status: (data as IndoorStatus | null) ?? null,
-          };
-        }),
-      );
+      // Fetch from BOTH player_injuries AND injury_events (latter for legacy + illness)
+      const playerIds = players.map((p) => p.id);
+      const [results, piResp, ieResp] = await Promise.all([
+        Promise.all(
+          players.map(async (p) => {
+            const { data, error: rpcErr } = await sb.rpc("get_indoor_load_status", {
+              p_player_id: p.id,
+            });
+            if (rpcErr) console.warn(`Indoor status failed for ${p.full_name}:`, rpcErr);
+            return {
+              player_id: p.id,
+              full_name: (p.full_name ?? "—").trim(),
+              status: (data as IndoorStatus | null) ?? null,
+              injury: null as InjuryInfo | null,
+            };
+          }),
+        ),
+        sb
+          .from("player_injuries")
+          .select("player_id, status, rtp_stage, body_part, injury_type, estimated_return_date, severity, injury_date")
+          .in("player_id", playerIds)
+          .order("injury_date", { ascending: false }),
+        sb
+          .from("injury_events")
+          .select("player_id, injury_type, body_side, severity, is_active, return_date, injury_date")
+          .in("player_id", playerIds)
+          .eq("is_active", true)
+          .order("injury_date", { ascending: false }),
+      ]);
 
-      // Sort by ACTION priority — Recovery first, then Modify, then Full, then No-data.
+      // Merge: injury_events first (lower precedence), player_injuries overwrites
+      const injuryByPlayer = new Map<string, InjuryInfo>();
+      for (const ev of (ieResp.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(ev.player_id);
+        if (injuryByPlayer.has(pid)) continue;
+        const evType = String(ev.injury_type ?? "");
+        const isIllness = evType === "illness";
+        injuryByPlayer.set(pid, {
+          status: "injured",
+          rtp_stage: null,
+          body_part: isIllness ? "Illness" : evType.replace(/_/g, " "),
+          injury_type: isIllness ? "Veikindi" : evType.replace(/_/g, " "),
+          estimated_return: typeof ev.return_date === "string" ? ev.return_date : null,
+          severity: typeof ev.severity === "string" ? ev.severity : null,
+        });
+      }
+      for (const inj of (piResp.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(inj.player_id);
+        const status = inj.status as InjuryInfo["status"];
+        if (status !== "injured" && status !== "rehabilitation" && status !== "rtp_training") continue;
+        // Only overwrite injury_events fallback when player_injuries has RTP-stage data
+        const existing = injuryByPlayer.get(pid);
+        if (existing && existing.rtp_stage != null) continue;
+        injuryByPlayer.set(pid, {
+          status,
+          rtp_stage: typeof inj.rtp_stage === "number" ? inj.rtp_stage : null,
+          body_part: typeof inj.body_part === "string" ? inj.body_part : null,
+          injury_type: typeof inj.injury_type === "string" ? inj.injury_type : null,
+          estimated_return: typeof inj.estimated_return_date === "string" ? inj.estimated_return_date : null,
+          severity: typeof inj.severity === "string" ? inj.severity : null,
+        });
+      }
+      for (const r of results) {
+        r.injury = injuryByPlayer.get(r.player_id) ?? null;
+      }
+
+      // Sort by ACTION priority — illness first (contagion), then injuries, then load.
       // Tie-break by composite score DESC (so heaviest within band shows first).
       const actionOrder: Record<Action, number> = {
-        RECOVERY: 0,
-        MODIFIED: 1,
-        FULL: 2,
-        NO_DATA: 3,
+        ILL: 0,
+        RECOVERING_ILL: 1,
+        INJURED: 2,
+        REHAB: 3,
+        RTP: 4,
+        RECOVERY: 5,
+        MODIFIED: 6,
+        FULL: 7,
+        NO_DATA: 8,
       };
       const sorted = results.sort((a, b) => {
-        const aAction = recommendAction(a.status);
-        const bAction = recommendAction(b.status);
+        const aAction = recommendAction(a.status, a.injury);
+        const bAction = recommendAction(b.status, b.injury);
         if (aAction !== bAction) return actionOrder[aAction] - actionOrder[bAction];
         const aScore = a.status?.composite_score ?? -1;
         const bScore = b.status?.composite_score ?? -1;
@@ -332,6 +462,12 @@ export default function CoachIndoorLoadPage() {
 
   // Team-level summary stats + action distribution
   const teamStats = React.useMemo(() => {
+    // Include players with indoor data OR active injury (so injured players show)
+    const relevant = rows.filter(
+      (r) =>
+        (r.status?.indoor_sessions_28d ?? 0) > 0 ||
+        (r.injury?.status && r.injury.status !== "cleared"),
+    );
     const withIndoor = rows.filter((r) => (r.status?.indoor_sessions_28d ?? 0) > 0);
     const heavyOrSpike = withIndoor.filter(
       (r) =>
@@ -348,47 +484,83 @@ export default function CoachIndoorLoadPage() {
       (sum, r) => sum + (r.status?.indoor_sessions_7d ?? 0),
       0,
     );
-    // Action distribution
-    const actionsCount = { FULL: 0, MODIFIED: 0, RECOVERY: 0, NO_DATA: 0 } as Record<Action, number>;
+    // Action distribution — injuries + illness counted separately
+    const actionsCount = {
+      FULL: 0, MODIFIED: 0, RECOVERY: 0, NO_DATA: 0,
+      INJURED: 0, REHAB: 0, RTP: 0,
+      ILL: 0, RECOVERING_ILL: 0,
+    } as Record<Action, number>;
     const concernPlayers: Array<{ name: string; action: Action; reason: string }> = [];
-    for (const r of withIndoor) {
-      const action = recommendAction(r.status);
+    for (const r of relevant) {
+      const action = recommendAction(r.status, r.injury);
       actionsCount[action]++;
-      if (action === "RECOVERY" || action === "MODIFIED") {
-        const reason = buildIcelandicReason({
-          composite_band: r.status?.composite_score_band,
-          acwr_value: r.status?.acwr?.value,
-          acwr_flag: r.status?.acwr?.flag,
-          mcburnie_flag: r.status?.indoor_mcburnie?.flag,
-        });
+      if (action !== "FULL" && action !== "NO_DATA") {
+        // Reason: illness > injury > load
+        let reason: string;
+        if (action === "ILL") {
+          reason = "Veikindi — engin æfing";
+        } else if (action === "RECOVERING_ILL") {
+          reason = "Á batavegi eftir veikindi";
+        } else if (r.injury?.status === "injured") {
+          reason = r.injury.body_part ? `${r.injury.body_part} (acute meiðsl)` : "Acute meiðsl";
+        } else if (r.injury?.status === "rehabilitation") {
+          reason = r.injury.body_part ? `${r.injury.body_part} — endurhæfing` : "Endurhæfing";
+        } else if (r.injury?.status === "rtp_training") {
+          const stage = r.injury.rtp_stage != null ? ` (stage ${r.injury.rtp_stage}/5)` : "";
+          reason = r.injury.body_part ? `${r.injury.body_part} — RTP${stage}` : `RTP${stage}`;
+        } else {
+          reason = buildIcelandicReason({
+            composite_band: r.status?.composite_score_band,
+            acwr_value: r.status?.acwr?.value,
+            acwr_flag: r.status?.acwr?.flag,
+            mcburnie_flag: r.status?.indoor_mcburnie?.flag,
+          });
+        }
         concernPlayers.push({ name: r.full_name, action, reason });
       }
     }
-    // Team-level status: derive from action distribution
+    // Team-level status: derive from action distribution (illness + injury aware)
+    const totalInjured = actionsCount.INJURED + actionsCount.REHAB + actionsCount.RTP;
+    const totalIll = actionsCount.ILL + actionsCount.RECOVERING_ILL;
     let teamAction: Action = "FULL";
     let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
-    if (actionsCount.RECOVERY >= 3) {
-      teamAction = "RECOVERY";
-      teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa hvíld — íhuga að lækka heildarintensity team-session`;
-    } else if (actionsCount.RECOVERY >= 1) {
+    const sentenceParts: string[] = [];
+    if (totalIll > 0) {
+      sentenceParts.push(`${totalIll} ${totalIll === 1 ? "veikur" : "veikir"}`);
       teamAction = "MODIFIED";
-      teamSentence = `${actionsCount.RECOVERY} leikmenn í hvíld og ${actionsCount.MODIFIED} þurfa léttari æfingu — flest liðið OK`;
-    } else if (actionsCount.MODIFIED >= 5) {
-      teamAction = "MODIFIED";
-      teamSentence = `${actionsCount.MODIFIED} leikmenn þurfa léttari æfingu — íhuga lægra team-volume í dag`;
-    } else if (actionsCount.MODIFIED >= 1) {
-      teamSentence = `${actionsCount.FULL} leikmenn tilbúnir í fullt, ${actionsCount.MODIFIED} þurfa léttari æfingu`;
     }
+    if (totalInjured > 0) {
+      sentenceParts.push(`${totalInjured} í meiðslum/RTP`);
+      teamAction = "MODIFIED";
+    }
+    if (actionsCount.RECOVERY >= 1) {
+      sentenceParts.push(`${actionsCount.RECOVERY} ${actionsCount.RECOVERY === 1 ? "þarf" : "þurfa"} hvíld`);
+      teamAction = "RECOVERY";
+    }
+    if (actionsCount.MODIFIED >= 1) {
+      sentenceParts.push(`${actionsCount.MODIFIED} ${actionsCount.MODIFIED === 1 ? "þarf" : "þurfa"} léttari æfingu`);
+      if (teamAction === "FULL") teamAction = "MODIFIED";
+    }
+    if (sentenceParts.length > 0) {
+      teamSentence = `${actionsCount.FULL} tilbúnir, ${sentenceParts.join(", ")}`;
+    }
+    // Sort concerns: illness first (contagion + cardio risk), then injuries, then load
+    const concernOrder: Record<Action, number> = {
+      ILL: 0, RECOVERING_ILL: 1, INJURED: 2, REHAB: 3, RTP: 4, RECOVERY: 5, MODIFIED: 6, FULL: 7, NO_DATA: 8,
+    };
     return {
       withIndoor: withIndoor.length,
       heavyOrSpike,
       typicalCount,
       lightOrLow,
+      totalInjured,
+      totalIll,
       totalIndoorSessions7d,
       actionsCount,
       concernPlayers: concernPlayers.sort((a, b) => {
-        // RECOVERY first, then MODIFIED
-        if (a.action !== b.action) return a.action === "RECOVERY" ? -1 : 1;
+        const ao = concernOrder[a.action];
+        const bo = concernOrder[b.action];
+        if (ao !== bo) return ao - bo;
         return a.name.localeCompare(b.name);
       }),
       teamAction,
@@ -452,7 +624,7 @@ export default function CoachIndoorLoadPage() {
                 {teamStats.teamSentence}
               </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
                 ✅ {teamStats.actionsCount.FULL} tilbúnir
               </span>
@@ -462,6 +634,16 @@ export default function CoachIndoorLoadPage() {
               <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
                 🛑 {teamStats.actionsCount.RECOVERY} hvíld
               </span>
+              {teamStats.totalInjured > 0 && (
+                <span className="rounded-md bg-violet-100 px-2 py-0.5 font-semibold text-violet-700">
+                  🏥 {teamStats.totalInjured} meiddir
+                </span>
+              )}
+              {teamStats.totalIll > 0 && (
+                <span className="rounded-md bg-teal-100 px-2 py-0.5 font-semibold text-teal-700">
+                  🤒 {teamStats.totalIll} veikir
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -547,8 +729,21 @@ export default function CoachIndoorLoadPage() {
         {rows.map((row) => {
           const flag: Flag | "none" = row.status?.indoor_mcburnie?.flag ?? "none";
           const noData = (row.status?.indoor_sessions_28d ?? 0) === 0;
+          const isInjured =
+            row.injury?.status === "injured" ||
+            row.injury?.status === "rehabilitation" ||
+            row.injury?.status === "rtp_training";
+          const isIll = isInjured && isIllnessRecord(row.injury?.body_part);
+          // Hide rows that have neither indoor data nor active injury/illness
+          if (noData && !isInjured) return null;
           const isExpanded = expanded.has(row.player_id);
-          const colorClass = noData ? FLAG_COLORS.none : FLAG_COLORS[flag];
+          const colorClass = isIll
+            ? "bg-teal-50 border-teal-300 text-teal-900"
+            : isInjured
+            ? "bg-violet-50 border-violet-300 text-violet-900"
+            : noData
+            ? FLAG_COLORS.none
+            : FLAG_COLORS[flag];
 
           return (
             <div
@@ -560,25 +755,40 @@ export default function CoachIndoorLoadPage() {
                 onClick={() => toggleExpand(row.player_id)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  {/* Plain-language readiness verdict — coach's primary signal */}
-                  {!noData && (
-                    <span
-                      className={`shrink-0 rounded px-2 py-1 text-xs font-bold ${ACTION_LABELS[recommendAction(row.status)].color}`}
-                      title={ACTION_LABELS[recommendAction(row.status)].recommendation}
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {/* Plain-language readiness verdict — coach's primary signal */}
+                    {(!noData || row.injury) && (
+                      <span
+                        className={`shrink-0 rounded px-2 py-1 text-xs font-bold ${ACTION_LABELS[recommendAction(row.status, row.injury)].color}`}
+                        title={ACTION_LABELS[recommendAction(row.status, row.injury)].recommendation}
+                      >
+                        {ACTION_LABELS[recommendAction(row.status, row.injury)].icon}{" "}
+                        {ACTION_LABELS[recommendAction(row.status, row.injury)].label}
+                      </span>
+                    )}
+                    <span className="truncate font-medium text-slate-900">{row.full_name}</span>
+                    {noData && !row.injury ? (
+                      <span className="text-xs text-slate-500">— engin indoor session sl. 28d</span>
+                    ) : !noData ? (
+                      <span className="hidden text-xs text-slate-600 sm:inline">
+                        {row.status!.indoor_sessions_28d}/{row.status!.total_sessions_28d} indoor
+                        (28d)
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Injury / illness context line */}
+                  {row.injury && (
+                    <p
+                      className={`ml-1 text-[11px] font-medium ${
+                        isIll ? "text-teal-700" : "text-violet-700"
+                      }`}
                     >
-                      {ACTION_LABELS[recommendAction(row.status)].icon}{" "}
-                      {ACTION_LABELS[recommendAction(row.status)].label}
-                    </span>
-                  )}
-                  <span className="truncate font-medium text-slate-900">{row.full_name}</span>
-                  {noData ? (
-                    <span className="text-xs text-slate-500">— engin indoor session sl. 28d</span>
-                  ) : (
-                    <span className="hidden text-xs text-slate-600 sm:inline">
-                      {row.status!.indoor_sessions_28d}/{row.status!.total_sessions_28d} indoor
-                      (28d)
-                    </span>
+                      {isIll
+                        ? `Veikindi${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}`
+                        : `${row.injury.body_part ?? "Meiðsl"}${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}${row.injury.rtp_stage != null ? ` · RTP ${row.injury.rtp_stage}/5` : ""}`}
+                      {row.injury.estimated_return ? ` · endurkoma ${row.injury.estimated_return.slice(5)}` : ""}
+                    </p>
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
@@ -614,22 +824,75 @@ export default function CoachIndoorLoadPage() {
               </button>
 
               {/* Expanded detail */}
-              {isExpanded && row.status && !noData && (
+              {isExpanded && (row.status || row.injury) && (
                 <div className="border-t border-current border-opacity-20 bg-white/60 px-4 py-4 text-sm text-slate-800">
+                  {/* Active injury / illness detail box — shown FIRST */}
+                  {row.injury && (
+                    <div
+                      className={`mb-4 rounded-lg border-2 p-4 ${
+                        isIll ? "border-teal-300 bg-teal-50" : "border-violet-300 bg-violet-50"
+                      }`}
+                    >
+                      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+                        <span
+                          className={`text-xs font-semibold uppercase tracking-wide ${
+                            isIll ? "text-teal-700" : "text-violet-700"
+                          }`}
+                        >
+                          {isIll ? "🤒 Active veikindi" : "Active meiðsli"}
+                        </span>
+                        {row.injury.severity && (
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold capitalize ${
+                              isIll ? "bg-teal-100 text-teal-700" : "bg-violet-100 text-violet-700"
+                            }`}
+                          >
+                            {row.injury.severity}
+                          </span>
+                        )}
+                        {!isIll && row.injury.rtp_stage != null && (
+                          <span className="rounded border border-violet-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                            RTP stage {row.injury.rtp_stage}/5
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-base font-bold text-slate-900">
+                        {isIll
+                          ? row.injury.injury_type ?? "Veikindi"
+                          : `${row.injury.body_part ?? "Meiðsl"}${row.injury.injury_type ? ` — ${row.injury.injury_type}` : ""}`}
+                      </p>
+                      {row.injury.estimated_return && (
+                        <p className={`mt-1 text-sm ${isIll ? "text-teal-700" : "text-violet-700"}`}>
+                          Áætluð endurkoma:{" "}
+                          <span className="font-semibold">{row.injury.estimated_return}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Coach guidance box — TOP PRIORITY: clear yes/no + concrete recommendation */}
                   {(() => {
-                    const action = recommendAction(row.status);
+                    const action = recommendAction(row.status, row.injury);
                     const labelInfo = ACTION_LABELS[action];
-                    const reason = buildIcelandicReason({
-                      composite_band: row.status.composite_score_band,
-                      acwr_value: row.status.acwr?.value,
-                      acwr_flag: row.status.acwr?.flag,
-                      mcburnie_flag: row.status.indoor_mcburnie?.flag,
-                    });
+                    const reason = row.injury
+                      ? labelInfo.sentence
+                      : row.status
+                      ? buildIcelandicReason({
+                          composite_band: row.status.composite_score_band,
+                          acwr_value: row.status.acwr?.value,
+                          acwr_flag: row.status.acwr?.flag,
+                          mcburnie_flag: row.status.indoor_mcburnie?.flag,
+                        })
+                      : "—";
                     const bannerBg =
-                      action === "RECOVERY" ? "border-rose-300 bg-rose-50"
+                      action === "ILL" || action === "RECOVERING_ILL"
+                        ? "border-teal-300 bg-teal-50"
+                        : action === "INJURED" || action === "REHAB" || action === "RTP"
+                        ? "border-violet-300 bg-violet-50"
+                        : action === "RECOVERY" ? "border-rose-300 bg-rose-50"
                         : action === "MODIFIED" ? "border-amber-300 bg-amber-50"
-                        : "border-emerald-300 bg-emerald-50";
+                        : action === "FULL" ? "border-emerald-300 bg-emerald-50"
+                        : "border-slate-200 bg-slate-50";
                     return (
                       <div className={`mb-4 rounded-lg border p-4 ${bannerBg}`}>
                         <div className="flex flex-wrap items-baseline gap-3">
@@ -668,7 +931,7 @@ export default function CoachIndoorLoadPage() {
                   })()}
 
                   {/* Composite Score banner + 14-day sparkline + FMP movement bars */}
-                  {row.status.latest_session?.fmp_bands && row.status.composite_score != null && row.status.composite_score_band && (
+                  {row.status?.latest_session?.fmp_bands && row.status.composite_score != null && row.status.composite_score_band && (
                     <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3">
                       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
                         <div>
@@ -700,6 +963,7 @@ export default function CoachIndoorLoadPage() {
                     </div>
                   )}
 
+                  {row.status && !noData && (
                   <div className="grid gap-4 md:grid-cols-3">
                     {/* Latest session */}
                     {row.status.latest_session && (
@@ -827,6 +1091,7 @@ export default function CoachIndoorLoadPage() {
                       )}
                     </div>
                   </div>
+                  )}
                 </div>
               )}
             </div>

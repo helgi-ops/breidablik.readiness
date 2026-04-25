@@ -1895,6 +1895,16 @@ export default function CoachPage() {
     sessions7d: number | null;
   }>>({});
 
+  // Active injuries per player — overrides load-based verdict in Decision Summary
+  const [playerInjuryStatus, setPlayerInjuryStatus] = useState<Record<string, {
+    status: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+    rtpStage: number | null;
+    bodyPart: string | null;
+    injuryType: string | null;
+    estimatedReturn: string | null;
+    severity: string | null;
+  }>>({});
+
   // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
   useEffect(() => {
     if (!rows.length || !coachTeamId) return;
@@ -2011,6 +2021,73 @@ export default function CoachPage() {
           if (Object.keys(indoorMap).length) setPlayerIndoorStatus(indoorMap);
         }
       } catch { /* Indoor Load is optional */ }
+
+      // Active injuries / illnesses — overrides Decision Summary verdict.
+      // We read from BOTH player_injuries (RTP-stage workflow) and injury_events
+      // (legacy + illness logging). player_injuries takes precedence when both have
+      // a record for the same player. Without this dual fetch we miss illnesses
+      // logged via the older /coach/injuries page (critical safety hole).
+      try {
+        const playerIds = rows.map((r) => r.player_id).filter(Boolean);
+        if (playerIds.length) {
+          const [piResp, ieResp] = await Promise.all([
+            supabase
+              .from("player_injuries")
+              .select("player_id, status, rtp_stage, body_part, injury_type, estimated_return_date, severity, injury_date, actual_return_date")
+              .in("player_id", playerIds)
+              .order("injury_date", { ascending: false }),
+            supabase
+              .from("injury_events")
+              .select("player_id, injury_type, body_side, severity, is_active, return_date, injury_date")
+              .in("player_id", playerIds)
+              .eq("is_active", true)
+              .order("injury_date", { ascending: false }),
+          ]);
+
+          const injuryMap: typeof playerInjuryStatus = {};
+
+          // First pass: injury_events (lower precedence — used as fallback)
+          for (const ev of (ieResp.data ?? []) as Array<Record<string, unknown>>) {
+            const pid = String(ev.player_id);
+            if (injuryMap[pid]) continue; // already have more recent
+            const evType = String(ev.injury_type ?? "");
+            const isIllness = evType === "illness";
+            // Map injury_events shape to playerInjuryStatus shape
+            injuryMap[pid] = {
+              status: "injured", // injury_events doesn't have RTP stages; treat active as injured
+              rtpStage: null,
+              // CRITICAL: set body_part='Illness' for illness so verdict triggers correctly
+              bodyPart: isIllness ? "Illness" : evType.replace(/_/g, " "),
+              injuryType: isIllness ? "Veikindi" : evType.replace(/_/g, " "),
+              estimatedReturn: typeof ev.return_date === "string" ? ev.return_date : null,
+              severity: typeof ev.severity === "string" ? ev.severity : null,
+            };
+          }
+
+          // Second pass: player_injuries (HIGHER precedence — overwrites injury_events)
+          for (const inj of (piResp.data ?? []) as Array<Record<string, unknown>>) {
+            const pid = String(inj.player_id);
+            const status = inj.status as typeof playerInjuryStatus[string]["status"];
+            const isActive =
+              status === "injured" ||
+              status === "rehabilitation" ||
+              status === "rtp_training";
+            if (!isActive) continue;
+            // Skip if we already have a player_injuries record for this player
+            // (need to track via separate set to allow overwriting injury_events fallback)
+            if (injuryMap[pid] && injuryMap[pid].rtpStage != null) continue;
+            injuryMap[pid] = {
+              status,
+              rtpStage: typeof inj.rtp_stage === "number" ? inj.rtp_stage : null,
+              bodyPart: typeof inj.body_part === "string" ? inj.body_part : null,
+              injuryType: typeof inj.injury_type === "string" ? inj.injury_type : null,
+              estimatedReturn: typeof inj.estimated_return_date === "string" ? inj.estimated_return_date : null,
+              severity: typeof inj.severity === "string" ? inj.severity : null,
+            };
+          }
+          setPlayerInjuryStatus(injuryMap);
+        }
+      } catch { /* Injury fetch is optional — no override if it fails */ }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, coachTeamId]);
@@ -6710,24 +6787,30 @@ export default function CoachPage() {
             </CardContent>
           </Card>
 
-          {/* Indoor Briefing — team-level executive summary (shown only when team has indoor data) */}
-          {rows.length > 0 && Object.keys(playerIndoorStatus).length > 0 && (
-            <TeamIndoorBriefing
-              players={rows.map((r) => {
-                const indoor = playerIndoorStatus[r.player_id];
-                return {
-                  player_id: r.player_id,
-                  full_name: r.full_name ?? "—",
-                  composite_score: indoor?.compositeScore ?? null,
-                  composite_band: indoor?.compositeBand ?? null,
-                  acwr_value: indoor?.acwrValue ?? null,
-                  acwr_flag: indoor?.acwrFlag ?? null,
-                  mcburnie_flag: indoor?.mcburnieFlag ?? null,
-                  sessions_7d: indoor?.sessions7d ?? 0,
-                };
-              })}
-            />
-          )}
+          {/* Indoor Briefing — team-level executive summary (rendered when team has indoor data OR active injuries) */}
+          {rows.length > 0 &&
+            (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
+              <TeamIndoorBriefing
+                players={rows.map((r) => {
+                  const indoor = playerIndoorStatus[r.player_id];
+                  const injury = playerInjuryStatus[r.player_id];
+                  return {
+                    player_id: r.player_id,
+                    full_name: r.full_name ?? "—",
+                    composite_score: indoor?.compositeScore ?? null,
+                    composite_band: indoor?.compositeBand ?? null,
+                    acwr_value: indoor?.acwrValue ?? null,
+                    acwr_flag: indoor?.acwrFlag ?? null,
+                    mcburnie_flag: indoor?.mcburnieFlag ?? null,
+                    sessions_7d: indoor?.sessions7d ?? 0,
+                    injury_status: injury?.status ?? null,
+                    injury_body_part: injury?.bodyPart ?? null,
+                    injury_rtp_stage: injury?.rtpStage ?? null,
+                    injury_estimated_return: injury?.estimatedReturn ?? null,
+                  };
+                })}
+              />
+            )}
 
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
@@ -6924,6 +7007,13 @@ export default function CoachPage() {
                 _indoor_sessions_7d: playerIndoorStatus[r.player_id]?.sessions7d ?? null,
                 _indoor_acwr_value: playerIndoorStatus[r.player_id]?.acwrValue ?? null,
                 _indoor_acwr_flag: playerIndoorStatus[r.player_id]?.acwrFlag ?? null,
+                // Active injury status — OVERRIDES load verdict in Decision Summary
+                _injury_status: playerInjuryStatus[r.player_id]?.status ?? null,
+                _injury_rtp_stage: playerInjuryStatus[r.player_id]?.rtpStage ?? null,
+                _injury_body_part: playerInjuryStatus[r.player_id]?.bodyPart ?? null,
+                _injury_type: playerInjuryStatus[r.player_id]?.injuryType ?? null,
+                _injury_estimated_return: playerInjuryStatus[r.player_id]?.estimatedReturn ?? null,
+                _injury_severity: playerInjuryStatus[r.player_id]?.severity ?? null,
               };
             }) as any} />
           )}
