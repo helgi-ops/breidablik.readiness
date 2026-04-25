@@ -38,10 +38,17 @@ const ACTION_COLORS: Record<Action, string> = {
 };
 
 const ACTION_LABELS: Record<Action, string> = {
-  FULL: "Full",
-  MODIFIED: "Modify",
-  RECOVERY: "Recovery",
-  NO_DATA: "No data",
+  FULL: "Tilbúinn",
+  MODIFIED: "Léttari æfing",
+  RECOVERY: "Hvíld",
+  NO_DATA: "Engin gögn",
+};
+
+const ACTION_ICONS: Record<Action, string> = {
+  FULL: "✅",
+  MODIFIED: "⚠️",
+  RECOVERY: "🛑",
+  NO_DATA: "❓",
 };
 
 function recommendAction(p: IndoorBriefingPlayer): Action {
@@ -64,11 +71,15 @@ function recommendAction(p: IndoorBriefingPlayer): Action {
 
 function buildReason(p: IndoorBriefingPlayer): string {
   const parts: string[] = [];
-  if (p.composite_band === "spike") parts.push("spike load");
-  else if (p.composite_band === "heavy") parts.push("heavy load");
-  else if (p.composite_band === "light") parts.push("very light");
-  if (p.acwr_flag === "red" && p.acwr_value != null) parts.push(`ACWR ${p.acwr_value.toFixed(2)}`);
-  else if (p.acwr_flag === "yellow" && p.acwr_value != null) parts.push(`ACWR ${p.acwr_value.toFixed(2)}`);
+  if (p.composite_band === "spike") parts.push("æfði miklu meira en venjulega");
+  else if (p.composite_band === "heavy") parts.push("þung session í gær");
+  else if (p.composite_band === "light") parts.push("nær engin æfing");
+  if (p.acwr_flag === "red" && p.acwr_value != null) {
+    if (p.acwr_value > 1.5) parts.push(`acute spike (ACWR ${p.acwr_value.toFixed(2)})`);
+    else if (p.acwr_value < 0.5) parts.push(`undirvinnsla (ACWR ${p.acwr_value.toFixed(2)})`);
+  } else if (p.acwr_flag === "yellow" && p.acwr_value != null) {
+    parts.push(`ACWR ${p.acwr_value.toFixed(2)}`);
+  }
   if (p.mcburnie_flag === "red") parts.push("decel overload");
   else if (p.mcburnie_flag === "yellow") parts.push("decel caution");
   return parts.join(" + ") || "—";
@@ -95,20 +106,20 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
     }
   }
 
-  // Team-level synthesis
+  // Team-level synthesis — plain Icelandic
   let teamAction: Action = "FULL";
-  let teamSentence = "Liðið er í góðu standi — allir leikmenn ready fyrir full training";
+  let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
   if (actionsCount.RECOVERY >= 3) {
     teamAction = "RECOVERY";
-    teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa recovery — vert að recess intensity í team-session`;
+    teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa hvíld — íhuga að lækka heildarintensity team-session`;
   } else if (actionsCount.RECOVERY >= 1) {
     teamAction = "MODIFIED";
-    teamSentence = `${actionsCount.RECOVERY} í recovery, ${actionsCount.MODIFIED} í modify — passa þeim í dag`;
+    teamSentence = `${actionsCount.RECOVERY} leikmenn í hvíld og ${actionsCount.MODIFIED} þurfa léttari æfingu — flest liðið OK`;
   } else if (actionsCount.MODIFIED >= 5) {
     teamAction = "MODIFIED";
-    teamSentence = `${actionsCount.MODIFIED} leikmenn í caution — íhuga reduced team intensity`;
+    teamSentence = `${actionsCount.MODIFIED} leikmenn þurfa léttari æfingu — íhuga lægra team-volume í dag`;
   } else if (actionsCount.MODIFIED >= 1) {
-    teamSentence = `${actionsCount.FULL} ready fyrir fullt, ${actionsCount.MODIFIED} þurfa modifications`;
+    teamSentence = `${actionsCount.FULL} leikmenn tilbúnir í fullt, ${actionsCount.MODIFIED} þurfa léttari æfingu`;
   }
 
   concernPlayers.sort((a, b) => {
@@ -128,32 +139,44 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
   return (
     <div className={`rounded-lg border p-4 ${bannerBg}`}>
       {/* Header banner */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className={`inline-block h-3 w-3 shrink-0 rounded-full ${dotBg}`} />
+      <div className="flex flex-wrap items-start gap-3">
+        <span className={`mt-1 inline-block h-3 w-3 shrink-0 rounded-full ${dotBg}`} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Indoor briefing — liðið í dag
-            </span>
-            <Link
-              href="/coach/indoor-load"
-              className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
-            >
-              Full síða →
-            </Link>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Indoor briefing — liðið í dag
           </div>
           <div className="mt-0.5 text-sm font-semibold text-slate-900">{teamSentence}</div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
-            🟢 {actionsCount.FULL}
+            ✅ {actionsCount.FULL} tilbúnir
           </span>
           <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
-            🟡 {actionsCount.MODIFIED}
+            ⚠️ {actionsCount.MODIFIED} léttari
           </span>
           <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
-            🔴 {actionsCount.RECOVERY}
+            🛑 {actionsCount.RECOVERY} hvíld
           </span>
+          {/* Prominent button to drill into full Indoor Load page */}
+          <Link
+            href="/coach/indoor-load"
+            className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+            title="Opna Indoor Load Intelligence síðuna með 14-day sparkline + team heatmap + per-day detail"
+          >
+            Opna full síðu
+            <svg
+              className="h-3 w-3"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M7.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L10.586 10 7.293 6.707a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </Link>
         </div>
       </div>
 
@@ -180,9 +203,9 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-500">{c.reason}</span>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ACTION_COLORS[c.action]}`}
+                    className={`rounded px-2 py-0.5 text-[11px] font-bold ${ACTION_COLORS[c.action]}`}
                   >
-                    {ACTION_LABELS[c.action]}
+                    {ACTION_ICONS[c.action]} {ACTION_LABELS[c.action]}
                   </span>
                 </div>
               </li>
@@ -190,12 +213,21 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
             {concernPlayers.length > 6 && (
               <li className="pt-0.5 text-[11px] text-slate-500">
                 + {concernPlayers.length - 6} fleiri leikmenn — sjá{" "}
-                <Link href="/coach/indoor-load" className="underline">
+                <Link href="/coach/indoor-load" className="font-semibold underline hover:text-slate-700">
                   full indoor síðu
                 </Link>
               </li>
             )}
           </ul>
+          {/* Bottom drill-in link — encourages exploring trend + heatmap */}
+          <div className="mt-3 border-t border-slate-200/60 pt-2 text-center">
+            <Link
+              href="/coach/indoor-load"
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+            >
+              📊 Skoða 14-day sparkline + team heatmap + per-day detail →
+            </Link>
+          </div>
         </div>
       )}
     </div>

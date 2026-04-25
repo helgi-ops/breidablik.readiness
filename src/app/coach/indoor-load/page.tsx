@@ -108,28 +108,72 @@ const SCORE_BAND_LABELS: Record<ScoreBand, string> = {
 // Action recommendation types — what should the coach DO with this player today?
 type Action = "FULL" | "MODIFIED" | "RECOVERY" | "NO_DATA";
 
-const ACTION_LABELS: Record<Action, { label: string; color: string; sentence: string }> = {
+const ACTION_LABELS: Record<
+  Action,
+  {
+    /** Short label for badge — plain Icelandic answer to "tilbúinn?" */
+    label: string;
+    /** Tailwind classes for badge background */
+    color: string;
+    /** Symbol prefix (✅ / ⚠️ / 🛑 / ❓) */
+    icon: string;
+    /** Single-line summary sentence */
+    sentence: string;
+    /** Concrete coaching recommendation */
+    recommendation: string;
+  }
+> = {
   FULL: {
-    label: "Full Training",
+    label: "Tilbúinn",
     color: "bg-emerald-500 text-white",
-    sentence: "OK að þjálfa á fullu",
+    icon: "✅",
+    sentence: "Tilbúinn í fullt prógram",
+    recommendation: "Engin takmörk — fullt æfing, sprint work OK",
   },
   MODIFIED: {
-    label: "Modify",
+    label: "Léttari æfing",
     color: "bg-amber-500 text-white",
-    sentence: "Lækka intensity / volume",
+    icon: "⚠️",
+    sentence: "Þarf léttari æfingu í dag",
+    recommendation: "Lækka volume 30-40% og sleppa max-intensity sprints",
   },
   RECOVERY: {
-    label: "Recovery",
+    label: "Hvíld",
     color: "bg-rose-500 text-white",
-    sentence: "Recovery only — engin high-intensity vinna",
+    icon: "🛑",
+    sentence: "Hvíld eða mobility eingöngu",
+    recommendation: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work",
   },
   NO_DATA: {
-    label: "No data",
+    label: "Engin gögn",
     color: "bg-slate-300 text-slate-700",
-    sentence: "Ekki nóg gögn til að gefa recommendation",
+    icon: "❓",
+    sentence: "Ekki nóg gögn til að meta",
+    recommendation: "Treysta á eyemark þjálfara í dag",
   },
 };
+
+/** Build natural Icelandic reason text for why a player is in MODIFIED or RECOVERY band. */
+function buildIcelandicReason(args: {
+  composite_band: ScoreBand | null | undefined;
+  acwr_value: number | null | undefined;
+  acwr_flag: Flag | null | undefined;
+  mcburnie_flag: Flag | null | undefined;
+}): string {
+  const parts: string[] = [];
+  if (args.composite_band === "spike") parts.push("æfði miklu meira en venjulega í gær");
+  else if (args.composite_band === "heavy") parts.push("þung session í gær");
+  else if (args.composite_band === "light") parts.push("nær engin æfing nýlega");
+  if (args.acwr_flag === "red" && args.acwr_value != null) {
+    if (args.acwr_value > 1.5) parts.push(`acute spike á 7 dögum (ACWR ${args.acwr_value.toFixed(2)})`);
+    else if (args.acwr_value < 0.5) parts.push(`undirvinnsla (ACWR ${args.acwr_value.toFixed(2)})`);
+  } else if (args.acwr_flag === "yellow" && args.acwr_value != null) {
+    parts.push(`ACWR ${args.acwr_value.toFixed(2)} (utan sweet spot)`);
+  }
+  if (args.mcburnie_flag === "red") parts.push("decel overload (mikið brake-work án nóg sprint)");
+  else if (args.mcburnie_flag === "yellow") parts.push("decel:intensity skekkja");
+  return parts.join(" + ") || "—";
+}
 
 /**
  * Synthesize player's load signals into a single coaching action.
@@ -311,33 +355,29 @@ export default function CoachIndoorLoadPage() {
       const action = recommendAction(r.status);
       actionsCount[action]++;
       if (action === "RECOVERY" || action === "MODIFIED") {
-        // Build short reason from worst signal
-        const reasons: string[] = [];
-        if (r.status?.composite_score_band === "spike") reasons.push("spike load");
-        else if (r.status?.composite_score_band === "heavy") reasons.push("heavy load");
-        else if (r.status?.composite_score_band === "light") reasons.push("very light");
-        if (r.status?.acwr?.flag === "red") reasons.push(`ACWR ${r.status.acwr.value.toFixed(2)}`);
-        else if (r.status?.acwr?.flag === "yellow") reasons.push(`ACWR ${r.status.acwr.value.toFixed(2)}`);
-        if (r.status?.indoor_mcburnie?.flag === "red") reasons.push("decel overload");
-        else if (r.status?.indoor_mcburnie?.flag === "yellow") reasons.push("decel caution");
-        concernPlayers.push({ name: r.full_name, action, reason: reasons.join(" + ") || "—" });
+        const reason = buildIcelandicReason({
+          composite_band: r.status?.composite_score_band,
+          acwr_value: r.status?.acwr?.value,
+          acwr_flag: r.status?.acwr?.flag,
+          mcburnie_flag: r.status?.indoor_mcburnie?.flag,
+        });
+        concernPlayers.push({ name: r.full_name, action, reason });
       }
     }
     // Team-level status: derive from action distribution
     let teamAction: Action = "FULL";
-    let teamSentence = "Liðið er í góðu standi — allir leikmenn ready fyrir full training";
+    let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
     if (actionsCount.RECOVERY >= 3) {
       teamAction = "RECOVERY";
-      teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa recovery — vert að recess intensity í team-session`;
+      teamSentence = `${actionsCount.RECOVERY} leikmenn þurfa hvíld — íhuga að lækka heildarintensity team-session`;
     } else if (actionsCount.RECOVERY >= 1) {
       teamAction = "MODIFIED";
-      teamSentence = `${actionsCount.RECOVERY} í recovery, ${actionsCount.MODIFIED} í modify — passa þeim í dag`;
+      teamSentence = `${actionsCount.RECOVERY} leikmenn í hvíld og ${actionsCount.MODIFIED} þurfa léttari æfingu — flest liðið OK`;
     } else if (actionsCount.MODIFIED >= 5) {
       teamAction = "MODIFIED";
-      teamSentence = `${actionsCount.MODIFIED} leikmenn í caution — íhuga reduced team intensity`;
+      teamSentence = `${actionsCount.MODIFIED} leikmenn þurfa léttari æfingu — íhuga lægra team-volume í dag`;
     } else if (actionsCount.MODIFIED >= 1) {
-      teamAction = "FULL";
-      teamSentence = `${actionsCount.FULL} ready fyrir fullt, ${actionsCount.MODIFIED} þurfa modifications`;
+      teamSentence = `${actionsCount.FULL} leikmenn tilbúnir í fullt, ${actionsCount.MODIFIED} þurfa léttari æfingu`;
     }
     return {
       withIndoor: withIndoor.length,
@@ -414,13 +454,13 @@ export default function CoachIndoorLoadPage() {
             </div>
             <div className="flex items-center gap-2 text-xs">
               <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
-                🟢 {teamStats.actionsCount.FULL} Full
+                ✅ {teamStats.actionsCount.FULL} tilbúnir
               </span>
               <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
-                🟡 {teamStats.actionsCount.MODIFIED} Modify
+                ⚠️ {teamStats.actionsCount.MODIFIED} léttari
               </span>
               <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
-                🔴 {teamStats.actionsCount.RECOVERY} Recovery
+                🛑 {teamStats.actionsCount.RECOVERY} hvíld
               </span>
             </div>
           </div>
@@ -449,7 +489,7 @@ export default function CoachIndoorLoadPage() {
                   <span
                     className={`rounded px-2 py-0.5 font-semibold ${ACTION_LABELS[c.action].color}`}
                   >
-                    {ACTION_LABELS[c.action].label}
+                    {ACTION_LABELS[c.action].icon} {ACTION_LABELS[c.action].label}
                   </span>
                 </div>
               </li>
@@ -521,18 +561,16 @@ export default function CoachIndoorLoadPage() {
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  {/* Action badge — coach's primary signal */}
+                  {/* Plain-language readiness verdict — coach's primary signal */}
                   {!noData && (
                     <span
-                      className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ACTION_LABELS[recommendAction(row.status)].color}`}
-                      title={ACTION_LABELS[recommendAction(row.status)].sentence}
+                      className={`shrink-0 rounded px-2 py-1 text-xs font-bold ${ACTION_LABELS[recommendAction(row.status)].color}`}
+                      title={ACTION_LABELS[recommendAction(row.status)].recommendation}
                     >
+                      {ACTION_LABELS[recommendAction(row.status)].icon}{" "}
                       {ACTION_LABELS[recommendAction(row.status)].label}
                     </span>
                   )}
-                  <span
-                    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${noData ? FLAG_DOT.none : FLAG_DOT[flag]}`}
-                  />
                   <span className="truncate font-medium text-slate-900">{row.full_name}</span>
                   {noData ? (
                     <span className="text-xs text-slate-500">— engin indoor session sl. 28d</span>
@@ -578,6 +616,57 @@ export default function CoachIndoorLoadPage() {
               {/* Expanded detail */}
               {isExpanded && row.status && !noData && (
                 <div className="border-t border-current border-opacity-20 bg-white/60 px-4 py-4 text-sm text-slate-800">
+                  {/* Coach guidance box — TOP PRIORITY: clear yes/no + concrete recommendation */}
+                  {(() => {
+                    const action = recommendAction(row.status);
+                    const labelInfo = ACTION_LABELS[action];
+                    const reason = buildIcelandicReason({
+                      composite_band: row.status.composite_score_band,
+                      acwr_value: row.status.acwr?.value,
+                      acwr_flag: row.status.acwr?.flag,
+                      mcburnie_flag: row.status.indoor_mcburnie?.flag,
+                    });
+                    const bannerBg =
+                      action === "RECOVERY" ? "border-rose-300 bg-rose-50"
+                        : action === "MODIFIED" ? "border-amber-300 bg-amber-50"
+                        : "border-emerald-300 bg-emerald-50";
+                    return (
+                      <div className={`mb-4 rounded-lg border p-4 ${bannerBg}`}>
+                        <div className="flex flex-wrap items-baseline gap-3">
+                          <span className="text-2xl">{labelInfo.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Tilbúinn í dag?
+                            </div>
+                            <div className="mt-0.5 text-lg font-bold text-slate-900">
+                              {labelInfo.sentence}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                              Hvers vegna
+                            </div>
+                            <div className="mt-0.5 text-sm text-slate-800">
+                              {action === "FULL"
+                                ? "Allir signal innan heilbrigðs sviðs — engin warning flag"
+                                : reason}
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                              Þjálfara-leiðbeining
+                            </div>
+                            <div className="mt-0.5 text-sm font-medium text-slate-900">
+                              {labelInfo.recommendation}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Composite Score banner + 14-day sparkline + FMP movement bars */}
                   {row.status.latest_session?.fmp_bands && row.status.composite_score != null && row.status.composite_score_band && (
                     <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3">

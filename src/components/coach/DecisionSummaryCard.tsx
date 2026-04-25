@@ -532,6 +532,57 @@ const UNKNOWN_STATE: StateConfig = {
   sortPriority: 9,
 };
 
+// ── Icelandic verdict mapping — answers "Tilbúinn?" plainly ─────────────
+type IcelandicVerdict = {
+  /** Emoji icon (✅⚠️🛑❓) */
+  icon: string;
+  /** Short verdict label */
+  label: string;
+  /** Single-line summary sentence */
+  sentence: string;
+  /** Concrete coaching recommendation */
+  recommendation: string;
+};
+
+const ICELANDIC_VERDICT: Record<string, IcelandicVerdict> = {
+  FULL: {
+    icon: "✅",
+    label: "Tilbúinn",
+    sentence: "Tilbúinn í fullt prógram",
+    recommendation: "Engin takmörk — fullt æfing, sprint work OK",
+  },
+  MODIFIED: {
+    icon: "⚠️",
+    label: "Léttari æfing",
+    sentence: "Þarf léttari æfingu í dag",
+    recommendation: "Lækka volume 30-40% og sleppa max-intensity sprints",
+  },
+  RECOVERY: {
+    icon: "🛑",
+    label: "Hvíld",
+    sentence: "Hvíld eða mobility eingöngu",
+    recommendation: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work",
+  },
+  HOLD: {
+    icon: "🛑",
+    label: "Frá æfingu",
+    sentence: "Frá æfingu í dag",
+    recommendation: "Medical/injury hold — ekki hafa með í team-session",
+  },
+};
+
+const UNKNOWN_VERDICT: IcelandicVerdict = {
+  icon: "❓",
+  label: "Engin gögn",
+  sentence: "Ekki nóg gögn til að meta",
+  recommendation: "Treysta á eyemark þjálfara í dag",
+};
+
+function getIcelandicVerdict(action: string | null): IcelandicVerdict {
+  if (!action) return UNKNOWN_VERDICT;
+  return ICELANDIC_VERDICT[action] ?? UNKNOWN_VERDICT;
+}
+
 // ── Risk flag labels ──────────────────────────────────────────────────────
 // Maps the engine's internal riskFlags to coach-friendly English.
 
@@ -606,6 +657,7 @@ const RECOVERY_FOCUS_LABEL: Record<string, string> = {
 const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row, onClose }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
+  const verdict = getIcelandicVerdict(displayAction);
   const final = row._final_recommendation_decision?.finalRecommendation ?? null;
 
   const confidenceRaw = final?.confidence ?? row._final_recommendation_decision?.confidence ?? null;
@@ -644,18 +696,22 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
         <div className={`${cfg.topBarClass} h-2 w-full`} />
 
         <div className="flex flex-col gap-6 p-8">
-          {/* Header */}
+          {/* Header — leads with plain-Icelandic verdict so coach gets clear answer first */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 leading-tight">{row.full_name}</h2>
               <div className="mt-3 flex items-center gap-3 flex-wrap">
-                <span className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-lg font-bold ${cfg.badgeBgClass} ${cfg.badgeTextClass}`}>
-                  {cfg.emoji} {cfg.label}
+                <span
+                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-lg font-bold ${cfg.badgeBgClass} ${cfg.badgeTextClass}`}
+                  title={verdict.recommendation}
+                >
+                  {verdict.icon} {verdict.label}
                 </span>
                 {confidence && (
                   <span className="text-base text-slate-500 font-medium">{confidence} confidence</span>
                 )}
               </div>
+              <p className="mt-2 text-sm text-slate-600 italic">{verdict.sentence}</p>
             </div>
             <button
               onClick={onClose}
@@ -694,6 +750,26 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
               </div>
             );
           })()}
+
+          {/* Þjálfara-leiðbeining — concrete recommendation in plain Icelandic */}
+          <div
+            className={`rounded-xl border px-5 py-4 ${
+              displayAction === "RECOVERY" || displayAction === "HOLD"
+                ? "bg-rose-50 border-rose-200"
+                : displayAction === "MODIFIED"
+                ? "bg-amber-50 border-amber-200"
+                : displayAction === "FULL"
+                ? "bg-emerald-50 border-emerald-200"
+                : "bg-slate-50 border-slate-200"
+            }`}
+          >
+            <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+              Þjálfara-leiðbeining
+            </p>
+            <p className="text-base font-semibold text-slate-900 leading-snug">
+              {verdict.recommendation}
+            </p>
+          </div>
 
           {/* Primary driver */}
           {primarySentence && (
@@ -1451,6 +1527,7 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
 const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row, onClick }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
+  const verdict = getIcelandicVerdict(displayAction);
   const final = row._final_recommendation_decision?.finalRecommendation ?? null;
   const isAlert = displayAction === "RECOVERY" || displayAction === "HOLD";
   const isWarning = displayAction === "MODIFIED";
@@ -1482,14 +1559,17 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
     >
       <div className="flex flex-col gap-1.5 px-3 py-2.5">
 
-        {/* Row 1: Name + badge + confidence */}
+        {/* Row 1: Name + plain-Icelandic verdict badge + confidence */}
         <div className="flex items-start justify-between gap-2 min-w-0">
           <span className="text-sm font-bold text-slate-900 leading-tight">
             {row.full_name}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${cfg.badgeBgClass} ${cfg.badgeTextClass}`}>
-              {cfg.emoji} {cfg.label}
+            <span
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${cfg.badgeBgClass} ${cfg.badgeTextClass}`}
+              title={verdict.recommendation}
+            >
+              {verdict.icon} {verdict.label}
             </span>
             {confidence && (
               <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
