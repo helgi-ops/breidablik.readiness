@@ -354,9 +354,15 @@ export default function CoachIndoorLoadPage() {
         return;
       }
 
-      // Fetch from BOTH player_injuries AND injury_events (latter for legacy + illness)
+      // Fetch from BOTH player_injuries AND injury_events + recent training data
+      // (last for illness auto-promote when player resumes training)
       const playerIds = players.map((p) => p.id);
-      const [results, piResp, ieResp] = await Promise.all([
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+      const [results, piResp, ieResp, trainingResp] = await Promise.all([
         Promise.all(
           players.map(async (p) => {
             const { data, error: rpcErr } = await sb.rpc("get_indoor_load_status", {
@@ -382,7 +388,40 @@ export default function CoachIndoorLoadPage() {
           .in("player_id", playerIds)
           .eq("is_active", true)
           .order("injury_date", { ascending: false }),
+        sb
+          .from("player_external_load_daily")
+          .select("player_id, date, total_player_load")
+          .in("player_id", playerIds)
+          .eq("source", "catapult")
+          .gte("date", sevenDaysAgoStr)
+          .gt("total_player_load", 0)
+          .order("date", { ascending: false }),
       ]);
+
+      // Build training history map for illness auto-promote
+      const trainingDatesByPlayer = new Map<string, string[]>();
+      for (const t of (trainingResp.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(t.player_id);
+        const list = trainingDatesByPlayer.get(pid) ?? [];
+        list.push(String(t.date));
+        trainingDatesByPlayer.set(pid, list);
+      }
+      const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
+      function resolveIllnessStatus(
+        pid: string,
+        illnessDate: string | null,
+      ): "injured" | "rehabilitation" | null {
+        const dates = trainingDatesByPlayer.get(pid) ?? [];
+        const trainedAfterIllness = illnessDate ? dates.some((d) => d > illnessDate) : false;
+        const trainedRecently = dates.length > 0 && (dates[0] === todayStr || dates[0] === yesterdayStr);
+        const daysSinceLogged = illnessDate
+          ? Math.floor((Date.now() - new Date(illnessDate).getTime()) / 86_400_000)
+          : 0;
+        if (daysSinceLogged >= 7 && trainedAfterIllness) return null;
+        if (trainedRecently || trainedAfterIllness) return "rehabilitation";
+        return "injured";
+      }
 
       // Merge: injury_events first (lower precedence), player_injuries overwrites
       const injuryByPlayer = new Map<string, InjuryInfo>();
@@ -391,8 +430,15 @@ export default function CoachIndoorLoadPage() {
         if (injuryByPlayer.has(pid)) continue;
         const evType = String(ev.injury_type ?? "");
         const isIllness = evType === "illness";
+        const illnessDate = typeof ev.injury_date === "string" ? ev.injury_date : null;
+        let effectiveStatus: InjuryInfo["status"] = "injured";
+        if (isIllness) {
+          const resolved = resolveIllnessStatus(pid, illnessDate);
+          if (resolved == null) continue;
+          effectiveStatus = resolved;
+        }
         injuryByPlayer.set(pid, {
-          status: "injured",
+          status: effectiveStatus,
           rtp_stage: null,
           body_part: isIllness ? "Illness" : evType.replace(/_/g, " "),
           injury_type: isIllness ? "Veikindi" : evType.replace(/_/g, " "),

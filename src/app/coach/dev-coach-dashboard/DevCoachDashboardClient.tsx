@@ -2027,10 +2027,23 @@ export default function CoachPage() {
       // (legacy + illness logging). player_injuries takes precedence when both have
       // a record for the same player. Without this dual fetch we miss illnesses
       // logged via the older /coach/injuries page (critical safety hole).
+      //
+      // ILLNESS AUTO-PROMOTE LOGIC:
+      // injury_events.is_active never auto-clears. So when a player logs an illness
+      // and then resumes training, the system would incorrectly keep showing 🤒 Veikur.
+      // We detect resumed training via Catapult sessions after illness_date and:
+      //   - 7+ days since logged + recent training → presume cleared (skip verdict)
+      //   - Recent training (today/yesterday) → demote to "rehabilitation" (🫧 Að jafna sig)
+      //   - No recent training → keep as 🤒 Veikur
       try {
         const playerIds = rows.map((r) => r.player_id).filter(Boolean);
         if (playerIds.length) {
-          const [piResp, ieResp] = await Promise.all([
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+          const [piResp, ieResp, recentTrainingResp] = await Promise.all([
             supabase
               .from("player_injuries")
               .select("player_id, status, rtp_stage, body_part, injury_type, estimated_return_date, severity, injury_date, actual_return_date")
@@ -2042,7 +2055,50 @@ export default function CoachPage() {
               .in("player_id", playerIds)
               .eq("is_active", true)
               .order("injury_date", { ascending: false }),
+            // Last 7 days of training sessions per player (for illness auto-promote)
+            supabase
+              .from("player_external_load_daily")
+              .select("player_id, date, total_player_load")
+              .in("player_id", playerIds)
+              .eq("source", "catapult")
+              .gte("date", sevenDaysAgoStr)
+              .gt("total_player_load", 0)
+              .order("date", { ascending: false }),
           ]);
+
+          // Build per-player training history map: { playerId → [date, ...] sorted desc }
+          const trainingDatesByPlayer = new Map<string, string[]>();
+          for (const t of (recentTrainingResp.data ?? []) as Array<Record<string, unknown>>) {
+            const pid = String(t.player_id);
+            const date = String(t.date);
+            const list = trainingDatesByPlayer.get(pid) ?? [];
+            list.push(date);
+            trainingDatesByPlayer.set(pid, list);
+          }
+
+          /** Apply illness auto-promote rules. Returns null if illness should be SKIPPED entirely. */
+          function resolveIllnessStatus(
+            pid: string,
+            illnessDate: string | null,
+          ): "injured" | "rehabilitation" | null {
+            const trainingDates = trainingDatesByPlayer.get(pid) ?? [];
+            const trainedAfterIllness = illnessDate
+              ? trainingDates.some((d) => d > illnessDate)
+              : false;
+            const trainedRecently =
+              trainingDates.length > 0 &&
+              (trainingDates[0] === todayStr ||
+                trainingDates[0] === new Date(Date.now() - 86_400_000).toISOString().slice(0, 10));
+            const daysSinceLogged = illnessDate
+              ? Math.floor((Date.now() - new Date(illnessDate).getTime()) / 86_400_000)
+              : 0;
+            // Stale illness (logged 7+ days ago) + back to training → presume cleared
+            if (daysSinceLogged >= 7 && trainedAfterIllness) return null;
+            // Recent training → demote to recovering
+            if (trainedRecently || trainedAfterIllness) return "rehabilitation";
+            // Still actively sick
+            return "injured";
+          }
 
           const injuryMap: typeof playerInjuryStatus = {};
 
@@ -2052,11 +2108,17 @@ export default function CoachPage() {
             if (injuryMap[pid]) continue; // already have more recent
             const evType = String(ev.injury_type ?? "");
             const isIllness = evType === "illness";
-            // Map injury_events shape to playerInjuryStatus shape
+            const illnessDate = typeof ev.injury_date === "string" ? ev.injury_date : null;
+            // For illness: apply auto-promote rule based on training history
+            let effectiveStatus: typeof playerInjuryStatus[string]["status"] = "injured";
+            if (isIllness) {
+              const resolved = resolveIllnessStatus(pid, illnessDate);
+              if (resolved == null) continue; // presumed cleared — skip
+              effectiveStatus = resolved;
+            }
             injuryMap[pid] = {
-              status: "injured", // injury_events doesn't have RTP stages; treat active as injured
+              status: effectiveStatus,
               rtpStage: null,
-              // CRITICAL: set body_part='Illness' for illness so verdict triggers correctly
               bodyPart: isIllness ? "Illness" : evType.replace(/_/g, " "),
               injuryType: isIllness ? "Veikindi" : evType.replace(/_/g, " "),
               estimatedReturn: typeof ev.return_date === "string" ? ev.return_date : null,
@@ -2073,8 +2135,6 @@ export default function CoachPage() {
               status === "rehabilitation" ||
               status === "rtp_training";
             if (!isActive) continue;
-            // Skip if we already have a player_injuries record for this player
-            // (need to track via separate set to allow overwriting injury_events fallback)
             if (injuryMap[pid] && injuryMap[pid].rtpStage != null) continue;
             injuryMap[pid] = {
               status,
