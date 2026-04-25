@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 
 // ── Minimal types (mirrored from dashboard Row) ───────────────────────────
 
@@ -886,10 +887,42 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
             </div>
           )}
 
-          {/* Þjálfara-leiðbeining — concrete recommendation in plain Icelandic */}
-          <div
-            className={`rounded-xl border px-5 py-4 ${
-              isInjured
+          {/* Þjálfara-leiðbeining — explanation engine output */}
+          {(() => {
+            // Map row data into explain.ts input
+            const verdictKey = isIll
+              ? row._injury_status === "injured" ? "ILL" : "RECOVERING_ILL"
+              : isInjured
+              ? row._injury_status === "injured" ? "INJURED"
+                : row._injury_status === "rehabilitation" ? "REHAB"
+                : row._injury_status === "rtp_training" ? "RTP" : "INJURED"
+              : (displayAction as ExplainInput["verdict"]) ?? "NO_DATA";
+            const explanation = buildVerdictExplanation({
+              verdict: verdictKey,
+              composite_score: row._indoor_composite_score ?? null,
+              composite_band: row._indoor_composite_band ?? null,
+              acwr_value: row._indoor_acwr_value ?? null,
+              acwr_flag: row._indoor_acwr_flag ?? null,
+              mcburnie_ratio: row._indoor_mcburnie_ratio ?? null,
+              mcburnie_flag: row._indoor_mcburnie_flag ?? null,
+              indoor_sessions_7d: row._indoor_sessions_7d ?? null,
+              injury_status: row._injury_status ?? null,
+              injury_body_part: row._injury_body_part ?? null,
+              injury_type: row._injury_type ?? null,
+              injury_rtp_stage: row._injury_rtp_stage ?? null,
+              injury_estimated_return: row._injury_estimated_return ?? null,
+              injury_severity: row._injury_severity ?? null,
+              has_readiness_today: row.sleep_quality != null || row.fatigue_energy != null,
+              fatigue_energy: row.fatigue_energy ?? null,
+              muscle_soreness: row.muscle_soreness ?? null,
+              sleep_quality: row.sleep_quality ?? null,
+              trained_recently: row._yesterday_load?.playerLoad != null && row._yesterday_load.playerLoad > 0,
+            });
+
+            const containerColor =
+              isIll
+                ? "bg-teal-50 border-teal-200"
+                : isInjured
                 ? "bg-violet-50 border-violet-200"
                 : displayAction === "RECOVERY" || displayAction === "HOLD"
                 ? "bg-rose-50 border-rose-200"
@@ -897,16 +930,57 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                 ? "bg-amber-50 border-amber-200"
                 : displayAction === "FULL"
                 ? "bg-emerald-50 border-emerald-200"
-                : "bg-slate-50 border-slate-200"
-            }`}
-          >
-            <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
-              Þjálfara-leiðbeining
-            </p>
-            <p className="text-base font-semibold text-slate-900 leading-snug">
-              {verdict.recommendation}
-            </p>
-          </div>
+                : "bg-slate-50 border-slate-200";
+
+            return (
+              <div className={`rounded-xl border px-5 py-4 space-y-3 ${containerColor}`}>
+                {/* WHY — top driving signals */}
+                {explanation.why.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+                      Hvers vegna
+                    </p>
+                    <ul className="space-y-0.5 text-sm text-slate-800">
+                      {explanation.why.map((line, i) => (
+                        <li key={i} className="leading-snug">· {line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* ACTION — concrete coaching action */}
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+                    Þjálfara-leiðbeining
+                  </p>
+                  <p className="text-base font-semibold text-slate-900 leading-snug">
+                    {explanation.action || verdict.recommendation}
+                  </p>
+                </div>
+                {/* VERIFY — what to check (only if relevant) */}
+                {explanation.verify.length > 0 && (
+                  <div className="border-t border-current border-opacity-20 pt-3">
+                    <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+                      Verifya
+                    </p>
+                    <ul className="space-y-0.5 text-sm text-slate-700">
+                      {explanation.verify.map((line, i) => (
+                        <li key={i} className="leading-snug">⚠ {line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* ASK — suggested question for player (only if data missing) */}
+                {explanation.ask && (
+                  <div className="border-t border-current border-opacity-20 pt-3">
+                    <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+                      Spurning til leikmanns
+                    </p>
+                    <p className="text-sm italic text-slate-700">"{explanation.ask}"</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Primary driver */}
           {primarySentence && (
