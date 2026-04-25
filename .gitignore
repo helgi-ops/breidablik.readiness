@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ── Sport science research library (large binary corpus, not source) ──
+research/
+
+# ── Word/Excel temp lockfiles ──
+~$*
+
+# ── Generated deliverable docs (live in workspace, not source) ──
+MicroPulse Coach Guide.pdf
+MicroPulse-App-Uppsetning.pdf
+MicroPulse-Pilot-Samningur*.docx
+MicroPulse-References-*.docx
+MicroPulse-References-*.md
+MicroPulse-Sport-Science-References.docx
+MicroPulse-Sport-Science-References.md
