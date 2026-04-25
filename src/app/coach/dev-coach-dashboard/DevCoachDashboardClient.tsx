@@ -82,6 +82,7 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
+import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
@@ -1882,6 +1883,18 @@ export default function CoachPage() {
     baselineVelocity: number; worstVelocity: number;
   }>>>({});
 
+  // Indoor Load (FMP-driven höll-mode) per player — populates Decision Summary's Indoor block
+  const [playerIndoorStatus, setPlayerIndoorStatus] = useState<Record<string, {
+    latestDate: string | null;
+    compositeScore: number | null;
+    compositeBand: "light" | "below_average" | "typical" | "heavy" | "spike" | null;
+    mcburnieRatio: number | null;
+    mcburnieFlag: "green" | "yellow" | "red" | null;
+    acwrValue: number | null;
+    acwrFlag: "green" | "yellow" | "red" | null;
+    sessions7d: number | null;
+  }>>({});
+
   // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
   useEffect(() => {
     if (!rows.length || !coachTeamId) return;
@@ -1960,6 +1973,44 @@ export default function CoachPage() {
           }
         }
       } catch { /* VBT fatigue is optional */ }
+
+      // Indoor Load Intelligence — fetch per-player composite score + McBurnie status.
+      // RPC handles 28d baseline + indoor session detection internally; we just collect.
+      try {
+        const playerIds = rows.map((r) => r.player_id).filter(Boolean);
+        if (playerIds.length) {
+          const indoorMap: typeof playerIndoorStatus = {};
+          await Promise.all(
+            playerIds.map(async (pid) => {
+              try {
+                const { data } = await supabase.rpc("get_indoor_load_status", {
+                  p_player_id: pid,
+                });
+                const status = data as Record<string, unknown> | null;
+                if (!status) return;
+                const sessions7d = Number(
+                  (status.recent_7d as Record<string, unknown> | null)?.sessions ?? 0,
+                );
+                if (sessions7d <= 0) return; // no recent indoor work — skip
+                const latest = status.latest_session as Record<string, unknown> | null;
+                const mc = status.indoor_mcburnie as Record<string, unknown> | null;
+                const acwr = status.acwr as Record<string, unknown> | null;
+                indoorMap[pid] = {
+                  latestDate: typeof latest?.date === "string" ? latest.date : null,
+                  compositeScore: typeof status.composite_score === "number" ? status.composite_score : null,
+                  compositeBand: (status.composite_score_band as typeof playerIndoorStatus[string]["compositeBand"]) ?? null,
+                  mcburnieRatio: typeof mc?.decel_per_dyn_high_min === "number" ? mc.decel_per_dyn_high_min : null,
+                  mcburnieFlag: (mc?.flag as "green" | "yellow" | "red" | undefined) ?? null,
+                  acwrValue: typeof acwr?.value === "number" ? acwr.value : null,
+                  acwrFlag: (acwr?.flag as "green" | "yellow" | "red" | undefined) ?? null,
+                  sessions7d,
+                };
+              } catch { /* per-player RPC failure — skip silently */ }
+            }),
+          );
+          if (Object.keys(indoorMap).length) setPlayerIndoorStatus(indoorMap);
+        }
+      } catch { /* Indoor Load is optional */ }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, coachTeamId]);
@@ -6659,6 +6710,25 @@ export default function CoachPage() {
             </CardContent>
           </Card>
 
+          {/* Indoor Briefing — team-level executive summary (shown only when team has indoor data) */}
+          {rows.length > 0 && Object.keys(playerIndoorStatus).length > 0 && (
+            <TeamIndoorBriefing
+              players={rows.map((r) => {
+                const indoor = playerIndoorStatus[r.player_id];
+                return {
+                  player_id: r.player_id,
+                  full_name: r.full_name ?? "—",
+                  composite_score: indoor?.compositeScore ?? null,
+                  composite_band: indoor?.compositeBand ?? null,
+                  acwr_value: indoor?.acwrValue ?? null,
+                  acwr_flag: indoor?.acwrFlag ?? null,
+                  mcburnie_flag: indoor?.mcburnieFlag ?? null,
+                  sessions_7d: indoor?.sessions7d ?? 0,
+                };
+              })}
+            />
+          )}
+
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
             <DecisionSummaryCard rows={rows.map((r) => {
@@ -6787,6 +6857,34 @@ export default function CoachPage() {
                 };
               }
 
+              // ── Stage B: Indoor escalation rule ──────────────────────────
+              // When indoor signal is concerning (spike score OR red McBurnie) AND
+              // the latest indoor session is recent (today or yesterday), bump the
+              // concern level up by one band. This feeds directly into Decision Engine
+              // so coaches don't underestimate indoor-only sessions where outdoor metrics
+              // (sprint efforts, vb6 distance) would naturally be near-zero.
+              const indoor = playerIndoorStatus[r.player_id];
+              let escalatedConcern = resolved.concernLevel;
+              const indoorIsRecent = (() => {
+                if (!indoor?.latestDate) return false;
+                const latestTime = new Date(indoor.latestDate).getTime();
+                const todayTime = new Date(ed).getTime();
+                const dayDiff = Math.round((todayTime - latestTime) / (1000 * 60 * 60 * 24));
+                return dayDiff >= 0 && dayDiff <= 1;
+              })();
+              const indoorIsConcerning =
+                indoor?.compositeBand === "spike" ||
+                indoor?.mcburnieFlag === "red" ||
+                indoor?.acwrFlag === "red";
+              if (indoorIsRecent && indoorIsConcerning && escalatedConcern !== "high") {
+                const bumpMap: Record<string, "none" | "low" | "moderate" | "high"> = {
+                  none: "low",
+                  low: "moderate",
+                  moderate: "high",
+                };
+                escalatedConcern = bumpMap[escalatedConcern ?? "none"] ?? escalatedConcern;
+              }
+
               return {
                 ...r,
                 _yesterday_load: yRow ? {
@@ -6804,7 +6902,7 @@ export default function CoachPage() {
                 _vbt_fatigue_flags: playerVbtFatigue[r.player_id] ?? null,
                 _today_nbs: resolved.nbs,
                 _today_composite_score: resolved.compositeScore,
-                _today_composite_concern: resolved.concernLevel,
+                _today_composite_concern: escalatedConcern,
                 _today_fatigue_type: resolved.fatigueType,
                 _today_player_load_spike: resolved.playerLoadSpike,
                 _load_signals_date: signalDate,
@@ -6817,6 +6915,15 @@ export default function CoachPage() {
                 // HID% trend
                 _today_hid_decline_pct: resolved.hidDeclinePct,
                 _today_hid_fatigue_flag: resolved.hidFatigueFlag,
+                // Indoor Load Intelligence (höll-mode FMP-driven signal)
+                _indoor_latest_date: playerIndoorStatus[r.player_id]?.latestDate ?? null,
+                _indoor_composite_score: playerIndoorStatus[r.player_id]?.compositeScore ?? null,
+                _indoor_composite_band: playerIndoorStatus[r.player_id]?.compositeBand ?? null,
+                _indoor_mcburnie_ratio: playerIndoorStatus[r.player_id]?.mcburnieRatio ?? null,
+                _indoor_mcburnie_flag: playerIndoorStatus[r.player_id]?.mcburnieFlag ?? null,
+                _indoor_sessions_7d: playerIndoorStatus[r.player_id]?.sessions7d ?? null,
+                _indoor_acwr_value: playerIndoorStatus[r.player_id]?.acwrValue ?? null,
+                _indoor_acwr_flag: playerIndoorStatus[r.player_id]?.acwrFlag ?? null,
               };
             }) as any} />
           )}

@@ -126,6 +126,24 @@ export type DecisionSummaryRow = {
     baselineVelocity: number;
     worstVelocity: number;
   }> | null;
+
+  // ── Indoor Load Intelligence (FMP-driven, when session detected as indoor) ──
+  /** ISO date of latest indoor session within last 28d (null = no recent indoor work). */
+  _indoor_latest_date?: string | null;
+  /** Composite Indoor Load Score (0-150+); 100 = personal 28d avg. Null when no indoor data. */
+  _indoor_composite_score?: number | null;
+  /** Score band: light/below_average/typical/heavy/spike. */
+  _indoor_composite_band?: "light" | "below_average" | "typical" | "heavy" | "spike" | null;
+  /** Indoor McBurnie proxy decel:dyn-high ratio (0.5-15+). Null when no recent indoor. */
+  _indoor_mcburnie_ratio?: number | null;
+  /** Indoor McBurnie flag: green/yellow/red. */
+  _indoor_mcburnie_flag?: "green" | "yellow" | "red" | null;
+  /** Number of indoor sessions in last 7 days (for context). */
+  _indoor_sessions_7d?: number | null;
+  /** Acute:Chronic Workload Ratio (Gabbett 2017). 7d total / 28d weekly avg. Sweet spot 0.8-1.3. */
+  _indoor_acwr_value?: number | null;
+  /** ACWR flag: green/yellow/red. */
+  _indoor_acwr_flag?: "green" | "yellow" | "red" | null;
 };
 
 // ── Action resolution (matches Squad tab logic exactly) ───────────────────
@@ -1280,6 +1298,107 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                     <span className="text-[10px] font-semibold uppercase tracking-wide">{resDecelBand}</span>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          );
+        })()}
+        {/* Indoor Load (FMP-driven, höll-mode) — shown when player has recent indoor session */}
+        {(() => {
+          const indoorScore = row._indoor_composite_score;
+          const indoorBand = row._indoor_composite_band;
+          const indoorMcburnieFlag = row._indoor_mcburnie_flag;
+          const indoorSessions7d = row._indoor_sessions_7d ?? 0;
+          if (indoorScore == null || indoorSessions7d === 0) return null;
+
+          const scoreTone =
+            indoorBand === "spike"
+              ? "border-rose-300 bg-rose-50 text-rose-700"
+              : indoorBand === "heavy"
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : indoorBand === "typical"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : indoorBand === "below_average"
+              ? "border-sky-200 bg-sky-50 text-sky-700"
+              : "border-slate-200 bg-slate-50 text-slate-600";
+          const scoreLabel =
+            indoorBand === "spike" ? "Spike"
+              : indoorBand === "heavy" ? "Heavy"
+              : indoorBand === "typical" ? "Typical"
+              : indoorBand === "below_average" ? "Below avg"
+              : "Light";
+
+          const mcburnieTone =
+            indoorMcburnieFlag === "red"
+              ? "border-rose-300 bg-rose-50 text-rose-700"
+              : indoorMcburnieFlag === "yellow"
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700";
+          const mcburnieLabel =
+            indoorMcburnieFlag === "red" ? "At-risk"
+              : indoorMcburnieFlag === "yellow" ? "Caution"
+              : "Healthy";
+
+          // Escalation indicator: spike score OR red McBurnie → concern level was bumped
+          const escalated = indoorBand === "spike" || indoorMcburnieFlag === "red";
+
+          return (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2 flex items-center gap-2">
+                Indoor load (höll-mode)
+                {escalated && (
+                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-700 normal-case">
+                    ↑ Concern bumped
+                  </span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <div
+                  className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${scoreTone}`}
+                  title="Composite Indoor Load Score: weighted combo of player_load, dyn_high_pct, ima_total, hmld, decel_b23 normalized to 28d baseline. 100 = personal avg."
+                >
+                  <span className="text-[9px] font-semibold uppercase opacity-70">Indoor score</span>
+                  <span className="text-lg font-bold tabular-nums">{indoorScore}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide">{scoreLabel}</span>
+                </div>
+                {indoorMcburnieFlag && (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${mcburnieTone}`}
+                    title="Indoor McBurnie proxy: decel events per minute of high-intensity FMP movement. Healthy 1-10."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">McBurnie indoor</span>
+                    <span className="text-lg font-bold tabular-nums">
+                      {row._indoor_mcburnie_ratio?.toFixed(2) ?? "—"}
+                    </span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{mcburnieLabel}</span>
+                  </div>
+                )}
+                <div className="flex flex-col rounded-lg border border-slate-200 bg-white px-3 py-2 min-w-[7rem]">
+                  <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-500">Indoor (7d)</span>
+                  <span className="text-lg font-bold tabular-nums text-slate-800">{indoorSessions7d}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {indoorSessions7d === 1 ? "session" : "sessions"}
+                  </span>
+                </div>
+                {row._indoor_acwr_value != null && row._indoor_acwr_flag && (
+                  <div
+                    className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${
+                      row._indoor_acwr_flag === "red"
+                        ? "border-rose-300 bg-rose-50 text-rose-700"
+                        : row._indoor_acwr_flag === "yellow"
+                        ? "border-amber-300 bg-amber-50 text-amber-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                    title="Acute:Chronic Workload Ratio (Gabbett 2017). Sweet spot 0.8-1.3. >1.5 = injury risk elevated."
+                  >
+                    <span className="text-[9px] font-semibold uppercase opacity-70">ACWR (7d:28d)</span>
+                    <span className="text-lg font-bold tabular-nums">{row._indoor_acwr_value.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">
+                      {row._indoor_acwr_flag === "red" ? "Risk"
+                        : row._indoor_acwr_flag === "yellow" ? "Caution"
+                        : "Sweet spot"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           );
