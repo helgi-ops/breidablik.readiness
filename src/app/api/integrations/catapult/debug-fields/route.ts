@@ -169,6 +169,132 @@ export async function GET(request: Request) {
 
     const normalizedFirst = normalized[0] ?? null;
 
+    // Surface sprint-count probe results — these tell us EXACTLY which display-name
+    // Catapult accepts and what raw key name it sends back.
+    const sprintProbeAccepted = details.sprintCountProbeResults.filter((r) => r.success);
+    const sprintProbeRejected = details.sprintCountProbeResults.filter((r) => !r.success);
+    // Find any new keys the sprint probe revealed beyond the base/IMA/metabolic/FMP fields
+    const sprintRevealedKeys = Array.from(
+      new Set(sprintProbeAccepted.flatMap((r) => r.returnedKeys)),
+    )
+      .filter((k) => !allRawKeys.includes(k))
+      .sort();
+
+    // ── Aggregate stats across ALL 18 athletes ─────────────────────
+    // The "sample" fields above only show row[0] which may be a goalkeeper or someone
+    // who didn't participate. These aggregates tell us if data exists for ANY athlete.
+    function aggregateField(rows: Record<string, unknown>[], fieldNames: string[]) {
+      let nonZeroCount = 0;
+      let maxValue = 0;
+      let sumValue = 0;
+      const samplesPerAthlete: Array<{ athleteId: string | null; value: number | null }> = [];
+      for (const row of rows) {
+        const athleteId =
+          (typeof row.athlete_id === "string" ? row.athlete_id : null) ??
+          (typeof row.athleteId === "string" ? row.athleteId : null) ??
+          (typeof row.id === "string" ? row.id : null);
+        let val: number | null = null;
+        for (const fname of fieldNames) {
+          const raw = row[fname];
+          const parsed = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+          if (parsed != null && Number.isFinite(parsed)) {
+            val = parsed;
+            break;
+          }
+        }
+        samplesPerAthlete.push({ athleteId, value: val });
+        if (val != null && val > 0) {
+          nonZeroCount += 1;
+          sumValue += val;
+          if (val > maxValue) maxValue = val;
+        }
+      }
+      return {
+        nonZeroAthletes: nonZeroCount,
+        totalAthletes: rows.length,
+        maxValue,
+        avgValue: nonZeroCount > 0 ? sumValue / nonZeroCount : 0,
+        topAthlete:
+          samplesPerAthlete
+            .filter((s) => s.value != null && s.value > 0)
+            .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0] ?? null,
+      };
+    }
+
+    const imaAggregates = {
+      imaAccelHigh: aggregateField(rowsImaOnly, ["IMA Accel High", "ima_accel_high", "imaAccelHigh"]),
+      imaDecelHigh: aggregateField(rowsImaOnly, ["IMA Decel High", "ima_decel_high", "imaDecelHigh"]),
+      imaCodLeftHigh: aggregateField(rowsImaOnly, ["IMA CoD Left High", "ima_cod_left_high"]),
+      imaCodRightHigh: aggregateField(rowsImaOnly, ["IMA CoD Right High", "ima_cod_right_high"]),
+    };
+    const baseAggregates = {
+      totalDistance: aggregateField(rowsBase, ["total_distance", "totalDistance"]),
+      maxVelocity: aggregateField(rowsBase, ["max_vel", "max_velocity", "maxVelocity"]),
+      velocityBand6Distance: aggregateField(rowsBase, ["velocity_band6_total_distance", "velocityBand6TotalDistance"]),
+      totalPlayerLoad: aggregateField(rowsBase, ["total_player_load", "totalPlayerLoad"]),
+    };
+    const metabolicAggregates = {
+      peakMetaPower: aggregateField(rowsMetabolicOnly, ["Peak Meta Power", "Peak Metabolic Power", "Max Metabolic Power"]),
+      hmldM: aggregateField(rowsMetabolicOnly, ["High Metabolic Load Dist (m)", "High Metabolic Load Dist", "High Metabolic Load Distance"]),
+    };
+    const fmpAggregates = {
+      fmpDynamicHighDuration: aggregateField(rowsFmpOnly, ["FMP Dynamic High Duration", "fmp_dynamic_high_duration"]),
+      fmpRunningHighDuration: aggregateField(rowsFmpOnly, ["FMP Running High Duration", "fmp_running_high_duration"]),
+    };
+
+    // ── Pattern-based key dumps (the truth, no guessing) ──────────────
+    // Find ALL raw keys in the merged Catapult response matching specific patterns.
+    // This is how we discover the EXACT field name Catapult uses for sprint count
+    // and avg/peak metabolic power.
+    function dumpKeys(allKeys: string[], pattern: RegExp): string[] {
+      return allKeys.filter((k) => pattern.test(k.toLowerCase())).sort();
+    }
+    function dumpKeysWithSampleValues(rows: Record<string, unknown>[], allKeys: string[], pattern: RegExp) {
+      const matchingKeys = dumpKeys(allKeys, pattern);
+      const result: Array<{
+        key: string;
+        nonZeroAthletes: number;
+        maxValue: number;
+        sampleAthlete: { athleteId: string | null; value: number | null } | null;
+      }> = [];
+      for (const key of matchingKeys) {
+        const agg = aggregateField(rows, [key]);
+        result.push({
+          key,
+          nonZeroAthletes: agg.nonZeroAthletes,
+          maxValue: agg.maxValue,
+          sampleAthlete: agg.topAthlete,
+        });
+      }
+      return result;
+    }
+
+    // Sprint count: any key with "velocity_band" / "vb_" / "sprint" + "effort" / "count"
+    const sprintCountCandidateKeys = dumpKeysWithSampleValues(
+      rowsMerged,
+      allRawKeys,
+      /(velocity_band[_ ]?[4-6]|vb[4-6]|sprint).*(effort|count|set_?2|gen[_ ]?2)/i,
+    );
+    // Catapult sometimes names them differently — also dump anything containing "band_6" or "b6"
+    const sprintCountVelocityBand6 = dumpKeysWithSampleValues(
+      rowsMerged,
+      allRawKeys,
+      /(velocity[_ ]?band[_ ]?6|vb6|band[_ ]6\+|band_6_plus)/i,
+    );
+
+    // Metabolic power: avg / peak / max
+    const metabolicPowerCandidateKeys = dumpKeysWithSampleValues(
+      rowsMerged,
+      allRawKeys,
+      /(metabolic|meta).*(power|w_kg|wkg)/i,
+    );
+    // Also include any avg/peak metabolic of any kind
+    const metabolicAvgPeakCandidateKeys = dumpKeysWithSampleValues(
+      rowsMerged,
+      allRawKeys,
+      /(avg|average|peak|max|mean).*(metabolic|meta|power)/i,
+    );
+
     return NextResponse.json({
       ok: true,
       date,
@@ -181,6 +307,52 @@ export async function GET(request: Request) {
       metabolicOnlyError: details.metabolicOnlyError,
       imaOnlyParameters: details.imaOnlyParameters,
       metabolicOnlyParameters: details.metabolicOnlyParameters,
+      // ── Sprint count probe results ──────────────────────────────
+      // sprintCountAcceptedParameters: display-names Catapult ACCEPTED
+      // sprintCountRejectedParameters: display-names Catapult REJECTED with error
+      // sprintRevealedKeys: NEW keys returned by sprint probe that weren't in merged payload
+      sprintCountParameters: details.sprintCountParameters,
+      sprintCountAcceptedParameters: sprintProbeAccepted.map((r) => ({
+        parameter: r.parameter,
+        returnedKeys: r.returnedKeys,
+        sampleValues: r.sampleValues,
+      })),
+      sprintCountRejectedParameters: sprintProbeRejected.map((r) => ({
+        parameter: r.parameter,
+        error: r.error,
+      })),
+      sprintRevealedKeys,
+      // ── IMA Free Running probe results ───────────────────────────────
+      // freeRunningBatchSucceeded: true if Catapult accepted all 24 in one call
+      // freeRunningProbeResults: per-parameter success/error
+      // freeRunningAcceptedCount: how many of 24 names Catapult accepted
+      freeRunningParameters: details.freeRunningParameters,
+      freeRunningBatchSucceeded: details.freeRunningBatchSucceeded,
+      freeRunningOnlyError: details.freeRunningOnlyError,
+      freeRunningAcceptedCount: details.freeRunningProbeResults.filter((r) => r.success).length,
+      freeRunningRejectedParameters: details.freeRunningProbeResults
+        .filter((r) => !r.success)
+        .map((r) => ({ parameter: r.parameter, error: r.error })),
+      // Find any keys in merged payload matching free running pattern
+      freeRunningRevealedKeys: allRawKeys.filter((k) => {
+        const lower = k.toLowerCase();
+        return lower.includes("free_running") || lower.includes("freerunning") ||
+          (lower.includes("stride") && (lower.includes("count") || lower.includes("rate")));
+      }).sort(),
+      // ── Aggregate stats across ALL athletes (not just first row) ──────
+      // If nonZeroAthletes = 0 across all 18, the metric truly isn't being captured.
+      // If nonZeroAthletes > 0, the data IS coming through — first row was just a low-activity athlete.
+      imaAggregates,
+      baseAggregates,
+      metabolicAggregates,
+      fmpAggregates,
+      // ── Pattern-based dumps to discover the EXACT Catapult key name ──────
+      // Each entry shows: { key, nonZeroAthletes (out of all athletes), maxValue, sampleAthlete }
+      // Look for entries with nonZeroAthletes > 0 and maxValue > 0 — those are populated.
+      sprintCountCandidateKeys,
+      sprintCountVelocityBand6,
+      metabolicPowerCandidateKeys,
+      metabolicAvgPeakCandidateKeys,
       basePayloadTopKeys: Object.keys((details.basePayload as Record<string, unknown>) ?? {}).sort(),
       imaOnlyPayloadTopKeys: Object.keys((details.imaOnlyPayload as Record<string, unknown>) ?? {}).sort(),
       metabolicOnlyPayloadTopKeys: Object.keys((details.metabolicOnlyPayload as Record<string, unknown>) ?? {}).sort(),

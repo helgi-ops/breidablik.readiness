@@ -298,8 +298,9 @@ const HMLD_KEYS = [
 ];
 
 const METABOLIC_ENERGY_KEYS = [
-  // Exact Catapult OpenField display-names (confirmed from Reporting_Parameters)
-  "Meta Energy (KJ/kg)",        // primary — confirmed in Reporting_Parameters settings
+  // Exact Catapult OpenField display-names (confirmed in Reporting_Parameters 25 Apr 2026)
+  "Energy",                     // bare "Energy" parameter from Breiðablik Reporting_Parameters
+  "Meta Energy (KJ/kg)",        // primary KJ/kg variant
   "Meta Energy (Cal/kg)",       // fallback in case of unit display preference
   // Other display-name variants
   "Metabolic Energy",
@@ -703,6 +704,11 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ),
       velocityBand5TotalEffortsGen2: toInteger(
         extractMetric(flattenedRecord, [
+          // PRIMARY — exact OpenField parameter name (HS = High Speed Efforts)
+          "HS Efforts",
+          "hs_efforts",
+          "high_speed_efforts",
+          // Legacy fallbacks
           "velocity_band_5_plus_total_effort_count_set_2",
           "velocity_band5_total_effort_count_gen2",
           "velocity_band5_plus_total_efforts_gen2",
@@ -712,6 +718,11 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ),
       velocityBand6TotalEffortsGen2: toInteger(
         extractMetric(flattenedRecord, [
+          // PRIMARY — exact OpenField parameter name confirmed in Reporting_Parameters
+          "Sprint Efforts",
+          "sprint_efforts",
+          "sprintEfforts",
+          // Legacy fallbacks
           "velocity_band_6_plus_total_effort_count_set_2",
           "velocity_band6_total_effort_count_gen2",
           "velocity_band6_plus_total_efforts_gen2",
@@ -814,10 +825,43 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       hrZone4TimeS: normalizedHr.hrZone4TimeS,
       hrZone5TimeS: normalizedHr.hrZone5TimeS,
       durationMinutes: normalizedIma.durationMinutes,
+      // IMA Free Running 8-band pipeline (indoor stride detail)
+      ...extractFreeRunningBands(flattenedRecord),
     });
   }
 
   return normalized;
+}
+
+/** Extract IMA Free Running stride/cadence/load values for all 8 bands. */
+function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (let band = 1; band <= 8; band++) {
+    // Try many alias variants — Catapult may return display name or snake_case
+    const strideAliases = [
+      `IMA Free Running Band ${band} Stride Count`,
+      `ima_free_running_band${band}_stride_count`,
+      `imafreerunningband${band}stridecount`,
+      `ima_fr_band${band}_stride_count`,
+    ];
+    const rateAliases = [
+      `IMA Free Running Band ${band} Average Stride Rate`,
+      `ima_free_running_band${band}_average_stride_rate`,
+      `ima_free_running_band${band}_avg_stride_rate`,
+      `imafreerunningband${band}averagestriderate`,
+      `ima_fr_band${band}_avg_stride_rate`,
+    ];
+    const loadAliases = [
+      `IMA Free Running Band ${band} Total Player Load`,
+      `ima_free_running_band${band}_total_player_load`,
+      `imafreerunningband${band}totalplayerload`,
+      `ima_fr_band${band}_total_player_load`,
+    ];
+    out[`imaFrBand${band}StrideCount`] = toInteger(extractMetric(flat, strideAliases));
+    out[`imaFrBand${band}AvgStrideRate`] = extractMetric(flat, rateAliases);
+    out[`imaFrBand${band}TotalPlayerLoad`] = extractMetric(flat, loadAliases);
+  }
+  return out;
 }
 
 function sumNullable(a: number | null | undefined, b: number | null | undefined): number | null {
@@ -905,6 +949,18 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.hrZone5TimeS = sumNullable(current.hrZone5TimeS, metric.hrZone5TimeS);
     // Session duration: sum across activities
     current.durationMinutes = sumNullable(current.durationMinutes, metric.durationMinutes);
+    // IMA Free Running 8 bands: stride counts + load sum, stride rate takes max
+    for (let band = 1; band <= 8; band++) {
+      const sk = `imaFrBand${band}StrideCount` as const;
+      const rk = `imaFrBand${band}AvgStrideRate` as const;
+      const lk = `imaFrBand${band}TotalPlayerLoad` as const;
+      // @ts-expect-error dynamic key access on typed metric object
+      current[sk] = sumNullable(current[sk], metric[sk]);
+      // @ts-expect-error dynamic key access — stride rate is per-band cadence, take max across activities
+      current[rk] = maxNullable(current[rk], metric[rk]);
+      // @ts-expect-error dynamic key access
+      current[lk] = sumNullable(current[lk], metric[lk]);
+    }
   }
 
   return Array.from(byAthleteDate.values());
@@ -967,8 +1023,65 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       fmpDynamicLowS: metric.fmpDynamicLowS ?? null,
       fmpDynamicMediumS: metric.fmpDynamicMediumS ?? null,
       fmpDynamicHighS: metric.fmpDynamicHighS ?? null,
-      fmpTotalDurationS: metric.fmpTotalDurationS ?? null,
+      // fmpTotalDurationS: prefer Catapult-direct value; fall back to sum of 6 bands
+      fmpTotalDurationS: (() => {
+        if (metric.fmpTotalDurationS != null && metric.fmpTotalDurationS > 0) return metric.fmpTotalDurationS;
+        const bands = [
+          metric.fmpVeryLowS,
+          metric.fmpLowIntensityS,
+          metric.fmpRunningMediumS,
+          metric.fmpRunningHighS,
+          metric.fmpDynamicMediumS,
+          metric.fmpDynamicHighS,
+        ];
+        const sum = bands.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+        return sum > 0 ? sum : null;
+      })(),
+      // FMP percentages — derived from band_duration / computed_total × 100
+      fmpDynamicHighPct: (() => {
+        const total = (metric.fmpVeryLowS ?? 0) + (metric.fmpLowIntensityS ?? 0) + (metric.fmpRunningMediumS ?? 0) +
+          (metric.fmpRunningHighS ?? 0) + (metric.fmpDynamicMediumS ?? 0) + (metric.fmpDynamicHighS ?? 0);
+        if (total <= 0 || metric.fmpDynamicHighS == null) return null;
+        return Number(((metric.fmpDynamicHighS / total) * 100).toFixed(2));
+      })(),
+      fmpDynamicMediumPct: (() => {
+        const total = (metric.fmpVeryLowS ?? 0) + (metric.fmpLowIntensityS ?? 0) + (metric.fmpRunningMediumS ?? 0) +
+          (metric.fmpRunningHighS ?? 0) + (metric.fmpDynamicMediumS ?? 0) + (metric.fmpDynamicHighS ?? 0);
+        if (total <= 0 || metric.fmpDynamicMediumS == null) return null;
+        return Number(((metric.fmpDynamicMediumS / total) * 100).toFixed(2));
+      })(),
+      fmpRunningHighPct: (() => {
+        const total = (metric.fmpVeryLowS ?? 0) + (metric.fmpLowIntensityS ?? 0) + (metric.fmpRunningMediumS ?? 0) +
+          (metric.fmpRunningHighS ?? 0) + (metric.fmpDynamicMediumS ?? 0) + (metric.fmpDynamicHighS ?? 0);
+        if (total <= 0 || metric.fmpRunningHighS == null) return null;
+        return Number(((metric.fmpRunningHighS / total) * 100).toFixed(2));
+      })(),
       durationMinutes: metric.durationMinutes ?? null,
+      // IMA Free Running 8 bands — indoor stride detail
+      imaFrBand1StrideCount: metric.imaFrBand1StrideCount ?? null,
+      imaFrBand1AvgStrideRate: metric.imaFrBand1AvgStrideRate ?? null,
+      imaFrBand1TotalPlayerLoad: metric.imaFrBand1TotalPlayerLoad ?? null,
+      imaFrBand2StrideCount: metric.imaFrBand2StrideCount ?? null,
+      imaFrBand2AvgStrideRate: metric.imaFrBand2AvgStrideRate ?? null,
+      imaFrBand2TotalPlayerLoad: metric.imaFrBand2TotalPlayerLoad ?? null,
+      imaFrBand3StrideCount: metric.imaFrBand3StrideCount ?? null,
+      imaFrBand3AvgStrideRate: metric.imaFrBand3AvgStrideRate ?? null,
+      imaFrBand3TotalPlayerLoad: metric.imaFrBand3TotalPlayerLoad ?? null,
+      imaFrBand4StrideCount: metric.imaFrBand4StrideCount ?? null,
+      imaFrBand4AvgStrideRate: metric.imaFrBand4AvgStrideRate ?? null,
+      imaFrBand4TotalPlayerLoad: metric.imaFrBand4TotalPlayerLoad ?? null,
+      imaFrBand5StrideCount: metric.imaFrBand5StrideCount ?? null,
+      imaFrBand5AvgStrideRate: metric.imaFrBand5AvgStrideRate ?? null,
+      imaFrBand5TotalPlayerLoad: metric.imaFrBand5TotalPlayerLoad ?? null,
+      imaFrBand6StrideCount: metric.imaFrBand6StrideCount ?? null,
+      imaFrBand6AvgStrideRate: metric.imaFrBand6AvgStrideRate ?? null,
+      imaFrBand6TotalPlayerLoad: metric.imaFrBand6TotalPlayerLoad ?? null,
+      imaFrBand7StrideCount: metric.imaFrBand7StrideCount ?? null,
+      imaFrBand7AvgStrideRate: metric.imaFrBand7AvgStrideRate ?? null,
+      imaFrBand7TotalPlayerLoad: metric.imaFrBand7TotalPlayerLoad ?? null,
+      imaFrBand8StrideCount: metric.imaFrBand8StrideCount ?? null,
+      imaFrBand8AvgStrideRate: metric.imaFrBand8AvgStrideRate ?? null,
+      imaFrBand8TotalPlayerLoad: metric.imaFrBand8TotalPlayerLoad ?? null,
     },
   };
 }

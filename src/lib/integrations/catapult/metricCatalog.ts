@@ -55,10 +55,17 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   },
   {
     key: "velocityBand6TotalEffortsGen2",
-    label: "Vel B6+ Total # Efforts (Gen 2)",
+    label: "Sprint Efforts (#)",
     digits: 0,
     acwrSupported: true,
     aliases: [
+      // PRIMARY — exact OpenField parameter name confirmed in Reporting_Parameters (25 Apr 2026)
+      "Sprint Efforts",
+      // Snake_case variants Catapult sometimes returns
+      "sprint_efforts",
+      "sprintEfforts",
+      // Legacy display-name guesses (kept as fallback)
+      "Velocity B6+ Total # Efforts (Gen 2)",
       "velocity_band_6_plus_total_effort_count_set_2",
       "velocity_band6_total_effort_count_gen2",
       "velocity_band6_plus_total_efforts_gen2",
@@ -69,10 +76,16 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   },
   {
     key: "velocityBand5TotalEffortsGen2",
-    label: "Vel B5+ Total # Efforts (Gen 2)",
+    label: "HS Efforts (#)",
     digits: 0,
     acwrSupported: true,
     aliases: [
+      // PRIMARY — High-Speed Efforts parameter from OpenField (25 Apr 2026)
+      "HS Efforts",
+      "hs_efforts",
+      "high_speed_efforts",
+      // Legacy display-name guesses
+      "Velocity B5+ Total # Efforts (Gen 2)",
       "velocity_band_5_plus_total_effort_count_set_2",
       "velocity_band5_total_effort_count_gen2",
       "velocity_band5_plus_total_efforts_gen2",

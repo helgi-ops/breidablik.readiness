@@ -159,6 +159,21 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.fmpDynamicMediumS = sumNullable(current.externalLoad.fmpDynamicMediumS, row.externalLoad.fmpDynamicMediumS);
     current.externalLoad.fmpDynamicHighS = sumNullable(current.externalLoad.fmpDynamicHighS, row.externalLoad.fmpDynamicHighS);
     current.externalLoad.fmpTotalDurationS = sumNullable(current.externalLoad.fmpTotalDurationS, row.externalLoad.fmpTotalDurationS);
+    // IMA Free Running 8 bands: stride counts + load sum, stride rate takes max
+    {
+      const cur = current.externalLoad as unknown as Record<string, number | null | undefined>;
+      const inc = row.externalLoad as unknown as Record<string, number | null | undefined>;
+      for (let band = 1; band <= 8; band++) {
+        const sk = `imaFrBand${band}StrideCount`;
+        const rk = `imaFrBand${band}AvgStrideRate`;
+        const lk = `imaFrBand${band}TotalPlayerLoad`;
+        cur[sk] = sumNullable(cur[sk], inc[sk]);
+        const a = cur[rk];
+        const b = inc[rk];
+        cur[rk] = a != null && b != null ? Math.max(a, b) : (a ?? b ?? null);
+        cur[lk] = sumNullable(cur[lk], inc[lk]);
+      }
+    }
   }
 
   return Array.from(merged.values());
@@ -240,6 +255,31 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     fmp_dynamic_high_pct: row.externalLoad.fmpDynamicHighPct ?? null,
     fmp_running_high_pct: row.externalLoad.fmpRunningHighPct ?? null,
     session_duration_minutes: row.externalLoad.durationMinutes ?? null,
+    // IMA Free Running 8 bands — indoor stride detail
+    ima_fr_band1_stride_count: row.externalLoad.imaFrBand1StrideCount ?? null,
+    ima_fr_band1_avg_stride_rate: row.externalLoad.imaFrBand1AvgStrideRate ?? null,
+    ima_fr_band1_total_player_load: row.externalLoad.imaFrBand1TotalPlayerLoad ?? null,
+    ima_fr_band2_stride_count: row.externalLoad.imaFrBand2StrideCount ?? null,
+    ima_fr_band2_avg_stride_rate: row.externalLoad.imaFrBand2AvgStrideRate ?? null,
+    ima_fr_band2_total_player_load: row.externalLoad.imaFrBand2TotalPlayerLoad ?? null,
+    ima_fr_band3_stride_count: row.externalLoad.imaFrBand3StrideCount ?? null,
+    ima_fr_band3_avg_stride_rate: row.externalLoad.imaFrBand3AvgStrideRate ?? null,
+    ima_fr_band3_total_player_load: row.externalLoad.imaFrBand3TotalPlayerLoad ?? null,
+    ima_fr_band4_stride_count: row.externalLoad.imaFrBand4StrideCount ?? null,
+    ima_fr_band4_avg_stride_rate: row.externalLoad.imaFrBand4AvgStrideRate ?? null,
+    ima_fr_band4_total_player_load: row.externalLoad.imaFrBand4TotalPlayerLoad ?? null,
+    ima_fr_band5_stride_count: row.externalLoad.imaFrBand5StrideCount ?? null,
+    ima_fr_band5_avg_stride_rate: row.externalLoad.imaFrBand5AvgStrideRate ?? null,
+    ima_fr_band5_total_player_load: row.externalLoad.imaFrBand5TotalPlayerLoad ?? null,
+    ima_fr_band6_stride_count: row.externalLoad.imaFrBand6StrideCount ?? null,
+    ima_fr_band6_avg_stride_rate: row.externalLoad.imaFrBand6AvgStrideRate ?? null,
+    ima_fr_band6_total_player_load: row.externalLoad.imaFrBand6TotalPlayerLoad ?? null,
+    ima_fr_band7_stride_count: row.externalLoad.imaFrBand7StrideCount ?? null,
+    ima_fr_band7_avg_stride_rate: row.externalLoad.imaFrBand7AvgStrideRate ?? null,
+    ima_fr_band7_total_player_load: row.externalLoad.imaFrBand7TotalPlayerLoad ?? null,
+    ima_fr_band8_stride_count: row.externalLoad.imaFrBand8StrideCount ?? null,
+    ima_fr_band8_avg_stride_rate: row.externalLoad.imaFrBand8AvgStrideRate ?? null,
+    ima_fr_band8_total_player_load: row.externalLoad.imaFrBand8TotalPlayerLoad ?? null,
   }));
 
   if (!payload.length) return 0;

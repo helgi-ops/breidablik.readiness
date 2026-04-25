@@ -71,6 +71,52 @@ const CATAPULT_BASE_PARAMETERS = [
   "player_load_per_minute",
 ];
 
+// Sprint Count parameters — exact display names from Breiðablik OpenField
+// Reporting_Parameters (confirmed 25 Apr 2026 from settings/parameters page).
+// Used for McBurnie 2022 Decel:Sprint coupling.
+export const CATAPULT_SPRINT_COUNT_PARAMETERS = [
+  // PRIMARY — exact display names from OpenField Reporting_Parameters
+  "Sprint Efforts",            // → velocity_band6_total_efforts_gen2 (sprint count)
+  "HS Efforts",                // → velocity_band5_total_efforts_gen2 (high-speed count)
+  "Sprint Dist Per Min",       // optional — sprint distance per minute
+  "HS Distance",               // optional — high-speed distance
+  "HS Dist Per Min",           // optional — high-speed distance per minute
+  // Legacy display-name guesses (kept as fallback for orgs with different naming)
+  "Velocity B6+ Total # Efforts (Gen 2)",
+  "Velocity B5+ Total # Efforts (Gen 2)",
+];
+
+// IMA Free Running parameters — 8 stride velocity bands, IMU-only (works indoor)
+// User confirmed all 8 bands enabled in OpenField Reporting_Parameters (25 Apr 2026)
+// because Icelandic indoor halls are often 100m+ long, so high bands (7-8) capture
+// real sprint events. Each band gets 3 metrics: stride count, avg stride rate, player load.
+export const CATAPULT_FREE_RUNNING_PARAMETERS = [
+  "IMA Free Running Band 1 Stride Count",
+  "IMA Free Running Band 1 Average Stride Rate",
+  "IMA Free Running Band 1 Total Player Load",
+  "IMA Free Running Band 2 Stride Count",
+  "IMA Free Running Band 2 Average Stride Rate",
+  "IMA Free Running Band 2 Total Player Load",
+  "IMA Free Running Band 3 Stride Count",
+  "IMA Free Running Band 3 Average Stride Rate",
+  "IMA Free Running Band 3 Total Player Load",
+  "IMA Free Running Band 4 Stride Count",
+  "IMA Free Running Band 4 Average Stride Rate",
+  "IMA Free Running Band 4 Total Player Load",
+  "IMA Free Running Band 5 Stride Count",
+  "IMA Free Running Band 5 Average Stride Rate",
+  "IMA Free Running Band 5 Total Player Load",
+  "IMA Free Running Band 6 Stride Count",
+  "IMA Free Running Band 6 Average Stride Rate",
+  "IMA Free Running Band 6 Total Player Load",
+  "IMA Free Running Band 7 Stride Count",
+  "IMA Free Running Band 7 Average Stride Rate",
+  "IMA Free Running Band 7 Total Player Load",
+  "IMA Free Running Band 8 Stride Count",
+  "IMA Free Running Band 8 Average Stride Rate",
+  "IMA Free Running Band 8 Total Player Load",
+];
+
 // Football Movement Profile (FMP) — inertial sensor based, works indoors.
 // Catapult's 6 movement categories:
 //   Very Low, Low, Running Medium, Running High, Dynamic Medium, Dynamic High
@@ -749,6 +795,50 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     // FMP fetch failed — continue without FMP data
   }
 
+  // Sprint count parameters — Velocity B6+ Total # Efforts (Gen 2) etc.
+  // Try each display-name variant individually so a single bad name doesn't
+  // poison the whole batch (Catapult rejects the entire request on unknown name).
+  for (const paramName of CATAPULT_SPRINT_COUNT_PARAMETERS) {
+    try {
+      const sprintPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, sprintPayload);
+    } catch {
+      // This particular variant failed — try the next one
+    }
+  }
+
+  // IMA Free Running 8-band — try as ONE batch first, fall back to per-param probe
+  // (Catapult sometimes rejects batch with unknown name; per-param probe is more robust)
+  try {
+    const freeRunningPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_FREE_RUNNING_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, freeRunningPayload);
+  } catch {
+    // Batch failed — try each parameter individually
+    for (const paramName of CATAPULT_FREE_RUNNING_PARAMETERS) {
+      try {
+        const singlePayload = await catapultPost("/api/v6/stats", {
+          group_by: ["athlete"],
+          filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+          parameters: [paramName],
+          requested_only: true,
+        });
+        mergedPayload = mergeStatsPayloads(mergedPayload, singlePayload);
+      } catch {
+        // This particular variant failed — try the next one
+      }
+    }
+  }
+
   return mergedPayload;
 }
 
@@ -757,6 +847,18 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   imaOnlyPayload: unknown | null;
   metabolicOnlyPayload: unknown | null;
   fmpOnlyPayload: unknown | null;
+  sprintCountOnlyPayload: unknown | null;
+  sprintCountProbeResults: Array<{
+    parameter: string;
+    success: boolean;
+    error: string | null;
+    returnedKeys: string[];
+    sampleValues: Record<string, unknown>;
+  }>;
+  freeRunningOnlyPayload: unknown | null;
+  freeRunningOnlyError: string | null;
+  freeRunningBatchSucceeded: boolean;
+  freeRunningProbeResults: Array<{ parameter: string; success: boolean; error: string | null }>;
   mergedPayload: unknown;
   imaOnlyError: string | null;
   metabolicOnlyError: string | null;
@@ -764,6 +866,8 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   imaOnlyParameters: string[];
   metabolicOnlyParameters: string[];
   fmpOnlyParameters: string[];
+  sprintCountParameters: string[];
+  freeRunningParameters: string[];
 }> {
   const basePayload = await catapultPost("/api/v6/stats", {
     group_by: ["athlete"],
@@ -823,11 +927,116 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     fmpOnlyError = error instanceof Error ? error.message : "Unknown FMP-only fetch error";
   }
 
+  // IMA Free Running probe — batch first, then per-param fallback. Track which succeeded.
+  let freeRunningOnlyPayload: unknown | null = null;
+  let freeRunningOnlyError: string | null = null;
+  let freeRunningBatchSucceeded = false;
+  try {
+    freeRunningOnlyPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_FREE_RUNNING_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, freeRunningOnlyPayload);
+    freeRunningBatchSucceeded = true;
+  } catch (error) {
+    freeRunningOnlyError = error instanceof Error ? error.message : "Unknown Free Running batch fetch error";
+  }
+  // Per-param probe regardless — collect which names work
+  const freeRunningProbeResults: Array<{ parameter: string; success: boolean; error: string | null }> = [];
+  for (const paramName of CATAPULT_FREE_RUNNING_PARAMETERS) {
+    try {
+      const single = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      freeRunningProbeResults.push({ parameter: paramName, success: true, error: null });
+      if (!freeRunningBatchSucceeded) mergedPayload = mergeStatsPayloads(mergedPayload, single);
+    } catch (error) {
+      freeRunningProbeResults.push({
+        parameter: paramName,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown",
+      });
+    }
+  }
+
+  // Sprint count probe — try each variant individually so we can isolate which name(s) Catapult accepts
+  let sprintCountOnlyPayload: unknown | null = null;
+  const sprintCountProbeResults: Array<{
+    parameter: string;
+    success: boolean;
+    error: string | null;
+    returnedKeys: string[];
+    sampleValues: Record<string, unknown>;
+  }> = [];
+
+  // Snapshot the base payload's row-keys so we can diff against them per probe.
+  // Catapult silently accepts ANY parameter name — we can only tell which one
+  // worked by comparing the returned row-keys to the base row's keys.
+  const baseRows = extractStatsRows(basePayload);
+  const baseKeySet = new Set<string>();
+  for (const row of baseRows.slice(0, 3)) {
+    for (const k of Object.keys(row)) baseKeySet.add(k);
+  }
+
+  for (const paramName of CATAPULT_SPRINT_COUNT_PARAMETERS) {
+    try {
+      const sprintPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      // Extract ALL keys from first 3 rows of response (no filter)
+      const rows = extractStatsRows(sprintPayload);
+      const responseKeySet = new Set<string>();
+      for (const row of rows.slice(0, 3)) {
+        for (const k of Object.keys(row)) responseKeySet.add(k);
+      }
+      // True diff: keys present in this probe's response that were NOT in the base payload.
+      // These are the keys actually populated by this specific parameter name.
+      const newKeys = Array.from(responseKeySet).filter((k) => !baseKeySet.has(k)).sort();
+      const firstRow = rows[0] ?? {};
+      const sampleValues: Record<string, unknown> = {};
+      for (const k of newKeys) sampleValues[k] = firstRow[k];
+
+      sprintCountProbeResults.push({
+        parameter: paramName,
+        success: true,
+        error: null,
+        returnedKeys: newKeys,
+        sampleValues,
+      });
+
+      // Use the first probe that revealed NEW keys as the canonical sprint payload
+      if (sprintCountOnlyPayload == null && newKeys.length > 0) sprintCountOnlyPayload = sprintPayload;
+      mergedPayload = mergeStatsPayloads(mergedPayload, sprintPayload);
+    } catch (error) {
+      sprintCountProbeResults.push({
+        parameter: paramName,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown sprint-count probe error",
+        returnedKeys: [],
+        sampleValues: {},
+      });
+    }
+  }
+
   return {
     basePayload,
     imaOnlyPayload,
     metabolicOnlyPayload,
     fmpOnlyPayload,
+    sprintCountOnlyPayload,
+    sprintCountProbeResults,
+    freeRunningOnlyPayload,
+    freeRunningOnlyError,
+    freeRunningBatchSucceeded,
+    freeRunningProbeResults,
     mergedPayload,
     imaOnlyError,
     metabolicOnlyError,
@@ -835,6 +1044,8 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     imaOnlyParameters: CATAPULT_IMA_PARAMETERS,
     metabolicOnlyParameters: CATAPULT_METABOLIC_PARAMETERS,
     fmpOnlyParameters: CATAPULT_FMP_PARAMETERS,
+    sprintCountParameters: CATAPULT_SPRINT_COUNT_PARAMETERS,
+    freeRunningParameters: CATAPULT_FREE_RUNNING_PARAMETERS,
   };
 }
 
@@ -904,6 +1115,46 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
     mergedPayload = mergeStatsPayloads(mergedPayload, fmpPayload);
   } catch {
     // FMP fetch failed — continue without FMP data
+  }
+
+  // Sprint count parameters — try each variant individually
+  for (const paramName of CATAPULT_SPRINT_COUNT_PARAMETERS) {
+    try {
+      const sprintPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: baseFilters,
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, sprintPayload);
+    } catch {
+      // This particular variant failed — try the next one
+    }
+  }
+
+  // IMA Free Running 8-band — try as ONE batch first, fall back to per-param probe
+  try {
+    const freeRunningPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: baseFilters,
+      parameters: CATAPULT_FREE_RUNNING_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, freeRunningPayload);
+  } catch {
+    for (const paramName of CATAPULT_FREE_RUNNING_PARAMETERS) {
+      try {
+        const singlePayload = await catapultPost("/api/v6/stats", {
+          group_by: ["athlete"],
+          filters: baseFilters,
+          parameters: [paramName],
+          requested_only: true,
+        });
+        mergedPayload = mergeStatsPayloads(mergedPayload, singlePayload);
+      } catch {
+        // try next variant
+      }
+    }
   }
 
   return mergedPayload;

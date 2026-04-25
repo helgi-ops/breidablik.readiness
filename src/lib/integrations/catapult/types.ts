@@ -85,6 +85,31 @@ export type CatapultSessionMetric = {
   hrZone5TimeS?: number | null;
   // Session duration in minutes (from Catapult GPS)
   durationMinutes?: number | null;
+  // IMA Free Running 8-band pipeline (indoor stride detail, IMU-only, no GPS required)
+  imaFrBand1StrideCount?: number | null;
+  imaFrBand1AvgStrideRate?: number | null;
+  imaFrBand1TotalPlayerLoad?: number | null;
+  imaFrBand2StrideCount?: number | null;
+  imaFrBand2AvgStrideRate?: number | null;
+  imaFrBand2TotalPlayerLoad?: number | null;
+  imaFrBand3StrideCount?: number | null;
+  imaFrBand3AvgStrideRate?: number | null;
+  imaFrBand3TotalPlayerLoad?: number | null;
+  imaFrBand4StrideCount?: number | null;
+  imaFrBand4AvgStrideRate?: number | null;
+  imaFrBand4TotalPlayerLoad?: number | null;
+  imaFrBand5StrideCount?: number | null;
+  imaFrBand5AvgStrideRate?: number | null;
+  imaFrBand5TotalPlayerLoad?: number | null;
+  imaFrBand6StrideCount?: number | null;
+  imaFrBand6AvgStrideRate?: number | null;
+  imaFrBand6TotalPlayerLoad?: number | null;
+  imaFrBand7StrideCount?: number | null;
+  imaFrBand7AvgStrideRate?: number | null;
+  imaFrBand7TotalPlayerLoad?: number | null;
+  imaFrBand8StrideCount?: number | null;
+  imaFrBand8AvgStrideRate?: number | null;
+  imaFrBand8TotalPlayerLoad?: number | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -149,6 +174,31 @@ export type NormalizedExternalLoad = {
     hrZone5TimeS?: number | null;
     // Session duration in minutes
     durationMinutes?: number | null;
+    // IMA Free Running 8-band pipeline (indoor stride detail, IMU-only)
+    imaFrBand1StrideCount?: number | null;
+    imaFrBand1AvgStrideRate?: number | null;
+    imaFrBand1TotalPlayerLoad?: number | null;
+    imaFrBand2StrideCount?: number | null;
+    imaFrBand2AvgStrideRate?: number | null;
+    imaFrBand2TotalPlayerLoad?: number | null;
+    imaFrBand3StrideCount?: number | null;
+    imaFrBand3AvgStrideRate?: number | null;
+    imaFrBand3TotalPlayerLoad?: number | null;
+    imaFrBand4StrideCount?: number | null;
+    imaFrBand4AvgStrideRate?: number | null;
+    imaFrBand4TotalPlayerLoad?: number | null;
+    imaFrBand5StrideCount?: number | null;
+    imaFrBand5AvgStrideRate?: number | null;
+    imaFrBand5TotalPlayerLoad?: number | null;
+    imaFrBand6StrideCount?: number | null;
+    imaFrBand6AvgStrideRate?: number | null;
+    imaFrBand6TotalPlayerLoad?: number | null;
+    imaFrBand7StrideCount?: number | null;
+    imaFrBand7AvgStrideRate?: number | null;
+    imaFrBand7TotalPlayerLoad?: number | null;
+    imaFrBand8StrideCount?: number | null;
+    imaFrBand8AvgStrideRate?: number | null;
+    imaFrBand8TotalPlayerLoad?: number | null;
   };
   rawPayload?: unknown;
   activityCount?: number;
