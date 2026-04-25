@@ -23,6 +23,9 @@ export type CatapultSessionMetric = {
   maxVelocity: number;
   velocityBand5TotalDistance?: number | null;
   velocityBand6TotalDistance?: number | null;
+  velocityBand4TotalEffortsGen2?: number | null;
+  velocityBand5TotalEffortsGen2?: number | null;
+  velocityBand6TotalEffortsGen2?: number | null;
   hirDist?: number | null;
   maxVel?: number | null;
   accelB23TotEffsGen2?: number | null;
@@ -99,6 +102,9 @@ export type NormalizedExternalLoad = {
     maxVelocity: number | null;
     velocityBand5TotalDistance?: number | null;
     velocityBand6TotalDistance?: number | null;
+    velocityBand4TotalEffortsGen2?: number | null;
+    velocityBand5TotalEffortsGen2?: number | null;
+    velocityBand6TotalEffortsGen2?: number | null;
     hirDist?: number | null;
     maxVel?: number | null;
     accelB23TotEffsGen2?: number | null;

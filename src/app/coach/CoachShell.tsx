@@ -13,6 +13,9 @@ import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
 import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotificationPrompt";
 
 const operationsLinks = [
+  { href: "/coach/quadrant", label: "Quadrant view" },
+  { href: "/coach/decel-intelligence", label: "Decel Intelligence (McBurnie)" },
+  { href: "/coach/injuries", label: "Injuries (proof-of-ROI)" },
   { href: "/coach/match-minutes", label: "Match minutes" },
   { href: "/coach/templates", label: "Templates" },
   { href: "/coach/custom-templates", label: "Custom templates" },

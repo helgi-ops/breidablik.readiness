@@ -694,6 +694,31 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       maxVelocity: extractMetric(flattenedRecord, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]) ?? 0,
       velocityBand5TotalDistance: extractMetric(flattenedRecord, ["velocity_band5_total_distance"]),
       velocityBand6TotalDistance: extractMetric(flattenedRecord, ["velocity_band6_total_distance"]),
+      velocityBand4TotalEffortsGen2: toInteger(
+        extractMetric(flattenedRecord, [
+          "velocity_band_4_plus_total_effort_count_set_2",
+          "velocity_band4_total_effort_count_gen2",
+          "velocityBand4TotalEffortsGen2",
+        ]),
+      ),
+      velocityBand5TotalEffortsGen2: toInteger(
+        extractMetric(flattenedRecord, [
+          "velocity_band_5_plus_total_effort_count_set_2",
+          "velocity_band5_total_effort_count_gen2",
+          "velocity_band5_plus_total_efforts_gen2",
+          "vb5_plus_total_efforts_gen2",
+          "velocityBand5TotalEffortsGen2",
+        ]),
+      ),
+      velocityBand6TotalEffortsGen2: toInteger(
+        extractMetric(flattenedRecord, [
+          "velocity_band_6_plus_total_effort_count_set_2",
+          "velocity_band6_total_effort_count_gen2",
+          "velocity_band6_plus_total_efforts_gen2",
+          "vb6_plus_total_efforts_gen2",
+          "velocityBand6TotalEffortsGen2",
+        ]),
+      ),
       hirDist: extractMetric(flattenedRecord, ["hir_dist"]),
       maxVel: extractMetric(flattenedRecord, ["max_vel"]),
       accelB23TotEffsGen2: toInteger(
@@ -830,6 +855,9 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.maxVelocity = Math.max(current.maxVelocity, metric.maxVelocity);
     current.velocityBand5TotalDistance = sumNullable(current.velocityBand5TotalDistance, metric.velocityBand5TotalDistance);
     current.velocityBand6TotalDistance = sumNullable(current.velocityBand6TotalDistance, metric.velocityBand6TotalDistance);
+    current.velocityBand4TotalEffortsGen2 = sumNullable(current.velocityBand4TotalEffortsGen2, metric.velocityBand4TotalEffortsGen2);
+    current.velocityBand5TotalEffortsGen2 = sumNullable(current.velocityBand5TotalEffortsGen2, metric.velocityBand5TotalEffortsGen2);
+    current.velocityBand6TotalEffortsGen2 = sumNullable(current.velocityBand6TotalEffortsGen2, metric.velocityBand6TotalEffortsGen2);
     current.hirDist = sumNullable(current.hirDist, metric.hirDist);
     current.maxVel = maxNullable(current.maxVel, metric.maxVel);
     current.accelB23TotEffsGen2 = sumNullable(current.accelB23TotEffsGen2, metric.accelB23TotEffsGen2);
@@ -899,6 +927,9 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       maxVelocity: metric.maxVelocity,
       velocityBand5TotalDistance: metric.velocityBand5TotalDistance ?? null,
       velocityBand6TotalDistance: metric.velocityBand6TotalDistance ?? null,
+      velocityBand4TotalEffortsGen2: metric.velocityBand4TotalEffortsGen2 ?? null,
+      velocityBand5TotalEffortsGen2: metric.velocityBand5TotalEffortsGen2 ?? null,
+      velocityBand6TotalEffortsGen2: metric.velocityBand6TotalEffortsGen2 ?? null,
       hirDist: metric.hirDist ?? null,
       maxVel: metric.maxVel ?? null,
       accelB23TotEffsGen2: metric.accelB23TotEffsGen2 ?? null,

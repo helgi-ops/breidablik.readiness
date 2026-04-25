@@ -4,6 +4,9 @@ export type CatapultMetricKey =
   | "totalDistance"
   | "velocityBand5TotalDistance"
   | "velocityBand6TotalDistance"
+  | "velocityBand4TotalEffortsGen2"
+  | "velocityBand5TotalEffortsGen2"
+  | "velocityBand6TotalEffortsGen2"
   | "hirDist"
   | "maxVelocity"
   | "accelB23TotEffsGen2"
@@ -49,6 +52,44 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     digits: 0,
     acwrSupported: true,
     aliases: ["velocity_band6_total_distance", "velocityBand6TotalDistance"],
+  },
+  {
+    key: "velocityBand6TotalEffortsGen2",
+    label: "Vel B6+ Total # Efforts (Gen 2)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: [
+      "velocity_band_6_plus_total_effort_count_set_2",
+      "velocity_band6_total_effort_count_gen2",
+      "velocity_band6_plus_total_efforts_gen2",
+      "vb6_plus_total_efforts_gen2",
+      "velocityBand6TotalEffortsGen2",
+      "vel_b6_total_efforts_gen2",
+    ],
+  },
+  {
+    key: "velocityBand5TotalEffortsGen2",
+    label: "Vel B5+ Total # Efforts (Gen 2)",
+    digits: 0,
+    acwrSupported: true,
+    aliases: [
+      "velocity_band_5_plus_total_effort_count_set_2",
+      "velocity_band5_total_effort_count_gen2",
+      "velocity_band5_plus_total_efforts_gen2",
+      "vb5_plus_total_efforts_gen2",
+      "velocityBand5TotalEffortsGen2",
+      "vel_b5_total_efforts_gen2",
+    ],
+  },
+  {
+    key: "velocityBand4TotalEffortsGen2",
+    label: "Vel B4+ Total # Efforts (Gen 2)",
+    digits: 0,
+    aliases: [
+      "velocity_band_4_plus_total_effort_count_set_2",
+      "velocity_band4_total_effort_count_gen2",
+      "velocityBand4TotalEffortsGen2",
+    ],
   },
   { key: "hirDist", label: "HIR Dist (m)", digits: 0, acwrSupported: true, aliases: ["hir_dist", "hirDist"] },
   { key: "maxVelocity", label: "Max Vel (km/h)", digits: 1, aliases: ["max_vel", "max_velocity", "maxVel", "maxVelocity"] },

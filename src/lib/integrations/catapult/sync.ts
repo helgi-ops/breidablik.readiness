@@ -81,6 +81,18 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
       current.externalLoad.velocityBand6TotalDistance,
       row.externalLoad.velocityBand6TotalDistance
     );
+    current.externalLoad.velocityBand4TotalEffortsGen2 = sumNullable(
+      current.externalLoad.velocityBand4TotalEffortsGen2,
+      row.externalLoad.velocityBand4TotalEffortsGen2
+    );
+    current.externalLoad.velocityBand5TotalEffortsGen2 = sumNullable(
+      current.externalLoad.velocityBand5TotalEffortsGen2,
+      row.externalLoad.velocityBand5TotalEffortsGen2
+    );
+    current.externalLoad.velocityBand6TotalEffortsGen2 = sumNullable(
+      current.externalLoad.velocityBand6TotalEffortsGen2,
+      row.externalLoad.velocityBand6TotalEffortsGen2
+    );
     current.externalLoad.hirDist = sumNullable(current.externalLoad.hirDist, row.externalLoad.hirDist);
     current.externalLoad.maxVel = maxNullable(current.externalLoad.maxVel, row.externalLoad.maxVel);
     current.externalLoad.accelB23TotEffsGen2 = sumNullable(
@@ -178,6 +190,9 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     max_velocity: row.externalLoad.maxVelocity,
     velocity_band5_total_distance: row.externalLoad.velocityBand5TotalDistance ?? null,
     velocity_band6_total_distance: row.externalLoad.velocityBand6TotalDistance ?? null,
+    velocity_band4_total_efforts_gen2: row.externalLoad.velocityBand4TotalEffortsGen2 ?? null,
+    velocity_band5_total_efforts_gen2: row.externalLoad.velocityBand5TotalEffortsGen2 ?? null,
+    velocity_band6_total_efforts_gen2: row.externalLoad.velocityBand6TotalEffortsGen2 ?? null,
     hir_dist: row.externalLoad.hirDist ?? null,
     max_vel: row.externalLoad.maxVel ?? null,
     accel_b2_3_tot_effs_gen2: row.externalLoad.accelB23TotEffsGen2 ?? null,
