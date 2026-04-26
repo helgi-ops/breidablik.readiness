@@ -181,8 +181,19 @@ async function authenticate(req: NextRequest) {
 }
 
 /**
- * GET /api/messages?playerId=...&date=...
- * Fetch chat thread for a player on a given date.
+ * GET /api/messages?playerId=...[&date=YYYY-MM-DD]
+ * Fetch chat thread for a player.
+ *
+ * Default behaviour: last 7 days of messages (matches the
+ * player_coach_messages table's 7-day retention policy). This avoids
+ * the midnight-rollover bug where messages "disappeared" because the
+ * UI passed today's entry_date and yesterday's messages were filtered
+ * out at view time even though they were still in the database.
+ *
+ * Opt-in `date` param: strict per-day fetch — used by surfaces that
+ * tie chat to a single check-in (e.g. coach reviewing Pétur's Tuesday
+ * note specifically). Without `date` the thread is the rolling 7-day
+ * conversation stream.
  */
 export async function GET(req: NextRequest) {
   const result = await authenticate(req);
@@ -202,7 +213,13 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: true });
 
   if (date) {
+    // Explicit date — strict single-day filter (back-compat).
     query = query.eq("entry_date", date);
+  } else {
+    // Default — rolling 7-day window matching DB retention.
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    query = query.gte("created_at", sevenDaysAgo.toISOString());
   }
 
   const { data, error } = await query;

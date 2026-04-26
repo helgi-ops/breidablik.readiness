@@ -51,8 +51,13 @@ export default function ChatThread({
   const fetchMessages = useCallback(async () => {
     try {
       const headers = await authHeaders();
+      // No date param → API returns rolling 7-day window (matches DB
+      // retention). Sending `date=${entryDate}` here previously caused
+      // messages to "disappear" at midnight when entryDate rolled over.
+      // entryDate is still used when SENDING new messages (so the
+      // server tags the row with the relevant check-in date).
       const res = await fetch(
-        `/api/messages?playerId=${playerId}&date=${entryDate}`,
+        `/api/messages?playerId=${playerId}`,
         { headers }
       );
       if (!res.ok) return;
@@ -63,17 +68,20 @@ export default function ChatThread({
     } finally {
       setLoading(false);
     }
-  }, [playerId, entryDate]);
+  }, [playerId]);
 
   // Initial load
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription
+  // Realtime subscription — accepts any message for this player
+  // regardless of entry_date so the rolling 7-day window stays live.
+  // Previously filtered to msg.entry_date === entryDate, which dropped
+  // yesterday's messages from the live stream after midnight rollover.
   useEffect(() => {
     const channel = supabase
-      .channel(`chat-${playerId}-${entryDate}`)
+      .channel(`chat-${playerId}`)
       .on(
         "postgres_changes",
         {
@@ -84,12 +92,10 @@ export default function ChatThread({
         },
         (payload: any) => {
           const msg = payload.new as Message;
-          if (msg.entry_date === entryDate) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === msg.id)) return prev;
-              return [...prev, msg];
-            });
-          }
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
         }
       )
       .subscribe();
@@ -97,7 +103,7 @@ export default function ChatThread({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, playerId, entryDate]);
+  }, [supabase, playerId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
