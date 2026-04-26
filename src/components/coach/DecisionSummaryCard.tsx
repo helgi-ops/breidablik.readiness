@@ -3,6 +3,7 @@
 import { useState, useEffect, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
+import { useLang, type Lang } from "@/lib/lang";
 
 // ── Minimal types (mirrored from dashboard Row) ───────────────────────────
 
@@ -547,91 +548,150 @@ const UNKNOWN_STATE: StateConfig = {
   sortPriority: 9,
 };
 
-// ── Icelandic verdict mapping — answers "Tilbúinn?" plainly ─────────────
-type IcelandicVerdict = {
-  /** Emoji icon (✅⚠️🛑❓) */
+// ── Bilingual verdict mapping — EN default, IS toggle ─────────────────
+type BilingualVerdict = {
   icon: string;
-  /** Short verdict label */
+  label: { EN: string; IS: string };
+  sentence: { EN: string; IS: string };
+  recommendation: { EN: string; IS: string };
+};
+
+type ResolvedVerdict = {
+  icon: string;
   label: string;
-  /** Single-line summary sentence */
   sentence: string;
-  /** Concrete coaching recommendation */
   recommendation: string;
 };
 
-const ICELANDIC_VERDICT: Record<string, IcelandicVerdict> = {
+const VERDICT_MAP: Record<string, BilingualVerdict> = {
   FULL: {
     icon: "✅",
-    label: "Tilbúinn",
-    sentence: "Tilbúinn í fullt prógram",
-    recommendation: "Engin takmörk — fullt æfing, sprint work OK",
+    label: { EN: "Ready", IS: "Tilbúinn" },
+    sentence: { EN: "Ready for full program", IS: "Tilbúinn í fullt prógram" },
+    recommendation: {
+      EN: "No restrictions — full training, sprint work OK",
+      IS: "Engin takmörk — fullt æfing, sprint work OK",
+    },
   },
   MODIFIED: {
     icon: "⚠️",
-    label: "Léttari æfing",
-    sentence: "Þarf léttari æfingu í dag",
-    recommendation: "Lækka volume 30-40% og sleppa max-intensity sprints",
+    label: { EN: "Lighter session", IS: "Léttari æfing" },
+    sentence: { EN: "Needs a lighter session today", IS: "Þarf léttari æfingu í dag" },
+    recommendation: {
+      EN: "Reduce volume 30-40% and skip max-intensity sprints",
+      IS: "Lækka volume 30-40% og sleppa max-intensity sprints",
+    },
   },
   RECOVERY: {
     icon: "🛑",
-    label: "Hvíld",
-    sentence: "Hvíld eða mobility eingöngu",
-    recommendation: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work",
+    label: { EN: "Rest", IS: "Hvíld" },
+    sentence: { EN: "Rest or mobility only", IS: "Hvíld eða mobility eingöngu" },
+    recommendation: {
+      EN: "No high-intensity work — focus on mobility, recovery, light technical work",
+      IS: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work",
+    },
   },
   HOLD: {
     icon: "🛑",
-    label: "Frá æfingu",
-    sentence: "Frá æfingu í dag",
-    recommendation: "Medical/injury hold — ekki hafa með í team-session",
+    label: { EN: "Held out", IS: "Frá æfingu" },
+    sentence: { EN: "Held out today", IS: "Frá æfingu í dag" },
+    recommendation: {
+      EN: "Medical/injury hold — do not include in team session",
+      IS: "Medical/injury hold — ekki hafa með í team-session",
+    },
   },
 };
 
-// Injury-driven verdicts override load-based verdicts.
-// Source: player_injuries.status × rtp_stage (return-to-play protocol)
-const INJURY_VERDICT: Record<string, IcelandicVerdict> = {
-  // status='injured' (rtp_stage 0) — acute phase, complete rest
+const INJURY_VERDICT: Record<string, BilingualVerdict> = {
   injured: {
     icon: "🚫",
-    label: "Frá æfingu — meiðsl",
-    sentence: "Acute meiðsli — engin æfing",
-    recommendation: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar.",
+    label: { EN: "Out — injury", IS: "Frá æfingu — meiðsl" },
+    sentence: { EN: "Acute injury — no training", IS: "Acute meiðsli — engin æfing" },
+    recommendation: {
+      EN: "Medical/physio protocol. No team training until physio clears.",
+      IS: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar.",
+    },
   },
-  // status='rehabilitation' (rtp_stage 1-2) — physio/rehab work only
   rehabilitation: {
     icon: "🏥",
-    label: "Endurhæfing",
-    sentence: "Í endurhæfingu hjá sjúkraþjálfara",
-    recommendation: "Aðeins physio-prescribed exercises. Engin team-vinna eða running.",
+    label: { EN: "Rehab", IS: "Endurhæfing" },
+    sentence: { EN: "In rehabilitation with physio", IS: "Í endurhæfingu hjá sjúkraþjálfara" },
+    recommendation: {
+      EN: "Physio-prescribed exercises only. No team work or running yet.",
+      IS: "Aðeins physio-prescribed exercises. Engin team-vinna eða running.",
+    },
   },
-  // status='rtp_training' (rtp_stage 3-4) — gradually returning to running/team
   rtp_training: {
     icon: "🩹",
-    label: "Return-to-play",
-    sentence: "Í endurkomu — modified team work",
-    recommendation: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5.",
+    label: { EN: "Return-to-play", IS: "Return-to-play" },
+    sentence: { EN: "Returning — modified team work", IS: "Í endurkomu — modified team work" },
+    recommendation: {
+      EN: "Lighter sessions with the team. Skip max-intensity sprints and full contact until stage 5.",
+      IS: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5.",
+    },
   },
-  // status='cleared' — back to normal verdict logic
 };
 
-// Illness-driven verdicts (separate from musculoskeletal injuries).
-// Detected when player_injuries.body_part = 'Illness' (or similar).
-// Critical: sick player with fever shouldn't train — myocarditis risk + spreads to teammates.
-const ILLNESS_VERDICT: Record<string, IcelandicVerdict> = {
-  // Acute illness (status='injured' + body_part='Illness') — full rest
+const ILLNESS_VERDICT: Record<string, BilingualVerdict> = {
   acute: {
     icon: "🤒",
-    label: "Veikur",
-    sentence: "Veikur — engin æfing",
-    recommendation: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu.",
+    label: { EN: "Sick", IS: "Veikur" },
+    sentence: { EN: "Sick — no training", IS: "Veikur — engin æfing" },
+    recommendation: {
+      EN: "No training. Rest, hydrate, monitor symptoms. Keep distance from teammates due to contagion risk.",
+      IS: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu.",
+    },
   },
-  // Recovering (status in 'rehabilitation'/'rtp_training' + body_part='Illness') — light training
   recovering: {
     icon: "🫧",
-    label: "Að jafna sig",
-    sentence: "Á batavegi — léttari æfing",
-    recommendation: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session.",
+    label: { EN: "Recovering", IS: "Að jafna sig" },
+    sentence: { EN: "Recovering — lighter session", IS: "Á batavegi — léttari æfing" },
+    recommendation: {
+      EN: "Light technical/aerobic work today. Skip max-intensity sprints. Hydrate well. Re-assess after session.",
+      IS: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session.",
+    },
   },
 };
+
+function resolveVerdict(map: BilingualVerdict, lang: Lang): ResolvedVerdict {
+  return {
+    icon: map.icon,
+    label: lang === "IS" ? map.label.IS : map.label.EN,
+    sentence: lang === "IS" ? map.sentence.IS : map.sentence.EN,
+    recommendation: lang === "IS" ? map.recommendation.IS : map.recommendation.EN,
+  };
+}
+
+// ── UI string translations (headings, small labels) ─────────────────────
+const I18N = {
+  activeIllness: { EN: "Active illness", IS: "Active veikindi" },
+  activeInjury: { EN: "Active injury", IS: "Active meiðsli" },
+  illness: { EN: "Illness", IS: "Veikindi" },
+  injury: { EN: "Injury", IS: "Meiðsl" },
+  estimatedReturn: { EN: "Estimated return", IS: "Áætluð endurkoma" },
+  rtpStage: { EN: "RTP stage", IS: "RTP stage" },
+  why: { EN: "Why", IS: "Hvers vegna" },
+  coachGuidance: { EN: "Coach guidance", IS: "Þjálfara-leiðbeining" },
+  verify: { EN: "Verify", IS: "Verifya" },
+  askPlayer: { EN: "Question for player", IS: "Spurning til leikmanns" },
+  acwrLabel: { EN: "ACWR (7d:28d)", IS: "ACWR (7d:28d)" },
+  acwrRisk: { EN: "Risk", IS: "Risk" },
+  acwrCaution: { EN: "Caution", IS: "Caution" },
+  acwrSweetSpot: { EN: "Sweet spot", IS: "Sweet spot" },
+  indoor7d: { EN: "Indoor (7d)", IS: "Indoor (7d)" },
+  sessionsLabel: { EN: "sessions", IS: "sessions" },
+  sessionLabel: { EN: "session", IS: "session" },
+  indoorLoad: { EN: "Indoor load (höll-mode)", IS: "Indoor load (höll-mode)" },
+  concernBumped: { EN: "↑ Concern bumped", IS: "↑ Concern bumped" },
+  indoorScore: { EN: "Indoor score", IS: "Indoor score" },
+  mcburnieIndoor: { EN: "McBurnie indoor", IS: "McBurnie indoor" },
+  healthy: { EN: "Healthy", IS: "Heilbrigt" },
+  atRisk: { EN: "At-risk", IS: "Risk" },
+  caution: { EN: "Caution", IS: "Caution" },
+} as const;
+function t(key: keyof typeof I18N, lang: Lang): string {
+  return lang === "IS" ? I18N[key].IS : I18N[key].EN;
+}
 
 /** True if this injury record is actually an illness (not musculoskeletal). */
 function isIllnessRecord(bodyPart: string | null | undefined): boolean {
@@ -640,34 +700,39 @@ function isIllnessRecord(bodyPart: string | null | undefined): boolean {
   return bp.includes("illness") || bp.includes("sjúk") || bp.includes("veik") || bp.includes("flu") || bp.includes("cold");
 }
 
-const UNKNOWN_VERDICT: IcelandicVerdict = {
+const UNKNOWN_VERDICT_BILINGUAL: BilingualVerdict = {
   icon: "❓",
-  label: "Engin gögn",
-  sentence: "Ekki nóg gögn til að meta",
-  recommendation: "Treysta á eyemark þjálfara í dag",
+  label: { EN: "No data", IS: "Engin gögn" },
+  sentence: { EN: "Not enough data to assess", IS: "Ekki nóg gögn til að meta" },
+  recommendation: {
+    EN: "Rely on coach's eye today",
+    IS: "Treysta á eyemark þjálfara í dag",
+  },
 };
 
 /**
- * Resolve plain-Icelandic verdict.
+ * Resolve verdict in EN or IS based on user's language preference.
  * Priority: illness override → injury override → load-based action → unknown.
- * Illness/injury from player_injuries always takes precedence over load metrics
- * because a sick or injured player must NEVER receive "Tilbúinn" from stale load data.
  */
 function getIcelandicVerdict(
   action: string | null,
-  injuryStatus?: string | null,
-  bodyPart?: string | null,
-): IcelandicVerdict {
-  // Illness override — body_part='Illness' marker takes precedence over injury verdicts
+  injuryStatus: string | null | undefined,
+  bodyPart: string | null | undefined,
+  lang: Lang = "EN",
+): ResolvedVerdict {
   if (injuryStatus && injuryStatus !== "cleared" && isIllnessRecord(bodyPart)) {
-    return injuryStatus === "injured" ? ILLNESS_VERDICT.acute : ILLNESS_VERDICT.recovering;
+    return resolveVerdict(
+      injuryStatus === "injured" ? ILLNESS_VERDICT.acute : ILLNESS_VERDICT.recovering,
+      lang,
+    );
   }
-  // Injury override — musculoskeletal injuries (non-illness)
   if (injuryStatus && injuryStatus !== "cleared" && INJURY_VERDICT[injuryStatus]) {
-    return INJURY_VERDICT[injuryStatus];
+    return resolveVerdict(INJURY_VERDICT[injuryStatus], lang);
   }
-  if (!action) return UNKNOWN_VERDICT;
-  return ICELANDIC_VERDICT[action] ?? UNKNOWN_VERDICT;
+  if (action && VERDICT_MAP[action]) {
+    return resolveVerdict(VERDICT_MAP[action], lang);
+  }
+  return resolveVerdict(UNKNOWN_VERDICT_BILINGUAL, lang);
 }
 
 // ── Risk flag labels ──────────────────────────────────────────────────────
@@ -741,10 +806,10 @@ const RECOVERY_FOCUS_LABEL: Record<string, string> = {
   NO_EXTRA_RECOVERY_NEEDED: "No extra recovery needed",
 };
 
-const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row, onClose }) => {
+const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lang }> = ({ row, onClose, lang = "EN" }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
-  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part);
+  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
   const isInjured =
     row._injury_status === "injured" ||
     row._injury_status === "rehabilitation" ||
@@ -856,7 +921,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                     isIll ? "text-teal-700" : "text-violet-700"
                   }`}
                 >
-                  {isIll ? "🤒 Active veikindi" : "Active meiðsli"}
+                  {isIll ? `🤒 ${t("activeIllness", lang)}` : t("activeInjury", lang)}
                 </p>
                 {row._injury_severity && (
                   <span
@@ -875,12 +940,12 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
               </div>
               <p className="text-base font-bold text-slate-900">
                 {isIll
-                  ? row._injury_type ?? "Veikindi"
-                  : `${row._injury_body_part ?? "Meiðsl"}${row._injury_type ? ` — ${row._injury_type}` : ""}`}
+                  ? row._injury_type ?? t("illness", lang)
+                  : `${row._injury_body_part ?? t("injury", lang)}${row._injury_type ? ` — ${row._injury_type}` : ""}`}
               </p>
               {row._injury_estimated_return && (
                 <p className={`mt-1 text-sm ${isIll ? "text-teal-700" : "text-violet-700"}`}>
-                  Áætluð endurkoma:{" "}
+                  {t("estimatedReturn", lang)}:{" "}
                   <span className="font-semibold">{row._injury_estimated_return}</span>
                 </p>
               )}
@@ -917,7 +982,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
               muscle_soreness: row.muscle_soreness ?? null,
               sleep_quality: row.sleep_quality ?? null,
               trained_recently: row._yesterday_load?.playerLoad != null && row._yesterday_load.playerLoad > 0,
-            });
+            }, lang);
 
             const containerColor =
               isIll
@@ -938,7 +1003,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                 {explanation.why.length > 0 && (
                   <div>
                     <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
-                      Hvers vegna
+                      {t("why", lang)}
                     </p>
                     <ul className="space-y-0.5 text-sm text-slate-800">
                       {explanation.why.map((line, i) => (
@@ -950,7 +1015,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                 {/* ACTION — concrete coaching action */}
                 <div>
                   <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
-                    Þjálfara-leiðbeining
+                    {t("coachGuidance", lang)}
                   </p>
                   <p className="text-base font-semibold text-slate-900 leading-snug">
                     {explanation.action || verdict.recommendation}
@@ -960,7 +1025,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                 {explanation.verify.length > 0 && (
                   <div className="border-t border-current border-opacity-20 pt-3">
                     <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
-                      Verifya
+                      {t("verify", lang)}
                     </p>
                     <ul className="space-y-0.5 text-sm text-slate-700">
                       {explanation.verify.map((line, i) => (
@@ -973,7 +1038,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
                 {explanation.ask && (
                   <div className="border-t border-current border-opacity-20 pt-3">
                     <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
-                      Spurning til leikmanns
+                      {t("askPlayer", lang)}
                     </p>
                     <p className="text-sm italic text-slate-700">"{explanation.ask}"</p>
                   </div>
@@ -1086,7 +1151,7 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void }> = ({ row
           })()}
 
           {/* Readiness ↔ Load detail */}
-          <ReadinessLoadDetail row={row} />
+          <ReadinessLoadDetail row={row} lang={lang} />
 
           {/* Action */}
           <div className={`rounded-xl border ${cfg.actionBgClass} px-5 py-5`}>
@@ -1281,7 +1346,7 @@ const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
 };
 
 /** Detailed readiness + load section for player modal */
-const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
+const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
   const readiness = getReadinessItems(row);
   const load = getLoadItems(row);
   if (readiness.length === 0 && load.length === 0) return null;
@@ -1621,9 +1686,9 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
               ? "border-amber-300 bg-amber-50 text-amber-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-700";
           const mcburnieLabel =
-            indoorMcburnieFlag === "red" ? "At-risk"
-              : indoorMcburnieFlag === "yellow" ? "Caution"
-              : "Healthy";
+            indoorMcburnieFlag === "red" ? t("atRisk", lang)
+              : indoorMcburnieFlag === "yellow" ? t("caution", lang)
+              : t("healthy", lang);
 
           // Escalation indicator: spike score OR red McBurnie → concern level was bumped
           const escalated = indoorBand === "spike" || indoorMcburnieFlag === "red";
@@ -1631,10 +1696,10 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
           return (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2 flex items-center gap-2">
-                Indoor load (höll-mode)
+                {t("indoorLoad", lang)}
                 {escalated && (
                   <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-700 normal-case">
-                    ↑ Concern bumped
+                    {t("concernBumped", lang)}
                   </span>
                 )}
               </p>
@@ -1643,7 +1708,7 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                   className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${scoreTone}`}
                   title="Composite Indoor Load Score: weighted combo of player_load, dyn_high_pct, ima_total, hmld, decel_b23 normalized to 28d baseline. 100 = personal avg."
                 >
-                  <span className="text-[9px] font-semibold uppercase opacity-70">Indoor score</span>
+                  <span className="text-[9px] font-semibold uppercase opacity-70">{t("indoorScore", lang)}</span>
                   <span className="text-lg font-bold tabular-nums">{indoorScore}</span>
                   <span className="text-[10px] font-semibold uppercase tracking-wide">{scoreLabel}</span>
                 </div>
@@ -1652,7 +1717,7 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                     className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${mcburnieTone}`}
                     title="Indoor McBurnie proxy: decel events per minute of high-intensity FMP movement. Healthy 1-10."
                   >
-                    <span className="text-[9px] font-semibold uppercase opacity-70">McBurnie indoor</span>
+                    <span className="text-[9px] font-semibold uppercase opacity-70">{t("mcburnieIndoor", lang)}</span>
                     <span className="text-lg font-bold tabular-nums">
                       {row._indoor_mcburnie_ratio?.toFixed(2) ?? "—"}
                     </span>
@@ -1660,10 +1725,10 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                   </div>
                 )}
                 <div className="flex flex-col rounded-lg border border-slate-200 bg-white px-3 py-2 min-w-[7rem]">
-                  <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-500">Indoor (7d)</span>
+                  <span className="text-[9px] font-semibold uppercase opacity-70 text-slate-500">{t("indoor7d", lang)}</span>
                   <span className="text-lg font-bold tabular-nums text-slate-800">{indoorSessions7d}</span>
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    {indoorSessions7d === 1 ? "session" : "sessions"}
+                    {indoorSessions7d === 1 ? t("sessionLabel", lang) : t("sessionsLabel", lang)}
                   </span>
                 </div>
                 {row._indoor_acwr_value != null && row._indoor_acwr_flag && (
@@ -1677,12 +1742,12 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
                     }`}
                     title="Acute:Chronic Workload Ratio (Gabbett 2017). Sweet spot 0.8-1.3. >1.5 = injury risk elevated."
                   >
-                    <span className="text-[9px] font-semibold uppercase opacity-70">ACWR (7d:28d)</span>
+                    <span className="text-[9px] font-semibold uppercase opacity-70">{t("acwrLabel", lang)}</span>
                     <span className="text-lg font-bold tabular-nums">{row._indoor_acwr_value.toFixed(2)}</span>
                     <span className="text-[10px] font-semibold uppercase tracking-wide">
-                      {row._indoor_acwr_flag === "red" ? "Risk"
-                        : row._indoor_acwr_flag === "yellow" ? "Caution"
-                        : "Sweet spot"}
+                      {row._indoor_acwr_flag === "red" ? t("acwrRisk", lang)
+                        : row._indoor_acwr_flag === "yellow" ? t("acwrCaution", lang)
+                        : t("acwrSweetSpot", lang)}
                     </span>
                   </div>
                 )}
@@ -1735,10 +1800,10 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
 // Red/Yellow: full detail — coach needs all info to make a decision
 // Green: compact — just a quick confirmation, no noise
 
-const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row, onClick }) => {
+const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang }> = ({ row, onClick, lang = "EN" }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
-  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part);
+  const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
   const isInjured =
     row._injury_status === "injured" ||
     row._injury_status === "rehabilitation" ||
@@ -1807,12 +1872,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
               isIll ? "text-teal-700" : "text-violet-700"
             }`}
           >
-            {isIll ? "Veikindi" : row._injury_body_part ?? "Meiðsl"}
+            {isIll ? t("illness", lang) : row._injury_body_part ?? t("injury", lang)}
             {row._injury_type ? ` (${row._injury_type})` : ""}
             {row._injury_estimated_return
-              ? ` · Áætluð endurkoma ${row._injury_estimated_return.slice(5)}`
+              ? ` · ${t("estimatedReturn", lang)} ${row._injury_estimated_return.slice(5)}`
               : ""}
-            {!isIll && row._injury_rtp_stage != null ? ` · RTP stage ${row._injury_rtp_stage}/5` : ""}
+            {!isIll && row._injury_rtp_stage != null ? ` · ${t("rtpStage", lang)} ${row._injury_rtp_stage}/5` : ""}
           </p>
         )}
 
@@ -1888,6 +1953,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void }> = ({ row,
 
 const DecisionSummaryCard: FC<{ rows: DecisionSummaryRow[] }> = ({ rows }) => {
   const [selectedRow, setSelectedRow] = useState<DecisionSummaryRow | null>(null);
+  const [lang] = useLang();
 
   if (!rows.length) return null;
 
@@ -1939,14 +2005,14 @@ const DecisionSummaryCard: FC<{ rows: DecisionSummaryRow[] }> = ({ rows }) => {
       <CardContent>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((row) => (
-            <PlayerCard key={row.player_id} row={row} onClick={() => setSelectedRow(row)} />
+            <PlayerCard key={row.player_id} row={row} onClick={() => setSelectedRow(row)} lang={lang} />
           ))}
         </div>
       </CardContent>
 
       {/* Detail modal — click anywhere outside or press Escape to close */}
       {selectedRow && (
-        <PlayerModal row={selectedRow} onClose={() => setSelectedRow(null)} />
+        <PlayerModal row={selectedRow} onClose={() => setSelectedRow(null)} lang={lang} />
       )}
     </Card>
   );

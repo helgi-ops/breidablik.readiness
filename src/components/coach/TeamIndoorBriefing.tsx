@@ -16,6 +16,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useLang, type Lang } from "@/lib/lang";
 
 type Action =
   | "FULL"
@@ -62,17 +63,52 @@ const ACTION_COLORS: Record<Action, string> = {
   RECOVERING_ILL: "bg-teal-500 text-white",
 };
 
-const ACTION_LABELS: Record<Action, string> = {
-  FULL: "Tilbúinn",
-  MODIFIED: "Léttari æfing",
-  RECOVERY: "Hvíld",
-  NO_DATA: "Engin gögn",
-  INJURED: "Frá æfingu — meiðsl",
-  REHAB: "Endurhæfing",
-  RTP: "Return-to-play",
-  ILL: "Veikur",
-  RECOVERING_ILL: "Að jafna sig",
+const ACTION_LABELS_BILINGUAL: Record<Action, { EN: string; IS: string }> = {
+  FULL: { EN: "Ready", IS: "Tilbúinn" },
+  MODIFIED: { EN: "Lighter session", IS: "Léttari æfing" },
+  RECOVERY: { EN: "Rest", IS: "Hvíld" },
+  NO_DATA: { EN: "No data", IS: "Engin gögn" },
+  INJURED: { EN: "Out — injury", IS: "Frá æfingu — meiðsl" },
+  REHAB: { EN: "Rehab", IS: "Endurhæfing" },
+  RTP: { EN: "Return-to-play", IS: "Return-to-play" },
+  ILL: { EN: "Sick", IS: "Veikur" },
+  RECOVERING_ILL: { EN: "Recovering", IS: "Að jafna sig" },
 };
+
+function actionLabel(action: Action, lang: Lang): string {
+  return lang === "IS" ? ACTION_LABELS_BILINGUAL[action].IS : ACTION_LABELS_BILINGUAL[action].EN;
+}
+
+const I18N = {
+  briefingTitle: { EN: "Indoor briefing — team today", IS: "Indoor briefing — liðið í dag" },
+  fullSyfa: { EN: "Open full page", IS: "Opna full síðu" },
+  topConcerns: { EN: "Top concerns", IS: "Top concerns" },
+  morePlayers: { EN: "more players — see", IS: "fleiri leikmenn — sjá" },
+  fullIndoorPage: { EN: "full indoor page", IS: "full indoor síðu" },
+  see14d: {
+    EN: "📊 View 14-day sparkline + team heatmap + per-day detail →",
+    IS: "📊 Skoða 14-day sparkline + team heatmap + per-day detail →",
+  },
+  ready: { EN: "ready", IS: "tilbúnir" },
+  lighter: { EN: "lighter", IS: "léttari" },
+  rest: { EN: "rest", IS: "hvíld" },
+  injured: { EN: "injured", IS: "meiddir" },
+  sick: { EN: "sick", IS: "veikir" },
+  // Sentence parts
+  allReady: { EN: "All players ready for full program today", IS: "Allir leikmenn tilbúnir í fullt prógram í dag" },
+  needsRest: { EN: "need rest", IS: "þurfa hvíld" },
+  needsLighter: { EN: "need a lighter session", IS: "þurfa léttari æfingu" },
+  inMeidsl: { EN: "in injury/RTP", IS: "í meiðslum/RTP" },
+  inSick: { EN: "sick", IS: "veikir" },
+  considerLowerIntensity: {
+    EN: "consider lowering team intensity",
+    IS: "íhuga að lækka heildarintensity team-session",
+  },
+  watchOut: { EN: "watch them today", IS: "passa þeim í dag" },
+} as const;
+function tt(key: keyof typeof I18N, lang: Lang): string {
+  return lang === "IS" ? I18N[key].IS : I18N[key].EN;
+}
 
 const ACTION_ICONS: Record<Action, string> = {
   FULL: "✅",
@@ -123,22 +159,21 @@ function recommendAction(p: IndoorBriefingPlayer): Action {
   return "FULL";
 }
 
-function buildReason(p: IndoorBriefingPlayer): string {
-  // Illness reason — takes precedence over injury (more urgent + contagion risk)
+function buildReason(p: IndoorBriefingPlayer, lang: Lang): string {
+  const en = lang === "EN";
   if (isIllnessRecord(p.injury_body_part)) {
-    if (p.injury_status === "injured") return "Veikindi — engin æfing";
-    return "Á batavegi eftir veikindi";
+    if (p.injury_status === "injured") return en ? "Sick — no training" : "Veikindi — engin æfing";
+    return en ? "Recovering from illness" : "Á batavegi eftir veikindi";
   }
-  // Injury reason
   if (p.injury_status === "injured") {
     return p.injury_body_part
-      ? `${p.injury_body_part} (acute meiðsl)`
-      : "Acute meiðsl — engin æfing";
+      ? `${p.injury_body_part} ${en ? "(acute injury)" : "(acute meiðsl)"}`
+      : en ? "Acute injury — no training" : "Acute meiðsl — engin æfing";
   }
   if (p.injury_status === "rehabilitation") {
     return p.injury_body_part
-      ? `${p.injury_body_part} — endurhæfing hjá sjúkraþjálfara`
-      : "Endurhæfing hjá sjúkraþjálfara";
+      ? `${p.injury_body_part} — ${en ? "rehab with physio" : "endurhæfing hjá sjúkraþjálfara"}`
+      : en ? "Rehab with physio" : "Endurhæfing hjá sjúkraþjálfara";
   }
   if (p.injury_status === "rtp_training") {
     const stage = p.injury_rtp_stage != null ? ` (stage ${p.injury_rtp_stage}/5)` : "";
@@ -146,23 +181,23 @@ function buildReason(p: IndoorBriefingPlayer): string {
       ? `${p.injury_body_part} — return-to-play${stage}`
       : `Return-to-play${stage}`;
   }
-  // Load-based reason
   const parts: string[] = [];
-  if (p.composite_band === "spike") parts.push("æfði miklu meira en venjulega");
-  else if (p.composite_band === "heavy") parts.push("þung session í gær");
-  else if (p.composite_band === "light") parts.push("nær engin æfing");
+  if (p.composite_band === "spike") parts.push(en ? "trained much harder than usual" : "æfði miklu meira en venjulega");
+  else if (p.composite_band === "heavy") parts.push(en ? "heavy session yesterday" : "þung session í gær");
+  else if (p.composite_band === "light") parts.push(en ? "almost no training" : "nær engin æfing");
   if (p.acwr_flag === "red" && p.acwr_value != null) {
-    if (p.acwr_value > 1.5) parts.push(`acute spike (ACWR ${p.acwr_value.toFixed(2)})`);
-    else if (p.acwr_value < 0.5) parts.push(`undirvinnsla (ACWR ${p.acwr_value.toFixed(2)})`);
+    if (p.acwr_value > 1.5) parts.push(`${en ? "acute spike" : "acute spike"} (ACWR ${p.acwr_value.toFixed(2)})`);
+    else if (p.acwr_value < 0.5) parts.push(`${en ? "undertraining" : "undirvinnsla"} (ACWR ${p.acwr_value.toFixed(2)})`);
   } else if (p.acwr_flag === "yellow" && p.acwr_value != null) {
     parts.push(`ACWR ${p.acwr_value.toFixed(2)}`);
   }
-  if (p.mcburnie_flag === "red") parts.push("decel overload");
-  else if (p.mcburnie_flag === "yellow") parts.push("decel caution");
+  if (p.mcburnie_flag === "red") parts.push(en ? "decel overload" : "decel overload");
+  else if (p.mcburnie_flag === "yellow") parts.push(en ? "decel caution" : "decel caution");
   return parts.join(" + ") || "—";
 }
 
 export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[] }) {
+  const [lang] = useLang();
   // Include players with indoor data OR active injury/illness (so injured + sick
   // players surface even when they have no recent indoor session).
   const relevant = players.filter(
@@ -190,36 +225,40 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
     actionsCount[action]++;
     // Surface in concerns: any RECOVERY/MODIFIED/injury action
     if (action !== "FULL" && action !== "NO_DATA") {
-      concernPlayers.push({ name: p.full_name, action, reason: buildReason(p) });
+      concernPlayers.push({ name: p.full_name, action, reason: buildReason(p, lang) });
     }
   }
 
   const totalInjured = actionsCount.INJURED + actionsCount.REHAB + actionsCount.RTP;
   const totalIll = actionsCount.ILL + actionsCount.RECOVERING_ILL;
 
-  // Team-level synthesis — plain Icelandic, injury+illness aware
+  // Team-level synthesis — bilingual EN/IS, injury+illness aware
   let teamAction: Action = "FULL";
-  let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
-  // Build sentence parts so we mention illnesses, injuries, and load concerns
+  let teamSentence = tt("allReady", lang);
   const sentenceParts: string[] = [];
   if (totalIll > 0) {
-    sentenceParts.push(`${totalIll} ${totalIll === 1 ? "veikur" : "veikir"}`);
+    sentenceParts.push(
+      lang === "EN"
+        ? `${totalIll} ${totalIll === 1 ? "sick" : "sick"}`
+        : `${totalIll} ${totalIll === 1 ? "veikur" : "veikir"}`,
+    );
     teamAction = "MODIFIED";
   }
   if (totalInjured > 0) {
-    sentenceParts.push(`${totalInjured} í meiðslum/RTP`);
+    sentenceParts.push(`${totalInjured} ${tt("inMeidsl", lang)}`);
     teamAction = "MODIFIED";
   }
   if (actionsCount.RECOVERY >= 1) {
-    sentenceParts.push(`${actionsCount.RECOVERY} ${actionsCount.RECOVERY === 1 ? "þarf" : "þurfa"} hvíld`);
+    sentenceParts.push(`${actionsCount.RECOVERY} ${tt("needsRest", lang)}`);
     teamAction = "RECOVERY";
   }
   if (actionsCount.MODIFIED >= 1) {
-    sentenceParts.push(`${actionsCount.MODIFIED} ${actionsCount.MODIFIED === 1 ? "þarf" : "þurfa"} léttari æfingu`);
+    sentenceParts.push(`${actionsCount.MODIFIED} ${tt("needsLighter", lang)}`);
     if (teamAction === "FULL") teamAction = "MODIFIED";
   }
   if (sentenceParts.length > 0) {
-    teamSentence = `${actionsCount.FULL} tilbúnir, ${sentenceParts.join(", ")}`;
+    const fullCountWord = lang === "EN" ? "ready" : "tilbúnir";
+    teamSentence = `${actionsCount.FULL} ${fullCountWord}, ${sentenceParts.join(", ")}`;
   }
 
   // Sort concerns: illness first (contagion + cardio risk), then injuries, then load
@@ -257,37 +296,37 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
         <span className={`mt-1 inline-block h-3 w-3 shrink-0 rounded-full ${dotBg}`} />
         <div className="flex-1 min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Indoor briefing — liðið í dag
+            {tt("briefingTitle", lang)}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-slate-900">{teamSentence}</div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
-            ✅ {actionsCount.FULL} tilbúnir
+            ✅ {actionsCount.FULL} {tt("ready", lang)}
           </span>
           <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
-            ⚠️ {actionsCount.MODIFIED} léttari
+            ⚠️ {actionsCount.MODIFIED} {tt("lighter", lang)}
           </span>
           <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
-            🛑 {actionsCount.RECOVERY} hvíld
+            🛑 {actionsCount.RECOVERY} {tt("rest", lang)}
           </span>
           {totalInjured > 0 && (
             <span className="rounded-md bg-violet-100 px-2 py-0.5 font-semibold text-violet-700">
-              🏥 {totalInjured} meiddir
+              🏥 {totalInjured} {tt("injured", lang)}
             </span>
           )}
           {totalIll > 0 && (
             <span className="rounded-md bg-teal-100 px-2 py-0.5 font-semibold text-teal-700">
-              🤒 {totalIll} veikir
+              🤒 {totalIll} {tt("sick", lang)}
             </span>
           )}
           {/* Prominent button to drill into full Indoor Load page */}
           <Link
             href="/coach/indoor-load"
             className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
-            title="Opna Indoor Load Intelligence síðuna með 14-day sparkline + team heatmap + per-day detail"
+            title="Open the Indoor Load Intelligence page with 14-day sparkline + team heatmap + per-day detail"
           >
-            Opna full síðu
+            {tt("fullSyfa", lang)}
             <svg
               className="h-3 w-3"
               viewBox="0 0 20 20"
@@ -308,7 +347,7 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
       {concernPlayers.length > 0 && (
         <div className="mt-3 border-t border-slate-200/60 pt-3">
           <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Top concerns ({concernPlayers.length})
+            {tt("topConcerns", lang)} ({concernPlayers.length})
           </div>
           <ul className="space-y-1">
             {concernPlayers.slice(0, 6).map((c) => (
@@ -329,27 +368,26 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
                   <span
                     className={`rounded px-2 py-0.5 text-[11px] font-bold ${ACTION_COLORS[c.action]}`}
                   >
-                    {ACTION_ICONS[c.action]} {ACTION_LABELS[c.action]}
+                    {ACTION_ICONS[c.action]} {actionLabel(c.action, lang)}
                   </span>
                 </div>
               </li>
             ))}
             {concernPlayers.length > 6 && (
               <li className="pt-0.5 text-[11px] text-slate-500">
-                + {concernPlayers.length - 6} fleiri leikmenn — sjá{" "}
+                + {concernPlayers.length - 6} {tt("morePlayers", lang)}{" "}
                 <Link href="/coach/indoor-load" className="font-semibold underline hover:text-slate-700">
-                  full indoor síðu
+                  {tt("fullIndoorPage", lang)}
                 </Link>
               </li>
             )}
           </ul>
-          {/* Bottom drill-in link — encourages exploring trend + heatmap */}
           <div className="mt-3 border-t border-slate-200/60 pt-2 text-center">
             <Link
               href="/coach/indoor-load"
               className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
             >
-              📊 Skoða 14-day sparkline + team heatmap + per-day detail →
+              {tt("see14d", lang)}
             </Link>
           </div>
         </div>
