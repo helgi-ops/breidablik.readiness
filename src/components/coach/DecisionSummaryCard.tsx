@@ -1002,6 +1002,13 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lan
               readiness_trend: trendForExplain,
               is_overridden: isOverridden,
               system_recommendation: systemRec,
+              // Composite concern context — same signals Daily Briefing uses
+              // for Top Concerns. Lets the FULL branch surface the
+              // watch-this state when MLI/fatigue/PL spike are flagging
+              // despite ACWR + composite_band looking fine.
+              composite_concern_level: row._today_composite_concern ?? null,
+              fatigue_type: row._today_fatigue_type ?? null,
+              pl_spike_ratio: row._today_player_load_spike ?? null,
             }, lang);
 
             const containerColor =

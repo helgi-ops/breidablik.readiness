@@ -44,6 +44,16 @@ export type ExplainInput = {
   readiness_trend?: string | null;         // e.g. "sharply declining", "stable"
   is_overridden?: boolean;                 // coach has manually set FULL while STEN says otherwise
   system_recommendation?: "RECOVERY" | "MODIFIED" | "FULL" | null;
+  // ── Composite load concern context ───────────────────────
+  // Daily Briefing's Top Concerns flags players based on these signals
+  // (MLI / fatigue type / PL spike) which the verdict logic doesn't
+  // currently see. When verdict is FULL but these flag concern, surface
+  // it so the coach guidance acknowledges the watch-this state instead
+  // of saying "max-intensity OK" alongside a Top Concerns flag for the
+  // same player.
+  composite_concern_level?: "none" | "low" | "moderate" | "high" | null;
+  fatigue_type?: string | null;             // mechanical_fatigue | metabolic_fatigue | global_fatigue | normal
+  pl_spike_ratio?: number | null;           // today vs 28d baseline; ≥1.6 = spike
 };
 
 type Bilingual = { EN: string; IS: string };
@@ -327,7 +337,99 @@ export function buildVerdictExplanation(input: ExplainInput, lang: Lang = "EN"):
       return { why, verify, action, ask };
     }
 
-    // ── Genuine FULL branch (no override conflict) ──────────
+    // ── Watchful-FULL branch ────────────────────────────────
+    // STEN says ready, but composite concern signals (MLI / fatigue type
+    // / PL spike) are flagging this player to Top Concerns on the Daily
+    // Briefing. Without this branch the coach sees Aron flagged at the
+    // top + "max-intensity OK" two scrolls down — contradictory. Surface
+    // the watchful state instead.
+    const concernHigh = input.composite_concern_level === "high";
+    const concernMod = input.composite_concern_level === "moderate";
+    const fatigueFlag = input.fatigue_type && input.fatigue_type !== "normal" ? input.fatigue_type : null;
+    const plSpike = (input.pl_spike_ratio ?? 0) >= 1.6;
+    const plElevated = !plSpike && (input.pl_spike_ratio ?? 0) >= 1.15;
+    const isWatchful = concernHigh || concernMod || fatigueFlag != null || plSpike || plElevated;
+
+    if (isWatchful) {
+      const stenBit = input.readiness_sten != null ? `STEN ${input.readiness_sten}` : "readiness OK";
+      why.push(t({
+        EN: `Ready today (${stenBit}${input.readiness_trend ? `, ${input.readiness_trend}` : ""}) — body is reporting it can train`,
+        IS: `Tilbúinn í dag (${stenBit}${input.readiness_trend ? `, ${input.readiness_trend}` : ""}) — líkaminn segir hann ráði við æfinguna`,
+      }, lang));
+
+      const fatigueLabelEn =
+        fatigueFlag === "mechanical_fatigue" ? "mechanical load (sprints, decels)"
+        : fatigueFlag === "metabolic_fatigue" ? "metabolic load (high-intensity running)"
+        : fatigueFlag === "global_fatigue"    ? "overall accumulated load"
+        : null;
+      const fatigueLabelIs =
+        fatigueFlag === "mechanical_fatigue" ? "mechanical álag (sprettir, decels)"
+        : fatigueFlag === "metabolic_fatigue" ? "metabolic álag (high-intensity hlaup)"
+        : fatigueFlag === "global_fatigue"    ? "heildar uppsafnað álag"
+        : null;
+
+      if (concernHigh) {
+        why.push(t({
+          EN: `Composite load concern: HIGH${fatigueLabelEn ? ` — ${fatigueLabelEn} in red zone` : ""}. Body is handling it now, may not next week if trend continues.`,
+          IS: `Composite load concern: HÁTT${fatigueLabelIs ? ` — ${fatigueLabelIs} í rauðu` : ""}. Líkaminn ræður við það núna, gæti ekki næstu viku ef stefnan heldur.`,
+        }, lang));
+      } else if (concernMod) {
+        why.push(t({
+          EN: `Composite load concern: MODERATE${fatigueLabelEn ? ` — ${fatigueLabelEn} elevated` : ""}. Worth tracking across the week.`,
+          IS: `Composite load concern: HÓF${fatigueLabelIs ? ` — ${fatigueLabelIs} hækkað` : ""}. Vert að fylgjast með í gegnum vikuna.`,
+        }, lang));
+      } else if (fatigueFlag) {
+        why.push(t({
+          EN: `Fatigue signal: ${fatigueLabelEn} flagged. Single-day, may resolve with normal recovery.`,
+          IS: `Fatigue signal: ${fatigueLabelIs} flag-að. Einn dagur, getur hjaðnað með venjulegu recovery.`,
+        }, lang));
+      }
+
+      if (plSpike && input.pl_spike_ratio != null) {
+        why.push(t({
+          EN: `PlayerLoad ${input.pl_spike_ratio.toFixed(2)}× above 28d baseline — acute spike (≥1.6× = injury risk window opens)`,
+          IS: `PlayerLoad ${input.pl_spike_ratio.toFixed(2)}× yfir 28d baseline — acute spike (≥1.6× = injury risk gluggi opnast)`,
+        }, lang));
+      } else if (plElevated && input.pl_spike_ratio != null) {
+        why.push(t({
+          EN: `PlayerLoad ${input.pl_spike_ratio.toFixed(2)}× baseline — elevated but not spike (caution band 1.15–1.6×)`,
+          IS: `PlayerLoad ${input.pl_spike_ratio.toFixed(2)}× baseline — hækkað en ekki spike (caution band 1.15–1.6×)`,
+        }, lang));
+      }
+
+      verify.push(t({
+        EN: "Compare today's composite + fatigue type to the 7-day rolling avg — is the trend rising?",
+        IS: "Berðu saman composite + fatigue type í dag við 7-day rolling avg — er stefnan upp á við?",
+      }, lang));
+      if (fatigueFlag === "mechanical_fatigue") {
+        verify.push(t({
+          EN: "Check accel/decel volume — taper sprints/CoD if MLI keeps climbing day-on-day",
+          IS: "Skoðaðu accel/decel volume — taper sprints/CoD ef MLI heldur áfram að hækka dag fyrir dag",
+        }, lang));
+      } else if (fatigueFlag === "metabolic_fatigue") {
+        verify.push(t({
+          EN: "Watch HR / sRPE response in warmup — pull intensity if recovery between drills lags",
+          IS: "Fylgstu með HR / sRPE response í warmup — bakka intensity ef recovery milli drills dregst",
+        }, lang));
+      }
+
+      action = concernHigh || plSpike
+        ? t({
+            EN: "Full session OK today, but treat as borderline. Skip the highest-intensity blocks (max sprints, contact). Watch volume across the rest of the week — drop a session if signal stays red.",
+            IS: "Fullt session OK í dag, en líttu á þetta sem borderline. Sleppa hæstu intensity blokkum (max sprints, contact). Fylgstu með volume í afgangi vikunnar — sleppa session ef merki helst rautt.",
+          }, lang)
+        : t({
+            EN: "Full session OK. One signal is elevated but not critical — keep an eye on it across the next 2–3 sessions before changing the plan.",
+            IS: "Fullt session OK. Eitt merki er hækkað en ekki critical — fylgstu með í næstu 2-3 sessions áður en þú breytir plani.",
+          }, lang);
+      ask = t({
+        EN: "How are your legs feeling — any heavy or stiff spots from yesterday?",
+        IS: "Hvernig líður fótum þínum — eitthvað þungt eða stíft frá því í gær?",
+      }, lang);
+      return { why, verify, action, ask };
+    }
+
+    // ── Genuine FULL branch (no override conflict, no watchful flags) ──
     why.push(t({
       EN: "All load signals within healthy band — no warning flags",
       IS: "Allir load-merki innan healthy band — engin warning flags",
