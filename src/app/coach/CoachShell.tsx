@@ -23,7 +23,7 @@ const monitoringLinks: { href: string; label: Bi }[] = [
   { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",        IS: "Quadrant view (Gabbett)" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",        IS: "Indoor Load (höll-mode)" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",  IS: "Decel Intelligence (McBurnie)" } },
-  { href: "/coach/injuries",           label: { EN: "Injury log",                     IS: "Meiðslaskráning" } },
+  { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",        IS: "Meiðsla-munstursgreining" } },
 ];
 
 // Session-building cluster — "how do I plan and run training?"

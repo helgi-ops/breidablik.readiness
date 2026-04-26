@@ -114,14 +114,13 @@ const mechanismLabel = (k: Mechanism, lang: Lang): string =>
 
 // ── Page-level UI strings ───────────────────────────────────────────────
 const INJ_I18N = {
-  pageTitle: { EN: "Injury log", IS: "Meiðslaskráning" },
+  pageTitle: { EN: "Injury Pattern Analysis", IS: "Meiðsla-munstursgreining" },
   proofOfRoi: { EN: "proof-of-ROI", IS: "proof-of-ROI" },
   pageSubtitle: {
-    EN: "Log injuries and see which signals MicroPulse caught beforehand.",
-    IS: "Skráðu meiðsli og sjáðu hvaða signals MicroPulse fangaði fyrirfram.",
+    EN: "Read-only view of every recorded injury, plus the MicroPulse warning signals that preceded it. To log a new injury, use the RTP tab on the Dashboard.",
+    IS: "Lestrar-aðeins yfirlit yfir öll skráð meiðsli og þau MicroPulse warning signals sem komu á undan. Til að skrá nýtt meiðsli, notaðu RTP tab á Dashboard.",
   },
-  closeForm: { EN: "Close form", IS: "Loka skráningarformi" },
-  logInjury: { EN: "+ Log injury", IS: "+ Skrá meiðsli" },
+  goToRtpTab: { EN: "Open RTP tab →", IS: "Opna RTP tab →" },
   notSignedIn: { EN: "Not signed in", IS: "Ekki innskráður" },
   noTeam: { EN: "Not connected to a team", IS: "Ekki tengdur við lið" },
   errorGeneric: { EN: "Error", IS: "Villa" },
@@ -203,7 +202,6 @@ export default function CoachInjuriesPage() {
   const [players, setPlayers]   = React.useState<Player[]>([]);
   const [injuries, setInjuries] = React.useState<InjuryEvent[]>([]);
   const [summary, setSummary]   = React.useState<Summary | null>(null);
-  const [showForm, setShowForm] = React.useState(false);
 
   React.useEffect(() => { void load(); }, []);
 
@@ -247,41 +245,31 @@ export default function CoachInjuriesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-      {/* Header */}
+      {/* Header — read-only analytics view. Logging happens on RTP tab. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold text-slate-900">{it("pageTitle", lang)}</h1>
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
               {it("proofOfRoi", lang)}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {it("pageSubtitle", lang)}
             {teamLabel && <> · {teamLabel}</>}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+        <Link
+          href="/coach?tab=rtp"
+          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
         >
-          {showForm ? it("closeForm", lang) : it("logInjury", lang)}
-        </button>
+          {it("goToRtpTab", lang)}
+        </Link>
       </div>
 
       {/* Summary */}
       {summary && summary.total_injuries > 0 && (
         <SummaryPanel summary={summary} lang={lang} />
-      )}
-
-      {/* Form */}
-      {showForm && teamId && (
-        <InjuryForm
-          teamId={teamId}
-          players={players}
-          lang={lang}
-          onSaved={() => { setShowForm(false); void load(); }}
-        />
       )}
 
       {/* List */}
@@ -476,127 +464,9 @@ function Mini({ label, value, hint }: { label: string; value: any; hint?: string
   );
 }
 
-// ─── New injury form ─────────────────────────────────────────────────────
-
-function InjuryForm({
-  teamId, players, lang, onSaved,
-}: {
-  teamId: string;
-  players: Player[];
-  lang: Lang;
-  onSaved: () => void;
-}) {
-  const [playerId, setPlayerId] = React.useState("");
-  const [date, setDate]         = React.useState(new Date().toISOString().slice(0, 10));
-  const [type, setType]         = React.useState<InjuryType>("hamstring");
-  const [side, setSide]         = React.useState<BodySide>("na");
-  const [mechanism, setMechanism] = React.useState<Mechanism>("non_contact_match");
-  const [severity, setSeverity] = React.useState<Severity | "">("");
-  const [daysLost, setDaysLost] = React.useState("");
-  const [notes, setNotes]       = React.useState("");
-  const [saving, setSaving]     = React.useState(false);
-  const [err, setErr]           = React.useState<string | null>(null);
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (!playerId) { setErr(it("selectPlayerErr", lang)); return; }
-    setSaving(true); setErr(null);
-    try {
-      const sb = getSupabaseClient();
-      const { error } = await sb.from("injury_events").insert({
-        player_id: playerId,
-        team_id: teamId,
-        injury_date: date,
-        injury_type: type,
-        body_side: side,
-        mechanism: mechanism,
-        severity: severity || null,
-        days_lost: daysLost ? parseInt(daysLost, 10) : null,
-        notes: notes.trim() || null,
-        is_active: true,
-      });
-      if (error) throw error;
-      onSaved();
-    } catch (e: any) {
-      setErr(e?.message ?? it("saveErr", lang));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={save} className="rounded-xl border-2 border-emerald-300 bg-white p-4 space-y-3">
-      <h2 className="text-base font-semibold text-slate-900">{it("formTitle", lang)}</h2>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label={it("player", lang)}>
-          <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">{it("selectDash", lang)}</option>
-            {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-          </select>
-        </Field>
-        <Field label={it("injuryDate", lang)}>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
-        </Field>
-        <Field label={it("injuryTypeField", lang)}>
-          <select value={type} onChange={(e) => setType(e.target.value as InjuryType)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            {(Object.keys(INJURY_TYPE_LABEL_BILINGUAL) as InjuryType[]).map((k) => (
-              <option key={k} value={k}>{injuryTypeLabel(k, lang)}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label={it("bodySide", lang)}>
-          <select value={side} onChange={(e) => setSide(e.target.value as BodySide)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="na">{it("sideNa", lang)}</option>
-            <option value="left">{it("sideLeft", lang)}</option>
-            <option value="right">{it("sideRight", lang)}</option>
-            <option value="bilateral">{it("sideBilateral", lang)}</option>
-          </select>
-        </Field>
-        <Field label={it("mechanism", lang)}>
-          <select value={mechanism} onChange={(e) => setMechanism(e.target.value as Mechanism)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            {(Object.keys(MECHANISM_LABEL_BILINGUAL) as Mechanism[]).map((k) => (
-              <option key={k} value={k}>{mechanismLabel(k, lang)}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label={it("severity", lang)}>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity | "")} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">{it("notSet", lang)}</option>
-            {(Object.keys(SEVERITY_LABEL_BILINGUAL) as Severity[]).map((k) => (
-              <option key={k} value={k}>{severityLabel(k, lang)}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label={it("daysLost", lang)}>
-          <input type="number" min={0} value={daysLost} onChange={(e) => setDaysLost(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
-        </Field>
-      </div>
-
-      <Field label={it("notes", lang)}>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
-      </Field>
-
-      {err && <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</div>}
-
-      <div className="flex gap-2">
-        <button type="submit" disabled={saving || !playerId} className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:bg-slate-300">
-          {saving ? it("saving", lang) : it("saveButton", lang)}
-        </button>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">
-        {it("formFooter", lang)}
-      </p>
-    </form>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="block text-xs font-medium text-slate-700">{label}</span>
-      <div className="mt-1">{children}</div>
-    </label>
-  );
-}
+// ─── Injury logging is no longer done here. ──────────────────────────────
+// This page is a read-only analytics view of injury_events. New injuries
+// are logged via the RTP tab (DevCoachDashboardClient → RtpTab.tsx) which
+// writes to player_injuries; a Postgres trigger
+// (player_injuries_sync_to_events) mirrors them here automatically so the
+// pattern-match retrospective analysis runs on every new injury.

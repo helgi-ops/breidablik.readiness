@@ -6602,7 +6602,7 @@ export default function CoachPage() {
           { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },
           { href: "/coach/indoor-load",        label: { EN: "Indoor Load",      IS: "Indoor Load" } },
           { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
-          { href: "/coach/injuries",           label: { EN: "Injuries",         IS: "Meiðsli" } },
+          { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
         ];
         // Overflow — niche player-monitoring views (volatility, jump testing,
         // VBT, longitudinal trends, RTP). MD Comparison + Session moved out
