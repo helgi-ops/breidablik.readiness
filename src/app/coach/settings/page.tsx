@@ -431,25 +431,37 @@ export default function CoachSettingsPage() {
                 );
               })}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {trainingMode === "indoor" ? (
-                <>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High 34%</span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">PlayerLoad 26%</span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 20%</span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic Med 14%</span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Running High 6%</span>
-                </>
-              ) : trainingMode === "outdoor" ? (
-                <>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">HIR Distance 34%</span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Decel Load 26%</span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Density Stress 20%</span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Max Velocity 14%</span>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Band 6 Distance 6%</span>
-                </>
-              ) : (
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Per-player heuristic — picks pipeline based on recent session counts</span>
+            {/* Real composite weights — sourced from the actual formulas
+                (get_indoor_load_status RPC for indoor, computeCompositeLoadConcern
+                for outdoor). Earlier placeholder labels here advertised
+                metrics the system never actually used. */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {trainingMode === "indoor" ? (
+                  <>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">Player Load 40%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High % 33%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 27%</span>
+                  </>
+                ) : trainingMode === "outdoor" ? (
+                  <>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">RPE ACWR 40%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">GPS Neuromuscular Burden 35%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Metabolic Load Score 25%</span>
+                  </>
+                ) : (
+                  <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Per-player heuristic — picks pipeline based on recent session counts</span>
+                )}
+              </div>
+              {trainingMode === "indoor" && (
+                <p className="text-xs text-zinc-500">
+                  HMLD and Decel B2-3 displayed as session context, not in composite (Catapult derives them with GPS context — noisy indoors). McBurnie indoor ratio still uses Decel B2-3.
+                </p>
+              )}
+              {trainingMode === "outdoor" && (
+                <p className="text-xs text-zinc-500">
+                  Safety nets bump concern level when triggered: Residual MLI (3d mechanical), Residual Decel (3d eccentric), Decel Burden (today), HID% fatigue trend, Accel:Decel ratio.
+                </p>
               )}
             </div>
           </div>
