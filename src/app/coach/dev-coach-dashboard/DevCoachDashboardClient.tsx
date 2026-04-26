@@ -1934,6 +1934,14 @@ export default function CoachPage() {
     sessions7d: number | null;
   }>>({});
 
+  // Decel Intelligence (McBurnie 2022 4-dimension framework) per player —
+  // feeds the verdict pipeline so a player flagged red on
+  // /coach/decel-intelligence also shows red on the dashboard.
+  const [playerDecelStatus, setPlayerDecelStatus] = useState<Record<string, {
+    overallFlag: "green" | "yellow" | "red" | "unknown" | null;
+    explanation: string | null;
+  }>>({});
+
   // Active injuries per player — overrides load-based verdict in Decision Summary
   const [playerInjuryStatus, setPlayerInjuryStatus] = useState<Record<string, {
     status: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
@@ -2060,6 +2068,36 @@ export default function CoachPage() {
           if (Object.keys(indoorMap).length) setPlayerIndoorStatus(indoorMap);
         }
       } catch { /* Indoor Load is optional */ }
+
+      // Decel Intelligence (McBurnie 2022 4-dimension framework) per
+      // player — feeds the verdict pipeline so a player flagged red on
+      // /coach/decel-intelligence cannot show GREEN on the dashboard.
+      // Same fetch pattern as Indoor Load: parallel per-player RPC,
+      // skip silently when data is missing.
+      try {
+        const playerIds = rows.map((r) => r.player_id).filter(Boolean);
+        if (playerIds.length) {
+          const decelMap: typeof playerDecelStatus = {};
+          await Promise.all(
+            playerIds.map(async (pid) => {
+              try {
+                const { data } = await supabase.rpc("get_mcburnie_decel_status", {
+                  p_player_id: pid,
+                });
+                const status = data as Record<string, unknown> | null;
+                if (!status) return;
+                const flag = status.overall_flag as "green" | "yellow" | "red" | "unknown" | undefined;
+                if (!flag) return;
+                decelMap[pid] = {
+                  overallFlag: flag,
+                  explanation: typeof status.explanation === "string" ? status.explanation : null,
+                };
+              } catch { /* per-player RPC failure — skip silently */ }
+            }),
+          );
+          if (Object.keys(decelMap).length) setPlayerDecelStatus(decelMap);
+        }
+      } catch { /* Decel Intelligence is optional */ }
 
       // Active injuries / illnesses — overrides Decision Summary verdict.
       // We read from BOTH player_injuries (RTP-stage workflow) and injury_events
@@ -4952,6 +4990,7 @@ export default function CoachPage() {
       }, readinessDecision);
       const neural = r._neural_load ?? null;
       const indoorIdx = playerIndoorStatus[String(r.player_id)];
+      const decelIdx = playerDecelStatus[String(r.player_id)];
       const athleteDecision = buildAthleteDecision({
         snapshot,
         readinessDecision,
@@ -4977,6 +5016,9 @@ export default function CoachPage() {
               mcburnieFlag: indoorIdx.mcburnieFlag ?? null,
               acwrFlag: indoorIdx.acwrFlag ?? null,
             }
+          : null,
+        decelIntelligence: decelIdx
+          ? { overallFlag: decelIdx.overallFlag, summary: decelIdx.explanation }
           : null,
         hardBlock: false,
       });
@@ -5744,6 +5786,14 @@ export default function CoachPage() {
           mcburnieFlag: idx.mcburnieFlag ?? null,
           acwrFlag: idx.acwrFlag ?? null,
         };
+      })(),
+      // Decel Intelligence (McBurnie 2022 4-dimension overall flag) —
+      // closes the verdict gap with /coach/decel-intelligence. Same
+      // pattern as indoorLoad, populated via parallel RPC fetch.
+      decelIntelligence: (() => {
+        const idx = playerDecelStatus[String(r.player_id)];
+        if (!idx) return null;
+        return { overallFlag: idx.overallFlag, summary: idx.explanation };
       })(),
       hardBlock: false,
     });
