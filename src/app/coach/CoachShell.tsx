@@ -11,41 +11,55 @@ import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
 import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
 import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotificationPrompt";
+import { useLang, type Lang } from "@/lib/lang";
 
-const operationsLinks = [
-  { href: "/coach/quadrant", label: "Quadrant view" },
-  { href: "/coach/decel-intelligence", label: "Decel Intelligence (McBurnie)" },
-  { href: "/coach/indoor-load", label: "Indoor Load (höll-mode)" },
-  { href: "/coach/injuries", label: "Injuries (proof-of-ROI)" },
-  { href: "/coach/match-minutes", label: "Match minutes" },
-  { href: "/coach/templates", label: "Templates" },
-  { href: "/coach/custom-templates", label: "Custom templates" },
+// ── Bilingual nav labels ──────────────────────────────────────────────
+type Bi = { EN: string; IS: string };
+const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
+
+// Player-monitoring cluster — "what's happening with my players right now?"
+// Deeper analytics layered on top of the dashboard's daily Today/Squad views.
+const monitoringLinks: { href: string; label: Bi }[] = [
+  { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",        IS: "Quadrant view (Gabbett)" } },
+  { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",        IS: "Indoor Load (höll-mode)" } },
+  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",  IS: "Decel Intelligence (McBurnie)" } },
+  { href: "/coach/injuries",           label: { EN: "Injury log",                     IS: "Meiðslaskráning" } },
 ];
 
-const adminLinks = [
-  { href: "/coach/settings", label: "Settings" },
-  { href: "/coach/reporting-center", label: "Reporting center" },
-  { href: "/coach/integrations", label: "Integrations" },
-  { href: "/coach/automation-center", label: "Automation" },
+// Session-building cluster — "how do I plan and run training?"
+const planningLinks: { href: string; label: Bi }[] = [
+  { href: "/coach/templates",        label: { EN: "Session templates",   IS: "Session templates" } },
+  { href: "/coach/custom-templates", label: { EN: "Custom templates",    IS: "Sérsniðnar templates" } },
+  { href: "/coach/match-minutes",    label: { EN: "Match minutes",       IS: "Leikmínútur" } },
+];
+
+const adminLinks: { href: string; label: Bi }[] = [
+  { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
+  { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
+  { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
+  { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
 // Only shown to users with profiles.role === 'admin'
-const superAdminLinks = [
-  { href: "/coach/leads", label: "Leads (demo/pilot)" },
+const superAdminLinks: { href: string; label: Bi }[] = [
+  { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
 ];
 
 function NavDropdown({
   label,
   links,
   pathname,
+  lang,
 }: {
   label: string;
-  links: { href: string; label: string }[];
+  links: { href: string; label: Bi }[];
   pathname: string;
+  lang: Lang;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const isActive = links.some((l) => pathname?.startsWith(l.href));
+  const activeLink = links.find((l) => pathname?.startsWith(l.href)) ?? null;
+  const isActive = activeLink != null;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -65,7 +79,9 @@ function NavDropdown({
           isActive ? "font-medium text-foreground" : "text-muted-foreground"
         }`}
       >
-        {label}
+        {/* When a child page is active, surface its label so the user knows
+            which dropdown contains the current view. */}
+        {activeLink ? `${label} · ${tt(activeLink.label, lang)}` : label}
         <svg
           className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
           viewBox="0 0 20 20"
@@ -81,7 +97,7 @@ function NavDropdown({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border bg-background py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border bg-background py-1 shadow-lg">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -93,7 +109,7 @@ function NavDropdown({
                   : "text-muted-foreground"
               }`}
             >
-              {link.label}
+              {tt(link.label, lang)}
             </Link>
           ))}
         </div>
@@ -105,6 +121,7 @@ function NavDropdown({
 export default function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isDisplayRoute = pathname?.startsWith("/coach/display");
+  const [lang] = useLang();
 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
@@ -267,15 +284,24 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             </Link>
 
             <NavDropdown
-              label="Operations"
-              links={operationsLinks}
+              label={lang === "IS" ? "Eftirlit" : "Monitoring"}
+              links={monitoringLinks}
               pathname={pathname ?? ""}
+              lang={lang}
+            />
+
+            <NavDropdown
+              label={lang === "IS" ? "Skipulag" : "Planning"}
+              links={planningLinks}
+              pathname={pathname ?? ""}
+              lang={lang}
             />
 
             <NavDropdown
               label="Admin"
               links={adminLinks}
               pathname={pathname ?? ""}
+              lang={lang}
             />
 
             {isAdmin && (
@@ -283,6 +309,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 label="MicroPulse"
                 links={superAdminLinks}
                 pathname={pathname ?? ""}
+                lang={lang}
               />
             )}
 
