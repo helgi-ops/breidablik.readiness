@@ -1824,6 +1824,11 @@ export default function CoachPage() {
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
+  // Manual override of the indoor-vs-outdoor verdict pipeline. 'auto' lets
+  // the per-player heuristic decide; 'indoor' forces the FMP pipeline (höll
+  // mode); 'outdoor' forces the GPS pipeline. See teams.training_mode_default
+  // — coaches typically set this once per season.
+  const [trainingMode, setTrainingMode] = useState<"auto" | "indoor" | "outdoor">("auto");
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
 
   // MD context
@@ -2656,13 +2661,15 @@ export default function CoachPage() {
 
     // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
     if (resolvedTeamId) {
-      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type").eq("id", resolvedTeamId).maybeSingle();
+      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type, training_mode_default").eq("id", resolvedTeamId).maybeSingle();
       if (teamData) {
         setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
         setTeamType(String((teamData as any)?.team_type ?? "club_team"));
         const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
         if (gp === "statsport" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
+        const tm = String((teamData as any)?.training_mode_default ?? "auto").toLowerCase();
+        if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
       }
     }
 
@@ -7119,7 +7126,7 @@ export default function CoachPage() {
                 _injury_estimated_return: playerInjuryStatus[r.player_id]?.estimatedReturn ?? null,
                 _injury_severity: playerInjuryStatus[r.player_id]?.severity ?? null,
               };
-            }) as any} />
+            }) as any} trainingMode={trainingMode} />
           )}
 
           {/* Readiness × Load quadrant — at-a-glance decision support */}

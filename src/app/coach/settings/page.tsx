@@ -69,6 +69,12 @@ export default function CoachSettingsPage() {
   const [indoorMode, setIndoorMode] = useState<boolean | null>(null);
   const [indoorModeLoading, setIndoorModeLoading] = useState(false);
   const [indoorModeError, setIndoorModeError] = useState("");
+  // Ternary load pipeline override (auto/indoor/outdoor). Maps onto
+  // teams.training_mode_default and supersedes the binary indoor_mode
+  // toggle for verdict-pipeline purposes — existing indoor_mode flag
+  // stays in sync (true when 'indoor', false otherwise) for any legacy
+  // consumers.
+  const [trainingMode, setTrainingMode] = useState<"auto" | "indoor" | "outdoor">("auto");
   const [sportType, setSportType] = useState<"football" | "basketball">("football");
   const [sportTypeLoading, setSportTypeLoading] = useState(false);
 
@@ -175,10 +181,44 @@ export default function CoachSettingsPage() {
           const json = await res.json();
           setIndoorMode(json.indoor_mode ?? false);
           setSportType(json.sport_type === "basketball" ? "basketball" : "football");
+          const tm = String(json.training_mode_default ?? "auto").toLowerCase();
+          if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
         }
       } catch { /* silently fail */ }
     };
     fetchIndoorMode();
+  }, [teamId, supabase]);
+
+  const setTrainingModeRemote = useCallback(async (next: "auto" | "indoor" | "outdoor") => {
+    if (!teamId) return;
+    setIndoorModeLoading(true);
+    setIndoorModeError("");
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ team_id: teamId, training_mode_default: next }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? "Failed to update");
+      }
+      setTrainingMode(next);
+      // Keep legacy boolean indoor_mode in sync so any other consumers
+      // (TV display, indoor-only UI features) reflect the active mode.
+      if (next === "indoor") setIndoorMode(true);
+      else if (next === "outdoor") setIndoorMode(false);
+    } catch (err) {
+      setIndoorModeError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setIndoorModeLoading(false);
+    }
   }, [teamId, supabase]);
 
   const toggleIndoorMode = useCallback(async () => {
@@ -344,19 +384,21 @@ export default function CoachSettingsPage() {
         </section>
       )}
 
-      {/* ── Indoor Mode (FMP) ─────────────────────────────────────────── */}
-      {teamId && indoorMode !== null && (
+      {/* ── Load monitoring mode (Auto / Indoor / Outdoor) ───────────── */}
+      {teamId && (
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-3">
             <div>
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Load monitoring mode</div>
               <h2 className="mt-1 text-lg font-semibold text-zinc-950">
-                {indoorMode ? "Indoor Mode (FMP)" : "Outdoor Mode (GPS)"}
+                {trainingMode === "auto" ? "Auto-detect"
+                  : trainingMode === "indoor" ? "Indoor (FMP)"
+                  : "Outdoor (GPS)"}
               </h2>
               <p className="mt-1 max-w-xl text-sm text-zinc-600">
-                {indoorMode
-                  ? "Using Football Movement Profile (inertial sensors) + PlayerLoad + IMA for load monitoring. No GPS required."
-                  : "Using GPS-based metrics (HIR, velocity bands, max speed) for load monitoring."}
+                {trainingMode === "auto" ? "System picks Indoor or Outdoor pipeline per player based on recent session activity. Use this when the team flips between modes mid-week."
+                  : trainingMode === "indoor" ? "Forces FMP / PlayerLoad / IMA pipeline (höll-mode). GPS metrics ignored. Best for hall season or indoor sports."
+                  : "Forces GPS pipeline (HIR, velocity bands, sprint count). FMP indoor metrics ignored. Best for outdoor pitch season."}
               </p>
               {sportType === "basketball" && (
                 <div className="mt-2 text-xs text-indigo-600">Körfubolti notar alltaf indoor mode / Basketball always uses indoor mode</div>
@@ -365,42 +407,51 @@ export default function CoachSettingsPage() {
                 <div className="mt-2 text-sm text-red-600">{indoorModeError}</div>
               )}
             </div>
-            <button
-              type="button"
-              disabled={indoorModeLoading || sportType === "basketball"}
-              onClick={toggleIndoorMode}
-              title={sportType === "basketball" ? "Basketball is always indoor" : undefined}
-              className={`relative mt-1 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                indoorMode
-                  ? "bg-indigo-600 focus:ring-indigo-500"
-                  : "bg-zinc-300 focus:ring-zinc-400"
-              } ${indoorModeLoading || sportType === "basketball" ? "opacity-50 cursor-wait" : ""}`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                  indoorMode ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {indoorMode ? (
-              <>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High 34%</span>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">PlayerLoad 26%</span>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 20%</span>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic Med 14%</span>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Running High 6%</span>
-              </>
-            ) : (
-              <>
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">HIR Distance 34%</span>
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Decel Load 26%</span>
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Density Stress 20%</span>
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Max Velocity 14%</span>
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Band 6 Distance 6%</span>
-              </>
-            )}
+            {/* 3-state segmented control */}
+            <div className={`inline-flex w-fit rounded-xl border border-zinc-200 bg-zinc-50 p-1 ${indoorModeLoading || sportType === "basketball" ? "opacity-50 pointer-events-none" : ""}`}>
+              {(["auto", "indoor", "outdoor"] as const).map((mode) => {
+                const active = trainingMode === mode;
+                const label = mode === "auto" ? "🤖 Auto" : mode === "indoor" ? "🏟️ Indoor" : "🌿 Outdoor";
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={indoorModeLoading || sportType === "basketball"}
+                    onClick={() => setTrainingModeRemote(mode)}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                      active
+                        ? mode === "indoor" ? "bg-indigo-600 text-white shadow-sm"
+                          : mode === "outdoor" ? "bg-emerald-600 text-white shadow-sm"
+                          : "bg-zinc-900 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {trainingMode === "indoor" ? (
+                <>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High 34%</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">PlayerLoad 26%</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 20%</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic Med 14%</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Running High 6%</span>
+                </>
+              ) : trainingMode === "outdoor" ? (
+                <>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">HIR Distance 34%</span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Decel Load 26%</span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Density Stress 20%</span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Max Velocity 14%</span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Band 6 Distance 6%</span>
+                </>
+              ) : (
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Per-player heuristic — picks pipeline based on recent session counts</span>
+              )}
+            </div>
           </div>
         </section>
       )}

@@ -50,6 +50,18 @@ export async function GET(req: Request) {
 
     if (error) throw error;
 
+    // Also fetch the team-level training mode default (ternary
+    // auto/indoor/outdoor) which lives on the teams table directly
+    // because it's read by the verdict pipeline alongside sport,
+    // gps_provider, etc.
+    const { data: teamRow } = await sb
+      .from("teams")
+      .select("training_mode_default")
+      .eq("id", teamId)
+      .maybeSingle();
+    const trainingModeDefault =
+      String((teamRow as { training_mode_default?: string } | null)?.training_mode_default ?? "auto");
+
     // Return defaults if no row exists yet
     const settings = data ?? {
       team_id: teamId,
@@ -60,7 +72,7 @@ export async function GET(req: Request) {
       updated_by: null,
     };
 
-    return NextResponse.json(settings);
+    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
@@ -82,6 +94,19 @@ export async function PATCH(req: Request) {
 
     if (typeof body.indoor_mode === "boolean") {
       updates.indoor_mode = body.indoor_mode;
+    }
+    // training_mode_default lives on `teams` (not team_settings) since
+    // the verdict pipeline reads it alongside sport / gps_provider /
+    // team_type. We write it separately and keep the response shape
+    // consistent with GET above.
+    let updatedTrainingMode: string | null = null;
+    if (body.training_mode_default === "auto" || body.training_mode_default === "indoor" || body.training_mode_default === "outdoor") {
+      const { error: tmErr } = await sb
+        .from("teams")
+        .update({ training_mode_default: body.training_mode_default })
+        .eq("id", teamId);
+      if (tmErr) throw new Error(tmErr.message);
+      updatedTrainingMode = body.training_mode_default;
     }
     if (body.sport_type === "football" || body.sport_type === "basketball") {
       updates.sport_type = body.sport_type;
@@ -116,6 +141,12 @@ export async function PATCH(req: Request) {
 
     if (error) throw error;
 
+    // If only training_mode_default was sent, the team_settings upsert
+    // is a no-op for that field — surface it from the teams table read
+    // we just did.
+    if (updatedTrainingMode != null) {
+      return NextResponse.json({ ...data, training_mode_default: updatedTrainingMode });
+    }
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

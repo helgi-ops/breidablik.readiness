@@ -806,7 +806,13 @@ const RECOVERY_FOCUS_LABEL: Record<string, string> = {
   NO_EXTRA_RECOVERY_NEEDED: "No extra recovery needed",
 };
 
-const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lang }> = ({ row, onClose, lang = "EN" }) => {
+const PlayerModal: FC<{
+  row: DecisionSummaryRow;
+  onClose: () => void;
+  lang?: Lang;
+  /** Team-level load pipeline override — see DecisionSummaryCard prop. */
+  trainingMode?: "auto" | "indoor" | "outdoor";
+}> = ({ row, onClose, lang = "EN", trainingMode = "auto" }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
   const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
@@ -1010,15 +1016,23 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lan
               fatigue_type: row._today_fatigue_type ?? null,
               pl_spike_ratio: row._today_player_load_spike ?? null,
               // Decide which load pipeline is primary for this player
-              // today. Heuristic:
-              //   - 3+ indoor sessions/week  → höll-mode dominant
-              //   - any outdoor PL or concern → outdoor pipeline available
-              //   - 1–2 indoor sessions only → indoor (sparse but real)
-              //   - nothing                  → null (no data line in Why)
+              // today. Team-level trainingMode wins when set explicitly
+              // (Settings toggle); otherwise fall back to per-player
+              // heuristic based on session counts.
+              //
+              //   trainingMode = 'indoor' or 'outdoor' → force that pipeline
+              //   trainingMode = 'auto' (default):
+              //     - 3+ indoor sessions/week  → höll-mode dominant
+              //     - any outdoor PL or concern → outdoor pipeline
+              //     - 1–2 indoor sessions only → indoor (sparse but real)
+              //     - nothing                  → null (no data line)
+              //
               // For Iceland football this means winter (höll season) shows
-              // Indoor numbers, summer (gervigras) shows GPS numbers, with
-              // the engine labelling the line accordingly.
+              // Indoor numbers, summer (gervigras) shows GPS numbers, and
+              // the coach can flip it manually when the team transitions.
               primary_load_source: (() => {
+                if (trainingMode === "indoor") return "indoor";
+                if (trainingMode === "outdoor") return "outdoor";
                 const indoor7d = row._indoor_sessions_7d ?? 0;
                 const hasOutdoorActivity =
                   (row._yesterday_load?.playerLoad ?? 0) > 0
@@ -1998,7 +2012,17 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
 
 // ── Main Card ─────────────────────────────────────────────────────────────
 
-const DecisionSummaryCard: FC<{ rows: DecisionSummaryRow[] }> = ({ rows }) => {
+const DecisionSummaryCard: FC<{
+  rows: DecisionSummaryRow[];
+  /**
+   * Manual override for the load pipeline used in the verdict
+   * explanation. 'auto' (default) lets the per-player heuristic decide
+   * — see primary_load_source resolution at the buildVerdictExplanation
+   * callsite. 'indoor' / 'outdoor' force one pipeline for the whole
+   * team, useful for season toggles in Iceland football.
+   */
+  trainingMode?: "auto" | "indoor" | "outdoor";
+}> = ({ rows, trainingMode = "auto" }) => {
   const [selectedRow, setSelectedRow] = useState<DecisionSummaryRow | null>(null);
   const [lang] = useLang();
 
@@ -2059,7 +2083,7 @@ const DecisionSummaryCard: FC<{ rows: DecisionSummaryRow[] }> = ({ rows }) => {
 
       {/* Detail modal — click anywhere outside or press Escape to close */}
       {selectedRow && (
-        <PlayerModal row={selectedRow} onClose={() => setSelectedRow(null)} lang={lang} />
+        <PlayerModal row={selectedRow} onClose={() => setSelectedRow(null)} lang={lang} trainingMode={trainingMode} />
       )}
     </Card>
   );
