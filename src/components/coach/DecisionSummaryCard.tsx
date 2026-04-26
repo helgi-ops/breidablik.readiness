@@ -962,6 +962,22 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lan
                 : row._injury_status === "rehabilitation" ? "REHAB"
                 : row._injury_status === "rtp_training" ? "RTP" : "INJURED"
               : (displayAction as ExplainInput["verdict"]) ?? "NO_DATA";
+
+            // Override context — pass the readiness side so the engine can
+            // surface the conflict when displayAction=FULL but STEN is low.
+            // Mirrors the same logic as stenOverrideWarning() above so the
+            // banner and the explanation stay in sync.
+            const stenForExplain = row._z_today != null && Number.isFinite(row._z_today)
+              ? zToSten(row._z_today!)
+              : null;
+            const isOverridden = displayAction === "FULL" && stenForExplain != null && stenForExplain <= 4;
+            const systemRec: ExplainInput["system_recommendation"] =
+              !isOverridden ? null
+                : (stenForExplain != null && stenForExplain <= 2) ? "RECOVERY"
+                : "MODIFIED";
+            // trendText is computed earlier in the same render scope
+            const trendForExplain = (typeof trendText === "string" && trendText.length) ? trendText : null;
+
             const explanation = buildVerdictExplanation({
               verdict: verdictKey,
               composite_score: row._indoor_composite_score ?? null,
@@ -982,6 +998,10 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lan
               muscle_soreness: row.muscle_soreness ?? null,
               sleep_quality: row.sleep_quality ?? null,
               trained_recently: row._yesterday_load?.playerLoad != null && row._yesterday_load.playerLoad > 0,
+              readiness_sten: stenForExplain,
+              readiness_trend: trendForExplain,
+              is_overridden: isOverridden,
+              system_recommendation: systemRec,
             }, lang);
 
             const containerColor =

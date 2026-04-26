@@ -34,6 +34,16 @@ export type ExplainInput = {
   fatigue_energy?: number | null;
   muscle_soreness?: number | null;
   sleep_quality?: number | null;
+  // ── Override + readiness context ─────────────────────────
+  // When verdict is FULL but the system would have recommended RECOVERY or
+  // MODIFIED based on STEN, the explanation must surface that conflict
+  // rather than rendering load-only "all clear" text. Without this the
+  // coach guidance gives "max-intensity OK" on a player whose self-reported
+  // readiness is at the floor — a clinical safety hole.
+  readiness_sten?: number | null;          // 1-10, computed via zToSten(_z_today)
+  readiness_trend?: string | null;         // e.g. "sharply declining", "stable"
+  is_overridden?: boolean;                 // coach has manually set FULL while STEN says otherwise
+  system_recommendation?: "RECOVERY" | "MODIFIED" | "FULL" | null;
 };
 
 type Bilingual = { EN: string; IS: string };
@@ -263,6 +273,61 @@ export function buildVerdictExplanation(input: ExplainInput, lang: Lang = "EN"):
   }
 
   if (input.verdict === "FULL") {
+    // ── Override-aware branch ───────────────────────────────
+    // If the coach has set FULL but STEN signals the player is below their
+    // baseline, surface the conflict prominently. Without this we tell the
+    // coach "max-intensity OK" on a player whose readiness is at the floor.
+    if (input.is_overridden && input.readiness_sten != null && input.readiness_sten <= 4) {
+      const sten = input.readiness_sten;
+      const sysRec = input.system_recommendation ?? (sten <= 2 ? "RECOVERY" : "MODIFIED");
+      const trendBit = input.readiness_trend ? `, ${input.readiness_trend} trend` : "";
+      const trendBitIs = input.readiness_trend ? `, ${input.readiness_trend}` : "";
+
+      why.push(t({
+        EN: `Coach override active — system recommended ${sysRec} based on STEN ${sten}${trendBit}`,
+        IS: `Coach override virkur — kerfið mælti með ${sysRec} út frá STEN ${sten}${trendBitIs}`,
+      }, lang));
+      why.push(t({
+        EN: `Self-reported readiness is ${sten <= 2 ? "very low" : "below baseline"} — load picture below is healthy, but the player's body is signalling otherwise`,
+        IS: `Sjálfs-mat á readiness er ${sten <= 2 ? "mjög lágt" : "undir baseline"} — load merki að neðan eru í lagi en líkami leikmannsins er að segja annað`,
+      }, lang));
+      // Add load context for transparency (so the coach sees both sides)
+      if (input.composite_score != null) {
+        why.push(t({
+          EN: `Load: composite ${input.composite_score} (${input.composite_band ?? "balanced"})${input.acwr_value != null ? `, ACWR ${input.acwr_value.toFixed(2)}` : ""}`,
+          IS: `Load: composite ${input.composite_score} (${input.composite_band ?? "balanced"})${input.acwr_value != null ? `, ACWR ${input.acwr_value.toFixed(2)}` : ""}`,
+        }, lang));
+      }
+      verify.push(t({
+        EN: "Confirm with player before warmup — sleep, soreness, anything outside training",
+        IS: "Staðfestu með leikmanni fyrir warmup — svefn, harðsperrur, eitthvað utan æfingar",
+      }, lang));
+      verify.push(t({
+        EN: "Watch RPE and body language during first 15 min — pull back if it doesn't lift",
+        IS: "Fylgstu með RPE og body language fyrstu 15 mín — bakka ef það lyftist ekki",
+      }, lang));
+      action = sten <= 2
+        ? t({
+            EN: "Light start, modified-friendly. No max-intensity sprints in opening block. Re-assess after warmup — if still flat, drop to recovery work.",
+            IS: "Léttur byrjunarkafli, modified-friendly. Engar max-intensity sprints í fyrsta blokk. Endurmettu eftir warmup — ef enn flatur, færðu yfir í recovery work.",
+          }, lang)
+        : t({
+            EN: "Modified intensity start. Skip max-intensity sprints early. Watch warmup carefully — escalate to full only if body language is good.",
+            IS: "Modified intensity í byrjun. Sleppa max-intensity sprints snemma. Fylgstu vel með warmup — escalate-aðu á fullt aðeins ef body language er góð.",
+          }, lang);
+      ask = sten <= 2
+        ? t({
+            EN: "How did you sleep, and how do your legs feel right now?",
+            IS: "Hvernig svafstu og hvernig líður fótum þínum núna?",
+          }, lang)
+        : t({
+            EN: "Anything outside training pulling on you (life, school, sleep)?",
+            IS: "Eitthvað utan æfinga sem dregur á þig (líf, skóli, svefn)?",
+          }, lang);
+      return { why, verify, action, ask };
+    }
+
+    // ── Genuine FULL branch (no override conflict) ──────────
     why.push(t({
       EN: "All load signals within healthy band — no warning flags",
       IS: "Allir load-merki innan healthy band — engin warning flags",
