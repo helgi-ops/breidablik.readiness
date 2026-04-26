@@ -1009,6 +1009,26 @@ const PlayerModal: FC<{ row: DecisionSummaryRow; onClose: () => void; lang?: Lan
               composite_concern_level: row._today_composite_concern ?? null,
               fatigue_type: row._today_fatigue_type ?? null,
               pl_spike_ratio: row._today_player_load_spike ?? null,
+              // Decide which load pipeline is primary for this player
+              // today. Heuristic:
+              //   - 3+ indoor sessions/week  → höll-mode dominant
+              //   - any outdoor PL or concern → outdoor pipeline available
+              //   - 1–2 indoor sessions only → indoor (sparse but real)
+              //   - nothing                  → null (no data line in Why)
+              // For Iceland football this means winter (höll season) shows
+              // Indoor numbers, summer (gervigras) shows GPS numbers, with
+              // the engine labelling the line accordingly.
+              primary_load_source: (() => {
+                const indoor7d = row._indoor_sessions_7d ?? 0;
+                const hasOutdoorActivity =
+                  (row._yesterday_load?.playerLoad ?? 0) > 0
+                  || row._today_composite_concern != null
+                  || row._today_player_load_spike != null;
+                if (indoor7d >= 3) return "indoor";
+                if (hasOutdoorActivity) return "outdoor";
+                if (indoor7d >= 1) return "indoor";
+                return null;
+              })(),
             }, lang);
 
             const containerColor =

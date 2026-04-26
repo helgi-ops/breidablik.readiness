@@ -54,7 +54,62 @@ export type ExplainInput = {
   composite_concern_level?: "none" | "low" | "moderate" | "high" | null;
   fatigue_type?: string | null;             // mechanical_fatigue | metabolic_fatigue | global_fatigue | normal
   pl_spike_ratio?: number | null;           // today vs 28d baseline; ≥1.6 = spike
+  // ── Which load pipeline is primary for this player today ────────
+  // The app has two parallel composite scoring pipelines:
+  //   - Indoor (FMP-based, höll-mode): composite_score on a 0–150+ scale
+  //     where 100 = personal 28d avg. Has paired ACWR + McBurnie ratio.
+  //   - Outdoor (GPS/Catapult-based): composite_concern_level on a
+  //     none/low/moderate/high band, fatigue_type, pl_spike_ratio.
+  // Without this hint the engine always rendered the indoor scale,
+  // which is wrong/missing for outdoor-only teams. Callsite decides
+  // which pipeline reflects the player's actual training mode this
+  // week and the engine labels the line accordingly.
+  primary_load_source?: "indoor" | "outdoor" | null;
 };
+
+// ── Source-aware load context line ────────────────────────
+// Returns a labelled "Composite/Load" sentence for the Why section,
+// picking the right pipeline (Indoor FMP vs Outdoor GPS) so the coach
+// always sees both the value and which environment it refers to.
+function loadContextLine(input: ExplainInput, lang: Lang): string | null {
+  const src = input.primary_load_source ?? null;
+
+  // Outdoor: prefer concern band + PL spike (GPS pipeline shape)
+  if (src === "outdoor") {
+    const concern = input.composite_concern_level;
+    const spike = input.pl_spike_ratio;
+    if (concern && concern !== "none") {
+      const concernLabel = concern.toUpperCase();
+      const spikeBit = spike != null ? `, PL ${spike.toFixed(2)}× baseline` : "";
+      return t({
+        EN: `GPS load concern: ${concernLabel}${spikeBit}`,
+        IS: `GPS load concern: ${concernLabel}${spikeBit}`,
+      }, lang);
+    }
+    if (spike != null && spike >= 1.15) {
+      return t({
+        EN: `GPS PlayerLoad ${spike.toFixed(2)}× 28d baseline`,
+        IS: `GPS PlayerLoad ${spike.toFixed(2)}× 28d baseline`,
+      }, lang);
+    }
+    return t({
+      EN: "GPS load: within healthy band — no concern flags",
+      IS: "GPS load: innan healthy band — engin concern flags",
+    }, lang);
+  }
+
+  // Indoor: composite_score on FMP scale + ACWR
+  if (src === "indoor" && input.composite_score != null) {
+    const acwrBit = input.acwr_value != null ? `, ACWR ${input.acwr_value.toFixed(2)}` : "";
+    return t({
+      EN: `Indoor composite ${input.composite_score} (${input.composite_band ?? "balanced"}${acwrBit})`,
+      IS: `Indoor composite ${input.composite_score} (${input.composite_band ?? "balanced"}${acwrBit})`,
+    }, lang);
+  }
+
+  // No source identified or no data
+  return null;
+}
 
 type Bilingual = { EN: string; IS: string };
 function t(b: Bilingual, lang: Lang): string {
@@ -301,13 +356,10 @@ export function buildVerdictExplanation(input: ExplainInput, lang: Lang = "EN"):
         EN: `Self-reported readiness is ${sten <= 2 ? "very low" : "below baseline"} — load picture below is healthy, but the player's body is signalling otherwise`,
         IS: `Sjálfs-mat á readiness er ${sten <= 2 ? "mjög lágt" : "undir baseline"} — load merki að neðan eru í lagi en líkami leikmannsins er að segja annað`,
       }, lang));
-      // Add load context for transparency (so the coach sees both sides)
-      if (input.composite_score != null) {
-        why.push(t({
-          EN: `Load: composite ${input.composite_score} (${input.composite_band ?? "balanced"})${input.acwr_value != null ? `, ACWR ${input.acwr_value.toFixed(2)}` : ""}`,
-          IS: `Load: composite ${input.composite_score} (${input.composite_band ?? "balanced"})${input.acwr_value != null ? `, ACWR ${input.acwr_value.toFixed(2)}` : ""}`,
-        }, lang));
-      }
+      // Add load context for transparency (so the coach sees both sides).
+      // Pulled via loadContextLine so it labels Indoor vs GPS correctly.
+      const overrideLoadLine = loadContextLine(input, lang);
+      if (overrideLoadLine) why.push(overrideLoadLine);
       verify.push(t({
         EN: "Confirm with player before warmup — sleep, soreness, anything outside training",
         IS: "Staðfestu með leikmanni fyrir warmup — svefn, harðsperrur, eitthvað utan æfingar",
@@ -434,24 +486,30 @@ export function buildVerdictExplanation(input: ExplainInput, lang: Lang = "EN"):
       EN: "All load signals within healthy band — no warning flags",
       IS: "Allir load-merki innan healthy band — engin warning flags",
     }, lang));
-    if (input.composite_score != null) {
-      why.push(t({
-        EN: `Composite ${input.composite_score} (typical, ~${input.composite_band ?? "balanced"})`,
-        IS: `Composite ${input.composite_score} (typical, ~${input.composite_band ?? "balanced"})`,
-      }, lang));
+
+    // Source-aware composite line: Indoor or GPS depending on which
+    // pipeline reflects this player's actual training mode this week.
+    const fullLoadLine = loadContextLine(input, lang);
+    if (fullLoadLine) why.push(fullLoadLine);
+
+    // Indoor-specific extras — only meaningful when player has been in
+    // höll-mode. Skip these lines for outdoor-mode players (they have
+    // no indoor ACWR / sessions count from the FMP pipeline).
+    if (input.primary_load_source === "indoor") {
+      if (input.acwr_value != null && input.acwr_flag === "green") {
+        why.push(t({
+          EN: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
+          IS: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
+        }, lang));
+      }
+      if (input.indoor_sessions_7d != null && input.indoor_sessions_7d >= 4) {
+        why.push(t({
+          EN: `${input.indoor_sessions_7d} indoor sessions in last 7 days — distributed load, no spike`,
+          IS: `${input.indoor_sessions_7d} indoor æfingar sl. 7 daga — distributed load, no spike`,
+        }, lang));
+      }
     }
-    if (input.acwr_value != null && input.acwr_flag === "green") {
-      why.push(t({
-        EN: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
-        IS: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
-      }, lang));
-    }
-    if (input.indoor_sessions_7d != null && input.indoor_sessions_7d >= 4) {
-      why.push(t({
-        EN: `${input.indoor_sessions_7d} sessions in last 7 days — distributed load, no spike`,
-        IS: `${input.indoor_sessions_7d} æfingar sl. 7 daga — distributed load, no spike`,
-      }, lang));
-    }
+
     action = t({
       EN: "No restrictions — full training, sprint work OK, max-intensity efforts allowed.",
       IS: "Engin takmörk — fullt æfing, sprint work OK, max-intensity efforts allowed.",
