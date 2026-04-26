@@ -11,7 +11,7 @@ import { RtpTab } from "./RtpTab";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import computeTeamDecision from "@/lib/decision/engine";
 import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
@@ -1735,7 +1735,6 @@ function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
  * ----------------------------- */
 export default function CoachPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [lang, setLang] = useLang();
   const ct = COACH_COPY[lang];
 
@@ -1750,20 +1749,30 @@ export default function CoachPage() {
   ]);
   // Tab is URL-driven so the workspace tab bar (lifted to CoachShell or
   // accessed from Planning dropdown) can deep-link to a specific view.
-  // Falls back to "today" when no ?tab= param or value is unknown.
-  const tabParam = searchParams?.get("tab") ?? null;
-  const initialTab: CoachTab = tabParam && VALID_TABS.has(tabParam as CoachTab) ? (tabParam as CoachTab) : "today";
-  const [dashTab, setDashTabState] = useState<CoachTab>(initialTab);
+  //
+  // We read `?tab=` from window.location.search rather than Next.js's
+  // useSearchParams() — the latter requires the consuming subtree to be
+  // wrapped in <Suspense>, otherwise static prerender fails. Reading on
+  // the client sidesteps that. Initial render is "today" until the
+  // useEffect runs (one frame later for deep-links).
+  const [dashTab, setDashTabState] = useState<CoachTab>("today");
 
-  // Keep state in sync when URL changes (e.g. user clicks a Planning link)
   useEffect(() => {
-    if (tabParam && VALID_TABS.has(tabParam as CoachTab) && tabParam !== dashTab) {
-      setDashTabState(tabParam as CoachTab);
-    } else if (!tabParam && dashTab !== "today") {
-      setDashTabState("today");
-    }
+    if (typeof window === "undefined") return;
+    const sync = () => {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("tab");
+      if (t && VALID_TABS.has(t as CoachTab)) {
+        setDashTabState(t as CoachTab);
+      } else {
+        setDashTabState("today");
+      }
+    };
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabParam]);
+  }, []);
 
   // setDashTab also pushes to URL so deep-links + back-button work.
   const setDashTab = React.useCallback((next: CoachTab) => {

@@ -5,7 +5,7 @@
 // component that exports metadata (including the coach PWA manifest link)
 // and renders this shell around the route's children.
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
@@ -142,10 +142,34 @@ function NavDropdown({
   );
 }
 
+/**
+ * Read the `?tab=` URL param without using Next.js `useSearchParams()`.
+ *
+ * `useSearchParams()` requires the consuming subtree to be wrapped in a
+ * `<Suspense>` boundary (otherwise static prerender fails for every page
+ * under this shell). Reading from `window.location.search` on the client
+ * sidesteps that requirement — the trade-off is the active-state
+ * highlight on dropdowns appears one frame after first paint, which is
+ * imperceptible.
+ */
+function useUrlTabParam(): string | null {
+  const [tab, setTab] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => {
+      const params = new URLSearchParams(window.location.search);
+      setTab(params.get("tab"));
+    };
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+  return tab;
+}
+
 export default function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentTab = searchParams?.get("tab") ?? null;
+  const currentTab = useUrlTabParam();
   const isDisplayRoute = pathname?.startsWith("/coach/display");
   const [lang] = useLang();
 
