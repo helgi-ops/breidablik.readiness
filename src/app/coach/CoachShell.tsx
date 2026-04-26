@@ -5,7 +5,7 @@
 // component that exports metadata (including the coach PWA manifest link)
 // and renders this shell around the route's children.
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
@@ -27,7 +27,11 @@ const monitoringLinks: { href: string; label: Bi }[] = [
 ];
 
 // Session-building cluster — "how do I plan and run training?"
+// MD Comparison + Session builder live as in-app dashboard tabs (?tab=…),
+// the others are standalone routes.
 const planningLinks: { href: string; label: Bi }[] = [
+  { href: "/coach?tab=md",           label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
+  { href: "/coach?tab=drills",       label: { EN: "Session builder",     IS: "Session builder" } },
   { href: "/coach/templates",        label: { EN: "Session templates",   IS: "Session templates" } },
   { href: "/coach/custom-templates", label: { EN: "Custom templates",    IS: "Sérsniðnar templates" } },
   { href: "/coach/match-minutes",    label: { EN: "Match minutes",       IS: "Leikmínútur" } },
@@ -45,20 +49,40 @@ const superAdminLinks: { href: string; label: Bi }[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
 ];
 
+/**
+ * Match a link href against the current location, supporting both pure path
+ * links ("/coach/quadrant") and query-string deep links ("/coach?tab=md").
+ *
+ * Pure path: pathname must startsWith href.
+ * Query link: pathname must equal the path part AND every query param in
+ * href must match what's currently in the URL (so /coach matches but
+ * /coach?tab=squad doesn't match /coach?tab=md).
+ */
+function isLinkActive(href: string, pathname: string, currentTab: string | null): boolean {
+  const [path, query] = href.split("?");
+  if (!query) return pathname?.startsWith(path) ?? false;
+  if (pathname !== path) return false;
+  const params = new URLSearchParams(query);
+  const wantedTab = params.get("tab");
+  return wantedTab != null && currentTab === wantedTab;
+}
+
 function NavDropdown({
   label,
   links,
   pathname,
+  currentTab,
   lang,
 }: {
   label: string;
   links: { href: string; label: Bi }[];
   pathname: string;
+  currentTab: string | null;
   lang: Lang;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const activeLink = links.find((l) => pathname?.startsWith(l.href)) ?? null;
+  const activeLink = links.find((l) => isLinkActive(l.href, pathname, currentTab)) ?? null;
   const isActive = activeLink != null;
 
   useEffect(() => {
@@ -104,7 +128,7 @@ function NavDropdown({
               href={link.href}
               onClick={() => setOpen(false)}
               className={`block px-4 py-2 text-sm hover:bg-muted ${
-                pathname?.startsWith(link.href)
+                isLinkActive(link.href, pathname, currentTab)
                   ? "font-medium text-foreground"
                   : "text-muted-foreground"
               }`}
@@ -120,6 +144,8 @@ function NavDropdown({
 
 export default function CoachShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams?.get("tab") ?? null;
   const isDisplayRoute = pathname?.startsWith("/coach/display");
   const [lang] = useLang();
 
@@ -287,6 +313,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               label={lang === "IS" ? "Eftirlit" : "Monitoring"}
               links={monitoringLinks}
               pathname={pathname ?? ""}
+              currentTab={currentTab}
               lang={lang}
             />
 
@@ -294,6 +321,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               label={lang === "IS" ? "Skipulag" : "Planning"}
               links={planningLinks}
               pathname={pathname ?? ""}
+              currentTab={currentTab}
               lang={lang}
             />
 
@@ -301,6 +329,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               label="Admin"
               links={adminLinks}
               pathname={pathname ?? ""}
+              currentTab={currentTab}
               lang={lang}
             />
 
@@ -309,6 +338,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 label="MicroPulse"
                 links={superAdminLinks}
                 pathname={pathname ?? ""}
+                currentTab={currentTab}
                 lang={lang}
               />
             )}

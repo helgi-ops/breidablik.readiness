@@ -11,7 +11,7 @@ import { RtpTab } from "./RtpTab";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import computeTeamDecision from "@/lib/decision/engine";
 import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
@@ -1735,6 +1735,7 @@ function CoachHubCards({ weeklyOutlook }: { weeklyOutlook?: string | null }) {
  * ----------------------------- */
 export default function CoachPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [lang, setLang] = useLang();
   const ct = COACH_COPY[lang];
 
@@ -1744,7 +1745,32 @@ export default function CoachPage() {
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
   type CoachTab = "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
-  const [dashTab, setDashTab] = useState<CoachTab>("today");
+  const VALID_TABS: ReadonlySet<CoachTab> = new Set([
+    "today", "squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp",
+  ]);
+  // Tab is URL-driven so the workspace tab bar (lifted to CoachShell or
+  // accessed from Planning dropdown) can deep-link to a specific view.
+  // Falls back to "today" when no ?tab= param or value is unknown.
+  const tabParam = searchParams?.get("tab") ?? null;
+  const initialTab: CoachTab = tabParam && VALID_TABS.has(tabParam as CoachTab) ? (tabParam as CoachTab) : "today";
+  const [dashTab, setDashTabState] = useState<CoachTab>(initialTab);
+
+  // Keep state in sync when URL changes (e.g. user clicks a Planning link)
+  useEffect(() => {
+    if (tabParam && VALID_TABS.has(tabParam as CoachTab) && tabParam !== dashTab) {
+      setDashTabState(tabParam as CoachTab);
+    } else if (!tabParam && dashTab !== "today") {
+      setDashTabState("today");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
+
+  // setDashTab also pushes to URL so deep-links + back-button work.
+  const setDashTab = React.useCallback((next: CoachTab) => {
+    setDashTabState(next);
+    const url = next === "today" ? "/coach" : `/coach?tab=${next}`;
+    router.replace(url, { scroll: false });
+  }, [router]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -6559,13 +6585,28 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Tab navigation + lang toggle (hidden in PWA – bottom nav used instead) ── */}
+      {/* ── Workspace tab navigation (monitoring tools) ───────────────────
+          Tabs are coherent player-monitoring views. In-app tabs (today,
+          squad, load, gps + More items) switch via setDashTab; standalone
+          routes (Quadrant, Indoor, Decel, Injuries) are Next.js Links that
+          navigate away from the dashboard. Hidden in PWA — bottom nav used
+          instead. */}
       {!isPwa && (() => {
         const labels = ct.tabs as Record<string, string>;
         const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
-        // Primary tabs always visible, overflow goes in "More" dropdown
-        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "md", "drills"];
+        // Primary in-app tabs — daily monitoring workflow
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
+        // Standalone routes for deeper monitoring analytics — render as Links
+        const EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
+          { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },
+          { href: "/coach/indoor-load",        label: { EN: "Indoor Load",      IS: "Indoor Load" } },
+          { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
+          { href: "/coach/injuries",           label: { EN: "Injuries",         IS: "Meiðsli" } },
+        ];
+        // Overflow — niche player-monitoring views (volatility, jump testing,
+        // VBT, longitudinal trends, RTP). MD Comparison + Session moved out
+        // of this row entirely — they live in the top-nav Planning dropdown.
         const MORE_TABS: Array<typeof dashTab> = ["volatility", "vald", "strength", "trend", "rtp"];
         const moreLabel = lang === "IS" ? "Meira" : "More";
 
@@ -6600,7 +6641,21 @@ export default function CoachPage() {
                   <TabBtn key={tabId} tabId={tabId} />
                 ))}
 
-                {/* "More" dropdown */}
+                {/* Visual separator between in-app tabs and route-based tabs */}
+                <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+
+                {/* Standalone monitoring routes */}
+                {EXTERNAL_TABS.map((t) => (
+                  <Link
+                    key={t.href}
+                    href={t.href}
+                    className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap"
+                  >
+                    {lang === "IS" ? t.label.IS : t.label.EN}
+                  </Link>
+                ))}
+
+                {/* "More" dropdown — overflow in-app tabs */}
                 <div className="relative group">
                   <button
                     className={`flex items-center gap-1 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
