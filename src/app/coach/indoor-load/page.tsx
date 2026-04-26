@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang, type Lang } from "@/lib/lang";
 
 type Flag = "green" | "yellow" | "red";
 type ScoreBand = "light" | "below_average" | "typical" | "heavy" | "spike";
@@ -97,13 +98,15 @@ const SCORE_BAND_COLORS: Record<ScoreBand, string> = {
   spike: "bg-rose-100 text-rose-800",
 };
 
-const SCORE_BAND_LABELS: Record<ScoreBand, string> = {
-  light: "Light",
-  below_average: "Below avg",
-  typical: "Typical",
-  heavy: "Heavy",
-  spike: "Spike",
+const SCORE_BAND_LABELS_BILINGUAL: Record<ScoreBand, { EN: string; IS: string }> = {
+  light: { EN: "Light", IS: "Léttur" },
+  below_average: { EN: "Below avg", IS: "Undir meðaltali" },
+  typical: { EN: "Typical", IS: "Týpískur" },
+  heavy: { EN: "Heavy", IS: "Þungur" },
+  spike: { EN: "Spike", IS: "Spike" },
 };
+const scoreBandLabel = (b: ScoreBand, lang: Lang) =>
+  lang === "IS" ? SCORE_BAND_LABELS_BILINGUAL[b].IS : SCORE_BAND_LABELS_BILINGUAL[b].EN;
 
 // Action recommendation types — what should the coach DO with this player today?
 type Action =
@@ -124,105 +127,101 @@ function isIllnessRecord(bodyPart: string | null | undefined): boolean {
   return bp.includes("illness") || bp.includes("sjúk") || bp.includes("veik") || bp.includes("flu") || bp.includes("cold");
 }
 
-const ACTION_LABELS: Record<
-  Action,
-  {
-    /** Short label for badge — plain Icelandic answer to "tilbúinn?" */
-    label: string;
-    /** Tailwind classes for badge background */
-    color: string;
-    /** Symbol prefix (✅ / ⚠️ / 🛑 / ❓) */
-    icon: string;
-    /** Single-line summary sentence */
-    sentence: string;
-    /** Concrete coaching recommendation */
-    recommendation: string;
-  }
-> = {
+type LocalizedAction = { color: string; icon: string; label: string; sentence: string; recommendation: string };
+const ACTION_LABELS_BILINGUAL: Record<Action, {
+  color: string;
+  icon: string;
+  label: { EN: string; IS: string };
+  sentence: { EN: string; IS: string };
+  recommendation: { EN: string; IS: string };
+}> = {
   FULL: {
-    label: "Tilbúinn",
-    color: "bg-emerald-500 text-white",
-    icon: "✅",
-    sentence: "Tilbúinn í fullt prógram",
-    recommendation: "Engin takmörk — fullt æfing, sprint work OK",
+    color: "bg-emerald-500 text-white", icon: "✅",
+    label: { EN: "Ready", IS: "Tilbúinn" },
+    sentence: { EN: "Ready for full program", IS: "Tilbúinn í fullt prógram" },
+    recommendation: { EN: "No restrictions — full training, sprint work OK", IS: "Engin takmörk — fullt æfing, sprint work OK" },
   },
   MODIFIED: {
-    label: "Léttari æfing",
-    color: "bg-amber-500 text-white",
-    icon: "⚠️",
-    sentence: "Þarf léttari æfingu í dag",
-    recommendation: "Lækka volume 30-40% og sleppa max-intensity sprints",
+    color: "bg-amber-500 text-white", icon: "⚠️",
+    label: { EN: "Lighter session", IS: "Léttari æfing" },
+    sentence: { EN: "Needs a lighter session today", IS: "Þarf léttari æfingu í dag" },
+    recommendation: { EN: "Reduce volume 30-40% and skip max-intensity sprints", IS: "Lækka volume 30-40% og sleppa max-intensity sprints" },
   },
   RECOVERY: {
-    label: "Hvíld",
-    color: "bg-rose-500 text-white",
-    icon: "🛑",
-    sentence: "Hvíld eða mobility eingöngu",
-    recommendation: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work",
+    color: "bg-rose-500 text-white", icon: "🛑",
+    label: { EN: "Rest", IS: "Hvíld" },
+    sentence: { EN: "Rest or mobility only", IS: "Hvíld eða mobility eingöngu" },
+    recommendation: { EN: "No high-intensity work — focus on mobility, recovery, light technical work", IS: "Engin high-intensity vinna — focus á hreyfanleika, recovery, light technical work" },
   },
   NO_DATA: {
-    label: "Engin gögn",
-    color: "bg-slate-300 text-slate-700",
-    icon: "❓",
-    sentence: "Ekki nóg gögn til að meta",
-    recommendation: "Treysta á eyemark þjálfara í dag",
+    color: "bg-slate-300 text-slate-700", icon: "❓",
+    label: { EN: "No data", IS: "Engin gögn" },
+    sentence: { EN: "Not enough data to assess", IS: "Ekki nóg gögn til að meta" },
+    recommendation: { EN: "Rely on coach's eye today", IS: "Treysta á eyemark þjálfara í dag" },
   },
   INJURED: {
-    label: "Frá æfingu — meiðsl",
-    color: "bg-violet-600 text-white",
-    icon: "🚫",
-    sentence: "Acute meiðsli — engin æfing",
-    recommendation: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar.",
+    color: "bg-violet-600 text-white", icon: "🚫",
+    label: { EN: "Out — injury", IS: "Frá æfingu — meiðsl" },
+    sentence: { EN: "Acute injury — no training", IS: "Acute meiðsli — engin æfing" },
+    recommendation: { EN: "Medical/physio protocol. No team training until physio clears.", IS: "Medical/physio prótókoll. Engin team-æfing fyrr en sjúkraþjálfari clear-ar." },
   },
   REHAB: {
-    label: "Endurhæfing",
-    color: "bg-violet-600 text-white",
-    icon: "🏥",
-    sentence: "Í endurhæfingu hjá sjúkraþjálfara",
-    recommendation: "Aðeins physio-prescribed exercises. Engin team-vinna eða running.",
+    color: "bg-violet-600 text-white", icon: "🏥",
+    label: { EN: "Rehab", IS: "Endurhæfing" },
+    sentence: { EN: "In rehabilitation with physio", IS: "Í endurhæfingu hjá sjúkraþjálfara" },
+    recommendation: { EN: "Physio-prescribed exercises only. No team work or running.", IS: "Aðeins physio-prescribed exercises. Engin team-vinna eða running." },
   },
   RTP: {
-    label: "Return-to-play",
-    color: "bg-violet-500 text-white",
-    icon: "🩹",
-    sentence: "Í endurkomu — modified team work",
-    recommendation: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5.",
+    color: "bg-violet-500 text-white", icon: "🩹",
+    label: { EN: "Return-to-play", IS: "Return-to-play" },
+    sentence: { EN: "Returning — modified team work", IS: "Í endurkomu — modified team work" },
+    recommendation: { EN: "Lighter sessions with the team. Skip max-intensity sprints and full contact until stage 5.", IS: "Léttari æfingar með liðinu. Sleppa max-intensity sprints og full contact þar til stage 5." },
   },
   ILL: {
-    label: "Veikur",
-    color: "bg-teal-600 text-white",
-    icon: "🤒",
-    sentence: "Veikur — engin æfing",
-    recommendation: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu.",
+    color: "bg-teal-600 text-white", icon: "🤒",
+    label: { EN: "Sick", IS: "Veikur" },
+    sentence: { EN: "Sick — no training", IS: "Veikur — engin æfing" },
+    recommendation: { EN: "No training. Rest, hydrate, monitor symptoms. Keep distance from teammates due to contagion risk.", IS: "Engin æfing. Hvíld, drekka mikið, monitor symptoms. Fjarlægð frá öðrum leikmönnum vegna smithættu." },
   },
   RECOVERING_ILL: {
-    label: "Að jafna sig",
-    color: "bg-teal-500 text-white",
-    icon: "🫧",
-    sentence: "Á batavegi — léttari æfing",
-    recommendation: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session.",
+    color: "bg-teal-500 text-white", icon: "🫧",
+    label: { EN: "Recovering", IS: "Að jafna sig" },
+    sentence: { EN: "Recovering — lighter session", IS: "Á batavegi — léttari æfing" },
+    recommendation: { EN: "Light technical/aerobic work today. Skip max-intensity sprints. Hydrate well. Re-assess after session.", IS: "Light technical/aerobic work í dag. Sleppa max-intensity sprints. Drekka mikið. Skoða aftur eftir session." },
   },
 };
 
+function actionLabels(action: Action, lang: Lang): LocalizedAction {
+  const a = ACTION_LABELS_BILINGUAL[action];
+  return {
+    color: a.color,
+    icon: a.icon,
+    label: lang === "IS" ? a.label.IS : a.label.EN,
+    sentence: lang === "IS" ? a.sentence.IS : a.sentence.EN,
+    recommendation: lang === "IS" ? a.recommendation.IS : a.recommendation.EN,
+  };
+}
+
 /** Build natural Icelandic reason text for why a player is in MODIFIED or RECOVERY band. */
-function buildIcelandicReason(args: {
+function buildLoadReason(args: {
   composite_band: ScoreBand | null | undefined;
   acwr_value: number | null | undefined;
   acwr_flag: Flag | null | undefined;
   mcburnie_flag: Flag | null | undefined;
-}): string {
+}, lang: Lang): string {
+  const en = lang === "EN";
   const parts: string[] = [];
-  if (args.composite_band === "spike") parts.push("æfði miklu meira en venjulega í gær");
-  else if (args.composite_band === "heavy") parts.push("þung session í gær");
-  else if (args.composite_band === "light") parts.push("nær engin æfing nýlega");
+  if (args.composite_band === "spike") parts.push(en ? "trained much harder than usual yesterday" : "æfði miklu meira en venjulega í gær");
+  else if (args.composite_band === "heavy") parts.push(en ? "heavy session yesterday" : "þung session í gær");
+  else if (args.composite_band === "light") parts.push(en ? "almost no training recently" : "nær engin æfing nýlega");
   if (args.acwr_flag === "red" && args.acwr_value != null) {
-    if (args.acwr_value > 1.5) parts.push(`acute spike á 7 dögum (ACWR ${args.acwr_value.toFixed(2)})`);
-    else if (args.acwr_value < 0.5) parts.push(`undirvinnsla (ACWR ${args.acwr_value.toFixed(2)})`);
+    if (args.acwr_value > 1.5) parts.push(`${en ? "acute 7-day spike" : "acute spike á 7 dögum"} (ACWR ${args.acwr_value.toFixed(2)})`);
+    else if (args.acwr_value < 0.5) parts.push(`${en ? "undertraining" : "undirvinnsla"} (ACWR ${args.acwr_value.toFixed(2)})`);
   } else if (args.acwr_flag === "yellow" && args.acwr_value != null) {
-    parts.push(`ACWR ${args.acwr_value.toFixed(2)} (utan sweet spot)`);
+    parts.push(`ACWR ${args.acwr_value.toFixed(2)} (${en ? "outside sweet spot" : "utan sweet spot"})`);
   }
-  if (args.mcburnie_flag === "red") parts.push("decel overload (mikið brake-work án nóg sprint)");
-  else if (args.mcburnie_flag === "yellow") parts.push("decel:intensity skekkja");
+  if (args.mcburnie_flag === "red") parts.push(en ? "decel overload (lots of braking, not enough sprint)" : "decel overload (mikið brake-work án nóg sprint)");
+  else if (args.mcburnie_flag === "yellow") parts.push(en ? "decel:intensity imbalance" : "decel:intensity skekkja");
   return parts.join(" + ") || "—";
 }
 
@@ -310,7 +309,111 @@ const FLAG_DOT: Record<Flag | "none", string> = {
   none: "bg-slate-300",
 };
 
+// ── Page-level UI strings ───────────────────────────────────────────────
+const PAGE_I18N = {
+  pageTitle: { EN: "Indoor Load Intelligence", IS: "Indoor Load Intelligence" },
+  pageSubtitle: {
+    EN: "Höll-mode load monitoring built on Football Movement Profile (FMP). Auto-detects indoor sessions from low velocity-band 6 + meaningful FMP activity.",
+    IS: "Höll-mode álagsgreining byggð á Football Movement Profile (FMP). Auto-greinir innan-húss sessions út frá lágu velocity-band 6 og marktækri FMP-virkni.",
+  },
+  refresh: { EN: "Refresh", IS: "Endurnýja" },
+  loadingData: { EN: "Loading indoor load data…", IS: "Sæki indoor load gögn…" },
+  notSignedIn: { EN: "Not signed in", IS: "Ekki innskráður" },
+  noTeam: { EN: "Not connected to a team", IS: "Ekki tengdur við lið" },
+  errorLoading: { EN: "Error", IS: "Villa" },
+  teamToday: { EN: "Team today", IS: "Liðið í dag" },
+  ready: { EN: "ready", IS: "tilbúnir" },
+  lighter: { EN: "lighter", IS: "léttari" },
+  rest: { EN: "rest", IS: "hvíld" },
+  injured: { EN: "injured", IS: "meiddir" },
+  sick: { EN: "sick", IS: "veikir" },
+  topConcerns: { EN: "Top concerns", IS: "Top concerns" },
+  morePlayers: { EN: "more players — see list below", IS: "fleiri leikmenn — sjá lista neðar" },
+  withIndoorData: { EN: "Players with indoor data", IS: "Leikmenn með indoor data" },
+  heavyOrSpike: { EN: "Heavy / Spike", IS: "Heavy / Spike" },
+  typicalSession: { EN: "Typical session", IS: "Typical session" },
+  lightOrBelow: { EN: "Light / Below avg", IS: "Light / Below avg" },
+  indoorSessions7d: { EN: "Indoor sessions last 7d", IS: "Indoor sessions sl. 7d" },
+  noIndoorSession: { EN: "— no indoor session in last 28d", IS: "— engin indoor session sl. 28d" },
+  indoorIn28d: { EN: "indoor (28d)", IS: "indoor (28d)" },
+  illness: { EN: "Illness", IS: "Veikindi" },
+  injury: { EN: "Injury", IS: "Meiðsl" },
+  estimatedReturn: { EN: "estimated return", IS: "endurkoma" },
+  rtp: { EN: "RTP", IS: "RTP" },
+  activeIllness: { EN: "🤒 Active illness", IS: "🤒 Active veikindi" },
+  activeInjury: { EN: "Active injury", IS: "Active meiðsli" },
+  rtpStage: { EN: "RTP stage", IS: "RTP stage" },
+  estReturnLabel: { EN: "Estimated return", IS: "Áætluð endurkoma" },
+  readyToday: { EN: "Ready today?", IS: "Tilbúinn í dag?" },
+  whyHeading: { EN: "Why", IS: "Hvers vegna" },
+  coachGuidance: { EN: "Coach guidance", IS: "Þjálfara-leiðbeining" },
+  fullSignals: { EN: "All signals within healthy range — no warning flags", IS: "Allir signal innan heilbrigðs sviðs — engin warning flag" },
+  compositeScoreTitle: { EN: "Composite Indoor Load Score", IS: "Composite Indoor Load Score" },
+  vsBaseline: { EN: "(100 = personal 28d avg)", IS: "(100 = personal 28d avg)" },
+  latestSession: { EN: "Latest indoor session", IS: "Síðasta indoor session" },
+  personalBaseline: { EN: "Personal baseline (28d indoor)", IS: "Personal baseline (28d indoor)" },
+  recent7dCumulative: { EN: "Last 7 days (cumulative)", IS: "Sl. 7 dagar (cumulative)" },
+  playerLoad: { EN: "Player Load", IS: "Player Load" },
+  duration: { EN: "Duration", IS: "Lengd" },
+  min: { EN: "min", IS: "mín" },
+  dynamicHigh: { EN: "Dynamic High %", IS: "Dynamic High %" },
+  hmldM: { EN: "HMLD (m)", IS: "HMLD (m)" },
+  imaTotal: { EN: "IMA total", IS: "IMA total" },
+  decelB23: { EN: "Decel B2-3", IS: "Decel B2-3" },
+  avgPlayerLoad: { EN: "Avg Player Load", IS: "Avg Player Load" },
+  avgDuration: { EN: "Avg duration", IS: "Avg lengd" },
+  avgDynHighPct: { EN: "Avg Dyn High %", IS: "Avg Dyn High %" },
+  avgHmldM: { EN: "Avg HMLD (m)", IS: "Avg HMLD (m)" },
+  avgImaTotal: { EN: "Avg IMA total", IS: "Avg IMA total" },
+  avgDecelB23: { EN: "Avg Decel B2-3", IS: "Avg Decel B2-3" },
+  indoorSessionsLabel: { EN: "Indoor sessions", IS: "Indoor sessions" },
+  playerLoadTotal: { EN: "Player Load total", IS: "Player Load samtals" },
+  dynHighSec: { EN: "Dyn High (sec)", IS: "Dyn High (sek)" },
+  indoorMcburnieProxy: { EN: "Indoor McBurnie proxy", IS: "Indoor McBurnie proxy" },
+  decelsPerMinDynHigh: { EN: "decels / min Dyn High (healthy", IS: "decels / mín Dyn High (heilbrigt" },
+  acwrTitle: { EN: "ACWR (Gabbett 2017)", IS: "ACWR (Gabbett 2017)" },
+  acwrSubtitle: { EN: "7d / 28d-week-avg (sweet spot 0.8-1.3)", IS: "7d / 28d-week-avg (sweet spot 0.8-1.3)" },
+  // Team status sentence parts
+  allReadyToday: { EN: "All players ready for full program today", IS: "Allir leikmenn tilbúnir í fullt prógram í dag" },
+  needsRest: { EN: "need rest", IS: "þurfa hvíld" },
+  needsLighter: { EN: "need a lighter session", IS: "þurfa léttari æfingu" },
+  inMeidsl: { EN: "in injury/RTP", IS: "í meiðslum/RTP" },
+  // Concern reasons
+  illNoTraining: { EN: "Sick — no training", IS: "Veikindi — engin æfing" },
+  recoveringFromIll: { EN: "Recovering from illness", IS: "Á batavegi eftir veikindi" },
+  acuteInjury: { EN: "Acute injury", IS: "Acute meiðsl" },
+  rehabSuffix: { EN: "rehab", IS: "endurhæfing" },
+  rehabilitation: { EN: "Rehabilitation", IS: "Endurhæfing" },
+  rtpStageSuffix: { EN: "stage", IS: "stage" },
+  // Heatmap
+  teamHeatmapTitle: { EN: "Team load heatmap (14 days)", IS: "Team load heatmap (14 dagar)" },
+  teamHeatmapSubtitle: {
+    EN: "Each cell = one session colored by composite score. Inner red border = indoor.",
+    IS: "Hver reitur = ein session colored eftir composite score. Innri rauður border = indoor.",
+  },
+  legendLight: { EN: "Light", IS: "Light" },
+  legendBelow: { EN: "Below", IS: "Below" },
+  legendTypical: { EN: "Typical", IS: "Typical" },
+  legendHeavy: { EN: "Heavy", IS: "Heavy" },
+  legendSpike: { EN: "Spike", IS: "Spike" },
+  player: { EN: "Player", IS: "Leikmaður" },
+  rest_label: { EN: "rest", IS: "hvíld" },
+  // FMP movement bars
+  fmpDistribution: { EN: "FMP movement distribution (latest indoor session)", IS: "FMP movement distribution (síðasta indoor session)" },
+  minTotal: { EN: "min total", IS: "mín alls" },
+  // Sparkline
+  loadTrend14d: { EN: "14-day load trend", IS: "14-day load trend" },
+  indoor: { EN: "Indoor", IS: "Indoor" },
+  outdoor: { EN: "Outdoor", IS: "Outdoor" },
+  // Methodology footer
+  methodology: { EN: "Methodology", IS: "Aðferðafræði" },
+} as const;
+function pt(key: keyof typeof PAGE_I18N, lang: Lang): string {
+  return lang === "IS" ? PAGE_I18N[key].IS : PAGE_I18N[key].EN;
+}
+
 export default function CoachIndoorLoadPage() {
+  const [lang] = useLang();
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -329,7 +432,7 @@ export default function CoachIndoorLoadPage() {
         data: { user },
       } = await sb.auth.getUser();
       if (!user) {
-        setError("Ekki innskráður");
+        setError(pt("notSignedIn", lang));
         return;
       }
       const { data: profile } = await sb
@@ -339,7 +442,7 @@ export default function CoachIndoorLoadPage() {
         .maybeSingle();
       const tid = (profile as { team_id?: string } | null)?.team_id;
       if (!tid) {
-        setError("Ekki tengdur við lið");
+        setError(pt("noTeam", lang));
         return;
       }
 
@@ -441,7 +544,7 @@ export default function CoachIndoorLoadPage() {
           status: effectiveStatus,
           rtp_stage: null,
           body_part: isIllness ? "Illness" : evType.replace(/_/g, " "),
-          injury_type: isIllness ? "Veikindi" : evType.replace(/_/g, " "),
+          injury_type: isIllness ? pt("illness", lang) : evType.replace(/_/g, " "),
           estimated_return: typeof ev.return_date === "string" ? ev.return_date : null,
           severity: typeof ev.severity === "string" ? ev.severity : null,
         });
@@ -490,7 +593,7 @@ export default function CoachIndoorLoadPage() {
       });
       setRows(sorted);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Villa";
+      const message = e instanceof Error ? e.message : pt("errorLoading", lang);
       setError(message);
     } finally {
       setLoading(false);
@@ -544,23 +647,27 @@ export default function CoachIndoorLoadPage() {
         // Reason: illness > injury > load
         let reason: string;
         if (action === "ILL") {
-          reason = "Veikindi — engin æfing";
+          reason = pt("illNoTraining", lang);
         } else if (action === "RECOVERING_ILL") {
-          reason = "Á batavegi eftir veikindi";
+          reason = pt("recoveringFromIll", lang);
         } else if (r.injury?.status === "injured") {
-          reason = r.injury.body_part ? `${r.injury.body_part} (acute meiðsl)` : "Acute meiðsl";
+          reason = r.injury.body_part
+            ? `${r.injury.body_part} (${pt("acuteInjury", lang).toLowerCase()})`
+            : pt("acuteInjury", lang);
         } else if (r.injury?.status === "rehabilitation") {
-          reason = r.injury.body_part ? `${r.injury.body_part} — endurhæfing` : "Endurhæfing";
+          reason = r.injury.body_part
+            ? `${r.injury.body_part} — ${pt("rehabSuffix", lang)}`
+            : pt("rehabilitation", lang);
         } else if (r.injury?.status === "rtp_training") {
-          const stage = r.injury.rtp_stage != null ? ` (stage ${r.injury.rtp_stage}/5)` : "";
+          const stage = r.injury.rtp_stage != null ? ` (${pt("rtpStageSuffix", lang)} ${r.injury.rtp_stage}/5)` : "";
           reason = r.injury.body_part ? `${r.injury.body_part} — RTP${stage}` : `RTP${stage}`;
         } else {
-          reason = buildIcelandicReason({
+          reason = buildLoadReason({
             composite_band: r.status?.composite_score_band,
             acwr_value: r.status?.acwr?.value,
             acwr_flag: r.status?.acwr?.flag,
             mcburnie_flag: r.status?.indoor_mcburnie?.flag,
-          });
+          }, lang);
         }
         concernPlayers.push({ name: r.full_name, action, reason });
       }
@@ -569,26 +676,26 @@ export default function CoachIndoorLoadPage() {
     const totalInjured = actionsCount.INJURED + actionsCount.REHAB + actionsCount.RTP;
     const totalIll = actionsCount.ILL + actionsCount.RECOVERING_ILL;
     let teamAction: Action = "FULL";
-    let teamSentence = "Allir leikmenn tilbúnir í fullt prógram í dag";
+    let teamSentence = pt("allReadyToday", lang);
     const sentenceParts: string[] = [];
     if (totalIll > 0) {
-      sentenceParts.push(`${totalIll} ${totalIll === 1 ? "veikur" : "veikir"}`);
+      sentenceParts.push(`${totalIll} ${pt("sick", lang)}`);
       teamAction = "MODIFIED";
     }
     if (totalInjured > 0) {
-      sentenceParts.push(`${totalInjured} í meiðslum/RTP`);
+      sentenceParts.push(`${totalInjured} ${pt("inMeidsl", lang)}`);
       teamAction = "MODIFIED";
     }
     if (actionsCount.RECOVERY >= 1) {
-      sentenceParts.push(`${actionsCount.RECOVERY} ${actionsCount.RECOVERY === 1 ? "þarf" : "þurfa"} hvíld`);
+      sentenceParts.push(`${actionsCount.RECOVERY} ${pt("needsRest", lang)}`);
       teamAction = "RECOVERY";
     }
     if (actionsCount.MODIFIED >= 1) {
-      sentenceParts.push(`${actionsCount.MODIFIED} ${actionsCount.MODIFIED === 1 ? "þarf" : "þurfa"} léttari æfingu`);
+      sentenceParts.push(`${actionsCount.MODIFIED} ${pt("needsLighter", lang)}`);
       if (teamAction === "FULL") teamAction = "MODIFIED";
     }
     if (sentenceParts.length > 0) {
-      teamSentence = `${actionsCount.FULL} tilbúnir, ${sentenceParts.join(", ")}`;
+      teamSentence = `${actionsCount.FULL} ${pt("ready", lang)}, ${sentenceParts.join(", ")}`;
     }
     // Sort concerns: illness first (contagion + cardio risk), then injuries, then load
     const concernOrder: Record<Action, number> = {
@@ -626,10 +733,9 @@ export default function CoachIndoorLoadPage() {
             <span>›</span>
             <span>Indoor Load</span>
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">Indoor Load Intelligence</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{pt("pageTitle", lang)}</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Höll-mode álagsgreining byggð á Football Movement Profile (FMP). Auto-greinir
-            innan-húss sessions út frá lágu velocity-band 6 og marktækri FMP-virkni.
+            {pt("pageSubtitle", lang)}
           </p>
         </div>
         <button
@@ -637,7 +743,7 @@ export default function CoachIndoorLoadPage() {
           disabled={loading}
           className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
         >
-          {loading ? "Sæki…" : "Endurnýja"}
+          {loading ? (lang === "IS" ? "Sæki…" : "Loading…") : pt("refresh", lang)}
         </button>
       </div>
 
@@ -664,7 +770,7 @@ export default function CoachIndoorLoadPage() {
             />
             <div className="flex-1">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Liðið í dag
+                {pt("teamToday", lang)}
               </div>
               <div className="mt-0.5 text-base font-semibold text-slate-900">
                 {teamStats.teamSentence}
@@ -672,22 +778,22 @@ export default function CoachIndoorLoadPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
-                ✅ {teamStats.actionsCount.FULL} tilbúnir
+                ✅ {teamStats.actionsCount.FULL} {pt("ready", lang)}
               </span>
               <span className="rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">
-                ⚠️ {teamStats.actionsCount.MODIFIED} léttari
+                ⚠️ {teamStats.actionsCount.MODIFIED} {pt("lighter", lang)}
               </span>
               <span className="rounded-md bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">
-                🛑 {teamStats.actionsCount.RECOVERY} hvíld
+                🛑 {teamStats.actionsCount.RECOVERY} {pt("rest", lang)}
               </span>
               {teamStats.totalInjured > 0 && (
                 <span className="rounded-md bg-violet-100 px-2 py-0.5 font-semibold text-violet-700">
-                  🏥 {teamStats.totalInjured} meiddir
+                  🏥 {teamStats.totalInjured} {pt("injured", lang)}
                 </span>
               )}
               {teamStats.totalIll > 0 && (
                 <span className="rounded-md bg-teal-100 px-2 py-0.5 font-semibold text-teal-700">
-                  🤒 {teamStats.totalIll} veikir
+                  🤒 {teamStats.totalIll} {pt("sick", lang)}
                 </span>
               )}
             </div>
@@ -699,7 +805,7 @@ export default function CoachIndoorLoadPage() {
       {!loading && teamStats.concernPlayers.length > 0 && (
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Top concerns ({teamStats.concernPlayers.length})
+            {pt("topConcerns", lang)} ({teamStats.concernPlayers.length})
           </div>
           <ul className="space-y-1.5">
             {teamStats.concernPlayers.slice(0, 6).map((c) => (
@@ -714,17 +820,20 @@ export default function CoachIndoorLoadPage() {
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   <span className="text-slate-500">{c.reason}</span>
-                  <span
-                    className={`rounded px-2 py-0.5 font-semibold ${ACTION_LABELS[c.action].color}`}
-                  >
-                    {ACTION_LABELS[c.action].icon} {ACTION_LABELS[c.action].label}
-                  </span>
+                  {(() => {
+                    const cInfo = actionLabels(c.action, lang);
+                    return (
+                      <span className={`rounded px-2 py-0.5 font-semibold ${cInfo.color}`}>
+                        {cInfo.icon} {cInfo.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </li>
             ))}
             {teamStats.concernPlayers.length > 6 && (
               <li className="pt-1 text-xs text-slate-500">
-                + {teamStats.concernPlayers.length - 6} fleiri leikmenn — sjá lista neðar
+                + {teamStats.concernPlayers.length - 6} {pt("morePlayers", lang)}
               </li>
             )}
           </ul>
@@ -733,24 +842,24 @@ export default function CoachIndoorLoadPage() {
 
       {/* Team summary */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <SummaryCard label="Leikmenn með indoor data" value={String(teamStats.withIndoor)} />
+        <SummaryCard label={pt("withIndoorData", lang)} value={String(teamStats.withIndoor)} />
         <SummaryCard
-          label="Heavy / Spike"
+          label={pt("heavyOrSpike", lang)}
           value={String(teamStats.heavyOrSpike)}
           accent="text-rose-700"
         />
         <SummaryCard
-          label="Typical session"
+          label={pt("typicalSession", lang)}
           value={String(teamStats.typicalCount)}
           accent="text-emerald-700"
         />
         <SummaryCard
-          label="Light / Below avg"
+          label={pt("lightOrBelow", lang)}
           value={String(teamStats.lightOrLow)}
           accent="text-sky-700"
         />
         <SummaryCard
-          label="Indoor sessions sl. 7d"
+          label={pt("indoorSessions7d", lang)}
           value={String(teamStats.totalIndoorSessions7d)}
         />
       </div>
@@ -763,12 +872,12 @@ export default function CoachIndoorLoadPage() {
 
       {loading && rows.length === 0 && (
         <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          Sæki indoor load gögn…
+          {pt("loadingData", lang)}
         </div>
       )}
 
       {/* Team-wide 14-day heatmap — at-a-glance roster overview */}
-      {!loading && rows.length > 0 && <TeamHeatmap rows={rows} />}
+      {!loading && rows.length > 0 && <TeamHeatmap rows={rows} lang={lang} />}
 
       {/* Player rows */}
       <div className="space-y-2">
@@ -804,22 +913,23 @@ export default function CoachIndoorLoadPage() {
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex min-w-0 items-center gap-3">
                     {/* Plain-language readiness verdict — coach's primary signal */}
-                    {(!noData || row.injury) && (
-                      <span
-                        className={`shrink-0 rounded px-2 py-1 text-xs font-bold ${ACTION_LABELS[recommendAction(row.status, row.injury)].color}`}
-                        title={ACTION_LABELS[recommendAction(row.status, row.injury)].recommendation}
-                      >
-                        {ACTION_LABELS[recommendAction(row.status, row.injury)].icon}{" "}
-                        {ACTION_LABELS[recommendAction(row.status, row.injury)].label}
-                      </span>
-                    )}
+                    {(!noData || row.injury) && (() => {
+                      const rowAction = actionLabels(recommendAction(row.status, row.injury), lang);
+                      return (
+                        <span
+                          className={`shrink-0 rounded px-2 py-1 text-xs font-bold ${rowAction.color}`}
+                          title={rowAction.recommendation}
+                        >
+                          {rowAction.icon} {rowAction.label}
+                        </span>
+                      );
+                    })()}
                     <span className="truncate font-medium text-slate-900">{row.full_name}</span>
                     {noData && !row.injury ? (
-                      <span className="text-xs text-slate-500">— engin indoor session sl. 28d</span>
+                      <span className="text-xs text-slate-500">{pt("noIndoorSession", lang)}</span>
                     ) : !noData ? (
                       <span className="hidden text-xs text-slate-600 sm:inline">
-                        {row.status!.indoor_sessions_28d}/{row.status!.total_sessions_28d} indoor
-                        (28d)
+                        {row.status!.indoor_sessions_28d}/{row.status!.total_sessions_28d} {pt("indoorIn28d", lang)}
                       </span>
                     ) : null}
                   </div>
@@ -831,9 +941,9 @@ export default function CoachIndoorLoadPage() {
                       }`}
                     >
                       {isIll
-                        ? `Veikindi${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}`
-                        : `${row.injury.body_part ?? "Meiðsl"}${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}${row.injury.rtp_stage != null ? ` · RTP ${row.injury.rtp_stage}/5` : ""}`}
-                      {row.injury.estimated_return ? ` · endurkoma ${row.injury.estimated_return.slice(5)}` : ""}
+                        ? `${pt("illness", lang)}${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}`
+                        : `${row.injury.body_part ?? pt("injury", lang)}${row.injury.injury_type ? ` (${row.injury.injury_type})` : ""}${row.injury.rtp_stage != null ? ` · RTP ${row.injury.rtp_stage}/5` : ""}`}
+                      {row.injury.estimated_return ? ` · ${pt("estimatedReturn", lang)} ${row.injury.estimated_return.slice(5)}` : ""}
                     </p>
                   )}
                 </div>
@@ -841,7 +951,7 @@ export default function CoachIndoorLoadPage() {
                   {!noData && row.status?.composite_score != null && row.status.composite_score_band && (
                     <span
                       className={`rounded-md px-2 py-0.5 text-sm font-bold tabular-nums ${SCORE_BAND_COLORS[row.status.composite_score_band]}`}
-                      title={`Composite Indoor Load Score: ${SCORE_BAND_LABELS[row.status.composite_score_band]} (100 = personal avg)`}
+                      title={`Composite Indoor Load Score: ${scoreBandLabel(row.status.composite_score_band, lang)} (100 = personal avg)`}
                     >
                       {row.status.composite_score}
                     </span>
@@ -885,7 +995,7 @@ export default function CoachIndoorLoadPage() {
                             isIll ? "text-teal-700" : "text-violet-700"
                           }`}
                         >
-                          {isIll ? "🤒 Active veikindi" : "Active meiðsli"}
+                          {isIll ? pt("activeIllness", lang) : pt("activeInjury", lang)}
                         </span>
                         {row.injury.severity && (
                           <span
@@ -904,12 +1014,12 @@ export default function CoachIndoorLoadPage() {
                       </div>
                       <p className="text-base font-bold text-slate-900">
                         {isIll
-                          ? row.injury.injury_type ?? "Veikindi"
-                          : `${row.injury.body_part ?? "Meiðsl"}${row.injury.injury_type ? ` — ${row.injury.injury_type}` : ""}`}
+                          ? row.injury.injury_type ?? pt("illness", lang)
+                          : `${row.injury.body_part ?? pt("injury", lang)}${row.injury.injury_type ? ` — ${row.injury.injury_type}` : ""}`}
                       </p>
                       {row.injury.estimated_return && (
                         <p className={`mt-1 text-sm ${isIll ? "text-teal-700" : "text-violet-700"}`}>
-                          Áætluð endurkoma:{" "}
+                          {pt("estReturnLabel", lang)}:{" "}
                           <span className="font-semibold">{row.injury.estimated_return}</span>
                         </p>
                       )}
@@ -919,16 +1029,16 @@ export default function CoachIndoorLoadPage() {
                   {/* Coach guidance box — TOP PRIORITY: clear yes/no + concrete recommendation */}
                   {(() => {
                     const action = recommendAction(row.status, row.injury);
-                    const labelInfo = ACTION_LABELS[action];
+                    const labelInfo = actionLabels(action, lang);
                     const reason = row.injury
                       ? labelInfo.sentence
                       : row.status
-                      ? buildIcelandicReason({
+                      ? buildLoadReason({
                           composite_band: row.status.composite_score_band,
                           acwr_value: row.status.acwr?.value,
                           acwr_flag: row.status.acwr?.flag,
                           mcburnie_flag: row.status.indoor_mcburnie?.flag,
-                        })
+                        }, lang)
                       : "—";
                     const bannerBg =
                       action === "ILL" || action === "RECOVERING_ILL"
@@ -945,7 +1055,7 @@ export default function CoachIndoorLoadPage() {
                           <span className="text-2xl">{labelInfo.icon}</span>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                              Tilbúinn í dag?
+                              {pt("readyToday", lang)}
                             </div>
                             <div className="mt-0.5 text-lg font-bold text-slate-900">
                               {labelInfo.sentence}
@@ -955,17 +1065,17 @@ export default function CoachIndoorLoadPage() {
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
                             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                              Hvers vegna
+                              {pt("whyHeading", lang)}
                             </div>
                             <div className="mt-0.5 text-sm text-slate-800">
                               {action === "FULL"
-                                ? "Allir signal innan heilbrigðs sviðs — engin warning flag"
+                                ? pt("fullSignals", lang)
                                 : reason}
                             </div>
                           </div>
                           <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
                             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                              Þjálfara-leiðbeining
+                              {pt("coachGuidance", lang)}
                             </div>
                             <div className="mt-0.5 text-sm font-medium text-slate-900">
                               {labelInfo.recommendation}
@@ -982,7 +1092,7 @@ export default function CoachIndoorLoadPage() {
                       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
                         <div>
                           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Composite Indoor Load Score
+                            {pt("compositeScoreTitle", lang)}
                           </span>
                           <div className="mt-0.5 flex items-baseline gap-2">
                             <span className="text-3xl font-bold tabular-nums text-slate-900">
@@ -991,10 +1101,10 @@ export default function CoachIndoorLoadPage() {
                             <span
                               className={`rounded px-1.5 py-0.5 text-xs font-semibold ${SCORE_BAND_COLORS[row.status.composite_score_band]}`}
                             >
-                              {SCORE_BAND_LABELS[row.status.composite_score_band]}
+                              {scoreBandLabel(row.status.composite_score_band, lang)}
                             </span>
                             <span className="text-xs text-slate-500">
-                              (100 = personal 28d avg)
+                              {pt("vsBaseline", lang)}
                             </span>
                           </div>
                         </div>
@@ -1002,10 +1112,10 @@ export default function CoachIndoorLoadPage() {
                       {/* 14-day trend sparkline */}
                       {row.status.history_14d && row.status.history_14d.length > 0 && (
                         <div className="mb-3">
-                          <HistorySparkline history={row.status.history_14d} />
+                          <HistorySparkline history={row.status.history_14d} lang={lang} />
                         </div>
                       )}
-                      <FmpMovementBars bands={row.status.latest_session.fmp_bands} />
+                      <FmpMovementBars bands={row.status.latest_session.fmp_bands} lang={lang} />
                     </div>
                   )}
 
@@ -1015,25 +1125,25 @@ export default function CoachIndoorLoadPage() {
                     {row.status.latest_session && (
                       <div>
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Síðasta indoor session ({row.status.latest_session.date})
+                          {pt("latestSession", lang)} ({row.status.latest_session.date})
                         </div>
                         <dl className="space-y-1 tabular-nums">
-                          <Stat label="Player Load" value={row.status.latest_session.player_load} />
+                          <Stat label={pt("playerLoad", lang)} value={row.status.latest_session.player_load} />
                           <Stat
-                            label="Lengd"
-                            value={`${row.status.latest_session.duration_min} mín`}
+                            label={pt("duration", lang)}
+                            value={`${row.status.latest_session.duration_min} ${pt("min", lang)}`}
                           />
                           <Stat
-                            label="Dynamic High %"
+                            label={pt("dynamicHigh", lang)}
                             value={
                               row.status.latest_session.dyn_high_pct != null
                                 ? `${row.status.latest_session.dyn_high_pct.toFixed(2)}%`
                                 : null
                             }
                           />
-                          <Stat label="HMLD (m)" value={row.status.latest_session.hmld_m} />
-                          <Stat label="IMA total" value={row.status.latest_session.ima_total} />
-                          <Stat label="Decel B2-3" value={row.status.latest_session.decel_b23} />
+                          <Stat label={pt("hmldM", lang)} value={row.status.latest_session.hmld_m} />
+                          <Stat label={pt("imaTotal", lang)} value={row.status.latest_session.ima_total} />
+                          <Stat label={pt("decelB23", lang)} value={row.status.latest_session.decel_b23} />
                         </dl>
                       </div>
                     )}
@@ -1041,31 +1151,31 @@ export default function CoachIndoorLoadPage() {
                     {/* Baseline 28d */}
                     <div>
                       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Personal baseline (28d indoor)
+                        {pt("personalBaseline", lang)}
                       </div>
                       <dl className="space-y-1 tabular-nums">
                         <Stat
-                          label="Avg Player Load"
+                          label={pt("avgPlayerLoad", lang)}
                           value={row.status.baseline_indoor.avg_player_load}
                         />
                         <Stat
-                          label="Avg lengd"
-                          value={`${row.status.baseline_indoor.avg_duration_min} mín`}
+                          label={pt("avgDuration", lang)}
+                          value={`${row.status.baseline_indoor.avg_duration_min} ${pt("min", lang)}`}
                         />
                         <Stat
-                          label="Avg Dyn High %"
+                          label={pt("avgDynHighPct", lang)}
                           value={`${row.status.baseline_indoor.avg_dyn_high_pct.toFixed(2)}%`}
                         />
                         <Stat
-                          label="Avg HMLD (m)"
+                          label={pt("avgHmldM", lang)}
                           value={row.status.baseline_indoor.avg_hmld_m}
                         />
                         <Stat
-                          label="Avg IMA total"
+                          label={pt("avgImaTotal", lang)}
                           value={row.status.baseline_indoor.avg_ima_total}
                         />
                         <Stat
-                          label="Avg Decel B2-3"
+                          label={pt("avgDecelB23", lang)}
                           value={row.status.baseline_indoor.avg_decel_b23}
                         />
                       </dl>
@@ -1074,32 +1184,32 @@ export default function CoachIndoorLoadPage() {
                     {/* 7-day cumulative + McBurnie */}
                     <div>
                       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Sl. 7 dagar (cumulative)
+                        {pt("recent7dCumulative", lang)}
                       </div>
                       <dl className="space-y-1 tabular-nums">
-                        <Stat label="Indoor sessions" value={row.status.recent_7d.sessions} />
+                        <Stat label={pt("indoorSessionsLabel", lang)} value={row.status.recent_7d.sessions} />
                         <Stat
-                          label="Player Load samtals"
+                          label={pt("playerLoadTotal", lang)}
                           value={row.status.recent_7d.sum_player_load}
                         />
                         <Stat
-                          label="Dyn High (sek)"
+                          label={pt("dynHighSec", lang)}
                           value={row.status.recent_7d.sum_dyn_high_s}
                         />
-                        <Stat label="Decel B2-3" value={row.status.recent_7d.sum_decel_b23} />
+                        <Stat label={pt("decelB23", lang)} value={row.status.recent_7d.sum_decel_b23} />
                       </dl>
 
                       {row.status.indoor_mcburnie && (
                         <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Indoor McBurnie proxy
+                            {pt("indoorMcburnieProxy", lang)}
                           </div>
                           <div className="mt-1 flex items-baseline justify-between">
                             <span className="text-lg font-bold tabular-nums">
                               {row.status.indoor_mcburnie.decel_per_dyn_high_min.toFixed(2)}
                             </span>
                             <span className="text-xs text-slate-500">
-                              decels / mín Dyn High (heilbrigt {row.status.indoor_mcburnie.healthy_range})
+                              {pt("decelsPerMinDynHigh", lang)} {row.status.indoor_mcburnie.healthy_range})
                             </span>
                           </div>
                           {row.status.indoor_mcburnie.interpretation && (
@@ -1120,14 +1230,14 @@ export default function CoachIndoorLoadPage() {
                           }`}
                         >
                           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            ACWR (Gabbett 2017)
+                            {pt("acwrTitle", lang)}
                           </div>
                           <div className="mt-1 flex items-baseline justify-between">
                             <span className="text-lg font-bold tabular-nums">
                               {row.status.acwr.value.toFixed(2)}
                             </span>
                             <span className="text-xs text-slate-500">
-                              7d / 28d-week-avg (sweet spot 0.8-1.3)
+                              {pt("acwrSubtitle", lang)}
                             </span>
                           </div>
                           <div className="mt-1 text-xs leading-relaxed text-slate-700">
@@ -1146,104 +1256,7 @@ export default function CoachIndoorLoadPage() {
       </div>
 
       {/* Methodology footer */}
-      <details className="mt-8 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
-        <summary className="cursor-pointer font-semibold text-slate-800">Aðferðafræði</summary>
-        <div className="mt-3 space-y-2">
-          <p>
-            <strong>Auto-greining á indoor session:</strong> Session telst innan-húss ef
-            velocity_band6_total_distance &lt; 50m og fmp_total_duration_s &gt; 600s (10 mín).
-            Þetta útilokar útiæfingar sem mæla raunverulega max-hraða og fangar æfingar í höllum
-            þar sem GPS-háðir mælar segja lítið.
-          </p>
-          <p>
-            <strong>Composite Indoor Load Score (0-150+):</strong> Vegið meðaltal af 5 þáttum
-            normaliseraðum við 28-daga personal baseline. <strong>100 = nákvæmlega meðal-session
-            þíns leikmanns.</strong> Vegir: Player Load 30%, Dynamic High % 25%, IMA total 20%,
-            HMLD 15%, Decel B2-3 10%.
-          </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>
-              <strong>&lt; 60:</strong> Light — recovery/walkthrough
-            </li>
-            <li>
-              <strong>60-90:</strong> Below average — mild tactical
-            </li>
-            <li>
-              <strong>90-110:</strong> Typical — standard training
-            </li>
-            <li>
-              <strong>110-140:</strong> Heavy — match-style training
-            </li>
-            <li>
-              <strong>&gt; 140:</strong> Spike — overload risk ef sustained
-            </li>
-          </ul>
-          <p>
-            <strong>FMP movement bars:</strong> Stacked bar sem sýnir hvernig session-tími
-            dreifðist á 7 stride-velocity bands. Mikið rautt (Dynamic High) = high-intensity
-            session. Mikið grátt (Very Low) = recovery. Þetta er IMU-byggt og virkar fullkomlega
-            indoor.
-          </p>
-          <p>
-            <strong>14-day load trend:</strong> Daily composite score yfir síðustu 14 daga.
-            Hver dálkur er ein session, litaður eftir score band (slate/sky/emerald/amber/rose).
-            Rautt punktur ofan á dálki = indoor session. Tómir dagar (faint dots) = recovery/rest.
-            Slitnar línur sýna baseline (100) og spike threshold (140). Þetta gerir þjálfara kleift
-            að sjá <em>trajectory</em> — er þessi leikmaður á uppleið, niðurleið, eða stable.
-          </p>
-          <p>
-            <strong>Team load heatmap (efst á síðu):</strong> 14×N grid sem sýnir allt liðið í
-            einu — hver röð er leikmaður, hver dálkur er dagur. Litur reitar = composite score band.
-            Rauður innri border = indoor session. Þetta er <em>tactical overview</em> sem þjálfari
-            getur scan-að á 5 sekúndum til að spot-a leikmenn með sustained spikes vs distributed
-            load.
-          </p>
-          <p>
-            <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2017):</strong> Vikulegt
-            cumulative player load deilt með 28-day weekly average. Sweet spot 0.8-1.3 — sýnir
-            að leikmaður er adapted til að höndla núverandi load. Hækkun yfir 1.5 (acute spike)
-            tengist 2-4× hærri injury risk.
-          </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>
-              <strong>0.8-1.3:</strong> 🟢 Sweet spot — adapted, ready to perform
-            </li>
-            <li>
-              <strong>0.5-0.8 eða 1.3-1.5:</strong> 🟡 Caution — detraining eða acute spike
-            </li>
-            <li>
-              <strong>&lt; 0.5 eða &gt; 1.5:</strong> 🔴 Danger zone — severe undertraining eða
-              elevated injury risk
-            </li>
-          </ul>
-          <p>
-            <strong>Indoor McBurnie proxy:</strong> decel_b23_count / (FMP duration × Dynamic High
-            %). Mælir hversu margar high-intensity bremsanir leikmaður gerir per mínútu af
-            high-intensity hreyfingu.
-          </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>
-              <strong>1-10:</strong> 🟢 Healthy — eðlilegt indoor decel:intensity coupling
-            </li>
-            <li>
-              <strong>0.5-1 eða 10-15:</strong> 🟡 Caution — annað hvort underload
-              (lítið brake-work) eða decel-heavy training
-            </li>
-            <li>
-              <strong>&lt; 0.5 eða &gt; 15:</strong> 🔴 At-risk — verulegt mismunur milli
-              bremsuvinnu og hreyfingar (overload eða undirvinnsla)
-            </li>
-          </ul>
-          <p>
-            <strong>Source:</strong> Football Movement Profile (Catapult OpenField, IMU-only,
-            engin GPS-þörf), accelerometry IMA Accel/Decel/CoD, Player Load.
-          </p>
-          <p className="italic text-slate-500">
-            Reference: McBurnie, Harper, Jones &amp; Dos&apos;Santos 2022 — Deceleration Training
-            in Team Sports. Sports Medicine.
-          </p>
-        </div>
-      </details>
+      <MethodologyFooter lang={lang} />
     </div>
   );
 }
@@ -1265,7 +1278,7 @@ function SummaryCard({
   );
 }
 
-function TeamHeatmap({ rows }: { rows: Row[] }) {
+function TeamHeatmap({ rows, lang = "EN" }: { rows: Row[]; lang?: Lang }) {
   // 14 columns × N players. Each cell = composite score for that day.
   // Players with no recent indoor data are skipped.
   const playersWithHistory = rows.filter(
@@ -1298,26 +1311,26 @@ function TeamHeatmap({ rows }: { rows: Row[] }) {
     <div className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-baseline justify-between border-b border-slate-100 px-4 py-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Team load heatmap (14 dagar)</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{pt("teamHeatmapTitle", lang)}</h3>
           <p className="text-xs text-slate-500">
-            Hver reitur = ein session colored eftir composite score. Innri rauður border = indoor.
+            {pt("teamHeatmapSubtitle", lang)}
           </p>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-slate-500">
           <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-slate-300" /> Light
+            <span className="h-2.5 w-2.5 rounded-sm bg-slate-300" /> {pt("legendLight", lang)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-sky-300" /> Below
+            <span className="h-2.5 w-2.5 rounded-sm bg-sky-300" /> {pt("legendBelow", lang)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Typical
+            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> {pt("legendTypical", lang)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Heavy
+            <span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> {pt("legendHeavy", lang)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> Spike
+            <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> {pt("legendSpike", lang)}
           </span>
         </div>
       </div>
@@ -1326,7 +1339,7 @@ function TeamHeatmap({ rows }: { rows: Row[] }) {
           <thead>
             <tr className="border-b border-slate-100 text-[10px] text-slate-500">
               <th className="sticky left-0 z-10 bg-white px-3 py-1.5 text-left font-medium">
-                Player
+                {pt("player", lang)}
               </th>
               {days.map((d, i) => (
                 <th
@@ -1356,8 +1369,8 @@ function TeamHeatmap({ rows }: { rows: Row[] }) {
                           className={`mx-auto h-5 w-full max-w-[1.5rem] rounded ${cellColor(point?.score, point?.is_indoor)}`}
                           title={
                             point
-                              ? `${d}: ${point.score ?? "—"} (${point.is_indoor ? "Indoor" : "Outdoor"})`
-                              : `${d}: rest`
+                              ? `${d}: ${point.score ?? "—"} (${point.is_indoor ? pt("indoor", lang) : pt("outdoor", lang)})`
+                              : `${d}: ${pt("rest_label", lang)}`
                           }
                         />
                       </td>
@@ -1373,7 +1386,7 @@ function TeamHeatmap({ rows }: { rows: Row[] }) {
   );
 }
 
-function HistorySparkline({ history }: { history: HistoryPoint[] }) {
+function HistorySparkline({ history, lang = "EN" }: { history: HistoryPoint[]; lang?: Lang }) {
   // Render last 14 days as a daily column chart with score values + indoor/outdoor coloring.
   // Empty days = rest, shown as faint grid background.
   if (history.length === 0) return null;
@@ -1407,11 +1420,11 @@ function HistorySparkline({ history }: { history: HistoryPoint[] }) {
     <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
       <div className="flex items-baseline justify-between border-b border-slate-100 px-2 py-1">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-          14-day load trend
+          {pt("loadTrend14d", lang)}
         </span>
         <span className="text-[10px] text-slate-400">
-          <span className="inline-block h-2 w-2 rounded-sm bg-rose-500"></span> Indoor &nbsp;
-          <span className="inline-block h-2 w-2 rounded-sm bg-slate-400"></span> Outdoor
+          <span className="inline-block h-2 w-2 rounded-sm bg-rose-500"></span> {pt("indoor", lang)} &nbsp;
+          <span className="inline-block h-2 w-2 rounded-sm bg-slate-400"></span> {pt("outdoor", lang)}
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" preserveAspectRatio="none">
@@ -1447,7 +1460,7 @@ function HistorySparkline({ history }: { history: HistoryPoint[] }) {
                 fill={fill}
                 rx="1"
               >
-                <title>{`${day.date}: ${score} (${isIndoor ? "Indoor" : "Outdoor"})`}</title>
+                <title>{`${day.date}: ${score} (${isIndoor ? pt("indoor", lang) : pt("outdoor", lang)})`}</title>
               </rect>
               {/* Indoor marker dot */}
               {isIndoor && (
@@ -1468,7 +1481,7 @@ function HistorySparkline({ history }: { history: HistoryPoint[] }) {
   );
 }
 
-function FmpMovementBars({ bands }: { bands: FmpBands }) {
+function FmpMovementBars({ bands, lang = "EN" }: { bands: FmpBands; lang?: Lang }) {
   // Use total of the 7 movement bands (excludes total_s)
   const total =
     bands.very_low_s +
@@ -1483,8 +1496,8 @@ function FmpMovementBars({ bands }: { bands: FmpBands }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-        <span>FMP movement distribution (síðasta indoor session)</span>
-        <span className="tabular-nums">{Math.round(total / 60)} mín alls</span>
+        <span>{pt("fmpDistribution", lang)}</span>
+        <span className="tabular-nums">{Math.round(total / 60)} {pt("minTotal", lang)}</span>
       </div>
       {/* Stacked horizontal bar */}
       <div className="flex h-6 w-full overflow-hidden rounded-md border border-slate-200 bg-white">
@@ -1545,5 +1558,154 @@ function Stat({
       <dt className="text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{display}</dd>
     </div>
+  );
+}
+
+// ── Methodology footer (bilingual) ──────────────────────────────────────────
+function MethodologyFooter({ lang }: { lang: Lang }) {
+  const isEN = lang === "EN";
+  return (
+    <details className="mt-8 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+      <summary className="cursor-pointer font-semibold text-slate-800">
+        {isEN ? "Methodology" : "Aðferðafræði"}
+      </summary>
+      <div className="mt-3 space-y-2">
+        <p>
+          <strong>{isEN ? "Indoor session auto-detection:" : "Auto-greining á indoor session:"}</strong>{" "}
+          {isEN
+            ? "A session counts as indoor if velocity_band6_total_distance < 50m and fmp_total_duration_s > 600s (10 min). This excludes outdoor sessions that capture true max-speed work and surfaces hall-based sessions where GPS-dependent metrics are uninformative."
+            : "Session telst innan-húss ef velocity_band6_total_distance < 50m og fmp_total_duration_s > 600s (10 mín). Þetta útilokar útiæfingar sem mæla raunverulega max-hraða og fangar æfingar í höllum þar sem GPS-háðir mælar segja lítið."}
+        </p>
+        <p>
+          <strong>{isEN ? "Composite Indoor Load Score (0-150+):" : "Composite Indoor Load Score (0-150+):"}</strong>{" "}
+          {isEN
+            ? "Weighted average of 5 components normalized to the player's 28-day personal baseline."
+            : "Vegið meðaltal af 5 þáttum normaliseraðum við 28-daga personal baseline."}{" "}
+          <strong>
+            {isEN
+              ? "100 = exactly an average session for that player."
+              : "100 = nákvæmlega meðal-session þíns leikmanns."}
+          </strong>{" "}
+          {isEN
+            ? "Weights: Player Load 30%, Dynamic High % 25%, IMA total 20%, HMLD 15%, Decel B2-3 10%."
+            : "Vegir: Player Load 30%, Dynamic High % 25%, IMA total 20%, HMLD 15%, Decel B2-3 10%."}
+        </p>
+        <ul className="ml-4 list-disc space-y-1">
+          <li>
+            <strong>&lt; 60:</strong> {isEN ? "Light — recovery/walkthrough" : "Light — recovery/walkthrough"}
+          </li>
+          <li>
+            <strong>60-90:</strong> {isEN ? "Below average — mild tactical" : "Below average — mild tactical"}
+          </li>
+          <li>
+            <strong>90-110:</strong> {isEN ? "Typical — standard training" : "Typical — standard training"}
+          </li>
+          <li>
+            <strong>110-140:</strong> {isEN ? "Heavy — match-style training" : "Heavy — match-style training"}
+          </li>
+          <li>
+            <strong>&gt; 140:</strong>{" "}
+            {isEN ? "Spike — overload risk if sustained" : "Spike — overload risk ef sustained"}
+          </li>
+        </ul>
+        <p>
+          <strong>FMP movement bars:</strong>{" "}
+          {isEN
+            ? "Stacked bar showing how session time was distributed across the 7 stride-velocity bands. Lots of red (Dynamic High) = high-intensity session. Lots of grey (Very Low) = recovery. IMU-based, works fully indoors."
+            : "Stacked bar sem sýnir hvernig session-tími dreifðist á 7 stride-velocity bands. Mikið rautt (Dynamic High) = high-intensity session. Mikið grátt (Very Low) = recovery. Þetta er IMU-byggt og virkar fullkomlega indoor."}
+        </p>
+        <p>
+          <strong>14-day load trend:</strong>{" "}
+          {isEN ? (
+            <>
+              Daily composite score over the last 14 days. Each column is one session, colored by score band
+              (slate/sky/emerald/amber/rose). A red dot above a column = indoor session. Empty days (faint dots) =
+              recovery/rest. Dashed lines mark baseline (100) and spike threshold (140). Lets the coach see{" "}
+              <em>trajectory</em> — is this player trending up, down, or stable.
+            </>
+          ) : (
+            <>
+              Daily composite score yfir síðustu 14 daga. Hver dálkur er ein session, litaður eftir score band
+              (slate/sky/emerald/amber/rose). Rautt punktur ofan á dálki = indoor session. Tómir dagar (faint dots) =
+              recovery/rest. Slitnar línur sýna baseline (100) og spike threshold (140). Þetta gerir þjálfara kleift
+              að sjá <em>trajectory</em> — er þessi leikmaður á uppleið, niðurleið, eða stable.
+            </>
+          )}
+        </p>
+        <p>
+          <strong>{isEN ? "Team load heatmap (top of page):" : "Team load heatmap (efst á síðu):"}</strong>{" "}
+          {isEN ? (
+            <>
+              14×N grid showing the entire roster at once — each row is a player, each column is a day. Cell color
+              = composite score band. Red inner border = indoor session. A <em>tactical overview</em> the coach can
+              scan in 5 seconds to spot players with sustained spikes vs distributed load.
+            </>
+          ) : (
+            <>
+              14×N grid sem sýnir allt liðið í einu — hver röð er leikmaður, hver dálkur er dagur. Litur reitar =
+              composite score band. Rauður innri border = indoor session. Þetta er <em>tactical overview</em> sem
+              þjálfari getur scan-að á 5 sekúndum til að spot-a leikmenn með sustained spikes vs distributed load.
+            </>
+          )}
+        </p>
+        <p>
+          <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2017):</strong>{" "}
+          {isEN
+            ? "Weekly cumulative player load divided by the 28-day weekly average. Sweet spot 0.8-1.3 — indicates the player is adapted to the current load. A spike above 1.5 (acute spike) is associated with 2-4× higher injury risk."
+            : "Vikulegt cumulative player load deilt með 28-day weekly average. Sweet spot 0.8-1.3 — sýnir að leikmaður er adapted til að höndla núverandi load. Hækkun yfir 1.5 (acute spike) tengist 2-4× hærri injury risk."}
+        </p>
+        <ul className="ml-4 list-disc space-y-1">
+          <li>
+            <strong>0.8-1.3:</strong> 🟢 {isEN ? "Sweet spot — adapted, ready to perform" : "Sweet spot — adapted, ready to perform"}
+          </li>
+          <li>
+            <strong>{isEN ? "0.5-0.8 or 1.3-1.5:" : "0.5-0.8 eða 1.3-1.5:"}</strong> 🟡{" "}
+            {isEN ? "Caution — detraining or acute spike" : "Caution — detraining eða acute spike"}
+          </li>
+          <li>
+            <strong>{isEN ? "< 0.5 or > 1.5:" : "< 0.5 eða > 1.5:"}</strong> 🔴{" "}
+            {isEN
+              ? "Danger zone — severe undertraining or elevated injury risk"
+              : "Danger zone — severe undertraining eða elevated injury risk"}
+          </li>
+        </ul>
+        <p>
+          <strong>Indoor McBurnie proxy:</strong>{" "}
+          {isEN
+            ? "decel_b23_count / (FMP duration × Dynamic High %). Measures how many high-intensity decelerations a player performs per minute of high-intensity movement."
+            : "decel_b23_count / (FMP duration × Dynamic High %). Mælir hversu margar high-intensity bremsanir leikmaður gerir per mínútu af high-intensity hreyfingu."}
+        </p>
+        <ul className="ml-4 list-disc space-y-1">
+          <li>
+            <strong>1-10:</strong> 🟢{" "}
+            {isEN
+              ? "Healthy — normal indoor decel:intensity coupling"
+              : "Healthy — eðlilegt indoor decel:intensity coupling"}
+          </li>
+          <li>
+            <strong>{isEN ? "0.5-1 or 10-15:" : "0.5-1 eða 10-15:"}</strong> 🟡{" "}
+            {isEN
+              ? "Caution — either underload (little brake-work) or decel-heavy training"
+              : "Caution — annað hvort underload (lítið brake-work) eða decel-heavy training"}
+          </li>
+          <li>
+            <strong>{isEN ? "< 0.5 or > 15:" : "< 0.5 eða > 15:"}</strong> 🔴{" "}
+            {isEN
+              ? "At-risk — significant mismatch between brake-work and movement (overload or underwork)"
+              : "At-risk — verulegt mismunur milli bremsuvinnu og hreyfingar (overload eða undirvinnsla)"}
+          </li>
+        </ul>
+        <p>
+          <strong>Source:</strong>{" "}
+          {isEN
+            ? "Football Movement Profile (Catapult OpenField, IMU-only, no GPS required), accelerometry IMA Accel/Decel/CoD, Player Load."
+            : "Football Movement Profile (Catapult OpenField, IMU-only, engin GPS-þörf), accelerometry IMA Accel/Decel/CoD, Player Load."}
+        </p>
+        <p className="italic text-slate-500">
+          Reference: McBurnie, Harper, Jones &amp; Dos&apos;Santos 2022 — Deceleration Training in Team Sports.
+          Sports Medicine.
+        </p>
+      </div>
+    </details>
   );
 }
