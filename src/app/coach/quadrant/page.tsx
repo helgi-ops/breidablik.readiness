@@ -21,8 +21,65 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantChart";
+import { useLang, type Lang } from "@/lib/lang";
 
 type Window = 7 | 14 | 28;
+
+// ── Bilingual UI strings ─────────────────────────────────────────────────
+const QUAD_I18N = {
+  pageTitle: { EN: "Quadrant view", IS: "Quadrant view" },
+  subtitleA: {
+    EN: "External load (avg distance) × internal cost (avg sRPE). Quadrant lines at team median.",
+    IS: "External load (avg distance) × internal cost (avg sRPE). Quadrant-línur á team median.",
+  },
+  updated: { EN: "updated", IS: "uppfært" },
+  notSignedIn: { EN: "Not signed in", IS: "Ekki innskráður" },
+  noTeam: { EN: "Not connected to a team", IS: "Ekki tengdur við lið" },
+  errorFetch: { EN: "Failed to fetch data", IS: "Villa við að sækja gögn" },
+  loadingData: { EN: "Loading data…", IS: "Hleð gögn…" },
+  noDataInWindow: {
+    EN: "No data in this window. Upload GPS / RPE first.",
+    IS: "Engin gögn fyrir þennan glugga. Hladdu upp GPS / RPE fyrst.",
+  },
+  injuryRisk: { EN: "Injury risk", IS: "Injury risk" },
+  decoupled: { EN: "Decoupled", IS: "Decoupled" },
+  peakFitness: { EN: "Peak fitness", IS: "Peak fitness" },
+  underStimulated: { EN: "Under-stimulated", IS: "Under-stimulated" },
+  howToRead: { EN: "How to read this:", IS: "Hvernig á að lesa þetta:" },
+  riskExplain: {
+    EN: "(top-right): players who both run a lot and pay a high internal cost. Highest injury risk — consider reducing load in the next session.",
+    IS: "(efst-hægri): leikmenn sem bæði keyra mikið og borga mikið innra. Mest meiðslaáhætta — íhuga reduced load í næstu session.",
+  },
+  decoupledExplain: {
+    EN: "(top-left): players running little but paying a lot internally. Classic early-warning fatigue or illness signal — Halson 2014.",
+    IS: "(efst-vinstri): leikmenn sem keyra lítið en borga mikið. Klassískt early-warning fatigue eða illness merki — Halson 2014.",
+  },
+  peakExplain: {
+    EN: "(bottom-right): lots of work, low cost. Well trained — at peak form.",
+    IS: "(neðst-hægri): mikið work, lítill cost. Vel þjálfaðir — komnir á topp form.",
+  },
+  underExplain: {
+    EN: "(bottom-left): minimal load. No injury risk — but maybe not getting enough stimulus either.",
+    IS: "(neðst-vinstri): minimal load. Ekki meiðslaáhætta — en kannski ekki að fá nóg álag heldur.",
+  },
+  dotSizeHint: {
+    EN: "Dot size reflects ACWR — larger dot = ratio above 1.3 (acute work outpaces chronic).",
+    IS: "Punktastærð endurspeglar ACWR — stærri punktur = ratio hærri en 1.3 (acute work outpaces chronic).",
+  },
+  backToDashboard: { EN: "← Back to dashboard", IS: "← Til baka á dashboard" },
+  addGpsRpe: { EN: "Add GPS / RPE data →", IS: "Bæta við GPS / RPE gögnum →" },
+  xLabel: {
+    EN: "External load — avg distance (m / day, last",
+    IS: "External load — avg distance (m / day, last",
+  },
+  yLabel: {
+    EN: "Internal cost — avg sRPE (AU / day, last",
+    IS: "Internal cost — avg sRPE (AU / day, last",
+  },
+} as const;
+function qt(key: keyof typeof QUAD_I18N, lang: Lang): string {
+  return lang === "IS" ? QUAD_I18N[key].IS : QUAD_I18N[key].EN;
+}
 
 type RawPlayer = {
   id: string;
@@ -41,6 +98,7 @@ type Aggregate = {
 };
 
 export default function CoachQuadrantPage() {
+  const [lang] = useLang();
   const [loading, setLoading]   = React.useState(true);
   const [error, setError]       = React.useState<string | null>(null);
   const [windowDays, setWindow] = React.useState<Window>(7);
@@ -59,7 +117,7 @@ export default function CoachQuadrantPage() {
     try {
       const sb = getSupabaseClient();
       const { data: { user } } = await sb.auth.getUser();
-      if (!user) { setError("Ekki innskráður"); return; }
+      if (!user) { setError(qt("notSignedIn", lang)); return; }
 
       // Resolve coach's team
       const { data: profile } = await sb
@@ -68,7 +126,7 @@ export default function CoachQuadrantPage() {
         .eq("id", user.id)
         .maybeSingle();
       const teamId = profile?.team_id as string | undefined;
-      if (!teamId) { setError("Ekki tengdur við lið"); return; }
+      if (!teamId) { setError(qt("noTeam", lang)); return; }
 
       const { data: team } = await sb
         .from("teams")
@@ -193,12 +251,12 @@ export default function CoachQuadrantPage() {
       }
 
       setPoints(out);
-      setComputedAt(new Date().toLocaleTimeString("is-IS", {
+      setComputedAt(new Date().toLocaleTimeString(lang === "IS" ? "is-IS" : "en-GB", {
         hour: "2-digit", minute: "2-digit",
       }));
     } catch (e: any) {
       console.error(e);
-      setError(e?.message ?? "Villa við að sækja gögn");
+      setError(e?.message ?? qt("errorFetch", lang));
     } finally {
       setLoading(false);
     }
@@ -229,15 +287,15 @@ export default function CoachQuadrantPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-slate-900">Quadrant view</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">{qt("pageTitle", lang)}</h1>
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
               Gabbett 2017
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            External load (avg distance) × internal cost (avg sRPE). Quadrant lines at team median.
+            {qt("subtitleA", lang)}
             {teamLabel && <> · {teamLabel}</>}
-            {computedAt && <> · uppfært {computedAt}</>}
+            {computedAt && <> · {qt("updated", lang)} {computedAt}</>}
           </p>
         </div>
         <div className="flex gap-1">
@@ -259,17 +317,17 @@ export default function CoachQuadrantPage() {
 
       {/* Quadrant counts */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <CountCard label="Injury risk"      n={counts.risk}      tone="red" />
-        <CountCard label="Decoupled"        n={counts.decoupled} tone="yellow" />
-        <CountCard label="Peak fitness"     n={counts.peak}      tone="green" />
-        <CountCard label="Under-stimulated" n={counts.low}       tone="gray" />
+        <CountCard label={qt("injuryRisk", lang)}      n={counts.risk}      tone="red" />
+        <CountCard label={qt("decoupled", lang)}       n={counts.decoupled} tone="yellow" />
+        <CountCard label={qt("peakFitness", lang)}     n={counts.peak}      tone="green" />
+        <CountCard label={qt("underStimulated", lang)} n={counts.low}       tone="gray" />
       </div>
 
       {/* Chart */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         {loading && (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            Hleð gögn…
+            {qt("loadingData", lang)}
           </div>
         )}
         {!loading && error && (
@@ -279,51 +337,47 @@ export default function CoachQuadrantPage() {
         )}
         {!loading && !error && points.length === 0 && (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            Engin gögn fyrir þessa glugga. Hladdu upp GPS / RPE fyrst.
+            {qt("noDataInWindow", lang)}
           </div>
         )}
         {!loading && !error && points.length > 0 && (
           <QuadrantChart
             points={points}
-            xLabel={`External load — avg distance (m / day, last ${windowDays}d)`}
-            yLabel={`Internal cost — avg sRPE (AU / day, last ${windowDays}d)`}
+            xLabel={`${qt("xLabel", lang)} ${windowDays}d) →`}
+            yLabel={`${qt("yLabel", lang)} ${windowDays}d)`}
           />
         )}
       </div>
 
       {/* Helper text below chart */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-        <p className="mb-2 font-semibold text-slate-900">Hvernig á að lesa þetta:</p>
+        <p className="mb-2 font-semibold text-slate-900">{qt("howToRead", lang)}</p>
         <ul className="list-inside list-disc space-y-1.5">
           <li>
-            <strong>Injury risk</strong> (efst-hægri): leikmenn sem bæði keyra mikið og borga mikið innra.
-            Mest meiðslaáhætta — íhuga reduced load í næstu session.
+            <strong>{qt("injuryRisk", lang)}</strong> {qt("riskExplain", lang)}
           </li>
           <li>
-            <strong>Decoupled</strong> (efst-vinstri): leikmenn sem keyra lítið en borga mikið.
-            Klassískt early-warning fatigue eða illness merki — Halson 2014.
+            <strong>{qt("decoupled", lang)}</strong> {qt("decoupledExplain", lang)}
           </li>
           <li>
-            <strong>Peak fitness</strong> (neðst-hægri): mikið work, lítill cost.
-            Vel þjálfaðir — komnir á topp form.
+            <strong>{qt("peakFitness", lang)}</strong> {qt("peakExplain", lang)}
           </li>
           <li>
-            <strong>Under-stimulated</strong> (neðst-vinstri): minimal load.
-            Ekki meiðslaáhætta — en kannski ekki að fá nóg álag heldur.
+            <strong>{qt("underStimulated", lang)}</strong> {qt("underExplain", lang)}
           </li>
         </ul>
         <p className="mt-3 text-xs text-muted-foreground">
-          Punktastærð endurspeglar ACWR — stærri punktur = ratio hærri en 1.3 (acute work outpaces chronic).
+          {qt("dotSizeHint", lang)}
         </p>
       </div>
 
       {/* Quick navigation back */}
       <div className="flex justify-between text-sm">
         <Link href="/coach" className="text-emerald-700 hover:underline">
-          ← Til baka á dashboard
+          {qt("backToDashboard", lang)}
         </Link>
         <Link href="/coach/integrations" className="text-slate-500 hover:underline">
-          Bæta við GPS / RPE gögnum →
+          {qt("addGpsRpe", lang)}
         </Link>
       </div>
     </div>

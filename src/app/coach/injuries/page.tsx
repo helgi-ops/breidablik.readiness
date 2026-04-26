@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang, type Lang } from "@/lib/lang";
 
 type InjuryType =
   | "hamstring" | "calf" | "groin" | "quad" | "hip"
@@ -67,45 +68,134 @@ type Summary = {
   latest_injury: string | null;
 };
 
-const INJURY_TYPE_LABEL: Record<InjuryType, string> = {
-  hamstring: "Aftan-læri",
-  calf: "Kálfi",
-  groin: "Nár",
-  quad: "Fram-læri",
-  hip: "Mjöðm",
-  knee_acl: "Hné — ACL",
-  knee_mcl: "Hné — MCL",
-  knee_meniscus: "Hné — meniscus",
-  knee_other: "Hné — annað",
-  ankle_sprain: "Ökkla-tognun",
-  ankle_other: "Ökkla — annað",
-  foot: "Fótur",
-  achilles: "Achilles",
-  lower_back: "Mjóbak",
-  upper_body: "Efri hluti",
-  concussion: "Heilahristingur",
-  illness: "Veikindi",
-  other: "Annað",
+const INJURY_TYPE_LABEL_BILINGUAL: Record<InjuryType, { EN: string; IS: string }> = {
+  hamstring:     { EN: "Hamstring",      IS: "Aftan-læri" },
+  calf:          { EN: "Calf",           IS: "Kálfi" },
+  groin:         { EN: "Groin",          IS: "Nár" },
+  quad:          { EN: "Quad",           IS: "Fram-læri" },
+  hip:           { EN: "Hip",            IS: "Mjöðm" },
+  knee_acl:      { EN: "Knee — ACL",     IS: "Hné — ACL" },
+  knee_mcl:      { EN: "Knee — MCL",     IS: "Hné — MCL" },
+  knee_meniscus: { EN: "Knee — meniscus",IS: "Hné — meniscus" },
+  knee_other:    { EN: "Knee — other",   IS: "Hné — annað" },
+  ankle_sprain:  { EN: "Ankle sprain",   IS: "Ökkla-tognun" },
+  ankle_other:  { EN: "Ankle — other",   IS: "Ökkla — annað" },
+  foot:          { EN: "Foot",           IS: "Fótur" },
+  achilles:      { EN: "Achilles",       IS: "Achilles" },
+  lower_back:    { EN: "Lower back",     IS: "Mjóbak" },
+  upper_body:    { EN: "Upper body",     IS: "Efri hluti" },
+  concussion:    { EN: "Concussion",     IS: "Heilahristingur" },
+  illness:       { EN: "Illness",        IS: "Veikindi" },
+  other:         { EN: "Other",          IS: "Annað" },
 };
+const injuryTypeLabel = (k: InjuryType, lang: Lang): string =>
+  lang === "IS" ? INJURY_TYPE_LABEL_BILINGUAL[k].IS : INJURY_TYPE_LABEL_BILINGUAL[k].EN;
 
-const SEVERITY_LABEL: Record<Severity, string> = {
-  minimal: "Minimal (1-3 d)",
-  mild: "Mild (4-7 d)",
-  moderate: "Moderate (8-28 d)",
-  severe: "Severe (>28 d)",
+const SEVERITY_LABEL_BILINGUAL: Record<Severity, { EN: string; IS: string }> = {
+  minimal:  { EN: "Minimal (1-3 d)",     IS: "Minimal (1-3 d)" },
+  mild:     { EN: "Mild (4-7 d)",        IS: "Mild (4-7 d)" },
+  moderate: { EN: "Moderate (8-28 d)",   IS: "Moderate (8-28 d)" },
+  severe:   { EN: "Severe (>28 d)",      IS: "Severe (>28 d)" },
 };
+const severityLabel = (k: Severity, lang: Lang): string =>
+  lang === "IS" ? SEVERITY_LABEL_BILINGUAL[k].IS : SEVERITY_LABEL_BILINGUAL[k].EN;
 
-const MECHANISM_LABEL: Record<Mechanism, string> = {
-  non_contact_match: "Án snertingar — leikur",
-  non_contact_training: "Án snertingar — æfing",
-  contact_match: "Snerting — leikur",
-  contact_training: "Snerting — æfing",
-  overuse: "Yfirálag",
-  recurrence: "Endurmeiðsl",
-  unknown: "Óþekkt",
+const MECHANISM_LABEL_BILINGUAL: Record<Mechanism, { EN: string; IS: string }> = {
+  non_contact_match:    { EN: "Non-contact — match",    IS: "Án snertingar — leikur" },
+  non_contact_training: { EN: "Non-contact — training", IS: "Án snertingar — æfing" },
+  contact_match:        { EN: "Contact — match",        IS: "Snerting — leikur" },
+  contact_training:     { EN: "Contact — training",     IS: "Snerting — æfing" },
+  overuse:              { EN: "Overuse",                IS: "Yfirálag" },
+  recurrence:           { EN: "Re-injury",              IS: "Endurmeiðsl" },
+  unknown:              { EN: "Unknown",                IS: "Óþekkt" },
 };
+const mechanismLabel = (k: Mechanism, lang: Lang): string =>
+  lang === "IS" ? MECHANISM_LABEL_BILINGUAL[k].IS : MECHANISM_LABEL_BILINGUAL[k].EN;
+
+// ── Page-level UI strings ───────────────────────────────────────────────
+const INJ_I18N = {
+  pageTitle: { EN: "Injury log", IS: "Meiðslaskráning" },
+  proofOfRoi: { EN: "proof-of-ROI", IS: "proof-of-ROI" },
+  pageSubtitle: {
+    EN: "Log injuries and see which signals MicroPulse caught beforehand.",
+    IS: "Skráðu meiðsli og sjáðu hvaða signals MicroPulse fangaði fyrirfram.",
+  },
+  closeForm: { EN: "Close form", IS: "Loka skráningarformi" },
+  logInjury: { EN: "+ Log injury", IS: "+ Skrá meiðsli" },
+  notSignedIn: { EN: "Not signed in", IS: "Ekki innskráður" },
+  noTeam: { EN: "Not connected to a team", IS: "Ekki tengdur við lið" },
+  errorGeneric: { EN: "Error", IS: "Villa" },
+  loggedInjuries: { EN: "Logged injuries (latest 200)", IS: "Skráð meiðsli (síðustu 200)" },
+  loadingShort: { EN: "Loading…", IS: "Hleð…" },
+  noInjuriesYet: {
+    EN: "No injuries logged yet. Log the first one to see retrospective signal correlation.",
+    IS: "Engin meiðsli skráð enn. Skráðu fyrsta meiðslið til að sjá retrospective signal correlation.",
+  },
+  backToDashboard: { EN: "← Back to dashboard", IS: "← Til baka á dashboard" },
+  // Summary panel
+  summaryHeader: { EN: "MicroPulse Pattern Match — last 365 days", IS: "MicroPulse Pattern Match — last 365 days" },
+  ofInjuries: { EN: "of {n} injuries", IS: "af {n} meiðslum" },
+  precededByWarning: {
+    EN: "preceded by warning signs (yellow/red flag, decoupling alert, or ACWR spike)",
+    IS: "á undan kom warning sign (yellow/red flag, decoupling alert, eða ACWR spike)",
+  },
+  strongPattern: { EN: "Strong pattern match (≥0.5)", IS: "Strong pattern match (≥0.5)" },
+  avgPatternScore: { EN: "Avg pattern score", IS: "Avg pattern score" },
+  hamstring: { EN: "Hamstring", IS: "Aftan-læri" },
+  knee: { EN: "Knee", IS: "Hné" },
+  ankle: { EN: "Ankle", IS: "Ökkli" },
+  groin: { EN: "Groin", IS: "Nár" },
+  // Injury row
+  precededTag: { EN: "✓ Preceded by warning", IS: "✓ Preceded by warning" },
+  noPriorSignal: { EN: "No prior signal", IS: "Engin signal á undan" },
+  matchSuffix: { EN: "match", IS: "match" },
+  yellowDays: { EN: "Yellow days", IS: "Yellow days" },
+  redDays: { EN: "Red days", IS: "Red days" },
+  decouplingAlerts: { EN: "Decoupling alerts", IS: "Decoupling alerts" },
+  ofFourteen: { EN: "(of 14)", IS: "(af 14)" },
+  oneSdHint: { EN: "(>1 SD)", IS: "(>1 SD)" },
+  sevenOver28d: { EN: "(7d / 28d)", IS: "(7d / 28d)" },
+  firstWarningPrefix: { EN: "First warning sign:", IS: "First warning sign:" },
+  daysBeforeInjury: {
+    EN: "days before injury. MicroPulse had detected the pattern with that lead time.",
+    IS: "dögum fyrir meiðsli. MicroPulse fangaði munstrið með þeim fyrirvara.",
+  },
+  dominantSignals: { EN: "Dominant signals seen:", IS: "Dominant signals sem komu fram:" },
+  notesLabel: { EN: "Notes:", IS: "Athugasemdir:" },
+  retroComputed: { EN: "Retro signals computed:", IS: "Retro signals reiknað:" },
+  windowLabel: { EN: "Window:", IS: "Glugga:" },
+  daysShort: { EN: "days", IS: "dagar" },
+  // Form
+  formTitle: { EN: "Log injury", IS: "Skrá meiðsli" },
+  player: { EN: "Player", IS: "Leikmaður" },
+  selectDash: { EN: "— select —", IS: "— veldu —" },
+  injuryDate: { EN: "Injury date", IS: "Dagur meiðsla" },
+  injuryTypeField: { EN: "Injury type", IS: "Týpa meiðsla" },
+  bodySide: { EN: "Body side", IS: "Hlið líkama" },
+  sideNa: { EN: "N/A", IS: "Á ekki við" },
+  sideLeft: { EN: "Left", IS: "Vinstri" },
+  sideRight: { EN: "Right", IS: "Hægri" },
+  sideBilateral: { EN: "Bilateral", IS: "Báðar" },
+  mechanism: { EN: "Mechanism", IS: "Mekanismi" },
+  severity: { EN: "Severity", IS: "Alvarleiki" },
+  notSet: { EN: "— not set —", IS: "— ekki ákvarðað —" },
+  daysLost: { EN: "Days lost (if known)", IS: "Fjöldi daga týnt (ef þekkt)" },
+  notes: { EN: "Notes", IS: "Athugasemdir" },
+  saving: { EN: "Saving…", IS: "Vista…" },
+  saveButton: { EN: "Save injury + compute correlation", IS: "Vista meiðsli + reikna correlation" },
+  formFooter: {
+    EN: "When saved, the system automatically runs a retrospective analysis of the last 14 days of MicroPulse signals (wellness flags, decoupling alerts, ACWR spikes) and stores the results in retro_signals JSONB shown in the list.",
+    IS: "Þegar meiðsli er vistað keyrir kerfið automatískt afturskyggna analýsu af síðustu 14 daga MicroPulse signals (wellness flags, decoupling alerts, ACWR spikes) og pakka niðurstöðum í retro_signals JSONB sem sýnt er í lista.",
+  },
+  selectPlayerErr: { EN: "Select a player", IS: "Veldu leikmann" },
+  saveErr: { EN: "Failed to save injury", IS: "Villa við vistun" },
+} as const;
+function it(key: keyof typeof INJ_I18N, lang: Lang): string {
+  return lang === "IS" ? INJ_I18N[key].IS : INJ_I18N[key].EN;
+}
 
 export default function CoachInjuriesPage() {
+  const [lang] = useLang();
   const [loading, setLoading]   = React.useState(true);
   const [error, setError]       = React.useState<string | null>(null);
   const [teamId, setTeamId]     = React.useState<string | null>(null);
@@ -122,10 +212,10 @@ export default function CoachInjuriesPage() {
     try {
       const sb = getSupabaseClient();
       const { data: { user } } = await sb.auth.getUser();
-      if (!user) { setError("Ekki innskráður"); return; }
+      if (!user) { setError(it("notSignedIn", lang)); return; }
       const { data: profile } = await sb.from("profiles").select("team_id").eq("id", user.id).maybeSingle();
       const tid = profile?.team_id as string | undefined;
-      if (!tid) { setError("Ekki tengdur við lið"); return; }
+      if (!tid) { setError(it("noTeam", lang)); return; }
       setTeamId(tid);
 
       const { data: team } = await sb.from("teams").select("name, club_short_name").eq("id", tid).maybeSingle();
@@ -147,7 +237,7 @@ export default function CoachInjuriesPage() {
         .select("*").eq("team_id", tid).maybeSingle();
       setSummary(sumData as Summary | null);
     } catch (e: any) {
-      setError(e?.message ?? "Villa");
+      setError(e?.message ?? it("errorGeneric", lang));
     } finally {
       setLoading(false);
     }
@@ -161,13 +251,13 @@ export default function CoachInjuriesPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-slate-900">Meiðslaskráning</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">{it("pageTitle", lang)}</h1>
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
-              proof-of-ROI
+              {it("proofOfRoi", lang)}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Skráðu meiðsli og sjáðu hvaða signals MicroPulse fangaði fyrirfram.
+            {it("pageSubtitle", lang)}
             {teamLabel && <> · {teamLabel}</>}
           </p>
         </div>
@@ -175,13 +265,13 @@ export default function CoachInjuriesPage() {
           onClick={() => setShowForm(!showForm)}
           className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
         >
-          {showForm ? "Loka skráningarformi" : "+ Skrá meiðsli"}
+          {showForm ? it("closeForm", lang) : it("logInjury", lang)}
         </button>
       </div>
 
       {/* Summary */}
       {summary && summary.total_injuries > 0 && (
-        <SummaryPanel summary={summary} />
+        <SummaryPanel summary={summary} lang={lang} />
       )}
 
       {/* Form */}
@@ -189,6 +279,7 @@ export default function CoachInjuriesPage() {
         <InjuryForm
           teamId={teamId}
           players={players}
+          lang={lang}
           onSaved={() => { setShowForm(false); void load(); }}
         />
       )}
@@ -196,30 +287,30 @@ export default function CoachInjuriesPage() {
       {/* List */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">
-          Skráð meiðsli (síðustu 200)
+          {it("loggedInjuries", lang)}
         </h2>
         {loading && (
-          <div className="py-8 text-center text-sm text-muted-foreground">Hleð…</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">{it("loadingShort", lang)}</div>
         )}
         {error && (
           <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
         )}
         {!loading && !error && injuries.length === 0 && (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Engin meiðsli skráð enn. Skráðu fyrsta meiðslið til að sjá retrospective signal correlation.
+            {it("noInjuriesYet", lang)}
           </div>
         )}
         {!loading && injuries.length > 0 && (
           <div className="space-y-2">
             {injuries.map((inj) => (
-              <InjuryRow key={inj.id} injury={inj} playerName={playerName(inj.player_id)} />
+              <InjuryRow key={inj.id} injury={inj} playerName={playerName(inj.player_id)} lang={lang} />
             ))}
           </div>
         )}
       </div>
 
       <div className="text-sm">
-        <Link href="/coach" className="text-emerald-700 hover:underline">← Til baka á dashboard</Link>
+        <Link href="/coach" className="text-emerald-700 hover:underline">{it("backToDashboard", lang)}</Link>
       </div>
     </div>
   );
@@ -227,7 +318,7 @@ export default function CoachInjuriesPage() {
 
 // ─── Summary panel ───────────────────────────────────────────────────────
 
-function SummaryPanel({ summary }: { summary: Summary }) {
+function SummaryPanel({ summary, lang }: { summary: Summary; lang: Lang }) {
   const total = summary.total_injuries;
   const predicted = summary.predicted_injuries;
   const pct = total > 0 ? Math.round((predicted / total) * 100) : 0;
@@ -237,24 +328,24 @@ function SummaryPanel({ summary }: { summary: Summary }) {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-            MicroPulse Pattern Match — last 365 days
+            {it("summaryHeader", lang)}
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <div className="text-4xl font-bold text-emerald-700">{predicted}</div>
-            <div className="text-xl text-emerald-700">of {total} injuries</div>
+            <div className="text-xl text-emerald-700">{it("ofInjuries", lang).replace("{n}", String(total))}</div>
             <div className="text-2xl font-bold text-emerald-700">({pct}%)</div>
           </div>
           <div className="mt-1 text-xs text-emerald-600">
-            preceded by warning signs (yellow/red flag, decoupling alert, or ACWR spike)
+            {it("precededByWarning", lang)}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          <Stat label="Strong pattern match (≥0.5)" value={summary.strong_pattern_match} />
-          <Stat label="Avg pattern score" value={summary.avg_pattern_match_score?.toFixed(2) ?? "—"} />
-          <Stat label="Hamstring" value={summary.hamstring_count} />
-          <Stat label="Knee" value={summary.knee_count} />
-          <Stat label="Ankle" value={summary.ankle_count} />
-          <Stat label="Groin" value={summary.groin_count} />
+          <Stat label={it("strongPattern", lang)} value={summary.strong_pattern_match} />
+          <Stat label={it("avgPatternScore", lang)} value={summary.avg_pattern_match_score?.toFixed(2) ?? "—"} />
+          <Stat label={it("hamstring", lang)} value={summary.hamstring_count} />
+          <Stat label={it("knee", lang)} value={summary.knee_count} />
+          <Stat label={it("ankle", lang)} value={summary.ankle_count} />
+          <Stat label={it("groin", lang)} value={summary.groin_count} />
         </div>
       </div>
     </div>
@@ -272,7 +363,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 // ─── Injury row ───────────────────────────────────────────────────────────
 
-function InjuryRow({ injury, playerName }: { injury: InjuryEvent; playerName: string }) {
+function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerName: string; lang: Lang }) {
   const [expanded, setExpanded] = React.useState(false);
   const retro = injury.retro_signals;
   const score = retro?.pattern_match_score as number | undefined;
@@ -302,10 +393,10 @@ function InjuryRow({ injury, playerName }: { injury: InjuryEvent; playerName: st
           <div>
             <div className="text-sm font-semibold text-slate-900">{playerName}</div>
             <div className="text-xs text-muted-foreground">
-              {INJURY_TYPE_LABEL[injury.injury_type]}
+              {injuryTypeLabel(injury.injury_type, lang)}
               {injury.body_side !== "na" && <> · {injury.body_side}</>}
-              {" · "}{MECHANISM_LABEL[injury.mechanism]}
-              {injury.severity && <> · {SEVERITY_LABEL[injury.severity]}</>}
+              {" · "}{mechanismLabel(injury.mechanism, lang)}
+              {injury.severity && <> · {severityLabel(injury.severity, lang)}</>}
             </div>
           </div>
         </div>
@@ -313,17 +404,17 @@ function InjuryRow({ injury, playerName }: { injury: InjuryEvent; playerName: st
         <div className="flex items-center gap-2">
           {preceded && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
-              ✓ Preceded by warning
+              {it("precededTag", lang)}
             </span>
           )}
           {!preceded && retro && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
-              No prior signal
+              {it("noPriorSignal", lang)}
             </span>
           )}
           {score != null && (
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${scoreColor}`}>
-              {(score * 100).toFixed(0)}% match
+              {(score * 100).toFixed(0)}% {it("matchSuffix", lang)}
             </span>
           )}
           <span className="text-slate-400">{expanded ? "▾" : "▸"}</span>
@@ -333,22 +424,21 @@ function InjuryRow({ injury, playerName }: { injury: InjuryEvent; playerName: st
       {expanded && retro && (
         <div className="border-t border-slate-100 bg-slate-50 p-4">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            <Mini label="Yellow days" value={yellowDays ?? "—"} hint="(of 14)" />
-            <Mini label="Red days" value={redDays ?? "—"} hint="(of 14)" />
-            <Mini label="Decoupling alerts" value={decAlerts ?? "—"} hint="(>1 SD)" />
-            <Mini label="ACWR" value={acwr?.toFixed(2) ?? "—"} hint="(7d / 28d)" />
+            <Mini label={it("yellowDays", lang)} value={yellowDays ?? "—"} hint={it("ofFourteen", lang)} />
+            <Mini label={it("redDays", lang)} value={redDays ?? "—"} hint={it("ofFourteen", lang)} />
+            <Mini label={it("decouplingAlerts", lang)} value={decAlerts ?? "—"} hint={it("oneSdHint", lang)} />
+            <Mini label="ACWR" value={acwr?.toFixed(2) ?? "—"} hint={it("sevenOver28d", lang)} />
           </div>
 
           {firstWarning != null && firstWarning < 14 && (
             <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
-              <strong>First warning sign:</strong> {firstWarning} days before injury.
-              MicroPulse had detected the pattern with that lead time.
+              <strong>{it("firstWarningPrefix", lang)}</strong> {firstWarning} {it("daysBeforeInjury", lang)}
             </div>
           )}
 
           {retro?.wellness?.dominant_signals_seen && retro.wellness.dominant_signals_seen.length > 0 && (
             <div className="mt-3 text-xs">
-              <strong className="text-slate-700">Dominant signals seen:</strong>{" "}
+              <strong className="text-slate-700">{it("dominantSignals", lang)}</strong>{" "}
               <span className="text-slate-600">
                 {retro.wellness.dominant_signals_seen.map((s: string) => s.replace("wellness.", "")).join(", ")}
               </span>
@@ -357,15 +447,18 @@ function InjuryRow({ injury, playerName }: { injury: InjuryEvent; playerName: st
 
           {injury.notes && (
             <div className="mt-3 text-xs">
-              <strong className="text-slate-700">Notes:</strong>{" "}
+              <strong className="text-slate-700">{it("notesLabel", lang)}</strong>{" "}
               <span className="italic text-slate-600">{injury.notes}</span>
             </div>
           )}
 
           <div className="mt-3 text-[10px] text-slate-400">
-            Retro signals computed: {retro.computed_at ? new Date(retro.computed_at).toLocaleString("is-IS") : "—"}
+            {it("retroComputed", lang)}{" "}
+            {retro.computed_at
+              ? new Date(retro.computed_at).toLocaleString(lang === "IS" ? "is-IS" : "en-GB")
+              : "—"}
             {" · "}
-            Window: {retro.scan_window_days} days
+            {it("windowLabel", lang)} {retro.scan_window_days} {it("daysShort", lang)}
           </div>
         </div>
       )}
@@ -386,10 +479,11 @@ function Mini({ label, value, hint }: { label: string; value: any; hint?: string
 // ─── New injury form ─────────────────────────────────────────────────────
 
 function InjuryForm({
-  teamId, players, onSaved,
+  teamId, players, lang, onSaved,
 }: {
   teamId: string;
   players: Player[];
+  lang: Lang;
   onSaved: () => void;
 }) {
   const [playerId, setPlayerId] = React.useState("");
@@ -405,7 +499,7 @@ function InjuryForm({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!playerId) { setErr("Veldu leikmann"); return; }
+    if (!playerId) { setErr(it("selectPlayerErr", lang)); return; }
     setSaving(true); setErr(null);
     try {
       const sb = getSupabaseClient();
@@ -424,7 +518,7 @@ function InjuryForm({
       if (error) throw error;
       onSaved();
     } catch (e: any) {
-      setErr(e?.message ?? "Villa við vistun");
+      setErr(e?.message ?? it("saveErr", lang));
     } finally {
       setSaving(false);
     }
@@ -432,48 +526,54 @@ function InjuryForm({
 
   return (
     <form onSubmit={save} className="rounded-xl border-2 border-emerald-300 bg-white p-4 space-y-3">
-      <h2 className="text-base font-semibold text-slate-900">Skrá meiðsli</h2>
+      <h2 className="text-base font-semibold text-slate-900">{it("formTitle", lang)}</h2>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Leikmaður">
+        <Field label={it("player", lang)}>
           <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">— veldu —</option>
+            <option value="">{it("selectDash", lang)}</option>
             {players.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
           </select>
         </Field>
-        <Field label="Dagur meiðsla">
+        <Field label={it("injuryDate", lang)}>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="Týpa meiðsla">
+        <Field label={it("injuryTypeField", lang)}>
           <select value={type} onChange={(e) => setType(e.target.value as InjuryType)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            {Object.entries(INJURY_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {(Object.keys(INJURY_TYPE_LABEL_BILINGUAL) as InjuryType[]).map((k) => (
+              <option key={k} value={k}>{injuryTypeLabel(k, lang)}</option>
+            ))}
           </select>
         </Field>
-        <Field label="Hlið líkama">
+        <Field label={it("bodySide", lang)}>
           <select value={side} onChange={(e) => setSide(e.target.value as BodySide)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="na">Á ekki við</option>
-            <option value="left">Vinstri</option>
-            <option value="right">Hægri</option>
-            <option value="bilateral">Báðar</option>
+            <option value="na">{it("sideNa", lang)}</option>
+            <option value="left">{it("sideLeft", lang)}</option>
+            <option value="right">{it("sideRight", lang)}</option>
+            <option value="bilateral">{it("sideBilateral", lang)}</option>
           </select>
         </Field>
-        <Field label="Mekanismi">
+        <Field label={it("mechanism", lang)}>
           <select value={mechanism} onChange={(e) => setMechanism(e.target.value as Mechanism)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            {Object.entries(MECHANISM_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {(Object.keys(MECHANISM_LABEL_BILINGUAL) as Mechanism[]).map((k) => (
+              <option key={k} value={k}>{mechanismLabel(k, lang)}</option>
+            ))}
           </select>
         </Field>
-        <Field label="Alvarleiki">
+        <Field label={it("severity", lang)}>
           <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity | "")} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">— ekki ákvarðað —</option>
-            {Object.entries(SEVERITY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <option value="">{it("notSet", lang)}</option>
+            {(Object.keys(SEVERITY_LABEL_BILINGUAL) as Severity[]).map((k) => (
+              <option key={k} value={k}>{severityLabel(k, lang)}</option>
+            ))}
           </select>
         </Field>
-        <Field label="Fjöldi daga týnt (ef þekkt)">
+        <Field label={it("daysLost", lang)}>
           <input type="number" min={0} value={daysLost} onChange={(e) => setDaysLost(e.target.value)} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
         </Field>
       </div>
 
-      <Field label="Athugasemdir">
+      <Field label={it("notes", lang)}>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full rounded border-slate-300 px-2 py-1.5 text-sm" />
       </Field>
 
@@ -481,14 +581,12 @@ function InjuryForm({
 
       <div className="flex gap-2">
         <button type="submit" disabled={saving || !playerId} className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:bg-slate-300">
-          {saving ? "Vista…" : "Vista meiðsli + reikna correlation"}
+          {saving ? it("saving", lang) : it("saveButton", lang)}
         </button>
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Þegar meiðsli er vistað keyrir kerfið automatískt afturskyggna analýsu af síðustu 14 daga
-        MicroPulse signals (wellness flags, decoupling alerts, ACWR spikes) og pakka niðurstöðum í
-        retro_signals JSONB sem sýnt er í lista.
+        {it("formFooter", lang)}
       </p>
     </form>
   );

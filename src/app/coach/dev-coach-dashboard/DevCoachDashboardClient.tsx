@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw, Download, FileText } from "lucide-react";
 import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
@@ -1870,8 +1871,6 @@ export default function CoachPage() {
   const [complianceMissing, setComplianceMissing] = useState<Array<{
     player_id: string; full_name: string; missing_checkin: boolean; missing_rpe: boolean;
   }>>([]);
-  const [imputing, setImputing] = useState(false);
-  const [imputeMessage, setImputeMessage] = useState("");
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
 
   // MLI + Metabolic Load per player (for Decision Summary enrichment)
@@ -2449,30 +2448,6 @@ export default function CoachPage() {
       }
     } catch {
       // non-critical — ignore
-    }
-  }
-
-  async function runImputation() {
-    try {
-      setImputing(true);
-      setImputeMessage("");
-      const headers = await getCoachAuthHeaders();
-      const res = await fetch("/api/coach/impute", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ date: today }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Imputation failed.");
-      const ri = Number(json.readiness_imputed ?? 0);
-      const rpe = Number(json.rpe_imputed ?? 0);
-      setImputeMessage(`Fyllt inn: ${ri} check-in${ri !== 1 ? "s" : ""} · ${rpe} RPE`);
-      await fetchCompliance();
-      await loadToday();
-    } catch (e: unknown) {
-      setImputeMessage((e instanceof Error ? e.message : null) ?? "Villa við imputation.");
-    } finally {
-      setImputing(false);
     }
   }
 
@@ -6714,57 +6689,62 @@ export default function CoachPage() {
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 flex-1">
                   <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">{ct.header.commandCenter}</CardTitle>
                   <CardDescription className="mt-1 text-sm text-slate-500">{ct.header.decisionSummary}</CardDescription>
-                  {catapultSyncMessage ? <div className="mt-2 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
-                  {imputeMessage ? <div className="mt-1 text-xs text-indigo-700">{imputeMessage}</div> : null}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    <span className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</span>
+                    <span className="text-slate-400">·</span>
+                    <span>Coach {coachDisplayName ?? "—"}</span>
+                    <span className="text-slate-400">·</span>
+                    <span>MD {mdDayToday}</span>
+                  </div>
+                  {catapultSyncMessage ? <div className="mt-1.5 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
                 </div>
-                <div className="flex flex-col items-start gap-2 md:items-end">
-                  <div className="text-right text-xs text-slate-500">
-                    <div className="font-medium text-slate-700">Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} min before session start</div>
-                    <div>Coach {coachDisplayName ?? "—"} · MD {mdDayToday}</div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-end">
-                    {gpsProvider === "statsport" ? (
-                      <Button variant="outline" size="sm" onClick={() => syncStatSportForDate(today)} disabled={catapultSyncing || loading}>
-                        {catapultSyncing ? ct.actions.syncingStatSport : ct.actions.syncStatSport}
-                      </Button>
-                    ) : gpsProvider !== "none" ? (
-                      <Button variant="outline" size="sm" onClick={() => syncCatapultForDate(today)} disabled={catapultSyncing || loading}>
-                        {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
-                      </Button>
-                    ) : null}
+                <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+                  {gpsProvider === "statsport" ? (
                     <Button
-                      variant="outline"
                       size="sm"
-                      onClick={runImputation}
-                      disabled={imputing || loading}
-                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                      title="Fyll inn check-in og RPE fyrir leikmenn sem hafa ekki skilað inn"
+                      onClick={() => syncStatSportForDate(today)}
+                      disabled={catapultSyncing || loading}
+                      className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
                     >
-                      {imputing ? "Fyllir inn…" : "↻ Fylla inn missing"}
+                      <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                      {catapultSyncing ? ct.actions.syncingStatSport : ct.actions.syncStatSport}
                     </Button>
+                  ) : gpsProvider !== "none" ? (
                     <Button
-                      variant="outline"
                       size="sm"
-                      onClick={downloadReadinessRiskReport}
-                      disabled={pdfDownloading || loading}
-                      className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                      onClick={() => syncCatapultForDate(today)}
+                      disabled={catapultSyncing || loading}
+                      className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
                     >
-                      {pdfDownloading ? "Generating…" : "⬇ Readiness Risk Report"}
+                      <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                      {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={downloadPostTrainingReport}
-                      disabled={pdfPostDownloading || loading}
-                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    >
-                      {pdfPostDownloading ? "Generating…" : "⬇ Post-Training Report"}
-                    </Button>
-                  </div>
+                  ) : null}
+                  <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadReadinessRiskReport}
+                    disabled={pdfDownloading || loading}
+                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    {pdfDownloading ? "Generating…" : "Readiness Risk"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadPostTrainingReport}
+                    disabled={pdfPostDownloading || loading}
+                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {pdfPostDownloading ? "Generating…" : "Post-Training"}
+                  </Button>
                 </div>
               </div>
             </CardHeader>

@@ -4,17 +4,22 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 /**
- * RPE auto-fill cron.
+ * Nightly auto-fill cron — runs at 23:30 local time (Atlantic/Reykjavik).
  *
- * Rule: If a player hasn't submitted a session RPE for today by 23:30 local
- * time (Atlantic/Reykjavik), auto-fill a placeholder entry using the average
- * RPE and average duration of the team's existing submissions for the day.
+ * Two passes per non-OFF team:
+ *   1. RPE pass: legacy team-average fill for missing session_rpe_entries.
+ *      If no player submitted, team is skipped (logged as "no_baseline").
+ *   2. Imputation pass: calls fn_impute_team_day RPC which fills BOTH
+ *      missing check-ins (readiness) AND missing RPE for the date using
+ *      a player-specific 10-day rolling median (with team average as
+ *      fallback for RPE). The pass-1 output is the input for pass-2's
+ *      RPE-coverage check, so any RPE filled in pass-1 is preserved as-is.
  *
  * Exception: If today is an OFF day in Week_Setup (week_plans.day_type = 'OFF')
- * for a team, that team is skipped entirely.
+ * for a team, that team is skipped entirely (no auto-fill on rest days).
  *
- * If no player on the team submitted, there is no average to use, so that
- * team is skipped (logged as "no_baseline").
+ * Replaces the old manual "Fylla inn missing" coach-dashboard button — the
+ * system now handles imputation automatically every night.
  */
 
 const APP_TZ = process.env.APP_TIMEZONE || "Atlantic/Reykjavik";
@@ -87,12 +92,20 @@ interface TeamResult {
   avg_rpe?: number;
   avg_duration?: number;
   missing_player_ids?: string[];
+  // Imputation pass — runs fn_impute_team_day for check-ins + leftover RPE
+  imputation?: {
+    readiness_imputed: number;
+    rpe_imputed: number;
+    error?: string;
+  };
 }
 
 async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
   date_key: string;
   results: TeamResult[];
   total_filled: number;
+  total_readiness_imputed: number;
+  total_rpe_imputed: number;
 }> {
   const dateKey = todayDateKey();
 
@@ -225,7 +238,39 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
     totalFilled = count ?? insertRows.length;
   }
 
-  return { date_key: dateKey, results, total_filled: totalFilled };
+  // ── Pass 2: imputation (check-ins + any leftover RPE) ──────────────────
+  // For every non-OFF team, call fn_impute_team_day which uses a
+  // player-specific 10-day rolling median to fill both check-ins and RPE.
+  // Pass-1 inserts above already covered the RPE-with-team-average path,
+  // so this pass primarily fills check-ins and any RPE that pass-1 skipped
+  // (e.g. teams with zero submissions = "no_baseline").
+  let totalReadinessImputed = 0;
+  let totalRpeImputed = 0;
+  for (const result of results) {
+    if (result.status === "off_day" || result.status === "no_players") continue;
+    const { data: imp, error: impErr } = await sb.rpc("fn_impute_team_day", {
+      p_team_id: result.team_id,
+      p_date: dateKey,
+    });
+    if (impErr) {
+      result.imputation = { readiness_imputed: 0, rpe_imputed: 0, error: impErr.message };
+      continue;
+    }
+    const r = imp as { readiness_imputed?: number; rpe_imputed?: number } | null;
+    const ri = Number(r?.readiness_imputed ?? 0);
+    const rpe = Number(r?.rpe_imputed ?? 0);
+    result.imputation = { readiness_imputed: ri, rpe_imputed: rpe };
+    totalReadinessImputed += ri;
+    totalRpeImputed += rpe;
+  }
+
+  return {
+    date_key: dateKey,
+    results,
+    total_filled: totalFilled,
+    total_readiness_imputed: totalReadinessImputed,
+    total_rpe_imputed: totalRpeImputed,
+  };
 }
 
 export async function POST(req: Request) {
