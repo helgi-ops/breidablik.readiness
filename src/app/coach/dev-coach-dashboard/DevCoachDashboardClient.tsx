@@ -4951,6 +4951,7 @@ export default function CoachPage() {
         travelLoad: undefined,
       }, readinessDecision);
       const neural = r._neural_load ?? null;
+      const indoorIdx = playerIndoorStatus[String(r.player_id)];
       const athleteDecision = buildAthleteDecision({
         snapshot,
         readinessDecision,
@@ -4965,6 +4966,16 @@ export default function CoachPage() {
                   : "clear",
               confidence: 0.65,
               summary: neural.summary ?? null,
+            }
+          : null,
+        // Indoor Load Intelligence — same wiring as the per-player
+        // dashboard callsite below. Keeps the team aggregate in sync
+        // with what the per-player view reports.
+        indoorLoad: indoorIdx
+          ? {
+              compositeBand: indoorIdx.compositeBand ?? null,
+              mcburnieFlag: indoorIdx.mcburnieFlag ?? null,
+              acwrFlag: indoorIdx.acwrFlag ?? null,
             }
           : null,
         hardBlock: false,
@@ -5721,6 +5732,19 @@ export default function CoachPage() {
       load: compositeLoad.concernLevel !== "none"
         ? { concernLevel: compositeLoad.concernLevel, summary: compositeLoad.summary }
         : null,
+      // Indoor Load Intelligence — feeds the verdict so a player flagged
+      // red on /coach/indoor-load also shows red on the dashboard. Uses
+      // the same playerIndoorStatus map populated earlier in the load
+      // flow (line ~2030). Null when no recent indoor sessions.
+      indoorLoad: (() => {
+        const idx = playerIndoorStatus[String(r.player_id)];
+        if (!idx) return null;
+        return {
+          compositeBand: idx.compositeBand ?? null,
+          mcburnieFlag: idx.mcburnieFlag ?? null,
+          acwrFlag: idx.acwrFlag ?? null,
+        };
+      })(),
       hardBlock: false,
     });
     const teamTodayRows = rows

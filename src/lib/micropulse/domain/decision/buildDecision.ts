@@ -26,6 +26,32 @@ type BuildAthleteDecisionParams = {
     confidence?: number | null;
     explanationLine?: string | null;
   } | null;
+  /**
+   * Indoor Load Intelligence signals (FMP / IMU höll-mode pipeline).
+   * Optional — null when player has no recent indoor sessions or team
+   * is purely outdoor. When present, indoor "spike" composite or
+   * McBurnie "red" flag bumps athleteState into RED; "heavy" composite
+   * or McBurnie "yellow" flag bumps into YELLOW. Without this wiring
+   * the verdict ignores the indoor pipeline entirely and only the
+   * explanation layer surfaces it.
+   */
+  indoorLoad?: {
+    compositeBand?: "light" | "below_average" | "typical" | "heavy" | "spike" | null;
+    mcburnieFlag?: "green" | "yellow" | "red" | null;
+    acwrFlag?: "green" | "yellow" | "red" | null;
+    summary?: string | null;
+  } | null;
+  /**
+   * Decel Intelligence (McBurnie 2022 4-dimension framework) overall
+   * flag. Aggregates overload exposure, underload risk, decel:accel +
+   * decel:sprint coupling, and exposure concentration. Red bumps to
+   * RED; yellow bumps to YELLOW. Same severity ladder as
+   * loadConcernLevel and indoorLoad.
+   */
+  decelIntelligence?: {
+    overallFlag?: "green" | "yellow" | "red" | "unknown" | null;
+    summary?: string | null;
+  } | null;
   hardBlock?: boolean | null;
   explicitRecoveryDay?: boolean | null;
 };
@@ -43,11 +69,28 @@ function inferAthleteState(args: {
   neuralStatus: NeuralStatus;
   injurySeverity: "none" | "low" | "moderate" | "high";
   loadConcernLevel: "none" | "low" | "moderate" | "high";
+  // ── Indoor + Decel intelligence layers ─────────────────────────
+  // Same severity ladder as loadConcernLevel — these get folded into
+  // the same red/yellow gates so the dashboard verdict reflects the
+  // intelligence views the coach can drill into. Without this wiring
+  // a player flagged red on /coach/indoor-load or /coach/decel-
+  // intelligence could still show GREEN on the dashboard.
+  indoorCompositeBand?: "light" | "below_average" | "typical" | "heavy" | "spike" | null;
+  indoorMcburnieFlag?: "green" | "yellow" | "red" | null;
+  indoorAcwrFlag?: "green" | "yellow" | "red" | null;
+  decelOverallFlag?: "green" | "yellow" | "red" | "unknown" | null;
 }): AthleteState {
   if (args.hardBlock || args.rehab) return "RED";
   if (args.readinessState === "RED") return "RED";
   if (args.neuralStatus === "suppressed") return "RED";
   if (args.injurySeverity === "high" || args.loadConcernLevel === "high") return "RED";
+
+  // RED gates from the intelligence layers.
+  if (args.indoorCompositeBand === "spike") return "RED";
+  if (args.indoorMcburnieFlag === "red") return "RED";
+  if (args.indoorAcwrFlag === "red") return "RED";
+  if (args.decelOverallFlag === "red") return "RED";
+
   if (
     args.readinessState === "YELLOW" ||
     args.neuralStatus === "caution" ||
@@ -56,6 +99,13 @@ function inferAthleteState(args: {
   ) {
     return "YELLOW";
   }
+
+  // YELLOW gates from the intelligence layers.
+  if (args.indoorCompositeBand === "heavy") return "YELLOW";
+  if (args.indoorMcburnieFlag === "yellow") return "YELLOW";
+  if (args.indoorAcwrFlag === "yellow") return "YELLOW";
+  if (args.decelOverallFlag === "yellow") return "YELLOW";
+
   return args.readinessState;
 }
 
@@ -74,6 +124,10 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
       ? "low"
       : "none";
   const loadConcernLevel = params.load?.concernLevel ?? "none";
+  const indoorCompositeBand = params.indoorLoad?.compositeBand ?? null;
+  const indoorMcburnieFlag = params.indoorLoad?.mcburnieFlag ?? null;
+  const indoorAcwrFlag = params.indoorLoad?.acwrFlag ?? null;
+  const decelOverallFlag = params.decelIntelligence?.overallFlag ?? null;
   const whoopInfluenced =
     snapshot.derived.hasWhoopData &&
     (!!params.whoop?.explanationLine ||
@@ -85,6 +139,10 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     neuralStatus,
     injurySeverity,
     loadConcernLevel,
+    indoorCompositeBand,
+    indoorMcburnieFlag,
+    indoorAcwrFlag,
+    decelOverallFlag,
   });
   const lowDataConfidence = snapshot.derived.overallSnapshotConfidence < 0.45;
   const sessionMode = deriveSessionMode({
@@ -112,6 +170,21 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
         (params.whoop?.confidence ?? 0.5) * 0.05
     )
   );
+  // Compose load summary lines: outdoor concern (existing) + indoor +
+  // decel intelligence when any of those moved the verdict. Keeps the
+  // Why text honest about which intelligence layer escalated the call.
+  const loadSummaryParts: string[] = [];
+  if (params.load?.summary) loadSummaryParts.push(params.load.summary);
+  if (indoorCompositeBand === "spike") loadSummaryParts.push("Indoor composite is in SPIKE band — overload risk if sustained.");
+  else if (indoorCompositeBand === "heavy") loadSummaryParts.push("Indoor composite in HEAVY band — match-style training load yesterday.");
+  if (indoorMcburnieFlag === "red") loadSummaryParts.push("Indoor McBurnie ratio in RED — decel:intensity coupling significantly off.");
+  else if (indoorMcburnieFlag === "yellow") loadSummaryParts.push("Indoor McBurnie ratio in YELLOW — decel:intensity coupling outside sweet spot.");
+  if (indoorAcwrFlag === "red") loadSummaryParts.push("Indoor ACWR in RED — acute spike or severe undertraining (Gabbett 2017).");
+  else if (indoorAcwrFlag === "yellow") loadSummaryParts.push("Indoor ACWR in YELLOW — outside 0.8–1.3 sweet spot.");
+  if (decelOverallFlag === "red") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag RED — multiple deceleration dimensions out of safe range.");
+  else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");
+  const loadSummaryCombined = loadSummaryParts.length ? loadSummaryParts.join(" ") : null;
+
   const reasons = buildDecisionReasons({
     hardBlock,
     rehab,
@@ -123,7 +196,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
         : params.injuryDecision
         ? `Injury risk remains ${params.injuryDecision.injuryRiskLevel.toLowerCase()}.`
         : null,
-    loadSummary: params.load?.summary ?? null,
+    loadSummary: loadSummaryCombined,
     whoopLine: whoopInfluenced ? params.whoop?.explanationLine ?? "WHOOP influenced confidence, but not the dominant constraint." : null,
     lowDataConfidence,
   });

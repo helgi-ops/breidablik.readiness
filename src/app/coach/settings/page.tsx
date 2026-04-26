@@ -431,39 +431,63 @@ export default function CoachSettingsPage() {
                 );
               })}
             </div>
-            {/* Real composite weights — sourced from the actual formulas
-                (get_indoor_load_status RPC for indoor, computeCompositeLoadConcern
-                for outdoor). Earlier placeholder labels here advertised
-                metrics the system never actually used. */}
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {trainingMode === "indoor" ? (
-                  <>
-                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">Player Load 40%</span>
-                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High % 33%</span>
-                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total 27%</span>
-                  </>
-                ) : trainingMode === "outdoor" ? (
-                  <>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">RPE ACWR 40%</span>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">GPS Neuromuscular Burden 35%</span>
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Metabolic Load Score 25%</span>
-                  </>
-                ) : (
-                  <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Per-player heuristic — picks pipeline based on recent session counts</span>
-                )}
+            {/* Two-layer composite breakdown.
+                Indoor & outdoor pipelines both have:
+                  · top-level composite (the verdict input)
+                  · NBS sub-layer (per-signal spike-ratio weights)
+                Both shown so coach can see the full chain from raw
+                Catapult signal → NBS subscore → top composite verdict. */}
+            {trainingMode === "indoor" && (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-900/70">Top composite (verdict input)</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">Player Load 40%</span>
+                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">FMP Dynamic High % 33%</span>
+                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">IMA Total 27%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500">HMLD and Decel B2-3 → session context, not composite (Catapult derives them with GPS context, noisy indoors). McBurnie indoor ratio still uses Decel B2-3.</p>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-900/70">Indoor NBS sub-layer (dashboard signals)</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic High 34%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">PlayerLoad Spike 26%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">IMA Total Spike 20%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Dynamic Med 14%</span>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">FMP Running High 6%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500">Each signal becomes a today/28d-baseline ratio, normalised 0–1 against an alert threshold, then weighted into the NBS subscore (0–1). Drives the dashboard external-load chip + feeds outdoor-mode composite.</p>
+                </div>
               </div>
-              {trainingMode === "indoor" && (
-                <p className="text-xs text-zinc-500">
-                  HMLD and Decel B2-3 displayed as session context, not in composite (Catapult derives them with GPS context — noisy indoors). McBurnie indoor ratio still uses Decel B2-3.
-                </p>
-              )}
-              {trainingMode === "outdoor" && (
-                <p className="text-xs text-zinc-500">
-                  Safety nets bump concern level when triggered: Residual MLI (3d mechanical), Residual Decel (3d eccentric), Decel Burden (today), HID% fatigue trend, Accel:Decel ratio.
-                </p>
-              )}
-            </div>
+            )}
+            {trainingMode === "outdoor" && (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/70">Top composite (verdict input)</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">RPE ACWR 40%</span>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">GPS NBS 35%</span>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">Metabolic Load Score 25%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500">Safety nets bump concern up when triggered: Residual MLI (3d mechanical), Residual Decel (3d eccentric), Decel Burden (today), HID% fatigue trend (Harper 2019), Accel:Decel ratio.</p>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/70">GPS NBS sub-layer</div>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">HIR Spike 34%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Decel Spike 26%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Density Stress 20%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Max Velocity Exposure 14%</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Band 6 (sprint) Distance 6%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500">Each signal becomes a today/28d-baseline ratio, normalised 0–1 against an alert threshold, then weighted into the NBS subscore (0–1) that feeds the top composite at 35%.</p>
+                </div>
+              </div>
+            )}
+            {trainingMode === "auto" && (
+              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">Per-player heuristic picks Indoor or Outdoor pipeline based on recent session counts</span>
+            )}
           </div>
         </section>
       )}
