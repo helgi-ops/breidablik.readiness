@@ -1579,16 +1579,19 @@ function MethodologyFooter({ lang }: { lang: Lang }) {
         <p>
           <strong>{isEN ? "Composite Indoor Load Score (0-150+):" : "Composite Indoor Load Score (0-150+):"}</strong>{" "}
           {isEN
-            ? "Weighted average of 5 components normalized to the player's 28-day personal baseline."
-            : "Vegið meðaltal af 5 þáttum normaliseraðum við 28-daga personal baseline."}{" "}
+            ? "Weighted average of 3 IMU-native components normalized to the player's 28-day personal baseline."
+            : "Vegið meðaltal af 3 IMU-native þáttum normaliseraðum við 28-daga personal baseline."}{" "}
           <strong>
             {isEN
               ? "100 = exactly an average session for that player."
               : "100 = nákvæmlega meðal-session þíns leikmanns."}
           </strong>{" "}
           {isEN
-            ? "Weights: Player Load 30%, Dynamic High % 25%, IMA total 20%, HMLD 15%, Decel B2-3 10%."
-            : "Vegir: Player Load 30%, Dynamic High % 25%, IMA total 20%, HMLD 15%, Decel B2-3 10%."}
+            ? "Weights: Player Load 40%, Dynamic High % 33%, IMA total 27%."
+            : "Vegir: Player Load 40%, Dynamic High % 33%, IMA total 27%."}{" "}
+          {isEN
+            ? "HMLD and Decel B2-3 are excluded — Catapult derives those from GPS context, so they're noisy indoors. Both are still shown as session-context fields and feed the McBurnie indoor ratio."
+            : "HMLD og Decel B2-3 eru útilokaðir — Catapult fær þau úr GPS context og verða því noisy inni. Báðir eru samt sýndir sem session-context og fara í McBurnie indoor ratio-inn."}
         </p>
         <ul className="ml-4 list-disc space-y-1">
           <li>
