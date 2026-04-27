@@ -721,6 +721,11 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
 
           {/* VALD ForceDecks snapshot */}
           {(() => {
+            // explanation in vald_daily_player_snapshot is a JSONB object
+            // ({ cmj, nordbord, forceframe } each with a message field),
+            // not a plain string. Type accordingly so we don't try to
+            // render the object directly into JSX.
+            type ValdExplanationPart = { message?: string; latest?: number | null; baseline?: number | null; delta_percent?: number | null; asymmetry_percent?: number | null };
             const v = (retro as Record<string, unknown> | null)?.vald_snapshot as {
               snapshot_date?: string;
               days_before_injury?: number;
@@ -729,9 +734,20 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
               hamstring_flag?: string;
               groin_flag?: string;
               cmj_score?: number | null;
-              explanation?: string;
+              explanation?: { cmj?: ValdExplanationPart; nordbord?: ValdExplanationPart; forceframe?: ValdExplanationPart } | null;
             } | undefined;
             if (!v || !v.snapshot_date) return null;
+            // Extract the meaningful message lines from the structured
+            // explanation. Skips empty/no-data messages so we don't
+            // display three "no data available" lines in a row.
+            const explanationLines: string[] = [];
+            if (v.explanation && typeof v.explanation === "object") {
+              for (const part of [v.explanation.cmj, v.explanation.nordbord, v.explanation.forceframe]) {
+                if (part?.message && !/^no /i.test(part.message)) {
+                  explanationLines.push(part.message);
+                }
+              }
+            }
             const flagCls = (f?: string) => f === "red"
               ? "border-red-300 bg-red-50 text-red-700"
               : f === "yellow"
@@ -768,8 +784,12 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
                     </div>
                   ))}
                 </div>
-                {v.explanation && (
-                  <div className="mt-2 text-[11px] italic text-slate-600">{v.explanation}</div>
+                {explanationLines.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-[11px] italic text-slate-600">
+                    {explanationLines.map((line, li) => (
+                      <li key={`vald-exp-${li}`}>{line}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             );
