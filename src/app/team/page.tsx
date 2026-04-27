@@ -111,6 +111,14 @@ export default function TeamPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Inline Google Sheets URL configuration — replaces having to
+  // navigate to /coach/settings just to set the calendar source.
+  const [showSheetConfig, setShowSheetConfig] = useState(false);
+  const [sheetUrlInput, setSheetUrlInput] = useState("");
+  const [currentSheetId, setCurrentSheetId] = useState<string | null>(null);
+  const [sheetSaving, setSheetSaving] = useState(false);
+  const [sheetMessage, setSheetMessage] = useState<string | null>(null);
   const [nnIndex, setNnIndex] = useState(0);
 
   // Documents state
@@ -184,6 +192,21 @@ export default function TeamPage() {
 
         const data: TeamData = await response.json();
         setTeamData(data);
+
+        // Fetch current Google Sheets config for the team — sync-sheet
+        // route reads team_settings.settings.schedule_sheet_id. Show
+        // the current value so the coach knows whether they need to
+        // configure or just hit Sync.
+        const { data: ts } = await supabase
+          .from("team_settings")
+          .select("settings")
+          .eq("team_id", profileData.team_id)
+          .maybeSingle();
+        const sid = (ts?.settings as Record<string, unknown> | null)?.schedule_sheet_id;
+        if (typeof sid === "string" && sid.length > 0) {
+          setCurrentSheetId(sid);
+        }
+
         setLoading(false);
       } catch (err) {
         setError(
@@ -383,6 +406,82 @@ export default function TeamPage() {
       setTeamData(updatedTeamData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete event");
+    }
+  };
+
+  /**
+   * Extract a Google Sheets ID from a full URL or accept a raw ID.
+   * Accepts:
+   *   https://docs.google.com/spreadsheets/d/{ID}/edit#gid=0
+   *   https://docs.google.com/spreadsheets/d/{ID}/
+   *   raw {ID}
+   * Returns null when the input does not look like a sheet ID.
+   */
+  function extractSheetId(input: string): string | null {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    // Full URL pattern
+    const m = trimmed.match(/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/);
+    if (m && m[1]) return m[1];
+    // Raw ID — Google Sheet IDs are alphanumeric with - and _, ≥20 chars
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) return trimmed;
+    return null;
+  }
+
+  const handleSaveSheetUrl = async () => {
+    setSheetMessage(null);
+    const sheetId = extractSheetId(sheetUrlInput);
+    if (!sheetId) {
+      setSheetMessage(
+        lang === "IS"
+          ? "Ógild URL — límdu inn fullt Google Sheets URL eða ID"
+          : "Invalid URL — paste the full Google Sheets URL or ID"
+      );
+      return;
+    }
+    if (!profile?.team_id) return;
+    setSheetSaving(true);
+    try {
+      // Read existing settings so we don't clobber other keys
+      const { data: existing } = await supabase
+        .from("team_settings")
+        .select("settings")
+        .eq("team_id", profile.team_id)
+        .maybeSingle();
+
+      const merged = {
+        ...((existing?.settings as Record<string, unknown> | null) ?? {}),
+        schedule_sheet_id: sheetId,
+      };
+
+      // Upsert — team_settings might not yet have a row for this team
+      const { error: upErr } = await supabase
+        .from("team_settings")
+        .upsert(
+          { team_id: profile.team_id, settings: merged },
+          { onConflict: "team_id" }
+        );
+      if (upErr) {
+        console.error("save sheet URL error:", upErr);
+        setSheetMessage(
+          lang === "IS"
+            ? `Tókst ekki að vista — ${upErr.message || upErr.code || "unknown"}`
+            : `Could not save — ${upErr.message || upErr.code || "unknown"}`
+        );
+        setSheetSaving(false);
+        return;
+      }
+      setCurrentSheetId(sheetId);
+      setSheetMessage(
+        lang === "IS" ? "Vistað ✓ — smelltu Samstilla núna" : "Saved ✓ — click Sync now"
+      );
+      setSheetUrlInput("");
+      setShowSheetConfig(false);
+    } catch (e) {
+      console.error(e);
+      setSheetMessage(lang === "IS" ? "Villa við vistun" : "Save error");
+    } finally {
+      setSheetSaving(false);
     }
   };
 
@@ -910,8 +1009,18 @@ export default function TeamPage() {
             {isCoachOrAdmin && (
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setShowSheetConfig((v) => !v)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition text-sm font-medium"
+                  title={lang === "IS" ? "Stilla Google Sheets dagatal" : "Configure Google Sheets calendar"}
+                >
+                  ⚙️ {lang === "IS" ? "Heimild" : "Source"}
+                </button>
+                <button
                   onClick={handleSyncSheet}
-                  disabled={syncLoading}
+                  disabled={syncLoading || !currentSheetId}
+                  title={!currentSheetId
+                    ? (lang === "IS" ? "Stilltu Google Sheets fyrst" : "Configure Google Sheets first")
+                    : undefined}
                   className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium disabled:opacity-50"
                 >
                   {syncLoading ? (lang === "IS" ? "Samstilli..." : "Syncing...") : (lang === "IS" ? "Samstilla" : "Sync")}
@@ -929,6 +1038,67 @@ export default function TeamPage() {
           {syncMessage && (
             <div className={`text-sm px-3 py-2 rounded-lg ${(syncMessage.startsWith("Villa") || syncMessage.startsWith("Error")) ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
               {syncMessage}
+            </div>
+          )}
+
+          {/* ── Google Sheets calendar source config ────────────────
+              Coach pastes the full Sheets URL or just the sheet ID.
+              We extract the ID, save to team_settings.settings, then
+              the Sync button works. Shown when coach clicks "Heimild"
+              OR auto-shown when no sheet is configured yet. */}
+          {isCoachOrAdmin && (showSheetConfig || !currentSheetId) && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {lang === "IS" ? "Google Sheets dagatal" : "Google Sheets calendar"}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  {lang === "IS"
+                    ? "Límdu inn URL á Google Sheets dagatalinu sem þú vilt samstilla við. Sheet þarf að vera \"Anyone with the link can view\"."
+                    : "Paste the URL of the Google Sheets calendar to sync. The sheet must be \"Anyone with the link can view\"."}
+                </p>
+                {currentSheetId && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {lang === "IS" ? "Núverandi sheet ID:" : "Current sheet ID:"}{" "}
+                    <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-700">{currentSheetId.slice(0, 12)}…</code>
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  value={sheetUrlInput}
+                  onChange={(e) => setSheetUrlInput(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/…"
+                  className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
+                />
+                <button
+                  onClick={handleSaveSheetUrl}
+                  disabled={sheetSaving || !sheetUrlInput.trim()}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sheetSaving
+                    ? (lang === "IS" ? "Vista…" : "Saving…")
+                    : (lang === "IS" ? "Vista" : "Save")}
+                </button>
+                {showSheetConfig && (
+                  <button
+                    onClick={() => { setShowSheetConfig(false); setSheetUrlInput(""); setSheetMessage(null); }}
+                    className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-white"
+                  >
+                    {lang === "IS" ? "Hætta við" : "Cancel"}
+                  </button>
+                )}
+              </div>
+              {sheetMessage && (
+                <div className={`text-xs px-2 py-1.5 rounded ${
+                  sheetMessage.includes("✓") || sheetMessage.toLowerCase().includes("saved")
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-red-50 text-red-700"
+                }`}>
+                  {sheetMessage}
+                </div>
+              )}
             </div>
           )}
 
