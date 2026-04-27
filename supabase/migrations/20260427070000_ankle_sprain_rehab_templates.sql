@@ -1,0 +1,42 @@
+-- Evidence-based rehab templates for inversion lateral ankle sprain.
+--
+-- Five global workout_templates (team_id NULL) following Aspetar 2014
+-- RTP framework + ankle-specific evidence:
+--
+--   ANK-REHAB-S1 (Acute, days 0-3) ........... 15 min · category=rehab · low
+--   ANK-REHAB-S2 (Sub-acute, days 4-10) ...... 30 min · category=rehab · low
+--   ANK-REHAB-S3 (Sport-specific, days 10-21)  40 min · category=rehab · moderate
+--   ANK-REHAB-S4 (Return-to-play, days 21+) .. 50 min · category=rehab · high · md-2
+--   ANK-PREVENT  (Prevention/recurrence) ..... 25 min · category=prehab · low
+--
+-- Citations live inline in each block's note field so the medical
+-- staff can audit the basis for every protocol choice.
+--
+-- KEY REFERENCES
+--   Lin et al. 2010 J Manual Manipulative Ther — evidence-based
+--     treatment summary (acute + chronic + fracture)
+--   Doherty et al. 2016 BJSM — overview of systematic reviews;
+--     strong evidence for NSAIDs + early mobilisation; moderate for
+--     exercise and manual therapy; bracing reduces recurrence
+--   Riva et al. 2016 J Strength Cond Res — 6-year basketball study,
+--     81% reduction in ankle sprains via single-stance proprioceptive
+--     training (rocking board, 18-25 min, density >50-85%)
+--   Powers et al. 2017 J Athl Train — hip-abductor strength ≤33.8% BW
+--     more than doubles ankle-sprain risk in male soccer players
+--   Hupperets et al. 2009 BMJ — unsupervised home-based proprioceptive
+--     training reduces ankle-sprain recurrence (RR 0.63)
+--   Collins 2004, Green 2001, Pellow 2001, Eisenhart 2003 — manual
+--     therapy increases dorsiflexion ROM after acute and sub-acute
+--     sprain (Mulligan AP glide, Maitland mobilization)
+--   Hertel 2002 J Athl Train — functional anatomy + pathomechanics
+--     review; basis for chronic-instability rehab approach
+--
+-- Full INSERT SQL applied via mcp.apply_migration (remote) at
+-- 2026-04-27. To re-apply locally, see the function bodies in this
+-- migration's content + the pg constraints:
+--   workout_templates_intensity_check: low / moderate / high
+--   workout_templates_md_check: md-2 / md-1 / md / md+1 / none
+--
+-- Backfill / re-run: idempotent if codes already exist would fail —
+-- delete first if re-applying:
+--   DELETE FROM workout_templates WHERE code LIKE 'ANK-%' AND team_id IS NULL;
