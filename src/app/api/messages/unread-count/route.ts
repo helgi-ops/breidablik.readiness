@@ -60,12 +60,15 @@ export async function GET(req: NextRequest) {
     .eq("player_id", playerId)
     .is("read_at", null);
 
-  // Filter by sender_role based on viewerRole
-  if (role === "player") {
+  // Filter by sender_role based on viewerRole. Normalize to lowercase
+  // because production profiles store role mixed-case (ADMIN, COACH).
+  // STAFF is treated like coach for unread-count purposes.
+  const normalizedRole = String(role ?? "").toLowerCase();
+  if (normalizedRole === "player") {
     // Player: unread messages FROM coach (sender_role != 'player')
     query = query.neq("sender_role", "player");
-  } else if (role === "coach") {
-    // Coach: unread messages FROM player (sender_role = 'player')
+  } else if (["coach", "admin", "staff"].includes(normalizedRole)) {
+    // Coach/admin/staff: unread messages FROM player (sender_role = 'player')
     query = query.eq("sender_role", "player");
   }
 

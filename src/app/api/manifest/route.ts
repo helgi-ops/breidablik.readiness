@@ -77,7 +77,9 @@ export async function GET(req: NextRequest) {
   // via a small client component). Falls back to MicroPulse branding if absent.
   const teamId = req.nextUrl.searchParams.get("team_id")?.trim() ?? null;
   // role=coach → coach-specific start_url and id for independent PWA install
-  const role = req.nextUrl.searchParams.get("role")?.trim() ?? null;
+  // Normalise to lowercase — production profiles store role mixed-case
+  // and consumers may pass either casing.
+  const role = (req.nextUrl.searchParams.get("role")?.trim() ?? "").toLowerCase() || null;
 
   let manifest = { ...MICROPULSE_MANIFEST };
 

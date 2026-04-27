@@ -132,7 +132,12 @@ export default function TeamPage() {
   const [docLoading, setDocLoading] = useState(false);
   const [docFilter, setDocFilter] = useState<string | null>(null);
 
-  const isCoachOrAdmin = profile?.role === "coach" || profile?.role === "admin";
+  // Case-insensitive role check + accept STAFF — production profiles
+  // sometimes store role as 'ADMIN'/'COACH' (uppercase). Without this
+  // every coach control on the team page (sync calendar, upload doc,
+  // create event/announcement) is hidden for ADMIN users.
+  const _normalizedRole = String(profile?.role ?? "").toUpperCase();
+  const isCoachOrAdmin = ["COACH", "ADMIN", "STAFF"].includes(_normalizedRole);
 
   useEffect(() => {
     const initializePage = async () => {
