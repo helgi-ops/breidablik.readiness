@@ -176,6 +176,14 @@ const INJ_I18N = {
     EN: "No prior non-green days recorded in the 14-day window.",
     IS: "Engir non-green dagar á 14-daga glugganum.",
   },
+  // McBurnie Decel Intelligence retrospective
+  decelHeading: { EN: "McBurnie Decel Intelligence — as of injury date", IS: "McBurnie Decel Intelligence — sem af meiðsla-degi" },
+  decelOverall: { EN: "Overall", IS: "Heild" },
+  decelOverload: { EN: "Overload", IS: "Overload" },
+  decelUnderload: { EN: "Underload", IS: "Underload" },
+  decelAccelCoupling: { EN: "Decel : Accel", IS: "Decel : Accel" },
+  decelSprintCoupling: { EN: "Decel : Sprint", IS: "Decel : Sprint" },
+  decelConcentration: { EN: "Concentration", IS: "Concentration" },
   dominantSignals: { EN: "Dominant signals seen:", IS: "Dominant signals sem komu fram:" },
   notesLabel: { EN: "Notes:", IS: "Athugasemdir:" },
   retroComputed: { EN: "Retro signals computed:", IS: "Retro signals reiknað:" },
@@ -632,6 +640,91 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
               {buildWarningSignSentence(firstWarning, retro as Record<string, unknown> | null | undefined, lang)}
             </div>
           )}
+
+          {/* McBurnie Decel Intelligence — as of injury date.
+              Snapshot of the 4-dimension framework (overload,
+              underload, accel-coupling, sprint-coupling, concen-
+              tration) computed using only data that existed at the
+              time of injury. Hidden when no GPS data is available
+              for the player. */}
+          {(() => {
+            const di = (retro as Record<string, unknown> | null)?.decel_intelligence as {
+              overall_flag?: "green" | "yellow" | "red" | "unknown";
+              explanation?: string;
+              as_of_date?: string;
+              overload?: { flag?: string; cumulative_28d_count?: number; baseline_daily_mean?: number };
+              underload?: { flag?: string; cumulative_7d_count?: number; match_day_demand?: number };
+              accel_coupling?: { flag?: string; recent_ratio?: number; healthy_range?: string };
+              sprint_coupling?: { flag?: string; recent_ratio?: number; healthy_range?: string };
+              concentration?: { flag?: string; peak_day_pct_of_28d?: number; distinct_high_intensity_days?: number };
+            } | undefined;
+            // Hide entirely when there's no decel data at all (all unknown)
+            if (!di) return null;
+            const allUnknown = ["overload", "underload", "accel_coupling", "sprint_coupling", "concentration"]
+              .every((k) => (di as any)[k]?.flag === "unknown" || (di as any)[k]?.flag == null);
+            if (allUnknown) return null;
+
+            const flagCls = (f?: string) => f === "red"
+              ? "border-red-300 bg-red-50 text-red-700"
+              : f === "yellow"
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : f === "green"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-slate-300 bg-white text-slate-500";
+
+            const dims: Array<{ key: string; labelKey: keyof typeof INJ_I18N; flag?: string; sub?: string }> = [
+              { key: "overload", labelKey: "decelOverload", flag: di.overload?.flag,
+                sub: di.overload?.cumulative_28d_count != null
+                  ? `${di.overload.cumulative_28d_count} / ${di.overload?.baseline_daily_mean ?? "?"}/d`
+                  : undefined },
+              { key: "underload", labelKey: "decelUnderload", flag: di.underload?.flag,
+                sub: di.underload?.cumulative_7d_count != null
+                  ? `${di.underload.cumulative_7d_count} / ${di.underload?.match_day_demand ?? "?"}`
+                  : undefined },
+              { key: "accel_coupling", labelKey: "decelAccelCoupling", flag: di.accel_coupling?.flag,
+                sub: di.accel_coupling?.recent_ratio != null
+                  ? `${di.accel_coupling.recent_ratio.toFixed(2)} (${di.accel_coupling?.healthy_range ?? ""})`
+                  : undefined },
+              { key: "sprint_coupling", labelKey: "decelSprintCoupling", flag: di.sprint_coupling?.flag,
+                sub: di.sprint_coupling?.recent_ratio != null
+                  ? `${di.sprint_coupling.recent_ratio.toFixed(2)} (${di.sprint_coupling?.healthy_range ?? ""})`
+                  : undefined },
+              { key: "concentration", labelKey: "decelConcentration", flag: di.concentration?.flag,
+                sub: di.concentration?.peak_day_pct_of_28d != null
+                  ? `peak ${di.concentration.peak_day_pct_of_28d}%`
+                  : undefined },
+            ];
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("decelHeading", lang)}
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${flagCls(di.overall_flag)}`}>
+                    {di.overall_flag ?? "—"}
+                  </span>
+                </div>
+                {di.explanation && (
+                  <div className="text-[11px] italic text-slate-600 mb-2">{di.explanation}</div>
+                )}
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                  {dims.map((d) => (
+                    <div key={d.key} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+                      <div className="text-[9px] uppercase tracking-wide text-slate-500">
+                        {it(d.labelKey, lang)}
+                      </div>
+                      <span className={`mt-1 inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold uppercase ${flagCls(d.flag)}`}>
+                        {d.flag ?? "—"}
+                      </span>
+                      {d.sub && (
+                        <div className="text-[10px] text-slate-500 tabular-nums mt-1">{d.sub}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Day-by-day warning timeline — every non-green day in
               the 14-day window, with the reason chips that explain
