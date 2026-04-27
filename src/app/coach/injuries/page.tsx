@@ -184,6 +184,30 @@ const INJ_I18N = {
   decelAccelCoupling: { EN: "Decel : Accel", IS: "Decel : Accel" },
   decelSprintCoupling: { EN: "Decel : Sprint", IS: "Decel : Sprint" },
   decelConcentration: { EN: "Concentration", IS: "Concentration" },
+  // Tier 1+2 retro signals
+  priorInjuriesHeading: { EN: "Prior injuries (last 180 days)", IS: "Fyrri meiðsli (síðustu 180 daga)" },
+  priorInjuriesNone: { EN: "No prior injuries in last 180 days.", IS: "Engin fyrri meiðsli síðustu 180 daga." },
+  priorSameSite: { EN: "Same-site recurrence", IS: "Sama svæði — endurkoma" },
+  priorCount: { EN: "prior injuries", IS: "fyrri meiðsli" },
+  valdHeading: { EN: "VALD ForceDecks snapshot", IS: "VALD ForceDecks staða" },
+  valdAsOf: { EN: "as of", IS: "sem af" },
+  valdNeuromuscular: { EN: "Neuromuscular", IS: "Taugavöðva" },
+  valdHamstring: { EN: "Hamstring", IS: "Aftan-læri" },
+  valdGroin: { EN: "Groin", IS: "Nár" },
+  nordbordHeading: { EN: "VALD Nordbord — eccentric hamstring asymmetry", IS: "VALD Nordbord — eccentric hamstring ósamhverfa" },
+  nordbordAsymmetry: { EN: "asymmetry", IS: "ósamhverfa" },
+  nordbordOpar: { EN: "Opar 2015 threshold: ≥10% asymmetry → elevated hamstring-injury risk", IS: "Opar 2015 viðmið: ≥10% ósamhverfa → aukin hamstring-meiðsla áhætta" },
+  gpsSpikesHeading: { EN: "GPS spike days (Buchheit 2010)", IS: "GPS spike dagar (Buchheit 2010)" },
+  gpsSpikeNone: { EN: "No HSR or sprint-count spikes in window.", IS: "Engar HSR eða sprint spikes í glugganum." },
+  gpsSpikeHsr: { EN: "HSR", IS: "HSR" },
+  gpsSpikeSprint: { EN: "sprints", IS: "spretti" },
+  matchHeading: { EN: "Match congestion (Lago-Penas 2010)", IS: "Leikja-þéttleiki (Lago-Penas 2010)" },
+  matchInWindow: { EN: "matches in 14d", IS: "leikir á 14d" },
+  matchTotalMin: { EN: "total minutes", IS: "samtals mínútur" },
+  matchShortestGap: { EN: "shortest gap", IS: "stysta bil" },
+  streakHeading: { EN: "Chronic pattern at injury", IS: "Viðvarandi mynstur við meiðsli" },
+  daysOff: { EN: "non-green days", IS: "non-green dagar" },
+  daysSinceGreen: { EN: "days since last GREEN", IS: "dagar síðan síðasti GREEN" },
   dominantSignals: { EN: "Dominant signals seen:", IS: "Dominant signals sem komu fram:" },
   notesLabel: { EN: "Notes:", IS: "Athugasemdir:" },
   retroComputed: { EN: "Retro signals computed:", IS: "Retro signals reiknað:" },
@@ -640,6 +664,266 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
               {buildWarningSignSentence(firstWarning, retro as Record<string, unknown> | null | undefined, lang)}
             </div>
           )}
+
+          {/* ── Tier 1+2 retrospective signals ─────────────────────
+              Six panels that complete the clinical picture beyond
+              wellness/ACWR/McBurnie: prior injuries, VALD snapshot,
+              Nordbord asymmetry, GPS spikes, match congestion,
+              chronic-pattern streak context. Each panel hides itself
+              when its data isn't available. */}
+
+          {/* Prior injuries (Hägglund 2013) */}
+          {(() => {
+            const pi = (retro as Record<string, unknown> | null)?.prior_injuries as {
+              count_180d?: number;
+              same_site_recurrence?: boolean;
+              history?: Array<{ date: string; days_before: number; body_part?: string; injury_type?: string; severity?: string; days_lost?: number | null }>;
+            } | undefined;
+            if (!pi) return null;
+            const count = pi.count_180d ?? 0;
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("priorInjuriesHeading", lang)}
+                  </div>
+                  {count > 0 && (
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${pi.same_site_recurrence ? "border-red-300 bg-red-50 text-red-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}>
+                      {count} {it("priorCount", lang)}
+                    </span>
+                  )}
+                </div>
+                {count === 0 ? (
+                  <div className="text-[11px] text-slate-500">{it("priorInjuriesNone", lang)}</div>
+                ) : (
+                  <>
+                    {pi.same_site_recurrence && (
+                      <div className="mb-2 inline-flex items-center rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                        {it("priorSameSite", lang)}
+                      </div>
+                    )}
+                    <ol className="space-y-1 text-xs">
+                      {(pi.history ?? []).map((h, hi) => (
+                        <li key={`prior-${hi}`} className="flex items-start gap-2 text-slate-700">
+                          <span className="font-mono text-[10px] text-slate-500">{h.date}</span>
+                          <span className="text-[10px] text-slate-400 tabular-nums">({h.days_before}d)</span>
+                          <span className="font-medium">{h.body_part ?? h.injury_type ?? "—"}</span>
+                          {h.severity && <span className="text-slate-500">· {h.severity}</span>}
+                          {h.days_lost != null && <span className="text-slate-500">· {h.days_lost}d lost</span>}
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* VALD ForceDecks snapshot */}
+          {(() => {
+            const v = (retro as Record<string, unknown> | null)?.vald_snapshot as {
+              snapshot_date?: string;
+              days_before_injury?: number;
+              overall_vald_status?: string;
+              neuromuscular_flag?: string;
+              hamstring_flag?: string;
+              groin_flag?: string;
+              cmj_score?: number | null;
+              explanation?: string;
+            } | undefined;
+            if (!v || !v.snapshot_date) return null;
+            const flagCls = (f?: string) => f === "red"
+              ? "border-red-300 bg-red-50 text-red-700"
+              : f === "yellow"
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : f === "green"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-slate-300 bg-white text-slate-500";
+            const dims = [
+              { key: "neuro", labelKey: "valdNeuromuscular" as const, flag: v.neuromuscular_flag },
+              { key: "ham", labelKey: "valdHamstring" as const, flag: v.hamstring_flag },
+              { key: "groin", labelKey: "valdGroin" as const, flag: v.groin_flag },
+            ];
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("valdHeading", lang)}
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${flagCls(v.overall_vald_status)}`}>
+                    {v.overall_vald_status ?? "—"}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 mb-2">
+                  {it("valdAsOf", lang)} <span className="font-mono">{v.snapshot_date}</span>
+                  {v.days_before_injury != null && <span className="text-slate-400"> ({v.days_before_injury}d before)</span>}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {dims.map((d) => (
+                    <div key={d.key} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+                      <div className="text-[9px] uppercase tracking-wide text-slate-500">{it(d.labelKey, lang)}</div>
+                      <span className={`mt-1 inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold uppercase ${flagCls(d.flag)}`}>
+                        {d.flag ?? "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {v.explanation && (
+                  <div className="mt-2 text-[11px] italic text-slate-600">{v.explanation}</div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* VALD Nordbord — eccentric hamstring asymmetry (Opar 2015) */}
+          {(() => {
+            const n = (retro as Record<string, unknown> | null)?.nordbord as {
+              test_date?: string;
+              days_before?: number;
+              left_peak_force_n?: number;
+              right_peak_force_n?: number;
+              asymmetry_percent?: number;
+              asymmetry_side?: string;
+            } | undefined;
+            if (!n || n.asymmetry_percent == null) return null;
+            const asymCls = n.asymmetry_percent >= 15
+              ? "border-red-300 bg-red-50 text-red-700"
+              : n.asymmetry_percent >= 10
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : "border-emerald-300 bg-emerald-50 text-emerald-700";
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("nordbordHeading", lang)}
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums ${asymCls}`}>
+                    {n.asymmetry_percent.toFixed(1)}% {n.asymmetry_side ?? ""}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 mb-1">
+                  {n.test_date && <><span className="font-mono">{n.test_date}</span></>}
+                  {n.days_before != null && <span className="text-slate-400"> ({n.days_before}d before)</span>}
+                  {n.left_peak_force_n != null && n.right_peak_force_n != null && (
+                    <span className="ml-2 text-slate-500 tabular-nums">
+                      L {Math.round(n.left_peak_force_n)}N · R {Math.round(n.right_peak_force_n)}N
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] italic text-slate-500">{it("nordbordOpar", lang)}</div>
+              </div>
+            );
+          })()}
+
+          {/* GPS spike days (Buchheit 2010, Malone 2017) */}
+          {(() => {
+            const g = (retro as Record<string, unknown> | null)?.gps_spikes as {
+              count?: number;
+              days?: Array<{ date: string; days_before: number; hsr_distance?: number; hsr_ratio_vs_28d?: number; sprint_count?: number; sprint_ratio_vs_28d?: number }>;
+            } | undefined;
+            if (!g || (g.count ?? 0) === 0) return null;
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("gpsSpikesHeading", lang)}
+                  </div>
+                  <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-700">
+                    {g.count} {it("daysShort", lang)}
+                  </span>
+                </div>
+                <ol className="space-y-1 text-xs">
+                  {(g.days ?? []).map((d, di) => (
+                    <li key={`spike-${di}`} className="flex items-start gap-2 text-slate-700">
+                      <span className="font-mono text-[10px] text-slate-500">{d.date}</span>
+                      <span className="text-[10px] text-slate-400 tabular-nums">({d.days_before}d)</span>
+                      {d.hsr_distance != null && d.hsr_ratio_vs_28d != null && d.hsr_ratio_vs_28d >= 1.5 && (
+                        <span className="inline-flex items-center rounded border border-orange-300 bg-orange-50 px-1.5 py-0 text-[10px] font-semibold text-orange-700">
+                          {it("gpsSpikeHsr", lang)} {Math.round(d.hsr_distance)}m · {d.hsr_ratio_vs_28d.toFixed(1)}×
+                        </span>
+                      )}
+                      {d.sprint_count != null && d.sprint_ratio_vs_28d != null && d.sprint_ratio_vs_28d >= 1.5 && (
+                        <span className="inline-flex items-center rounded border border-orange-300 bg-orange-50 px-1.5 py-0 text-[10px] font-semibold text-orange-700">
+                          {d.sprint_count} {it("gpsSpikeSprint", lang)} · {d.sprint_ratio_vs_28d.toFixed(1)}×
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })()}
+
+          {/* Match congestion (Lago-Penas 2010) */}
+          {(() => {
+            const m = (retro as Record<string, unknown> | null)?.match_congestion as {
+              matches_in_14d?: number;
+              total_minutes?: number;
+              shortest_gap_days?: number | null;
+              match_dates?: string[];
+            } | undefined;
+            if (!m || (m.matches_in_14d ?? 0) === 0) return null;
+            const congestionCls = (m.matches_in_14d ?? 0) >= 3
+              ? "border-red-300 bg-red-50 text-red-700"
+              : (m.matches_in_14d ?? 0) >= 2
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : "border-slate-300 bg-white text-slate-700";
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("matchHeading", lang)}
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tabular-nums ${congestionCls}`}>
+                    {m.matches_in_14d} {it("matchInWindow", lang)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+                  <div className="rounded bg-slate-50 px-2 py-1">
+                    <div className="text-[9px] uppercase text-slate-500">{it("matchTotalMin", lang)}</div>
+                    <div className="font-bold text-slate-800 tabular-nums">{m.total_minutes ?? 0}</div>
+                  </div>
+                  <div className="rounded bg-slate-50 px-2 py-1">
+                    <div className="text-[9px] uppercase text-slate-500">{it("matchShortestGap", lang)}</div>
+                    <div className="font-bold text-slate-800 tabular-nums">{m.shortest_gap_days != null ? `${m.shortest_gap_days}d` : "—"}</div>
+                  </div>
+                  <div className="rounded bg-slate-50 px-2 py-1">
+                    <div className="text-[9px] uppercase text-slate-500">dates</div>
+                    <div className="font-mono text-[10px] text-slate-700">{(m.match_dates ?? []).join(", ") || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Streak context at injury */}
+          {(() => {
+            const s = (retro as Record<string, unknown> | null)?.streak_context_at_injury as {
+              days_off_in_window?: number;
+              last_green_date?: string | null;
+              days_since_green?: number | null;
+            } | undefined;
+            if (!s || ((s.days_off_in_window ?? 0) === 0 && s.days_since_green == null)) return null;
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700 mb-1.5">
+                  {it("streakHeading", lang)}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  <div className="rounded bg-slate-50 px-2 py-1">
+                    <div className="text-[9px] uppercase text-slate-500">{it("daysOff", lang)}</div>
+                    <div className="font-bold text-slate-800 tabular-nums">{s.days_off_in_window ?? 0} <span className="text-[9px] text-slate-400">/ 14</span></div>
+                  </div>
+                  {s.days_since_green != null && (
+                    <div className="rounded bg-slate-50 px-2 py-1">
+                      <div className="text-[9px] uppercase text-slate-500">{it("daysSinceGreen", lang)}</div>
+                      <div className="font-bold text-slate-800 tabular-nums">{s.days_since_green}d</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* McBurnie Decel Intelligence — as of injury date.
               Snapshot of the 4-dimension framework (overload,

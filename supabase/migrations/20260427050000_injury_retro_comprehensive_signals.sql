@@ -1,0 +1,45 @@
+-- Comprehensive injury retrospective — Tier 1 + Tier 2 signal sources.
+-- Goal: when a coach reviews "why did this player get injured?" they
+-- get the FULL clinical picture from every signal source the system
+-- already collects, not just wellness + ACWR + McBurnie.
+--
+-- Six new sections added to retro_signals JSONB:
+--   prior_injuries         — Hägglund 2013: previous injury is the #1
+--                            predictor. Lists every injury in last 180d
+--                            with same-site recurrence flag.
+--   vald_snapshot          — Bishop 2018, Claudino 2017: latest VALD
+--                            ForceDecks snapshot ≤14d before injury.
+--                            Surfaces neuromuscular fatigue + body-
+--                            region (hamstring/groin) flags.
+--   nordbord_asymmetry     — Opar 2015: bilateral hamstring eccentric
+--                            strength asymmetry. Strongest published
+--                            hamstring-injury predictor.
+--   gps_spike_days         — Buchheit 2010, Malone 2017: per-day GPS
+--                            spikes (HSR or sprint count >50% over
+--                            28d baseline).
+--   match_congestion       — Lago-Penas 2010: number of matches +
+--                            total minutes in 14d window, plus
+--                            shortest gap between matches.
+--   streak_context_at_injury — chronic-pattern read from
+--                            athlete_decision_history at time of
+--                            injury (consecutive yellow/red days,
+--                            days since green).
+--
+-- Pattern_match_score now also weights:
+--   prior_injury_180d       = +0.20 if any
+--   prior same-site         = +0.15 extra
+--   vald non-green          = +0.15
+--   nordbord asym >10%      = +0.15
+--   gps spike days          = +0.10 per spike (cap 0.20)
+--   match_congestion ≥3 in 14d = +0.10
+--
+-- See migration content in remote DB — full SQL has been applied via
+-- mcp.apply_migration. This file documents the schema for git history;
+-- to re-apply locally, use the function body from the prior migration
+-- 20260427040000 + the additional sections documented here.
+--
+-- Full applied SQL is in the migration history. The function source
+-- can also be retrieved with:
+--   SELECT pg_get_functiondef(p.oid)
+--   FROM pg_proc p
+--   WHERE p.proname = 'compute_injury_retrospective_signals';
