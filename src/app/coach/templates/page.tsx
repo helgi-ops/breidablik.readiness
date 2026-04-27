@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { usePlan } from "@/lib/micropulse/product";
+import AssignRehabModal from "@/components/coach/AssignRehabModal";
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -152,6 +153,25 @@ export default function TemplatesPage() {
 
   // Preview / details
   const [openStructureId, setOpenStructureId] = useState<string | null>(null);
+
+  // Coach team_id for the assign-rehab modal
+  const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+
+  // Currently-being-assigned template (drives modal open + preset)
+  const [assignTemplate, setAssignTemplate] = useState<{ id: string; title: string } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user?.id) return;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      setCoachTeamId(prof?.team_id ?? null);
+    })();
+  }, []);
 
   async function load() {
     const extendedSelect =
@@ -392,6 +412,16 @@ export default function TemplatesPage() {
                         {openStructureId === t.id ? "Fela" : "Skoða"}
                       </Button>
 
+                      {coachTeamId && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setAssignTemplate({ id: t.id, title: t.title ?? "Untitled" })}
+                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        >
+                          Úthluta leikmanni
+                        </Button>
+                      )}
+
                       {isAtLeastPro && !isGlobal && (
                         <label className="ml-auto flex items-center gap-2 text-sm">
                           <span className="opacity-70">Virk</span>
@@ -419,6 +449,20 @@ export default function TemplatesPage() {
           </Card>
         ) : null}
       </div>
+
+      {/* Assign template modal — opened from any template card's
+          "Úthluta leikmanni" button. Pre-fills the template,
+          coach picks player + date range. */}
+      {coachTeamId && assignTemplate && (
+        <AssignRehabModal
+          open={true}
+          onClose={() => setAssignTemplate(null)}
+          lang="IS"
+          teamId={coachTeamId}
+          presetTemplateId={assignTemplate.id}
+          presetTemplateTitle={assignTemplate.title}
+        />
+      )}
     </div>
   );
 }

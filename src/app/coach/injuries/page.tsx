@@ -19,6 +19,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import AssignRehabModal from "@/components/coach/AssignRehabModal";
 
 type InjuryType =
   | "hamstring" | "calf" | "groin" | "quad" | "hip"
@@ -532,7 +533,7 @@ export default function CoachInjuriesPage() {
         {!loading && injuries.length > 0 && (
           <div className="space-y-2">
             {injuries.map((inj) => (
-              <InjuryRow key={inj.id} injury={inj} playerName={playerName(inj.player_id)} lang={lang} />
+              <InjuryRow key={inj.id} injury={inj} playerName={playerName(inj.player_id)} lang={lang} teamId={teamId} />
             ))}
           </div>
         )}
@@ -592,8 +593,9 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 // ─── Injury row ───────────────────────────────────────────────────────────
 
-function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerName: string; lang: Lang }) {
+function InjuryRow({ injury, playerName, lang, teamId }: { injury: InjuryEvent; playerName: string; lang: Lang; teamId: string | null }) {
   const [expanded, setExpanded] = React.useState(false);
+  const [rehabModalOpen, setRehabModalOpen] = React.useState(false);
   const retro = injury.retro_signals;
   const score = retro?.pattern_match_score as number | undefined;
   const preceded = retro?.preceded_by_warning as boolean | undefined;
@@ -652,6 +654,21 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
 
       {expanded && retro && (
         <div className="border-t border-slate-100 bg-slate-50 p-4">
+          {/* Send rehab — primary action when reviewing an injury.
+              Pre-fills player + injury_event_id so the modal lands
+              ready to assign with rehab/prehab category preset. */}
+          {teamId && (
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setRehabModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+              >
+                {lang === "IS" ? "+ Úthluta rehab áætlun" : "+ Assign rehab program"}
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <Mini label={it("yellowDays", lang)} value={yellowDays ?? "—"} hint={it("ofFourteen", lang)} />
             <Mini label={it("redDays", lang)} value={redDays ?? "—"} hint={it("ofFourteen", lang)} />
@@ -1156,6 +1173,23 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
             {it("windowLabel", lang)} {retro.scan_window_days} {it("daysShort", lang)}
           </div>
         </div>
+      )}
+
+      {/* Rehab assignment modal — mounted at row root so it overlays
+          the whole page when open. Pre-fills player, injury context,
+          and category filter (rehab/prehab) so coach assignment is
+          a 3-click flow from the injury row. */}
+      {teamId && (
+        <AssignRehabModal
+          open={rehabModalOpen}
+          onClose={() => setRehabModalOpen(false)}
+          lang={lang}
+          teamId={teamId}
+          presetPlayerId={injury.player_id}
+          presetPlayerName={playerName}
+          injuryEventId={injury.id}
+          categoryFilter={["rehab", "prehab", "recovery"]}
+        />
       )}
     </div>
   );
