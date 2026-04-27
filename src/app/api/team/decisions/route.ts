@@ -12,6 +12,7 @@ import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropul
 import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type VbtSessionRow } from "@/lib/micropulse/vbtReadiness";
 import { computeMechanicalLoad, type MechanicalLoadSourceRow } from "@/lib/micropulse/mechanicalLoad";
 import { computeMetabolicLoad, type MetabolicLoadSourceRow } from "@/lib/micropulse/metabolicLoad";
+import { flagAgainstBaseline, type AthleteMetricBaseline } from "@/lib/micropulse/baselines";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -436,6 +437,36 @@ async function fetchVbtDataForPlayers(
 }
 
 /**
+ * Bulk-fetch wellness baselines for a list of players, keyed by
+ * player_id → metric_key. Used by the injury-risk pipeline to swap
+ * the global Likert thresholds (sleep ≤ 2, soreness ≤ 2) for personal
+ * z-scores against each player's own 28-day mean+SD (Robertson 2017).
+ *
+ * Returns an empty Map when the player has no baseline yet — callers
+ * fall through to the global threshold so existing behaviour is
+ * preserved for new players. We only pull the metrics actually used by
+ * the rules engine to keep payload small.
+ */
+async function fetchWellnessBaselines(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+): Promise<Map<string, Map<string, AthleteMetricBaseline>>> {
+  const out = new Map<string, Map<string, AthleteMetricBaseline>>();
+  if (!playerIds.length) return out;
+  const { data } = await sb
+    .from("athlete_metric_baselines")
+    .select("player_id, metric_key, n_observations, mean, sd, cv, median, window_days, status, computed_at")
+    .in("player_id", playerIds)
+    .in("metric_key", ["wellness.sleep_quality", "wellness.muscle_soreness"]);
+  for (const row of (data ?? []) as AthleteMetricBaseline[]) {
+    const pid = String(row.player_id);
+    if (!out.has(pid)) out.set(pid, new Map());
+    out.get(pid)!.set(row.metric_key, row);
+  }
+  return out;
+}
+
+/**
  * Convert raw player_external_load_daily rows into MechanicalLoadSourceRow format.
  * Uses the same field mappings as the MLI API endpoint.
  */
@@ -488,6 +519,13 @@ async function buildPlayerSource(args: {
   vbtData?: { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string } | null;
   indoorMode?: boolean;
   sportType?: "football" | "basketball";
+  /**
+   * Personal wellness baselines for this player (sleep_quality + muscle_soreness).
+   * When present, the injury-risk rules engine prefers personal z-scores over
+   * the global Likert cutoffs. Tier C also uses these to add chronic-low
+   * bonuses when the player's personal mean is ≤ 2.5 over 28 days.
+   */
+  wellnessBaselines?: Map<string, AthleteMetricBaseline> | null;
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -632,6 +670,28 @@ async function buildPlayerSource(args: {
     (mliResultEarly?.mli != null && mliResultEarly.mli >= 65) &&
     (metaResultEarly?.metabolicLoadScore != null && metaResultEarly.metabolicLoadScore >= 65);
 
+  // ── Personal-baseline (Robertson 2017) sub-score flagging ────────
+  // Compute z-scores against this player's own 28-day mean+SD when a
+  // baseline exists. The injury-risk rules engine prefers these over
+  // the global Likert thresholds (sleep ≤ 2, soreness ≤ 2) so a player
+  // whose personal sleep mean is 4.5 triggers POOR_RECOVERY at sleep=3
+  // (z ≈ -1.5) instead of waiting for the global cutoff. Tier C also
+  // surfaces chronic-low cases (personal mean ≤ 2.5 across 28d).
+  const sleepValue = toFinite(args.row.sleep_quality);
+  const sorenessValue = toFinite(args.row.muscle_soreness);
+  const sleepBaseline = args.wellnessBaselines?.get("wellness.sleep_quality") ?? null;
+  const sorenessBaseline = args.wellnessBaselines?.get("wellness.muscle_soreness") ?? null;
+  const sleepFlag = sleepValue != null
+    ? flagAgainstBaseline(sleepValue, sleepBaseline, "wellness.sleep_quality")
+    : null;
+  const sorenessFlagPersonal = sorenessValue != null
+    ? flagAgainstBaseline(sorenessValue, sorenessBaseline, "wellness.muscle_soreness")
+    : null;
+  const sleepZ = sleepFlag?.z ?? null;
+  const sorenessZ = sorenessFlagPersonal?.z ?? null;
+  const sleepChronicLow = !!sleepBaseline && sleepBaseline.status !== "insufficient_data" && sleepBaseline.mean <= 2.5;
+  const sorenessChronicLow = !!sorenessBaseline && sorenessBaseline.status !== "insufficient_data" && sorenessBaseline.mean <= 2.5;
+
   const injuryRiskDecision = buildInjuryRiskDecision(
     {
       acwr: acwrValue ?? undefined,
@@ -642,10 +702,15 @@ async function buildPlayerSource(args: {
       recentRedDays: toFinite(tm?.recent_red_days) ?? undefined,
       highSpeedRunning: toInt(args.ydayContext?.hsr_m) ?? undefined,
       maxVelocityPct: toFinite(args.ydayContext?.max_velocity_pct) ?? undefined,
-      sleepScore: toFinite(args.row.sleep_quality) ?? undefined,
+      sleepScore: sleepValue ?? undefined,
       hrvChangePct: hrvChangePctValue ?? undefined,
-      sorenessScore: toFinite(args.row.muscle_soreness) ?? undefined,
-      sorenessFlag: typeof toFinite(args.row.muscle_soreness) === "number" ? (toFinite(args.row.muscle_soreness) ?? 4) <= 2 : undefined,
+      sorenessScore: sorenessValue ?? undefined,
+      sorenessFlag: typeof sorenessValue === "number" ? (sorenessValue ?? 4) <= 2 : undefined,
+      // Personal-baseline z-scores + chronic-low flags (Tier A + Tier C)
+      sleepZ: sleepZ ?? undefined,
+      sorenessZ: sorenessZ ?? undefined,
+      sleepChronicLow,
+      sorenessChronicLow,
       painFlag: false,
       gpsSpike:
         String(args.ydayContext?.intensity ?? "").toUpperCase() !== "OFF" &&
@@ -792,7 +857,7 @@ export async function GET(req: Request) {
     // Basketball teams are always indoor regardless of toggle
     const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
-    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer] = await Promise.all([
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -801,6 +866,7 @@ export async function GET(req: Request) {
       fetchMdContext(sb, teamId, date),
       fetchWhoopSnapshots(sb, playerIds),
       fetchVbtDataForPlayers(sb, playerIds, date, teamId),
+      fetchWellnessBaselines(sb, playerIds),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -824,6 +890,7 @@ export async function GET(req: Request) {
             vbtData: vbtByPlayer.get(String(row.player_id)) ?? null,
             indoorMode: effectiveIndoorMode,
             sportType,
+            wellnessBaselines: wellnessBaselinesByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {

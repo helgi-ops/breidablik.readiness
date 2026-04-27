@@ -17,6 +17,10 @@
 
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  flagAgainstBaseline,
+  type AthleteMetricBaseline,
+} from "@/lib/micropulse/baselines";
 
 // ── Types (loose — we only read fields we care about) ──────────────────────
 
@@ -84,6 +88,13 @@ export type DailyBriefingCardProps = {
   // to contextualise today's readiness with info like "after OFF" or
   // "after 2 OFF days" when yesterday had no real data.
   recentDayTypes?: Record<string, string | null> | null;
+  // Per-player wellness baselines from athlete_metric_baselines.
+  // Keyed by player_id → metric_key → baseline. Enables personalised
+  // (Robertson 2017) z-score flagging instead of the global ≤2 threshold,
+  // which surfaces false yellows for players whose personal norm is itself
+  // ~3/5 (and misses real concern for players whose norm is 4-5/5).
+  // Optional — when absent the card falls back to the global threshold.
+  playerBaselines?: Record<string, Record<string, AthleteMetricBaseline>>;
 };
 
 // ── Copy (IS / EN) ─────────────────────────────────────────────────────────
@@ -145,6 +156,18 @@ const COPY = {
       dzDrop: (dz: number) => `Δz ${dz.toFixed(1)}`,
       total: (n: number) => `total ${n}/25`,
     },
+    // Tier B — personal-norm tooltip lines. When a value triggers a
+    // chip, the tooltip explains *why* (z-score against personal mean)
+    // so the coach knows it's the player's personal norm, not the
+    // global threshold, that drove the flag.
+    chipTooltip: {
+      personal: (mean: number, sd: number, z: number) =>
+        `Hans norm ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — í dag ${z.toFixed(1)} SD frá norm`,
+      noBaseline: "Engin persónuleg baseline ennþá — nota global þröskuld (≤2)",
+      chronic: (mean: number) =>
+        `Persónuleg norm hjá honum er ${mean.toFixed(1)}/5 — chronic-low yfir 28 daga`,
+    },
+    chronicTag: "chronic-low",
     reasons: {
       redReadiness: "RAUTT readiness",
       yellowReadiness: "GULT readiness",
@@ -213,6 +236,15 @@ const COPY = {
       dzDrop: (dz: number) => `Δz ${dz.toFixed(1)}`,
       total: (n: number) => `total ${n}/25`,
     },
+    // Tier B — personal-norm tooltip lines.
+    chipTooltip: {
+      personal: (mean: number, sd: number, z: number) =>
+        `His norm ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — today ${z.toFixed(1)} SD from norm`,
+      noBaseline: "No personal baseline yet — using global threshold (≤2)",
+      chronic: (mean: number) =>
+        `His personal norm is ${mean.toFixed(1)}/5 — chronic-low across 28d`,
+    },
+    chronicTag: "chronic-low",
     reasons: {
       redReadiness: "RED readiness",
       yellowReadiness: "YELLOW readiness",
@@ -255,6 +287,26 @@ function formatFocus(row: BriefingRow | undefined, lang: "IS" | "EN"): string {
 
 type AttentionLevel = "alert" | "monitor" | "ok";
 
+type DriverKind = "sleep" | "energy" | "stress" | "soreness" | "dz" | "total";
+
+type DriverChip = {
+  kind: DriverKind;
+  value: number;
+  // ── Tier B/C personalisation context ─────────────────────
+  // baselineMean / baselineSd / z populate the personal-norm tooltip
+  // ("His norm 4.1/5, today -1.6 SD from norm") and let the coach
+  // immediately see *why* this player's value triggered a flag while
+  // another player with the same value didn't.
+  // chronic = true when this metric's personal norm is itself ≤ 2.5
+  // across the 28-day baseline window — these players need long-term
+  // escalation even when z stays green.
+  baselineMean?: number;
+  baselineSd?: number;
+  z?: number;
+  baselineSource?: "personal" | "global"; // global = fell back to ≤2 because no baseline
+  chronic?: boolean;
+};
+
 type AttentionItem = {
   playerId: string;
   name: string;
@@ -269,35 +321,109 @@ type AttentionItem = {
   // ── Driver chips — the *orsök* layer. These are raw-data-level
   // explanations of why readiness dropped to YELLOW/RED. Intentionally
   // diagnostic (not prescriptive) so they don't duplicate Decision summary.
-  drivers: Array<{ kind: "sleep" | "energy" | "stress" | "soreness" | "dz" | "total"; value: number }>;
+  drivers: DriverChip[];
 };
 
-// Thresholds tuned against the existing 1–5 Likert scale:
-// score of 1 = severe, 2 = concerning. 3+ is within normal range so
-// we don't clutter the row with "normal" drivers.
-const WELLNESS_DRIVER_THRESHOLD = 2;
 // Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
 const DZ_DRIVER_THRESHOLD = 0.5;
 
-function deriveReadinessDrivers(row: BriefingRow): AttentionItem["drivers"] {
-  const drivers: AttentionItem["drivers"] = [];
+// Fallback global threshold used only when a player has no personal
+// baseline yet (insufficient_data status, < 7 obs). Once their personal
+// baseline is active we use ±1 SD against personal mean instead.
+// Robertson 2017 — personal norms beat group thresholds for wellness.
+const WELLNESS_GLOBAL_FALLBACK_THRESHOLD = 2;
 
-  const subs: Array<{ kind: AttentionItem["drivers"][number]["kind"]; value: number | null | undefined }> = [
+// Tier C — chronic-low absolute floor. When a player's *personal mean*
+// for a sub-score is at or below this value across the 28-day baseline
+// window, their z-score will rarely flag (because the baseline is itself
+// low) — but the absolute reading is still concerning. Surface a
+// chronic-low tag so the coach knows long-term escalation may be needed.
+const CHRONIC_LOW_MEAN_THRESHOLD = 2.5;
+
+// Map driver chip kinds to the corresponding athlete_metric_baselines
+// metric_key. Stress chip uses wellness.stress_mood; soreness uses
+// wellness.muscle_soreness, etc.
+const DRIVER_TO_METRIC: Record<Exclude<DriverKind, "dz" | "total">, string> = {
+  sleep: "wellness.sleep_quality",
+  energy: "wellness.fatigue_energy",
+  stress: "wellness.stress_mood",
+  soreness: "wellness.muscle_soreness",
+};
+
+function deriveReadinessDrivers(
+  row: BriefingRow,
+  baselines: Record<string, AthleteMetricBaseline> | null,
+): DriverChip[] {
+  const drivers: DriverChip[] = [];
+
+  const subs: Array<{ kind: Exclude<DriverKind, "dz" | "total">; value: number | null | undefined }> = [
     { kind: "sleep", value: row.sleep_quality },
     { kind: "energy", value: row.fatigue_energy },
     { kind: "stress", value: row.stress_mood },
     { kind: "soreness", value: row.muscle_soreness },
   ];
 
-  const lowSubs = subs
-    .filter((s): s is { kind: AttentionItem["drivers"][number]["kind"]; value: number } =>
-      typeof s.value === "number" && s.value <= WELLNESS_DRIVER_THRESHOLD
-    )
-    .sort((a, b) => a.value - b.value);
+  // Each candidate gets evaluated against its personal baseline (Tier A).
+  // Three outcomes per sub-score:
+  //   1. baseline exists + flag is yellow/red  → show chip with personal context
+  //   2. baseline exists + flag is green       → suppress chip (it's normal for this player)
+  //   3. no baseline yet                       → fall back to global ≤2 threshold
+  // We rank by "concerning-ness" so the most extreme deviations show first.
+  type Candidate = DriverChip & { rankScore: number };
+  const candidates: Candidate[] = [];
 
-  // Take the two lowest wellness subscores that are ≤ threshold — these
-  // are the "which variable dropped you" answer. More than two is noise.
-  for (const s of lowSubs.slice(0, 2)) drivers.push({ kind: s.kind, value: s.value });
+  for (const s of subs) {
+    if (typeof s.value !== "number") continue;
+    const metricKey = DRIVER_TO_METRIC[s.kind];
+    const baseline = baselines?.[metricKey] ?? null;
+
+    if (baseline && baseline.status !== "insufficient_data") {
+      // Tier A — personal z-score check
+      const result = flagAgainstBaseline(s.value, baseline, metricKey);
+      const chronic = baseline.mean <= CHRONIC_LOW_MEAN_THRESHOLD;
+
+      if (result.flag === "green" && !chronic) continue; // genuinely normal for this player
+
+      // Surface chip when either (a) z makes it concerning today, or
+      // (b) the player's chronic personal norm is itself in the danger zone.
+      // Ranking: actively concerning (yellow/red flag) ALWAYS beats
+      // chronic-only — a player whose value crashed today matters more
+      // for today's verdict than a player whose long-term norm is low
+      // but is having a normal day. Within "active", more-negative z
+      // wins; within "chronic-only", lower personal mean wins.
+      const z = result.z ?? 0;
+      const rankScore = result.flag === "green"
+        ? -0.1 + (baseline.mean - CHRONIC_LOW_MEAN_THRESHOLD) * 0.01 // chronic-only — small negative range
+        : z; // active concern — wins by virtue of z ≤ -1 ≪ -0.1
+      candidates.push({
+        kind: s.kind,
+        value: s.value,
+        baselineMean: baseline.mean,
+        baselineSd: baseline.sd,
+        z,
+        baselineSource: "personal",
+        chronic,
+        rankScore,
+      });
+    } else if (s.value <= WELLNESS_GLOBAL_FALLBACK_THRESHOLD) {
+      // Tier A fallback — no personal baseline, use the original ≤2 threshold
+      candidates.push({
+        kind: s.kind,
+        value: s.value,
+        baselineSource: "global",
+        rankScore: s.value, // lower = worse
+      });
+    }
+  }
+
+  // Take the two most concerning sub-scores. Cap at 2 to match prior
+  // behaviour (more chips become noise, and Decision summary handles
+  // the prescription side).
+  candidates.sort((a, b) => a.rankScore - b.rankScore);
+  for (const c of candidates.slice(0, 2)) {
+    const { rankScore: _r, ...chip } = c;
+    drivers.push(chip);
+  }
 
   // Δz baseline drop — only when the coach sees a dev-driven flag.
   const dz = typeof row._dz === "number" ? row._dz : null;
@@ -320,6 +446,7 @@ function buildAttentionList(
   rows: BriefingRow[],
   playerComposites: Record<string, PlayerCompositeEntry>,
   lang: "IS" | "EN",
+  playerBaselines: Record<string, Record<string, AthleteMetricBaseline>> | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const out: AttentionItem[] = [];
@@ -390,7 +517,10 @@ function buildAttentionList(
         composite: comp?.compositeScore ?? null,
         plSpike: comp?.playerLoadSpike ?? null,
         fatigueType: comp?.fatigueType ?? null,
-        drivers: deriveReadinessDrivers(row),
+        drivers: deriveReadinessDrivers(
+          row,
+          playerBaselines?.[String(row.player_id)] ?? null,
+        ),
       });
     }
   }
@@ -417,13 +547,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     teamSignal = null,
     dayStateLabel = null,
     recentDayTypes = null,
+    playerBaselines = null,
   } = props;
 
   const t = COPY[lang];
 
   const attention = useMemo(
-    () => buildAttentionList(rows, playerComposites, lang),
-    [rows, playerComposites, lang],
+    () => buildAttentionList(rows, playerComposites, lang, playerBaselines),
+    [rows, playerComposites, lang, playerBaselines],
   );
 
   // ── Post-OFF context ──────────────────────────────────────────────────
@@ -817,17 +948,40 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                 // Driver chip labels — plug raw numeric values into the
                 // localized formatter so the coach sees e.g. "svefn 2/5"
                 // or "Δz -0.9". Capped at 3 chips per row to stay scannable.
-                const driverChips = item.drivers.slice(0, 3).map((d) => {
+                // Tier B/C: each chip carries baseline metadata for the
+                // tooltip ("His norm 4.1/5, today -1.6 SD from norm") and
+                // a chronic-low tag when the player's personal mean for
+                // that metric is itself ≤ 2.5 across 28d.
+                const driverChipsWithMeta = item.drivers.slice(0, 3).map((d) => {
+                  let label = "";
                   switch (d.kind) {
-                    case "sleep": return t.drivers.sleep(d.value);
-                    case "energy": return t.drivers.energy(d.value);
-                    case "stress": return t.drivers.stress(d.value);
-                    case "soreness": return t.drivers.soreness(d.value);
-                    case "dz": return t.drivers.dzDrop(d.value);
-                    case "total": return t.drivers.total(d.value);
-                    default: return "";
+                    case "sleep": label = t.drivers.sleep(d.value); break;
+                    case "energy": label = t.drivers.energy(d.value); break;
+                    case "stress": label = t.drivers.stress(d.value); break;
+                    case "soreness": label = t.drivers.soreness(d.value); break;
+                    case "dz": label = t.drivers.dzDrop(d.value); break;
+                    case "total": label = t.drivers.total(d.value); break;
                   }
-                }).filter(Boolean);
+
+                  // Tier B — personal-norm tooltip text. Only meaningful
+                  // for wellness sub-scores (sleep/energy/stress/soreness),
+                  // where we have a baseline for comparison.
+                  let tooltip: string | undefined;
+                  if (d.baselineSource === "personal" && d.baselineMean != null && d.baselineSd != null) {
+                    tooltip = t.chipTooltip.personal(d.baselineMean, d.baselineSd, d.z ?? 0);
+                  } else if (d.baselineSource === "global") {
+                    tooltip = t.chipTooltip.noBaseline;
+                  }
+
+                  return {
+                    label,
+                    tooltip,
+                    chronic: d.chronic === true,
+                    chronicTooltip: d.chronic && d.baselineMean != null
+                      ? t.chipTooltip.chronic(d.baselineMean)
+                      : undefined,
+                  };
+                }).filter((c) => c.label);
 
                 return (
                   <li
@@ -863,15 +1017,32 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                       </div>
                       {/* Driver chips — orsök layer. Separate row, orange
                           accent so they read as "why" (not as "what to do"
-                          which is Decision summary's job). */}
-                      {driverChips.length > 0 ? (
+                          which is Decision summary's job).
+                          Tier B: each chip carries a `title` tooltip with
+                          personal-norm context ("His norm 4.1/5 …") so the
+                          coach can see at a glance whether this is normal
+                          for this player or a true deviation.
+                          Tier C: chronic-low chips get a slate badge to
+                          flag long-term low personal norm (e.g. a player
+                          who consistently reports stress 2/5 — a chronic
+                          warning, not a today problem). */}
+                      {driverChipsWithMeta.length > 0 ? (
                         <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {driverChips.map((label, idx) => (
+                          {driverChipsWithMeta.map((c, idx) => (
                             <span
                               key={`${item.playerId}-drv-${idx}`}
-                              className="rounded-full border border-orange-300 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-800"
+                              className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-800"
+                              title={c.tooltip}
                             >
-                              {label}
+                              {c.label}
+                              {c.chronic ? (
+                                <span
+                                  className="rounded-sm border border-slate-400 bg-slate-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-slate-600"
+                                  title={c.chronicTooltip}
+                                >
+                                  {t.chronicTag}
+                                </span>
+                              ) : null}
                             </span>
                           ))}
                         </div>

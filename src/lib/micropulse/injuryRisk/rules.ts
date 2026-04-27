@@ -34,14 +34,29 @@ export function evaluateInjuryRiskRules(
     (hasNumber(input.highSpeedRunning) && (input.highSpeedRunning as number) >= 800) || input.gpsSpike === true;
   const elevatedAcwr = hasNumber(input.acwr) && (input.acwr as number) >= 1.3;
   const negativeDeltaZ = hasNumber(input.deltaZ) && (input.deltaZ as number) <= -0.25;
+
+  // ── Recovery / soreness — personal-baseline aware (Robertson 2017) ──
+  // Prefer personal z-score when available. When absent, fall back to
+  // the global Likert cutoff so existing behaviour is preserved for
+  // players without a baseline yet (< 7 obs).
+  // sleepZ ≤ -1.0 ≈ same statistical strength as the old "sleep ≤ 2"
+  // rule but normalised against each player's own norm.
+  const sleepBelowPersonal = hasNumber(input.sleepZ) && (input.sleepZ as number) <= -1.0;
+  const sleepBelowGlobal = !hasNumber(input.sleepZ) &&
+    hasNumber(input.sleepScore) && (input.sleepScore as number) <= 2;
   const poorRecovery =
-    (hasNumber(input.sleepScore) && (input.sleepScore as number) <= 2) ||
+    sleepBelowPersonal ||
+    sleepBelowGlobal ||
     (hasNumber(input.hrvChangePct) && (input.hrvChangePct as number) <= -8);
   const highVolatility = hasNumber(input.volatility) && (input.volatility as number) >= 35;
   const repeatedWarningDays =
     ((input.recentYellowDays ?? 0) + (input.recentRedDays ?? 0)) >= 2 ||
     (input.recentRedDays ?? 0) >= 1;
-  const lowSorenessCaution = (hasNumber(input.sorenessScore) && (input.sorenessScore as number) <= 2) || input.sorenessFlag === true;
+
+  const sorenessBelowPersonal = hasNumber(input.sorenessZ) && (input.sorenessZ as number) <= -1.0;
+  const sorenessBelowGlobal = !hasNumber(input.sorenessZ) &&
+    hasNumber(input.sorenessScore) && (input.sorenessScore as number) <= 2;
+  const lowSorenessCaution = sorenessBelowPersonal || sorenessBelowGlobal || input.sorenessFlag === true;
   const goodSorenessSignal = hasNumber(input.sorenessScore) && (input.sorenessScore as number) >= 4 && input.painFlag !== true;
   const sorenessPain = lowSorenessCaution || input.painFlag === true;
   const congestionTravel = input.matchCongestion === true || input.travelLoad === true;
@@ -168,6 +183,20 @@ export function evaluateInjuryRiskRules(
       triggeredRules.push("ECCENTRIC_DOMINANT_LOAD");
       riskScore += 1;
     }
+  }
+
+  // Tier C — chronic-low personal baselines (sleep / soreness mean ≤ 2.5
+  // across 28d). These players are running with depleted recovery
+  // capacity at all times, so any acute spike is more dangerous than
+  // for a player whose personal mean is 4. Light bonus (+1 each) so it
+  // does not double-count an already poor recovery day.
+  if (input.sleepChronicLow === true) {
+    triggeredRules.push("CHRONIC_LOW_SLEEP_BASELINE");
+    riskScore += 1;
+  }
+  if (input.sorenessChronicLow === true) {
+    triggeredRules.push("CHRONIC_LOW_SORENESS_BASELINE");
+    riskScore += 1;
   }
 
   let injuryRiskLevel: "LOW" | "MODERATE" | "HIGH" = "LOW";

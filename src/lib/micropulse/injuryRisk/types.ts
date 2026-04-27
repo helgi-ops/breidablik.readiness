@@ -71,4 +71,26 @@ export type InjuryRiskInput = {
   hidDeclinePct?: number;
   /** True when HID% fatigue conditions met (decline ≥20% + stable distance). */
   hidFatigueFlag?: boolean;
+
+  // ── Personal-baseline z-scores (Robertson 2017) ────────────────────
+  // When present, the rules engine prefers these over the global Likert
+  // thresholds (sleepScore ≤ 2, sorenessScore ≤ 2). A player whose
+  // personal sleep mean is 4.5 should trigger "POOR_RECOVERY_MARKERS"
+  // when sleep drops to 3 (z ≈ -1.5), even though 3 > the global cutoff.
+  // Conversely, a player whose personal sleep mean is 2.7 should NOT
+  // trigger every day at value 2 — that's normal for them.
+  // Set by the caller using flagAgainstBaseline(); null when no
+  // personal baseline exists (insufficient_data, < 7 obs).
+  /** Personal z-score for tonight's sleep (negative = below personal norm). */
+  sleepZ?: number | null;
+  /** Personal z-score for today's soreness (negative = below personal norm). */
+  sorenessZ?: number | null;
+  /**
+   * True when player's *personal sleep mean* across the 28-day baseline
+   * window is itself ≤ 2.5 — Tier C chronic-low signal. These players
+   * need long-term escalation even when their daily z stays green.
+   */
+  sleepChronicLow?: boolean;
+  /** Tier C — personal soreness mean ≤ 2.5 across 28d. */
+  sorenessChronicLow?: boolean;
 };

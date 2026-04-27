@@ -1952,6 +1952,28 @@ export default function CoachPage() {
     severity: string | null;
   }>>({});
 
+  // Per-player wellness baselines (Robertson 2017 / Rebelo 2026). Fed into
+  // DailyBriefingCard so driver chips ("svefn 2/5", "soreness 2/5") flag
+  // against each player's personal mean+SD instead of a global ≤2 cutoff.
+  // Without this, players whose personal norm is itself ~2.5 trigger every
+  // single day, while players whose norm is 4-5/5 never trigger when they
+  // dip to 3/5 — both wrong directions for clinical decisions.
+  // Shape: { player_id → { metric_key → AthleteMetricBaseline } }.
+  const [playerBaselines, setPlayerBaselines] = useState<
+    Record<string, Record<string, {
+      player_id: string;
+      metric_key: string;
+      n_observations: number;
+      mean: number;
+      sd: number;
+      cv: number | null;
+      median: number | null;
+      window_days: number;
+      status: "insufficient_data" | "calibrating" | "active";
+      computed_at: string;
+    }>>
+  >({});
+
   // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
   useEffect(() => {
     if (!rows.length || !coachTeamId) return;
@@ -2098,6 +2120,32 @@ export default function CoachPage() {
           if (Object.keys(decelMap).length) setPlayerDecelStatus(decelMap);
         }
       } catch { /* Decel Intelligence is optional */ }
+
+      // Wellness baselines — keyed by player+metric for personal-norm
+      // flagging in DailyBriefingCard (deriveReadinessDrivers). One bulk
+      // fetch covers the whole team — RLS scopes it to the coach's
+      // players. Wellness keys only (sleep_quality, fatigue_energy,
+      // stress_mood, muscle_soreness, sleep_duration, total) — load
+      // metric baselines aren't needed by the briefing card.
+      try {
+        const playerIds = rows.map((r) => r.player_id).filter(Boolean);
+        if (playerIds.length) {
+          const { data: blRows } = await supabase
+            .from("athlete_metric_baselines")
+            .select(
+              "player_id, metric_key, n_observations, mean, sd, cv, median, window_days, status, computed_at",
+            )
+            .in("player_id", playerIds)
+            .like("metric_key", "wellness.%");
+          const blMap: Record<string, Record<string, any>> = {};
+          for (const row of (blRows ?? []) as any[]) {
+            const pid = String(row.player_id);
+            if (!blMap[pid]) blMap[pid] = {};
+            blMap[pid][String(row.metric_key)] = row;
+          }
+          if (Object.keys(blMap).length) setPlayerBaselines(blMap);
+        }
+      } catch { /* baselines are optional — falls back to global ≤2 threshold */ }
 
       // Active injuries / illnesses — overrides Decision Summary verdict.
       // We read from BOTH player_injuries (RTP-stage workflow) and injury_events
@@ -6830,6 +6878,7 @@ export default function CoachPage() {
             teamSignal={teamSignal as any}
             dayStateLabel={dayStateInfo?.label ?? null}
             recentDayTypes={recentDayTypes}
+            playerBaselines={playerBaselines}
           />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
