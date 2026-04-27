@@ -121,4 +121,44 @@ export type CoachCommandPlayerSource = {
       requiresManualReview: boolean;
     };
   };
+  /**
+   * Counterfactual "what-if" alternatives for today's verdict. Up to 3
+   * single-lever flips that would have improved the verdict (e.g. "If
+   * indoor composite had been TYPICAL → YELLOW not RED"). Empty array
+   * for GREEN/GRAY verdicts or when no single-lever flip helps. The
+   * field is always present so consumers can rely on it being there.
+   * See src/lib/micropulse/domain/decision/counterfactuals.ts for the
+   * full Counterfactual type definition.
+   */
+  counterfactuals?: Array<{
+    signal:
+      | "readiness"
+      | "neural"
+      | "injury"
+      | "load"
+      | "indoor_composite"
+      | "indoor_mcburnie"
+      | "indoor_acwr"
+      | "decel"
+      | "streak";
+    currentValue: string;
+    hypotheticalValue: string;
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    impact: 1 | 2 | 3;
+    descriptionEN: string;
+    descriptionIS: string;
+  }>;
+  /**
+   * Streak context — chronic-pattern view of today vs. recent days.
+   * Set by the decision engine when recentDecisions are passed in.
+   * Null when sequence escalation didn't run (e.g. dashboard client-
+   * side path that doesn't fetch decision history).
+   */
+  streakContext?: {
+    consecutiveYellow: number;
+    consecutiveRed: number;
+    daysOfYellowOrRed: number;
+    daysSinceGreen: number | null;
+    escalationApplied: "none" | "yellow_streak_to_red" | "red_streak_sustained";
+  } | null;
 };

@@ -1,4 +1,5 @@
 import type { TrainingRecommendation } from "@/lib/micropulse/decision";
+import type { Counterfactual } from "./counterfactuals";
 
 export type AthleteState = "GREEN" | "YELLOW" | "RED" | "GRAY";
 export type SessionMode = "full" | "modified" | "recovery" | "pending";
@@ -50,6 +51,14 @@ export interface AthleteDecision {
     daysSinceGreen: number | null; // null = always green / no history
     escalationApplied: "none" | "yellow_streak_to_red" | "red_streak_sustained";
   };
+
+  // ── Counterfactual "what-if" alternatives ────────────────────────
+  // Up to 3 single-lever flips that would have changed today's verdict
+  // for the better. Empty for GREEN/GRAY states (no counterfactuals
+  // are useful) or when no single-lever flip improves the verdict.
+  // Coaches see "If indoor composite had been TYPICAL → YELLOW not RED"
+  // — the actionable counterpart to the reasons[] explanation.
+  counterfactuals?: Counterfactual[];
   engineContributions?: {
     readiness?: {
       score?: number | null;

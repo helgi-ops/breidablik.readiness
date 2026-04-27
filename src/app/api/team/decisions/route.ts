@@ -859,6 +859,14 @@ async function buildPlayerSource(args: {
           requiresManualReview: athleteDecision.flags.lowDataConfidence,
         },
       },
+    // Counterfactual "what-if" alternatives — empty for GREEN/GRAY
+    // verdicts. Surface up to 3 single-lever flips that would have
+    // improved today's verdict, so external API consumers (and the
+    // future PlayerClient verdict modal) can render the same explain-
+    // ability layer the dashboard does. Deliberately included even
+    // when empty so consumers can rely on the field being present.
+    counterfactuals: athleteDecision.counterfactuals ?? [],
+    streakContext: athleteDecision.streakContext ?? null,
   };
 }
 

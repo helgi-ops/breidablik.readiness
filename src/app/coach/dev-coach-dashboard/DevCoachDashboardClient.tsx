@@ -6201,6 +6201,45 @@ export default function CoachPage() {
                   </div>
                 </div>
 
+                {/* ── What if (counterfactuals) ─────────────────────────
+                    Single-lever flips that would have improved today's
+                    verdict. Empty for GREEN players (engine returns []).
+                    Shows the most impactful first. Coaches see the
+                    actionable counterpart to "Why" — not just what
+                    happened, but what would need to change to flip the
+                    decision. */}
+                {athleteDecision.counterfactuals && athleteDecision.counterfactuals.length > 0 ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50/50 px-4 py-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                      {lang === "IS" ? "Hvað ef" : "What if"}
+                    </div>
+                    <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-800">
+                      {athleteDecision.counterfactuals.map((cf, idx) => {
+                        const text = lang === "IS" ? cf.descriptionIS : cf.descriptionEN;
+                        const stateChipCls =
+                          cf.hypotheticalState === "GREEN"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : cf.hypotheticalState === "YELLOW"
+                            ? "border-amber-300 bg-amber-50 text-amber-800"
+                            : "border-slate-300 bg-white text-slate-700";
+                        return (
+                          <li
+                            key={`${pid}-cf-${idx}-${cf.signal}`}
+                            className="flex items-start gap-2"
+                          >
+                            <span
+                              className={`mt-0.5 inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${stateChipCls}`}
+                            >
+                              {cf.hypotheticalState}
+                            </span>
+                            <span>{text}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+
                 {performanceIntelligence || prescription || neuralVolatility || finalRecommendationDecision ? (
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-600">
                     {performanceIntelligence ? (

@@ -7,6 +7,8 @@ import { buildDecisionFlags } from "./flags";
 import { deriveLoadAction } from "./loadAction";
 import { deriveSessionMode } from "./sessionMode";
 import { applyStreakEscalation, describeStreakContext, type RecentDecision } from "./sequence";
+import { inferAthleteState } from "./state";
+import { computeCounterfactuals } from "./counterfactuals";
 import type { AthleteDecision, AthleteState, NeuralStatus } from "./types";
 
 type BuildAthleteDecisionParams = {
@@ -73,60 +75,13 @@ function mapReadinessConfidence(value?: "low" | "medium" | "high" | null): numbe
   return 0.4;
 }
 
-function inferAthleteState(args: {
-  hardBlock: boolean;
-  rehab: boolean;
-  readinessState: AthleteState;
-  neuralStatus: NeuralStatus;
-  injurySeverity: "none" | "low" | "moderate" | "high";
-  loadConcernLevel: "none" | "low" | "moderate" | "high";
-  // ── Indoor + Decel intelligence layers ─────────────────────────
-  // Same severity ladder as loadConcernLevel — these get folded into
-  // the same red/yellow gates so the dashboard verdict reflects the
-  // intelligence views the coach can drill into. Without this wiring
-  // a player flagged red on /coach/indoor-load or /coach/decel-
-  // intelligence could still show GREEN on the dashboard.
-  indoorCompositeBand?: "light" | "below_average" | "typical" | "heavy" | "spike" | null;
-  indoorMcburnieFlag?: "green" | "yellow" | "red" | null;
-  indoorAcwrFlag?: "green" | "yellow" | "red" | null;
-  decelOverallFlag?: "green" | "yellow" | "red" | "unknown" | null;
-}): AthleteState {
-  if (args.hardBlock || args.rehab) return "RED";
-  if (args.readinessState === "RED") return "RED";
-  if (args.neuralStatus === "suppressed") return "RED";
-  if (args.injurySeverity === "high" || args.loadConcernLevel === "high") return "RED";
-
-  // RED gates from the intelligence layers.
-  if (args.indoorCompositeBand === "spike") return "RED";
-  if (args.indoorMcburnieFlag === "red") return "RED";
-  if (args.indoorAcwrFlag === "red") return "RED";
-  if (args.decelOverallFlag === "red") return "RED";
-
-  if (
-    args.readinessState === "YELLOW" ||
-    args.neuralStatus === "caution" ||
-    args.injurySeverity === "moderate" ||
-    args.loadConcernLevel === "moderate"
-  ) {
-    return "YELLOW";
-  }
-
-  // YELLOW gates from the intelligence layers.
-  if (args.indoorCompositeBand === "heavy") return "YELLOW";
-  if (args.indoorMcburnieFlag === "yellow") return "YELLOW";
-  if (args.indoorAcwrFlag === "yellow") return "YELLOW";
-  if (args.decelOverallFlag === "yellow") return "YELLOW";
-
-  return args.readinessState;
-}
-
 export function buildAthleteDecision(params: BuildAthleteDecisionParams): AthleteDecision {
   const snapshot = params.snapshot;
   const readinessState = params.readinessDecision?.athleteState ?? (snapshot.derived.hasManualData ? "YELLOW" : "GRAY");
   const hardBlock = params.hardBlock === true;
   const rehab = snapshot.context.rehab === true || snapshot.context.returnToPlay === true;
   const neuralStatus = params.neural?.status ?? "unknown";
-  const injurySeverity =
+  const injurySeverity: "none" | "low" | "moderate" | "high" =
     params.injuryDecision?.injuryRiskLevel === "HIGH"
       ? "high"
       : params.injuryDecision?.injuryRiskLevel === "MODERATE"
@@ -143,7 +98,11 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     snapshot.derived.hasWhoopData &&
     (!!params.whoop?.explanationLine ||
       (params.readinessDecision?.riskFactors ?? []).some((factor) => factor.startsWith("whoop_")));
-  const preliminaryState = inferAthleteState({
+  // Capture the exact inputs passed to inferAthleteState so the
+  // counterfactual engine (counterfactuals.ts) can re-run the decision
+  // tree with one lever flipped at a time. Same object → guaranteed
+  // counterfactuals match the real engine's logic.
+  const inferInputs = {
     hardBlock,
     rehab,
     readinessState,
@@ -154,7 +113,8 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     indoorMcburnieFlag,
     indoorAcwrFlag,
     decelOverallFlag,
-  });
+  };
+  const preliminaryState = inferAthleteState(inferInputs);
 
   // ── Sequence-aware escalation ─────────────────────────────────────
   // Stateless single-day inference can't see chronic patterns. If a
@@ -169,6 +129,17 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   );
   const athleteState = streakResult.state;
   const streakContext = streakResult.context;
+
+  // ── Counterfactual "what-if" alternatives ─────────────────────────
+  // Single-lever flips that would have improved today's verdict.
+  // Empty for GREEN/GRAY (no useful counterfactuals). Special-cases
+  // the chronic-yellow→red streak escalation lever, which lives in
+  // sequence.ts not in inferAthleteState. Capped at top 3 by impact.
+  const counterfactuals = computeCounterfactuals(
+    athleteState,
+    inferInputs,
+    streakContext,
+  );
 
   const lowDataConfidence = snapshot.derived.overallSnapshotConfidence < 0.45;
   const sessionMode = deriveSessionMode({
@@ -310,6 +281,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
       context: snapshot.derived.hasContextData,
     },
     streakContext,
+    counterfactuals,
     engineContributions: {
       readiness: params.readinessDecision
         ? {
