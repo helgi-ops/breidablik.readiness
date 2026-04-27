@@ -6,6 +6,7 @@ import { buildDecisionExplanationLines, buildDecisionReasons, buildDecisionRecom
 import { buildDecisionFlags } from "./flags";
 import { deriveLoadAction } from "./loadAction";
 import { deriveSessionMode } from "./sessionMode";
+import { applyStreakEscalation, describeStreakContext, type RecentDecision } from "./sequence";
 import type { AthleteDecision, AthleteState, NeuralStatus } from "./types";
 
 type BuildAthleteDecisionParams = {
@@ -54,6 +55,16 @@ type BuildAthleteDecisionParams = {
   } | null;
   hardBlock?: boolean | null;
   explicitRecoveryDay?: boolean | null;
+  /**
+   * Recent verdicts for this player (last 7 days, today excluded).
+   * Used by sequence-aware escalation (sequence.ts):
+   *   - 3+ consecutive YELLOW (today incl) → escalate to RED
+   *   - 2+ consecutive RED → tag SUSTAINED_RED reason
+   * Without this the verdict is stateless day-by-day and chronic
+   * patterns ("she's been yellow all week") are invisible to the coach.
+   * Optional — when absent, escalation is a no-op.
+   */
+  recentDecisions?: RecentDecision[] | null;
 };
 
 function mapReadinessConfidence(value?: "low" | "medium" | "high" | null): number {
@@ -132,7 +143,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     snapshot.derived.hasWhoopData &&
     (!!params.whoop?.explanationLine ||
       (params.readinessDecision?.riskFactors ?? []).some((factor) => factor.startsWith("whoop_")));
-  const athleteState = inferAthleteState({
+  const preliminaryState = inferAthleteState({
     hardBlock,
     rehab,
     readinessState,
@@ -144,6 +155,21 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     indoorAcwrFlag,
     decelOverallFlag,
   });
+
+  // ── Sequence-aware escalation ─────────────────────────────────────
+  // Stateless single-day inference can't see chronic patterns. If a
+  // player has been YELLOW for 3+ days running, that's a different
+  // clinical state than "yellow once" and warrants RED. Sustained RED
+  // (2+ days) doesn't change the state but tags it for guidance.
+  // No-op when recentDecisions is null/empty (backwards compatible).
+  const streakResult = applyStreakEscalation(
+    preliminaryState,
+    snapshot.date,
+    params.recentDecisions ?? [],
+  );
+  const athleteState = streakResult.state;
+  const streakContext = streakResult.context;
+
   const lowDataConfidence = snapshot.derived.overallSnapshotConfidence < 0.45;
   const sessionMode = deriveSessionMode({
     athleteState,
@@ -185,7 +211,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");
   const loadSummaryCombined = loadSummaryParts.length ? loadSummaryParts.join(" ") : null;
 
-  const reasons = buildDecisionReasons({
+  const baseReasons = buildDecisionReasons({
     hardBlock,
     rehab,
     readinessWhy: params.readinessDecision?.why,
@@ -200,6 +226,17 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     whoopLine: whoopInfluenced ? params.whoop?.explanationLine ?? "WHOOP influenced confidence, but not the dominant constraint." : null,
     lowDataConfidence,
   });
+
+  // Prepend a streak line when escalation fired so it reads as the
+  // dominant cause of today's verdict (it overrode preliminaryState).
+  const streakLine = describeStreakContext(streakContext, "EN");
+  const reasons = streakResult.reasonCode || streakLine
+    ? [
+        ...(streakLine ? [streakLine] : []),
+        ...baseReasons,
+        ...(streakResult.reasonCode ? [streakResult.reasonCode] : []),
+      ]
+    : baseReasons;
   const explanationLines = buildDecisionExplanationLines({
     athleteState,
     sessionMode,
@@ -272,6 +309,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
       neuromuscular: snapshot.derived.hasNeuromuscularData,
       context: snapshot.derived.hasContextData,
     },
+    streakContext,
     engineContributions: {
       readiness: params.readinessDecision
         ? {

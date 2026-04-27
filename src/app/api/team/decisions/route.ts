@@ -13,6 +13,8 @@ import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type
 import { computeMechanicalLoad, type MechanicalLoadSourceRow } from "@/lib/micropulse/mechanicalLoad";
 import { computeMetabolicLoad, type MetabolicLoadSourceRow } from "@/lib/micropulse/metabolicLoad";
 import { flagAgainstBaseline, type AthleteMetricBaseline } from "@/lib/micropulse/baselines";
+import { fetchRecentDecisions, recordPlayerDecision } from "@/lib/micropulse/domain/decision/history";
+import type { RecentDecision } from "@/lib/micropulse/domain/decision/sequence";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -526,6 +528,13 @@ async function buildPlayerSource(args: {
    * bonuses when the player's personal mean is ≤ 2.5 over 28 days.
    */
   wellnessBaselines?: Map<string, AthleteMetricBaseline> | null;
+  /**
+   * Last 7 days of verdicts for this player (athlete_decision_history).
+   * Feeds sequence-aware escalation in buildAthleteDecision — 3+
+   * consecutive YELLOW becomes RED, 2+ consecutive RED tags as
+   * SUSTAINED. Without this the verdict is stateless day-by-day.
+   */
+  recentDecisions?: RecentDecision[] | null;
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -778,6 +787,34 @@ async function buildPlayerSource(args: {
       summary: loadSummaryParts.join(" | "),
     },
     hardBlock: false,
+    recentDecisions: args.recentDecisions ?? null,
+  });
+
+  // Fire-and-forget: persist this verdict to athlete_decision_history.
+  // Foundation for sequence escalation (next time we run), counterfactual
+  // explanations, calibration loops, and ROI proof. Failures logged but
+  // never block the response.
+  void recordPlayerDecision({
+    decision: athleteDecision,
+    teamId: args.teamId ?? null,
+    inputSignals: {
+      // Snapshot of the dominant input drivers — keep small, just what
+      // we'd want for counterfactuals later. Add more keys as needed.
+      readinessSten: readinessDecision?.supportingMetrics?.zScore != null
+        ? Math.max(1, Math.min(10, Math.round(2 * readinessDecision.supportingMetrics.zScore + 5.5)))
+        : null,
+      readinessZ: zToday,
+      deltaZ: dz,
+      acwr: acwrValue,
+      sleepZ,
+      sorenessZ,
+      sleepChronicLow,
+      sorenessChronicLow,
+      indoorBand: null,
+      decelOverallFlag: null,
+      compositeConcern: compositeLoad.concernLevel,
+      injuryRisk: injuryRiskDecision?.injuryRiskLevel ?? null,
+    },
   });
 
   // CMJ required today if:
@@ -857,7 +894,7 @@ export async function GET(req: Request) {
     // Basketball teams are always indoor regardless of toggle
     const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
-    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer] = await Promise.all([
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -867,6 +904,7 @@ export async function GET(req: Request) {
       fetchWhoopSnapshots(sb, playerIds),
       fetchVbtDataForPlayers(sb, playerIds, date, teamId),
       fetchWellnessBaselines(sb, playerIds),
+      fetchRecentDecisions(playerIds, 7),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -891,6 +929,7 @@ export async function GET(req: Request) {
             indoorMode: effectiveIndoorMode,
             sportType,
             wellnessBaselines: wellnessBaselinesByPlayer.get(String(row.player_id)) ?? null,
+            recentDecisions: recentDecisionsByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {

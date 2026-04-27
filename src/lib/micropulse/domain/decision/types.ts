@@ -39,6 +39,17 @@ export interface AthleteDecision {
     context: boolean;
   };
 
+  // ── Sequence / streak context (decision_history derived) ─────────
+  // Set by buildAthleteDecision when recentDecisions are passed in.
+  // Coaches see "3rd yellow day in a row" instead of treating each
+  // day as isolated — chronic warnings become visible.
+  streakContext?: {
+    consecutiveYellow: number;   // YELLOW days in a row up to and including today
+    consecutiveRed: number;      // RED days in a row up to and including today
+    daysOfYellowOrRed: number;   // any non-green over the last 7d
+    daysSinceGreen: number | null; // null = always green / no history
+    escalationApplied: "none" | "yellow_streak_to_red" | "red_streak_sustained";
+  };
   engineContributions?: {
     readiness?: {
       score?: number | null;
