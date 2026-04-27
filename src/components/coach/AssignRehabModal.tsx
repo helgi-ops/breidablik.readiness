@@ -246,8 +246,12 @@ export default function AssignRehabModal(props: AssignRehabModalProps) {
         .from("player_template_assignments")
         .upsert(rows, { onConflict: "player_id,entry_date" });
       if (upErr) {
-        console.error(upErr);
-        setError(t.errorSave);
+        // Surface the actual DB error message (RLS denial, constraint
+        // violation, etc.) so the next bug is debuggable in 5 seconds
+        // instead of a generic "could not save". Falls back to the
+        // friendly message only when no message present.
+        console.error("AssignRehabModal upsert failed:", upErr);
+        setError(`${t.errorSave} — ${upErr.message || upErr.code || "unknown error"}`);
         setSaving(false);
         return;
       }
