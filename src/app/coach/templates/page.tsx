@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { usePlan } from "@/lib/micropulse/product";
 import AssignRehabModal from "@/components/coach/AssignRehabModal";
+import TemplateBlockBuilder, { type TemplateStructure } from "@/components/coach/TemplateBlockBuilder";
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -133,23 +134,24 @@ export default function TemplatesPage() {
   const [newCode, setNewCode] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newStructure, setNewStructure] = useState(
-    JSON.stringify(
-      {
-        duration_min: 25,
-        category: "strength",
-        blocks: [
-          {
-            type: "strength",
-            title: "Block A",
-            exercises: [{ name: "Bench Press", sets: 4, reps: 4 }],
-          },
-        ],
-      },
-      null,
-      2
-    )
+
+  // Structure is now an OBJECT (TemplateStructure), edited via the
+  // visual TemplateBlockBuilder. We only fall through to raw JSON when
+  // the coach toggles "Show JSON" — for power users who want to paste
+  // a complex structure or copy from another template.
+  const defaultStructure: TemplateStructure = {
+    duration_min: 25,
+    category: "strength",
+    blocks: [
+      { type: "strength", title: "Block A", exercises: [{ name: "Bench Press", sets: 4, reps: 4 }] },
+    ],
+  };
+  const [newStructureObj, setNewStructureObj] = useState<TemplateStructure>(defaultStructure);
+  const [showJsonMode, setShowJsonMode] = useState(false);
+  const [newStructureJson, setNewStructureJson] = useState<string>(
+    JSON.stringify(defaultStructure, null, 2),
   );
+  const [jsonError, setJsonError] = useState<string>("");
 
   // Preview / details
   const [openStructureId, setOpenStructureId] = useState<string | null>(null);
@@ -238,12 +240,17 @@ export default function TemplatesPage() {
   }
 
   async function createTemplate() {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(newStructure);
-    } catch {
-      alert("Structure þarf að vera valid JSON.");
-      return;
+    // Pull the structure from whichever mode is active. JSON mode wins
+    // when toggled — coach can paste a full structure and we trust it.
+    let structureToSave: TemplateStructure = newStructureObj;
+    if (showJsonMode) {
+      try {
+        structureToSave = JSON.parse(newStructureJson);
+        setJsonError("");
+      } catch (e) {
+        setJsonError(`Ekki valid JSON: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
     }
 
     const payload = {
@@ -251,7 +258,7 @@ export default function TemplatesPage() {
       code: newCode || null,
       title: newTitle || null,
       description: newDesc || null,
-      structure: parsed,
+      structure: structureToSave,
       is_active: true,
     };
 
@@ -259,13 +266,16 @@ export default function TemplatesPage() {
 
     if (error) {
       console.error("createTemplate error:", error);
-      alert("Tókst ekki að búa til template.");
+      alert(`Tókst ekki að búa til template — ${error.message || error.code || "unknown error"}`);
       return;
     }
 
     setNewCode("");
     setNewTitle("");
     setNewDesc("");
+    setNewStructureObj(defaultStructure);
+    setNewStructureJson(JSON.stringify(defaultStructure, null, 2));
+    setShowJsonMode(false);
     setShowNew(false);
     await load();
   }
@@ -361,10 +371,56 @@ export default function TemplatesPage() {
                 <Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Stutt lýsing..." />
               </div>
 
-              <div className="grid gap-1">
-                <Label>Structure (JSON)</Label>
-                <Textarea value={newStructure} onChange={(e) => setNewStructure(e.target.value)} className="min-h-[220px] font-mono text-xs" />
+              {/* Mode toggle: visual builder (default) vs raw JSON */}
+              <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <Label className="text-base">Uppbygging æfingakerfis</Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showJsonMode) {
+                      // Switching back to visual: parse JSON to object
+                      try {
+                        const parsed = JSON.parse(newStructureJson);
+                        setNewStructureObj(parsed);
+                        setJsonError("");
+                        setShowJsonMode(false);
+                      } catch (e) {
+                        setJsonError(`Ekki valid JSON: ${e instanceof Error ? e.message : String(e)}`);
+                      }
+                    } else {
+                      // Switching to JSON: serialize object
+                      setNewStructureJson(JSON.stringify(newStructureObj, null, 2));
+                      setShowJsonMode(true);
+                    }
+                  }}
+                  className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  {showJsonMode ? "← Skipta í visual" : "Sýna sem JSON →"}
+                </button>
               </div>
+
+              {showJsonMode ? (
+                <div className="grid gap-1">
+                  <Textarea
+                    value={newStructureJson}
+                    onChange={(e) => setNewStructureJson(e.target.value)}
+                    className="min-h-[280px] font-mono text-xs"
+                  />
+                  {jsonError && (
+                    <div className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+                      {jsonError}
+                    </div>
+                  )}
+                  <p className="text-[11px] italic text-slate-500">
+                    Power-user mode — paste valid JSON structure. Switching back to visual will validate and load the parsed object.
+                  </p>
+                </div>
+              ) : (
+                <TemplateBlockBuilder
+                  value={newStructureObj}
+                  onChange={setNewStructureObj}
+                />
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setShowNew(false)}>
