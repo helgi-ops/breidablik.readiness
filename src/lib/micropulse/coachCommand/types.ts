@@ -161,4 +161,21 @@ export type CoachCommandPlayerSource = {
     daysSinceGreen: number | null;
     escalationApplied: "none" | "yellow_streak_to_red" | "red_streak_sustained";
   } | null;
+  /**
+   * Tomorrow's forecast — rule-based projection of next-day verdict
+   * using streak escalation gates + signal trajectory. Returns 3
+   * scenarios (improve/hold/decline) + bilingual rationale lines.
+   * Null when today is GRAY (no signal to extrapolate from).
+   */
+  forecast?: {
+    expectedState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    confidence: "low" | "medium" | "high";
+    scenarios: {
+      ifImprove: "GREEN" | "YELLOW" | "RED" | "GRAY";
+      ifHold: "GREEN" | "YELLOW" | "RED" | "GRAY";
+      ifDecline: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    };
+    reasonsEN: string[];
+    reasonsIS: string[];
+  } | null;
 };

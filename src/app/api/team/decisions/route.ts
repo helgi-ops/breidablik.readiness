@@ -15,6 +15,7 @@ import { computeMetabolicLoad, type MetabolicLoadSourceRow } from "@/lib/micropu
 import { flagAgainstBaseline, type AthleteMetricBaseline } from "@/lib/micropulse/baselines";
 import { fetchRecentDecisions, recordPlayerDecision } from "@/lib/micropulse/domain/decision/history";
 import type { RecentDecision } from "@/lib/micropulse/domain/decision/sequence";
+import { deriveSignalTrend, type SignalTrend } from "@/lib/micropulse/domain/decision/forecast";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 
 export const runtime = "nodejs";
@@ -163,6 +164,50 @@ async function fetchCoachRows(sb: ReturnType<typeof getAdminClient>, teamId: str
   const fallback = await sb.from("v_coach_readiness_today_v8").select("*").eq("entry_date", date).order("total_score", { ascending: true }).order("full_name", { ascending: true });
   if (fallback.error) throw fallback.error;
   return ((fallback.data ?? []) as CoachRow[]).filter((row) => String(row.team_id ?? (row as Record<string, unknown>).team ?? "") === teamId);
+}
+
+/**
+ * Pull last 5 days of total_score per player so the forecast engine
+ * can compute a SignalTrend (improving / stable / declining). Bulk
+ * single round-trip — N+1 would dominate latency at 25-player teams.
+ *
+ * Returns Map keyed by player_id → SignalTrend (already derived).
+ * Empty map on no data; caller should treat absence as "unknown trend".
+ */
+async function fetchScoreTrendByPlayer(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+  date: string,
+): Promise<Map<string, SignalTrend>> {
+  if (!playerIds.length) return new Map();
+  // 5 calendar days ending today (inclusive) — short enough to be
+  // responsive to current state, long enough to smooth daily noise.
+  const start = new Date(`${date}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - 4);
+  const startDate = start.toISOString().slice(0, 10);
+  const { data, error } = await sb
+    .from("readiness_entries")
+    .select("player_id, entry_date, total_score")
+    .in("player_id", playerIds)
+    .gte("entry_date", startDate)
+    .lte("entry_date", date)
+    .order("entry_date", { ascending: true });
+  if (error) {
+    console.warn("fetchScoreTrendByPlayer error:", error.message);
+    return new Map();
+  }
+  const byPlayer = new Map<string, Array<{ date: string; score: number | null }>>();
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const pid = String(row.player_id);
+    const score = typeof row.total_score === "number" ? row.total_score : null;
+    if (!byPlayer.has(pid)) byPlayer.set(pid, []);
+    byPlayer.get(pid)!.push({ date: String(row.entry_date), score });
+  }
+  const out = new Map<string, SignalTrend>();
+  for (const [pid, rows] of byPlayer.entries()) {
+    out.set(pid, deriveSignalTrend(rows.map((r) => r.score)));
+  }
+  return out;
 }
 
 async function fetchTrainingModifiers(
@@ -535,6 +580,13 @@ async function buildPlayerSource(args: {
    * SUSTAINED. Without this the verdict is stateless day-by-day.
    */
   recentDecisions?: RecentDecision[] | null;
+  /**
+   * Recent total_score trajectory (last 5 days) used by the forecast
+   * engine to lean tomorrow's projection toward "improving" or
+   * "declining". Optional — when null the forecast falls back to
+   * streak-only logic with reduced confidence.
+   */
+  signalTrend?: SignalTrend | null;
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -788,6 +840,7 @@ async function buildPlayerSource(args: {
     },
     hardBlock: false,
     recentDecisions: args.recentDecisions ?? null,
+    signalTrend: args.signalTrend ?? null,
   });
 
   // Fire-and-forget: persist this verdict to athlete_decision_history.
@@ -867,6 +920,11 @@ async function buildPlayerSource(args: {
     // when empty so consumers can rely on the field being present.
     counterfactuals: athleteDecision.counterfactuals ?? [],
     streakContext: athleteDecision.streakContext ?? null,
+    // Tomorrow's forecast — null for GRAY (no signal). Includes
+    // expectedState + 3 scenarios + bilingual rationale. Surfaced in
+    // dashboard accordion as "Tomorrow's outlook" panel. Coaches use
+    // this to plan tomorrow's session before signals come in.
+    forecast: athleteDecision.forecast ?? null,
   };
 }
 
@@ -902,7 +960,7 @@ export async function GET(req: Request) {
     // Basketball teams are always indoor regardless of toggle
     const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
-    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer] = await Promise.all([
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer, signalTrendByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -913,6 +971,7 @@ export async function GET(req: Request) {
       fetchVbtDataForPlayers(sb, playerIds, date, teamId),
       fetchWellnessBaselines(sb, playerIds),
       fetchRecentDecisions(playerIds, 7),
+      fetchScoreTrendByPlayer(sb, playerIds, date),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -938,6 +997,7 @@ export async function GET(req: Request) {
             sportType,
             wellnessBaselines: wellnessBaselinesByPlayer.get(String(row.player_id)) ?? null,
             recentDecisions: recentDecisionsByPlayer.get(String(row.player_id)) ?? null,
+            signalTrend: signalTrendByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {

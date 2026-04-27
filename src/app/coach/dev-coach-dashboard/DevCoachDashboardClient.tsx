@@ -6262,6 +6262,92 @@ export default function CoachPage() {
                   </div>
                 </div>
 
+                {/* ── Tomorrow's outlook (forecast) ─────────────────────
+                    Rule-based projection of next-day verdict using
+                    streak escalation gates + signal trajectory. Three
+                    scenarios (improve/hold/decline) so coach can plan
+                    tomorrow before signals come in. Hidden when GRAY
+                    today (no signal to extrapolate) or low confidence. */}
+                {athleteDecision.forecast ? (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50/40 px-4 py-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-700">
+                        {lang === "IS" ? "Á morgun" : "Tomorrow's outlook"}
+                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          athleteDecision.forecast.confidence === "high"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : athleteDecision.forecast.confidence === "medium"
+                            ? "border-amber-300 bg-amber-50 text-amber-800"
+                            : "border-slate-300 bg-white text-slate-600"
+                        }`}
+                      >
+                        {athleteDecision.forecast.confidence}
+                      </span>
+                    </div>
+
+                    {/* Three scenarios as a compact strip */}
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {(["ifImprove", "ifHold", "ifDecline"] as const).map((key) => {
+                        const state = athleteDecision.forecast!.scenarios[key];
+                        const label = key === "ifImprove"
+                          ? (lang === "IS" ? "Ef batnar" : "If improves")
+                          : key === "ifHold"
+                          ? (lang === "IS" ? "Ef stöðugt" : "If holds")
+                          : (lang === "IS" ? "Ef versnar" : "If declines");
+                        const isExpected = state === athleteDecision.forecast!.expectedState && key === "ifHold";
+                        return (
+                          <div
+                            key={key}
+                            className={`flex flex-col items-start gap-1 rounded-lg border bg-white px-3 py-2 ${
+                              isExpected ? "border-violet-300 ring-1 ring-violet-200" : "border-slate-200"
+                            }`}
+                          >
+                            <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                              {label}
+                            </div>
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                                state === "GREEN"
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                  : state === "YELLOW"
+                                  ? "border-amber-300 bg-amber-50 text-amber-800"
+                                  : state === "RED"
+                                  ? "border-red-300 bg-red-50 text-red-800"
+                                  : "border-slate-300 bg-white text-slate-700"
+                              }`}
+                            >
+                              {state}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bilingual rationale lines */}
+                    {(lang === "IS"
+                      ? athleteDecision.forecast.reasonsIS
+                      : athleteDecision.forecast.reasonsEN
+                    ).length > 0 ? (
+                      <ul className="mt-3 space-y-1 text-xs leading-5 text-slate-700">
+                        {(lang === "IS"
+                          ? athleteDecision.forecast.reasonsIS
+                          : athleteDecision.forecast.reasonsEN
+                        ).map((line, idx) => (
+                          <li
+                            key={`${pid}-fc-${idx}`}
+                            className="flex items-start gap-1.5"
+                          >
+                            <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-violet-400" />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {/* ── What if (counterfactuals) ─────────────────────────
                     Single-lever flips that would have improved today's
                     verdict. Empty for GREEN players (engine returns []).

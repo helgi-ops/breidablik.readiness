@@ -9,6 +9,7 @@ import { deriveSessionMode } from "./sessionMode";
 import { applyStreakEscalation, describeStreakContext, type RecentDecision } from "./sequence";
 import { inferAthleteState } from "./state";
 import { computeCounterfactuals } from "./counterfactuals";
+import { computeForecast, type SignalTrend } from "./forecast";
 import type { AthleteDecision, AthleteState, NeuralStatus } from "./types";
 
 type BuildAthleteDecisionParams = {
@@ -67,6 +68,14 @@ type BuildAthleteDecisionParams = {
    * Optional — when absent, escalation is a no-op.
    */
   recentDecisions?: RecentDecision[] | null;
+  /**
+   * Recent signal trajectory (e.g. last 5 days of total_score or
+   * z-score) used by the forecast engine to lean tomorrow toward
+   * "improving" or "declining" instead of just "ifHold". Optional —
+   * when absent, forecast falls back to streak-only logic and
+   * confidence drops to medium/low.
+   */
+  signalTrend?: SignalTrend | null;
 };
 
 function mapReadinessConfidence(value?: "low" | "medium" | "high" | null): number {
@@ -140,6 +149,18 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     inferInputs,
     streakContext,
   );
+
+  // ── Tomorrow's forecast ──────────────────────────────────────────
+  // Rule-based projection that combines streak escalation gates +
+  // recent signal trajectory. Returns null for GRAY (no signal to
+  // extrapolate). Gives coach 3 scenarios so they can plan tomorrow
+  // before signals come in.
+  const forecast = computeForecast({
+    todayDate: snapshot.date,
+    todayActualState: athleteState,
+    recentDecisions: params.recentDecisions ?? [],
+    signalTrend: params.signalTrend ?? null,
+  });
 
   const lowDataConfidence = snapshot.derived.overallSnapshotConfidence < 0.45;
   const sessionMode = deriveSessionMode({
@@ -282,6 +303,7 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
     },
     streakContext,
     counterfactuals,
+    forecast,
     engineContributions: {
       readiness: params.readinessDecision
         ? {

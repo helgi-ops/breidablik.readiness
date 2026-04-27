@@ -1,5 +1,6 @@
 import type { TrainingRecommendation } from "@/lib/micropulse/decision";
 import type { Counterfactual } from "./counterfactuals";
+import type { VerdictForecast } from "./forecast";
 
 export type AthleteState = "GREEN" | "YELLOW" | "RED" | "GRAY";
 export type SessionMode = "full" | "modified" | "recovery" | "pending";
@@ -59,6 +60,14 @@ export interface AthleteDecision {
   // Coaches see "If indoor composite had been TYPICAL → YELLOW not RED"
   // — the actionable counterpart to the reasons[] explanation.
   counterfactuals?: Counterfactual[];
+
+  // ── Tomorrow's outlook ───────────────────────────────────────────
+  // Rule-based forecast from forecast.ts. Combines streak escalation
+  // gates + (optional) signal trajectory to project tomorrow. Returns
+  // expectedState + 3 scenarios (improve / hold / decline) + bilingual
+  // rationale. Null when today is GRAY (no signal to extrapolate).
+  // Coaches use this to plan tomorrow's session before signals come in.
+  forecast?: VerdictForecast | null;
   engineContributions?: {
     readiness?: {
       score?: number | null;

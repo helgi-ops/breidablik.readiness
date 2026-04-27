@@ -154,10 +154,27 @@ const INJ_I18N = {
   ofFourteen: { EN: "(of 14)", IS: "(af 14)" },
   oneSdHint: { EN: "(>1 SD)", IS: "(>1 SD)" },
   sevenOver28d: { EN: "(7d / 28d)", IS: "(7d / 28d)" },
-  firstWarningPrefix: { EN: "First warning sign:", IS: "First warning sign:" },
+  firstWarningPrefix: { EN: "First warning sign", IS: "Fyrsta aðvörunarmerki" },
   daysBeforeInjury: {
-    EN: "days before injury. MicroPulse had detected the pattern with that lead time.",
-    IS: "dögum fyrir meiðsli. MicroPulse fangaði munstrið með þeim fyrirvara.",
+    EN: "days before injury",
+    IS: "dögum fyrir meiðsli",
+  },
+  noSpecificSignals: {
+    EN: "MicroPulse detected the pattern with that lead time.",
+    IS: "MicroPulse fangaði munstrið með þeim fyrirvara.",
+  },
+  // Per-day warning timeline labels
+  timelineHeading: { EN: "Day-by-day warning timeline", IS: "Dag-fyrir-dag aðvörunartímalína" },
+  timelineSubhead: {
+    EN: "Every non-green day in the 14-day lead-up to the injury, oldest first.",
+    IS: "Allir non-green dagar á 14-daga aðdraganda meiðslanna, elsti efst.",
+  },
+  daysBeforeShort: { EN: "d before", IS: "d fyrir" },
+  decouplingChip: { EN: "decoupling", IS: "decoupling" },
+  extremeLoadChip: { EN: "extreme load", IS: "extreme load" },
+  noTimeline: {
+    EN: "No prior non-green days recorded in the 14-day window.",
+    IS: "Engir non-green dagar á 14-daga glugganum.",
   },
   dominantSignals: { EN: "Dominant signals seen:", IS: "Dominant signals sem komu fram:" },
   notesLabel: { EN: "Notes:", IS: "Athugasemdir:" },
@@ -191,6 +208,93 @@ const INJ_I18N = {
 } as const;
 function it(key: keyof typeof INJ_I18N, lang: Lang): string {
   return lang === "IS" ? INJ_I18N[key].IS : INJ_I18N[key].EN;
+}
+
+/**
+ * Build a precise, sport-science-cited "first warning sign" sentence
+ * from the retro_signals JSONB. Lists the specific warning components
+ * that fired in the 14-day window leading up to the injury, with
+ * thresholds and references where applicable.
+ *
+ * Example outputs:
+ *   "First warning sign 8 days before injury — 1 RED day; ACWR 1.48
+ *    above Gabbett 2017 sweet-spot upper bound (1.30); dominant
+ *    wellness signal: muscle_soreness."
+ *   "First warning sign 12 days before injury — 3 YELLOW days; 2
+ *    internal:external decoupling alerts (Akubat 2014)."
+ *
+ * Falls back to the generic phrase when no specific signal triggered
+ * (rare — would mean firstWarning came from data we no longer index).
+ */
+function buildWarningSignSentence(
+  lead: number,
+  retro: Record<string, unknown> | null | undefined,
+  lang: Lang,
+): string {
+  const wellness = (retro?.wellness ?? {}) as Record<string, unknown>;
+  const decoupling = (retro?.decoupling ?? {}) as Record<string, unknown>;
+  const load = (retro?.load ?? {}) as Record<string, unknown>;
+
+  const yellowDays = (wellness.yellow_days as number | undefined) ?? 0;
+  const redDays = (wellness.red_days as number | undefined) ?? 0;
+  const decAlerts = (decoupling.alert_days as number | undefined) ?? 0;
+  const acwr = load.acwr as number | null | undefined;
+  const dominantSignals = (wellness.dominant_signals_seen as string[] | undefined) ?? [];
+
+  const components: string[] = [];
+
+  if (redDays > 0) {
+    components.push(
+      lang === "IS"
+        ? `${redDays} RED ${redDays === 1 ? "dagur" : "dagar"}`
+        : `${redDays} RED ${redDays === 1 ? "day" : "days"}`,
+    );
+  }
+  if (yellowDays > 0) {
+    components.push(
+      lang === "IS"
+        ? `${yellowDays} YELLOW ${yellowDays === 1 ? "dagur" : "dagar"}`
+        : `${yellowDays} YELLOW ${yellowDays === 1 ? "day" : "days"}`,
+    );
+  }
+  if (typeof acwr === "number" && acwr >= 1.3) {
+    components.push(
+      lang === "IS"
+        ? `ACWR ${acwr.toFixed(2)} — yfir efri mörkum Gabbett 2017 sweet-spot (1.30)`
+        : `ACWR ${acwr.toFixed(2)} — above Gabbett 2017 sweet-spot upper bound (1.30)`,
+    );
+  } else if (typeof acwr === "number" && acwr > 0 && acwr < 0.8) {
+    components.push(
+      lang === "IS"
+        ? `ACWR ${acwr.toFixed(2)} — undir Gabbett 2017 sweet-spot (0.80), undirálag`
+        : `ACWR ${acwr.toFixed(2)} — below Gabbett 2017 sweet-spot (0.80), undertraining`,
+    );
+  }
+  if (decAlerts > 0) {
+    components.push(
+      lang === "IS"
+        ? `${decAlerts} internal:external decoupling merki (Akubat 2014)`
+        : `${decAlerts} internal:external decoupling ${decAlerts === 1 ? "alert" : "alerts"} (Akubat 2014)`,
+    );
+  }
+  if (dominantSignals.length > 0) {
+    const cleaned = dominantSignals.map((s) => s.replace("wellness.", "")).join(", ");
+    components.push(
+      lang === "IS"
+        ? `ríkjandi wellness merki: ${cleaned}`
+        : `dominant wellness ${dominantSignals.length === 1 ? "signal" : "signals"}: ${cleaned}`,
+    );
+  }
+
+  const prefix = it("firstWarningPrefix", lang);
+  const tail = it("daysBeforeInjury", lang);
+
+  if (components.length === 0) {
+    // Fallback — pattern detected but no indexed component (unusual)
+    return `${prefix} ${lead} ${tail}. ${it("noSpecificSignals", lang)}`;
+  }
+
+  return `${prefix} ${lead} ${tail} — ${components.join("; ")}.`;
 }
 
 export default function CoachInjuriesPage() {
@@ -420,11 +524,97 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
 
           {firstWarning != null && firstWarning < 14 && (
             <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
-              <strong>{it("firstWarningPrefix", lang)}</strong> {firstWarning} {it("daysBeforeInjury", lang)}
+              {buildWarningSignSentence(firstWarning, retro as Record<string, unknown> | null | undefined, lang)}
             </div>
           )}
 
-          {retro?.wellness?.dominant_signals_seen && retro.wellness.dominant_signals_seen.length > 0 && (
+          {/* Day-by-day warning timeline — every non-green day in
+              the 14-day window, with flag, dominant signal, and load
+              context. Coach reads this top-to-bottom as the lead-up
+              unfolded. Hidden when timeline is empty (no prior off
+              days) — those cases still show the warning sentence
+              above if firstWarning exists, or fall through silently. */}
+          {(() => {
+            const timeline = (retro as Record<string, unknown> | null)?.warning_timeline as Array<{
+              date: string;
+              days_before: number;
+              flag: "YELLOW" | "RED";
+              total_score: number | null;
+              z_score: number | null;
+              dominant_signal: string | null;
+              had_decoupling_alert: boolean;
+              extreme_load_day: boolean;
+            }> | undefined;
+            if (!timeline || timeline.length === 0) return null;
+            return (
+              <div className="mt-3 rounded border border-slate-200 bg-white p-2.5">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    {it("timelineHeading", lang)}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {timeline.length} {it("daysShort", lang)}
+                  </div>
+                </div>
+                <div className="text-[10px] italic text-slate-500 mb-2">
+                  {it("timelineSubhead", lang)}
+                </div>
+                <ol className="space-y-1.5">
+                  {timeline.map((d, idx) => {
+                    const flagCls = d.flag === "RED"
+                      ? "border-red-300 bg-red-50 text-red-700"
+                      : "border-amber-300 bg-amber-50 text-amber-700";
+                    const dominant = d.dominant_signal?.replace("wellness.", "");
+                    return (
+                      <li key={`tl-${idx}-${d.date}`} className="flex items-start gap-2 text-xs">
+                        <span className="mt-0.5 inline-flex shrink-0 items-center font-mono text-[10px] text-slate-500">
+                          {d.date}
+                        </span>
+                        <span className="mt-0.5 inline-flex shrink-0 items-center text-[10px] text-slate-400 tabular-nums">
+                          ({d.days_before}{it("daysBeforeShort", lang)})
+                        </span>
+                        <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold ${flagCls}`}>
+                          {d.flag}
+                        </span>
+                        <span className="flex-1 text-slate-700">
+                          {d.total_score != null && (
+                            <span className="tabular-nums text-slate-500">{d.total_score}/25</span>
+                          )}
+                          {d.z_score != null && (
+                            <span className="ml-1.5 tabular-nums text-slate-500">
+                              z={d.z_score.toFixed(2)}
+                            </span>
+                          )}
+                          {dominant && (
+                            <span className="ml-1.5 text-slate-700">
+                              · <span className="font-medium">{dominant}</span>
+                            </span>
+                          )}
+                          {d.had_decoupling_alert && (
+                            <span className="ml-1.5 inline-flex items-center rounded-sm border border-orange-300 bg-orange-50 px-1 text-[9px] font-semibold uppercase text-orange-700">
+                              {it("decouplingChip", lang)}
+                            </span>
+                          )}
+                          {d.extreme_load_day && (
+                            <span className="ml-1.5 inline-flex items-center rounded-sm border border-purple-300 bg-purple-50 px-1 text-[9px] font-semibold uppercase text-purple-700">
+                              {it("extremeLoadChip", lang)}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            );
+          })()}
+
+          {/* Standalone dominant-signal line — only when the warning
+              sentence above isn't rendered (so the signals don't get
+              shown twice in the same expanded row). */}
+          {(firstWarning == null || firstWarning >= 14) &&
+            retro?.wellness?.dominant_signals_seen &&
+            retro.wellness.dominant_signals_seen.length > 0 && (
             <div className="mt-3 text-xs">
               <strong className="text-slate-700">{it("dominantSignals", lang)}</strong>{" "}
               <span className="text-slate-600">
