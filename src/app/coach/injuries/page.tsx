@@ -211,6 +211,111 @@ function it(key: keyof typeof INJ_I18N, lang: Lang): string {
 }
 
 /**
+ * Per-day "why was this RED/YELLOW" reason chips.
+ *
+ * Each entry in warning_timeline carries the raw signals that drove
+ * the day's flag (sub-scores, personal-z, delta_z, pi tags, decoupling,
+ * extreme load). This function turns those into a short ordered list
+ * of human-readable reason chips so the coach immediately sees the
+ * cause without parsing numbers.
+ *
+ * Reasons are listed in priority order — most clinically relevant
+ * first. Hard threshold reasons (sub-score ≤ 2, z ≤ -2, Δz ≤ -1.5)
+ * always beat soft tags (volatility, sustained_low).
+ */
+function buildDayReasons(
+  day: {
+    sub_scores?: { sleep?: number | null; energy?: number | null; stress?: number | null; soreness?: number | null } | null;
+    z_score?: number | null;
+    delta_z?: number | null;
+    pi_tags?: string[] | unknown;
+    had_decoupling_alert?: boolean;
+    extreme_load_day?: boolean;
+    total_score?: number | null;
+  },
+  lang: Lang,
+): Array<{ label: string; tone: "red" | "amber" | "slate" }> {
+  const reasons: Array<{ label: string; tone: "red" | "amber" | "slate" }> = [];
+
+  // 1. Sub-scores ≤ 2 (the most directly clinical signal)
+  const subs = day.sub_scores ?? {};
+  const subEntries: Array<{ key: keyof typeof subs; valueEN: string; valueIS: string }> = [
+    { key: "sleep", valueEN: "sleep", valueIS: "svefn" },
+    { key: "soreness", valueEN: "soreness", valueIS: "strengir" },
+    { key: "energy", valueEN: "energy", valueIS: "orka" },
+    { key: "stress", valueEN: "stress/mood", valueIS: "streita" },
+  ];
+  for (const s of subEntries) {
+    const v = subs[s.key];
+    if (typeof v === "number" && v <= 2) {
+      const labelName = lang === "IS" ? s.valueIS : s.valueEN;
+      reasons.push({ label: `${labelName} ${v}/5`, tone: v <= 1 ? "red" : "amber" });
+    }
+  }
+
+  // 2. Personal-z ≤ -2 (Robertson 2017 — significant deviation from norm)
+  if (typeof day.z_score === "number" && day.z_score <= -2) {
+    reasons.push({
+      label: `z ${day.z_score.toFixed(2)} (${lang === "IS" ? "Robertson" : "Robertson"})`,
+      tone: "red",
+    });
+  } else if (typeof day.z_score === "number" && day.z_score <= -1) {
+    reasons.push({
+      label: `z ${day.z_score.toFixed(2)}`,
+      tone: "amber",
+    });
+  }
+
+  // 3. Acute Δz drop ≤ -1.5 (overnight crash)
+  if (typeof day.delta_z === "number" && day.delta_z <= -1.5) {
+    reasons.push({
+      label: lang === "IS" ? `acute drop Δz ${day.delta_z.toFixed(2)}` : `acute drop Δz ${day.delta_z.toFixed(2)}`,
+      tone: "red",
+    });
+  }
+
+  // 4. Decoupling alert
+  if (day.had_decoupling_alert) {
+    reasons.push({
+      label: lang === "IS" ? "decoupling (Akubat 2014)" : "decoupling (Akubat 2014)",
+      tone: "amber",
+    });
+  }
+
+  // 5. Extreme load
+  if (day.extreme_load_day) {
+    reasons.push({
+      label: lang === "IS" ? "extreme load dagur" : "extreme load day",
+      tone: "amber",
+    });
+  }
+
+  // 6. Engine pi tags (volatility, sustained_low) — soft context
+  const tags = Array.isArray(day.pi_tags) ? (day.pi_tags as string[]) : [];
+  const uniqueTags = Array.from(new Set(tags));
+  for (const tag of uniqueTags) {
+    if (tag === "pi_volatility") {
+      reasons.push({ label: lang === "IS" ? "óstöðugleiki" : "volatility", tone: "slate" });
+    } else if (tag === "pi_sustained_low") {
+      reasons.push({ label: lang === "IS" ? "viðvarandi lágt" : "sustained low", tone: "slate" });
+    } else if (tag === "pi_acute_drop" && !reasons.some((r) => r.label.startsWith("acute drop"))) {
+      // pi_acute_drop without a numeric Δz match — surface as soft tag
+      reasons.push({ label: lang === "IS" ? "acute drop" : "acute drop", tone: "amber" });
+    }
+  }
+
+  // 7. Fallback — low total_score with no other reason
+  if (reasons.length === 0 && typeof day.total_score === "number" && day.total_score <= 17) {
+    reasons.push({
+      label: `total ${day.total_score}/25`,
+      tone: day.total_score <= 12 ? "red" : "amber",
+    });
+  }
+
+  return reasons;
+}
+
+/**
  * Build a precise, sport-science-cited "first warning sign" sentence
  * from the retro_signals JSONB. Lists the specific warning components
  * that fired in the 14-day window leading up to the injury, with
@@ -529,11 +634,10 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
           )}
 
           {/* Day-by-day warning timeline — every non-green day in
-              the 14-day window, with flag, dominant signal, and load
-              context. Coach reads this top-to-bottom as the lead-up
-              unfolded. Hidden when timeline is empty (no prior off
-              days) — those cases still show the warning sentence
-              above if firstWarning exists, or fall through silently. */}
+              the 14-day window, with the reason chips that explain
+              WHY the day was RED/YELLOW (sub-score below threshold,
+              personal-z drop, acute Δz, decoupling, etc.). Coach
+              reads this top-to-bottom as the lead-up unfolded. */}
           {(() => {
             const timeline = (retro as Record<string, unknown> | null)?.warning_timeline as Array<{
               date: string;
@@ -541,7 +645,12 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
               flag: "YELLOW" | "RED";
               total_score: number | null;
               z_score: number | null;
+              yesterday_z?: number | null;
+              yesterday_total?: number | null;
+              delta_z?: number | null;
               dominant_signal: string | null;
+              pi_tags?: string[] | unknown;
+              sub_scores?: { sleep?: number | null; energy?: number | null; stress?: number | null; soreness?: number | null } | null;
               had_decoupling_alert: boolean;
               extreme_load_day: boolean;
             }> | undefined;
@@ -559,48 +668,59 @@ function InjuryRow({ injury, playerName, lang }: { injury: InjuryEvent; playerNa
                 <div className="text-[10px] italic text-slate-500 mb-2">
                   {it("timelineSubhead", lang)}
                 </div>
-                <ol className="space-y-1.5">
+                <ol className="space-y-2">
                   {timeline.map((d, idx) => {
                     const flagCls = d.flag === "RED"
                       ? "border-red-300 bg-red-50 text-red-700"
                       : "border-amber-300 bg-amber-50 text-amber-700";
-                    const dominant = d.dominant_signal?.replace("wellness.", "");
+                    const reasons = buildDayReasons(d, lang);
                     return (
-                      <li key={`tl-${idx}-${d.date}`} className="flex items-start gap-2 text-xs">
-                        <span className="mt-0.5 inline-flex shrink-0 items-center font-mono text-[10px] text-slate-500">
-                          {d.date}
-                        </span>
-                        <span className="mt-0.5 inline-flex shrink-0 items-center text-[10px] text-slate-400 tabular-nums">
-                          ({d.days_before}{it("daysBeforeShort", lang)})
-                        </span>
-                        <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold ${flagCls}`}>
-                          {d.flag}
-                        </span>
-                        <span className="flex-1 text-slate-700">
+                      <li key={`tl-${idx}-${d.date}`} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        {/* Header row: date + days-before + flag chip + score */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-mono text-[10px] text-slate-500">{d.date}</span>
+                          <span className="text-[10px] text-slate-400 tabular-nums">
+                            ({d.days_before}{it("daysBeforeShort", lang)})
+                          </span>
+                          <span className={`inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold ${flagCls}`}>
+                            {d.flag}
+                          </span>
                           {d.total_score != null && (
-                            <span className="tabular-nums text-slate-500">{d.total_score}/25</span>
+                            <span className="text-[10px] tabular-nums text-slate-500">
+                              {d.total_score}/25
+                            </span>
                           )}
                           {d.z_score != null && (
-                            <span className="ml-1.5 tabular-nums text-slate-500">
-                              z={d.z_score.toFixed(2)}
+                            <span className="text-[10px] tabular-nums text-slate-400">
+                              · z={d.z_score.toFixed(2)}
                             </span>
                           )}
-                          {dominant && (
-                            <span className="ml-1.5 text-slate-700">
-                              · <span className="font-medium">{dominant}</span>
+                          {d.delta_z != null && d.delta_z <= -1.5 && (
+                            <span className="text-[10px] tabular-nums text-red-600 font-semibold">
+                              · Δz {d.delta_z.toFixed(2)}
                             </span>
                           )}
-                          {d.had_decoupling_alert && (
-                            <span className="ml-1.5 inline-flex items-center rounded-sm border border-orange-300 bg-orange-50 px-1 text-[9px] font-semibold uppercase text-orange-700">
-                              {it("decouplingChip", lang)}
-                            </span>
-                          )}
-                          {d.extreme_load_day && (
-                            <span className="ml-1.5 inline-flex items-center rounded-sm border border-purple-300 bg-purple-50 px-1 text-[9px] font-semibold uppercase text-purple-700">
-                              {it("extremeLoadChip", lang)}
-                            </span>
-                          )}
-                        </span>
+                        </div>
+                        {/* Reason chips — the "why" layer */}
+                        {reasons.length > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {reasons.map((r, ri) => {
+                              const cls = r.tone === "red"
+                                ? "border-red-300 bg-red-50 text-red-700"
+                                : r.tone === "amber"
+                                ? "border-amber-300 bg-amber-50 text-amber-700"
+                                : "border-slate-300 bg-white text-slate-600";
+                              return (
+                                <span
+                                  key={`tl-${idx}-r-${ri}`}
+                                  className={`inline-flex items-center rounded border px-1.5 py-0 text-[10px] font-medium ${cls}`}
+                                >
+                                  {r.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </li>
                     );
                   })}

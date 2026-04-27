@@ -1,28 +1,20 @@
 -- Extend compute_injury_retrospective_signals to also return a
--- per-day warning_timeline array. Each entry describes ONE day in
--- the lookback window where the player had a non-green flag, plus
--- the dominant signal that drove the flag and key load context.
+-- per-day warning_timeline array — every non-green day in the
+-- 14-day window, with the signals that caused the flag.
 --
--- Why a server-side timeline (vs. UI fetching readiness_entries on
--- expand): keeps the clinical retrospective record atomic with the
--- injury, so a coach reviewing a 6-month-old injury sees the same
--- timeline forever even if readiness_entries is later archived or
--- re-baselined. Also avoids an N+1 fetch when the user expands
--- multiple injury rows.
+-- Why server-side (not UI fetch on expand): keeps the clinical
+-- retrospective record atomic with the injury, so a coach reviewing
+-- a 6-month-old injury sees the same timeline forever even if
+-- readiness_entries is later archived or re-baselined. Also avoids
+-- N+1 fetch when expanding multiple injury rows.
 --
--- Schema added inside retro_signals:
---   warning_timeline: [
---     {
---       date,                  -- ISO yyyy-mm-dd
---       days_before,           -- integer 1..14
---       flag,                  -- 'YELLOW' | 'RED'
---       total_score,           -- 0..25 readiness sum
---       z_score,               -- nullable, today's z if present
---       dominant_signal,       -- e.g. 'wellness.muscle_soreness'
---       had_decoupling_alert,  -- boolean — RPE-per-km > 1 SD personal
---       extreme_load_day       -- boolean — single-day session_load spike
---     }, ...
---   ]
+-- Per-day fields (so the UI can answer "why was this day RED?"):
+--   date, days_before, flag, total_score
+--   z_score, yesterday_z, yesterday_total, delta_z (acute change)
+--   dominant_signal, pi_tags (engine flags fired that day)
+--   sub_scores: { sleep, energy, stress, soreness } 1-5 raw
+--   had_decoupling_alert, extreme_load_day
+--
 -- Sorted oldest-first so the coach reads the timeline as it unfolded.
 
 create or replace function public.compute_injury_retrospective_signals(
@@ -153,9 +145,9 @@ begin
   );
 
   -- ── Per-day warning timeline ──────────────────────────────────
-  -- One entry per non-green day in the window. Joins readiness with
-  -- per-day decoupling + per-day extreme-load checks so the UI can
-  -- render a full picture without further fetches.
+  -- One entry per non-green day in the window, with sub-scores,
+  -- pi tags, and delta_z so the UI can compute plain-language
+  -- "why this day was RED/YELLOW" reasons without re-fetching.
   with day_decoupling as (
     select rpe.session_date,
            ((rpe.rpe::numeric * coalesce(rpe.duration_minutes, 60)::numeric)
@@ -191,8 +183,15 @@ begin
       (v_injury.injury_date - re.entry_date)::int as days_before,
       upper(re.computed_auto_flag) as flag,
       re.total_score,
-      (re.training_modifier->'pi'->>'z')::numeric as z_score,
+      (re.training_modifier->'pi'->>'z_today')::numeric as z_score,
+      (re.training_modifier->'pi'->>'yesterday_z')::numeric as yesterday_z,
+      (re.training_modifier->'pi'->>'yesterday_total')::numeric as yesterday_total,
       re.training_modifier->'pi'->'dominant_signal'->>'metric' as dominant_signal,
+      re.training_modifier->'pi'->'tags' as pi_tags,
+      re.sleep_quality,
+      re.fatigue_energy,
+      re.stress_mood,
+      re.muscle_soreness,
       exists (
         select 1
         from day_decoupling dd
@@ -220,7 +219,19 @@ begin
     'flag', flag,
     'total_score', total_score,
     'z_score', z_score,
+    'yesterday_z', yesterday_z,
+    'yesterday_total', yesterday_total,
+    'delta_z', case when z_score is not null and yesterday_z is not null
+                    then round((z_score - yesterday_z)::numeric, 2)
+                    else null end,
     'dominant_signal', dominant_signal,
+    'pi_tags', coalesce(pi_tags, '[]'::jsonb),
+    'sub_scores', jsonb_build_object(
+      'sleep', sleep_quality,
+      'energy', fatigue_energy,
+      'stress', stress_mood,
+      'soreness', muscle_soreness
+    ),
     'had_decoupling_alert', had_decoupling_alert,
     'extreme_load_day', extreme_load_day
   )), '[]'::jsonb)
@@ -257,8 +268,7 @@ begin
 end;
 $$;
 
--- Backfill all existing injuries so historical entries pick up the
--- new warning_timeline field. Idempotent.
+-- Backfill all existing injuries
 update public.injury_events
 set retro_signals = public.compute_injury_retrospective_signals(id, 14)
 where id is not null;
