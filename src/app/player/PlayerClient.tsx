@@ -2735,6 +2735,20 @@ export default function PlayerClient() {
   const [sessionRpeStatusError, setSessionRpeStatusError] = useState("");
   const [playerRiskTrend, setPlayerRiskTrend] = useState<PlayerRiskTrend>({ dates: [], riskScores: [], readinessStates: [] });
   const [neuralVolatilityDecision, setNeuralVolatilityDecision] = useState<NeuralVolatilityIntelligenceDecision | null>(null);
+  // Counterfactual "what-if" alternatives surfaced from buildAthleteDecision
+  // for the player view. Empty for GREEN players (engine returns []) — the
+  // self-service "what would help" panel only appears for YELLOW/RED days.
+  // Sorted by impact desc by the engine; we show all (capped at 3 by
+  // computeCounterfactuals so noise stays bounded).
+  const [todayCounterfactuals, setTodayCounterfactuals] = useState<Array<{
+    signal: string;
+    currentValue: string;
+    hypotheticalValue: string;
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    impact: 1 | 2 | 3;
+    descriptionEN: string;
+    descriptionIS: string;
+  }>>([]);
   const [prescriptionDecision, setPrescriptionDecision] = useState<PrescriptionDecision | null>(null);
   const [finalRecommendationDecision, setFinalRecommendationDecision] = useState<FinalRecommendationDecision | null>(null);
   const [sessionDraft, setSessionDraft] = useState<SessionDraft | null>(null);
@@ -3895,6 +3909,7 @@ export default function PlayerClient() {
         setNeuralVolatilityDecision(null);
         setPrescriptionDecision(null);
         setFinalRecommendationDecision(null);
+        setTodayCounterfactuals([]);
 
         const { data: trendRows, error: trendErr } = await supabase
           .from("readiness_entries")
@@ -3908,6 +3923,7 @@ export default function PlayerClient() {
           setNeuralVolatilityDecision(null);
           setPrescriptionDecision(null);
           setFinalRecommendationDecision(null);
+          setTodayCounterfactuals([]);
         } else {
           const cleanTrendRows = ((trendRows ?? []) as any[])
             .filter((row) => !!row)
@@ -3980,6 +3996,10 @@ export default function PlayerClient() {
             snapshot: todaySnapshot,
             readinessDecision,
           });
+          // Persist counterfactuals to state so the "What would help"
+          // panel can render them under the explanation card. Engine
+          // returns empty for GREEN/GRAY days — panel hidden in that case.
+          setTodayCounterfactuals(athleteDecision.counterfactuals ?? []);
           const riskHistory = trendInput.map((item) => item.decision.injuryRisk.score);
 
           const nviDecision = buildNeuralVolatilityIntelligenceDecision({
@@ -4751,6 +4771,39 @@ export default function PlayerClient() {
                     ? "Þessir þættir drógu niður heildarmat þitt í dag."
                     : "These factors pulled your overall assessment down today."}
                 </div>
+                {/* "What would help" panel — counterfactual lever the
+                    player could focus on. Shown only when the engine
+                    found at least one single-flip that would improve
+                    today's verdict. Empty for multi-concern days where
+                    no single thing would help — which is honest. */}
+                {todayCounterfactuals.length > 0 ? (
+                  <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-base">🎯</span>
+                      <span className="text-sm font-bold text-sky-900">
+                        {lang === "IS" ? "Hvað myndi hjálpa" : "What would help"}
+                      </span>
+                    </div>
+                    <ul className="space-y-1.5 text-sm leading-6 text-sky-900">
+                      {todayCounterfactuals.map((cf, idx) => (
+                        <li key={`cf-${idx}`} className="flex items-start gap-2">
+                          <span
+                            className={`mt-0.5 inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+                              cf.hypotheticalState === "GREEN"
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                : cf.hypotheticalState === "YELLOW"
+                                ? "border-amber-300 bg-amber-50 text-amber-800"
+                                : "border-slate-300 bg-white text-slate-700"
+                            }`}
+                          >
+                            →{cf.hypotheticalState}
+                          </span>
+                          <span>{lang === "IS" ? cf.descriptionIS : cf.descriptionEN}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             )}
 

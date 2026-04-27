@@ -95,6 +95,22 @@ export type DailyBriefingCardProps = {
   // ~3/5 (and misses real concern for players whose norm is 4-5/5).
   // Optional — when absent the card falls back to the global threshold.
   playerBaselines?: Record<string, Record<string, AthleteMetricBaseline>>;
+  // ── Counterfactual lookup (per player) ─────────────────────────
+  // Map of player_id → top counterfactuals (already sorted by impact
+  // desc by the engine). The card renders the single highest-impact
+  // entry as a 1-line italic hint under the driver chips, surfacing
+  // the "what-if" lever directly in the morning view. Only populated
+  // by the dashboard when a player has flagged YELLOW/RED — GREEN
+  // players don't need them.
+  playerCounterfactuals?: Record<string, Array<{
+    signal: string;
+    currentValue: string;
+    hypotheticalValue: string;
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    impact: 1 | 2 | 3;
+    descriptionEN: string;
+    descriptionIS: string;
+  }>>;
 };
 
 // ── Copy (IS / EN) ─────────────────────────────────────────────────────────
@@ -322,6 +338,18 @@ type AttentionItem = {
   // explanations of why readiness dropped to YELLOW/RED. Intentionally
   // diagnostic (not prescriptive) so they don't duplicate Decision summary.
   drivers: DriverChip[];
+  // ── Counterfactual hint — the actionable lever ─────────────────
+  // Top single-lever flip that would have improved today's verdict.
+  // Surfaced as a small italic line beneath the driver chips so the
+  // coach can read "what's wrong" + "what would change it" without
+  // opening the player accordion. Null when no useful counterfactual
+  // exists (engine returned empty — e.g. multi-concern day where no
+  // single change helps).
+  topCounterfactual?: {
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    descriptionEN: string;
+    descriptionIS: string;
+  } | null;
 };
 
 // Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
@@ -447,6 +475,7 @@ function buildAttentionList(
   playerComposites: Record<string, PlayerCompositeEntry>,
   lang: "IS" | "EN",
   playerBaselines: Record<string, Record<string, AthleteMetricBaseline>> | null,
+  playerCounterfactuals: DailyBriefingCardProps["playerCounterfactuals"] | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const out: AttentionItem[] = [];
@@ -521,6 +550,21 @@ function buildAttentionList(
           row,
           playerBaselines?.[String(row.player_id)] ?? null,
         ),
+        // Counterfactuals are pre-sorted by impact desc — pick the
+        // single highest-impact lever to keep the row compact. Coach
+        // can drill into the player accordion for the full list (up
+        // to 3). Null when engine returned empty (multi-concern day
+        // where no single lever helps).
+        topCounterfactual: (() => {
+          const list = playerCounterfactuals?.[String(row.player_id)];
+          if (!list || list.length === 0) return null;
+          const top = list[0];
+          return {
+            hypotheticalState: top.hypotheticalState,
+            descriptionEN: top.descriptionEN,
+            descriptionIS: top.descriptionIS,
+          };
+        })(),
       });
     }
   }
@@ -548,13 +592,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     dayStateLabel = null,
     recentDayTypes = null,
     playerBaselines = null,
+    playerCounterfactuals = null,
   } = props;
 
   const t = COPY[lang];
 
   const attention = useMemo(
-    () => buildAttentionList(rows, playerComposites, lang, playerBaselines),
-    [rows, playerComposites, lang, playerBaselines],
+    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals),
+    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals],
   );
 
   // ── Post-OFF context ──────────────────────────────────────────────────
@@ -1050,6 +1095,33 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                       <div className="mt-0.5 text-xs text-slate-600">
                         {item.reasons.join(" · ")}
                       </div>
+                      {/* What-if hint — top counterfactual, single line.
+                          Surfaces "if X had been Y → GREEN" right under
+                          the reasons so the coach reads what's wrong AND
+                          what would change it without expanding. Hidden
+                          when no useful counterfactual (multi-concern
+                          day where no single lever helps). */}
+                      {item.topCounterfactual ? (
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] italic text-sky-700">
+                          <span
+                            className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-semibold not-italic tabular-nums ${
+                              item.topCounterfactual.hypotheticalState === "GREEN"
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                                : item.topCounterfactual.hypotheticalState === "YELLOW"
+                                ? "border-amber-300 bg-amber-50 text-amber-700"
+                                : "border-slate-300 bg-white text-slate-600"
+                            }`}
+                            aria-hidden="true"
+                          >
+                            →{item.topCounterfactual.hypotheticalState}
+                          </span>
+                          <span className="truncate">
+                            {lang === "IS"
+                              ? item.topCounterfactual.descriptionIS
+                              : item.topCounterfactual.descriptionEN}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   </li>
                 );

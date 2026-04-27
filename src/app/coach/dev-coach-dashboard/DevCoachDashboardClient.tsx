@@ -310,6 +310,20 @@ type ReadinessRiskReportPlayer = {
   injuryConfidence: "low" | "medium" | "high";
   injuryWhy: string[];
   injuryRecommendation: string[];
+  // Counterfactual "what-if" alternatives for this player today.
+  // Empty when no single-lever flip improves the verdict (or when
+  // the engine can't be run for this player). Surfaced in the
+  // BriefingCard attention list as a 1-line italic hint and in the
+  // PlayerClient self-service view.
+  counterfactuals?: Array<{
+    signal: string;
+    currentValue: string;
+    hypotheticalValue: string;
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    impact: 1 | 2 | 3;
+    descriptionEN: string;
+    descriptionIS: string;
+  }>;
 };
 
 type ReadinessRiskReportData = {
@@ -5089,6 +5103,12 @@ export default function CoachPage() {
         injuryConfidence: injuryRiskDecision.confidence,
         injuryWhy: injuryRiskDecision.why,
         injuryRecommendation: injuryRiskDecision.recommendation,
+        // Counterfactuals — surfaced into the per-player snapshot so
+        // downstream consumers (BriefingCard attention list, PlayerClient)
+        // can render the "what would need to change" lever alongside the
+        // existing reasons[]. Empty for GREEN/GRAY players (verdicts that
+        // don't benefit from counterfactual explanation).
+        counterfactuals: athleteDecision.counterfactuals ?? [],
       };
     });
 
@@ -5103,6 +5123,46 @@ export default function CoachPage() {
       summary: { green, yellow, red },
     };
   }, [rowsWithAdaptive, ctxHsr, ctxIntensity, mdDayToday, planPreview?.md_day, weekGrid, teamIntel?.volatility_pct, fatigueByPlayer, today]);
+
+  // ── Counterfactual lookup map keyed by player_id ─────────────────
+  // Built from readinessRiskReportData (which already runs
+  // buildAthleteDecision per flagged player) so we don't re-run the
+  // engine. Used by DailyBriefingCard to render the top counterfactual
+  // as a 1-line hint under driver chips, surfacing the "what would
+  // need to change" lever directly in the morning view (where coaches
+  // actually look) instead of behind 3 clicks of accordion drill-down.
+  const playerCounterfactualsMap = useMemo<Record<string, Array<{
+    signal: string;
+    currentValue: string;
+    hypotheticalValue: string;
+    hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+    impact: 1 | 2 | 3;
+    descriptionEN: string;
+    descriptionIS: string;
+  }>>>(() => {
+    const out: Record<string, Array<{
+      signal: string;
+      currentValue: string;
+      hypotheticalValue: string;
+      hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
+      impact: 1 | 2 | 3;
+      descriptionEN: string;
+      descriptionIS: string;
+    }>> = {};
+    // Map flaggedPlayers names back to player_ids by walking
+    // rowsWithAdaptive in parallel — readinessRiskReportData uses the
+    // same source order as flaggedRows.filter().
+    const flaggedRowsLocal = rowsWithAdaptive.filter((r) => {
+      const flag = String(r.final_flag ?? "").toUpperCase();
+      return flag === "RED" || flag === "YELLOW";
+    });
+    readinessRiskReportData.flaggedPlayers.forEach((p, idx) => {
+      const row = flaggedRowsLocal[idx];
+      if (!row || !p.counterfactuals?.length) return;
+      out[String(row.player_id)] = p.counterfactuals;
+    });
+    return out;
+  }, [readinessRiskReportData, rowsWithAdaptive]);
 
   async function downloadReadinessRiskReport() {
     try {
@@ -6918,6 +6978,7 @@ export default function CoachPage() {
             dayStateLabel={dayStateInfo?.label ?? null}
             recentDayTypes={recentDayTypes}
             playerBaselines={playerBaselines}
+            playerCounterfactuals={playerCounterfactualsMap}
           />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
