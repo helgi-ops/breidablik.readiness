@@ -108,6 +108,18 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
       current.externalLoad.decelB3PlusTotEffsGen2,
       row.externalLoad.decelB3PlusTotEffsGen2
     );
+    current.externalLoad.imaBand1DecelCount = sumNullable(
+      current.externalLoad.imaBand1DecelCount,
+      row.externalLoad.imaBand1DecelCount
+    );
+    current.externalLoad.imaBand2DecelCount = sumNullable(
+      current.externalLoad.imaBand2DecelCount,
+      row.externalLoad.imaBand2DecelCount
+    );
+    current.externalLoad.imaBand3DecelCount = sumNullable(
+      current.externalLoad.imaBand3DecelCount,
+      row.externalLoad.imaBand3DecelCount
+    );
     current.externalLoad.totDs = sumNullable(current.externalLoad.totDs, row.externalLoad.totDs);
     current.externalLoad.totalPlayerLoad = sumNullable(current.externalLoad.totalPlayerLoad, row.externalLoad.totalPlayerLoad);
     current.externalLoad.playerLoadPerMinute = maxNullable(
@@ -218,6 +230,9 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     tot_as: row.externalLoad.totAs ?? null,
     decel_b2_3_tot_effs_gen2: row.externalLoad.decelB23TotEffsGen2 ?? null,
     decel_b3_plus_tot_effs_gen2: row.externalLoad.decelB3PlusTotEffsGen2 ?? null,
+    ima_band1_decel_count: row.externalLoad.imaBand1DecelCount ?? null,
+    ima_band2_decel_count: row.externalLoad.imaBand2DecelCount ?? null,
+    ima_band3_decel_count: row.externalLoad.imaBand3DecelCount ?? null,
     tot_ds: row.externalLoad.totDs ?? null,
     total_player_load: row.externalLoad.totalPlayerLoad ?? null,
     player_load_per_minute: row.externalLoad.playerLoadPerMinute ?? null,

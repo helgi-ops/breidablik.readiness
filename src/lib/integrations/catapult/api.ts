@@ -900,6 +900,14 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     returnedKeys: string[];
     sampleValues: Record<string, unknown>;
   }>;
+  decelB3PlusOnlyPayload: unknown | null;
+  decelB3PlusProbeResults: Array<{
+    parameter: string;
+    success: boolean;
+    error: string | null;
+    returnedKeys: string[];
+    sampleValues: Record<string, unknown>;
+  }>;
   freeRunningOnlyPayload: unknown | null;
   freeRunningOnlyError: string | null;
   freeRunningBatchSucceeded: boolean;
@@ -912,6 +920,7 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   metabolicOnlyParameters: string[];
   fmpOnlyParameters: string[];
   sprintCountParameters: string[];
+  decelB3PlusParameters: string[];
   freeRunningParameters: string[];
 }> {
   const basePayload = await catapultPost("/api/v6/stats", {
@@ -1071,6 +1080,60 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     }
   }
 
+  // Decel B3 probe — mirror sprint-count probe, but for the McBurnie-aligned
+  // high-intensity decel field. We need this because the regular sync silently
+  // catches Catapult parameter rejections, so when no rows populate the b3
+  // column there's no log of WHY. The probe surfaces accept/reject + raw
+  // returned keys per variant so we can debug normalize.ts aliases against
+  // Catapult's actual response format.
+  let decelB3PlusOnlyPayload: unknown | null = null;
+  const decelB3PlusProbeResults: Array<{
+    parameter: string;
+    success: boolean;
+    error: string | null;
+    returnedKeys: string[];
+    sampleValues: Record<string, unknown>;
+  }> = [];
+
+  for (const paramName of CATAPULT_DECEL_B3_PLUS_PARAMETERS) {
+    try {
+      const decelPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      const rows = extractStatsRows(decelPayload);
+      const responseKeySet = new Set<string>();
+      for (const row of rows.slice(0, 3)) {
+        for (const k of Object.keys(row)) responseKeySet.add(k);
+      }
+      const newKeys = Array.from(responseKeySet).filter((k) => !baseKeySet.has(k)).sort();
+      const firstRow = rows[0] ?? {};
+      const sampleValues: Record<string, unknown> = {};
+      for (const k of newKeys) sampleValues[k] = firstRow[k];
+
+      decelB3PlusProbeResults.push({
+        parameter: paramName,
+        success: true,
+        error: null,
+        returnedKeys: newKeys,
+        sampleValues,
+      });
+
+      if (decelB3PlusOnlyPayload == null && newKeys.length > 0) decelB3PlusOnlyPayload = decelPayload;
+      mergedPayload = mergeStatsPayloads(mergedPayload, decelPayload);
+    } catch (error) {
+      decelB3PlusProbeResults.push({
+        parameter: paramName,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown decel-b3 probe error",
+        returnedKeys: [],
+        sampleValues: {},
+      });
+    }
+  }
+
   return {
     basePayload,
     imaOnlyPayload,
@@ -1078,6 +1141,8 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     fmpOnlyPayload,
     sprintCountOnlyPayload,
     sprintCountProbeResults,
+    decelB3PlusOnlyPayload,
+    decelB3PlusProbeResults,
     freeRunningOnlyPayload,
     freeRunningOnlyError,
     freeRunningBatchSucceeded,
@@ -1090,6 +1155,7 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     metabolicOnlyParameters: CATAPULT_METABOLIC_PARAMETERS,
     fmpOnlyParameters: CATAPULT_FMP_PARAMETERS,
     sprintCountParameters: CATAPULT_SPRINT_COUNT_PARAMETERS,
+    decelB3PlusParameters: CATAPULT_DECEL_B3_PLUS_PARAMETERS,
     freeRunningParameters: CATAPULT_FREE_RUNNING_PARAMETERS,
   };
 }

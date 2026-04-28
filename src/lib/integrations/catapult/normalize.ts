@@ -753,10 +753,35 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
           "deceleration_band2plus_total_efforts_gen2",
         ]),
       ),
-      // McBurnie 2022 — high-intensity-only decel count (band 3, >3 m/s²).
-      // Once OpenField has "Deceleration B3 Efforts (Gen 2)" enabled, this
-      // becomes the preferred input for McBurnie SQL functions over the
-      // combined b2_3 metric (which includes moderate-intensity noise).
+      // McBurnie 2022 — IMA-based per-band decel counts. Catapult exposes
+      // these in the base activity-stats payload under exact keys
+      // ima_band1_decel_count / ima_band2_decel_count / ima_band3_decel_count.
+      // Band 3 (>3 m/s²) is the McBurnie-preferred high-intensity input.
+      // Verified via debug-fields probe (28 Apr 2026): for Jónatan's 22 Apr
+      // session the values were 88 / 24 / 13 respectively — consistent with
+      // expected band distribution (more low-intensity, fewer high-intensity).
+      imaBand1DecelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band1_decel_count",
+          "ima_band_1_decel_count",
+        ]),
+      ),
+      imaBand2DecelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band2_decel_count",
+          "ima_band_2_decel_count",
+        ]),
+      ),
+      imaBand3DecelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band3_decel_count",
+          "ima_band_3_decel_count",
+        ]),
+      ),
+      // GPS Gen-2 high-intensity-only decel count (band 3, >3 m/s²).
+      // Once OpenField has "Deceleration B3 Efforts (Gen 2)" enabled AND
+      // Catapult API V6 actually returns it (which it didn't on 28 Apr —
+      // see debug probe), this becomes a fallback after IMA band 3.
       //
       // Catapult uses "B3" (no "+" suffix) for decels because band 3 is the
       // highest bucket — there is no decel B4. Both alias forms (band3 and

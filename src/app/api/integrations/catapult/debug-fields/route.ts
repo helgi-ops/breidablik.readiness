@@ -180,6 +180,26 @@ export async function GET(request: Request) {
       .filter((k) => !allRawKeys.includes(k))
       .sort();
 
+    // Same diagnostic surfacing for Decel B3 probe — added when McBurnie engine
+    // refused to upgrade from b2-3 fallback even after coach enabled
+    // "Deceleration B3 Efforts (Gen 2)" in OpenField. Probe tells us whether
+    // Catapult accepted ANY of our parameter name variants AND what raw key
+    // it returned the data under (so we can update normalize.ts aliases).
+    const decelB3PlusProbeAccepted = details.decelB3PlusProbeResults.filter((r) => r.success);
+    const decelB3PlusProbeRejected = details.decelB3PlusProbeResults.filter((r) => !r.success);
+    const decelB3PlusRevealedKeys = Array.from(
+      new Set(decelB3PlusProbeAccepted.flatMap((r) => r.returnedKeys)),
+    )
+      .filter((k) => !allRawKeys.includes(k))
+      .sort();
+    // Also surface ALL decel-related keys in the merged payload so we can spot
+    // fields the probe didn't isolate (e.g. if the param landed in basePayload).
+    const decelKeys = allRawKeys.filter((k) =>
+      ["decel", "deceleration", "brake"].some((token) => k.toLowerCase().includes(token)),
+    );
+    const decelKeysWithSamples: Record<string, unknown> = {};
+    for (const k of decelKeys) decelKeysWithSamples[k] = firstMergedFlat[k];
+
     // ── Aggregate stats across ALL 18 athletes ─────────────────────
     // The "sample" fields above only show row[0] which may be a goalkeeper or someone
     // who didn't participate. These aggregates tell us if data exists for ANY athlete.
@@ -322,6 +342,22 @@ export async function GET(request: Request) {
         error: r.error,
       })),
       sprintRevealedKeys,
+      // ── Decel B3 probe — McBurnie high-intensity decel diagnostic ─────
+      decelB3PlusParameters: details.decelB3PlusParameters,
+      decelB3PlusAcceptedParameters: decelB3PlusProbeAccepted.map((r) => ({
+        parameter: r.parameter,
+        returnedKeys: r.returnedKeys,
+        sampleValues: r.sampleValues,
+      })),
+      decelB3PlusRejectedParameters: decelB3PlusProbeRejected.map((r) => ({
+        parameter: r.parameter,
+        error: r.error,
+      })),
+      decelB3PlusRevealedKeys,
+      // All decel-related keys in the merged payload — useful when the probe
+      // returned no NEW keys but a decel-named field exists in the base payload
+      decelKeys,
+      decelKeysWithSamples,
       // ── IMA Free Running probe results ───────────────────────────────
       // freeRunningBatchSucceeded: true if Catapult accepted all 24 in one call
       // freeRunningProbeResults: per-parameter success/error

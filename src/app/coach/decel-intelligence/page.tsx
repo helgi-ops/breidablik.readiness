@@ -24,13 +24,19 @@ type McBurnieStatus = {
   overall_flag: Flag;
   explanation: string;
   /**
-   * Which decel field the SQL function actually used:
-   *   - "decel_b3_plus_tot_effs_gen2" → high-intensity-only (preferred,
-   *     biomechanically aligned with McBurnie 2022)
-   *   - "decel_b2_3_tot_effs_gen2"   → combined moderate+high (fallback for
-   *     historical data and orgs that haven't enabled the b3+ Catapult param)
+   * Which decel field the SQL function actually used (priority order):
+   *   - "ima_band3_decel_count"      → IMU-based high-intensity (preferred —
+   *     Catapult exposes this in the base payload, works indoor and outdoor)
+   *   - "decel_b3_plus_tot_effs_gen2" → GPS Gen-2 high-intensity (fallback,
+   *     not currently populated because Catapult API V6 silently drops the
+   *     parameter request)
+   *   - "decel_b2_3_tot_effs_gen2"   → combined moderate+high GPS (last-ditch
+   *     fallback for historical data with no IMA Band 3 capture)
    */
-  decel_source?: "decel_b3_plus_tot_effs_gen2" | "decel_b2_3_tot_effs_gen2";
+  decel_source?:
+    | "ima_band3_decel_count"
+    | "decel_b3_plus_tot_effs_gen2"
+    | "decel_b2_3_tot_effs_gen2";
   overload: { flag: Flag; cumulative_28d_count: number; baseline_daily_mean: number };
   underload: { flag: Flag; cumulative_7d_count: number; match_day_demand: number; match_days_observed: number };
   accel_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string };
@@ -50,6 +56,17 @@ export default function CoachDecelIntelligencePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
   const [refreshing, setRefreshing] = React.useState(false);
+  // Backfill state — separate from baseline-refresh because backfill calls
+  // the live Catapult API for each day in the window and can take several
+  // minutes. Track per-day progress so the coach knows it's still working.
+  const [backfilling, setBackfilling] = React.useState(false);
+  const [backfillStatus, setBackfillStatus] = React.useState<string | null>(null);
+  // Decel B3 diagnostic — calls /api/integrations/catapult/debug-fields and
+  // surfaces only the decel-relevant subset so we can see exactly which
+  // parameter name Catapult is accepting and what raw key it returns. Used
+  // when the b3 column refuses to populate after a re-sync.
+  const [diagnosing, setDiagnosing] = React.useState(false);
+  const [diagnosis, setDiagnosis] = React.useState<unknown>(null);
 
   React.useEffect(() => { void load(); }, []);
 
@@ -111,6 +128,125 @@ export default function CoachDecelIntelligencePage() {
     }
   }
 
+  /**
+   * Diagnostic — calls /api/integrations/catapult/debug-fields with the user's
+   * JWT and pulls out only the decel-relevant subset. Helps us see WHY the b3
+   * column is still null after a re-sync: did Catapult reject our parameter
+   * names, or is it returning the data under a key our normalize.ts aliases
+   * don't recognise?
+   */
+  async function diagnoseDecelB3() {
+    setDiagnosing(true);
+    setError(null);
+    setDiagnosis(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Engin gilda session — endurinn­skráðu þig");
+        return;
+      }
+      // Use a recent high-volume training day so any b3 events that exist
+      // would show up. Apr 22 had 41 b2_3 + 15 sprints for Jónatan.
+      const probeDate = "2026-04-22";
+      const res = await fetch(
+        `/api/integrations/catapult/debug-fields?date=${probeDate}`,
+        { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+      );
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        setError(`Diagnostic villa: ${json?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      // Pick out only the b3-decel diagnostic fields so coach UI doesn't
+      // drown in the full debug payload (which has 80+ keys for FMP, IMA, etc.)
+      setDiagnosis({
+        date: json.date,
+        activity: json.activity,
+        athleteCount: json.athleteCount,
+        decelB3PlusParameters: json.decelB3PlusParameters,
+        decelB3PlusAcceptedParameters: json.decelB3PlusAcceptedParameters,
+        decelB3PlusRejectedParameters: json.decelB3PlusRejectedParameters,
+        decelB3PlusRevealedKeys: json.decelB3PlusRevealedKeys,
+        decelKeys: json.decelKeys,
+        decelKeysWithSamples: json.decelKeysWithSamples,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? "Diagnostic villa");
+    } finally {
+      setDiagnosing(false);
+    }
+  }
+
+  /**
+   * Re-fetch the last 7 days from Catapult so any newly-enabled Reporting
+   * Parameters (e.g. "Deceleration B3 Efforts (Gen 2)") populate retroactively.
+   *
+   * Catapult does NOT backfill historical data when you enable a new
+   * Reporting Parameter — it only starts capturing it for activities synced
+   * from that point forward. So the only way to upgrade existing rows is to
+   * re-run the per-day sync against the API with the new param active.
+   *
+   * Backfill is rate-limited to 7 days per click (≈ 3-5 min wall time) to
+   * stay well inside Vercel's 300s function timeout. Click again for older
+   * days if the 28-day window also needs upgrading.
+   */
+  async function backfillLastWeek() {
+    setBackfilling(true);
+    setError(null);
+    setBackfillStatus("Sæki JWT token…");
+    try {
+      const sb = getSupabaseClient();
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Engin gilda session — endurinn­skráðu þig");
+        return;
+      }
+
+      // 7-day window ending yesterday (today's data isn't fully in yet)
+      const today = new Date();
+      const dateTo = new Date(today);
+      dateTo.setUTCDate(dateTo.getUTCDate() - 1);
+      const dateFrom = new Date(today);
+      dateFrom.setUTCDate(dateFrom.getUTCDate() - 7);
+      const fromStr = dateFrom.toISOString().slice(0, 10);
+      const toStr = dateTo.toISOString().slice(0, 10);
+
+      setBackfillStatus(`Endurnýja Catapult gögn ${fromStr} – ${toStr} (3-5 mín)…`);
+      const res = await fetch(
+        `/api/integrations/catapult/backfill?dateFrom=${fromStr}&dateTo=${toStr}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        const msg =
+          json?.error ||
+          (Array.isArray(json?.results)
+            ? json.results.find((r: any) => r.status === "error")?.warning
+            : undefined) ||
+          `HTTP ${res.status}`;
+        setError(`Backfill villa: ${msg}`);
+        return;
+      }
+
+      setBackfillStatus("Endur-reikna baselines með nýjum gögnum…");
+      await sb.rpc("refresh_mcburnie_decel_baselines");
+      await load();
+      setBackfillStatus(`Klárt — ${json.datesProcessed} dagar uppfærðir`);
+      // Clear status banner after 6s
+      setTimeout(() => setBackfillStatus(null), 6000);
+    } catch (e: any) {
+      setError(e?.message ?? "Backfill villa");
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
   const counts = React.useMemo(() => {
     let red = 0, yellow = 0, green = 0, unknown = 0;
     for (const r of rows) {
@@ -124,16 +260,20 @@ export default function CoachDecelIntelligencePage() {
   }, [rows]);
 
   // Which decel source is the team on? Aggregate across all players that
-  // have a status — if any player is using b3+, the team is in transition;
-  // if all are b3+ we're fully migrated; if all are b2_3 we're still on
-  // fallback waiting for OpenField to be configured.
+  // have a status. Three meaningful states: ima (IMU-based, McBurnie-aligned),
+  // mixed (transition), b2_3 (combined-intensity fallback).
   const decelSource = React.useMemo(() => {
     const sources = new Set(
       rows.map((r) => r.status?.decel_source).filter((s) => !!s) as string[],
     );
     if (sources.size === 0) return "unknown";
-    if (sources.has("decel_b3_plus_tot_effs_gen2") && sources.has("decel_b2_3_tot_effs_gen2")) return "mixed";
-    if (sources.has("decel_b3_plus_tot_effs_gen2")) return "b3plus";
+    const hasIma = sources.has("ima_band3_decel_count");
+    const hasB3 = sources.has("decel_b3_plus_tot_effs_gen2");
+    const hasB2_3 = sources.has("decel_b2_3_tot_effs_gen2");
+    // Any high-intensity coverage + any fallback coverage = mixed
+    if ((hasIma || hasB3) && hasB2_3) return "mixed";
+    if (hasIma) return "ima";
+    if (hasB3) return "b3plus";
     return "b2_3";
   }, [rows]);
 
@@ -154,13 +294,31 @@ export default function CoachDecelIntelligencePage() {
             4 dimensions: overload, underload, decel:sprint coupling, exposure concentration.
           </p>
         </div>
-        <button
-          onClick={refreshBaselines}
-          disabled={refreshing}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
-        >
-          {refreshing ? "Reikna…" : "↻ Endur-reikna baselines"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={backfillLastWeek}
+            disabled={backfilling || refreshing || diagnosing}
+            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            title="Re-fetch the last 7 days from Catapult so newly-enabled Reporting Parameters (e.g. Decel B3) start filling historic rows."
+          >
+            {backfilling ? "Sæki…" : "↻ Re-sync síðustu 7 daga"}
+          </button>
+          <button
+            onClick={refreshBaselines}
+            disabled={refreshing || backfilling || diagnosing}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            {refreshing ? "Reikna…" : "↻ Endur-reikna baselines"}
+          </button>
+          <button
+            onClick={diagnoseDecelB3}
+            disabled={diagnosing || backfilling || refreshing}
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            title="Probe Catapult API to see exactly which Decel B3 parameter names it accepts and what raw key it returns the data under."
+          >
+            {diagnosing ? "Greini…" : "🔍 Greina Decel B3"}
+          </button>
+        </div>
       </div>
 
       {/* Counts */}
@@ -170,6 +328,44 @@ export default function CoachDecelIntelligencePage() {
         <CountCard tone="green"   label="Green" n={counts.green} />
         <CountCard tone="gray"    label="Insufficient data" n={counts.unknown} />
       </div>
+
+      {/* Backfill progress banner — only visible while a re-sync is running.
+          Runs ~30-60s per day so 7 days = ~3-5 min wall time. Coach can leave
+          the page; backfill keeps running server-side until the route returns. */}
+      {backfillStatus && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+          <strong>Catapult re-sync</strong>: {backfillStatus}
+        </div>
+      )}
+
+      {/* Decel B3 diagnostic panel — only visible after the coach clicks
+          "🔍 Greina Decel B3". Renders the raw probe results so we can see
+          which Catapult parameter name was accepted and what raw key the
+          data came back under. Pre-formatted JSON for easy copy-paste. */}
+      {diagnosis != null && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <div className="mb-2 flex items-center justify-between">
+            <strong>Decel B3 diagnostic</strong>
+            <button
+              onClick={() => setDiagnosis(null)}
+              className="text-amber-700 hover:text-amber-900"
+              title="Hide diagnostic"
+            >
+              ✕
+            </button>
+          </div>
+          <pre className="overflow-x-auto rounded bg-white p-2 font-mono text-[10px] text-slate-800">
+            {JSON.stringify(diagnosis, null, 2)}
+          </pre>
+          <p className="mt-2 text-[10px] italic text-amber-800">
+            Look at <code>decelB3PlusAcceptedParameters</code> — if empty, Catapult
+            rejected ALL our parameter name variants. If populated, look at
+            <code> returnedKeys</code> for the raw key Catapult uses; that key needs
+            to be added to <code>normalize.ts</code> aliases. Also scan
+            <code> decelKeys</code> for any decel-named field already in the merged payload.
+          </p>
+        </div>
+      )}
 
       {/* Decel-source banner — tells the coach which Catapult field is feeding
           the McBurnie engine right now. b3+ = biomechanically aligned with the
@@ -203,10 +399,19 @@ export default function CoachDecelIntelligencePage() {
       )}
       {decelSource === "b3plus" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
-          <strong>Decel source: high-intensity-only (b3+).</strong> Fully aligned
-          with McBurnie 2022 — decel:sprint ratios should now compress to a
-          clinically meaningful range (typically 0.5-3.0) where the risk thresholds
-          actually trigger.
+          <strong>Decel source: GPS Gen-2 high-intensity (b3+).</strong> Fully
+          aligned with McBurnie 2022 — decel:sprint ratios should now compress to
+          a clinically meaningful range (typically 0.5-3.0) where the risk
+          thresholds actually trigger.
+        </div>
+      )}
+      {decelSource === "ima" && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+          <strong>Decel source: IMA Band 3 (IMU-based high-intensity).</strong>
+          {" "}Fully aligned with McBurnie 2022 — decel events measured directly
+          by the pod's accelerometer (works indoor and outdoor, no GPS dependency).
+          Ratios should now sit in the clinically meaningful 0.5-3.0 range where
+          the risk thresholds match the paper's intent.
         </div>
       )}
 

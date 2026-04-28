@@ -40,6 +40,16 @@ export type CatapultSessionMetric = {
    * Falls back to decelB23TotEffsGen2 in McBurnie SQL until populated.
    */
   decelB3PlusTotEffsGen2?: number | null;
+  /**
+   * IMA-based per-band decel counts. Catapult IMU exposes these as
+   * ima_band1_decel_count / ima_band2_decel_count / ima_band3_decel_count.
+   * Band 3 = high-intensity (>3 m/s²) — McBurnie 2022 preferred input.
+   * Discovered 28 Apr 2026 via debug-fields probe when GPS-Gen2 b3 came back
+   * empty but IMA band 3 was already in the base payload.
+   */
+  imaBand1DecelCount?: number | null;
+  imaBand2DecelCount?: number | null;
+  imaBand3DecelCount?: number | null;
   totDs?: number | null;
   totalPlayerLoad?: number | null;
   playerLoadPerMinute?: number | null;
@@ -146,6 +156,10 @@ export type NormalizedExternalLoad = {
     decelB23TotEffsGen2?: number | null;
     /** High-intensity-only decel count (band 3+, >3 m/s²). See CatapultSessionMetric. */
     decelB3PlusTotEffsGen2?: number | null;
+    /** IMA-based per-band decel counts. Band 3 = high-intensity. See CatapultSessionMetric. */
+    imaBand1DecelCount?: number | null;
+    imaBand2DecelCount?: number | null;
+    imaBand3DecelCount?: number | null;
     totDs?: number | null;
     totalPlayerLoad?: number | null;
     playerLoadPerMinute?: number | null;
