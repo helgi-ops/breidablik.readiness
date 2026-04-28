@@ -778,6 +778,27 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
           "ima_band_3_decel_count",
         ]),
       ),
+      // Symmetric IMA accel counts. Required so McBurnie A:D coupling can
+      // pair Band 3 vs Band 3 instead of Band 3 vs combined-intensity Accel
+      // B2-3 (which produces artificially low ratios that flag spurious red).
+      imaBand1AccelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band1_accel_count",
+          "ima_band_1_accel_count",
+        ]),
+      ),
+      imaBand2AccelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band2_accel_count",
+          "ima_band_2_accel_count",
+        ]),
+      ),
+      imaBand3AccelCount: toInteger(
+        extractMetric(flattenedRecord, [
+          "ima_band3_accel_count",
+          "ima_band_3_accel_count",
+        ]),
+      ),
       // GPS Gen-2 high-intensity-only decel count (band 3, >3 m/s²).
       // Once OpenField has "Deceleration B3 Efforts (Gen 2)" enabled AND
       // Catapult API V6 actually returns it (which it didn't on 28 Apr —
@@ -882,25 +903,48 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
   return normalized;
 }
 
-/** Extract IMA Free Running stride/cadence/load values for all 8 bands. */
+/** Extract IMA Free Running stride/cadence/load values for all 8 bands.
+ *
+ * Verified by Catapult debug-fields probe (28 Apr 2026): the actual response
+ * keys use the snake_case patterns below. The original "ima_free_running_*"
+ * and "ima_fr_*" alias attempts NEVER matched because Catapult uses:
+ *   - "imafreerunning_band{N}_*" — NO underscore between "ima" and "freerunning"
+ *   - "ima_v2_free_run_band{N}_*" — V2 modern keys for stride count, rate, etc.
+ *
+ * Display-name aliases ("IMA Free Running Band 1 Stride Count") kept as
+ * last-ditch fallback for orgs whose API returns the human-readable form.
+ */
 function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, number | null> {
   const out: Record<string, number | null> = {};
   for (let band = 1; band <= 8; band++) {
-    // Try many alias variants — Catapult may return display name or snake_case
+    // Stride count — V2 total_strides is the canonical modern key.
     const strideAliases = [
+      `ima_v2_free_run_band${band}_total_strides`,
+      `ima_v2_free_run_band${band}_event_count`,
+      `ima_v1_free_run_band${band}_event_count`,
+      `imafreerunning_band${band}_event_count`,
+      // Legacy / display-name fallbacks
       `IMA Free Running Band ${band} Stride Count`,
       `ima_free_running_band${band}_stride_count`,
       `imafreerunningband${band}stridecount`,
       `ima_fr_band${band}_stride_count`,
     ];
+    // Stride rate — V2 average_stride_rate
     const rateAliases = [
+      `ima_v2_free_run_band${band}_average_stride_rate`,
+      `ima_v1_free_run_band${band}_average_stride_rate`,
+      `imafreerunning_band${band}_average_stride_rate`,
+      // Legacy / display-name fallbacks
       `IMA Free Running Band ${band} Average Stride Rate`,
       `ima_free_running_band${band}_average_stride_rate`,
       `ima_free_running_band${band}_avg_stride_rate`,
       `imafreerunningband${band}averagestriderate`,
       `ima_fr_band${band}_avg_stride_rate`,
     ];
+    // Player load — total player load per band
     const loadAliases = [
+      `imafreerunning_band${band}_total_player_load`,
+      // Legacy / display-name fallbacks
       `IMA Free Running Band ${band} Total Player Load`,
       `ima_free_running_band${band}_total_player_load`,
       `imafreerunningband${band}totalplayerload`,
@@ -1040,6 +1084,18 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       accelB23TotEffsGen2: metric.accelB23TotEffsGen2 ?? null,
       totAs: metric.totAs ?? null,
       decelB23TotEffsGen2: metric.decelB23TotEffsGen2 ?? null,
+      // McBurnie 2022 — high-intensity decel inputs. Without these explicit
+      // mappings, normalize.ts extracts the values into SessionMetric but
+      // they're silently dropped by toNormalizedExternalLoad before reaching
+      // sync.ts and the DB. This caused IMA Band 3 columns to stay NULL even
+      // after Catapult was returning the data correctly.
+      decelB3PlusTotEffsGen2: metric.decelB3PlusTotEffsGen2 ?? null,
+      imaBand1DecelCount: metric.imaBand1DecelCount ?? null,
+      imaBand2DecelCount: metric.imaBand2DecelCount ?? null,
+      imaBand3DecelCount: metric.imaBand3DecelCount ?? null,
+      imaBand1AccelCount: metric.imaBand1AccelCount ?? null,
+      imaBand2AccelCount: metric.imaBand2AccelCount ?? null,
+      imaBand3AccelCount: metric.imaBand3AccelCount ?? null,
       totDs: metric.totDs ?? null,
       totalPlayerLoad: metric.totalPlayerLoad ?? null,
       playerLoadPerMinute: metric.playerLoadPerMinute ?? null,
