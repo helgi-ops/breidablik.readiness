@@ -20,35 +20,27 @@ function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
 // ── URL helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Returns the base URL for a product. Critical that this respects the
- * product parameter — VALD has a separate API host per product
- * (extforcedecks, extforceframe, extnordbord).
+ * Returns the base URL for a product. CRITICAL that Nordbord and ForceFrame
+ * resolve to their actual subdomains (`nordbord` and `groinbar` respectively),
+ * NOT the same domain as ForceDecks. Verified by DevTools probe in VALD HUB.
  *
- * Strategy:
- *   1. If config.baseUrl is a VALD product URL (matches the standard pattern),
- *      rewrite the {product} subdomain segment to the requested product.
- *      This handles the common case where the team's account was configured
- *      with extforcedecks but we now want to hit extforceframe/extnordbord too.
- *   2. If config.region is set, build the canonical region+product URL.
- *   3. Fall back to euw region.
+ * For ForceDecks, we still respect config.baseUrl (so per-team overrides work)
+ * because ForceDecks has its own legacy `extforcedecks` host.
  *
- * Bug history: the previous implementation just returned config.baseUrl
- * regardless of product, which silently routed all 3 product fetches to the
- * ForceDecks endpoint. Result: ForceFrame and Nordbord tables stayed empty.
+ * For Nordbord/ForceFrame, we IGNORE config.baseUrl entirely and always use
+ * the canonical region-specific URL — config.baseUrl is invariably the
+ * ForceDecks host (set when the account was first configured), and using it
+ * for Nordbord/ForceFrame would silently route all 3 products to ForceDecks
+ * (the bug we just fixed).
  */
 function productBaseUrl(config: ValdConnectionConfig, product: "forcedecks" | "nordbord" | "forceframe"): string {
-  if (config.baseUrl) {
-    // Rewrite ext{X} → ext{product} when the baseUrl matches the VALD pattern
-    const productPattern = /(prd-[a-z]+-api-)ext(?:forcedecks|forceframe|nordbord)(\.valdperformance\.com)/;
-    if (productPattern.test(config.baseUrl)) {
-      return config.baseUrl.replace(productPattern, `$1ext${product}$2`);
-    }
-    // Non-standard baseUrl (custom override) — only respect it for forcedecks,
-    // otherwise fall through to canonical product URL
-    if (product === "forcedecks") return config.baseUrl;
+  if (product === "forcedecks") {
+    if (config.baseUrl) return config.baseUrl;
+    if (config.region) return getValdProductBaseUrl(config.region as ValdRegion, "forcedecks");
+    return getValdProductBaseUrl("euw", "forcedecks");
   }
+  // Nordbord / ForceFrame — always canonical product URL, never config.baseUrl
   if (config.region) return getValdProductBaseUrl(config.region as ValdRegion, product);
-  // Reasonable default — European region
   return getValdProductBaseUrl("euw", product);
 }
 
@@ -209,10 +201,15 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
   }
 
   /**
-   * Per-product implementation of fetchTestsByDateRange. Same detailed →
-   * paged → cursor fallback chain as before, but parameterised by product so
-   * the public method can call it for ForceDecks, ForceFrame, and Nordbord
-   * in turn against their respective base URLs.
+   * Per-product implementation of fetchTestsByDateRange. ForceDecks uses
+   * the v2019q3 path with embedded date range; Nordbord and ForceFrame
+   * use modern endpoints that return all team tests (we filter by date
+   * client-side in sync.ts).
+   *
+   * Path templates verified by DevTools probe in VALD HUB:
+   *   - ForceDecks: /v2019q3/teams/{scopeId}/tests/detailed/{from}/{to}
+   *   - Nordbord:   /teams/{scopeId}/tests/all
+   *   - ForceFrame: /summaries/team/{scopeId}/tests
    */
   async function fetchTestsByDateRangeForProductImpl(
     product: "forcedecks" | "forceframe" | "nordbord",
@@ -221,6 +218,57 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     headers: Record<string, string>,
   ): Promise<ValdTestSummary[]> {
     const base = productBaseUrl(config, product);
+
+    // Nordbord and ForceFrame use a non-paginated POST endpoint that returns
+    // all team tests. Verified by browser probe of VALD HUB (28 Apr 2026):
+    // GET → 405 Method Not Allowed, POST → 401 Unauthorized (= method OK,
+    // just needs Bearer token which our authHeaders already provides).
+    //
+    // We send POST with an empty body — the endpoint accepts the team ID via
+    // path and returns the full test list. Date filtering is done client-side
+    // after parsing because we couldn't confirm a server-side filter param.
+    if (product === "nordbord" || product === "forceframe") {
+      for (const scopeId of scopeIds) {
+        try {
+          const path = product === "nordbord"
+            ? `/teams/${encodeURIComponent(scopeId)}/tests/all`
+            : `/summaries/team/${encodeURIComponent(scopeId)}/tests`;
+          const url = new URL(path, base);
+          note(`fetchTests[${product}] POST scope=${scopeId}: ${url.toString()}`);
+          const payload = await valdRequestJson<unknown>(url.toString(), {
+            method: "POST",
+            body: {},
+            headers,
+            timeoutMs: config.timeoutMs,
+          });
+          if (payload == null) continue;
+          const batch = listFromPayload(payload);
+          if (batch.length === 0) {
+            note(`fetchTests[${product}] scope=${scopeId}: 0 tests`);
+            continue;
+          }
+          // Client-side filter to dateRange (inclusive)
+          const filtered = batch.filter((row) => {
+            const rec = row as Record<string, unknown>;
+            const ts = (rec.testDateUtc ?? rec.dateUtc ?? rec.testDate ?? rec.date ?? rec.modifiedDateUtc) as string | undefined;
+            if (!ts) return true; // keep if no timestamp — better safe than dropping
+            const day = ts.slice(0, 10);
+            return day >= dateFrom && day <= dateTo;
+          });
+          note(`fetchTests[${product}] scope=${scopeId}: ${batch.length} fetched, ${filtered.length} in range`);
+          if (filtered.length > 0) {
+            return filtered.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          note(`fetchTests[${product}] scope=${scopeId}: error ${msg}`);
+          if (!msg.includes("404") && !msg.includes("400")) throw err;
+        }
+      }
+      return [];
+    }
+
+    // ForceDecks legacy v2019q3 path with detailed → paged → cursor fallback
     for (const scopeId of scopeIds) {
       // 1. Detailed endpoint — full test objects with param/extParams fields
       try {

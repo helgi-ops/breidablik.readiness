@@ -11,14 +11,25 @@ export const VALD_TOKEN_URL = process.env.VALD_TOKEN_URL ?? "https://auth.prd.va
 /**
  * Returns the product-specific API base URL for the given region.
  *
- * Format: https://prd-{region}-api-ext{product}.valdperformance.com
+ * VALD uses 3 different subdomain conventions across products — verified
+ * by DevTools probe of VALD HUB (28 Apr 2026):
+ *
+ *   - ForceDecks: legacy `extforcedecks` (v2019q3 API)
+ *   - Nordbord:   modern `nordbord` (no "ext" prefix!)
+ *   - ForceFrame: modern `groinbar` (legacy product name still in API)
+ *
+ * The original `ext{product}` assumption was wrong for Nordbord and ForceFrame.
  *
  * @example
- *   getValdProductBaseUrl("euw", "forcedecks")
- *   // → "https://prd-euw-api-extforcedecks.valdperformance.com"
+ *   getValdProductBaseUrl("euw", "forceframe")
+ *   // → "https://prd-euw-api-groinbar.valdperformance.com"
  */
 export function getValdProductBaseUrl(region: ValdRegion, product: "forcedecks" | "nordbord" | "forceframe"): string {
-  return `https://prd-${region}-api-ext${product}.valdperformance.com`;
+  const subdomain =
+    product === "forcedecks" ? "extforcedecks" :
+    product === "forceframe" ? "groinbar" :
+    "nordbord";
+  return `https://prd-${region}-api-${subdomain}.valdperformance.com`;
 }
 
 function env(name: string, fallback?: string): string {

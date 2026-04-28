@@ -173,6 +173,11 @@ export default function CoachDecelIntelligencePage() {
       // normalizedFirst.imaBand3DecelCount, etc.
       const normalizedExternal = (json.normalizedFirst as Record<string, unknown> | null) ?? {};
       const norm = (k: string) => (normalizedExternal[k] === undefined ? "<undefined>" : normalizedExternal[k]);
+      // Filter raw keys for IMA Free Running so we can see whether Catapult
+      // returns them and under what name. ima_fr_band 7+8 are the indoor
+      // sprint proxy used by McBurnie engine.
+      const allKeys: string[] = (json.allRawKeys as string[]) ?? [];
+      const freeRunningKeys = allKeys.filter((k) => /free.*run|fr.?band|stride/i.test(k)).sort();
       setDiagnosis({
         date: json.date,
         activity: json.activity,
@@ -183,6 +188,12 @@ export default function CoachDecelIntelligencePage() {
         decelB3PlusRevealedKeys: json.decelB3PlusRevealedKeys,
         decelKeys: json.decelKeys,
         decelKeysWithSamples: json.decelKeysWithSamples,
+        // IMA Free Running diagnostic
+        freeRunning_acceptedCount: json.freeRunningAcceptedCount,
+        freeRunning_batchSucceeded: json.freeRunningBatchSucceeded,
+        freeRunning_rejected_first3: (json.freeRunningRejectedParameters ?? []).slice(0, 3),
+        freeRunning_revealedKeys: json.freeRunningRevealedKeys,
+        freeRunning_keysInMergedPayload: freeRunningKeys,
         // Normalized output — proves whether normalize.ts is doing its job.
         // "<undefined>" string sentinel makes missing keys visible (otherwise
         // JSON.stringify silently drops them).

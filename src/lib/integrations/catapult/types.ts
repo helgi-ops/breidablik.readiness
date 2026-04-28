@@ -50,6 +50,15 @@ export type CatapultSessionMetric = {
   imaBand1DecelCount?: number | null;
   imaBand2DecelCount?: number | null;
   imaBand3DecelCount?: number | null;
+  /**
+   * Symmetric IMA accel counts. Required for McBurnie A:D coupling to pair
+   * Band 3 vs Band 3 (apples-to-apples). Without these the engine compares
+   * high-intensity decels to combined-intensity accels and ratios drop
+   * artificially.
+   */
+  imaBand1AccelCount?: number | null;
+  imaBand2AccelCount?: number | null;
+  imaBand3AccelCount?: number | null;
   totDs?: number | null;
   totalPlayerLoad?: number | null;
   playerLoadPerMinute?: number | null;
@@ -160,6 +169,10 @@ export type NormalizedExternalLoad = {
     imaBand1DecelCount?: number | null;
     imaBand2DecelCount?: number | null;
     imaBand3DecelCount?: number | null;
+    /** Symmetric IMA accel counts for valid A:D coupling. See CatapultSessionMetric. */
+    imaBand1AccelCount?: number | null;
+    imaBand2AccelCount?: number | null;
+    imaBand3AccelCount?: number | null;
     totDs?: number | null;
     totalPlayerLoad?: number | null;
     playerLoadPerMinute?: number | null;
