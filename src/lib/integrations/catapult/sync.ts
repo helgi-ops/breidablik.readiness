@@ -104,6 +104,10 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
       current.externalLoad.decelB23TotEffsGen2,
       row.externalLoad.decelB23TotEffsGen2
     );
+    current.externalLoad.decelB3PlusTotEffsGen2 = sumNullable(
+      current.externalLoad.decelB3PlusTotEffsGen2,
+      row.externalLoad.decelB3PlusTotEffsGen2
+    );
     current.externalLoad.totDs = sumNullable(current.externalLoad.totDs, row.externalLoad.totDs);
     current.externalLoad.totalPlayerLoad = sumNullable(current.externalLoad.totalPlayerLoad, row.externalLoad.totalPlayerLoad);
     current.externalLoad.playerLoadPerMinute = maxNullable(
@@ -213,6 +217,7 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     accel_b2_3_tot_effs_gen2: row.externalLoad.accelB23TotEffsGen2 ?? null,
     tot_as: row.externalLoad.totAs ?? null,
     decel_b2_3_tot_effs_gen2: row.externalLoad.decelB23TotEffsGen2 ?? null,
+    decel_b3_plus_tot_effs_gen2: row.externalLoad.decelB3PlusTotEffsGen2 ?? null,
     tot_ds: row.externalLoad.totDs ?? null,
     total_player_load: row.externalLoad.totalPlayerLoad ?? null,
     player_load_per_minute: row.externalLoad.playerLoadPerMinute ?? null,

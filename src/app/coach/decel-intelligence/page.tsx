@@ -23,6 +23,14 @@ type Flag = "green" | "yellow" | "red" | "unknown";
 type McBurnieStatus = {
   overall_flag: Flag;
   explanation: string;
+  /**
+   * Which decel field the SQL function actually used:
+   *   - "decel_b3_plus_tot_effs_gen2" → high-intensity-only (preferred,
+   *     biomechanically aligned with McBurnie 2022)
+   *   - "decel_b2_3_tot_effs_gen2"   → combined moderate+high (fallback for
+   *     historical data and orgs that haven't enabled the b3+ Catapult param)
+   */
+  decel_source?: "decel_b3_plus_tot_effs_gen2" | "decel_b2_3_tot_effs_gen2";
   overload: { flag: Flag; cumulative_28d_count: number; baseline_daily_mean: number };
   underload: { flag: Flag; cumulative_7d_count: number; match_day_demand: number; match_days_observed: number };
   accel_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string };
@@ -115,6 +123,20 @@ export default function CoachDecelIntelligencePage() {
     return { red, yellow, green, unknown };
   }, [rows]);
 
+  // Which decel source is the team on? Aggregate across all players that
+  // have a status — if any player is using b3+, the team is in transition;
+  // if all are b3+ we're fully migrated; if all are b2_3 we're still on
+  // fallback waiting for OpenField to be configured.
+  const decelSource = React.useMemo(() => {
+    const sources = new Set(
+      rows.map((r) => r.status?.decel_source).filter((s) => !!s) as string[],
+    );
+    if (sources.size === 0) return "unknown";
+    if (sources.has("decel_b3_plus_tot_effs_gen2") && sources.has("decel_b2_3_tot_effs_gen2")) return "mixed";
+    if (sources.has("decel_b3_plus_tot_effs_gen2")) return "b3plus";
+    return "b2_3";
+  }, [rows]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       {/* Header */}
@@ -148,6 +170,45 @@ export default function CoachDecelIntelligencePage() {
         <CountCard tone="green"   label="Green" n={counts.green} />
         <CountCard tone="gray"    label="Insufficient data" n={counts.unknown} />
       </div>
+
+      {/* Decel-source banner — tells the coach which Catapult field is feeding
+          the McBurnie engine right now. b3+ = biomechanically aligned with the
+          paper. b2_3 = combined fallback that inflates ratios; risk thresholds
+          rarely trigger. The banner doubles as a setup nudge for OpenField. */}
+      {decelSource === "b2_3" && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <div className="font-semibold">Using fallback decel source (Decel B2-3 combined)</div>
+          <p className="mt-1">
+            McBurnie's framework calls for high-intensity-only decels (band 3+, &gt;3 m/s²).
+            Currently this team's data uses the combined b2-3 metric (&gt;2 m/s²), which
+            includes moderate-intensity decels. Result: decel:sprint ratios are inflated
+            (typical 5-15) and the 0.5/0.8 risk thresholds rarely trigger.
+          </p>
+          <p className="mt-1 italic">
+            <strong>To switch to high-intensity-only:</strong> in Catapult OpenField →
+            Settings → Reporting Parameters → add
+            <em> "Deceleration B3 Efforts (Gen 2)"</em> to your Reporting_Parameters group,
+            then re-run the next session sync. Once the column populates, this engine
+            auto-upgrades on a per-player basis.
+          </p>
+        </div>
+      )}
+      {decelSource === "mixed" && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+          <strong>Decel source: mixed.</strong> Some players already have
+          high-intensity-only data (b3+) populating; others are still on the
+          combined fallback (b2-3) until their next sync arrives. Per-player
+          status shown below — each row uses whichever source it has data for.
+        </div>
+      )}
+      {decelSource === "b3plus" && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+          <strong>Decel source: high-intensity-only (b3+).</strong> Fully aligned
+          with McBurnie 2022 — decel:sprint ratios should now compress to a
+          clinically meaningful range (typically 0.5-3.0) where the risk thresholds
+          actually trigger.
+        </div>
+      )}
 
       {/* Player list */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -185,12 +246,16 @@ export default function CoachDecelIntelligencePage() {
             (defensive scrambling pattern). Foundation balance metric.
           </li>
           <li>
-            <strong>Decel:Sprint coupling (Vel B6+ Total # Efforts, Gen 2):</strong> McBurnie's
-            primary risk metric. Decel events divided by actual Catapult sprint event count
-            (vb6+ Gen 2 effort count, not distance proxy). Healthy ≥0.8 (every sprint followed
-            by at least one high-intensity brake). Red if &lt;0.5 (sprinting without proportional
-            braking — classic McBurnie injury pattern). Requires the
-            <em> Velocity B6+ Total # Efforts (Gen 2) </em> Catapult Reporting Parameter to be enabled.
+            <strong>Decel:Sprint coupling (McBurnie's primary risk metric):</strong> Decel
+            events divided by Catapult sprint event count (Vel B6+ Total # Efforts Gen 2,
+            not distance proxy). Healthy ≥0.8 (every sprint followed by at least one
+            high-intensity brake). Red if &lt;0.5 (sprinting without proportional braking).
+            <strong> Decel input prefers Decel B3+ Total # Efforts (Gen 2)</strong> when
+            populated — high-intensity-only events that match the eccentric demand of
+            sprint braking. Falls back to Decel B2-3 (combined) for historical data, but
+            note that the combined input inflates ratios (typical 5-15) so the McBurnie
+            thresholds rarely trigger. The per-team banner above shows which source is
+            currently in use.
           </li>
           <li>
             <strong>Exposure concentration:</strong> What % of 28-day cumulative volume happened in

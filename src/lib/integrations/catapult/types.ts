@@ -31,6 +31,15 @@ export type CatapultSessionMetric = {
   accelB23TotEffsGen2?: number | null;
   totAs?: number | null;
   decelB23TotEffsGen2?: number | null;
+  /**
+   * High-intensity-only decel count (band 3+, >3 m/s²) from Catapult's
+   * "Decel B3+ Total # Efforts (Gen 2)" reporting parameter. Preferred by
+   * McBurnie 2022 framework over the combined b2-3 metric because b2
+   * (moderate, 2-3 m/s²) decels are biomechanical noise — only high-intensity
+   * eccentric loading matches the injury-relevant demand of sprint braking.
+   * Falls back to decelB23TotEffsGen2 in McBurnie SQL until populated.
+   */
+  decelB3PlusTotEffsGen2?: number | null;
   totDs?: number | null;
   totalPlayerLoad?: number | null;
   playerLoadPerMinute?: number | null;
@@ -135,6 +144,8 @@ export type NormalizedExternalLoad = {
     accelB23TotEffsGen2?: number | null;
     totAs?: number | null;
     decelB23TotEffsGen2?: number | null;
+    /** High-intensity-only decel count (band 3+, >3 m/s²). See CatapultSessionMetric. */
+    decelB3PlusTotEffsGen2?: number | null;
     totDs?: number | null;
     totalPlayerLoad?: number | null;
     playerLoadPerMinute?: number | null;

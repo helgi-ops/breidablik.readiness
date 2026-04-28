@@ -753,6 +753,30 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
           "deceleration_band2plus_total_efforts_gen2",
         ]),
       ),
+      // McBurnie 2022 — high-intensity-only decel count (band 3, >3 m/s²).
+      // Once OpenField has "Deceleration B3 Efforts (Gen 2)" enabled, this
+      // becomes the preferred input for McBurnie SQL functions over the
+      // combined b2_3 metric (which includes moderate-intensity noise).
+      //
+      // Catapult uses "B3" (no "+" suffix) for decels because band 3 is the
+      // highest bucket — there is no decel B4. Both alias forms (band3 and
+      // band3plus) are listed in case different OpenField versions flatten
+      // display names differently.
+      decelB3PlusTotEffsGen2: toInteger(
+        extractMetric(flattenedRecord, [
+          // Most likely flattened forms of "Deceleration B3 Efforts (Gen 2)"
+          "gen2_deceleration_band3_total_effort_count",
+          "deceleration_band3_total_efforts_gen2",
+          "deceleration_b3_efforts_gen2",
+          "decel_b3_efforts_gen2",
+          "decel_band3_efforts_gen2",
+          // Plus-suffix variants (legacy / cross-version compatibility)
+          "gen2_deceleration_band3plus_total_effort_count",
+          "decel_b3_plus_tot_effs_gen2",
+          "decel_b3plus_tot_effs_gen2",
+          "deceleration_band3plus_total_efforts_gen2",
+        ]),
+      ),
       totDs: toInteger(
         extractMetric(flattenedRecord, [
           "gen2_acceleration_band3plus_average_effort_count",

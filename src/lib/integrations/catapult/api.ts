@@ -86,6 +86,34 @@ export const CATAPULT_SPRINT_COUNT_PARAMETERS = [
   "Velocity B5+ Total # Efforts (Gen 2)",
 ];
 
+// McBurnie 2022 high-intensity decel parameter — must be enabled in OpenField
+// Reporting_Parameters before data populates. Once present, McBurnie SQL
+// functions prefer this over the combined b2-3 metric because b2 (moderate
+// 2-3 m/s²) is biomechanical noise — only band 3 events (>3 m/s²) match the
+// eccentric loading demand of sprint braking.
+//
+// PRIMARY display name "Deceleration B3 Efforts (Gen 2)" confirmed in
+// Breiðablik's OpenField Reporting_Parameters page (28 Apr 2026).
+// Note Catapult uses "B3" (not "B3+") because there is no higher decel band —
+// band 3 IS the highest-intensity bucket (>3 m/s²) in their 3-band scheme.
+//
+// Coach instructions:
+//   OpenField → Settings → Reporting Parameters →
+//   add "Deceleration B3 Efforts (Gen 2)" → Update Parameter Group →
+//   wait for next sync (or trigger /api/integrations/catapult/daily-sync).
+export const CATAPULT_DECEL_B3_PLUS_PARAMETERS = [
+  // PRIMARY — exact display name from OpenField (28 Apr 2026)
+  "Deceleration B3 Efforts (Gen 2)",
+  // Alternate phrasings other orgs may have set up
+  "Decel B3 Efforts (Gen 2)",
+  "Decel B3 Total # Efforts (Gen 2)",
+  "Deceleration B3 Total # Efforts (Gen 2)",
+  // Legacy "+" variants kept as last-ditch fallback for orgs using the
+  // band3plus convention that mirrors accel naming
+  "Decel B3+ Total # Efforts (Gen 2)",
+  "Deceleration B3+ Total # Efforts (Gen 2)",
+];
+
 // IMA Free Running parameters — 8 stride velocity bands, IMU-only (works indoor)
 // User confirmed all 8 bands enabled in OpenField Reporting_Parameters (25 Apr 2026)
 // because Icelandic indoor halls are often 100m+ long, so high bands (7-8) capture
@@ -812,6 +840,23 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     }
   }
 
+  // McBurnie 2022 Decel B3+ — high-intensity-only decel count.
+  // Same per-param strategy as sprint counts above. Will silently no-op until
+  // the parameter is enabled in the org's OpenField Reporting_Parameters.
+  for (const paramName of CATAPULT_DECEL_B3_PLUS_PARAMETERS) {
+    try {
+      const decelPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, decelPayload);
+    } catch {
+      // This particular variant failed — try the next one
+    }
+  }
+
   // IMA Free Running 8-band — try as ONE batch first, fall back to per-param probe
   // (Catapult sometimes rejects batch with unknown name; per-param probe is more robust)
   try {
@@ -1127,6 +1172,23 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
         requested_only: true,
       });
       mergedPayload = mergeStatsPayloads(mergedPayload, sprintPayload);
+    } catch {
+      // This particular variant failed — try the next one
+    }
+  }
+
+  // McBurnie 2022 Decel B3+ — high-intensity-only decel count.
+  // Same per-param strategy as sprint counts above. Will silently no-op until
+  // the parameter is enabled in the org's OpenField Reporting_Parameters.
+  for (const paramName of CATAPULT_DECEL_B3_PLUS_PARAMETERS) {
+    try {
+      const decelPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: baseFilters,
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, decelPayload);
     } catch {
       // This particular variant failed — try the next one
     }
