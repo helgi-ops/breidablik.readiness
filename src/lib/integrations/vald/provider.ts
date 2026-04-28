@@ -20,12 +20,33 @@ function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
 // ── URL helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Returns the base URL for a product, preferring config.baseUrl when explicitly
- * set, then constructing a region-specific URL, then falling back to the
- * legacy generic host.
+ * Returns the base URL for a product. Critical that this respects the
+ * product parameter — VALD has a separate API host per product
+ * (extforcedecks, extforceframe, extnordbord).
+ *
+ * Strategy:
+ *   1. If config.baseUrl is a VALD product URL (matches the standard pattern),
+ *      rewrite the {product} subdomain segment to the requested product.
+ *      This handles the common case where the team's account was configured
+ *      with extforcedecks but we now want to hit extforceframe/extnordbord too.
+ *   2. If config.region is set, build the canonical region+product URL.
+ *   3. Fall back to euw region.
+ *
+ * Bug history: the previous implementation just returned config.baseUrl
+ * regardless of product, which silently routed all 3 product fetches to the
+ * ForceDecks endpoint. Result: ForceFrame and Nordbord tables stayed empty.
  */
 function productBaseUrl(config: ValdConnectionConfig, product: "forcedecks" | "nordbord" | "forceframe"): string {
-  if (config.baseUrl) return config.baseUrl;
+  if (config.baseUrl) {
+    // Rewrite ext{X} → ext{product} when the baseUrl matches the VALD pattern
+    const productPattern = /(prd-[a-z]+-api-)ext(?:forcedecks|forceframe|nordbord)(\.valdperformance\.com)/;
+    if (productPattern.test(config.baseUrl)) {
+      return config.baseUrl.replace(productPattern, `$1ext${product}$2`);
+    }
+    // Non-standard baseUrl (custom override) — only respect it for forcedecks,
+    // otherwise fall through to canonical product URL
+    if (product === "forcedecks") return config.baseUrl;
+  }
   if (config.region) return getValdProductBaseUrl(config.region as ValdRegion, product);
   // Reasonable default — European region
   return getValdProductBaseUrl("euw", product);
@@ -253,12 +274,21 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
       note(`fetchTests[${product}] scope=${scopeId} paged: 0 tests`);
     }
 
-    // 3. Cursor fallback — tests without parameters but enough for inference
-    const cursorBase = new URL("/tests", productBaseUrl(config, product)).toString();
-    note(`fetchTests[${product}] cursor-fallback: ${cursorBase} tenant=${tenantId ?? "none"} modifiedFrom=${dateFrom}`);
-    const rawTests = await fetchAllTestsWithCursor(cursorBase, tenantId, dateFrom, headers, config.timeoutMs);
-    note(`fetchTests[${product}] cursor-fallback: ${rawTests.length} tests`);
-    return rawTests.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+    // 3. Cursor fallback — tests without parameters but enough for inference.
+    // Wrapped in try/catch so DNS / connection failures on the legacy /tests
+    // path return [] instead of bubbling up. The outer fetchTestsByDateRange
+    // also catches but this gives cleaner per-product noting.
+    try {
+      const cursorBase = new URL("/tests", productBaseUrl(config, product)).toString();
+      note(`fetchTests[${product}] cursor-fallback: ${cursorBase} tenant=${tenantId ?? "none"} modifiedFrom=${dateFrom}`);
+      const rawTests = await fetchAllTestsWithCursor(cursorBase, tenantId, dateFrom, headers, config.timeoutMs);
+      note(`fetchTests[${product}] cursor-fallback: ${rawTests.length} tests`);
+      return rawTests.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      note(`fetchTests[${product}] cursor-fallback failed: ${msg}`);
+      return [];
+    }
   }
 
   /** Per-product implementation of fetchTestsForAthlete. */
@@ -359,43 +389,46 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     },
 
     async fetchTestsByDateRange(dateFrom: string, dateTo: string): Promise<ValdTestSummary[]> {
-      // Multi-product fetch: VALD has 3 product endpoints (ForceDecks/CMJ,
-      // ForceFrame/groin, Nordbord/hamstring), each on its own base URL but
-      // sharing the v2019q3 path structure. Loop over all 3 so we get every
-      // test type the org runs. Tag each result with the source product so
-      // sync.ts normalization picks the right schema downstream.
-      //
-      // Before this change the sync only hit ForceDecks → ForceFrame and
-      // Nordbord tables stayed empty regardless of how many tests the team
-      // ran in VALD HUB.
+      // Multi-product fetch: try ForceDecks (proven to work), then ForceFrame
+      // and Nordbord (subdomains may not exist for this org). Each product is
+      // wrapped in try/catch so a network error against one endpoint can't
+      // kill the whole sync — ForceDecks data still flows even if ForceFrame
+      // is unreachable. Once VALD confirms the correct subdomains for
+      // ForceFrame/Nordbord, the unreachability errors will disappear.
       const headers = await authHeaders();
       const products: Array<"forcedecks" | "forceframe" | "nordbord"> = ["forcedecks", "forceframe", "nordbord"];
       const allTests: ValdTestSummary[] = [];
       for (const product of products) {
-        const productTests = await fetchTestsByDateRangeForProductImpl(product, dateFrom, dateTo, headers);
-        // Endpoint origin is more reliable than payload-shape inference,
-        // especially for minimal payloads from the cursor fallback path.
-        // Override "unknown" with the source product but keep explicit hints
-        // (in case a payload was misrouted somehow).
-        for (const test of productTests) {
-          if (test.product === "unknown") test.product = product;
+        try {
+          const productTests = await fetchTestsByDateRangeForProductImpl(product, dateFrom, dateTo, headers);
+          for (const test of productTests) {
+            if (test.product === "unknown") test.product = product;
+          }
+          allTests.push(...productTests);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          note(`fetchTests[${product}] FAILED: ${msg} — likely subdomain not accessible for this org. Continuing with other products.`);
         }
-        allTests.push(...productTests);
       }
       return allTests;
     },
 
     async fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
-      // Same multi-product treatment for per-athlete backfill.
+      // Same fail-gracefully treatment for per-athlete backfill.
       const headers = await authHeaders();
       const products: Array<"forcedecks" | "forceframe" | "nordbord"> = ["forcedecks", "forceframe", "nordbord"];
       const allTests: ValdTestSummary[] = [];
       for (const product of products) {
-        const productTests = await fetchTestsForAthleteForProductImpl(product, valdAthleteId, dateFrom, headers);
-        for (const test of productTests) {
-          if (test.product === "unknown") test.product = product;
+        try {
+          const productTests = await fetchTestsForAthleteForProductImpl(product, valdAthleteId, dateFrom, headers);
+          for (const test of productTests) {
+            if (test.product === "unknown") test.product = product;
+          }
+          allTests.push(...productTests);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          note(`fetchTestsForAthlete[${product}] FAILED: ${msg} — likely subdomain not accessible for this org.`);
         }
-        allTests.push(...productTests);
       }
       return allTests;
     },
