@@ -42,6 +42,12 @@ type McBurnieStatus = {
   accel_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string };
   sprint_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string; requires_field?: string };
   concentration: { flag: Flag; peak_day_pct_of_28d: number; distinct_high_intensity_days: number };
+  // Neuromuscular capacity dims — load × capacity = compounded risk picture.
+  // Each shows last-test freshness so coach can spot stale data; flag falls
+  // back to "unknown" (gray) when no test of that type has been run.
+  nordbord?: { flag: Flag; freshness: string; score: number; last_test_at: string | null; metric_name: string; reference: string };
+  forceframe?: { flag: Flag; freshness: string; score: number; last_test_at: string | null; metric_name: string; reference: string };
+  cmj?: { flag: Flag; freshness: string; score: number; last_test_at: string | null; metric_name: string; reference: string };
   computed_at: string;
 };
 
@@ -161,6 +167,12 @@ export default function CoachDecelIntelligencePage() {
       }
       // Pick out only the b3-decel diagnostic fields so coach UI doesn't
       // drown in the full debug payload (which has 80+ keys for FMP, IMA, etc.)
+      //
+      // Normalize fields are on the SessionMetric directly (NOT under
+      // .externalLoad — that's a different type used elsewhere). Look at
+      // normalizedFirst.imaBand3DecelCount, etc.
+      const normalizedExternal = (json.normalizedFirst as Record<string, unknown> | null) ?? {};
+      const norm = (k: string) => (normalizedExternal[k] === undefined ? "<undefined>" : normalizedExternal[k]);
       setDiagnosis({
         date: json.date,
         activity: json.activity,
@@ -171,6 +183,16 @@ export default function CoachDecelIntelligencePage() {
         decelB3PlusRevealedKeys: json.decelB3PlusRevealedKeys,
         decelKeys: json.decelKeys,
         decelKeysWithSamples: json.decelKeysWithSamples,
+        // Normalized output — proves whether normalize.ts is doing its job.
+        // "<undefined>" string sentinel makes missing keys visible (otherwise
+        // JSON.stringify silently drops them).
+        normalize_has_normalizedFirst: json.normalizedFirst != null,
+        normalize_externalLoad_keys: Object.keys(normalizedExternal).sort(),
+        normalize_decelB23TotEffsGen2: norm("decelB23TotEffsGen2"),
+        normalize_decelB3PlusTotEffsGen2: norm("decelB3PlusTotEffsGen2"),
+        normalize_imaBand1DecelCount: norm("imaBand1DecelCount"),
+        normalize_imaBand2DecelCount: norm("imaBand2DecelCount"),
+        normalize_imaBand3DecelCount: norm("imaBand3DecelCount"),
       });
     } catch (e: any) {
       setError(e?.message ?? "Diagnostic villa");
@@ -289,9 +311,10 @@ export default function CoachDecelIntelligencePage() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Eccentric deceleration risk profile per player — implementation of the
-            McBurnie, Harper, Jones &amp; Dos'Santos 2022 framework (Sports Medicine).
-            4 dimensions: overload, underload, decel:sprint coupling, exposure concentration.
+            Load × capacity injury-risk profile. McBurnie 2022 deceleration framework
+            (5 external-load dims) combined with VALD neuromuscular capacity tests
+            (Nordbord, ForceFrame, CMJ — 3 internal-capacity dims). Coupling load and
+            capacity is the strongest single injury predictor per Hägglund 2013 / Opar 2015.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -467,11 +490,27 @@ export default function CoachDecelIntelligencePage() {
             the single peak day. Red if &gt;30% (McBurnie's "tall-thin force-time" pattern; concentrated
             mechanical loading more dangerous than distributed).
           </li>
+          <li>
+            <strong>Nordbord (eccentric hamstring):</strong> Bilateral eccentric peak force from
+            VALD Nordbord nordic-curl test, plus L/R asymmetry %. Red if asymmetry &gt; 15% or
+            absolute force drops &gt; 15% from baseline. Loaded high + weak hamstring = the single
+            strongest hamstring-strain predictor (Opar 2015).
+          </li>
+          <li>
+            <strong>ForceFrame (hip/groin isometric):</strong> Adductor squeeze + abductor isometric
+            peak force from VALD ForceFrame, with L/R asymmetry. Red if adductor force drop &gt; 10%
+            from baseline or asymmetry &gt; 15%. Loaded high + weak adductor = groin-injury risk
+            multiplier (Hägglund 2013).
+          </li>
+          <li>
+            <strong>CMJ (countermovement jump):</strong> Jump height, RSI-modified, and peak power
+            from VALD ForceDecks dual-plate CMJ test, vs personal rolling baseline. Red if drop
+            ≥ 5% from baseline = neuromuscular fatigue marker (Buchheit 2010, Claudino 2017).
+          </li>
         </ul>
         <p className="mt-2 text-slate-600">
-          <strong>Reference:</strong> McBurnie AJ, Harper DJ, Jones PA, Dos'Santos T. (2022).
-          Deceleration training in team sports: another potential 'vaccine' for sports-related injury?
-          <em> Sports Medicine</em>, 52(1), 1–12. doi:10.1007/s40279-021-01583-x
+          <strong>References:</strong> McBurnie 2022 (decel framework), Hägglund 2013 (adductor strength),
+          Opar 2015 (Nordic hamstring), Buchheit 2010 (CMJ fatigue), Claudino 2017 (CMJ monitoring).
         </p>
       </div>
 
@@ -517,6 +556,11 @@ function PlayerRow({ row }: { row: Row }) {
           <FlagBadge flag={s?.accel_coupling?.flag ?? "unknown"} label="A:D" />
           <FlagBadge flag={s?.sprint_coupling?.flag ?? "unknown"} label="D:Sprint" />
           <FlagBadge flag={s?.concentration?.flag ?? "unknown"} label="Concentration" />
+          {/* Neuromuscular capacity chips. Render only if SQL returns the dim
+              (graceful degradation if the function pre-dates this version). */}
+          {s?.nordbord && <FlagBadge flag={s.nordbord.flag} label="Nordbord" />}
+          {s?.forceframe && <FlagBadge flag={s.forceframe.flag} label="ForceFrame" />}
+          {s?.cmj && <FlagBadge flag={s.cmj.flag} label="CMJ" />}
           <span className="text-slate-400">{expanded ? "▾" : "▸"}</span>
         </div>
       </button>
@@ -563,6 +607,48 @@ function PlayerRow({ row }: { row: Row }) {
               caption={`Peak day's share of 28-day total · ${s.concentration.distinct_high_intensity_days} active days`}
               hint="Red if peak-day > 30% of monthly volume."
             />
+            {/* Neuromuscular capacity row — load × capacity = real risk picture.
+                Each card shows last-test date when present so coach can see
+                data freshness; "Engin gögn" when test type isn't being used. */}
+            {s.nordbord && (
+              <Detail
+                title="Nordbord — Hamstring"
+                flag={s.nordbord.flag}
+                big={s.nordbord.flag === "unknown" ? "Engin gögn" : `${s.nordbord.score.toFixed(1)}`}
+                caption={
+                  s.nordbord.last_test_at
+                    ? `Síðasta próf ${new Date(s.nordbord.last_test_at).toLocaleDateString("is-IS")} · ${s.nordbord.metric_name}`
+                    : `Engin Nordbord-próf gerð ennþá · ${s.nordbord.metric_name}`
+                }
+                hint={s.nordbord.reference}
+              />
+            )}
+            {s.forceframe && (
+              <Detail
+                title="ForceFrame — Groin/Hip"
+                flag={s.forceframe.flag}
+                big={s.forceframe.flag === "unknown" ? "Engin gögn" : `${s.forceframe.score.toFixed(1)}`}
+                caption={
+                  s.forceframe.last_test_at
+                    ? `Síðasta próf ${new Date(s.forceframe.last_test_at).toLocaleDateString("is-IS")} · ${s.forceframe.metric_name}`
+                    : `Engin ForceFrame-próf gerð ennþá · ${s.forceframe.metric_name}`
+                }
+                hint={s.forceframe.reference}
+              />
+            )}
+            {s.cmj && (
+              <Detail
+                title="CMJ — Neuromuscular"
+                flag={s.cmj.flag}
+                big={s.cmj.flag === "unknown" ? "Engin gögn" : `${s.cmj.score.toFixed(1)}`}
+                caption={
+                  s.cmj.last_test_at
+                    ? `Síðasta próf ${new Date(s.cmj.last_test_at).toLocaleDateString("is-IS")} · ${s.cmj.metric_name}`
+                    : `Engin CMJ-próf gerð ennþá · ${s.cmj.metric_name}`
+                }
+                hint={s.cmj.reference}
+              />
+            )}
           </div>
         </div>
       )}
