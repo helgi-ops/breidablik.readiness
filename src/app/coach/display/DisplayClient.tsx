@@ -337,11 +337,13 @@ export default function DisplayClient() {
     if (!teamId) return;
     (async () => {
       try {
-        // 1) Custom template sets for this team
+        // 1) Custom template sets for this team — exclude player-scoped overrides
+        // (Display is a team-wide projector view; per-player overrides shouldn't appear here.)
         const { data: setsData } = await supabase
           .from("custom_template_sets")
           .select("set_name, table_name, md_days, season_phase, sport, gender")
           .eq("team_id", teamId)
+          .is("player_id", null)
           .order("created_at", { ascending: false });
 
         // 2) Default microdose_templates md_days

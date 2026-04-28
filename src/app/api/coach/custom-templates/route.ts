@@ -101,15 +101,46 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, records: green });
   }
 
-  // No table_name  →  list all sets (metadata only)
+  // No table_name  →  list all sets (metadata only).
+  // Splits team templates (player_id IS NULL) vs player overrides (player_id NOT NULL)
+  // so the UI can render them in separate sections.
   const { data, error } = await supabase
     .from("custom_template_sets")
-    .select("id, set_name, sport, gender, season_phase, table_name, md_days, created_at")
+    .select(
+      "id, set_name, sport, gender, season_phase, table_name, md_days, created_at, " +
+        "player_id, parent_table_name, start_date, end_date, note",
+    )
     .eq("team_id", auth.teamId)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, sets: data ?? [] });
+
+  // Supabase-generated types don't yet know about the new player override columns,
+  // so cast to a permissive shape. Schema is enforced in the migration + DB layer.
+  const all = ((data ?? []) as unknown) as Array<Record<string, unknown> & { player_id?: string | null }>;
+  const team = all.filter((r) => !r.player_id);
+  const player = all.filter((r) => !!r.player_id);
+
+  // For player templates, hydrate the player name in a single batched lookup
+  let playerNameById: Record<string, string> = {};
+  if (player.length > 0) {
+    const ids = Array.from(new Set(player.map((r) => r.player_id).filter(Boolean) as string[]));
+    if (ids.length > 0) {
+      const { data: players } = await supabase
+        .from("players")
+        .select("id, full_name")
+        .in("id", ids);
+      playerNameById = Object.fromEntries(
+        ((players ?? []) as Array<{ id: string; full_name: string }>).map((p) => [p.id, p.full_name]),
+      );
+    }
+  }
+  const playerHydrated = player.map((r) => ({
+    ...r,
+    player_name: r.player_id ? playerNameById[r.player_id as string] ?? null : null,
+  }));
+
+  return NextResponse.json({ ok: true, sets: team, playerSets: playerHydrated });
 }
 
 // ── POST ───────────────────────────────────────────────────────────────────────
@@ -129,6 +160,13 @@ type PostBody = {
     structure: unknown[];
     variant: string;
   }>;
+
+  // Player override fields (all four required together, all four NULL together)
+  player_id?: string | null;
+  parent_table_name?: string | null;
+  start_date?: string | null;   // YYYY-MM-DD
+  end_date?:   string | null;   // YYYY-MM-DD
+  note?:       string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -149,6 +187,13 @@ export async function POST(req: NextRequest) {
     ? body.season_phase as string
     : null;
 
+  // Optional player-scope payload — all four required together
+  const player_id         = (body.player_id ?? "").trim() || null;
+  const parent_table_name = (body.parent_table_name ?? "").trim().toLowerCase() || null;
+  const start_date        = (body.start_date ?? "").trim() || null;
+  const end_date          = (body.end_date ?? "").trim() || null;
+  const note              = (body.note ?? "").trim() || null;
+
   if (!set_name || !sport || !table_name)
     return NextResponse.json({ ok: false, error: "set_name, sport og table_name vantar" }, { status: 400 });
 
@@ -157,6 +202,27 @@ export async function POST(req: NextRequest) {
 
   if (records.length === 0)
     return NextResponse.json({ ok: false, error: "Engar færslur til að vista" }, { status: 400 });
+
+  // Validate player-scope fields — must be all-or-none
+  if (player_id || parent_table_name || start_date || end_date) {
+    if (!player_id || !parent_table_name || !start_date || !end_date) {
+      return NextResponse.json(
+        { ok: false, error: "Player template krefst player_id, parent_table_name, start_date og end_date." },
+        { status: 400 },
+      );
+    }
+    if (!/^[a-z][a-z0-9_]*$/.test(parent_table_name)) {
+      return NextResponse.json({ ok: false, error: "Ógilt parent_table_name." }, { status: 400 });
+    }
+    const sd = Date.parse(start_date);
+    const ed = Date.parse(end_date);
+    if (!Number.isFinite(sd) || !Number.isFinite(ed)) {
+      return NextResponse.json({ ok: false, error: "Ógildar dagsetningar." }, { status: 400 });
+    }
+    if (sd > ed) {
+      return NextResponse.json({ ok: false, error: "start_date verður að vera ≤ end_date." }, { status: 400 });
+    }
+  }
 
   const supabase = getSupabase();
 
@@ -198,14 +264,20 @@ export async function POST(req: NextRequest) {
     .from("custom_template_sets")
     .upsert(
       {
-        team_id:      auth.teamId,
+        team_id:           auth.teamId,
         set_name,
         sport,
         gender,
         season_phase,
         table_name,
-        md_days:      mergedDays,
-        created_by:   auth.userId,
+        md_days:           mergedDays,
+        created_by:        auth.userId,
+        // Player override fields — NULL on team templates
+        player_id,
+        parent_table_name,
+        start_date,
+        end_date,
+        note,
       },
       { onConflict: "team_id,table_name,season_phase" }
     );

@@ -560,7 +560,17 @@ type TemplateSet = {
   table_name: string;
   md_days: string[];
   created_at: string;
+
+  // Player-override fields (NULL on team templates)
+  player_id?: string | null;
+  player_name?: string | null;
+  parent_table_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  note?: string | null;
 };
+
+type TeamPlayer = { id: string; full_name: string };
 
 // ─── File upload parsing ───────────────────────────────────────────────────────
 
@@ -2082,8 +2092,20 @@ const SPORT_ICONS: Record<string, string> = {
 
 export default function CustomTemplatesPage() {
   const [sets, setSets] = useState<TemplateSet[]>([]);
+  const [playerSets, setPlayerSets] = useState<TemplateSet[]>([]);
   const [loadingSets, setLoadingSets] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
+
+  // Roster for player template picker (one fetch per team)
+  const [teamPlayers, setTeamPlayers] = useState<TeamPlayer[]>([]);
+
+  // Player template builder state — only used when builderMode === "player"
+  const [builderMode, setBuilderMode] = useState<"team" | "player">("team");
+  const [playerBuilderPlayerId,  setPlayerBuilderPlayerId]  = useState<string>("");
+  const [playerBuilderParent,    setPlayerBuilderParent]    = useState<string>(""); // parent table_name
+  const [playerBuilderStart,     setPlayerBuilderStart]     = useState<string>(""); // YYYY-MM-DD
+  const [playerBuilderEnd,       setPlayerBuilderEnd]       = useState<string>("");
+  const [playerBuilderNote,      setPlayerBuilderNote]      = useState<string>("");
 
   // All teams this coach has access to + selected team
   const [allTeams, setAllTeams] = useState<TeamOption[]>([]);
@@ -2128,7 +2150,20 @@ export default function CustomTemplatesPage() {
   const setName   = teamName   ?? "";
   const sport     = teamSport  ?? "";
   const gender    = teamGender ?? null;
-  const tableName = buildTableName(setName, sport, gender);
+  const teamTableName = buildTableName(setName, sport, gender);
+
+  // For player templates we need a distinct table_name slug per (player, parent, window).
+  // Pattern: <team_table>_player_<8-char-id>_<startYYYYMMDD>
+  const playerSlug = playerBuilderPlayerId
+    ? playerBuilderPlayerId.replace(/-/g, "").slice(0, 8)
+    : "";
+  const playerTableName = builderMode === "player" && playerBuilderPlayerId && playerBuilderStart
+    ? `${teamTableName}_player_${playerSlug}_${playerBuilderStart.replace(/-/g, "")}`
+    : "";
+
+  const tableName = builderMode === "player"
+    ? (editingSet?.table_name ?? playerTableName)
+    : teamTableName;
 
   // ── Load existing sets ──────────────────────────────────────────────────────
   const loadSets = useCallback(async (forTeamId?: string | null) => {
@@ -2147,12 +2182,28 @@ export default function CustomTemplatesPage() {
     if (res.ok) {
       const json = await res.json();
       setSets(json.sets ?? []);
+      setPlayerSets(json.playerSets ?? []);
     }
     setLoadingSets(false);
   }, []);
 
   // Reload sets whenever the selected team changes
   useEffect(() => { void loadSets(selectedTeamId); }, [loadSets, selectedTeamId]);
+
+  // Load the team roster once whenever the selected team changes — used by the
+  // player-template builder picker. Cheap (id + full_name only) so safe on every change.
+  useEffect(() => {
+    if (!selectedTeamId) { setTeamPlayers([]); return; }
+    (async () => {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("players")
+        .select("id, full_name, team_id")
+        .eq("team_id", selectedTeamId)
+        .order("full_name");
+      setTeamPlayers(((data ?? []) as TeamPlayer[]).map((p) => ({ id: p.id, full_name: p.full_name })));
+    })();
+  }, [selectedTeamId]);
 
   // ── Load ALL teams this coach has access to ───────────────────────────────────
   useEffect(() => {
@@ -2299,7 +2350,24 @@ export default function CustomTemplatesPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setSaveErr("Ekki innskráður."); setSaving(false); return; }
 
+    // Pre-flight validation for player mode
+    if (builderMode === "player") {
+      if (!playerBuilderPlayerId)  { setSaveErr("Veldu leikmann.");                setSaving(false); return; }
+      if (!playerBuilderParent)    { setSaveErr("Veldu liðs-template að víkja frá."); setSaving(false); return; }
+      if (!playerBuilderStart)     { setSaveErr("Veldu start-dagsetningu.");       setSaving(false); return; }
+      if (!playerBuilderEnd)       { setSaveErr("Veldu end-dagsetningu.");         setSaving(false); return; }
+      if (playerBuilderStart > playerBuilderEnd) {
+        setSaveErr("start-dagur verður að vera fyrir end-dag.");
+        setSaving(false); return;
+      }
+    }
+
     const records = buildAllRecords();
+    const playerName = teamPlayers.find((p) => p.id === playerBuilderPlayerId)?.full_name ?? "leikmaður";
+    const setNameForSave = builderMode === "player"
+      ? `${setName} — ${playerName}`
+      : setName.trim();
+
     const res = await fetch("/api/coach/custom-templates", {
       method: "POST",
       headers: {
@@ -2308,13 +2376,21 @@ export default function CustomTemplatesPage() {
       },
       body: JSON.stringify({
         team_id:      selectedTeamId,
-        set_name:     setName.trim(),
+        set_name:     setNameForSave,
         sport:        sport,
         gender:       gender,
         season_phase: seasonPhase,
         table_name:   tableName,
         md_days:      selectedDays,
         records,
+        // Player override fields (only sent when in player mode)
+        ...(builderMode === "player" ? {
+          player_id:         playerBuilderPlayerId,
+          parent_table_name: playerBuilderParent,
+          start_date:        playerBuilderStart,
+          end_date:          playerBuilderEnd,
+          note:              playerBuilderNote || null,
+        } : {}),
       }),
     });
 
@@ -2339,6 +2415,13 @@ export default function CustomTemplatesPage() {
     setGreenTemplates({}); setExistingDays([]);
     setYellowOverrides({}); setRedOverrides({});
     setEditingColor(null); setEditingSet(null);
+    // Player builder state
+    setBuilderMode("team");
+    setPlayerBuilderPlayerId("");
+    setPlayerBuilderParent("");
+    setPlayerBuilderStart("");
+    setPlayerBuilderEnd("");
+    setPlayerBuilderNote("");
     // setName/sport/gender are derived from selectedTeam — no reset needed
   }
 
@@ -2358,6 +2441,18 @@ export default function CustomTemplatesPage() {
     setGreenTemplates({});
     setStep(2);
     setShowBuilder(true);
+
+    // Restore player-mode state if editing a player override
+    if (s.player_id) {
+      setBuilderMode("player");
+      setPlayerBuilderPlayerId(s.player_id);
+      setPlayerBuilderParent(s.parent_table_name ?? "");
+      setPlayerBuilderStart(s.start_date ?? "");
+      setPlayerBuilderEnd(s.end_date ?? "");
+      setPlayerBuilderNote(s.note ?? "");
+    } else {
+      setBuilderMode("team");
+    }
 
     // Fetch existing GREEN records and pre-populate builder (filtered by season_phase)
     const params = new URLSearchParams({ table_name: s.table_name });
@@ -2403,9 +2498,29 @@ export default function CustomTemplatesPage() {
           </p>
         </div>
         {!showBuilder && (
-          <Button onClick={() => { setShowBuilder(true); setStep(1); }}>
-            + Búa til nýtt kerfi
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button onClick={() => { setBuilderMode("team"); setShowBuilder(true); setStep(1); }}>
+              + Búa til nýtt kerfi
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBuilderMode("player");
+                // Pre-fill parent if there's exactly one team template — saves a click
+                if (sets.length === 1) setPlayerBuilderParent(sets[0].table_name);
+                // Default to today + 14 days as a reasonable rehab window
+                const today = new Date();
+                const plus14 = new Date();
+                plus14.setDate(today.getDate() + 14);
+                setPlayerBuilderStart(today.toISOString().slice(0, 10));
+                setPlayerBuilderEnd(plus14.toISOString().slice(0, 10));
+                setShowBuilder(true);
+                setStep(1);
+              }}
+            >
+              + Player kerfi
+            </Button>
+          </div>
         )}
       </div>
 
@@ -2421,7 +2536,7 @@ export default function CustomTemplatesPage() {
         <div className="space-y-3">
           {loadingSets ? (
             <p className="text-sm text-muted-foreground">Hleður...</p>
-          ) : sets.length === 0 ? (
+          ) : sets.length === 0 && playerSets.length === 0 ? (
             <Card>
               <CardContent className="pt-6 text-center text-sm text-muted-foreground">
                 Ekkert eigið æfingakerfi til enn. Búðu til þitt fyrsta hér að ofan.
@@ -2473,6 +2588,94 @@ export default function CustomTemplatesPage() {
               </Card>
             ))
           )}
+
+          {/* ── Player templates section ─────────────────────────────────── */}
+          {!loadingSets && (
+            <div className="mt-8 space-y-3">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Einstaklings-kerfi</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Override fyrir einstaka leikmenn — t.d. meiðsl eða return-to-play. Liðsplanið er grunnur; player-templatei&eth;
+                  v&iacute;kur fr&aacute; &thorn;eim MD-d&ouml;gum sem &thorn;u skilgreinir &iacute; vali&eth;u tímabili.
+                </p>
+              </div>
+
+              {playerSets.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center text-sm text-muted-foreground">
+                    Engin einstaklings-kerfi virk. Notaðu &laquo;+ Player kerfi&raquo; hér að ofan til að búa til.
+                  </CardContent>
+                </Card>
+              ) : (
+                playerSets.map((s) => {
+                  const today = new Date().toISOString().slice(0, 10);
+                  const isActive = !!s.start_date && !!s.end_date
+                    ? s.start_date <= today && today <= s.end_date
+                    : false;
+                  const isPast = !!s.end_date && s.end_date < today;
+                  return (
+                    <Card key={s.id} className={isActive ? "border-amber-300" : ""}>
+                      <CardContent className="flex items-center justify-between gap-4 pt-4">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-medium">{s.player_name ?? s.set_name}</div>
+                            <span className="text-xs text-muted-foreground">{s.sport}</span>
+                            {isActive && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                🟢 Virkt núna
+                              </span>
+                            )}
+                            {isPast && (
+                              <span className="inline-flex items-center gap-1 rounded-full border bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                                Liðið
+                              </span>
+                            )}
+                            {!isActive && !isPast && (
+                              <span className="inline-flex items-center gap-1 rounded-full border bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                Framundan
+                              </span>
+                            )}
+                          </div>
+                          {s.parent_table_name && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              Yfirskrifar:{" "}
+                              <span className="font-mono">{s.parent_table_name}</span>
+                            </div>
+                          )}
+                          {(s.start_date || s.end_date) && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {s.start_date} → {s.end_date}
+                            </div>
+                          )}
+                          {s.note && (
+                            <div className="mt-0.5 text-xs italic text-muted-foreground">{s.note}</div>
+                          )}
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(s.md_days ?? []).map((d) => (
+                              <Badge key={d} variant="outline" className="text-xs">{d}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(s.created_at).toLocaleDateString("is-IS")}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
+                            onClick={() => void loadExistingSet(s)}
+                          >
+                            ✏️ Breyta
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2521,6 +2724,87 @@ export default function CustomTemplatesPage() {
                 <span className="ml-2 text-amber-700">— breytingar yfirskrifa núverandi færslur. Þú getur líka bætt við nýjum dögum.</span>
               </div>
             </div>
+          )}
+
+          {/* Player-mode banner + scope form (visible in all steps) */}
+          {builderMode === "player" && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Einstaklings-kerfi {editingSet ? "— breyta" : "— nýtt"}
+                </CardTitle>
+                <CardDescription>
+                  Veldu leikmann og hvaða liðs-templatei þú víkur frá. Aðeins MD-dagarnir sem þú vistar í
+                  þessu kerfi yfirskrifa liðsplanið — aðrir dagar fylgja liðinu sjálfkrafa.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Leikmaður</Label>
+                  <select
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                    value={playerBuilderPlayerId}
+                    onChange={(e) => setPlayerBuilderPlayerId(e.target.value)}
+                    disabled={!!editingSet}
+                  >
+                    <option value="">— veldu leikmann —</option>
+                    {teamPlayers.map((p) => (
+                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Liðs-template að víkja frá</Label>
+                  <select
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                    value={playerBuilderParent}
+                    onChange={(e) => setPlayerBuilderParent(e.target.value)}
+                  >
+                    <option value="">— veldu parent —</option>
+                    {sets.map((s) => (
+                      <option key={s.id} value={s.table_name}>
+                        {s.set_name} {s.season_phase ? `(${s.season_phase})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Frá og með</Label>
+                  <Input
+                    type="date"
+                    value={playerBuilderStart}
+                    onChange={(e) => setPlayerBuilderStart(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Til og með</Label>
+                  <Input
+                    type="date"
+                    value={playerBuilderEnd}
+                    onChange={(e) => setPlayerBuilderEnd(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid gap-1.5 sm:col-span-2">
+                  <Label className="text-xs">Skýring (valfrjálst)</Label>
+                  <Input
+                    placeholder="t.d. Hamstring rehab — back-to-running W2"
+                    value={playerBuilderNote}
+                    onChange={(e) => setPlayerBuilderNote(e.target.value)}
+                  />
+                </div>
+
+                {sets.length === 0 && (
+                  <div className="sm:col-span-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    Ekkert liðs-template til að víkja frá. Búðu fyrst til a.m.k. eitt liðs-template áður
+                    en þú býrð til player override.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* ── Step 1: Name & sport ─────────────────────────────────────────── */}

@@ -3212,8 +3212,33 @@ export default function PlayerClient() {
       } | null = null;
 
       if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
+        // ── Per-player override resolution ────────────────────────────────────
+        // Check if the player has an active custom_template_sets override that:
+        //   1. covers today's date (start_date ≤ entry_date ≤ end_date)
+        //   2. defines a record for today's MD-day
+        // If yes — read records from override.table_name instead of team table.
+        // If no  — fall through to the team template (current behavior).
+        let effectiveTblName = tblName;
+        try {
+          const { data: overrideRow } = await supabase
+            .from("custom_template_sets")
+            .select("table_name, md_days")
+            .eq("player_id", playerId)
+            .lte("start_date", safeDay)
+            .gte("end_date", safeDay)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const overrideDays = Array.isArray((overrideRow as any)?.md_days)
+            ? ((overrideRow as any).md_days as string[])
+            : [];
+          if ((overrideRow as any)?.table_name && overrideDays.includes(resolvedMdDay)) {
+            effectiveTblName = (overrideRow as any).table_name;
+          }
+        } catch { /* fall back to team template silently */ }
+
         const { data: templateRows, error: templateErr } = await supabase
-          .from(tblName as any)
+          .from(effectiveTblName as any)
           .select("title, description, structure, structure_en, readiness_level, md_day, variant")
           .eq("team_id", resolvedTeamId)
           .eq("md_day", resolvedMdDay)
@@ -3698,12 +3723,13 @@ export default function PlayerClient() {
             }
           } catch { /* keep default inseason */ }
 
-          // Look up team's custom template table (if any)
+          // Look up team's custom template table (if any) — exclude player overrides
           try {
             const { data: ctSet } = await supabase
               .from("custom_template_sets")
               .select("table_name")
               .eq("team_id", prof.team_id)
+              .is("player_id", null)
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -4332,8 +4358,33 @@ export default function PlayerClient() {
       }
 
       const overrideTeamId = (profile as any)?.team_id ?? null;
+      const playerIdForOverride = (profile as any)?.player_id ?? null;
+
+      // Per-player override resolution (mirrors logic in fetchStage4Plan).
+      // If an active player override exists for today and covers this MD-day, use its table.
+      let effectiveOverrideTbl = templateTableName as string;
+      if (playerIdForOverride && day) {
+        try {
+          const { data: overrideRow } = await supabase
+            .from("custom_template_sets")
+            .select("table_name, md_days")
+            .eq("player_id", playerIdForOverride)
+            .lte("start_date", day)
+            .gte("end_date", day)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const overrideDays = Array.isArray((overrideRow as any)?.md_days)
+            ? ((overrideRow as any).md_days as string[])
+            : [];
+          if ((overrideRow as any)?.table_name && overrideDays.includes(mdDay)) {
+            effectiveOverrideTbl = (overrideRow as any).table_name;
+          }
+        } catch { /* fall back silently */ }
+      }
+
       const { data, error } = await supabase
-        .from(templateTableName as any)
+        .from(effectiveOverrideTbl as any)
         .select("title, description, structure, structure_en, readiness_level, md_day, variant")
         .eq("team_id", overrideTeamId)
         .eq("readiness_level", desiredReadiness)
