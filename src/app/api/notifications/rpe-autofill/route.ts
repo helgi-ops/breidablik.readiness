@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 /**
- * Nightly auto-fill cron — runs at 23:30 local time (Atlantic/Reykjavik).
+ * Nightly auto-fill cron — runs at 23:00 local time (Atlantic/Reykjavik).
  *
  * Two passes per non-OFF team:
  *   1. RPE pass: legacy team-average fill for missing session_rpe_entries.
@@ -17,6 +17,15 @@ export const runtime = "nodejs";
  *
  * Exception: If today is an OFF day in Week_Setup (week_plans.day_type = 'OFF')
  * for a team, that team is skipped entirely (no auto-fill on rest days).
+ *
+ * Lag protection (added 2026-04-28): Vercel cron can fire 30+ min late.
+ * If todayDateKey() runs after midnight Iceland time, the "today" date
+ * has rolled to the NEW day — we'd autofill for tomorrow's morning
+ * check-in window, which is exactly what coaches don't want. The fix
+ * is in resolveTargetDate() below: when execution happens between
+ * midnight and noon Iceland time, target the day that JUST ended
+ * (yesterday) instead of "today". This makes the cron deterministic
+ * regardless of Vercel scheduling lag.
  *
  * Replaces the old manual "Fylla inn missing" coach-dashboard button — the
  * system now handles imputation automatically every night.
@@ -66,6 +75,40 @@ function todayDateKey(): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Lag-aware date resolver for the nightly cron.
+ *
+ * The cron is scheduled for 23:00 Iceland time but Vercel cron can fire
+ * 10-60 minutes late. If we ran at, say, 00:15 Iceland time on Apr 28
+ * and used "today" naively, we'd autofill for Apr 28 — *before* players
+ * had any chance to check in for Apr 28. That's the opposite of what
+ * coaches want (autofill should be a 23:00 fallback for the day that's
+ * ending, NOT a midnight pre-fill for the day that's starting).
+ *
+ * Rule: if the current Iceland-local hour is < 12 (i.e. the cron lagged
+ * past midnight), target the day that JUST ended (yesterday). Otherwise
+ * target today.
+ *
+ * This makes the cron deterministic about which date it fills regardless
+ * of when Vercel actually fires it.
+ */
+function resolveTargetDate(): string {
+  const hourFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: APP_TZ,
+    hour: "2-digit",
+    hour12: false,
+  });
+  const localHour = parseInt(hourFmt.format(new Date()).slice(0, 2), 10);
+  const today = todayDateKey();
+  if (Number.isFinite(localHour) && localHour < 12) {
+    // Lagged past midnight — return yesterday in APP_TZ
+    const d = new Date(`${today}T12:00:00Z`); // noon UTC of "today" key
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+  return today;
+}
+
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -107,7 +150,11 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
   total_readiness_imputed: number;
   total_rpe_imputed: number;
 }> {
-  const dateKey = todayDateKey();
+  // Use lag-aware date resolver, NOT todayDateKey() — see resolveTargetDate()
+  // docstring above for why. If Vercel cron fires past midnight Iceland time,
+  // we must target yesterday (the day that just ended) instead of today, or
+  // we'd autofill the new day before any player has had a chance to check in.
+  const dateKey = resolveTargetDate();
 
   // 1. OFF teams for today
   const { data: offPlans, error: offErr } = await sb

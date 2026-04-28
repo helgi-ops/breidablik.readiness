@@ -12,6 +12,6 @@
     { "path": "/api/integrations/catapult/daily-sync", "schedule": "0 2 * * *" },
     { "path": "/api/integrations-live/sync/scheduled", "schedule": "0 7 * * *" },
     { "path": "/api/integrations-live/sync/scheduled", "schedule": "0 5 * * *" },
-    { "path": "/api/notifications/rpe-autofill", "schedule": "30 23 * * *" }
+    { "path": "/api/notifications/rpe-autofill", "schedule": "0 23 * * *" }
   ]
 }
