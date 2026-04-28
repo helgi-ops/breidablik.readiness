@@ -187,6 +187,130 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     return config.defaultHeaders ?? {};
   }
 
+  /**
+   * Per-product implementation of fetchTestsByDateRange. Same detailed →
+   * paged → cursor fallback chain as before, but parameterised by product so
+   * the public method can call it for ForceDecks, ForceFrame, and Nordbord
+   * in turn against their respective base URLs.
+   */
+  async function fetchTestsByDateRangeForProductImpl(
+    product: "forcedecks" | "forceframe" | "nordbord",
+    dateFrom: string,
+    dateTo: string,
+    headers: Record<string, string>,
+  ): Promise<ValdTestSummary[]> {
+    const base = productBaseUrl(config, product);
+    for (const scopeId of scopeIds) {
+      // 1. Detailed endpoint — full test objects with param/extParams fields
+      try {
+        const detailedUrl = new URL(
+          `/v2019q3/teams/${encodeURIComponent(scopeId)}/tests/detailed/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}`,
+          base,
+        );
+        note(`fetchTests[${product}] scope=${scopeId} detailed: ${detailedUrl.toString()}`);
+        const payload = await valdRequestJson<unknown>(detailedUrl.toString(), { headers, timeoutMs: config.timeoutMs });
+        if (payload != null) {
+          const batch = listFromPayload(payload);
+          if (batch.length > 0) {
+            note(`fetchTests[${product}] scope=${scopeId} detailed: ${batch.length} tests`);
+            return batch.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+          }
+          note(`fetchTests[${product}] scope=${scopeId} detailed: 0 tests`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        note(`fetchTests[${product}] scope=${scopeId} detailed: error ${msg}`);
+        if (!msg.includes("404") && !msg.includes("400") && !isAbort) throw err;
+      }
+
+      // 2. Paginated date-range endpoint
+      const all: unknown[] = [];
+      for (let page = 1; page <= 500; page += 1) {
+        const url = new URL(
+          `/v2019q3/teams/${encodeURIComponent(scopeId)}/tests/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/${page}`,
+          base,
+        );
+        if (page <= 3) note(`fetchTests[${product}] scope=${scopeId} page=${page}: ${url.toString()}`);
+        try {
+          const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+          if (payload == null) break;
+          const batch = listFromPayload(payload);
+          if (batch.length === 0) break;
+          all.push(...batch);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const isAbort = err instanceof Error && err.name === "AbortError";
+          note(`fetchTests[${product}] scope=${scopeId} page=${page}: error ${msg}`);
+          if (msg.includes("404") || msg.includes("400") || isAbort) break;
+          throw err;
+        }
+      }
+      if (all.length > 0) {
+        note(`fetchTests[${product}] scope=${scopeId} paged: ${all.length} tests`);
+        return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+      }
+      note(`fetchTests[${product}] scope=${scopeId} paged: 0 tests`);
+    }
+
+    // 3. Cursor fallback — tests without parameters but enough for inference
+    const cursorBase = new URL("/tests", productBaseUrl(config, product)).toString();
+    note(`fetchTests[${product}] cursor-fallback: ${cursorBase} tenant=${tenantId ?? "none"} modifiedFrom=${dateFrom}`);
+    const rawTests = await fetchAllTestsWithCursor(cursorBase, tenantId, dateFrom, headers, config.timeoutMs);
+    note(`fetchTests[${product}] cursor-fallback: ${rawTests.length} tests`);
+    return rawTests.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+  }
+
+  /** Per-product implementation of fetchTestsForAthlete. */
+  async function fetchTestsForAthleteForProductImpl(
+    product: "forcedecks" | "forceframe" | "nordbord",
+    valdAthleteId: string,
+    dateFrom: string,
+    headers: Record<string, string>,
+  ): Promise<ValdTestSummary[]> {
+    const base = productBaseUrl(config, product);
+    for (const scopeId of scopeIds) {
+      const all: unknown[] = [];
+      for (let page = 1; page <= 500; page += 1) {
+        const url = new URL(
+          `/v2019q3/teams/${encodeURIComponent(scopeId)}/athlete/${encodeURIComponent(valdAthleteId)}/tests/${page}`,
+          base,
+        );
+        url.searchParams.set("modifiedFrom", dateFrom);
+        if (page <= 3) note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId} page=${page}: ${url.toString()}`);
+        try {
+          const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+          if (payload == null) break;
+          const batch = listFromPayload(payload);
+          if (batch.length === 0) break;
+          all.push(...batch);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId} page=${page}: error ${msg}`);
+          if (msg.includes("404") || msg.includes("400")) break;
+          throw err;
+        }
+      }
+      if (all.length > 0) {
+        note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId}: ${all.length} tests`);
+        return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+      }
+      note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId}: 0 tests`);
+    }
+
+    // Cursor fallback filtered by ProfileId
+    const cursorUrl = new URL("/tests", productBaseUrl(config, product));
+    if (tenantId) cursorUrl.searchParams.set("TenantId", tenantId);
+    cursorUrl.searchParams.set("ProfileId", valdAthleteId);
+    cursorUrl.searchParams.set("ModifiedFromUtc", dateFrom);
+    note(`fetchTestsForAthlete[${product}] cursor-fallback athlete=${valdAthleteId}: ${cursorUrl.toString()}`);
+    const payload = await valdRequestJson(cursorUrl.toString(), { headers, timeoutMs: config.timeoutMs });
+    if (payload == null) return [];
+    const tests = listFromPayload(payload).map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+    note(`fetchTestsForAthlete[${product}] cursor-fallback athlete=${valdAthleteId}: ${tests.length} tests`);
+    return tests;
+  }
+
   return {
     async testConnection() {
       const headers = await authHeaders();
@@ -235,133 +359,45 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     },
 
     async fetchTestsByDateRange(dateFrom: string, dateTo: string): Promise<ValdTestSummary[]> {
-      // VALD External API v2019q3 endpoints (from Swagger):
-      //   GET /v2019q3/teams/{teamId}/tests/detailed/{dateFrom}/{dateTo}  ← full data with params
-      //   GET /v2019q3/teams/{teamId}/tests/{dateFrom}/{dateTo}/{page}    ← paginated, dates in PATH
-      //   GET /tests?TenantId=...&ModifiedFromUtc=...                     ← legacy cursor fallback
+      // Multi-product fetch: VALD has 3 product endpoints (ForceDecks/CMJ,
+      // ForceFrame/groin, Nordbord/hamstring), each on its own base URL but
+      // sharing the v2019q3 path structure. Loop over all 3 so we get every
+      // test type the org runs. Tag each result with the source product so
+      // sync.ts normalization picks the right schema downstream.
+      //
+      // Before this change the sync only hit ForceDecks → ForceFrame and
+      // Nordbord tables stayed empty regardless of how many tests the team
+      // ran in VALD HUB.
       const headers = await authHeaders();
-      const base = productBaseUrl(config, "forcedecks");
-      for (const scopeId of scopeIds) {
-        // 1. Try detailed endpoint first — returns full test objects with param/extParams fields
-        try {
-          const detailedUrl = new URL(
-            `/v2019q3/teams/${encodeURIComponent(scopeId)}/tests/detailed/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}`,
-            base,
-          );
-          note(`fetchTestsByDateRange scope=${scopeId} detailed: ${detailedUrl.toString()}`);
-          const payload = await valdRequestJson<unknown>(detailedUrl.toString(), { headers, timeoutMs: config.timeoutMs });
-          if (payload != null) {
-            const batch = listFromPayload(payload);
-            if (batch.length > 0) {
-              note(`fetchTestsByDateRange scope=${scopeId} detailed: ${batch.length} tests`);
-              return batch.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
-            }
-            note(`fetchTestsByDateRange scope=${scopeId} detailed: 0 tests`);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          const isAbort = err instanceof Error && err.name === "AbortError";
-          note(`fetchTestsByDateRange scope=${scopeId} detailed: error ${msg}`);
-          // 404 = endpoint unavailable, 400 = date range too large/unsupported,
-          // AbortError = timed out — all fall through to paginated endpoint
-          if (!msg.includes("404") && !msg.includes("400") && !isAbort) throw err;
+      const products: Array<"forcedecks" | "forceframe" | "nordbord"> = ["forcedecks", "forceframe", "nordbord"];
+      const allTests: ValdTestSummary[] = [];
+      for (const product of products) {
+        const productTests = await fetchTestsByDateRangeForProductImpl(product, dateFrom, dateTo, headers);
+        // Endpoint origin is more reliable than payload-shape inference,
+        // especially for minimal payloads from the cursor fallback path.
+        // Override "unknown" with the source product but keep explicit hints
+        // (in case a payload was misrouted somehow).
+        for (const test of productTests) {
+          if (test.product === "unknown") test.product = product;
         }
-
-        // 2. Paginated date-range endpoint — dates in PATH, page increments
-        const all: unknown[] = [];
-        for (let page = 1; page <= 500; page += 1) {
-          const url = new URL(
-            `/v2019q3/teams/${encodeURIComponent(scopeId)}/tests/${encodeURIComponent(dateFrom)}/${encodeURIComponent(dateTo)}/${page}`,
-            base,
-          );
-          if (page <= 3) {
-            note(`fetchTestsByDateRange scope=${scopeId} page=${page}: ${url.toString()}`);
-          }
-          try {
-            const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
-            if (payload == null) break;
-            const batch = listFromPayload(payload);
-            if (batch.length === 0) break;
-            all.push(...batch);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            const isAbort = err instanceof Error && err.name === "AbortError";
-            note(`fetchTestsByDateRange scope=${scopeId} page=${page}: error ${msg}`);
-            // 404 = no more pages, 400 = invalid range, AbortError = timed out
-            // All break out of page loop so we fall through to cursor fallback
-            if (msg.includes("404") || msg.includes("400") || isAbort) break;
-            throw err;
-          }
-        }
-        if (all.length > 0) {
-          note(`fetchTestsByDateRange scope=${scopeId} paged: ${all.length} tests`);
-          return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
-        }
-        note(`fetchTestsByDateRange scope=${scopeId} paged: 0 tests`);
+        allTests.push(...productTests);
       }
-
-      // 3. Fallback: legacy cursor-based endpoint (returns tests WITHOUT parameters)
-      note(`fetchTestsByDateRange fallback: ${getTestsBaseUrl(config)} tenant=${tenantId ?? "none"} modifiedFrom=${dateFrom}`);
-      const rawTests = await fetchAllTestsWithCursor(
-        getTestsBaseUrl(config),
-        tenantId,
-        dateFrom,
-        headers,
-        config.timeoutMs,
-      );
-      note(`fetchTestsByDateRange fallback: ${rawTests.length} tests`);
-      return rawTests.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+      return allTests;
     },
 
     async fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, _dateTo: string): Promise<ValdTestSummary[]> {
-      // VALD External API v2019q3: GET /v2019q3/teams/{teamId}/athlete/{athleteId}/tests/{page}
-      // Note: "athlete" is singular in the path (Swagger-confirmed).
+      // Same multi-product treatment for per-athlete backfill.
       const headers = await authHeaders();
-      const base = productBaseUrl(config, "forcedecks");
-      for (const scopeId of scopeIds) {
-        const all: unknown[] = [];
-        for (let page = 1; page <= 500; page += 1) {
-          const url = new URL(
-            `/v2019q3/teams/${encodeURIComponent(scopeId)}/athlete/${encodeURIComponent(valdAthleteId)}/tests/${page}`,
-            base,
-          );
-          url.searchParams.set("modifiedFrom", dateFrom);
-          if (page <= 3) {
-            note(`fetchTestsForAthlete scope=${scopeId} athlete=${valdAthleteId} page=${page}: ${url.toString()}`);
-          }
-          try {
-            const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
-            if (payload == null) break;
-            const batch = listFromPayload(payload);
-            if (batch.length === 0) break;
-            all.push(...batch);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            note(`fetchTestsForAthlete scope=${scopeId} athlete=${valdAthleteId} page=${page}: error ${msg}`);
-            if (msg.includes("404") || msg.includes("400")) break;
-            throw err;
-          }
+      const products: Array<"forcedecks" | "forceframe" | "nordbord"> = ["forcedecks", "forceframe", "nordbord"];
+      const allTests: ValdTestSummary[] = [];
+      for (const product of products) {
+        const productTests = await fetchTestsForAthleteForProductImpl(product, valdAthleteId, dateFrom, headers);
+        for (const test of productTests) {
+          if (test.product === "unknown") test.product = product;
         }
-        if (all.length > 0) {
-          note(`fetchTestsForAthlete scope=${scopeId} athlete=${valdAthleteId}: ${all.length} tests`);
-          return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
-        }
-        note(`fetchTestsForAthlete scope=${scopeId} athlete=${valdAthleteId}: 0 tests`);
+        allTests.push(...productTests);
       }
-
-      // Fallback: cursor endpoint filtered by ProfileId
-      const fallbackUrl = new URL(getTestsBaseUrl(config));
-      if (tenantId) fallbackUrl.searchParams.set("TenantId", tenantId);
-      fallbackUrl.searchParams.set("ProfileId", valdAthleteId);
-      fallbackUrl.searchParams.set("ModifiedFromUtc", dateFrom);
-      note(`fetchTestsForAthlete fallback athlete=${valdAthleteId}: ${fallbackUrl.toString()}`);
-      const payload = await valdRequestJson(fallbackUrl.toString(), { headers, timeoutMs: config.timeoutMs });
-      if (payload == null) return [];
-      const tests = listFromPayload(payload)
-        .map(mapValdTestSummary)
-        .filter((item): item is ValdTestSummary => !!item);
-      note(`fetchTestsForAthlete fallback athlete=${valdAthleteId}: ${tests.length} tests`);
-      return tests;
+      return allTests;
     },
 
     getDiagnostics() {
