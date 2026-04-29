@@ -688,7 +688,10 @@ async function buildPlayerSource(args: {
     playerName: String(args.row.full_name ?? ""),
     date: args.date,
     dailySnapshot: snapshot,
-    readinessScore: toFinite(args.row.readiness) ?? undefined,
+    // total_score (5-25 sum of 5 sub-scores) is the canonical readiness number.
+    // Legacy `readiness` column was on a 1-10 scale and produced scale-mixing
+    // bugs when combined with total_score (5-25) — see audit 2026-04-29.
+    readinessScore: toFinite(args.row.total_score) ?? undefined,
     checkinScore: toFinite(args.row.total_score) ?? undefined,
     zScore: zToday ?? undefined,
     deltaZ: dz ?? undefined,
@@ -887,7 +890,9 @@ async function buildPlayerSource(args: {
   return {
     athleteId: String(args.row.player_id),
     athleteName: String(args.row.full_name ?? ""),
-    readinessScore: toFinite(args.row.readiness) ?? toFinite(args.row.total_score),
+    // Use total_score (5-25) only — never legacy `readiness` (1-10), which
+    // would mix scales depending on which column is populated.
+    readinessScore: toFinite(args.row.total_score),
     cmjRequired,
     loadAlerts: compositeLoad.escalationReasons,
     fatigueType: compositeLoad.fatigueType,
@@ -1004,7 +1009,7 @@ export async function GET(req: Request) {
         players.push({
           athleteId: String(row.player_id),
           athleteName: String(row.full_name ?? "Unknown athlete"),
-          readinessScore: toFinite(row.readiness) ?? toFinite(row.total_score),
+          readinessScore: toFinite(row.total_score), // total_score (5-25) only — see audit comment above
           cmjRequired: false,
           loadAlerts: [],
           fatigueType: null,

@@ -110,7 +110,12 @@ async function buildSummaryInput(
       .select("accel_burst_personal_z, decel_burst_personal_z, ad_couple_personal_z, baseline_days")
       .eq("player_id", playerId)
       .maybeSingle(),
-    // Window slice of player_external_load_daily for MPE recovery + EDI + ACWR
+    // Window slice of player_external_load_daily for MPE recovery + EDI + ACWR.
+    // Note: HMLD / HSR raw numbers are deliberately NOT exposed to the LLM
+    // here — only derived rolling metrics (mpe_recovery z, edi avg, acwr-like)
+    // are returned. This prevents the HMLD-as-HIR confusion that hit the Q&A
+    // route on 2026-04-29. If you ever surface raw load numbers to the prompt,
+    // mirror the metric_definitions block from ask/route.ts.
     supabase
       .from("player_external_load_daily")
       .select("date, mpe_recovery_avg_s, mpe_count_est, edi, total_player_load, total_distance, high_metabolic_load_distance_m")

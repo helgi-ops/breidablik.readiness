@@ -3368,11 +3368,15 @@ export default function CoachPage() {
 
         const hasDbFinal = !!baseFlag && !!baseColor;
         if (!hasDbFinal) {
+          // applySorenessDowngrade expects the NEW scale (1=very sore, 5=fine)
+          // and triggers downgrade at <=2. Previously was passed legacy
+          // r.soreness (5=very sore, 1=fine) — INVERTED scale, so it
+          // downgraded fresh players and ignored sore ones. Fixed 2026-04-29.
           const downgraded = applySorenessDowngrade({
             flag: baseFlag,
             color: baseColor,
             reason: baseReason,
-            soreness: r.soreness ?? null,
+            soreness: (r as any).muscle_soreness ?? null,
           });
 
           finalColor = (downgraded.final_color ?? finalColor) as FinalColor;
@@ -3405,6 +3409,14 @@ export default function CoachPage() {
           position: r.position ?? null,
           team_id: (r as any).team_id ?? null,
 
+          // LEGACY fields kept for back-compat with normSor / display code.
+          // Legacy `soreness` is on a 1-5 scale where 5=very sore (high=bad),
+          // matching what normSor expects ((5-v)/4*100 = badness%).
+          // Legacy `readiness` is 1-10, `sleep` is 0-2. The DB trigger keeps
+          // these populated from the modern 6-step columns, so display paths
+          // continue to work. NEVER pass these into decision rules that expect
+          // the new 1-5 (5=best) scale — see the buildPerformanceIntelligenceDecision
+          // and applySorenessDowngrade fixes above for examples of correct flow.
           readiness: r.readiness ?? null,
           sleep: r.sleep ?? null,
           soreness: r.soreness ?? null,
@@ -4268,7 +4280,11 @@ export default function CoachPage() {
         riskHistory: history.map((point) => {
           const d = buildPerformanceIntelligenceDecision({
             readinessScore: point.checkInScore == null ? null : Math.max(0, Math.min(100, ((point.checkInScore - 5) / 20) * 100)),
-            sorenessScore: point.soreness ?? null,
+            // injuryRisk rules.ts: sorenessScore <= 2 = sore (elevated risk),
+            // >= 4 = fine. That's the NEW scale where 1=sore. point.soreness
+            // was sourced from legacy column (5=sore) — INVERTED. Use new
+            // muscle_soreness column directly. Fixed 2026-04-29.
+            sorenessScore: (point as any).muscle_soreness ?? null,
             sleepScore: point.sleepQuality ?? null,
             stressScore: point.stress ?? null,
             energyScore: point.energy ?? null,
@@ -4681,7 +4697,9 @@ export default function CoachPage() {
                     ? "GREEN"
                     : "GRAY",
             sessionMode: "pending",
-            sorenessScore: point.soreness ?? null,
+            // Use new muscle_soreness (1=sore) — see comment on the
+            // injuryRisk call above for the scale rationale.
+            sorenessScore: (point as any).muscle_soreness ?? null,
             sleepScore: point.sleepQuality ?? null,
             stressScore: point.stress ?? null,
             energyScore: point.energy ?? null,
@@ -5089,7 +5107,10 @@ export default function CoachPage() {
       return {
         name: r.full_name,
         readinessStatus: String(r.final_flag).toUpperCase() === "RED" ? "RED" : "YELLOW",
-        score: typeof r.readiness === "number" ? r.readiness : rawTotalScore,
+        // Always use rawTotalScore (5-25 modern). Legacy r.readiness was on
+        // a 1-10 scale — mixing the two produced inconsistent score values
+        // depending on which column was populated. Fixed 2026-04-29.
+        score: rawTotalScore,
         confidence: athleteDecision.decisionConfidence,
         why: athleteDecision.explanationLines.length ? athleteDecision.explanationLines : reasons,
         checkInScore: rawTotalScore,

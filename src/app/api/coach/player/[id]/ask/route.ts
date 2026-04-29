@@ -127,21 +127,99 @@ async function fetchDataForQuestion(
   if (dataKeys.includes("recent_load")) {
     const { data } = await supabase
       .from("player_external_load_daily")
-      .select("date, total_distance, total_player_load, high_metabolic_load_distance_m, ima_band3_decel_count, sharp_cut_count_est, mpe_count_est, mpe_recovery_avg_s, edi, activity_class_brown")
+      .select("date, total_distance, total_player_load, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, high_metabolic_load_distance_m, ima_band3_decel_count, sharp_cut_count_est, mpe_count_est, mpe_recovery_avg_s, edi, activity_class_brown")
       .eq("player_id", playerId)
       .gte("date", fourteenAgoIso)
       .order("date", { ascending: false });
-    out.recent_load_14d = data ?? [];
+    // Semantic labels — prevents Claude from confusing HMLD (metabolic-power
+    // based) with HSR/HIR (velocity based). They are NOT the same. Ívar
+    // hallucination 2026-04-29: AI reported HMLD 4057m as "high-intensity
+    // running" when actual HIR was V5+V6 = 308+38 = 346m. Field labels and
+    // explicit metric_definitions block now make this distinction explicit.
+    type LoadRow = {
+      date: string;
+      total_distance: number | null;
+      total_player_load: number | null;
+      high_speed_distance: number | null;
+      sprint_distance: number | null;
+      velocity_band5_total_distance: number | null;
+      velocity_band6_total_distance: number | null;
+      high_metabolic_load_distance_m: number | null;
+      ima_band3_decel_count: number | null;
+      sharp_cut_count_est: number | null;
+      mpe_count_est: number | null;
+      mpe_recovery_avg_s: number | null;
+      edi: number | null;
+      activity_class_brown: string | null;
+    };
+    const rows = (data ?? []) as LoadRow[];
+    out.recent_load_14d = rows.map((r) => ({
+      date: r.date,
+      total_distance_m:                r.total_distance,
+      total_player_load_au:            r.total_player_load,
+      hsr_meters_v5_plus:              r.high_speed_distance,        // velocity > 5.5 m/s
+      sprint_meters_v6_plus:           r.sprint_distance,            // velocity > 7.0 m/s
+      v5_distance_m:                   r.velocity_band5_total_distance,
+      v6_distance_m:                   r.velocity_band6_total_distance,
+      high_metabolic_load_distance_m:  r.high_metabolic_load_distance_m, // power-based, NOT HIR
+      decel_band3_count:               r.ima_band3_decel_count,
+      sharp_cut_count_est:             r.sharp_cut_count_est,
+      mpe_count_est:                   r.mpe_count_est,
+      mpe_recovery_avg_s:              r.mpe_recovery_avg_s,
+      edi:                             r.edi,
+      activity_class:                  r.activity_class_brown,
+    }));
+    out.metric_definitions = {
+      hsr_meters_v5_plus:              "High-speed running distance (velocity > 5.5 m/s). This IS 'high-intensity running' (HIR) for coach communication.",
+      sprint_meters_v6_plus:           "Sprint distance (velocity > 7.0 m/s). Subset of HSR.",
+      high_metabolic_load_distance_m:  "Distance covered at high metabolic power (>25.5 W/kg). Different metric — DO NOT call this 'high-intensity running' or 'HIR'. If you must reference it, say 'high-effort distance' or 'metabolically demanding distance'. Typically 5-10x larger than HSR — confusing the two will produce massively wrong numbers.",
+      total_distance_m:                "Total distance covered. This is everything, walking included.",
+      total_player_load_au:            "Catapult Player Load (arbitrary units, accelerometer-derived).",
+    };
   }
 
   if (dataKeys.includes("wellness_recent")) {
+    // Read the NEW 6-step columns — these are what the player actually fills
+    // in and what the coach sees in the UI. The legacy columns (sleep,
+    // soreness, readiness) are derived/scaled differently (e.g. legacy
+    // 'soreness' is 1-5 with 5=very sore; new muscle_soreness is 1-5 with
+    // 5=no pain — inverted). Reading the legacy columns made the AI describe
+    // numbers that didn't match what the coach saw on screen.
     const { data } = await supabase
       .from("readiness_entries")
-      .select("entry_date, sleep, soreness, readiness")
+      .select("entry_date, fatigue_energy, sleep_quality, sleep_duration, stress_mood, muscle_soreness, total_score, md_day")
       .eq("player_id", playerId)
       .gte("entry_date", sevenAgoIso)
       .order("entry_date", { ascending: false });
-    out.wellness_recent = data ?? [];
+    type WellnessRow = {
+      entry_date: string;
+      fatigue_energy: number | null;
+      sleep_quality: number | null;
+      sleep_duration: number | null;
+      stress_mood: number | null;
+      muscle_soreness: number | null;
+      total_score: number | null;
+      md_day: string | null;
+    };
+    out.wellness_recent = ((data ?? []) as WellnessRow[]).map((r) => ({
+      date:                    r.entry_date,
+      md_day:                  r.md_day,
+      fatigue_energy_1to5:     r.fatigue_energy,
+      sleep_quality_1to5:      r.sleep_quality,
+      sleep_duration_1to5:     r.sleep_duration,
+      stress_mood_1to5:        r.stress_mood,
+      muscle_soreness_1to5:    r.muscle_soreness,
+      total_score_max25:       r.total_score,
+    }));
+    out.wellness_scale_definitions = {
+      _common:                 "All 5 sub-scores are on a 1-5 scale where 5=BEST and 1=WORST. total_score = sum of the 5 sub-scores (range 5-25, 25=best).",
+      fatigue_energy_1to5:     "Player's energy / freshness. 5=fully energised, 1=exhausted.",
+      sleep_quality_1to5:      "How well he slept. 5=excellent, 1=very poor.",
+      sleep_duration_1to5:     "How long he slept. 5=plenty, 1=very short.",
+      stress_mood_1to5:        "Mental state. 5=relaxed/positive, 1=stressed/low.",
+      muscle_soreness_1to5:    "Muscle soreness. 5=NO pain, 1=very sore. NOTE: high = good, low = bad. Do NOT say 'soreness rose to 4' as if 4 was bad — 4/5 means he is barely sore.",
+      total_score_max25:       "Sum of all 5 sub-scores. 20+ = good day, 10-15 = rough day, <10 = very poor.",
+    };
   }
 
   if (dataKeys.includes("vald_strength")) {
@@ -241,7 +319,18 @@ Hard rules:
 - Each answer: 2-3 sentences max. NEVER more.
 - Plain coach language. NO data jargon. NEVER use internal metric names like
   "ACWR", "McBurnie", "HMLD", "z-score", "decel-to-accel ratio". Translate.
-- Cite numbers ONLY if they appear LITERALLY in the input JSON.
+- Cite numbers ONLY if they appear LITERALLY in the input JSON. Never average,
+  round dramatically, or compute new totals — read the value as-is.
+- If you reference "high-intensity running" or "HIR" or "high-speed running"
+  or "sprints", you MUST use the value from the field 'hsr_meters_v5_plus'
+  (or 'sprint_meters_v6_plus' for sprints specifically). NEVER use
+  'high_metabolic_load_distance_m' for these — that is a power-based metric,
+  typically 5-10x larger, and calling it HIR is a serious error that will
+  destroy coach trust.
+- If you reference total distance, use 'total_distance_m'. If you reference
+  Player Load, use 'total_player_load_au'.
+- A 'metric_definitions' block in the input tells you what each field means.
+  Trust those definitions over your prior assumptions about column names.
 - "X of Y days" — X must be ≤ Y. Always.
 - NEVER invent injuries / tests / events not in the input.
 - If data is sparse or missing, say "limited data" — do NOT manufacture answers.
@@ -291,7 +380,7 @@ const FORBIDDEN_TERMS = [
   /deceleration[-\s]to[-\s]acceleration\s+ratio/i,
   /\b(?:0\.\d+|1\.\d+)\s*(?:vs|versus)\s*(?:0\.\d+|1\.\d+)/i,
 ];
-function validateAnswer(text: string): string | null {
+function validateAnswer(text: string, scopedData?: Record<string, unknown>): string | null {
   for (const re of FORBIDDEN_TERMS) {
     if (re.test(text)) return `Contains forbidden jargon/ratio: ${re.source}`;
   }
@@ -307,6 +396,48 @@ function validateAnswer(text: string): string | null {
     const y = parseInt(m[2], 10);
     if (x > y) return `Impossible day count: "${x} of ${y} days"`;
     if (y > 30) return `Day count exceeds plausible window: "${y} days"`;
+  }
+  // HIR-vs-HMLD substitution guard. Catches: AI cites a number alongside
+  // "high-intensity running" / "high speed running" / "sprint distance"
+  // that doesn't match any real HSR/sprint value in the input — typically
+  // because the AI grabbed HMLD (which is 5-10x larger) instead.
+  // Triggered the Ívar 2026-04-29 incident: "4057 meters of high-intensity
+  // running" when actual HSR was 346m (HMLD was 4057m).
+  if (scopedData) {
+    const loadRows = (scopedData.recent_load_14d as Array<Record<string, number | null>> | undefined) ?? [];
+    const validHirNumbers = new Set<number>();
+    for (const r of loadRows) {
+      for (const k of ["hsr_meters_v5_plus", "sprint_meters_v6_plus", "v5_distance_m", "v6_distance_m"]) {
+        const v = r?.[k];
+        if (typeof v === "number" && v > 0) {
+          // Allow a small rounding tolerance — AI may say "350m" for 345.46
+          validHirNumbers.add(Math.round(v));
+        }
+      }
+    }
+    const hirContextRegex = /(\d{2,5}(?:\.\d+)?)\s*(?:m|meters?|metres?)?\s*(?:of\s+)?(?:high[-\s]intensity\s+running|high[-\s]speed\s+running|HIR|HSR|sprint(?:ing|\s+distance)?)/gi;
+    let h: RegExpExecArray | null;
+    while ((h = hirContextRegex.exec(text)) !== null) {
+      const cited = parseFloat(h[1]);
+      if (!Number.isFinite(cited)) continue;
+      // Allow values that are within 10% of any real HSR/sprint number
+      const matched = Array.from(validHirNumbers).some(
+        (v) => Math.abs(cited - v) <= Math.max(15, v * 0.1),
+      );
+      if (!matched) {
+        // Check if the cited value matches HMLD instead — the most common
+        // confusion. If so, name the bug clearly in the error so the retry
+        // prompt is informative.
+        const hmldNumbers = loadRows
+          .map((r) => r?.high_metabolic_load_distance_m)
+          .filter((v): v is number => typeof v === "number" && v > 0)
+          .map((v) => Math.round(v));
+        const isHmld = hmldNumbers.some((v) => Math.abs(cited - v) <= Math.max(50, v * 0.1));
+        return isHmld
+          ? `HIR/HSR cited as ${cited}m matches HMLD, not actual HSR. HMLD is power-based, not HIR.`
+          : `HIR/HSR cited as ${cited}m doesn't match any real HSR/sprint value in input.`;
+      }
+    }
   }
   return null;
 }
@@ -352,11 +483,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let issues: string | null = null;
   try {
     answer = await callClaude(systemPrompt, userMessage);
-    issues = validateAnswer(answer.answer);
+    issues = validateAnswer(answer.answer, scopedData);
     if (issues) {
       console.warn("[player-ask] First attempt failed validation, retrying", { questionId, issues });
-      answer = await callClaude(systemPrompt, userMessage);
-      issues = validateAnswer(answer.answer);
+      // On HIR-vs-HMLD failure, append a corrective hint to the prompt so
+      // the retry has a fighting chance. Generic retry doesn't change the
+      // model's reasoning enough to fix metric confusion.
+      const retryHint = issues.includes("HMLD")
+        ? `\n\nIMPORTANT: Your previous attempt confused 'high_metabolic_load_distance_m' (HMLD, power-based, ~4000m typical) with HIR/HSR. HIR is in 'hsr_meters_v5_plus' (typically 100-500m). Re-read the metric_definitions block. NEVER call HMLD high-intensity running.`
+        : `\n\nYour previous answer failed validation: ${issues}. Be more careful with field names and numbers.`;
+      answer = await callClaude(systemPrompt, userMessage + retryHint);
+      issues = validateAnswer(answer.answer, scopedData);
     }
   } catch (e) {
     return NextResponse.json({ error: `Generation failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
