@@ -4022,6 +4022,69 @@ export default function PlayerClient() {
             snapshot: todaySnapshot,
             readinessDecision,
           });
+
+          // Coach/player verdict alignment (added 2026-04-29).
+          //
+          // The local buildAthleteDecision call above only sees a sparse
+          // subset of inputs (sleep_quality, muscle_soreness, total_score,
+          // ydaySnapshot). The coach side runs the SAME engine but with
+          // ~25 inputs (Catapult signals, VALD snapshots, baselines, decel
+          // intelligence, etc.) — which means the same player on the same
+          // day got contradictory verdicts on the two surfaces.
+          //
+          // We now call /api/player/decision (which shares the engine with
+          // /api/team/decisions via the playerDecision lib) and OVERRIDE
+          // the local verdict's user-facing fields with the API result.
+          // Downstream cards (NVI, PI, prescription) keep using the
+          // overridden values so the entire player UI converges to the
+          // coach-side verdict.
+          //
+          // Failure mode: if the API call fails, we fall back to the
+          // locally computed verdict — better something than a blank
+          // screen. The fallback is the OLD behaviour (sparse inputs)
+          // and may diverge from the coach side; that's acceptable for
+          // the rare failure case.
+          try {
+            const apiRes = await supabase.auth.getSession();
+            const apiToken = apiRes.data.session?.access_token;
+            if (apiToken) {
+              const res = await fetch(`/api/player/decision?date=${encodeURIComponent(safeDay)}`, {
+                headers: { Authorization: `Bearer ${apiToken}` },
+              });
+              if (res.ok) {
+                const apiJson = await res.json() as {
+                  decision?: {
+                    recommendation?: { state?: string; sessionMode?: string };
+                    counterfactuals?: unknown[];
+                    forecast?: unknown;
+                  };
+                };
+                const apiRec = apiJson.decision?.recommendation;
+                if (apiRec?.state) {
+                  // Mutate in place — athleteDecision is a local variable
+                  // (not React state); downstream consumers in this useEffect
+                  // see the corrected verdict.
+                  (athleteDecision as { athleteState: string }).athleteState = String(apiRec.state).toUpperCase();
+                  if (apiRec.sessionMode) {
+                    (athleteDecision as { sessionMode: string }).sessionMode = String(apiRec.sessionMode);
+                  }
+                }
+                // Counterfactuals from the full pipeline are richer than
+                // the local sparse-input ones — prefer them when present.
+                if (Array.isArray(apiJson.decision?.counterfactuals)) {
+                  (athleteDecision as { counterfactuals: unknown[] }).counterfactuals = apiJson.decision!.counterfactuals!;
+                }
+                if (apiJson.decision?.forecast) {
+                  (athleteDecision as { forecast: unknown }).forecast = apiJson.decision.forecast;
+                }
+              } else {
+                console.warn("[player/decision] non-OK response", res.status);
+              }
+            }
+          } catch (e) {
+            console.warn("[player/decision] coach-aligned verdict fetch failed; using local fallback", e);
+          }
+
           // Persist counterfactuals to state so the "What would help"
           // panel can render them under the explanation card. Engine
           // returns empty for GREEN/GRAY days — panel hidden in that case.
