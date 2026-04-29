@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
+import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
 
@@ -688,7 +690,15 @@ function PlayerRow({ row }: { row: Row }) {
       </button>
 
       {expanded && s && (
-        <div className="border-t border-slate-200/50 bg-white/50 p-4">
+        <div className="border-t border-slate-200/50 bg-white/50 p-4 space-y-3">
+          {/* AI summary at the top of the expanded view — synthesises everything below
+              into 3-4 plain-language sentences so the coach gets the bottom line first.
+              Lang follows the global toggle (set on most pages). */}
+          <PlayerSummaryCard playerId={row.player_id} />
+
+          {/* Q&A dropdown — ask the system specific questions about this player. */}
+          <PlayerAskCard playerId={row.player_id} />
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail
               title="Overload"

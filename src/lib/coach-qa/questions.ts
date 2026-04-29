@@ -1,0 +1,162 @@
+/**
+ * Curated coach Q&A library — 8 standard questions per player.
+ *
+ * Each question has:
+ *   - id            : stable key used in API calls
+ *   - label_en/is   : what the coach sees in the dropdown
+ *   - data_keys     : which signals to fetch for this question (gates LLM scope)
+ *   - prompt        : structured instruction to Claude — scoped to one specific
+ *                     decision the coach is asking about
+ *
+ * Why curated rather than free-text: each prompt is focused on a specific
+ * decision and only sees the data that's relevant to that decision. This
+ * dramatically reduces hallucination scope vs a raw chatbot. The dropdown
+ * is also a teaching aid — coaches discover what the system can actually
+ * answer well, instead of asking unanswerable questions.
+ */
+
+export type QuestionDataKey =
+  | "decel_status"
+  | "indoor_state"
+  | "pattern_window"
+  | "active_injuries"
+  | "match_calendar"
+  | "recent_load"
+  | "wellness_recent"
+  | "vald_strength"
+  | "sharp_cut"
+  | "asp_burst"
+  | "mpe_recovery"
+  | "notifications_history"
+  | "squad_averages"
+  | "verdict_history";
+
+export type Question = {
+  id:    string;
+  label: string;
+  /** Hint shown under the dropdown when the coach hovers / focuses */
+  hint:  string;
+  /** Which data subsets to pull from DB and pass to Claude */
+  data_keys: QuestionDataKey[];
+  /** Focused prompt instruction — tells Claude exactly what to answer */
+  prompt: string;
+};
+
+export const COACH_QUESTIONS: Question[] = [
+  {
+    id:    "ready_for_90",
+    label: "Can he play 90 minutes in the next match?",
+    hint:  "Match-readiness assessment from load + wellness + injury context",
+    data_keys: ["decel_status", "active_injuries", "match_calendar", "recent_load", "wellness_recent", "vald_strength"],
+    prompt: `Question: Can this player tolerate 90 minutes in the next scheduled match?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: yes / no / yes-with-caveat (bottom line)
+- Sentence 2: the single biggest factor driving your answer (load trajectory, injury, freshness, etc.)
+- Sentence 3 (only if needed): specific watch-out for the match (e.g. "monitor groin in second half" or "limit to 60 min if score allows")
+
+Default to YES unless there's a real reason not to. Coaches over-rotate based on caveats — don't add concerns that aren't grounded in the data.`,
+  },
+  {
+    id:    "biggest_risk",
+    label: "What's his biggest injury risk right now?",
+    hint:  "Surfaces the single dominant risk factor across all signals",
+    data_keys: ["decel_status", "sharp_cut", "asp_burst", "active_injuries", "vald_strength", "wellness_recent"],
+    prompt: `Question: What is this player's single biggest injury risk profile right now?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: name the body region or system at highest risk (hamstring / groin / knee / ankle / general overload). If no real risk, say "no elevated injury risk — train normally".
+- Sentence 2: which specific signals are pointing there (sharp cuts + low hip-ER strength → groin/ACL; A:D imbalance + recurring soreness → hamstring; etc.)
+- Sentence 3 (only if amber/red): one specific protective action (drill modification, recovery focus, strength priority).
+
+Be honest about absence of risk. Coaches lose trust fast if you invent risks that aren't there.`,
+  },
+  {
+    id:    "last_flag",
+    label: "When was he last flagged and why?",
+    hint:  "Notification history lookup — most recent threshold crossing",
+    data_keys: ["notifications_history"],
+    prompt: `Question: When was this player most recently flagged in the notification system, and what was the reason?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: the date and the parameter that fired (e.g. "Flagged on Apr 26 for elevated decel volume")
+- Sentence 2: brief context — was it acknowledged, did it resolve, did anything follow.
+- Sentence 3 (only if pattern): note if the same flag has fired multiple times recently.
+
+If there are no flags in the recent history, say so plainly: "No flags in the last 14 days — clean record."`,
+  },
+  {
+    id:    "trend_14d",
+    label: "What's his trend over the last 14 days?",
+    hint:  "Trajectory read across load, wellness and verdicts",
+    data_keys: ["pattern_window", "recent_load", "wellness_recent", "verdict_history"],
+    prompt: `Question: What is this player's overall trajectory across the last 14 days?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: improving / steady / worsening (one clear direction)
+- Sentence 2: the dominant signal driving that direction (load climbing, wellness slipping, recovering well from previous spike, etc.)
+- Sentence 3: implication for the next 7 days (e.g. "expect plateau", "watch for breakthrough fatigue around MD-1").
+
+Be honest if data is sparse (e.g. injury time off the squad). Don't manufacture a trend if there's nothing to read.`,
+  },
+  {
+    id:    "match_cost",
+    label: "What did the last match cost him?",
+    hint:  "Post-match load + recovery trajectory",
+    data_keys: ["recent_load", "match_calendar", "wellness_recent", "decel_status"],
+    prompt: `Question: What did the most recent match cost this player in load and recovery terms?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: how heavy the match was for him relative to his typical (light / typical / heavy / very heavy)
+- Sentence 2: how he's recovering since (back to baseline, lingering, still catching up)
+- Sentence 3: practical implication (e.g. "ready to train fully again", "give one more easy day", "monitor for the rest of the week").
+
+If there has been no match in the last 5 days, say "no recent match in the data" and stop.`,
+  },
+  {
+    id:    "safest_drill",
+    label: "What's the safest drill for him today?",
+    hint:  "Drill modality recommendation based on dominant fatigue type",
+    data_keys: ["decel_status", "indoor_state", "pattern_window", "active_injuries"],
+    prompt: `Question: Given this player's current state, what type of drill is safest for him today and what should be avoided?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: the drill modality you'd recommend (e.g. "small-sided possession", "linear running with tempo", "technical/passing", "recovery-only")
+- Sentence 2: what to avoid and why (e.g. "skip high-decel finishing — A:D coupling is borderline" or "avoid sustained high-speed running — metabolic load already elevated")
+- Sentence 3 (only when meaningful): one positive opportunity (e.g. "good day for explosive work — joints are fresh").
+
+If the player is in clean GREEN with no concerns, say "any planned drill is fine — no restrictions" and stop.`,
+  },
+  {
+    id:    "squad_compare",
+    label: "How does he compare to the squad average?",
+    hint:  "Per-signal comparison vs team mean",
+    data_keys: ["recent_load", "squad_averages", "wellness_recent"],
+    prompt: `Question: How does this player compare to the squad average on the key load and wellness signals?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: overall positioning (above / at / below squad average for load)
+- Sentence 2: 1-2 specific signals where he differs most from squad mean (e.g. "20% higher sprint volume than average; wellness 1 point below squad mean")
+- Sentence 3: what that means in context (a striker above average sprint volume is normal; a centre-back above average sprint volume is unusual).
+
+Stay descriptive — coaches use this to calibrate, not to act on directly.`,
+  },
+  {
+    id:    "watch_today",
+    label: "What should I watch for in today's session?",
+    hint:  "Pre-session scan — most important factor to watch live",
+    data_keys: ["decel_status", "pattern_window", "wellness_recent", "active_injuries", "indoor_state"],
+    prompt: `Question: When this player is on the pitch today, what's the single most important thing to watch for?
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: the one thing to watch (movement quality at high decel, body language at fatigue point, soreness in body part X, etc.)
+- Sentence 2: when in the session it's most likely to show up (early / mid / late / specific drill type)
+- Sentence 3 (only if needed): the trigger that would mean "pull him" (e.g. "hold limb after a sprint", "drop in pace below his usual")
+
+If everything is clean, say "nothing specific to watch today — just routine session-end check-in" and stop.`,
+  },
+];
+
+export function getQuestion(id: string): Question | undefined {
+  return COACH_QUESTIONS.find((q) => q.id === id);
+}

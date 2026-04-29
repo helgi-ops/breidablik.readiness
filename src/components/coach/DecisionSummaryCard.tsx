@@ -4,6 +4,8 @@ import { useState, useEffect, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 import { useLang, type Lang } from "@/lib/lang";
+import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
+import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
 
 // ── Minimal types (mirrored from dashboard Row) ───────────────────────────
 
@@ -913,6 +915,24 @@ const PlayerModal: FC<{
               </div>
             );
           })()}
+
+          {/* AI summary — 3-4 sentence English narrative synthesising snapshot + pattern. */}
+          <PlayerSummaryCard
+            playerId={row.player_id}
+            coachVerdict={{
+              state:    String(displayAction ?? "unknown"),
+              headline: String(verdict ?? ""),
+              why_lines: decisionReasons.map((r) => String(r)),
+              action:    actionBlock?.headline
+                ? `${actionBlock.headline}${actionBlock.details.length ? ". " + actionBlock.details.join(". ") : ""}`
+                : undefined,
+            }}
+          />
+
+          {/* Q&A dropdown — coach asks specific question, gets focused English
+              answer. English-only because Icelandic LLM output had spelling
+              errors. Different cognitive mode from Summary: lean-forward. */}
+          <PlayerAskCard playerId={row.player_id} />
 
           {/* Active Injury / Illness context — shown FIRST when player is injured/sick/RTP */}
           {isInjured && (
