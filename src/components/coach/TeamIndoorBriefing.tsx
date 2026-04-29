@@ -66,7 +66,11 @@ const ACTION_COLORS: Record<Action, string> = {
 const ACTION_LABELS_BILINGUAL: Record<Action, { EN: string; IS: string }> = {
   FULL: { EN: "Ready", IS: "Tilbúinn" },
   MODIFIED: { EN: "Lighter session", IS: "Léttari æfing" },
-  RECOVERY: { EN: "Rest", IS: "Hvíld" },
+  // Renamed from "Rest" — that wording read as a prescription and conflicted
+  // with Decision Summary's overall verdict. This badge signals INDOOR LOAD
+  // was heavy / acute, not that the player must rest. Decision Summary owns
+  // the actual training-or-not call.
+  RECOVERY: { EN: "Heavy load", IS: "Mikið álag" },
   NO_DATA: { EN: "No data", IS: "Engin gögn" },
   INJURED: { EN: "Out — injury", IS: "Frá æfingu — meiðsl" },
   REHAB: { EN: "Rehab", IS: "Endurhæfing" },
@@ -96,7 +100,9 @@ const I18N = {
   sick: { EN: "sick", IS: "veikir" },
   // Sentence parts
   allReady: { EN: "All players ready for full program today", IS: "Allir leikmenn tilbúnir í fullt prógram í dag" },
-  needsRest: { EN: "need rest", IS: "þurfa hvíld" },
+  // "with heavy load" reads as informational, not as a coach prescription.
+  // The actual rest-or-train call lives in Decision Summary.
+  needsRest: { EN: "with heavy load", IS: "með mikið álag" },
   needsLighter: { EN: "need a lighter session", IS: "þurfa léttari æfingu" },
   inMeidsl: { EN: "in injury/RTP", IS: "í meiðslum/RTP" },
   inSick: { EN: "sick", IS: "veikir" },
