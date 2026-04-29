@@ -67,6 +67,11 @@ export default function CatapultUploadPage() {
   const supabase = getSupabaseClient();
 
   // ─── Wizard state ─────────────────────────────────────────────────────
+  // Two upload modes — share the same backend pipeline, differ only in
+  // the step-1 instructions and the recommended Catapult Cloud workflow.
+  //   bootstrap = one-time multi-day backfill (28 days)
+  //   daily     = routine post-session upload (1 day)
+  const [mode, setMode] = useState<"bootstrap" | "daily">("daily");
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [csv, setCsv] = useState<string>("");
   const [filename, setFilename] = useState<string>("");
@@ -210,13 +215,46 @@ export default function CatapultUploadPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl p-4 md:p-6">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">Catapult CSV upload</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fyrir lið án OpenField API-aðgangs. Exporta Activity Report úr OpenField Cloud sem CSV og uploada hér —
-          virkar fyrir einn dag eða marga (mælt með 28 daga bulk fyrir nýja klúbba).
+          Fyrir lið án OpenField API-aðgangs. Exporta CSV úr Catapult Timeline view og uploada hér.
         </p>
       </div>
+
+      {/* ─── Mode tabs (Bootstrap vs Daily) ─────────────────────────────── */}
+      {step === 1 && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:max-w-md">
+          <button
+            type="button"
+            onClick={() => setMode("daily")}
+            className={`rounded-lg border px-4 py-3 text-left transition-all ${
+              mode === "daily"
+                ? "border-foreground bg-foreground text-background shadow-sm"
+                : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="text-sm font-semibold">Dagleg upload</div>
+            <div className={`mt-0.5 text-xs ${mode === "daily" ? "text-background/80" : "text-muted-foreground"}`}>
+              Eftir hverja æfingu — 1 dagur
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("bootstrap")}
+            className={`rounded-lg border px-4 py-3 text-left transition-all ${
+              mode === "bootstrap"
+                ? "border-foreground bg-foreground text-background shadow-sm"
+                : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="text-sm font-semibold">Bootstrap (28 dagar)</div>
+            <div className={`mt-0.5 text-xs ${mode === "bootstrap" ? "text-background/80" : "text-muted-foreground"}`}>
+              Einu sinni — kveikir á öllu
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="mb-4 flex items-center gap-2 flex-wrap">
@@ -250,14 +288,14 @@ export default function CatapultUploadPage() {
         )}
       </div>
 
-      {/* ─── STEP 1: File picker ─────────────────────────────────────── */}
-      {step === 1 && (
+      {/* ─── STEP 1: File picker (mode-aware copy) ──────────────────── */}
+      {step === 1 && mode === "daily" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Skref 1 — Veldu CSV-skrá</CardTitle>
+            <CardTitle className="text-base">Veldu CSV — dagsins æfing</CardTitle>
             <CardDescription>
-              Í OpenField Cloud: <strong>Reporting → Activity Report → Export → CSV</strong>. Veldu hvaða dagaramma sem er
-              (einn dagur, ein vika, 28 dagar).
+              Í Catapult Cloud: <strong>Timeline → smelltu á dagsins æfingu → Export → CSV</strong>.
+              Uploadaðu skrána hér beint eftir á.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -273,9 +311,48 @@ export default function CatapultUploadPage() {
             {previewing && <p className="text-sm text-muted-foreground">Greini skrá…</p>}
             {previewErr && <p className="text-sm text-rose-600">{previewErr}</p>}
 
-            <div className="rounded-md border bg-blue-50 p-3 text-xs text-blue-800">
-              <strong>💡 Nýr klúbbur?</strong> Exportaðu síðustu 28 daga á EINUM CSV.
-              Það kveikir á personal baselines, ACWR, McBurnie og Decel Intelligence strax — þú þarft ekki að bíða 4 vikur eftir að söguhrun safnist.
+            <div className="rounded-md border bg-emerald-50 p-3 text-xs text-emerald-800">
+              <strong>⏱ Tekur ~2 mínútur.</strong> Þú getur uploadað hvenær sem er eftir æfingu —
+              best á sama kvöldi svo morgun-briefingin sé tilbúin.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 1 && mode === "bootstrap" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Bootstrap — síðustu 28 dagar</CardTitle>
+            <CardDescription>
+              Í Catapult Cloud: <strong>Timeline → veldu date range síðustu 28 daga → Export → CSV</strong>.
+              Þú getur líka uploadað nokkrar minni CSV-skrár í röð (t.d. eina viku í senn) — kerfið
+              de-duplicate-ar á (leikmaður, dagur).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleFile(f);
+              }}
+              className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-foreground file:text-background file:px-4 file:py-2 file:text-sm file:font-medium hover:file:bg-foreground/90"
+            />
+            {previewing && <p className="text-sm text-muted-foreground">Greini skrá…</p>}
+            {previewErr && <p className="text-sm text-rose-600">{previewErr}</p>}
+
+            <div className="rounded-md border bg-blue-50 p-3 text-xs text-blue-800 space-y-1">
+              <div><strong>💡 Af hverju 28 dagar?</strong></div>
+              <div>
+                Allir hluti kerfisins — personal baselines, ACWR, McBurnie og Decel Intelligence —
+                þurfa <strong>amk 28 daga sögu</strong> til að virka almennilega.
+                Án þess fær squad-ið flatt GREEN í 4 vikur þar til sagan safnast.
+              </div>
+              <div>
+                Með 28-daga bootstrap-i kveikir kerfið á <strong>strax frá degi 1</strong> — og þú
+                þarft bara að gera þetta einu sinni.
+              </div>
             </div>
           </CardContent>
         </Card>
