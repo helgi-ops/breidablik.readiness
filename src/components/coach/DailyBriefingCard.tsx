@@ -192,11 +192,13 @@ const COPY = {
       compositeMod: "hækkuð composite",
       neuralBias: "neural bias",
       plSpike: (ratio: number) => `PL ${ratio.toFixed(2)}×`,
+      plSpikePostMatch: (ratio: number) => `PL ${ratio.toFixed(2)}× (eftir leik — eðlilegt)`,
       protectTissue: (t: string) => `vernda ${t.toLowerCase()}`,
       recoveryBias: "recovery bias",
       mechFatigue: "vélrænt álag",
       metabFatigue: "efnaskiptaálag",
       globalFatigue: "heildarþreyta",
+      compositeHighPostMatch: "há composite load (eftir leik)",
     },
   },
   EN: {
@@ -269,11 +271,13 @@ const COPY = {
       compositeMod: "elevated composite",
       neuralBias: "neural bias",
       plSpike: (ratio: number) => `PL ${ratio.toFixed(2)}×`,
+      plSpikePostMatch: (ratio: number) => `PL ${ratio.toFixed(2)}× (post-match — expected)`,
       protectTissue: (t: string) => `protect ${t.toLowerCase()}`,
       recoveryBias: "recovery bias",
       mechFatigue: "mechanical fatigue",
       metabFatigue: "metabolic fatigue",
       globalFatigue: "global fatigue",
+      compositeHighPostMatch: "high composite load (post-match)",
     },
   },
 } as const;
@@ -470,12 +474,41 @@ function deriveReadinessDrivers(
   return drivers;
 }
 
+/**
+ * Was the previous day or two a match? Used to soften load-spike alerts that
+ * are merely the expected post-match echo. Looks at row.md_day (today's MD-day
+ * resolved) and recentDayTypes (planned day types over last week).
+ *
+ * Returns true if today is MD+1 or MD+2 OR if any of the last 3 days had
+ * day_type containing "MATCH" / "GAME". Coach reads "PL spike (post-match)"
+ * and immediately understands no action needed.
+ */
+function isPostMatchContext(
+  row: BriefingRow,
+  recentDayTypes: Record<string, string | null> | null | undefined,
+  todayIso: string,
+): boolean {
+  const md = String(row.md_day ?? "").toUpperCase();
+  if (md === "MD+1" || md === "MD+2") return true;
+  if (!recentDayTypes) return false;
+  for (let dayBack = 1; dayBack <= 3; dayBack++) {
+    const d = new Date(todayIso);
+    d.setUTCDate(d.getUTCDate() - dayBack);
+    const iso = d.toISOString().slice(0, 10);
+    const dt = String(recentDayTypes[iso] ?? "").toUpperCase();
+    if (dt.includes("MATCH") || dt.includes("GAME")) return true;
+  }
+  return false;
+}
+
 function buildAttentionList(
   rows: BriefingRow[],
   playerComposites: Record<string, PlayerCompositeEntry>,
   lang: "IS" | "EN",
   playerBaselines: Record<string, Record<string, AthleteMetricBaseline>> | null,
   playerCounterfactuals: DailyBriefingCardProps["playerCounterfactuals"] | null,
+  recentDayTypes: Record<string, string | null> | null | undefined,
+  todayIso: string,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const out: AttentionItem[] = [];
@@ -483,6 +516,13 @@ function buildAttentionList(
   for (const row of rows) {
     const reasons: string[] = [];
     let level: AttentionLevel = "ok";
+
+    // ── Match-day awareness (Gabbett 2017 + di Prampero 2015 — load spikes
+    // following matches are expected and should not fire alert; they're an
+    // echo of match exposure, not an unplanned overreach). When detected, we
+    // (a) downgrade alert→monitor and (b) annotate the reason with "post-match"
+    // so coach reads it correctly.
+    const postMatch = isPostMatchContext(row, recentDayTypes, todayIso);
 
     const col = row.final_color ?? null;
     if (col === "red") {
@@ -499,17 +539,27 @@ function buildAttentionList(
     const comp = playerComposites[String(row.player_id)];
     if (comp) {
       if (comp.concernLevel === "high") {
-        reasons.push(r.compositeHigh);
-        level = "alert";
+        // Post-match: don't escalate composite-high to alert; it's expected.
+        reasons.push(postMatch ? r.compositeHighPostMatch : r.compositeHigh);
+        if (postMatch) {
+          if (level === "ok") level = "monitor";
+        } else {
+          level = "alert";
+        }
       } else if (comp.concernLevel === "moderate") {
         reasons.push(r.compositeMod);
         if (level === "ok") level = "monitor";
       }
       if (comp.playerLoadSpike != null && comp.playerLoadSpike >= 1.6) {
-        reasons.push(r.plSpike(comp.playerLoadSpike));
-        level = "alert";
+        // Post-match PL spike → annotate + downgrade to monitor.
+        reasons.push(postMatch ? r.plSpikePostMatch(comp.playerLoadSpike) : r.plSpike(comp.playerLoadSpike));
+        if (postMatch) {
+          if (level === "ok") level = "monitor";
+        } else {
+          level = "alert";
+        }
       } else if (comp.playerLoadSpike != null && comp.playerLoadSpike >= 1.15 && level === "ok") {
-        reasons.push(r.plSpike(comp.playerLoadSpike));
+        reasons.push(postMatch ? r.plSpikePostMatch(comp.playerLoadSpike) : r.plSpike(comp.playerLoadSpike));
         level = "monitor";
       }
       const ft = comp.fatigueType ?? null;
@@ -598,8 +648,8 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
   const t = COPY[lang];
 
   const attention = useMemo(
-    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals),
-    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals],
+    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today),
+    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today],
   );
 
   // ── Post-OFF context ──────────────────────────────────────────────────
