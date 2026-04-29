@@ -200,6 +200,21 @@ const COPY = {
       globalFatigue: "heildarþreyta",
       compositeHighPostMatch: "há composite load (eftir leik)",
     },
+    // Compact-mode status phrases — single short label per player. Designed
+    // for non-S&C coaches: action-implication first, no jargon, no numbers.
+    compact: {
+      recoveryFocus:    "Hvíld",
+      postMatchEcho:    "Eftir leik — eðlilegt",
+      heavyLoad:        "Þungt æfingaálag",
+      highIntensity:    "Háákefðar dagur",
+      belowNormal:      "Undir venjulegu",
+      mechStrain:       "Vélrænt álag",
+      metabStrain:      "Efnaskiptaálag",
+      generalFatigue:   "Almenn þreyta",
+      neuralBias:       "Tauga-þreyta",
+      protectTissue:    (t: string) => `Vernda ${t.toLowerCase()}`,
+      monitor:          "Fylgjast með",
+    },
   },
   EN: {
     title: "Daily briefing",
@@ -279,6 +294,20 @@ const COPY = {
       globalFatigue: "global fatigue",
       compositeHighPostMatch: "high composite load (post-match)",
     },
+    // Compact-mode status phrases — single short label per player.
+    compact: {
+      recoveryFocus:    "Recovery focus",
+      postMatchEcho:    "Post-match echo (expected)",
+      heavyLoad:        "Heavy training load",
+      highIntensity:    "High-intensity day",
+      belowNormal:      "Below normal",
+      mechStrain:       "Mechanical strain",
+      metabStrain:      "Metabolic strain",
+      generalFatigue:   "General fatigue",
+      neuralBias:       "Neural fatigue",
+      protectTissue:    (t: string) => `Protect ${t.toLowerCase()}`,
+      monitor:          "Monitor",
+    },
   },
 } as const;
 
@@ -332,6 +361,11 @@ type AttentionItem = {
   name: string;
   level: AttentionLevel;
   reasons: string[];
+  // Single coach-friendly status phrase used in Compact mode — collapses all
+  // the multi-clause reasons into one short label like "Post-match echo
+  // (expected)" or "Heavy training load". Built from the same signals that
+  // populate `reasons`. Detailed mode keeps the full reasons.join(" · ").
+  compactStatus: string;
   // Numeric context for inline chips on the attention row — lets the coach
   // read the "why" without opening the player modal.
   score: number | null;
@@ -511,6 +545,7 @@ function buildAttentionList(
   todayIso: string,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
+  const cl = COPY[lang].compact;
   const out: AttentionItem[] = [];
 
   for (const row of rows) {
@@ -587,11 +622,43 @@ function buildAttentionList(
       // Dedupe reasons preserving order
       const seen = new Set<string>();
       const unique = reasons.filter((x) => (seen.has(x) ? false : (seen.add(x), true)));
+
+      // Derive a single coach-friendly status phrase for Compact mode.
+      // Priority: recovery > post-match echo > heavy load > below normal >
+      // fatigue type > monitor. The goal is one phrase that tells a non-S&C
+      // coach what's going on without showing them numbers or jargon.
+      const ft = comp?.fatigueType ?? null;
+      let compactStatus: string;
+      if (col === "red") {
+        compactStatus = cl.recoveryFocus;
+      } else if (postMatch && (comp?.concernLevel === "high" || (comp?.playerLoadSpike != null && comp.playerLoadSpike >= 1.6))) {
+        compactStatus = cl.postMatchEcho;
+      } else if (comp?.concernLevel === "high") {
+        compactStatus = cl.heavyLoad;
+      } else if (comp?.playerLoadSpike != null && comp.playerLoadSpike >= 1.6) {
+        compactStatus = cl.highIntensity;
+      } else if (col === "yellow") {
+        compactStatus = cl.belowNormal;
+      } else if (ft === "mechanical_fatigue") {
+        compactStatus = cl.mechStrain;
+      } else if (ft === "metabolic_fatigue") {
+        compactStatus = cl.metabStrain;
+      } else if (ft === "global_fatigue") {
+        compactStatus = cl.generalFatigue;
+      } else if (row._neural_bias_applied) {
+        compactStatus = cl.neuralBias;
+      } else if (row._adaptation?.protectTissue) {
+        compactStatus = cl.protectTissue(row._adaptation.protectTissue);
+      } else {
+        compactStatus = cl.monitor;
+      }
+
       out.push({
         playerId: String(row.player_id),
         name: row.full_name,
         level,
         reasons: unique,
+        compactStatus,
         score: row.total_score ?? null,
         composite: comp?.compositeScore ?? null,
         plSpike: comp?.playerLoadSpike ?? null,
@@ -1150,9 +1217,19 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             {t.chipPl} {item.plSpike.toFixed(2)}×
                           </span>
                         ) : null}
-                        {fatigueChipLabel ? (
+                        {/* Fatigue chip — hidden in Compact mode because the
+                            single compactStatus badge below already conveys
+                            the same info ("Mechanical strain" etc.) */}
+                        {detailed && fatigueChipLabel ? (
                           <span className="rounded-full border border-indigo-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
                             {fatigueChipLabel}
+                          </span>
+                        ) : null}
+                        {/* Compact-only status badge — single short phrase that
+                            replaces the multi-clause reasons line. */}
+                        {!detailed ? (
+                          <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                            {item.compactStatus}
                           </span>
                         ) : null}
                       </div>
@@ -1188,9 +1265,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           ))}
                         </div>
                       ) : null}
-                      <div className="mt-0.5 text-xs text-slate-600">
-                        {item.reasons.join(" · ")}
-                      </div>
+                      {/* Multi-clause reasons line — Detailed mode only. In
+                          Compact mode the single status badge above carries
+                          the message. */}
+                      {detailed ? (
+                        <div className="mt-0.5 text-xs text-slate-600">
+                          {item.reasons.join(" · ")}
+                        </div>
+                      ) : null}
                       {/* What-if hint — top counterfactual, single line.
                           Surfaces "if X had been Y → GREEN" right under
                           the reasons so the coach reads what's wrong AND
