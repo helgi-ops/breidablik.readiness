@@ -7213,8 +7213,14 @@ export default function CoachPage() {
             </CardContent>
           </Card>
 
-          {/* Indoor Briefing — team-level executive summary (rendered when team has indoor data OR active injuries) */}
+          {/* Indoor Briefing — team-level executive summary.
+              Hidden when team training_mode is explicitly set to "outdoor" — the
+              card is meaningless (and confusingly shows "heavy indoor load" for
+              outdoor sessions that the auto-classifier mis-labelled). When
+              outdoor mode is locked in, the coach has already told us indoor
+              context doesn't apply. */}
           {rows.length > 0 &&
+            trainingMode !== "outdoor" &&
             (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
               <TeamIndoorBriefing
                 players={rows.map((r) => {
