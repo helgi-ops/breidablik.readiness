@@ -95,6 +95,8 @@ type Aggregate = {
   rpe_days: number;          // days with RPE data
   acute_int: number;         // 7-day avg internal
   chronic_int: number;       // 28-day avg internal
+  edi_sum: number;           // sum of edi values across window (di Prampero 2015)
+  edi_n: number;             // count of days with edi data
 };
 
 export default function CoachQuadrantPage() {
@@ -154,10 +156,10 @@ export default function CoachQuadrantPage() {
       const winStartIso = winStart.toISOString().slice(0, 10);
       const chronicStartIso = chronicStart.toISOString().slice(0, 10);
 
-      // External load — last `windowDays`
+      // External load — last `windowDays` — also pull EDI (di Prampero 2015)
       const { data: extRows, error: extErr } = await sb
         .from("player_external_load_daily")
-        .select("player_id, date, total_distance")
+        .select("player_id, date, total_distance, edi")
         .in("player_id", playerIds)
         .gte("date", winStartIso);
       if (extErr) throw extErr;
@@ -178,10 +180,12 @@ export default function CoachQuadrantPage() {
           external_load: 0, internal_cost: 0,
           ext_days: 0, rpe_days: 0,
           acute_int: 0, chronic_int: 0,
+          edi_sum: 0, edi_n: 0,
         });
       }
 
-      // External — sum then divide by # days
+      // External — sum then divide by # days. Also accumulate EDI separately,
+      // since some rows have distance but no EDI (when HMLD is missing).
       for (const r of (extRows ?? [])) {
         const a = agg.get((r as any).player_id);
         if (!a) continue;
@@ -189,6 +193,11 @@ export default function CoachQuadrantPage() {
         if (Number.isFinite(v) && v > 0) {
           a.external_load += v;
           a.ext_days += 1;
+        }
+        const e = Number((r as any).edi);
+        if (Number.isFinite(e) && e > 1.0) {  // EDI of exactly 1.0 means no HMLD signal
+          a.edi_sum += e;
+          a.edi_n += 1;
         }
       }
 
@@ -240,12 +249,14 @@ export default function CoachQuadrantPage() {
           if (acwr >= 1.5) flag = "red";
           else if (acwr >= 1.3) flag = "yellow";
         }
+        const avgEdi = a.edi_n > 0 ? a.edi_sum / a.edi_n : null;
         out.push({
           playerId: p.id,
           name: (p.full_name ?? "—").trim(),
           externalLoad: a.external_load,
           internalCost: a.internal_cost,
           acwr,
+          edi: avgEdi,
           flag,
         });
       }

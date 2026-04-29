@@ -29,6 +29,7 @@ export type QuadrantPoint = {
   externalLoad: number;   // X-axis value (e.g. avg total_distance in metres)
   internalCost: number;   // Y-axis value (e.g. avg sRPE = RPE × min)
   acwr?: number | null;   // optional: drives dot size
+  edi?: number | null;    // di Prampero 2015 — intensity density per metre run
   flag?: "green" | "yellow" | "red" | null;
 };
 
@@ -238,8 +239,15 @@ function QuadrantLabel(props: {
 }
 
 function Tooltip({ x, y, point }: { x: number; y: number; point: QuadrantPoint }) {
-  const w = 220;
-  const h = 76;
+  const hasAcwr = point.acwr != null && Number.isFinite(point.acwr);
+  const hasEdi  = point.edi  != null && Number.isFinite(point.edi);
+  // Grow box dynamically to fit ACWR + EDI lines
+  const w = 230;
+  const h = 52 + (hasAcwr ? 14 : 0) + (hasEdi ? 14 : 0);
+  // EDI colour: green ≤ 1.20, yellow 1.20–1.35, orange > 1.35 (di Prampero 2015 thresholds)
+  const ediColour = hasEdi
+    ? (point.edi! <= 1.20 ? GREEN : point.edi! <= 1.35 ? YELLOW : "#FB923C")
+    : LIGHT;
   return (
     <g style={{ pointerEvents: "none" }}>
       <rect x={x} y={y} width={w} height={h} rx={6} fill={SLATE} opacity={0.96} />
@@ -247,14 +255,16 @@ function Tooltip({ x, y, point }: { x: number; y: number; point: QuadrantPoint }
         {point.name}
       </text>
       <text x={x + 12} y={y + 38} fontSize={11} fill={LIGHT} fontFamily="Calibri, sans-serif">
-        External: {point.externalLoad.toFixed(0)}
+        External: {point.externalLoad.toFixed(0)}  ·  Internal: {point.internalCost.toFixed(0)}
       </text>
-      <text x={x + 12} y={y + 52} fontSize={11} fill={LIGHT} fontFamily="Calibri, sans-serif">
-        Internal: {point.internalCost.toFixed(0)}
-      </text>
-      {point.acwr != null && Number.isFinite(point.acwr) && (
-        <text x={x + 12} y={y + 66} fontSize={11} fill={CYAN} fontFamily="Calibri, sans-serif">
-          ACWR: {point.acwr.toFixed(2)}
+      {hasAcwr && (
+        <text x={x + 12} y={y + 52} fontSize={11} fill={CYAN} fontFamily="Calibri, sans-serif">
+          ACWR: {point.acwr!.toFixed(2)}
+        </text>
+      )}
+      {hasEdi && (
+        <text x={x + 12} y={y + (hasAcwr ? 66 : 52)} fontSize={11} fill={ediColour} fontFamily="Calibri, sans-serif">
+          EDI: {point.edi!.toFixed(2)}  ·  intensity density
         </text>
       )}
     </g>
