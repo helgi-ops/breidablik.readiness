@@ -51,10 +51,42 @@ type McBurnieStatus = {
   computed_at: string;
 };
 
+// Sharp Cut Load (Dos'Santos 2021 — proxy via ima_band3_decel_count)
+// Fetched from v_sharp_cut_hip_er_risk view; surfaces as 6th McBurnie dim chip.
+type CuttingLoad = {
+  cuts_7d: number;
+  cuts_28d: number;
+  cuts_personal_z: number | null;
+  cuts_flag: "green" | "yellow" | "red" | "insufficient";
+};
+
+// MPE Recovery (Osgnach 2023 — recovery time lengthening = early fatigue)
+// Computed client-side from mpe_recovery_avg_s rolling 7d vs personal 28d.
+type MpeRecovery = {
+  recent_7d_avg_s: number | null;     // 7d avg of mpe_recovery_avg_s
+  baseline_28d_avg_s: number | null;  // 28d avg of mpe_recovery_avg_s
+  baseline_28d_sd_s: number | null;
+  z_score: number | null;             // (recent - baseline) / sd. Positive = recovery time lengthening = fatigue
+  flag: Flag;
+};
+
+// ASP-personal burst z-scoring (Osgnach 2023 ASP-spirit) — replaces fixed-threshold
+// accel/decel band counting with per-player baseline-aware scoring. Read from
+// v_asp_personal_burst view. Surfaces as a sub-line on the existing A:D Coupling tile.
+type AspBurst = {
+  accel_burst_personal_z: number | null;
+  decel_burst_personal_z: number | null;
+  ad_couple_personal_z: number | null;  // positive = braking-skewed
+  baseline_days: number;
+};
+
 type Row = {
   player_id: string;
   full_name: string;
   status: McBurnieStatus | null;
+  cutting?: CuttingLoad | null;
+  mpe?: MpeRecovery | null;
+  asp?: AspBurst | null;
 };
 
 export default function CoachDecelIntelligencePage() {
@@ -91,7 +123,96 @@ export default function CoachDecelIntelligencePage() {
       const players = (roster ?? []) as Array<{ id: string; full_name: string }>;
       if (players.length === 0) { setRows([]); return; }
 
-      // Fetch McBurnie status for each player in parallel
+      // Pull Sharp Cut Load (Dos'Santos 2021) for whole squad in one go
+      // — view already aggregates 7d/28d per player.
+      const { data: cuttingRows } = await sb
+        .from("v_sharp_cut_hip_er_risk")
+        .select("player_id, cuts_7d, cuts_28d, cuts_personal_z, cuts_flag")
+        .eq("team_id", tid);
+      const cuttingByPlayer = new Map<string, CuttingLoad>();
+      for (const r of (cuttingRows ?? []) as Array<{
+        player_id: string; cuts_7d: number; cuts_28d: number;
+        cuts_personal_z: number | null; cuts_flag: CuttingLoad["cuts_flag"];
+      }>) {
+        cuttingByPlayer.set(r.player_id, {
+          cuts_7d: Number(r.cuts_7d),
+          cuts_28d: Number(r.cuts_28d),
+          cuts_personal_z: r.cuts_personal_z != null ? Number(r.cuts_personal_z) : null,
+          cuts_flag: r.cuts_flag,
+        });
+      }
+
+      // Pull ASP-personal burst view (Osgnach 2023 ASP-spirit) for the whole
+      // squad — view already aggregates 28d baseline + 7d recent per player
+      // and z-scores both accel and decel bands. Used as a sub-line on the
+      // existing A:D Coupling tile so coach sees personal-relative skew alongside
+      // the raw ratio.
+      const { data: aspRows } = await sb
+        .from("v_asp_personal_burst")
+        .select("player_id, accel_burst_personal_z, decel_burst_personal_z, ad_couple_personal_z, baseline_days")
+        .eq("team_id", tid);
+      const aspByPlayer = new Map<string, AspBurst>();
+      for (const r of (aspRows ?? []) as Array<{
+        player_id: string;
+        accel_burst_personal_z: number | null;
+        decel_burst_personal_z: number | null;
+        ad_couple_personal_z:   number | null;
+        baseline_days: number;
+      }>) {
+        aspByPlayer.set(r.player_id, {
+          accel_burst_personal_z: r.accel_burst_personal_z != null ? Number(r.accel_burst_personal_z) : null,
+          decel_burst_personal_z: r.decel_burst_personal_z != null ? Number(r.decel_burst_personal_z) : null,
+          ad_couple_personal_z:   r.ad_couple_personal_z   != null ? Number(r.ad_couple_personal_z)   : null,
+          baseline_days: Number(r.baseline_days),
+        });
+      }
+
+      // Pull MPE recovery time history for whole squad — compute client-side
+      // because we want both 7d and 28d windows from the same 28d slice.
+      const since28 = new Date();
+      since28.setDate(since28.getDate() - 28);
+      const since28iso = since28.toISOString().slice(0, 10);
+      const since7 = new Date();
+      since7.setDate(since7.getDate() - 7);
+      const since7iso = since7.toISOString().slice(0, 10);
+      const { data: mpeRows } = await sb
+        .from("player_external_load_daily")
+        .select("player_id, date, mpe_recovery_avg_s")
+        .gte("date", since28iso)
+        .not("mpe_recovery_avg_s", "is", null);
+      const mpeByPlayer = new Map<string, { all: number[]; recent: number[] }>();
+      for (const r of (mpeRows ?? []) as Array<{ player_id: string; date: string; mpe_recovery_avg_s: number }>) {
+        const v = Number(r.mpe_recovery_avg_s);
+        if (!Number.isFinite(v) || v <= 0) continue;
+        const bucket = mpeByPlayer.get(r.player_id) ?? { all: [], recent: [] };
+        bucket.all.push(v);
+        if (r.date >= since7iso) bucket.recent.push(v);
+        mpeByPlayer.set(r.player_id, bucket);
+      }
+      function computeMpe(playerId: string): MpeRecovery | null {
+        const b = mpeByPlayer.get(playerId);
+        if (!b || b.all.length < 4) return null; // need at least 4 sessions for stability
+        const baseAvg = b.all.reduce((a, x) => a + x, 0) / b.all.length;
+        const variance = b.all.length > 1
+          ? b.all.reduce((a, x) => a + (x - baseAvg) ** 2, 0) / (b.all.length - 1)
+          : 0;
+        const baseSd = Math.sqrt(variance);
+        const recAvg = b.recent.length > 0
+          ? b.recent.reduce((a, x) => a + x, 0) / b.recent.length
+          : null;
+        const z = baseSd > 0 && recAvg != null ? (recAvg - baseAvg) / baseSd : null;
+        // Flag: positive z means recovery time lengthened = fatigue developing
+        let flag: Flag = "unknown";
+        if (z != null) {
+          if      (z >= 1.5) flag = "red";
+          else if (z >= 1.0) flag = "yellow";
+          else               flag = "green";
+        }
+        return { recent_7d_avg_s: recAvg, baseline_28d_avg_s: baseAvg, baseline_28d_sd_s: baseSd, z_score: z, flag };
+      }
+
+      // Fetch McBurnie status for each player in parallel — and merge
+      // the cutting + MPE rows we already pulled above.
       const results = await Promise.all(
         players.map(async (p) => {
           const { data, error: rpcErr } = await sb.rpc("get_mcburnie_decel_status", {
@@ -102,6 +223,9 @@ export default function CoachDecelIntelligencePage() {
             player_id: p.id,
             full_name: (p.full_name ?? "—").trim(),
             status: (data as McBurnieStatus | null) ?? null,
+            cutting: cuttingByPlayer.get(p.id) ?? null,
+            mpe: computeMpe(p.id),
+            asp: aspByPlayer.get(p.id) ?? null,
           };
         }),
       );
@@ -546,12 +670,19 @@ function PlayerRow({ row }: { row: Row }) {
             <div className="text-xs text-slate-500 italic">No GPS data available</div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <FlagBadge flag={s?.overload?.flag ?? "unknown"} label="Overload" />
           <FlagBadge flag={s?.underload?.flag ?? "unknown"} label="Underload" />
           <FlagBadge flag={s?.accel_coupling?.flag ?? "unknown"} label="A:D" />
           <FlagBadge flag={s?.sprint_coupling?.flag ?? "unknown"} label="D:Sprint" />
           <FlagBadge flag={s?.concentration?.flag ?? "unknown"} label="Concentration" />
+          {/* Dos'Santos 2021 — Sharp Cut Load */}
+          <FlagBadge
+            flag={row.cutting?.cuts_flag === "insufficient" ? "unknown" : (row.cutting?.cuts_flag ?? "unknown")}
+            label="Sharp Cuts"
+          />
+          {/* Osgnach 2023 — MPE Recovery Time */}
+          <FlagBadge flag={row.mpe?.flag ?? "unknown"} label="MPE Recovery" />
           <span className="text-slate-400">{expanded ? "▾" : "▸"}</span>
         </div>
       </button>
@@ -577,8 +708,12 @@ function PlayerRow({ row }: { row: Row }) {
               title="Decel : Accel Coupling"
               flag={s.accel_coupling.flag}
               big={s.accel_coupling.recent_ratio.toFixed(2)}
-              caption={`${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`}
-              hint="Eccentric:concentric balance. Red if <0.7 or >2.0."
+              caption={
+                row.asp?.ad_couple_personal_z != null
+                  ? `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}\nASP personal z = ${row.asp.ad_couple_personal_z >= 0 ? "+" : ""}${row.asp.ad_couple_personal_z.toFixed(2)} (${row.asp.ad_couple_personal_z > 0 ? "braking-skewed" : "accel-skewed"} vs personal 28d)`
+                  : `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`
+              }
+              hint="Eccentric:concentric balance. Red if <0.7 or >2.0. ASP personal-z (Osgnach 2023) above 0 means more decel-skewed than the player's own normal pattern."
             />
             <Detail
               title="Decel : Sprint Coupling"
@@ -598,6 +733,38 @@ function PlayerRow({ row }: { row: Row }) {
               caption={`Peak day's share of 28-day total · ${s.concentration.distinct_high_intensity_days} active days`}
               hint="Red if peak-day > 30% of monthly volume."
             />
+            {/* Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel count) */}
+            {row.cutting && (
+              <Detail
+                title="Sharp Cut Load"
+                flag={row.cutting.cuts_flag === "insufficient" ? "unknown" : row.cutting.cuts_flag}
+                big={`${row.cutting.cuts_7d} / ${row.cutting.cuts_28d}`}
+                caption={
+                  row.cutting.cuts_personal_z != null
+                    ? `7d / 28d · personal z = ${row.cutting.cuts_personal_z >= 0 ? "+" : ""}${row.cutting.cuts_personal_z.toFixed(2)}`
+                    : "7d / 28d total · awaiting baseline"
+                }
+                hint="Dos'Santos 2021. Proxy via IMA B3 decels. Red if z ≥ 1.5 vs personal 28d distribution. Sharp 70-90° cuts produce highest knee-joint load."
+              />
+            )}
+            {/* Osgnach 2023 — MPE Recovery Time (recovery lengthening = early fatigue) */}
+            {row.mpe && (
+              <Detail
+                title="MPE Recovery Time"
+                flag={row.mpe.flag}
+                big={
+                  row.mpe.recent_7d_avg_s != null
+                    ? `${row.mpe.recent_7d_avg_s.toFixed(0)}s`
+                    : "—"
+                }
+                caption={
+                  row.mpe.baseline_28d_avg_s != null
+                    ? `7d avg vs 28d baseline ${row.mpe.baseline_28d_avg_s.toFixed(0)}s · z = ${row.mpe.z_score != null ? (row.mpe.z_score >= 0 ? "+" : "") + row.mpe.z_score.toFixed(2) : "—"}`
+                    : "Awaiting baseline"
+                }
+                hint="Osgnach 2023. Inter-MPE recovery time lengthening (positive z) is sharper than HSR drop as a fatigue signal. Red if z ≥ 1.5."
+              />
+            )}
           </div>
         </div>
       )}
