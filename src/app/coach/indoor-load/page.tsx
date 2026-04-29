@@ -293,6 +293,14 @@ type Row = {
   full_name: string;
   status: IndoorStatus | null;
   injury: InjuryInfo | null;
+  // Brown 2016 — latest session activity classification + corrected MP
+  // for transparency only (Indoor Composite is intentionally MP-free).
+  brown: {
+    date: string;
+    activity_class: string | null;
+    mp_raw: number | null;
+    mp_corrected: number | null;
+  } | null;
 };
 
 const FLAG_COLORS: Record<Flag | "none", string> = {
@@ -465,6 +473,34 @@ export default function CoachIndoorLoadPage() {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
 
+      // Brown 2016 — pull latest session's activity classification + corrected MP
+      // for an informational disclosure block. Indoor Composite itself is IMU-only
+      // (designed without MP since Brown 2016 confirms GPS-MP is unreliable indoors)
+      // so this is purely transparency about the raw vs corrected metabolic power.
+      const brownLookup = await sb
+        .from("player_external_load_daily")
+        .select("player_id, date, activity_class_brown, metabolic_power_peak, metabolic_power_corrected_brown")
+        .in("player_id", playerIds)
+        .gte("date", sevenDaysAgoStr)
+        .not("activity_class_brown", "is", null)
+        .order("date", { ascending: false });
+      const brownByPlayer = new Map<string, {
+        date: string;
+        activity_class: string | null;
+        mp_raw: number | null;
+        mp_corrected: number | null;
+      }>();
+      for (const b of (brownLookup.data ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(b.player_id);
+        if (brownByPlayer.has(pid)) continue; // keep latest only
+        brownByPlayer.set(pid, {
+          date: String(b.date),
+          activity_class: (b.activity_class_brown as string | null) ?? null,
+          mp_raw: b.metabolic_power_peak != null ? Number(b.metabolic_power_peak) : null,
+          mp_corrected: b.metabolic_power_corrected_brown != null ? Number(b.metabolic_power_corrected_brown) : null,
+        });
+      }
+
       const [results, piResp, ieResp, trainingResp] = await Promise.all([
         Promise.all(
           players.map(async (p) => {
@@ -477,6 +513,7 @@ export default function CoachIndoorLoadPage() {
               full_name: (p.full_name ?? "—").trim(),
               status: (data as IndoorStatus | null) ?? null,
               injury: null as InjuryInfo | null,
+              brown: brownByPlayer.get(p.id) ?? null,
             };
           }),
         ),
@@ -1145,6 +1182,24 @@ export default function CoachIndoorLoadPage() {
                           <Stat label={pt("imaTotal", lang)} value={row.status.latest_session.ima_total} />
                           <Stat label={pt("decelB23", lang)} value={row.status.latest_session.decel_b23} />
                         </dl>
+
+                        {/* Brown 2016 — activity classification + corrected MP transparency.
+                            Indoor Composite is intentionally MP-free (since Brown 2016 confirms
+                            GPS-MP is unreliable indoors), but we surface raw vs corrected so
+                            coaches see the bias if they look at MP elsewhere. */}
+                        {row.brown && (
+                          <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-600">
+                            <div className="font-semibold">
+                              Brown 2016: <span className="capitalize">{row.brown.activity_class}</span>
+                            </div>
+                            {row.brown.mp_raw != null && row.brown.mp_corrected != null && (
+                              <div className="tabular-nums">
+                                MP raw {row.brown.mp_raw.toFixed(1)} → corrected {row.brown.mp_corrected.toFixed(1)} W/kg
+                                <span className="text-slate-400"> (±20% bias)</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
