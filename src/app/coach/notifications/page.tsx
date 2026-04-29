@@ -38,11 +38,21 @@ const SEVERITY_STYLES: Record<NotificationRow["severity"], { bg: string; border:
 };
 
 const PARAMETER_LABELS: Record<string, { en: string; is: string }> = {
-  acwr:               { en: "Training load ratio", is: "Æfingaálag (ACWR)" },
-  sharp_cut:          { en: "Sharp braking",       is: "Skarp bremsa" },
-  wellness_sleep:     { en: "Sleep",               is: "Svefn" },
-  wellness_soreness:  { en: "Soreness",            is: "Eymsl" },
-  wellness_readiness: { en: "Readiness",           is: "Readiness" },
+  acwr:               { en: "Training load ratio",        is: "Æfingaálag (ACWR)" },
+  hsr:                { en: "High-speed running",          is: "Hraðir hlauptímar" },
+  sharp_cut:          { en: "Sharp braking",               is: "Skarp bremsa" },
+  wellness_sleep:     { en: "Sleep",                       is: "Svefn" },
+  wellness_soreness:  { en: "Soreness",                    is: "Eymsl" },
+  wellness_energy:    { en: "Energy / fatigue",            is: "Orka / þreyta" },
+  wellness_readiness: { en: "Readiness",                   is: "Readiness" },
+};
+
+// Direction badge so the coach can see at a glance whether a player is being
+// over-trained or under-trained. Wellness drops use a separate badge style.
+const DIRECTION_LABELS: Record<string, { en: string; is: string; cls: string }> = {
+  overload:     { en: "↑ OVER",  is: "↑ YFIR",  cls: "bg-rose-100 text-rose-800 border-rose-300" },
+  underload:    { en: "↓ UNDER", is: "↓ UNDIR", cls: "bg-amber-100 text-amber-800 border-amber-300" },
+  wellness_drop:{ en: "↓ DROP",  is: "↓ FALL",  cls: "bg-slate-100 text-slate-700 border-slate-300" },
 };
 
 export default function CoachNotificationsPage() {
@@ -158,6 +168,7 @@ export default function CoachNotificationsPage() {
         {unacked.map((n) => {
           const style = SEVERITY_STYLES[n.severity];
           const paramLbl = PARAMETER_LABELS[n.parameter] ?? { en: n.parameter, is: n.parameter };
+          const dirLbl = DIRECTION_LABELS[n.direction];
           const summary = en ? n.summary : (n.summary_is ?? n.summary);
           return (
             <div
@@ -174,6 +185,11 @@ export default function CoachNotificationsPage() {
                     <span className="text-xs px-1.5 py-0.5 rounded-full border border-current/20">
                       {en ? paramLbl.en : paramLbl.is}
                     </span>
+                    {dirLbl && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${dirLbl.cls}`}>
+                        {en ? dirLbl.en : dirLbl.is}
+                      </span>
+                    )}
                     {n.is_post_match && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/60 border border-current/20">
                         {en ? "post-match" : "eftir leik"}
