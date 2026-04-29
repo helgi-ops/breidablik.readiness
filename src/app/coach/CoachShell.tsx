@@ -24,6 +24,7 @@ const monitoringLinks: { href: string; label: Bi }[] = [
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",        IS: "Indoor Load (höll-mode)" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",  IS: "Decel Intelligence (McBurnie)" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",        IS: "Meiðsla-munstursgreining" } },
+  { href: "/coach/notifications",      label: { EN: "Notifications",                  IS: "Tilkynningar" } },
 ];
 
 // Session-building cluster — "how do I plan and run training?"

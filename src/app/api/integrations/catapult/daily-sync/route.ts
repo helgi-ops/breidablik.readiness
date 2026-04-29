@@ -95,13 +95,46 @@ async function runSync(request: Request, explicitDate?: string | null) {
 
     // ── Sync each team sequentially ──────────────────────────────
     const results: Array<{ teamId: string; result: unknown; error?: string }> = [];
+    const syncedTeamIds = new Set<string>();
     for (const config of configs) {
       try {
         const r = await syncOneTeam(targetDate, config, debugIma);
         results.push(r);
+        if (config?.teamId) syncedTeamIds.add(config.teamId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Sync failed";
         results.push({ teamId: config?.teamId ?? "env-default", result: null, error: message });
+      }
+    }
+
+    // ── Coach notifications detection + push ────────────────────────
+    // Run threshold-crossing detection per team after sync so coaches see
+    // brand-new alerts within minutes of the data arriving, then push the
+    // newly-fired ones to subscribed coaches via PWA push.
+    const notifResults: Array<{ teamId: string; new_count: number; pushed: number; error?: string }> = [];
+    if (syncedTeamIds.size > 0 && targetDate === new Date().toISOString().slice(0, 10)) {
+      const sbAdmin = getAdminClient();
+      const { pushNewCoachNotifications } = await import("@/lib/notifications/push");
+      for (const teamId of syncedTeamIds) {
+        try {
+          const { data: newCount, error: detectErr } = await sbAdmin.rpc(
+            "detect_coach_notifications",
+            { p_team_id: teamId },
+          );
+          if (detectErr) throw detectErr;
+          let pushed = 0;
+          if (Number(newCount ?? 0) > 0 && !skipPush) {
+            pushed = await pushNewCoachNotifications(sbAdmin, teamId);
+          }
+          notifResults.push({ teamId, new_count: Number(newCount ?? 0), pushed });
+        } catch (err) {
+          notifResults.push({
+            teamId,
+            new_count: 0,
+            pushed: 0,
+            error: err instanceof Error ? err.message : "detection failed",
+          });
+        }
       }
     }
 
@@ -143,6 +176,7 @@ async function runSync(request: Request, explicitDate?: string | null) {
         push: pushResult,
         rpeReminder: rpeReminderResult,
         notified: shouldNotify,
+        coachNotifications: notifResults,
       });
     }
 
@@ -152,6 +186,7 @@ async function runSync(request: Request, explicitDate?: string | null) {
       push: pushResult,
       rpeReminder: rpeReminderResult,
       notified: shouldNotify,
+      coachNotifications: notifResults,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catapult sync failed";
