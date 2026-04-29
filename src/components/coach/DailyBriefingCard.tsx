@@ -676,6 +676,23 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
   // the first 5. Toggled by the "+N more" / "Sýna færri" button below.
   const [showAllAttention, setShowAllAttention] = useState(false);
 
+  // Compact vs Detailed view (added 2026-04-29 after coach feedback that the
+  // numeric chips were overwhelming for non-S&C coaches). Compact = name +
+  // status dot + plain-language reasons + fatigue tag only. Detailed = adds
+  // Score/Comp/PL chips, driver chips, and the "→ GREEN if X" counterfactual
+  // line. Default is "compact" for new users; preference persisted in
+  // localStorage so a numerate coach who flips to Detailed only does it once.
+  const [verbosity, setVerbosity] = useState<"compact" | "detailed">(() => {
+    if (typeof window === "undefined") return "compact";
+    const saved = window.localStorage.getItem("coachDailyBriefingVerbosity");
+    return saved === "detailed" ? "detailed" : "compact";
+  });
+  const detailed = verbosity === "detailed";
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("coachDailyBriefingVerbosity", verbosity);
+  }, [verbosity]);
+
   const alertCount = attention.filter((x) => x.level === "alert").length;
   const monitorCount = attention.filter((x) => x.level === "monitor").length;
   const watchCount = alertCount + monitorCount;
@@ -993,8 +1010,32 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
             sees the actual numbers (score, composite, PL spike) inline. */}
         {attention.length > 0 && (
           <div>
-            <div className="mb-2 text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
-              {t.topAttention}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
+                {t.topAttention}
+              </div>
+              {/* Compact / Detailed toggle. Compact = action-first view for
+                  coaches who don't want number-tokens crowding the page;
+                  Detailed = numerate view with all chips + counterfactuals. */}
+              <div className="inline-flex rounded-full border border-slate-200 bg-white text-[10px] overflow-hidden">
+                {([
+                  { v: "compact",  enLabel: "Compact",  isLabel: "Einfalt"  },
+                  { v: "detailed", enLabel: "Detailed", isLabel: "Ítarlegt" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setVerbosity(opt.v)}
+                    className={`px-2 py-0.5 transition-colors ${
+                      verbosity === opt.v
+                        ? "bg-slate-700 text-white font-semibold"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {lang === "IS" ? opt.isLabel : opt.enLabel}
+                  </button>
+                ))}
+              </div>
             </div>
             <ul className="space-y-1.5">
               {(showAllAttention ? attention : attention.slice(0, 5)).map((item) => {
@@ -1089,17 +1130,22 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                         <span className="text-sm font-semibold text-slate-900">
                           {item.name}
                         </span>
-                        {scoreChipCls ? (
+                        {/* Numeric chips — only in Detailed mode. Compact mode
+                            keeps just the fatigue-type tag (which is plain
+                            language, not a number) so non-S&C coaches see
+                            "mechanical fatigue" instead of "Score 17/25 Comp
+                            0.74 PL 1.74×". */}
+                        {detailed && scoreChipCls ? (
                           <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${scoreChipCls}`}>
                             {t.chipScore} {item.score}/25
                           </span>
                         ) : null}
-                        {compChipCls && item.composite != null ? (
+                        {detailed && compChipCls && item.composite != null ? (
                           <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${compChipCls}`}>
                             {t.chipComp} {item.composite.toFixed(2)}
                           </span>
                         ) : null}
-                        {plChipCls && item.plSpike != null ? (
+                        {detailed && plChipCls && item.plSpike != null ? (
                           <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${plChipCls}`}>
                             {t.chipPl} {item.plSpike.toFixed(2)}×
                           </span>
@@ -1121,7 +1167,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           flag long-term low personal norm (e.g. a player
                           who consistently reports stress 2/5 — a chronic
                           warning, not a today problem). */}
-                      {driverChipsWithMeta.length > 0 ? (
+                      {detailed && driverChipsWithMeta.length > 0 ? (
                         <div className="mt-1 flex flex-wrap items-center gap-1">
                           {driverChipsWithMeta.map((c, idx) => (
                             <span
@@ -1151,7 +1197,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           what would change it without expanding. Hidden
                           when no useful counterfactual (multi-concern
                           day where no single lever helps). */}
-                      {item.topCounterfactual ? (
+                      {detailed && item.topCounterfactual ? (
                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] italic text-sky-700">
                           <span
                             className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-semibold not-italic tabular-nums ${
