@@ -19,7 +19,11 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 // PlayerSummaryCard + PlayerAskCard intentionally NOT imported here — see
 // the comment in the expanded-row body. Both live in the Decision Summary
-// modal only to keep AI per-player features in one place.
+// modal only to keep the per-player overall AI features in one place.
+//
+// PlayerDecelSummaryCard is different: it's a NARROW AI feature that
+// translates the 6 decel metrics into coach speak. Lives only on this page.
+import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
 
@@ -692,16 +696,11 @@ function PlayerRow({ row }: { row: Row }) {
 
       {expanded && s && (
         <div className="border-t border-slate-200/50 bg-white/50 p-4 space-y-3">
-          {/* AI Summary + Q&A removed from this view 2026-04-30. They live in
-              the per-player Decision Summary modal (one click away from the
-              Today page) and putting them here too caused two problems:
-                1. Two different summaries for the same player on the same day
-                   — Decel Intel called GET (no coachVerdict, cached); Decision
-                   Summary called POST (forces regenerate with verdict context),
-                   so the texts diverged and confused the coach.
-                2. Q&A is a per-player feature and belongs in the per-player
-                   modal — having a second entry point invited drift.
-              Decel Intel page now stays focused on decel signals only. */}
+          {/* Plain-language explanation of the 6 decel metrics for coaches
+              without S&C background. Pre-computed interpretation in TS so
+              the LLM never invents its own reading of the numbers — see
+              lib/micropulse/decelNarrative for the design rationale. */}
+          <PlayerDecelSummaryCard playerId={row.player_id} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail
