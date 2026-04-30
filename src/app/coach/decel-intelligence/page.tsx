@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
-import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
+// PlayerSummaryCard + PlayerAskCard intentionally NOT imported here — see
+// the comment in the expanded-row body. Both live in the Decision Summary
+// modal only to keep AI per-player features in one place.
 
 type Flag = "green" | "yellow" | "red" | "unknown";
 
@@ -691,13 +692,16 @@ function PlayerRow({ row }: { row: Row }) {
 
       {expanded && s && (
         <div className="border-t border-slate-200/50 bg-white/50 p-4 space-y-3">
-          {/* AI summary at the top of the expanded view — synthesises everything below
-              into 3-4 plain-language sentences so the coach gets the bottom line first.
-              Lang follows the global toggle (set on most pages). */}
-          <PlayerSummaryCard playerId={row.player_id} />
-
-          {/* Q&A dropdown — ask the system specific questions about this player. */}
-          <PlayerAskCard playerId={row.player_id} />
+          {/* AI Summary + Q&A removed from this view 2026-04-30. They live in
+              the per-player Decision Summary modal (one click away from the
+              Today page) and putting them here too caused two problems:
+                1. Two different summaries for the same player on the same day
+                   — Decel Intel called GET (no coachVerdict, cached); Decision
+                   Summary called POST (forces regenerate with verdict context),
+                   so the texts diverged and confused the coach.
+                2. Q&A is a per-player feature and belongs in the per-player
+                   modal — having a second entry point invited drift.
+              Decel Intel page now stays focused on decel signals only. */}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail
