@@ -445,11 +445,35 @@ export default function DisplayClient() {
       const dd = String(today.getDate()).padStart(2, "0");
       const todayKey = `${yyyy}-${mm}-${dd}`;
 
-      const { data: playerData, error: playerErr } = await supabase
+      // CRITICAL: filter by team_id. Without this filter the TV view shows
+      // every player on every team that has data today — confusing for the
+      // coach AND a privacy leak (one club seeing another club's players).
+      // The view exposes both `team_id` and a legacy `team` column on some
+      // installs; we try team_id first and fall back to `team` if zero rows.
+      let playerData: unknown[] | null = null;
+      let playerErr: { message: string } | null = null;
+
+      const primary = await supabase
         .from("v_coach_readiness_today_v8")
         .select("full_name, final_color, final_flag")
         .eq("entry_date", todayKey)
+        .eq("team_id", teamId)
         .order("full_name", { ascending: true });
+      playerData = primary.data ?? null;
+      playerErr = primary.error;
+
+      if ((!playerErr && (playerData?.length ?? 0) === 0)) {
+        // Fallback: some deployments name the column `team` instead of `team_id`
+        const alt = await supabase
+          .from("v_coach_readiness_today_v8")
+          .select("full_name, final_color, final_flag")
+          .eq("entry_date", todayKey)
+          .eq("team", teamId)
+          .order("full_name", { ascending: true });
+        if (!alt.error && (alt.data?.length ?? 0) > 0) {
+          playerData = alt.data;
+        }
+      }
 
       if (!playerErr) {
         setPlayersToday((playerData ?? []) as PlayerStatusRow[]);
