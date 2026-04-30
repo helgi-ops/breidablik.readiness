@@ -271,6 +271,32 @@ NUMBERS — STRICT:
   ("most of the week", "several days", "a few sessions").
 
 ALIGNMENT WITH WHAT THE COACH SEES — CRITICAL:
+═══════ INJURY OVERRIDE — HIGHEST PRIORITY ═══════
+- If active_injuries is NOT empty, the player is NOT cleared to train. The
+  on-screen verdict will be "Out — injury", "Limited — rehab", or similar.
+  Your summary MUST honor that.
+- Required behavior when active_injuries has any entry:
+    * Sentence 1 MUST start with the injury status, e.g.:
+        - "Out — recovering from <body_part> injury (since <injury_date>, expected back <expected_return>)."
+        - "Limited — rehab from <body_part>; not cleared for full training yet."
+      Use the body_part / injury_date / expected_return fields from the
+      active_injuries entry literally — do not paraphrase the dates.
+    * NEVER write "cleared for full session", "ready to train", "no action
+      needed today", "follow today's plan", "go at full intensity", or any
+      phrase that implies the player is available. Those words contradict
+      the on-screen Out/Rehab badge and destroy coach trust.
+    * If load/wellness data exists, frame it as RECOVERY context
+      ("recovery looks on track", "wellness has held up well during rehab")
+      not as TRAINING readiness. Load numbers from before the injury are
+      historical only.
+    * Action sentence should focus on rehab progression, not training:
+      "continue rehab plan", "monitor for clearance before next match",
+      "recheck pain on the affected area".
+- The injury override beats every other rule below — coach_visible_verdict,
+  match-day context, load spikes, ASL z-scores. If active_injuries is
+  populated, READ THE INJURY FIRST.
+
+═══════ COACH-VISIBLE VERDICT ALIGNMENT (when not injured) ═══════
 - The input includes coach_visible_verdict which is the EXACT verdict + headline +
   reasoning that is rendered on the coach's screen RIGHT NOW. Your summary appears
   ON THE SAME SCREEN as that verdict.
@@ -420,9 +446,39 @@ function isRedVerdict(state: string | undefined): boolean {
       || s.includes("hvíld") || s.includes("rautt");
 }
 
-function validateSummary(text: string, windowDays: 7 | 14, coachVerdict: CoachVerdictInput): string | null {
+// Phrases that imply the player is cleared to train. Forbidden when the
+// player has an active injury — would contradict the on-screen Out/Rehab
+// badge and erode coach trust. Ívar 2026-04-30 incident: AI said "cleared
+// for full session today" while the verdict above was "Out — injury".
+const CLEARANCE_PHRASES = [
+  /\bcleared\s+(?:for|to)\s+(?:full|train|session|play)/i,
+  /\bready\s+to\s+(?:train|play|go)/i,
+  /\bgo\s+at\s+full\s+intensity\b/i,
+  /\bfollow\s+today'?s?\s+(?:training\s+)?plan\b/i,
+  /\bno\s+action\s+needed\b/i,
+  /\bavailable\s+for\s+(?:full\s+)?(?:session|training|match)/i,
+  /\bgood\s+readiness\s+today\b/i,
+  /\bfull\s+session\s+today\b/i,
+];
+
+function validateSummary(
+  text: string,
+  windowDays: 7 | 14,
+  coachVerdict: CoachVerdictInput,
+  hasActiveInjury: boolean = false,
+): string | null {
   for (const re of FORBIDDEN_TERMS) {
     if (re.test(text)) return `Contains forbidden jargon/ratio: ${re.source}`;
+  }
+  // Injury override — clearance phrases are forbidden when active_injuries
+  // is non-empty. Catches the failure mode where AI grabs load/wellness
+  // signals and writes "ready to train" while the screen says Out.
+  if (hasActiveInjury) {
+    for (const re of CLEARANCE_PHRASES) {
+      if (re.test(text)) {
+        return `Contradicts active injury: contains "${re.source}" while player has an active injury`;
+      }
+    }
   }
   // Sentence-count guardrail
   const sentenceCount = text.split(/[.!?]+/).filter((s) => s.trim().length > 5).length;
@@ -556,12 +612,16 @@ async function generateAndStore(
   // both attempts fail, since that breaks the silent-fallback UX.
   try {
     input = await buildSummaryInput(supabase, playerId, windowDays, coachVerdict);
+    // Detect active injury from input bundle so the validator can enforce
+    // the injury-override rules (block "cleared for full session" etc.).
+    const hasActiveInjury = Array.isArray((input as { active_injuries?: unknown[] }).active_injuries)
+      && ((input as { active_injuries: unknown[] }).active_injuries.length > 0);
     summary = await callClaude(input);
-    issues = validateSummary(summary.summary, windowDays, coachVerdict);
+    issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury);
     if (issues) {
       console.warn("[player-summary] First attempt failed validation, retrying", { issues });
       summary = await callClaude(input);
-      issues = validateSummary(summary.summary, windowDays, coachVerdict);
+      issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury);
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
