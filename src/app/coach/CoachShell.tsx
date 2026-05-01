@@ -49,6 +49,39 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const [notesCount, setNotesCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Team brand for the sidebar header (logo + short name).
+  const [teamBrand, setTeamBrand] = useState<{ name: string; logoUrl: string }>({
+    name: "",
+    logoUrl: "",
+  });
+
+  // Fetch team branding once per session.
+  useEffect(() => {
+    let alive = true;
+    async function fetchBrand() {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return;
+      const { data: prof } = await supabase
+        .from("profiles").select("team_id").eq("id", userId).maybeSingle();
+      const teamId = (prof as { team_id?: string | null } | null)?.team_id;
+      if (!teamId) return;
+      const { data: team } = await supabase
+        .from("teams")
+        .select("name, club_short_name, club_logo_url")
+        .eq("id", teamId)
+        .maybeSingle();
+      if (!alive || !team) return;
+      const t = team as { name?: string; club_short_name?: string; club_logo_url?: string };
+      setTeamBrand({
+        name: (t.club_short_name?.trim() || t.name?.trim() || "MicroPulse"),
+        logoUrl: (t.club_logo_url?.trim() || ""),
+      });
+    }
+    void fetchBrand();
+    return () => { alive = false; };
+  }, []);
+
   // ── Mobile nav drawer state ───────────────────────────────────────────
   // Below the md (768px) breakpoint the horizontal desktop nav is hidden
   // (it overflows badly with 7 top-level links + 4 dropdowns) and replaced
@@ -180,7 +213,18 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
+          <div className="flex items-center gap-2 min-w-0">
+            {teamBrand.logoUrl ? (
+              <img
+                src={teamBrand.logoUrl}
+                alt={teamBrand.name}
+                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
+              />
+            ) : null}
+            <div className="text-sm font-semibold tracking-tight truncate">
+              {teamBrand.name || "MicroPulse"}
+            </div>
+          </div>
         </div>
         <InstallPwaButton role="coach" variant="compact" />
       </header>
@@ -188,7 +232,18 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       {/* ── Desktop persistent sidebar ─────────────────────────────────── */}
       <aside className="hidden md:flex md:flex-col md:border-r md:border-slate-200 md:bg-white md:sticky md:top-0 md:h-screen">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
+          <div className="flex items-center gap-2 min-w-0">
+            {teamBrand.logoUrl ? (
+              <img
+                src={teamBrand.logoUrl}
+                alt={teamBrand.name}
+                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
+              />
+            ) : null}
+            <div className="text-sm font-semibold tracking-tight truncate">
+              {teamBrand.name || "MicroPulse"}
+            </div>
+          </div>
           <InstallPwaButton role="coach" variant="compact" />
         </div>
         <CoachSidebar
@@ -215,7 +270,18 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             aria-label={lang === "IS" ? "Aðalvalmynd" : "Main menu"}
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
+              <div className="flex items-center gap-2 min-w-0">
+            {teamBrand.logoUrl ? (
+              <img
+                src={teamBrand.logoUrl}
+                alt={teamBrand.name}
+                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
+              />
+            ) : null}
+            <div className="text-sm font-semibold tracking-tight truncate">
+              {teamBrand.name || "MicroPulse"}
+            </div>
+          </div>
               <button
                 type="button"
                 onClick={() => setMobileDrawerOpen(false)}
