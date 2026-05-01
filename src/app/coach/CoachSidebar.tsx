@@ -54,9 +54,9 @@ const communicationLinks: SidebarLink[] = [
 // works for anyone who finds it from there.
 const monitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
-  { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",          IS: "Quadrant view (Gabbett)" } },
-  { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",          IS: "Indoor Load (höll-mode)" } },
-  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",    IS: "Decel Intelligence (McBurnie)" } },
+  { href: "/coach/quadrant",           label: { EN: "Quadrant view",                    IS: "Quadrant view" } },
+  { href: "/coach/indoor-load",        label: { EN: "Indoor Load",                      IS: "Indoor Load" } },
+  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
   { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
