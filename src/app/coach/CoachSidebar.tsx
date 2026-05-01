@@ -42,16 +42,26 @@ const communicationLinks: SidebarLink[] = [
   { href: "/team",                label: { EN: "Team Page",     IS: "Liðssíða" } },
 ];
 
-// NOTE: Players + Week setup live at the top of Monitoring / Planning
-// respectively, instead of in a separate "top priority" nav block. This keeps
-// related items together (Players is fundamentally about who you're
-// monitoring; Week setup is the entry-point of the planning workflow).
+// NOTE: Players is *roster management* (approve pending, edit profiles), not
+// daily monitoring — coaches drilldown to individual players through the
+// Watch list / Daily Briefing. So Players lives in Admin, not Monitoring.
+// Week setup is the entry-point of the planning workflow → top of Planning.
+//
+// Items previously hidden behind the dashboard's "More ▼" dropdown
+// (Volatility, VALD/CMJ, Strength/VBT, Trends, Injuries/RTP) are surfaced
+// here as first-class sidebar links so coaches can find them. They render
+// inside the dashboard via ?tab=… deep links; the existing tab bar still
+// works for anyone who finds it from there.
 const monitoringLinks: SidebarLink[] = [
-  { href: "/coach/players",            label: { EN: "Players",                          IS: "Leikmenn" }, badgeKey: "pending" },
   { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",          IS: "Quadrant view (Gabbett)" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",          IS: "Indoor Load (höll-mode)" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",    IS: "Decel Intelligence (McBurnie)" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
+  { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
+  { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
+  { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
+  { href: "/coach?tab=trend",          label: { EN: "Trends",                           IS: "Þróun" } },
+  { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
@@ -65,6 +75,10 @@ const planningLinks: SidebarLink[] = [
 ];
 
 const adminLinks: SidebarLink[] = [
+  // Players sits at the top — it's the highest-frequency admin task
+  // (approving pending players + roster edits) and the badge needs
+  // visibility.
+  { href: "/coach/players",           label: { EN: "Players",           IS: "Leikmenn" }, badgeKey: "pending" },
   { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
   { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
@@ -288,7 +302,6 @@ export function CoachSidebar({
           currentTab={currentTab}
           lang={lang}
           onNavigate={onNavigate}
-          badges={{ pending: pendingCount }}
         />
         <Section
           label={lang === "IS" ? "Skipulag" : "Planning"}
@@ -305,6 +318,7 @@ export function CoachSidebar({
           currentTab={currentTab}
           lang={lang}
           onNavigate={onNavigate}
+          badges={{ pending: pendingCount }}
         />
         {isAdmin && (
           <Section
