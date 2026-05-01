@@ -31,21 +31,32 @@ import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 type Bi = { EN: string; IS: string };
 const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
 
-const communicationLinks: { href: string; label: Bi }[] = [
+// `badgeKey` lets a link opt into one of the live counts the sidebar already
+// fetches (currently just "pending" = pending player approvals). The Section
+// component reads the count from a `badges` prop and renders the pill.
+type SidebarLink = { href: string; label: Bi; badgeKey?: "pending" };
+
+const communicationLinks: SidebarLink[] = [
   { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
   { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
   { href: "/team",                label: { EN: "Team Page",     IS: "Liðssíða" } },
 ];
 
-const monitoringLinks: { href: string; label: Bi }[] = [
-  { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",        IS: "Quadrant view (Gabbett)" } },
-  { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",        IS: "Indoor Load (höll-mode)" } },
-  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",  IS: "Decel Intelligence (McBurnie)" } },
-  { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",        IS: "Meiðsla-munstursgreining" } },
-  { href: "/coach/notifications",      label: { EN: "Notifications",                  IS: "Tilkynningar" } },
+// NOTE: Players + Week setup live at the top of Monitoring / Planning
+// respectively, instead of in a separate "top priority" nav block. This keeps
+// related items together (Players is fundamentally about who you're
+// monitoring; Week setup is the entry-point of the planning workflow).
+const monitoringLinks: SidebarLink[] = [
+  { href: "/coach/players",            label: { EN: "Players",                          IS: "Leikmenn" }, badgeKey: "pending" },
+  { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",          IS: "Quadrant view (Gabbett)" } },
+  { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",          IS: "Indoor Load (höll-mode)" } },
+  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",    IS: "Decel Intelligence (McBurnie)" } },
+  { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
+  { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
-const planningLinks: { href: string; label: Bi }[] = [
+const planningLinks: SidebarLink[] = [
+  { href: "/coach/week-setup",       label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach?tab=md",           label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
   { href: "/coach?tab=drills",       label: { EN: "Session builder",     IS: "Session builder" } },
   { href: "/coach/templates",        label: { EN: "Session templates",   IS: "Session templates" } },
@@ -53,7 +64,7 @@ const planningLinks: { href: string; label: Bi }[] = [
   { href: "/coach/match-minutes",    label: { EN: "Match minutes",       IS: "Leikmínútur" } },
 ];
 
-const adminLinks: { href: string; label: Bi }[] = [
+const adminLinks: SidebarLink[] = [
   { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
   { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
@@ -61,7 +72,7 @@ const adminLinks: { href: string; label: Bi }[] = [
   { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
-const superAdminLinks: { href: string; label: Bi }[] = [
+const superAdminLinks: SidebarLink[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
 ];
 
@@ -91,13 +102,17 @@ function Section({
   currentTab,
   lang,
   onNavigate,
+  badges,
 }: {
   label: string;
-  links: { href: string; label: Bi }[];
+  links: SidebarLink[];
   pathname: string;
   currentTab: string | null;
   lang: Lang;
   onNavigate?: () => void;
+  /** Live counts the sidebar fetches; rendered as a pill on links whose
+   *  `badgeKey` matches a key here (currently only "pending"). */
+  badges?: { pending?: number };
 }) {
   // Versioned key — bump the suffix whenever the default flips so previously
   // stored prefs (which would otherwise force the old default) are ignored.
@@ -162,18 +177,26 @@ function Section({
         <ul className="flex flex-col gap-0.5">
           {links.map((l) => {
             const active = isLinkActive(l.href, pathname, currentTab);
+            const badgeCount = l.badgeKey ? badges?.[l.badgeKey] ?? 0 : 0;
             return (
               <li key={l.href}>
                 <Link
                   href={l.href}
                   onClick={onNavigate}
-                  className={`block rounded-md px-3 py-2 text-sm transition-colors ${
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
                     active
                       ? "bg-slate-900 text-white font-medium"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  {tt(l.label, lang)}
+                  <span>{tt(l.label, lang)}</span>
+                  {badgeCount > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      active ? "bg-white/20 text-white" : "bg-amber-500 text-white"
+                    }`}>
+                      {badgeCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             );
@@ -216,8 +239,6 @@ export function CoachSidebar({
   const pathname = usePathname() ?? "";
 
   const isOnCoach = pathname === "/coach" && currentTab == null;
-  const isOnPlayers = pathname?.startsWith("/coach/players") ?? false;
-  const isOnWeek = pathname?.startsWith("/coach/week-setup") ?? false;
 
   return (
     <div className="flex h-full flex-col">
@@ -227,7 +248,8 @@ export function CoachSidebar({
         <TeamSwitcher currentTeamId={currentTeamId} onSwitch={onSwitchTeam} />
       </div>
 
-      {/* Top-priority links — Dashboard / Players / Week setup with badge counts. */}
+      {/* Dashboard sits alone at the top — it's the daily landing page.
+          Players moved into Monitoring, Week setup into Planning. */}
       <nav className="flex flex-col gap-0.5 px-3 pt-4">
         <Link
           href="/coach"
@@ -246,35 +268,6 @@ export function CoachSidebar({
               {notesCount}
             </span>
           )}
-        </Link>
-        <Link
-          href="/coach/players"
-          onClick={onNavigate}
-          className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
-            isOnPlayers
-              ? "bg-slate-900 text-white font-medium"
-              : "text-slate-800 hover:bg-slate-100"
-          }`}
-        >
-          <span>{lang === "IS" ? "Leikmenn" : "Players"}</span>
-          {pendingCount > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-              isOnPlayers ? "bg-white/20 text-white" : "bg-amber-500 text-white"
-            }`}>
-              {pendingCount}
-            </span>
-          )}
-        </Link>
-        <Link
-          href="/coach/week-setup"
-          onClick={onNavigate}
-          className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-            isOnWeek
-              ? "bg-slate-900 text-white font-medium"
-              : "text-slate-800 hover:bg-slate-100"
-          }`}
-        >
-          {lang === "IS" ? "Vikuskipulag" : "Week setup"}
         </Link>
       </nav>
 
@@ -295,6 +288,7 @@ export function CoachSidebar({
           currentTab={currentTab}
           lang={lang}
           onNavigate={onNavigate}
+          badges={{ pending: pendingCount }}
         />
         <Section
           label={lang === "IS" ? "Skipulag" : "Planning"}
