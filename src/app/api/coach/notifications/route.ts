@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, parameter, direction, severity, threshold, value_now, value_prev,
       summary, summary_is, is_post_match, fired_at, acknowledged_at,
+      player_message_sent_at,
       player_id, players(full_name)
     `)
     .eq("team_id", auth.teamId)
