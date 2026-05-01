@@ -80,7 +80,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
-import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
+// MechanicalLoadIndexCard moved to /coach/load-intelligence (was on the GPS Data tab).
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
@@ -89,9 +89,9 @@ import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
-import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
+// TeamMetabolicSummary moved to /coach/load-intelligence (was on the GPS Data tab).
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
-import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
+// GpsLoadIntelligence moved to /coach/load-intelligence (was on the GPS Data tab).
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import TrainerDashboard from "@/components/trainer/TrainerDashboard";
 // (TeamSwitcher moved into CoachShell sidebar — coach can swap teams from
@@ -7905,29 +7905,9 @@ export default function CoachPage() {
           return { a7: fmt(a7), c28: fmt(c28), acwr };
         }
 
-        function acwrColor(v: number | null): string {
-          if (v == null) return "text-slate-400";
-          if (v > 1.5) return "text-red-600 font-semibold";
-          if (v > 1.3) return "text-amber-600 font-semibold";
-          if (v >= 0.8) return "text-emerald-700";
-          return "text-blue-600 font-semibold"; // < 0.8 — of lítið álag
-        }
-
-        function acwrBg(v: number | null): string {
-          if (v == null) return "";
-          if (v > 1.5) return "bg-red-50";
-          if (v > 1.3) return "bg-amber-50";
-          if (v >= 0.8) return "bg-emerald-50";
-          return "bg-blue-50"; // < 0.8 — of lítið álag
-        }
-
-        const gpsRows = gpsAllPlayers.map((p) => ({
-          name: p.name,
-          position: p.position,
-          snapshots: GPS_METRICS.map((m) => computeSnapshot(p.history, m.aliases, m.digits)),
-        }));
-
-        const noData = !gpsLoading && gpsRows.length === 0;
+        // acwrColor / acwrBg / gpsRows / noData / computeSnapshot used to
+        // live here for the Squad Load 7d/28d/ACWR table — moved with the
+        // table to /coach/quadrant via the SquadLoadTable component.
 
         // ── Today's session overview ──────────────────────────────────────
         const todayPlayerRows = gpsAllPlayers.map((p) => {
@@ -8182,90 +8162,15 @@ export default function CoachPage() {
               </CardContent>
             </Card>
 
-            {/* ── Load Intelligence (computed signals overview) ── */}
-            {!gpsLoading && gpsAllPlayers.length > 0 && (
-              <GpsLoadIntelligence
-                players={gpsAllPlayers}
-                date={gpsDate}
-                lang={lang as "IS" | "EN"}
-              />
-            )}
-
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">GPS Data — Squad Load</CardTitle>
-                    <CardDescription className="mt-1 text-sm text-slate-500">
-                      7-day acute · 28-day chronic · ACWR per player · Catapult
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" />&lt;0.8 Low</span>
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />0.8–1.3 OK</span>
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />1.3–1.5 Elevated</span>
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" />&gt;1.5 High</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {gpsLoading ? (
-                  <div className="px-6 py-10 text-center text-sm text-slate-400">Loading GPS data…</div>
-                ) : noData ? (
-                  <div className="px-6 py-10 text-center text-sm text-slate-400">
-                    No Catapult GPS data available. Sync Catapult to load player data.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50">
-                          <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 whitespace-nowrap border-r border-slate-200">
-                            Player
-                          </th>
-                          {GPS_METRICS.map((m) => (
-                            <th key={m.key} colSpan={3} className="px-2 py-2.5 text-center text-xs font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap">
-                              {m.shortLabel}
-                            </th>
-                          ))}
-                        </tr>
-                        <tr className="border-b border-slate-200 bg-slate-50/60">
-                          <th className="sticky left-0 z-10 bg-slate-50/60 px-4 py-1.5 border-r border-slate-200" />
-                          {GPS_METRICS.map((m) => (
-                            <React.Fragment key={m.key}>
-                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500 border-l border-slate-200">7D</th>
-                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">28D</th>
-                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">ACWR</th>
-                            </React.Fragment>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gpsRows.map((player, i) => (
-                          <tr key={player.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
-                            <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-900 whitespace-nowrap border-r border-slate-200" style={{ background: i % 2 === 0 ? "white" : "rgb(248 250 252 / 0.4)" }}>
-                              <div>{player.name}</div>
-                              <div className="text-[11px] text-slate-400">{player.position}</div>
-                            </td>
-                            {player.snapshots.map((snap, si) => (
-                              <React.Fragment key={si}>
-                                <td className="px-3 py-2 text-center text-slate-700 border-l border-slate-100 tabular-nums">{snap.a7}</td>
-                                <td className="px-3 py-2 text-center text-slate-500 tabular-nums">{snap.c28}</td>
-                                <td className={`px-3 py-2 text-center tabular-nums ${acwrColor(snap.acwr)} ${acwrBg(snap.acwr)}`}>
-                                  {snap.acwr == null ? "—" : snap.acwr.toFixed(2)}
-                                </td>
-                              </React.Fragment>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <MechanicalLoadIndexCard teamId={coachTeamId} />
-            <TeamMetabolicSummary teamId={coachTeamId} />
+            {/* GpsLoadIntelligence + Squad Load + MLI + MLS moved out:
+                - Load Intelligence + MLI + MLS → /coach/load-intelligence
+                  (Internal:External coupling story).
+                - Squad Load 7d/28d/ACWR table → /coach/quadrant (Quadrant
+                  IS the acute/chronic story so the table sits naturally
+                  alongside the 2x2 chart).
+                GPS Data tab now keeps just the daily snapshot table
+                above plus the manual entry below — pure "what did each
+                player do today" view. */}
             <CoachGpsManualEntry
               teamId={coachTeamId}
               date={today}
