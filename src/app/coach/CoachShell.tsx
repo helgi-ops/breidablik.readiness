@@ -17,6 +17,15 @@ import { useLang, type Lang } from "@/lib/lang";
 type Bi = { EN: string; IS: string };
 const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
 
+// Communication cluster — coach↔player + team-broadcast surfaces.
+// Grouped into a dropdown 2026-05-01 to relieve top-level density (the
+// nav was hitting both edges of the viewport at 100% zoom).
+const communicationLinks: { href: string; label: Bi }[] = [
+  { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
+  { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
+  { href: "/team",                label: { EN: "Team Page",     IS: "Liðssíða" } },
+];
+
 // Player-monitoring cluster — "what's happening with my players right now?"
 // Deeper analytics layered on top of the dashboard's daily Today/Squad views.
 const monitoringLinks: { href: string; label: Bi }[] = [
@@ -343,38 +352,19 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               href="/coach/week-setup"
               className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/week-setup") ? "font-medium text-foreground" : "text-muted-foreground"}`}
             >
-              Week setup
+              {lang === "IS" ? "Vikuskipulag" : "Week setup"}
             </Link>
 
-            <Link
-              href="/coach/conversations"
-              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/conversations") ? "font-medium text-foreground" : "text-muted-foreground"}`}
-            >
-              Conversations
-            </Link>
-
-            <Link
-              href="/team"
-              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/team" ? "font-medium text-foreground" : "text-muted-foreground"}`}
-            >
-              Team Page
-            </Link>
-
-            <Link
-              href="/coach/messages"
-              className={`rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname?.startsWith("/coach/messages") ? "font-medium text-foreground" : "text-muted-foreground"}`}
-            >
-              Messages
-            </Link>
-
-            <Link
-              href="/coach/display?refresh=15"
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-            >
-              TV ↗
-            </Link>
+            {/* Conversations + Messages + Team Page collapsed into a single
+                Communication dropdown 2026-05-01 to reduce nav density.
+                Same grouping as the mobile drawer Communication section. */}
+            <NavDropdown
+              label={lang === "IS" ? "Samskipti" : "Communication"}
+              links={communicationLinks}
+              pathname={pathname ?? ""}
+              currentTab={currentTab}
+              lang={lang}
+            />
 
             <NavDropdown
               label={lang === "IS" ? "Eftirlit" : "Monitoring"}
@@ -410,6 +400,24 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               />
             )}
 
+            {/* TV view as compact icon-button (was a text "TV ↗" link before
+                — moved to icon to free a top-level slot). Opens the display
+                page in a new tab for use on a locker-room screen. */}
+            <a
+              href="/coach/display?refresh=15"
+              target="_blank"
+              rel="noreferrer"
+              title={lang === "IS" ? "Skjár (opnar í nýjum flipa)" : "TV view (opens new tab)"}
+              aria-label={lang === "IS" ? "Skjár" : "TV view"}
+              className="ml-1 rounded-md p-2 text-muted-foreground hover:bg-muted"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="4" width="20" height="14" rx="2" />
+                <line x1="8" y1="22" x2="16" y2="22" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+              </svg>
+            </a>
+
             <button
               onClick={async () => {
                 await supabase.auth.signOut();
@@ -417,7 +425,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               }}
               className="ml-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
             >
-              Sign out
+              {lang === "IS" ? "Útskrá" : "Sign out"}
             </button>
           </nav>
         </div>
