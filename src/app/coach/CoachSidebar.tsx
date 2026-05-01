@@ -99,7 +99,10 @@ function Section({
   lang: Lang;
   onNavigate?: () => void;
 }) {
-  const storageKey = `coach-sidebar-section:${label}`;
+  // Versioned key — bump the suffix whenever the default flips so previously
+  // stored prefs (which would otherwise force the old default) are ignored.
+  // v2: default flipped from collapsed → open (2026-05-01).
+  const storageKey = `coach-sidebar-section-v2:${label}`;
   const hasActive = links.some((l) => isLinkActive(l.href, pathname, currentTab));
 
   // Default to open; rehydrate from localStorage after mount to avoid
