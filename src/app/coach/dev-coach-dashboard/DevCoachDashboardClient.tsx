@@ -6937,13 +6937,10 @@ export default function CoachPage() {
           { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
           { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
         ];
-        // Overflow — niche player-monitoring views (volatility, jump testing,
-        // VBT, longitudinal trends, RTP). MD Comparison + Session moved out
-        // of this row entirely — they live in the top-nav Planning dropdown.
-        const MORE_TABS: Array<typeof dashTab> = ["volatility", "vald", "strength", "trend", "rtp"];
-        const moreLabel = lang === "IS" ? "Meira" : "More";
-
-        const isMoreActive = MORE_TABS.includes(dashTab);
+        // Overflow tabs (volatility, vald, strength, trend, rtp) used to
+        // sit behind a "More ▾" dropdown here — moved to the sidebar
+        // Monitoring section as first-class links. The ?tab=… URLs still
+        // route through this page so deep links land on the right view.
 
         const TabBtn = ({ tabId }: { tabId: typeof dashTab }) => {
           const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
@@ -6988,44 +6985,11 @@ export default function CoachPage() {
                   </Link>
                 ))}
 
-                {/* "More" dropdown — overflow in-app tabs */}
-                <div className="relative group">
-                  <button
-                    className={`flex items-center gap-1 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                      isMoreActive
-                        ? "border-slate-900 text-slate-900"
-                        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-                    }`}
-                  >
-                    {isMoreActive ? labels[dashTab] : moreLabel}
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <div className="invisible group-hover:visible absolute left-0 top-full z-50 mt-0 min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                    {MORE_TABS.map((tabId) => {
-                      const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
-                      return (
-                        <button
-                          key={tabId}
-                          onClick={() => setDashTab(tabId)}
-                          className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                            dashTab === tabId
-                              ? "bg-slate-50 font-semibold text-slate-900"
-                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                          }`}
-                        >
-                          <span>{labels[tabId]}</span>
-                          {isLocked && (
-                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {/* "More" dropdown removed — Volatility / VALD / Strength /
+                    Trends / RTP now live as first-class links in the
+                    Monitoring section of the sidebar. The underlying tab
+                    rendering (?tab=volatility etc) still works so sidebar
+                    links land directly on the right view. */}
               </div>
 
               {/* Language toggle */}
