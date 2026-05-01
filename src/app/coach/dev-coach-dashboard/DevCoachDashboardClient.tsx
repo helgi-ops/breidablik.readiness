@@ -94,8 +94,7 @@ import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import TrainerDashboard from "@/components/trainer/TrainerDashboard";
-// (TeamSwitcher moved into CoachShell sidebar — coach can swap teams from
-//  the sidebar header now, no longer rendered here.)
+import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 
 /* ── Error boundary for TrainerDashboard ──────────────── */
 class TrainerErrorBoundary extends React.Component<
@@ -2786,8 +2785,16 @@ export default function CoachPage() {
     return resolvedTeamId;
   }
 
-  // (handleTeamSwitch removed — team switching now happens via the sidebar
-  //  TeamSwitcher in CoachShell, which persists profiles.team_id and reloads.)
+  /** Handle team switch from TeamSwitcher */
+  function handleTeamSwitch(team: CoachTeam) {
+    setCoachTeamId(team.id);
+    setTeamSport(team.sport || null);
+    setTeamType(team.teamType);
+    // Reset tab to "today" when switching teams
+    setDashTab("today");
+    setRows([]);
+    setLoading(true);
+  }
 
   /** -----------------------------
    * Fetch helpers
@@ -6899,9 +6906,14 @@ export default function CoachPage() {
   // and the regular coach data-loading never calls setLoading(false) for PT teams.
   if (teamType === "personal_trainer" && coachTeamId) {
     return (
-      <TrainerErrorBoundary>
-        <TrainerDashboard teamId={coachTeamId} />
-      </TrainerErrorBoundary>
+      <div className="space-y-4">
+        <div className="flex justify-end px-4 pt-2">
+          <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
+        </div>
+        <TrainerErrorBoundary>
+          <TrainerDashboard teamId={coachTeamId} />
+        </TrainerErrorBoundary>
+      </div>
     );
   }
 
@@ -7027,6 +7039,9 @@ export default function CoachPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Team switcher */}
+              <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
 
               {/* Language toggle */}
               <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">

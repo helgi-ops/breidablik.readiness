@@ -254,20 +254,12 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       </header>
 
       {/* ── Desktop persistent sidebar ─────────────────────────────────── */}
+      {/* Brand bar removed: the team-switcher dropdown at the top of the
+          CoachSidebar already shows the team identity, so the separate
+          logo+name row was redundant. Install PWA button stays in the
+          top-right slot — small footprint, only visible when installable. */}
       <aside className="hidden md:flex md:flex-col md:border-r md:border-slate-200 md:bg-white md:sticky md:top-0 md:h-screen">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {teamBrand.logoUrl ? (
-              <img
-                src={teamBrand.logoUrl}
-                alt={teamBrand.name}
-                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
-              />
-            ) : null}
-            <div className="text-sm font-semibold tracking-tight truncate">
-              {teamBrand.name || "MicroPulse"}
-            </div>
-          </div>
+        <div className="flex items-center justify-end px-4 py-2">
           <InstallPwaButton role="coach" variant="compact" />
         </div>
         <CoachSidebar
@@ -295,19 +287,10 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             aria-modal="true"
             aria-label={lang === "IS" ? "Aðalvalmynd" : "Main menu"}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div className="flex items-center gap-2 min-w-0">
-            {teamBrand.logoUrl ? (
-              <img
-                src={teamBrand.logoUrl}
-                alt={teamBrand.name}
-                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
-              />
-            ) : null}
-            <div className="text-sm font-semibold tracking-tight truncate">
-              {teamBrand.name || "MicroPulse"}
-            </div>
-          </div>
+            {/* Drawer header — close button only. Brand removed because the
+                team-switcher dropdown immediately below already shows the
+                team identity. */}
+            <div className="flex items-center justify-end px-4 py-2">
               <button
                 type="button"
                 onClick={() => setMobileDrawerOpen(false)}

@@ -22,10 +22,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
-import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 type Bi = { EN: string; IS: string };
@@ -75,14 +73,7 @@ function isLinkActive(href: string, pathname: string, currentTab: string | null)
   return wantedTab != null && currentTab === wantedTab;
 }
 
-// ─── Section component (collapsible header + list of links) ─────────────────
-//
-// Each section persists its open/closed state in localStorage so coaches'
-// preferences survive page refreshes. If any link inside the section matches
-// the current route the section is force-opened so the active item stays
-// visible (otherwise an active link would be hidden behind a collapsed
-// header — disorienting). Default state on first visit is collapsed so the
-// sidebar reads as a tidy index by default.
+// ─── Section component (header + list of links) ─────────────────────────────
 function Section({
   label,
   links,
@@ -98,83 +89,31 @@ function Section({
   lang: Lang;
   onNavigate?: () => void;
 }) {
-  const storageKey = `coach-sidebar-section:${label}`;
-  const hasActive = links.some((l) => isLinkActive(l.href, pathname, currentTab));
-
-  // Default to collapsed; rehydrate from localStorage after mount to avoid
-  // SSR/hydration mismatches.
-  const [open, setOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      if (stored === "1") setOpen(true);
-      else if (stored === "0") setOpen(false);
-    } catch {
-      /* localStorage may be blocked — silently fall back to default */
-    }
-  }, [storageKey]);
-
-  // Force-open whenever the active route is inside this section.
-  const effectiveOpen = open || hasActive;
-
-  function toggle() {
-    const next = !effectiveOpen;
-    setOpen(next);
-    try {
-      window.localStorage.setItem(storageKey, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }
-
   return (
     <div className="mt-4 first:mt-0">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={effectiveOpen}
-        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-      >
-        <span>{label}</span>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transition-transform ${effectiveOpen ? "rotate-180" : ""}`}
-          aria-hidden="true"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {effectiveOpen && (
-        <ul className="flex flex-col gap-0.5">
-          {links.map((l) => {
-            const active = isLinkActive(l.href, pathname, currentTab);
-            return (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  onClick={onNavigate}
-                  className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-                    active
-                      ? "bg-slate-900 text-white font-medium"
-                      : "text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  {tt(l.label, lang)}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {links.map((l) => {
+          const active = isLinkActive(l.href, pathname, currentTab);
+          return (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                onClick={onNavigate}
+                className={`block rounded-md px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? "bg-slate-900 text-white font-medium"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {tt(l.label, lang)}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -185,8 +124,6 @@ export function CoachSidebar({
   notesCount,
   pendingCount,
   currentTab,
-  currentTeamId,
-  onSwitchTeam,
   onNavigate,
 }: {
   isAdmin: boolean;
@@ -196,13 +133,6 @@ export function CoachSidebar({
    *  useSearchParams) because the parent shell already reads it via a
    *  Suspense-safe window.location helper. */
   currentTab: string | null;
-  /** The coach's currently active team_id (from profiles). Passed through
-   *  to the TeamSwitcher so coaches with multiple teams can swap from the
-   *  sidebar without leaving their current page. */
-  currentTeamId: string | null;
-  /** Invoked when the coach picks a different team from the switcher. The
-   *  shell handles persistence (writes profiles.team_id) and reload. */
-  onSwitchTeam: (team: CoachTeam) => void;
   /** Invoked when any link inside the sidebar is clicked. The mobile drawer
    *  uses this to close itself; desktop passes a no-op. */
   onNavigate?: () => void;
@@ -216,12 +146,6 @@ export function CoachSidebar({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Team switcher — renders nothing when the coach only has one team,
-          so single-team clubs don't see a redundant chip. */}
-      <div className="px-3 pt-3">
-        <TeamSwitcher currentTeamId={currentTeamId} onSwitch={onSwitchTeam} />
-      </div>
-
       {/* Top-priority links — Dashboard / Players / Week setup with badge counts. */}
       <nav className="flex flex-col gap-0.5 px-3 pt-4">
         <Link
@@ -318,7 +242,7 @@ export function CoachSidebar({
           />
         )}
         <div className="mt-4">
-          <div className="mb-1 px-3 py-1.5 text-sm font-semibold text-slate-500">
+          <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             TV
           </div>
           <a
