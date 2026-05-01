@@ -709,6 +709,7 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.overload.cumulative_28d_count.toFixed(0)} decels`}
               caption={`28-day cumulative · baseline daily ≈ ${s.overload.baseline_daily_mean.toFixed(1)}`}
               hint="Red if cumulative > 1.5× expected total."
+              info="Total high-intensity decelerations (band 2-3, >2 m/s²) over the last 28 days vs the player's personal daily baseline. Catches the player who has been quietly stacking eccentric load. RED when the 28-day total is more than 1.5× their expected total — eccentric tissue load is accumulating faster than recovery (McBurnie 2022)."
             />
             <Detail
               title="Underload"
@@ -716,6 +717,7 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.underload.cumulative_7d_count.toFixed(0)} / ${s.underload.match_day_demand.toFixed(1)}`}
               caption={`7-day exposure / match-day demand · ${s.underload.match_days_observed} match days observed`}
               hint="Red if 7-day < 50% of match demand."
+              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand (higher injury risk in the next match, especially hamstring and ACL)."
             />
             <Detail
               title="Decel : Accel Coupling"
@@ -727,6 +729,7 @@ function PlayerRow({ row }: { row: Row }) {
                   : `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`
               }
               hint="Eccentric:concentric balance. Red if <0.7 or >2.0. ASP personal-z (Osgnach 2023) above 0 means more decel-skewed than the player's own normal pattern."
+              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — lacks braking control, hamstring risk) or >2.0 (one-sided, brake-heavy — chronic eccentric load). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
             />
             <Detail
               title="Decel : Sprint Coupling"
@@ -738,6 +741,7 @@ function PlayerRow({ row }: { row: Row }) {
                   : `Awaiting Catapult Vel B6+ Total # Efforts (Gen 2) field. Will populate after next sync.`
               }
               hint="McBurnie's primary risk metric. Red if <0.5 (sprinting without proper braking)."
+              info="McBurnie's primary risk metric. Ratio of decelerations to high-speed sprint efforts. A player who sprints without proportional braking volume is exposing knees, ankles and hamstrings to forces they're not conditioned for. RED if <0.5 — sprint exposure outpacing braking control. Yellow ≥0.5 but below the player's healthy range."
             />
             <Detail
               title="Exposure Concentration"
@@ -745,6 +749,7 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.concentration.peak_day_pct_of_28d.toFixed(1)}%`}
               caption={`Peak day's share of 28-day total · ${s.concentration.distinct_high_intensity_days} active days`}
               hint="Red if peak-day > 30% of monthly volume."
+              info="How much of the 28-day decel volume happened on the single peak day. Spread is good, concentration is risky. RED if more than 30% of monthly volume in one day — sudden spike rather than chronic accumulation, which is the classic injury-pattern signature. Look for this when the rest of the week was quiet."
             />
             {/* Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel count) */}
             {row.cutting && (
@@ -758,6 +763,7 @@ function PlayerRow({ row }: { row: Row }) {
                     : "7d / 28d total · awaiting baseline"
                 }
                 hint="Dos'Santos 2021. Proxy via IMA B3 decels. Red if z ≥ 1.5 vs personal 28d distribution. Sharp 70-90° cuts produce highest knee-joint load."
+                info="Sharp 70-90° change-of-direction cuts produce the highest knee-joint load and are the dominant non-contact ACL injury mechanism (Dos'Santos 2021). MicroPulse uses IMA Band 3 deceleration count as a proxy — high IMA decels at high intensity correlate with cutting volume. Personal-z compares the last 7 days against the player's own 28-day distribution. RED if z ≥ 1.5 — meaningfully above their normal cutting load."
               />
             )}
             {/* Osgnach 2023 — MPE Recovery Time (recovery lengthening = early fatigue) */}
@@ -776,6 +782,7 @@ function PlayerRow({ row }: { row: Row }) {
                     : "Awaiting baseline"
                 }
                 hint="Osgnach 2023. Inter-MPE recovery time lengthening (positive z) is sharper than HSR drop as a fatigue signal. Red if z ≥ 1.5."
+                info="Average recovery time between Metabolic Power Equivalent (MPE) high-intensity efforts. When this lengthens it means the player needs more rest between bursts — an early-fatigue signal that's sharper than the classic HSR drop because it shows up before raw running output declines (Osgnach 2023). RED if z ≥ 1.5 — recovery is meaningfully longer than the player's own 28-day baseline."
               />
             )}
           </div>
@@ -785,12 +792,16 @@ function PlayerRow({ row }: { row: Row }) {
   );
 }
 
-function Detail({ title, flag, big, caption, hint }: {
+function Detail({ title, flag, big, caption, hint, info }: {
   title: string;
   flag: Flag;
   big: string;
   caption: string;
   hint: string;
+  /** Optional longer explanation surfaced via a hoverable info icon next
+   *  to the title. Coaches without S&C background want to know WHY a
+   *  metric matters and WHAT the red threshold actually means. */
+  info?: string;
 }) {
   const dot = {
     red: "bg-red-500",
@@ -805,6 +816,26 @@ function Detail({ title, flag, big, caption, hint }: {
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
           {title}
         </span>
+        {info && (
+          // Hover OR focus to reveal — keyboard-accessible. The tooltip is
+          // anchored bottom-left of the icon so it doesn't get clipped by
+          // the card edge on the right side of the grid.
+          <span className="relative inline-flex group">
+            <button
+              type="button"
+              aria-label={`More info about ${title}`}
+              className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            >
+              i
+            </button>
+            <span
+              role="tooltip"
+              className="invisible group-hover:visible group-focus-within:visible absolute left-0 top-5 z-30 w-72 rounded-md border border-slate-200 bg-white p-3 text-[11px] leading-relaxed text-slate-700 shadow-lg"
+            >
+              {info}
+            </span>
+          </span>
+        )}
       </div>
       <div className="mt-1 text-xl font-bold text-slate-900">{big}</div>
       <div className="text-[11px] text-slate-600">{caption}</div>
