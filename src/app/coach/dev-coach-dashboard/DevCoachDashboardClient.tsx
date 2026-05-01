@@ -86,7 +86,7 @@ import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
-import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
+// VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
@@ -7037,11 +7037,10 @@ export default function CoachPage() {
             playerBaselines={playerBaselines}
             playerCounterfactuals={playerCounterfactualsMap}
           />
-          {/* Calibration widget — proves the system's verdicts are
-              actually predictive (last 30 days). Hidden when sample
-              size is too small (<30 scoreable verdicts) so we don't
-              show noisy percentages. */}
-          <VerdictAccuracyCard lang={lang} />
+          {/* Verdict-accuracy / calibration widget moved to the Reporting
+              Center — coaches doing their morning briefing don't want
+              system-health metrics in the way. See the System health
+              section at the bottom of /coach/reporting-center. */}
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">

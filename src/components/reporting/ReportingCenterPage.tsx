@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { downloadReportPdf } from "./ReportPdf";
 import type { PdfRenderModel } from "@/lib/micropulse/reporting";
+import { useLang } from "@/lib/lang";
+import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -95,6 +97,7 @@ function flagLabel(color: string | null): string {
 
 export default function ReportingCenterPage() {
   const supabase = useMemo(() => getSupabaseClient(), []);
+  const [lang] = useLang();
   const [tab, setTab] = useState<ReportTab>("daily");
   const [date, setDate] = useState(todayISO());
   const [weekStart, setWeekStart] = useState(mondayOf(todayISO()));
@@ -668,6 +671,18 @@ export default function ReportingCenterPage() {
       {tab === "weekly" && !loading && weeklyDays.length === 0 && !error && (
         <div className="py-12 text-center text-sm text-zinc-500">Engin gögn fyrir valda viku.</div>
       )}
+
+      {/* System health — calibration widget moved here from the Today
+          briefing where it was confusing coaches. Lives at the bottom
+          of Reporting Center as a "how is the prediction layer doing"
+          metric for coaches who want transparency. Hidden when sample
+          size is too small (<30 scoreable verdicts). */}
+      <div className="pt-4 border-t border-zinc-200">
+        <h2 className="text-sm font-semibold text-zinc-700 mb-3">
+          {lang === "EN" ? "System health" : "Heilbrigði kerfis"}
+        </h2>
+        <VerdictAccuracyCard lang={lang === "EN" ? "EN" : "IS"} />
+      </div>
     </div>
   );
 }
