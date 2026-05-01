@@ -53,6 +53,7 @@ const communicationLinks: SidebarLink[] = [
 // inside the dashboard via ?tab=… deep links; the existing tab bar still
 // works for anyone who finds it from there.
 const monitoringLinks: SidebarLink[] = [
+  { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
   { href: "/coach/quadrant",           label: { EN: "Quadrant view (Gabbett)",          IS: "Quadrant view (Gabbett)" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load (höll-mode)",          IS: "Indoor Load (höll-mode)" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence (McBurnie)",    IS: "Decel Intelligence (McBurnie)" } },
