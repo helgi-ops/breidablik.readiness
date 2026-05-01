@@ -25,6 +25,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 type Bi = { EN: string; IS: string };
@@ -134,16 +135,16 @@ function Section({
         type="button"
         onClick={toggle}
         aria-expanded={effectiveOpen}
-        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
       >
         <span>{label}</span>
         <svg
-          width="10"
-          height="10"
+          width="12"
+          height="12"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="3"
+          strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
           className={`transition-transform ${effectiveOpen ? "rotate-180" : ""}`}
@@ -184,6 +185,8 @@ export function CoachSidebar({
   notesCount,
   pendingCount,
   currentTab,
+  currentTeamId,
+  onSwitchTeam,
   onNavigate,
 }: {
   isAdmin: boolean;
@@ -193,6 +196,13 @@ export function CoachSidebar({
    *  useSearchParams) because the parent shell already reads it via a
    *  Suspense-safe window.location helper. */
   currentTab: string | null;
+  /** The coach's currently active team_id (from profiles). Passed through
+   *  to the TeamSwitcher so coaches with multiple teams can swap from the
+   *  sidebar without leaving their current page. */
+  currentTeamId: string | null;
+  /** Invoked when the coach picks a different team from the switcher. The
+   *  shell handles persistence (writes profiles.team_id) and reload. */
+  onSwitchTeam: (team: CoachTeam) => void;
   /** Invoked when any link inside the sidebar is clicked. The mobile drawer
    *  uses this to close itself; desktop passes a no-op. */
   onNavigate?: () => void;
@@ -206,6 +216,12 @@ export function CoachSidebar({
 
   return (
     <div className="flex h-full flex-col">
+      {/* Team switcher — renders nothing when the coach only has one team,
+          so single-team clubs don't see a redundant chip. */}
+      <div className="px-3 pt-3">
+        <TeamSwitcher currentTeamId={currentTeamId} onSwitch={onSwitchTeam} />
+      </div>
+
       {/* Top-priority links — Dashboard / Players / Week setup with badge counts. */}
       <nav className="flex flex-col gap-0.5 px-3 pt-4">
         <Link
@@ -302,7 +318,7 @@ export function CoachSidebar({
           />
         )}
         <div className="mt-4">
-          <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="mb-1 px-3 py-1.5 text-sm font-semibold text-slate-500">
             TV
           </div>
           <a
