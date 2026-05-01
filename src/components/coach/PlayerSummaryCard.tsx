@@ -50,6 +50,7 @@ export function PlayerSummaryCard({
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [regenerating, setRegenerating] = React.useState(false);
+  const [eliteRequired, setEliteRequired] = React.useState(false);
 
   const coachVerdictKey = coachVerdict ? JSON.stringify(coachVerdict) : "";
 
@@ -78,6 +79,11 @@ export function PlayerSummaryCard({
             : undefined,
         },
       );
+      if (res.status === 402) {
+        // ELITE tier required — surface upgrade prompt instead of error.
+        setEliteRequired(true);
+        return;
+      }
       const json = (await res.json()) as SummaryResponse;
       if (!res.ok) {
         setError(json.error ?? `HTTP ${res.status}`);
@@ -96,6 +102,28 @@ export function PlayerSummaryCard({
   React.useEffect(() => {
     void fetchSummary(false);
   }, [fetchSummary]);
+
+  // ELITE-required state — show upgrade prompt instead of summary.
+  if (eliteRequired) {
+    return (
+      <div className={`rounded-lg border border-amber-200 bg-amber-50 p-3 ${className}`}>
+        <div className="flex items-start gap-2">
+          <span className="text-base">🔒</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+              AI Summary — ELITE feature
+            </div>
+            <p className="mt-1 text-sm text-amber-900">
+              AI-generated player summaries are part of the ELITE tier.
+              <a href="/pricing" className="ml-1 font-semibold underline hover:text-amber-700">
+                See plans
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Silent failure — if generation fails (e.g. missing API key, no data),
   // hide the card rather than show a broken state.

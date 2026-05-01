@@ -21,6 +21,7 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getQuestion, type QuestionDataKey } from "@/lib/coach-qa/questions";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL      = "claude-haiku-4-5-20251001";
@@ -557,6 +558,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!question) return NextResponse.json({ error: `Unknown question_id: ${questionId}` }, { status: 400 });
 
   const supabase = getSupabase();
+
+  // ELITE-tier gate. AI Q&A is a premium feature.
+  const isElite = await isEliteTeam(supabase, auth.teamId);
+  if (!isElite) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
 
   // Verify player ownership
   const { data: playerCheck } = await supabase

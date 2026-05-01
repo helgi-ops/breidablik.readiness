@@ -20,6 +20,7 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 const ANTHROPIC_API_URL  = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
@@ -535,6 +536,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const windowDays = (Number(req.nextUrl.searchParams.get("window") ?? "7") === 14 ? 14 : 7) as 7 | 14;
   const supabase   = getSupabase();
 
+  // ELITE-tier gate. AI features cost real money per call and are the
+  // ELITE-tier differentiator vs PRO. Non-ELITE teams get 402 Payment
+  // Required so the UI card can render an upgrade prompt rather than the
+  // generated text.
+  const isElite = await isEliteTeam(supabase, auth.teamId);
+  if (!isElite) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
+
   // Verify player belongs to coach's team
   const { data: playerCheck } = await supabase
     .from("players")
@@ -583,6 +593,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const windowDays = (Number(body.window ?? 7) === 14 ? 14 : 7) as 7 | 14;
   const coachVerdict = body.coach_verdict ?? null;
   const supabase   = getSupabase();
+
+  // ELITE-tier gate (same as GET).
+  const isElite = await isEliteTeam(supabase, auth.teamId);
+  if (!isElite) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
 
   const { data: playerCheck } = await supabase
     .from("players")

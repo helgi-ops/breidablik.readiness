@@ -40,6 +40,7 @@ export function PlayerAskCard({
   const [answer, setAnswer] = React.useState<AnswerResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [eliteRequired, setEliteRequired] = React.useState(false);
 
   async function handleAsk(questionId: string) {
     if (!questionId) return;
@@ -58,6 +59,7 @@ export function PlayerAskCard({
         },
         body: JSON.stringify({ question_id: questionId }),
       });
+      if (res.status === 402) { setEliteRequired(true); return; }
       const json = (await res.json()) as AnswerResponse;
       if (!res.ok) { setError(json.error ?? `HTTP ${res.status}`); return; }
       setAnswer(json);
@@ -81,6 +83,28 @@ export function PlayerAskCard({
   }
 
   const selectedQ = COACH_QUESTIONS.find((q) => q.id === selectedId);
+
+  // ELITE-required state — show upgrade prompt instead of dropdown.
+  if (eliteRequired) {
+    return (
+      <div className={`rounded-lg border border-amber-200 bg-amber-50 p-3 ${className}`}>
+        <div className="flex items-start gap-2">
+          <span className="text-base">🔒</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+              Ask the system — ELITE feature
+            </div>
+            <p className="mt-1 text-sm text-amber-900">
+              AI Q&amp;A is part of the ELITE tier.
+              <a href="/pricing" className="ml-1 font-semibold underline hover:text-amber-700">
+                See plans
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-lg border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3 ${className}`}>

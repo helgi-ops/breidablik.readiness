@@ -25,6 +25,7 @@ import {
   validateDecelNarrative,
   type RawDecelInputs,
 } from "@/lib/micropulse/decelNarrative";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -351,6 +352,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const supabase = getSupabase();
 
+  // ELITE-tier gate.
+  const isElite = await isEliteTeam(supabase, auth.teamId);
+  if (!isElite) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
+
   // Verify player belongs to team
   const { data: playerCheck } = await supabase
     .from("players").select("id, team_id").eq("id", playerId).maybeSingle();
@@ -381,6 +388,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const supabase = getSupabase();
+
+  // ELITE-tier gate (same as GET).
+  const isElite = await isEliteTeam(supabase, auth.teamId);
+  if (!isElite) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
 
   const { data: playerCheck } = await supabase
     .from("players").select("id, team_id").eq("id", playerId).maybeSingle();

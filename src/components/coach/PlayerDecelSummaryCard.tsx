@@ -30,6 +30,7 @@ export function PlayerDecelSummaryCard({
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [regenerating, setRegenerating] = React.useState(false);
+  const [eliteRequired, setEliteRequired] = React.useState(false);
 
   const fetchNarrative = React.useCallback(async (force: boolean = false) => {
     setError(null);
@@ -47,6 +48,7 @@ export function PlayerDecelSummaryCard({
           headers: { Authorization: `Bearer ${token}` },
         },
       );
+      if (res.status === 402) { setEliteRequired(true); return; }
       const json = (await res.json()) as DecelSummaryResponse;
       if (!res.ok) {
         setError(json.error ?? `HTTP ${res.status}`);
@@ -62,6 +64,29 @@ export function PlayerDecelSummaryCard({
   }, [playerId]);
 
   React.useEffect(() => { void fetchNarrative(false); }, [fetchNarrative]);
+
+  // ELITE-required state — show upgrade prompt instead of narrative.
+  if (eliteRequired) {
+    return (
+      <div className={`rounded-lg border border-amber-200 bg-amber-50 p-3 ${className}`}>
+        <div className="flex items-start gap-2">
+          <span className="text-base">🔒</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+              Plain-language decel read — ELITE feature
+            </div>
+            <p className="mt-1 text-sm text-amber-900">
+              AI explanations of decel intelligence numbers are part of the ELITE tier. The chips
+              and metrics below remain visible.
+              <a href="/pricing" className="ml-1 font-semibold underline hover:text-amber-700">
+                See plans
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Silent failure — hide the card when generation fails (missing API key,
   // no decel data, etc.) rather than showing a broken state.
