@@ -11,7 +11,6 @@ import InstallPwaButton from "@/components/pwa/InstallPwaButton";
 import CoachPwaBottomNav from "@/components/pwa/CoachPwaBottomNav";
 import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotificationPrompt";
 import { useLang } from "@/lib/lang";
-import type { CoachTeam } from "@/components/coach/TeamSwitcher";
 import { CoachSidebar } from "./CoachSidebar";
 
 
@@ -49,62 +48,6 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
-
-  // Team brand for the sidebar header (logo + short name).
-  const [teamBrand, setTeamBrand] = useState<{ name: string; logoUrl: string }>({
-    name: "",
-    logoUrl: "",
-  });
-
-  // Coach's currently active team_id — read from profiles, passed to the
-  // sidebar's TeamSwitcher so coaches with multiple teams can swap clubs.
-  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
-
-  // Fetch team_id + branding once per session.
-  useEffect(() => {
-    let alive = true;
-    async function fetchBrand() {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return;
-      const { data: prof } = await supabase
-        .from("profiles").select("team_id").eq("id", userId).maybeSingle();
-      const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-      if (alive) setCurrentTeamId(teamId);
-      if (!teamId) return;
-      const { data: team } = await supabase
-        .from("teams")
-        .select("name, club_short_name, club_logo_url")
-        .eq("id", teamId)
-        .maybeSingle();
-      if (!alive || !team) return;
-      const t = team as { name?: string; club_short_name?: string; club_logo_url?: string };
-      setTeamBrand({
-        name: (t.club_short_name?.trim() || t.name?.trim() || "MicroPulse"),
-        logoUrl: (t.club_logo_url?.trim() || ""),
-      });
-    }
-    void fetchBrand();
-    return () => { alive = false; };
-  }, []);
-
-  // Switch the coach's active team. Persists to profiles.team_id (every
-  // coach surface reads its team scope from there) then hard-reloads so all
-  // pages re-fetch with the new team. Hard reload is intentional — there
-  // are dozens of components with their own Supabase queries scoped by
-  // team_id, plumbing a context through all of them would be a weeks-long
-  // refactor for a once-per-session action.
-  async function handleSwitchTeam(team: CoachTeam) {
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return;
-      await supabase.from("profiles").update({ team_id: team.id }).eq("id", userId);
-      window.location.reload();
-    } catch (err) {
-      console.error("[CoachShell] team switch failed", err);
-    }
-  }
 
   // ── Mobile nav drawer state ───────────────────────────────────────────
   // Below the md (768px) breakpoint the horizontal desktop nav is hidden
@@ -237,29 +180,15 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <div className="flex items-center gap-2 min-w-0">
-            {teamBrand.logoUrl ? (
-              <img
-                src={teamBrand.logoUrl}
-                alt={teamBrand.name}
-                className="h-8 w-8 rounded-md object-contain bg-white border border-slate-200 shrink-0"
-              />
-            ) : null}
-            <div className="text-sm font-semibold tracking-tight truncate">
-              {teamBrand.name || "MicroPulse"}
-            </div>
-          </div>
+          <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
         </div>
         <InstallPwaButton role="coach" variant="compact" />
       </header>
 
       {/* ── Desktop persistent sidebar ─────────────────────────────────── */}
-      {/* Brand bar removed: the team-switcher dropdown at the top of the
-          CoachSidebar already shows the team identity, so the separate
-          logo+name row was redundant. Install PWA button stays in the
-          top-right slot — small footprint, only visible when installable. */}
       <aside className="hidden md:flex md:flex-col md:border-r md:border-slate-200 md:bg-white md:sticky md:top-0 md:h-screen">
-        <div className="flex items-center justify-end px-4 py-2">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
           <InstallPwaButton role="coach" variant="compact" />
         </div>
         <CoachSidebar
@@ -267,8 +196,6 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           notesCount={notesCount}
           pendingCount={pendingCount}
           currentTab={currentTab}
-          currentTeamId={currentTeamId}
-          onSwitchTeam={handleSwitchTeam}
         />
       </aside>
 
@@ -287,10 +214,8 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             aria-modal="true"
             aria-label={lang === "IS" ? "Aðalvalmynd" : "Main menu"}
           >
-            {/* Drawer header — close button only. Brand removed because the
-                team-switcher dropdown immediately below already shows the
-                team identity. */}
-            <div className="flex items-center justify-end px-4 py-2">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
               <button
                 type="button"
                 onClick={() => setMobileDrawerOpen(false)}
@@ -308,8 +233,6 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               notesCount={notesCount}
               pendingCount={pendingCount}
               currentTab={currentTab}
-              currentTeamId={currentTeamId}
-              onSwitchTeam={handleSwitchTeam}
               onNavigate={() => setMobileDrawerOpen(false)}
             />
           </aside>
