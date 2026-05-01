@@ -31,6 +31,9 @@ type NotificationRow = {
   /** Set when the coach has already sent an AI recovery message for this
    *  notification (see PlayerRecoveryMessageModal). Null until then. */
   player_message_sent_at: string | null;
+  /** TRUE when Stig 2 auto-send orchestrator delivered the AI message
+   *  (no coach review). Drives the "🤖 Auto-sent" pill on the row. */
+  auto_sent: boolean;
   player_id: string;
   players: { full_name: string | null } | null;
 };
@@ -236,15 +239,21 @@ export default function CoachNotificationsPage() {
                     disabled={!n.players?.full_name}
                     className={`rounded-md border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
                       n.player_message_sent_at
-                        ? "border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        ? n.auto_sent
+                          ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                          : "border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
                         : "border-current/30 bg-white/80 text-current hover:bg-white"
                     }`}
                     title={n.player_message_sent_at
-                      ? (en ? "AI message already sent — click to view" : "AI skilaboð þegar send — smelltu til að skoða")
+                      ? n.auto_sent
+                        ? (en ? "AI auto-sent — click to view what was delivered" : "AI sendi sjálfvirkt — smelltu til að skoða hvað var sent")
+                        : (en ? "AI message already sent — click to view" : "AI skilaboð þegar send — smelltu til að skoða")
                       : (en ? "Draft an AI recovery message to send to the player" : "Búa til AI recovery skilaboð til leikmanns")}
                   >
                     {n.player_message_sent_at
-                      ? (en ? "✓ AI msg sent" : "✓ AI sent")
+                      ? n.auto_sent
+                        ? (en ? "🤖 Auto-sent" : "🤖 Sjálfvirkt")
+                        : (en ? "✓ AI msg sent" : "✓ AI sent")
                       : (en ? "🤖 Draft AI msg" : "🤖 Draga upp AI skilaboð")}
                   </button>
                   <button

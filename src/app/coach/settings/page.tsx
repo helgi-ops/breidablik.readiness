@@ -13,6 +13,7 @@ import {
   type RecommendationAuditView,
 } from "@/lib/micropulse/adminConfig";
 import ClubBrandingSettings from "@/components/settings/ClubBrandingSettings";
+import AutoSendRecoveryMessageSettings from "@/components/settings/AutoSendRecoveryMessageSettings";
 import GpsProviderSettings from "@/components/settings/GpsProviderSettings";
 import RulesManager from "@/components/admin/RulesManager";
 import ProtectedPlayersManager from "@/components/admin/ProtectedPlayersManager";
@@ -495,6 +496,11 @@ export default function CoachSettingsPage() {
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {effectivePlan === "ELITE" && (
         <ClubBrandingSettings />
+      )}
+
+      {/* ── Elite: Auto-send AI recovery messages (Stig 2) ─────────────── */}
+      {effectivePlan === "ELITE" && teamId && (
+        <AutoSendRecoveryMessageSettings teamId={teamId} />
       )}
 
       <section className="rounded-2xl border bg-gradient-to-b from-white to-zinc-50 p-5 shadow-sm">

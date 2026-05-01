@@ -111,10 +111,11 @@ async function runSync(request: Request, explicitDate?: string | null) {
     // Run threshold-crossing detection per team after sync so coaches see
     // brand-new alerts within minutes of the data arriving, then push the
     // newly-fired ones to subscribed coaches via PWA push.
-    const notifResults: Array<{ teamId: string; new_count: number; pushed: number; error?: string }> = [];
+    const notifResults: Array<{ teamId: string; new_count: number; pushed: number; auto_sent?: number; error?: string }> = [];
     if (syncedTeamIds.size > 0 && targetDate === new Date().toISOString().slice(0, 10)) {
       const sbAdmin = getAdminClient();
       const { pushNewCoachNotifications } = await import("@/lib/notifications/push");
+      const { autoSendPendingForTeam } = await import("@/lib/notifications/autoSendRecoveryMessages");
       for (const teamId of syncedTeamIds) {
         try {
           const { data: newCount, error: detectErr } = await sbAdmin.rpc(
@@ -126,7 +127,17 @@ async function runSync(request: Request, explicitDate?: string | null) {
           if (Number(newCount ?? 0) > 0 && !skipPush) {
             pushed = await pushNewCoachNotifications(sbAdmin, teamId);
           }
-          notifResults.push({ teamId, new_count: Number(newCount ?? 0), pushed });
+          // Stig 2 — auto-send AI recovery messages for opted-in ELITE
+          // teams. Best-effort: errors per notification are absorbed by
+          // the orchestrator; we only log a top-level failure here.
+          let autoSent = 0;
+          try {
+            const r = await autoSendPendingForTeam(sbAdmin, teamId);
+            autoSent = r.sent;
+          } catch (err) {
+            console.error("[catapult daily-sync] auto-send failed", teamId, err);
+          }
+          notifResults.push({ teamId, new_count: Number(newCount ?? 0), pushed, auto_sent: autoSent });
         } catch (err) {
           notifResults.push({
             teamId,

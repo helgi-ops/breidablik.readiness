@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { pushNewCoachNotifications } from "@/lib/notifications/push";
+import { autoSendPendingForTeam } from "@/lib/notifications/autoSendRecoveryMessages";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, parameter, direction, severity, threshold, value_now, value_prev,
       summary, summary_is, is_post_match, fired_at, acknowledged_at,
-      player_message_sent_at,
+      player_message_sent_at, auto_sent,
       player_id, players(full_name)
     `)
     .eq("team_id", auth.teamId)
@@ -92,9 +93,22 @@ export async function POST(req: NextRequest) {
     pushedCount = await pushNewCoachNotifications(supabase, auth.teamId);
   }
 
+  // Stig 2 — if the team has opted in to auto-send, deliver AI recovery
+  // messages immediately (no coach review). Best-effort: never blocks the
+  // response if generation/insert fails for individual rows.
+  let autoSendResult = { sent: 0, skipped: 0, errors: 0 };
+  try {
+    autoSendResult = await autoSendPendingForTeam(supabase, auth.teamId);
+  } catch (err) {
+    console.error("[notifications POST] auto-send failed", err);
+  }
+
   return NextResponse.json({
     ok: true,
     new_notifications: newCount ?? 0,
     push_sent: pushedCount,
+    auto_sent: autoSendResult.sent,
+    auto_send_skipped: autoSendResult.skipped,
+    auto_send_errors: autoSendResult.errors,
   });
 }

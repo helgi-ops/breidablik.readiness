@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { generatePlayerMessage, type NotificationInput } from "@/lib/micropulse/playerRecoveryMessage";
+import { pushCoachMessageToPlayer } from "@/lib/notifications/playerPush";
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
@@ -204,14 +205,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // Link back so coach UI can show the confirmed state.
+  // Link back so coach UI can show the confirmed state. auto_sent stays
+  // false because this is the coach-review path.
   await a.supabase
     .from("coach_notifications")
     .update({
       player_message_sent_at: new Date().toISOString(),
       player_message_id: (insertedMsg as { id: string }).id,
+      auto_sent: false,
     })
     .eq("id", notificationId);
+
+  // Push to the player's PWA so they get a phone notification — same
+  // delivery path as a regular chat message. Best-effort; we don't roll
+  // back the insert if push fails.
+  try {
+    await pushCoachMessageToPlayer(a.supabase, notification.player_id, messageBody);
+  } catch (err) {
+    console.error("[player-message POST] push failed", err);
+  }
 
   return NextResponse.json({ ok: true, message_id: (insertedMsg as { id: string }).id });
 }
