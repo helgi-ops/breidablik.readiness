@@ -179,6 +179,31 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const [notesCount, setNotesCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ── Mobile nav drawer state ───────────────────────────────────────────
+  // Below the md (768px) breakpoint the horizontal desktop nav is hidden
+  // (it overflows badly with 7 top-level links + 4 dropdowns) and replaced
+  // with a hamburger button that opens this slide-out drawer.
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Close drawer whenever the route changes (so tapping a link inside the
+  // drawer feels like normal navigation — no manual close needed).
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [pathname]);
+
+  // Close on Escape + lock body scroll while the drawer is open.
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileDrawerOpen(false); };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileDrawerOpen]);
+
   // ── Onboarding guard ──
   // If a COACH lands on /coach/** without a team_id on their profile, redirect
   // them to the self-serve club-creation wizard so they can finish setup.
@@ -273,7 +298,23 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             <InstallPwaButton role="coach" variant="compact" />
           </div>
 
-          <nav className="flex items-center gap-1">
+          {/* Mobile hamburger — opens slide-out drawer below md breakpoint.
+              Desktop nav is hidden under md and shown from md+. */}
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(true)}
+            className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-muted"
+            aria-label={lang === "IS" ? "Opna valmynd" : "Open menu"}
+            aria-expanded={mobileDrawerOpen}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
+          <nav className="hidden md:flex items-center gap-1">
             <Link
               href="/coach"
               className={`relative rounded-md px-3 py-2 text-sm hover:bg-muted ${pathname === "/coach" ? "font-medium text-foreground" : "text-muted-foreground"}`}
@@ -381,6 +422,138 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           </nav>
         </div>
       </header>
+
+      {/* ── Mobile slide-out drawer ───────────────────────────────────────
+          Opens from the hamburger button below md (768px). Renders ALL
+          nav items the desktop header has, grouped into sections so the
+          coach can scan instead of scrolling a flat list of 18 routes.
+          Auto-closes on route change (see useEffect above), Escape, and
+          backdrop tap.
+      */}
+      {mobileDrawerOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          {/* Backdrop */}
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(false)}
+            className="absolute inset-0 bg-black/40"
+            aria-label={lang === "IS" ? "Loka valmynd" : "Close menu"}
+          />
+          {/* Drawer panel */}
+          <aside
+            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-xl overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "IS" ? "Aðalvalmynd" : "Main menu"}
+          >
+            <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+              <div className="text-sm font-semibold tracking-tight">Coach · Readiness</div>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
+                aria-label={lang === "IS" ? "Loka" : "Close"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <nav className="flex flex-col gap-0.5 p-3">
+              {/* Top-level frequent routes */}
+              <Link href="/coach" className="rounded-md px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-100 flex items-center justify-between">
+                <span>Dashboard</span>
+                {notesCount > 0 && (
+                  <span className="rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{notesCount}</span>
+                )}
+              </Link>
+              <Link href="/coach/players" className="rounded-md px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-100 flex items-center justify-between">
+                <span>{lang === "IS" ? "Leikmenn" : "Players"}</span>
+                {pendingCount > 0 && (
+                  <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{pendingCount}</span>
+                )}
+              </Link>
+              <Link href="/coach/week-setup" className="rounded-md px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-100">
+                {lang === "IS" ? "Vikuskipulag" : "Week setup"}
+              </Link>
+
+              {/* Communication */}
+              <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {lang === "IS" ? "Samskipti" : "Communication"}
+              </div>
+              <Link href="/coach/conversations" className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">Conversations</Link>
+              <Link href="/coach/messages" className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">Messages</Link>
+              <Link href="/team" className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">Team Page</Link>
+
+              {/* Monitoring */}
+              <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {lang === "IS" ? "Eftirlit" : "Monitoring"}
+              </div>
+              {monitoringLinks.map((l) => (
+                <Link key={l.href} href={l.href} className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
+                  {tt(l.label, lang)}
+                </Link>
+              ))}
+
+              {/* Planning */}
+              <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {lang === "IS" ? "Skipulag" : "Planning"}
+              </div>
+              {planningLinks.map((l) => (
+                <Link key={l.href} href={l.href} className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
+                  {tt(l.label, lang)}
+                </Link>
+              ))}
+
+              {/* Admin */}
+              <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Admin</div>
+              {adminLinks.map((l) => (
+                <Link key={l.href} href={l.href} className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
+                  {tt(l.label, lang)}
+                </Link>
+              ))}
+
+              {/* Super-admin only */}
+              {isAdmin && (
+                <>
+                  <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">MicroPulse</div>
+                  {superAdminLinks.map((l) => (
+                    <Link key={l.href} href={l.href} className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100">
+                      {tt(l.label, lang)}
+                    </Link>
+                  ))}
+                </>
+              )}
+
+              {/* TV */}
+              <div className="mt-4 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">TV</div>
+              <a
+                href="/coach/display?refresh=15"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                {lang === "IS" ? "Skjár ↗" : "TV view ↗"}
+              </a>
+            </nav>
+
+            {/* Footer with sign-out */}
+            <div className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3">
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+              >
+                {lang === "IS" ? "Útskrá" : "Sign out"}
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <main className={isDisplayRoute ? "w-full px-4 py-6" : "mx-auto max-w-6xl px-4 py-6"}>
         {/* One-time push-notification opt-in. Self-suppresses after dismissal
