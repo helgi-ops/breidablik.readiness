@@ -155,7 +155,7 @@ function Section({
         type="button"
         onClick={toggle}
         aria-expanded={effectiveOpen}
-        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm font-bold text-slate-800 hover:bg-slate-100"
       >
         <span>{label}</span>
         <svg
@@ -317,7 +317,7 @@ export function CoachSidebar({
           />
         )}
         <div className="mt-4">
-          <div className="mb-1 px-3 py-1.5 text-sm font-semibold text-slate-500">
+          <div className="mb-1 px-3 py-1.5 text-sm font-bold text-slate-800">
             TV
           </div>
           <a
