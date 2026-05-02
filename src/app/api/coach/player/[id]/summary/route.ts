@@ -138,13 +138,22 @@ async function buildSummaryInput(
       .lte("day_date", todayIso)
       .order("day_date", { ascending: false }),
     // ── Daily wellness series (6-step columns; 1 = bad, 5 = great) ──
-    // Adds visibility into per-day sleep / soreness / energy / readiness so
-    // AI can describe the SHAPE of the week ("dipped Thu-Fri then bounced
-    // back") instead of just counts ("poor sleep on 2 of 7 days"). Fetches
-    // the same window the rest of the prompt uses.
+    // Adds visibility into per-day sleep / soreness / energy so AI can
+    // describe the SHAPE of the week ("dipped Thu-Fri then bounced back")
+    // instead of just counts ("poor sleep on 2 of 7 days").
+    //
+    // CRITICAL — column choice: read the NEW 6-step columns the player
+    // actually fills in (sleep_quality / sleep_duration / muscle_soreness
+    // / fatigue_energy), NOT the legacy `sleep` / `soreness` / `readiness`
+    // columns. The legacy ones are derived/scaled differently (e.g. legacy
+    // `sleep` is binary-ish — Aron Bjarnason 2026-05-02 reported 1
+    // every day while sleep_quality ranged 3-4 — and `readiness` is on a
+    // 1-10 scale not 1-5). Reading the legacy columns produced the
+    // "Sleep has been consistently poor (1-2 out of 5)" hallucination
+    // across the whole squad. Same fix as task #174 — easy to regress.
     supabase
       .from("readiness_entries")
-      .select("entry_date, sleep, muscle_soreness, fatigue_energy, readiness")
+      .select("entry_date, sleep_quality, sleep_duration, muscle_soreness, fatigue_energy")
       .eq("player_id", playerId)
       .gte("entry_date", windowStart)
       .order("entry_date", { ascending: false }),
@@ -208,29 +217,29 @@ async function buildSummaryInput(
 
   // ── Wellness daily series (last 7d) ──
   // Pre-shape so AI sees a tidy ordered list, not raw rows. Each entry
-  // is { d: "Apr 30", sleep: 4, soreness: 3, energy: 4, readiness: 4 }.
-  // 6-step scale: 1=very poor … 5=very good (post-2026-04-29 fix).
-  // Trends are computed here, not by the model — model only narrates.
+  // is { d: "Apr 30", sleep_quality: 4, sleep_duration: 3, soreness: 3, energy: 4 }.
+  // 6-step scale: 1=very poor … 5=very good. Reads the NEW columns the
+  // player actually fills in — see fetch above for why this matters.
   type WellnessDay = {
     d: string;
-    sleep: number | null;
-    soreness: number | null;
-    energy: number | null;
-    readiness: number | null;
+    sleep_quality:  number | null;
+    sleep_duration: number | null;
+    soreness:       number | null;
+    energy:         number | null;
   };
   const wellRows = (wellnessSeries.data ?? []) as Array<{
     entry_date: string;
-    sleep: number | null;
+    sleep_quality:  number | null;
+    sleep_duration: number | null;
     muscle_soreness: number | null;
-    fatigue_energy: number | null;
-    readiness: number | null;
+    fatigue_energy:  number | null;
   }>;
   const wellnessDaily: WellnessDay[] = wellRows.slice(0, 7).map((r) => ({
     d: r.entry_date,
-    sleep:     r.sleep ?? null,
-    soreness:  r.muscle_soreness ?? null,
-    energy:    r.fatigue_energy ?? null,
-    readiness: r.readiness ?? null,
+    sleep_quality:  r.sleep_quality  ?? null,
+    sleep_duration: r.sleep_duration ?? null,
+    soreness:       r.muscle_soreness ?? null,
+    energy:         r.fatigue_energy ?? null,
   }));
   // Trend = last 3 vs prior 4 days, per metric. Reports direction only,
   // never magnitude (avoids made-up percentages).
@@ -245,10 +254,10 @@ async function buildSummaryInput(
     return "flat";
   }
   const wellnessTrends = {
-    sleep:     trendOf(wellnessDaily.map((d) => d.sleep)),
-    soreness:  trendOf(wellnessDaily.map((d) => d.soreness)),
-    energy:    trendOf(wellnessDaily.map((d) => d.energy)),
-    readiness: trendOf(wellnessDaily.map((d) => d.readiness)),
+    sleep_quality:  trendOf(wellnessDaily.map((d) => d.sleep_quality)),
+    sleep_duration: trendOf(wellnessDaily.map((d) => d.sleep_duration)),
+    soreness:       trendOf(wellnessDaily.map((d) => d.soreness)),
+    energy:         trendOf(wellnessDaily.map((d) => d.energy)),
   };
 
   // ── Verdict streak from athlete_decision_history ──
@@ -575,17 +584,27 @@ EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdic
 - pattern.persistent_self_reports.sore_days >= 4 → "sore most of the week"
 
 ═══════ WELLNESS SHAPE (NEW — prefer over counts) ═══════
-- wellness_daily is the per-day 1-5 score for sleep / soreness / energy /
-  readiness over the last 7 days (newest first). 1 = very poor, 5 = very good.
-- wellness_trends.{sleep,soreness,energy,readiness} = "improving" |
-  "worsening" | "flat" | null. Tells you the SHAPE of the week, not just
-  totals. Prefer trend language over count language when both apply.
+- wellness_daily is the per-day 1-5 score for FOUR metrics over the last
+  7 days (newest first): sleep_quality, sleep_duration, soreness, energy.
+  Scale: 1 = very poor, 5 = very good. ALL FOUR are 1-5 — there is no
+  separate "readiness" or "sleep" score in this block.
+- wellness_trends.{sleep_quality, sleep_duration, soreness, energy} =
+  "improving" | "worsening" | "flat" | null. Tells you the SHAPE of the
+  week, not just totals. Prefer trend language over count language.
+- Treat sleep_quality and sleep_duration as TWO different things —
+  "slept badly" vs "didn't sleep enough" are not the same:
+    sleep_quality low / sleep_duration ok → "slept poorly even though hours were ok"
+    sleep_duration low / sleep_quality ok → "short on sleep this week"
+    both low                              → "sleep has been a problem"
+    both ok / improving                   → don't mention sleep
 - Examples (use coach speak, never echo numeric scores):
-    sleep trend "worsening" → "sleep has been slipping the last few days"
+    sleep_quality trend "worsening" → "sleep quality has been slipping"
     soreness trend "improving" → "soreness has been easing"
     soreness all 4-5 with flat trend → "feeling fresh all week"
-    sleep flat at 2-3 → "sleep has been mediocre most of the week"
+    energy flat at 2-3 → "energy has been mediocre most of the week"
 - Never invent specific scores. Never say "his sleep was 2/5 yesterday".
+- The wellness_daily block does NOT contain a "sleep" or "readiness"
+  field — if you write "sleep was 1/5" you've hallucinated the field.
 
 ═══════ VERDICT STREAK (NEW — context coaches care about) ═══════
 - verdict_streak.{state, days_in_state, previous_state, coach_overrides_in_window}
