@@ -1840,6 +1840,11 @@ export default function CoachPage() {
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
+  // Catapult data tier — drives Lite-Mode top-tab gating (mirrors the
+  // sidebar filter in CoachShell/CoachSidebar). 'lite' hides Quadrant /
+  // Indoor Load / Decel Intel from the EXTERNAL_TABS row. Defaults to
+  // 'lite' (conservative — show fewer tabs while detecting).
+  const [catapultDataTier, setCatapultDataTier] = useState<"full" | "lite">("lite");
   // Manual override of the indoor-vs-outdoor verdict pipeline. 'auto' lets
   // the per-player heuristic decide; 'indoor' forces the FMP pipeline (höll
   // mode); 'outdoor' forces the GPS pipeline. See teams.training_mode_default
@@ -2773,6 +2778,15 @@ export default function CoachPage() {
         const tm = String((teamData as any)?.training_mode_default ?? "auto").toLowerCase();
         if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
       }
+
+      // Catapult data tier — same RPC the sidebar uses. Drives Lite-Mode
+      // top-tab gating (hides Quadrant / Indoor / Decel Intel from the
+      // EXTERNAL_TABS strip). See migration 20260502170000.
+      try {
+        const { data: tierData } = await supabase.rpc("get_catapult_data_tier", { p_team_id: resolvedTeamId });
+        const tierStr = String(tierData ?? "").toLowerCase();
+        setCatapultDataTier(tierStr === "full" ? "full" : "lite");
+      } catch { /* keep default 'lite' on error — conservative */ }
     }
 
     const r = String(role ?? "").toLowerCase();
@@ -6930,13 +6944,23 @@ export default function CoachPage() {
 
         // Primary in-app tabs — daily monitoring workflow
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
-        // Standalone routes for deeper monitoring analytics — render as Links
-        const EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
+        // Standalone routes for deeper monitoring analytics — render as Links.
+        // Quadrant / Indoor / Decel Intel are LITE-gated: they need B2-3
+        // efforts data the lower-tier Catapult plans don't expose. Same
+        // hidden-set as CoachSidebar's LITE_HIDDEN_HREFS so both nav
+        // surfaces stay in sync.
+        const LITE_HIDDEN_HREFS = new Set<string>([
+          "/coach/quadrant", "/coach/indoor-load", "/coach/decel-intelligence",
+        ]);
+        const ALL_EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
           { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },
           { href: "/coach/indoor-load",        label: { EN: "Indoor Load",      IS: "Indoor Load" } },
           { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
           { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
         ];
+        const EXTERNAL_TABS = catapultDataTier === "full"
+          ? ALL_EXTERNAL_TABS
+          : ALL_EXTERNAL_TABS.filter((t) => !LITE_HIDDEN_HREFS.has(t.href));
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar
         // Monitoring section as first-class links. The ?tab=… URLs still
