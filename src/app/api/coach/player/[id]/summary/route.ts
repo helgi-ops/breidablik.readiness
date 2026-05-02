@@ -134,6 +134,40 @@ async function buildSummaryInput(
       .order("day_date", { ascending: false }),
   ]);
 
+  // ── Strip stale strength-test entries from McBurnie payload ──
+  // The McBurnie engine ships cmj / nordbord / forceframe with a
+  // `freshness` label (its internal "no fatigue drop vs baseline"
+  // verdict) regardless of how old `last_test_at` actually is. AI was
+  // reading "freshness: fresh" and writing "his jump test remains
+  // fresh", which coaches read as "took a test recently". Hide entries
+  // whose actual measurement is more than STRENGTH_TEST_FRESHNESS_DAYS
+  // old so the AI literally can't see them; when present we inject
+  // days_since_test so the prompt can phrase the time frame accurately.
+  // Aron Bjarnason 2026-05-02 incident: cmj.last_test_at was 7 days
+  // old but freshness="fresh", AI said "took a jump" — fixed here.
+  const STRENGTH_TEST_FRESHNESS_DAYS = 4;
+  let hasRecentStrengthTest = false;
+  let mcburniePayload: Record<string, unknown> | null = null;
+  if (mcburnie.data && typeof mcburnie.data === "object") {
+    mcburniePayload = { ...(mcburnie.data as Record<string, unknown>) };
+    for (const key of ["cmj", "nordbord", "forceframe"] as const) {
+      const entry = mcburniePayload[key] as Record<string, unknown> | undefined;
+      if (!entry || typeof entry !== "object") continue;
+      const lastIso = typeof entry.last_test_at === "string" ? entry.last_test_at : null;
+      if (!lastIso) {
+        delete mcburniePayload[key];
+        continue;
+      }
+      const days = Math.floor((Date.now() - Date.parse(lastIso)) / 86_400_000);
+      if (!Number.isFinite(days) || days > STRENGTH_TEST_FRESHNESS_DAYS) {
+        delete mcburniePayload[key];
+        continue;
+      }
+      mcburniePayload[key] = { ...entry, days_since_test: days };
+      hasRecentStrengthTest = true;
+    }
+  }
+
   // Match-day awareness: detect if recent training was a match
   type SessionRow = {
     day_date: string;
@@ -212,7 +246,8 @@ async function buildSummaryInput(
     // Ground-truth verdict the coach is currently looking at on screen.
     coach_visible_verdict: coachVerdict ?? null,
     pattern:                pattern.data ?? null,
-    decel_sub_engine:       mcburnie.data ?? null,
+    decel_sub_engine:       mcburniePayload ?? null,
+    has_recent_strength_test: hasRecentStrengthTest,
     indoor_state:           indoorStatus.data ?? null,
     active_injuries: (injuries.data ?? []).map((i: Record<string, unknown>) => ({
       type:      i.injury_type,
@@ -327,6 +362,26 @@ STRUCTURE:
 - Sentence 2: pattern over the window (use literal numbers from input).
 - Sentence 3-4: action — concrete and proportionate. If everything looks fine,
   say "no action needed".
+
+═══════ STRENGTH TESTS (CMJ / NORDBORD / FORCEFRAME) — STRICT ═══════
+- decel_sub_engine.cmj / nordbord / forceframe entries appear ONLY when the
+  athlete actually performed that test in the last 4 days. If the field is
+  absent, the player has NOT taken that test recently.
+- When a strength-test field is ABSENT (or has_recent_strength_test = false):
+    NEVER mention "jump", "jumping", "CMJ", "jump test", "jumping metrics",
+    "neuromuscular test", "Nordic", "Nordbord", "hamstring strength test",
+    "ForceFrame", "ForceDecks", "groin test", "adductor squeeze", or any
+    other reference to a strength/jump test in the summary.
+    Coaches read "his jump test remains fresh" as "took a test recently".
+    If you can't see the test in the input, do not write about it.
+- When a strength-test field IS present, you may reference it briefly using
+  the days_since_test field for accurate framing
+  (e.g. "today's CMJ", "yesterday's groin test", "Monday's jump test").
+- The literal word "fresh" inside cmj.freshness / nordbord.freshness is an
+  internal verdict label meaning "no fatigue drop detected vs the player's
+  baseline". It does NOT mean "the player feels fresh" or "took a test
+  recently". Never echo that word literally — translate to coach speak
+  ("no fatigue dip in today's jump") only when the test is actually present.
 
 EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdict):
 - sharp_cut.cuts_personal_z > 1.0 → "sharp braking work above his usual" (in coach speak)
@@ -447,6 +502,24 @@ function isRedVerdict(state: string | undefined): boolean {
       || s.includes("hvíld") || s.includes("rautt");
 }
 
+// Strength-test mentions that are ONLY allowed when the input bundle
+// contains a recent (≤4d) cmj/nordbord/forceframe entry. Catches the
+// "his jump test remains fresh" hallucination flagged by Helgi 2026-05-02
+// for Aron Bjarnason — last actual CMJ was 7 days prior.
+const STRENGTH_TEST_PHRASES = [
+  /\bjump(?:s|ing|\s+test|\s+metrics?)?\b/i,
+  /\bCMJ\b/i,
+  /\bcountermovement\b/i,
+  /\bneuromuscular\s+test\b/i,
+  /\bnordbord\b/i,
+  /\bnordic\b/i,
+  /\bhamstring\s+strength\b/i,
+  /\bforceframe\b/i,
+  /\bforcedecks?\b/i,
+  /\bgroin\s+(?:test|strength)\b/i,
+  /\badductor\s+squeeze\b/i,
+];
+
 // Phrases that imply the player is cleared to train. Forbidden when the
 // player has an active injury — would contradict the on-screen Out/Rehab
 // badge and erode coach trust. Ívar 2026-04-30 incident: AI said "cleared
@@ -467,9 +540,21 @@ function validateSummary(
   windowDays: 7 | 14,
   coachVerdict: CoachVerdictInput,
   hasActiveInjury: boolean = false,
+  hasRecentStrengthTest: boolean = false,
 ): string | null {
   for (const re of FORBIDDEN_TERMS) {
     if (re.test(text)) return `Contains forbidden jargon/ratio: ${re.source}`;
+  }
+  // Strength-test override — strength-test phrases are forbidden when
+  // no recent (≤4d) cmj/nordbord/forceframe was passed to the AI.
+  // Catches the "jump test remains fresh" hallucination where AI echoes
+  // McBurnie's internal `freshness` label even when last_test_at is weeks old.
+  if (!hasRecentStrengthTest) {
+    for (const re of STRENGTH_TEST_PHRASES) {
+      if (re.test(text)) {
+        return `Mentions strength-test result without a recent test in input: "${re.source}"`;
+      }
+    }
   }
   // Injury override — clearance phrases are forbidden when active_injuries
   // is non-empty. Catches the failure mode where AI grabs load/wellness
@@ -632,12 +717,16 @@ async function generateAndStore(
     // the injury-override rules (block "cleared for full session" etc.).
     const hasActiveInjury = Array.isArray((input as { active_injuries?: unknown[] }).active_injuries)
       && ((input as { active_injuries: unknown[] }).active_injuries.length > 0);
+    // Detect recent strength tests so the validator can block "jump test
+    // remains fresh" hallucinations when no CMJ/Nordbord/ForceFrame in the
+    // last 4 days was actually visible to the model.
+    const hasRecentStrengthTest = Boolean((input as { has_recent_strength_test?: boolean }).has_recent_strength_test);
     summary = await callClaude(input);
-    issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury);
+    issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest);
     if (issues) {
       console.warn("[player-summary] First attempt failed validation, retrying", { issues });
       summary = await callClaude(input);
-      issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury);
+      issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest);
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
