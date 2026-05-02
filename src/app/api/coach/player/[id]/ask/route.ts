@@ -101,23 +101,13 @@ async function fetchDataForQuestion(
     }));
   }
 
-  // For minutes_capacity we need a wider lookback (90 days) to compute a stable
-  // "typical match PL". For other questions, the original 7-day window is fine.
-  const wantsMinuteCapacity = dataKeys.includes("recent_load") && dataKeys.includes("match_calendar");
-  let matchDatesAll: string[] = [];
-
   if (dataKeys.includes("match_calendar")) {
     // Pull recent + upcoming sessions to identify last/next match.
-    // Widened lookback to 90 days when minutes_capacity context is needed so
-    // we can build a stable typical-match-PL average.
-    const lookbackIso = wantsMinuteCapacity
-      ? new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10)
-      : sevenAgoIso;
     const { data } = await supabase
       .from("v_player_session_today_v2")
       .select("day_date, md_day_resolved, planned_focus, session_type")
       .eq("player_id", playerId)
-      .gte("day_date", lookbackIso)
+      .gte("day_date", sevenAgoIso)
       .order("day_date", { ascending: false }).limit(120);
     type Sess = { day_date: string; md_day_resolved?: string | null; planned_focus?: string | null; session_type?: string | null };
     const sessions = (data ?? []) as Sess[];
@@ -129,9 +119,8 @@ async function fetchDataForQuestion(
       const stype = String(s.session_type ?? "").toUpperCase();
       const isMatch = md === "MD" || focus.includes("MATCH") || focus.includes("GAME")
         || stype.includes("MATCH") || stype.includes("GAME");
-      if (isMatch && s.day_date <= todayIso) {
-        if (!lastMatch) lastMatch = s;
-        matchDatesAll.push(s.day_date);
+      if (isMatch && s.day_date <= todayIso && !lastMatch) {
+        lastMatch = s;
       }
       if (s.day_date === todayIso) nextMatchMdDay = md || null;
     }
@@ -139,17 +128,11 @@ async function fetchDataForQuestion(
   }
 
   if (dataKeys.includes("recent_load")) {
-    // For minutes_capacity we need 90d of load to compute a typical match PL
-    // (a 14d window often has 1-2 matches, too few for a stable mean). Other
-    // questions only need the 14d slice — fetch wider only when needed.
-    const loadStartIso = wantsMinuteCapacity
-      ? new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10)
-      : fourteenAgoIso;
     const { data } = await supabase
       .from("player_external_load_daily")
       .select("date, total_distance, total_player_load, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, high_metabolic_load_distance_m, ima_band3_decel_count, sharp_cut_count_est, mpe_count_est, mpe_recovery_avg_s, edi, activity_class_brown")
       .eq("player_id", playerId)
-      .gte("date", loadStartIso)
+      .gte("date", fourteenAgoIso)
       .order("date", { ascending: false });
     // Semantic labels — prevents Claude from confusing HMLD (metabolic-power
     // based) with HSR/HIR (velocity based). They are NOT the same. Ívar
@@ -173,11 +156,8 @@ async function fetchDataForQuestion(
       activity_class_brown: string | null;
     };
     const rows = (data ?? []) as LoadRow[];
-    // Only send the last 14 days into the prompt — keeps the payload tight.
-    // The 90d slice (when fetched) is used only for the capacity computation
-    // below, not exposed to the LLM.
+    // Send all 14 days into the prompt — keeps the payload tight.
     out.recent_load_14d = rows
-      .filter((r) => r.date >= fourteenAgoIso)
       .map((r) => ({
         date: r.date,
         total_distance_m:                r.total_distance,
@@ -194,80 +174,6 @@ async function fetchDataForQuestion(
         edi:                             r.edi,
         activity_class:                  r.activity_class_brown,
       }));
-
-    // ── Pre-compute minute-capacity context when needed ───────────────────
-    // We do the arithmetic here (not in the LLM) because Claude Haiku makes
-    // sum/mean errors more often than we'd like. Send pre-rounded numbers
-    // and let the LLM apply the threshold rules + days-since-injury cap.
-    if (wantsMinuteCapacity) {
-      const sevenAgoDate = sevenAgoIso;
-      const thirtyAgoIso = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-
-      // Typical match PL — average total_player_load across match days. Use
-      // the 30-day window first (recent form), fall back to 90d if too few.
-      const matchPlsRecent: number[] = [];
-      const matchPlsAll90: number[] = [];
-      for (const r of rows) {
-        const pl = Number(r.total_player_load);
-        if (!Number.isFinite(pl) || pl <= 0) continue;
-        if (matchDatesAll.includes(r.date)) {
-          matchPlsAll90.push(pl);
-          if (r.date >= thirtyAgoIso) matchPlsRecent.push(pl);
-        }
-      }
-      const useMatchPls = matchPlsRecent.length >= 2 ? matchPlsRecent : matchPlsAll90;
-      const typicalMatchPl = useMatchPls.length > 0
-        ? Math.round(useMatchPls.reduce((a, x) => a + x, 0) / useMatchPls.length)
-        : null;
-
-      // 7-day cumulative + max single session
-      let sum7d = 0;
-      let max7d = 0;
-      let sessions7d = 0;
-      for (const r of rows) {
-        const pl = Number(r.total_player_load);
-        if (!Number.isFinite(pl) || pl <= 0) continue;
-        if (r.date >= sevenAgoDate) {
-          sum7d += pl;
-          if (pl > max7d) max7d = pl;
-          sessions7d += 1;
-        }
-      }
-
-      // Days since last match (using the wider match list we collected)
-      const lastMatchDate = matchDatesAll.length > 0 ? matchDatesAll[0] : null;
-      const daysSinceLastMatch = lastMatchDate
-        ? Math.round((Date.parse(todayIso) - Date.parse(lastMatchDate)) / 86_400_000)
-        : null;
-
-      // Days since injury return — only if we already fetched active injuries
-      // AND the most recent one has an expected_return in the past
-      let daysSinceInjuryReturn: number | null = null;
-      const injuries = (out.active_injuries as Array<{ expected_return?: string | null }> | undefined) ?? [];
-      for (const inj of injuries) {
-        if (inj.expected_return && inj.expected_return <= todayIso) {
-          const days = Math.round((Date.parse(todayIso) - Date.parse(inj.expected_return)) / 86_400_000);
-          if (daysSinceInjuryReturn === null || days < daysSinceInjuryReturn) {
-            daysSinceInjuryReturn = days;
-          }
-        }
-      }
-
-      out.minute_capacity_context = {
-        typical_match_player_load:    typicalMatchPl,
-        match_days_used_for_avg:      useMatchPls.length,
-        match_avg_window:             matchPlsRecent.length >= 2 ? "30d" : "90d",
-        cumulative_7d_player_load:    Math.round(sum7d),
-        sessions_in_7d:               sessions7d,
-        max_session_pl_7d:            Math.round(max7d),
-        load_ratio_7d_vs_match:       typicalMatchPl && typicalMatchPl > 0
-          ? Number((sum7d / typicalMatchPl).toFixed(2))
-          : null,
-        days_since_last_match:        daysSinceLastMatch,
-        days_since_injury_return:     daysSinceInjuryReturn,
-        scale_note:                   "Player Load is in arbitrary units. Use load_ratio_7d_vs_match (cumulative_7d / typical_match) as the primary capacity signal.",
-      };
-    }
 
     out.metric_definitions = {
       hsr_meters_v5_plus:              "High-speed running distance (velocity > 5.5 m/s). This IS 'high-intensity running' (HIR) for coach communication.",
