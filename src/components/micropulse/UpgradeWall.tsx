@@ -16,13 +16,15 @@ type UpgradeWallProps = {
 
 const PLAN_LABELS: Record<MicroPulsePlanKey, string> = {
   FREE: "Free",
+  LITE: "Lite",
   PRO: "Pro",
   ELITE: "Elite",
 };
 
 const PLAN_COLORS: Record<MicroPulsePlanKey, { badge: string; btn: string }> = {
-  FREE:  { badge: "bg-slate-100 text-slate-600",  btn: "bg-slate-700 hover:bg-slate-800" },
-  PRO:   { badge: "bg-blue-100 text-blue-700",    btn: "bg-blue-600 hover:bg-blue-700" },
+  FREE:  { badge: "bg-slate-100 text-slate-600",   btn: "bg-slate-700 hover:bg-slate-800" },
+  LITE:  { badge: "bg-amber-100 text-amber-700",   btn: "bg-amber-600 hover:bg-amber-700" },
+  PRO:   { badge: "bg-blue-100 text-blue-700",     btn: "bg-blue-600 hover:bg-blue-700" },
   ELITE: { badge: "bg-violet-100 text-violet-700", btn: "bg-violet-600 hover:bg-violet-700" },
 };
 

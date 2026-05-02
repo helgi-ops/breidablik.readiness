@@ -3,9 +3,14 @@ import type { MicroPulseFeatureKey, MicroPulsePlanKey } from "./types";
 
 const PLAN_ORDER: Record<MicroPulsePlanKey, number> = {
   FREE: 1,
-  PRO: 2,
-  ELITE: 3,
+  LITE: 2,
+  PRO: 3,
+  ELITE: 4,
 };
+
+export function isAtLeastLite(plan: MicroPulsePlanKey): boolean {
+  return PLAN_ORDER[plan] >= PLAN_ORDER.LITE;
+}
 
 export function getPlanFeatures(plan: MicroPulsePlanKey): MicroPulseFeatureKey[] {
   return PLAN_FEATURES[plan];

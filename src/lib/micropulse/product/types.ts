@@ -1,4 +1,4 @@
-export type MicroPulsePlanKey = "FREE" | "PRO" | "ELITE";
+export type MicroPulsePlanKey = "FREE" | "LITE" | "PRO" | "ELITE";
 
 export type MicroPulseFeatureKey =
   | "DAILY_CHECKIN"

@@ -54,8 +54,8 @@ const COPY = {
         name: "Pro",
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
-        priceSecondary: "Best for coaches and performance staff",
-        note: "Run your daily team operations with the full deterministic intelligence engine.",
+        priceSecondary: "Best for clubs on Premium Catapult plans (B2-3 efforts or IMU bands) — any sport",
+        note: "Adds Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery on top of everything in Lite.",
         bullets: [
           "Everything in Free plus:",
           "Unlimited squad size",
@@ -83,26 +83,24 @@ const COPY = {
         ],
         cta: "Start Pro",
       },
-      proIndoor: {
-        name: "Pro Indoor",
-        pricePrimary: "€279 / month",
-        priceLocal: "39.990 kr / mánuð",
-        priceSecondary: "Best for indoor sports — basketball, handball, volleyball",
-        savings: "Save €70/month — GPS not applicable for indoor sports",
-        note: "Everything in Pro, optimised for sports without outdoor GPS tracking.",
+      lite: {
+        name: "Lite",
+        pricePrimary: "€129 / month",
+        priceLocal: "17.990 kr / mánuð",
+        priceSecondary: "Best for lower-division clubs and indoor sports without IMU vests",
+        note: "Standalone sport-science suite for clubs on standard Catapult Activity Reports — or no GPS at all. Built on Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
         bullets: [
           "Everything in Free plus:",
           "Unlimited squad size",
           "Coach dashboard & team readiness overview",
-          "Adaptive Training Engine",
-          "Neural Fatigue Model",
-          "Indoor Load page (FMP-driven, IMU-only — purpose-built for indoor)",
-          "Decel Intelligence (McBurnie 2022) — IMU-band stride detail",
-          "Bidirectional notifications — over- AND undertraining detection",
+          "Quadrant view (Gabbett 2016) — volume-axis ACWR per player",
+          "HSR Intelligence (Malone 2017 + Buchheit 2014) — hamstring/soft-tissue injury risk",
+          "Foster Monotony + Strain (Foster 1998) — overtraining detection from sRPE × duration",
+          "MD HSR Comparison (Buchheit 2018) — periodization helper, % of MD HSR reached",
+          "Squad Load 7d/28d/ACWR table — per-player workload trends",
+          "Catapult CSV upload (any standard Activity Report)",
           "VALD / CMJ monitoring tab",
-          "CMJ Required alerts — per player with reason",
-          "VALD force plate data in readiness & risk scores",
-          "Smart push notifications — check-in, RPE & CMJ",
+          "Bidirectional notifications — over- AND undertraining detection",
           "Match-week operations (Week setup, TV view, Messages)",
           "Player volatility tracking",
           "Explainable readiness decisions with counterfactuals",
@@ -110,7 +108,7 @@ const COPY = {
           "Multi-day rehab assignments + evidence-based templates",
           "Team workflow tools",
         ],
-        cta: "Start Pro Indoor",
+        cta: "Start Lite",
       },
       elite: {
         name: "Elite",
@@ -142,34 +140,41 @@ const COPY = {
     },
     compare: {
       title: "Quick compare",
+      // 5 columns: feature, Free, Lite, Pro, Elite (4-tier structure, May 2026)
       rows: [
-        ["Daily player check-in", "✅", "✅", "✅"],
-        ["Coach dashboard", "—", "✅", "✅"],
-        ["Adaptive Training Engine", "—", "✅", "✅"],
-        ["Neural fatigue model", "—", "✅", "✅"],
-        ["Decel Intelligence (McBurnie 2022)", "—", "✅", "✅"],
-        ["Sharp Cut load (Dos'Santos 2021)", "—", "✅", "✅"],
-        ["MPE Recovery (Osgnach 2023)", "—", "✅", "✅"],
-        ["Quadrant View (Gabbett 2017)", "—", "✅", "✅"],
-        ["Indoor Load page (FMP)", "—", "✅", "✅"],
-        ["Bidirectional notifications (over+under-training)", "—", "✅", "✅"],
-        ["VALD / CMJ monitoring", "—", "✅", "✅"],
-        ["CMJ Required alerts", "—", "✅", "✅"],
-        ["Smart push notifications", "—", "✅", "✅"],
-        ["GPS Load Monitoring — ACWR", "—", "Outdoor only", "✅"],
-        ["Mechanical Load Index (MLI)", "—", "Outdoor only", "✅"],
-        ["Metabolic Load Score", "—", "Outdoor only", "✅"],
-        ["GPS integration (Catapult API + CSV)", "—", "Outdoor only", "✅"],
-        ["Explainable readiness decisions", "—", "✅", "✅"],
-        ["Counterfactual explanations", "—", "✅", "✅"],
-        ["Multi-day rehab assignments", "—", "✅", "✅"],
-        ["🧠 AI Player Summary", "—", "—", "✅"],
-        ["💬 AI Q&A (8 curated questions)", "—", "—", "✅"],
-        ["🧠 Decel Narrative AI", "—", "—", "✅"],
-        ["Tomorrow's verdict forecast", "—", "—", "✅"],
-        ["Cross-team analytics", "—", "—", "✅"],
-        ["Multiple GPS integrations", "—", "—", "✅"],
-        ["Automation & alerts", "—", "—", "✅"],
+        ["Daily player check-in", "✅", "✅", "✅", "✅"],
+        ["Coach dashboard", "—", "✅", "✅", "✅"],
+        ["Adaptive Training Engine", "—", "✅", "✅", "✅"],
+        ["Squad Load 7d/28d/ACWR table", "—", "✅", "✅", "✅"],
+        ["Quadrant View (Gabbett 2016 — volume axis)", "—", "✅", "✅", "✅"],
+        ["HSR Intelligence (Malone 2017 + Buchheit 2014)", "—", "✅", "✅", "✅"],
+        ["Foster Monotony + Strain (Foster 1998)", "—", "✅", "✅", "✅"],
+        ["MD HSR Comparison (Buchheit 2018)", "—", "✅", "✅", "✅"],
+        ["Catapult CSV upload (any plan)", "—", "✅", "✅", "✅"],
+        ["GPS Load Monitoring — ACWR", "—", "✅", "✅", "✅"],
+        ["VALD / CMJ monitoring", "—", "✅", "✅", "✅"],
+        ["CMJ Required alerts", "—", "✅", "✅", "✅"],
+        ["Smart push notifications", "—", "✅", "✅", "✅"],
+        ["Bidirectional notifications (over+under-training)", "—", "✅", "✅", "✅"],
+        ["Explainable readiness decisions", "—", "✅", "✅", "✅"],
+        ["Counterfactual explanations", "—", "✅", "✅", "✅"],
+        ["Multi-day rehab assignments", "—", "✅", "✅", "✅"],
+        ["Decel Intelligence (McBurnie 2022)", "—", "—", "✅", "✅"],
+        ["Quadrant View (Gabbett 2017 — B2-3 axis)", "—", "—", "✅", "✅"],
+        ["Indoor Load page (FMP / IMU bands)", "—", "—", "✅", "✅"],
+        ["Sharp Cut load (Dos'Santos 2021)", "—", "—", "✅", "✅"],
+        ["MPE Recovery (Osgnach 2023)", "—", "—", "✅", "✅"],
+        ["Mechanical Load Index (MLI)", "—", "—", "✅", "✅"],
+        ["Metabolic Load Score", "—", "—", "✅", "✅"],
+        ["Neural fatigue model", "—", "—", "✅", "✅"],
+        ["Catapult API live sync", "—", "—", "✅", "✅"],
+        ["🧠 AI Player Summary", "—", "—", "—", "✅"],
+        ["💬 AI Q&A (8 curated questions)", "—", "—", "—", "✅"],
+        ["🧠 Decel Narrative AI", "—", "—", "—", "✅"],
+        ["Tomorrow's verdict forecast", "—", "—", "—", "✅"],
+        ["Cross-team analytics", "—", "—", "—", "✅"],
+        ["Multiple GPS integrations", "—", "—", "—", "✅"],
+        ["Automation & alerts", "—", "—", "—", "✅"],
       ],
     },
     demo: {
@@ -247,8 +252,8 @@ const COPY = {
         name: "Pro",
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
-        priceSecondary: "Fyrir S&C þjálfara, performance staff og single-team umhverfi.",
-        note: "Fullur deterministic intelligence engine fyrir daglegan rekstur.",
+        priceSecondary: "Fyrir lið með Premium Catapult áskrift (B2-3 efforts eða IMU bands) — hvaða íþrótt sem er",
+        note: "Bætir við Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery ofan á allt í Lite.",
         bullets: [
           "Allt í Free +",
           "Ótakmarkaður hópur",
@@ -276,26 +281,24 @@ const COPY = {
         ],
         cta: "Bóka demo",
       },
-      proIndoor: {
-        name: "Pro Innanhúss",
-        pricePrimary: "€279 / month",
-        priceLocal: "39.990 kr / mánuð",
-        priceSecondary: "Fyrir innanhúss íþróttir — körfubolti, handbolti, blak",
-        savings: "Sparar €70/mánuð — GPS á ekki við innanhúss íþróttir",
-        note: "Allt í Pro, stillt fyrir íþróttir án utandyra GPS.",
+      lite: {
+        name: "Lite",
+        pricePrimary: "€129 / month",
+        priceLocal: "17.990 kr / mánuð",
+        priceSecondary: "Fyrir neðri-deildar lið og innanhúss íþróttir án IMU vesta",
+        note: "Sjálfstæð sport-science suite fyrir lið með standard Catapult Activity Reports — eða engan GPS yfirleitt. Byggð á Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
         bullets: [
           "Allt í Free +",
           "Ótakmarkaður hópur",
           "Coach dashboard & liðsyfirsýn readiness",
-          "Adaptive Training Engine",
-          "Neural Fatigue Model",
-          "Indoor Load síða (FMP-driven, IMU-only — purpose-built fyrir innanhúss)",
-          "Decel Intelligence (McBurnie 2022) — IMU-band stride detail",
-          "Tvíátta tilkynningar — yfir- OG undirálag detection",
+          "Quadrant view (Gabbett 2016) — volume-axis ACWR per leikmann",
+          "HSR Intelligence (Malone 2017 + Buchheit 2014) — hamstring/soft-tissue meiðsla-áhætta",
+          "Foster Monotony + Strain (Foster 1998) — overtraining-greining úr sRPE × tíma",
+          "MD HSR Comparison (Buchheit 2018) — periodization helper, % af MD HSR náð",
+          "Squad Load 7d/28d/ACWR tafla — per-leikmanns álagsþróun",
+          "Catapult CSV upload (hvaða standard Activity Report sem er)",
           "VALD / CMJ monitoring flipi",
-          "CMJ Required tilkynningar — per leikmann með ástæðu",
-          "VALD kraftplata gögn í readiness & risk scores",
-          "Snjall push notifications — check-in, RPE & CMJ",
+          "Tvíátta tilkynningar — yfir- OG undirálag detection",
           "Leikjaviku rekstur (Week setup, TV view, Messages)",
           "Player volatility tracking",
           "Útskýranleg readiness decisions með counterfactuals",
@@ -303,7 +306,7 @@ const COPY = {
           "Multi-day rehab assignments + evidence-based templates",
           "Team workflow tools",
         ],
-        cta: "Byrja Pro Innanhúss",
+        cta: "Byrja Lite",
       },
       elite: {
         name: "Elite",
@@ -335,34 +338,41 @@ const COPY = {
     },
     compare: {
       title: "Stutt samanburður",
+      // 5 dálkar: feature, Free, Lite, Pro, Elite (4-tier struktúr, May 2026)
       rows: [
-        ["Daglegt player check-in", "✅", "✅", "✅"],
-        ["Coach dashboard", "—", "✅", "✅"],
-        ["Adaptive Training Engine", "—", "✅", "✅"],
-        ["Neural fatigue model", "—", "✅", "✅"],
-        ["Decel Intelligence (McBurnie 2022)", "—", "✅", "✅"],
-        ["Sharp Cut load (Dos'Santos 2021)", "—", "✅", "✅"],
-        ["MPE Recovery (Osgnach 2023)", "—", "✅", "✅"],
-        ["Quadrant View (Gabbett 2017)", "—", "✅", "✅"],
-        ["Indoor Load síða (FMP)", "—", "✅", "✅"],
-        ["Tvíátta tilkynningar (yfir+undir-álag)", "—", "✅", "✅"],
-        ["VALD / CMJ monitoring", "—", "✅", "✅"],
-        ["CMJ Required tilkynningar", "—", "✅", "✅"],
-        ["Snjall push notifications", "—", "✅", "✅"],
-        ["GPS Load Monitoring — ACWR", "—", "Utandyra", "✅"],
-        ["Mechanical Load Index (MLI)", "—", "Utandyra", "✅"],
-        ["Metabolic Load Score", "—", "Utandyra", "✅"],
-        ["GPS tenging (Catapult API + CSV)", "—", "Utandyra", "✅"],
-        ["Útskýranleg readiness decisions", "—", "✅", "✅"],
-        ["Counterfactual útskýringar", "—", "✅", "✅"],
-        ["Multi-day rehab assignments", "—", "✅", "✅"],
-        ["🧠 AI Player Summary", "—", "—", "✅"],
-        ["💬 AI Q&A (8 spurningar)", "—", "—", "✅"],
-        ["🧠 Decel Narrative AI", "—", "—", "✅"],
-        ["Spá fyrir morgundag", "—", "—", "✅"],
-        ["Cross-team analytics", "—", "—", "✅"],
-        ["Margar GPS tengingar", "—", "—", "✅"],
-        ["Automation & alerts", "—", "—", "✅"],
+        ["Daglegt player check-in", "✅", "✅", "✅", "✅"],
+        ["Coach dashboard", "—", "✅", "✅", "✅"],
+        ["Adaptive Training Engine", "—", "✅", "✅", "✅"],
+        ["Squad Load 7d/28d/ACWR tafla", "—", "✅", "✅", "✅"],
+        ["Quadrant View (Gabbett 2016 — volume axis)", "—", "✅", "✅", "✅"],
+        ["HSR Intelligence (Malone 2017 + Buchheit 2014)", "—", "✅", "✅", "✅"],
+        ["Foster Monotony + Strain (Foster 1998)", "—", "✅", "✅", "✅"],
+        ["MD HSR Comparison (Buchheit 2018)", "—", "✅", "✅", "✅"],
+        ["Catapult CSV upload (hvaða plan sem er)", "—", "✅", "✅", "✅"],
+        ["GPS Load Monitoring — ACWR", "—", "✅", "✅", "✅"],
+        ["VALD / CMJ monitoring", "—", "✅", "✅", "✅"],
+        ["CMJ Required tilkynningar", "—", "✅", "✅", "✅"],
+        ["Snjall push notifications", "—", "✅", "✅", "✅"],
+        ["Tvíátta tilkynningar (yfir+undir-álag)", "—", "✅", "✅", "✅"],
+        ["Útskýranleg readiness decisions", "—", "✅", "✅", "✅"],
+        ["Counterfactual útskýringar", "—", "✅", "✅", "✅"],
+        ["Multi-day rehab assignments", "—", "✅", "✅", "✅"],
+        ["Decel Intelligence (McBurnie 2022)", "—", "—", "✅", "✅"],
+        ["Quadrant View (Gabbett 2017 — B2-3 axis)", "—", "—", "✅", "✅"],
+        ["Indoor Load síða (FMP / IMU bands)", "—", "—", "✅", "✅"],
+        ["Sharp Cut load (Dos'Santos 2021)", "—", "—", "✅", "✅"],
+        ["MPE Recovery (Osgnach 2023)", "—", "—", "✅", "✅"],
+        ["Mechanical Load Index (MLI)", "—", "—", "✅", "✅"],
+        ["Metabolic Load Score", "—", "—", "✅", "✅"],
+        ["Neural fatigue model", "—", "—", "✅", "✅"],
+        ["Catapult API live sync", "—", "—", "✅", "✅"],
+        ["🧠 AI Player Summary", "—", "—", "—", "✅"],
+        ["💬 AI Q&A (8 spurningar)", "—", "—", "—", "✅"],
+        ["🧠 Decel Narrative AI", "—", "—", "—", "✅"],
+        ["Spá fyrir morgundag", "—", "—", "—", "✅"],
+        ["Cross-team analytics", "—", "—", "—", "✅"],
+        ["Margar GPS tengingar", "—", "—", "—", "✅"],
+        ["Automation & alerts", "—", "—", "—", "✅"],
       ],
     },
     demo: {
@@ -505,7 +515,13 @@ export default function PricingPage() {
   }
 
   const Plans = React.useMemo(() => {
-    const proPlan = sportEnv === "indoor" ? t.plans.proIndoor : t.plans.pro;
+    // 4-tier structure (May 2026 restructure): Free / Lite / Pro / Elite.
+    // Pricing is anchored to data tier (Lite Catapult plan vs Premium
+    // Catapult plan), not sport — Pro Indoor was retired because it had
+    // no Iceland addressable market and required Premium Catapult IMU
+    // plans that no Iceland indoor club had. The sportEnv toggle is now
+    // informational only — adds an indoor note to GPS-dependent items
+    // in the comparison table, doesn't switch tier pricing.
     return [
       {
         key: "free" as const,
@@ -519,17 +535,28 @@ export default function PricingPage() {
         cta: { label: t.plans.free.cta, href: "/signup" },
       },
       {
+        key: "lite" as const,
+        dark: false,
+        recommended: false,
+        name: t.plans.lite.name,
+        pricePrimary: t.plans.lite.pricePrimary,
+        priceLocal: t.plans.lite.priceLocal,
+        priceSecondary: t.plans.lite.priceSecondary,
+        note: t.plans.lite.note,
+        bullets: t.plans.lite.bullets,
+        cta: { label: t.plans.lite.cta, href: "/signup" },
+      },
+      {
         key: "pro" as const,
         dark: true,
         recommended: true,
-        name: proPlan.name,
-        pricePrimary: proPlan.pricePrimary,
-        priceLocal: proPlan.priceLocal,
-        priceSecondary: proPlan.priceSecondary,
-        savings: sportEnv === "indoor" ? t.plans.proIndoor.savings : undefined,
-        note: proPlan.note,
-        bullets: proPlan.bullets,
-        cta: { label: proPlan.cta, href: "#demo" },
+        name: t.plans.pro.name,
+        pricePrimary: t.plans.pro.pricePrimary,
+        priceLocal: t.plans.pro.priceLocal,
+        priceSecondary: t.plans.pro.priceSecondary,
+        note: t.plans.pro.note,
+        bullets: t.plans.pro.bullets,
+        cta: { label: t.plans.pro.cta, href: "#demo" },
       },
       {
         key: "elite" as const,
@@ -737,11 +764,8 @@ export default function PricingPage() {
                     {p.priceLocal}
                   </div>
                 ) : null}
-                {"savings" in p && p.savings ? (
-                  <div className="mt-1.5 inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-0.5 text-xs font-semibold text-white">
-                    {p.savings}
-                  </div>
-                ) : null}
+                {/* Savings badge removed in May 2026 restructure — was tied to
+                    Pro Indoor's GPS discount which no longer exists. */}
                 <div className={classNames("mt-1 text-sm", p.dark ? "text-white/70" : "text-neutral-500")}>
                   {p.priceSecondary}
                 </div>
@@ -822,22 +846,24 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Compare */}
+          {/* Compare — 5-column 4-tier grid (May 2026) */}
           <div className="mt-10 rounded-3xl border bg-neutral-50 p-6 md:p-8">
             <h3 className="text-lg font-semibold">{t.compare.title}</h3>
             <div className="mt-5 overflow-hidden rounded-2xl border bg-white">
-              <div className="grid grid-cols-4 gap-0 border-b bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
+              <div className="grid grid-cols-5 gap-0 border-b bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
                 <div>Feature</div>
                 <div className="text-center">Free</div>
+                <div className="text-center">Lite</div>
                 <div className="text-center">Pro</div>
                 <div className="text-center">Elite</div>
               </div>
               {t.compare.rows.map((r) => (
-                <div key={r[0]} className="grid grid-cols-4 gap-0 border-b px-4 py-3 text-sm">
+                <div key={r[0]} className="grid grid-cols-5 gap-0 border-b px-4 py-3 text-sm">
                   <div className="text-neutral-700">{r[0]}</div>
                   <div className="text-center">{r[1]}</div>
                   <div className="text-center">{r[2]}</div>
                   <div className="text-center">{r[3]}</div>
+                  <div className="text-center">{r[4]}</div>
                 </div>
               ))}
             </div>

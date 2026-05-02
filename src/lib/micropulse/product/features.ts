@@ -41,6 +41,29 @@ const ELITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
   "MULTI_TEAM_MANAGEMENT",
 ];
 
+// LITE = FREE + the subset of PRO that doesn't require Premium Catapult
+// data (B2-3 efforts or IMU bands). Coach dashboard, RPE/load tabs, week
+// setup, basic GPS load monitoring on standard Catapult Activity Reports
+// — yes. Mechanical Load Index and Metabolic Load Score depend on B2-3
+// efforts → these stay Pro-only and are filtered out of LITE_FEATURES.
+const LITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
+  "COACH_DASHBOARD",
+  "SQUAD_OVERVIEW",
+  "INTELLIGENCE_TAB",
+  "LOAD_RPE_TAB",
+  "GPS_LOAD_MONITORING",  // Volume-axis only on Lite (Gabbett 2016, Malone 2017)
+  "YESTERDAY_LOAD",
+  "WEEK_SETUP",
+  "ADAPTIVE_TRAINING_ENGINE",
+  "PLAYER_VOLATILITY",
+  "EXPLAINABLE_DECISIONS",
+  "SESSION_ADJUSTMENTS",
+  "MATCH_WEEK_LOGIC",
+  "TEAM_WORKFLOW",
+  "VALD_CMJ_MONITORING",
+];
+
+const LITE_FEATURES: MicroPulseFeatureKey[] = [...FREE_FEATURES, ...LITE_INCREMENTAL_FEATURES];
 const PRO_FEATURES: MicroPulseFeatureKey[] = [...FREE_FEATURES, ...PRO_INCREMENTAL_FEATURES];
 const ELITE_FEATURES: MicroPulseFeatureKey[] = [...PRO_FEATURES, ...ELITE_INCREMENTAL_FEATURES];
 
@@ -50,6 +73,7 @@ const ELITE_FEATURES: MicroPulseFeatureKey[] = [...PRO_FEATURES, ...ELITE_INCREM
  */
 export const PLAN_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {
   FREE: FREE_FEATURES,
+  LITE: LITE_FEATURES,
   PRO: PRO_FEATURES,
   ELITE: ELITE_FEATURES,
 };
@@ -59,23 +83,25 @@ export const FEATURE_MIN_PLAN: Record<MicroPulseFeatureKey, MicroPulsePlanKey> =
   BASIC_READINESS: "FREE",
   PLAYER_MONITORING: "FREE",
   TEAM_MONITORING: "FREE",
-  COACH_DASHBOARD: "PRO",
-  ADAPTIVE_TRAINING_ENGINE: "PRO",
+  // Lite-tier minimum — works on standard Catapult plans + RPE / wellness
+  COACH_DASHBOARD: "LITE",
+  ADAPTIVE_TRAINING_ENGINE: "LITE",
+  PLAYER_VOLATILITY: "LITE",
+  EXPLAINABLE_DECISIONS: "LITE",
+  SESSION_ADJUSTMENTS: "LITE",
+  MATCH_WEEK_LOGIC: "LITE",
+  TEAM_WORKFLOW: "LITE",
+  GPS_LOAD_MONITORING: "LITE",
+  YESTERDAY_LOAD: "LITE",
+  SQUAD_OVERVIEW: "LITE",
+  INTELLIGENCE_TAB: "LITE",
+  LOAD_RPE_TAB: "LITE",
+  WEEK_SETUP: "LITE",
+  VALD_CMJ_MONITORING: "LITE",
+  // Pro-only — requires Premium Catapult (B2-3 efforts + IMU bands)
   NEURAL_FATIGUE_MODEL: "PRO",
-  PLAYER_VOLATILITY: "PRO",
-  EXPLAINABLE_DECISIONS: "PRO",
-  SESSION_ADJUSTMENTS: "PRO",
-  MATCH_WEEK_LOGIC: "PRO",
-  TEAM_WORKFLOW: "PRO",
-  GPS_LOAD_MONITORING: "PRO",
   MECHANICAL_LOAD_INDEX: "PRO",
   METABOLIC_LOAD_SCORE: "PRO",
-  YESTERDAY_LOAD: "PRO",
-  SQUAD_OVERVIEW: "PRO",
-  INTELLIGENCE_TAB: "PRO",
-  LOAD_RPE_TAB: "PRO",
-  WEEK_SETUP: "PRO",
-  VALD_CMJ_MONITORING: "PRO",
   PERFORMANCE_INTELLIGENCE: "ELITE",
   INJURY_RISK_MODEL: "ELITE",
   LOAD_FORECASTING: "ELITE",
