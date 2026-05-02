@@ -60,6 +60,13 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // sidebar's TeamSwitcher so coaches with multiple teams can swap clubs.
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
 
+  // Auto-detected Catapult data tier — controls which Monitoring items
+  // appear in the sidebar. 'lite' hides Decel Intelligence, Indoor Load
+  // and Quadrant View (require B2-3 / IMA-band data the lower-tier
+  // Catapult plans don't expose). Auto-promotes to 'full' when B2-3
+  // efforts start arriving via Catapult sync. See migration 20260502170000.
+  const [catapultDataTier, setCatapultDataTier] = useState<"full" | "lite">("lite");
+
   // Fetch team_id + branding once per session.
   useEffect(() => {
     let alive = true;
@@ -83,6 +90,17 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
         name: (t.club_short_name?.trim() || t.name?.trim() || "MicroPulse"),
         logoUrl: (t.club_logo_url?.trim() || ""),
       });
+
+      // Catapult data tier — drives Lite-Mode sidebar gating. See
+      // src/lib/micropulse/catapultTier for the full feature matrix.
+      try {
+        const { data: tierData } = await supabase.rpc("get_catapult_data_tier", { p_team_id: teamId });
+        if (!alive) return;
+        const t = String(tierData ?? "").toLowerCase();
+        setCatapultDataTier(t === "full" ? "full" : "lite");
+      } catch {
+        if (alive) setCatapultDataTier("lite");
+      }
     }
     void fetchBrand();
     return () => { alive = false; };
@@ -268,6 +286,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           pendingCount={pendingCount}
           currentTab={currentTab}
           currentTeamId={currentTeamId}
+          catapultDataTier={catapultDataTier}
           onSwitchTeam={handleSwitchTeam}
         />
       </aside>
@@ -309,6 +328,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               pendingCount={pendingCount}
               currentTab={currentTab}
               currentTeamId={currentTeamId}
+              catapultDataTier={catapultDataTier}
               onSwitchTeam={handleSwitchTeam}
               onNavigate={() => setMobileDrawerOpen(false)}
             />

@@ -222,6 +222,16 @@ function Section({
   );
 }
 
+// Pages that need full Catapult B2-3 / IMA-band data to render anything
+// useful — hidden from teams on Lite tier so coaches don't navigate to
+// pages that look broken. Surfaced again automatically once B2-3 efforts
+// start arriving in player_external_load_daily.
+const LITE_HIDDEN_HREFS = new Set<string>([
+  "/coach/quadrant",
+  "/coach/indoor-load",
+  "/coach/decel-intelligence",
+]);
+
 // ─── Public Sidebar ─────────────────────────────────────────────────────────
 export function CoachSidebar({
   isAdmin,
@@ -229,6 +239,7 @@ export function CoachSidebar({
   pendingCount,
   currentTab,
   currentTeamId,
+  catapultDataTier,
   onSwitchTeam,
   onNavigate,
 }: {
@@ -243,6 +254,10 @@ export function CoachSidebar({
    *  to the TeamSwitcher so coaches with multiple teams can swap from the
    *  sidebar without leaving their current page. */
   currentTeamId: string | null;
+  /** Auto-detected Catapult data tier for the active team. 'lite' hides
+   *  features that need B2-3 / IMA bands; 'full' shows everything. Default
+   *  'lite' (conservative — show fewer items when undetermined). */
+  catapultDataTier?: "full" | "lite";
   /** Invoked when the coach picks a different team from the switcher. The
    *  shell handles persistence (writes profiles.team_id) and reload. */
   onSwitchTeam: (team: CoachTeam) => void;
@@ -254,6 +269,13 @@ export function CoachSidebar({
   const pathname = usePathname() ?? "";
 
   const isOnCoach = pathname === "/coach" && currentTab == null;
+
+  // Filter Lite-gated items out of Monitoring when the team's Catapult
+  // tier doesn't expose B2-3 efforts. See migration 20260502170000.
+  const isLite = catapultDataTier !== "full";
+  const monitoringLinksForTier = isLite
+    ? monitoringLinks.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
+    : monitoringLinks;
 
   return (
     <div className="flex h-full flex-col">
@@ -298,7 +320,7 @@ export function CoachSidebar({
         />
         <Section
           label={lang === "IS" ? "Eftirlit" : "Monitoring"}
-          links={monitoringLinks}
+          links={monitoringLinksForTier}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}
