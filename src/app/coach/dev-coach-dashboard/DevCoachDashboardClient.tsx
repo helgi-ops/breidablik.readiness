@@ -6945,12 +6945,16 @@ export default function CoachPage() {
         // Primary in-app tabs — daily monitoring workflow
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
         // Standalone routes for deeper monitoring analytics — render as Links.
-        // Quadrant / Indoor / Decel Intel are LITE-gated: they need B2-3
-        // efforts data the lower-tier Catapult plans don't expose. Same
-        // hidden-set as CoachSidebar's LITE_HIDDEN_HREFS so both nav
-        // surfaces stay in sync.
+        // Indoor Load + Decel Intel are LITE-gated: they need B2-3 efforts
+        // and IMA Free Running bands the lower-tier Catapult plans don't
+        // expose. Same hidden-set as CoachSidebar's LITE_HIDDEN_HREFS so
+        // both nav surfaces stay in sync.
+        //
+        // Quadrant is INTENTIONALLY allowed on Lite — it falls back to the
+        // Gabbett 2016 volume-axis variant (total_distance × sRPE) which
+        // works fine without B2-3.
         const LITE_HIDDEN_HREFS = new Set<string>([
-          "/coach/quadrant", "/coach/indoor-load", "/coach/decel-intelligence",
+          "/coach/indoor-load", "/coach/decel-intelligence",
         ]);
         const ALL_EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
           { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },

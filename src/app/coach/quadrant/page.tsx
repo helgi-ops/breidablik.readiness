@@ -23,7 +23,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantChart";
 import SquadLoadTable, { type SquadLoadPlayer } from "@/components/coach/SquadLoadTable";
 import { useLang, type Lang } from "@/lib/lang";
-import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Window = 7 | 14 | 28;
 
@@ -117,6 +116,13 @@ export default function CoachQuadrantPage() {
   const [squadLoadDate, setSquadLoadDate] = React.useState<string>("");
   const [teamSport, setTeamSport] = React.useState<string | null>(null);
 
+  // Catapult data tier — drives the Gabbett 2016 (volume axis, Lite) vs
+  // Gabbett 2017 (volume + B2-3 axis, Full) variant selection. Volume axis
+  // works on every Catapult plan; B2-3 axis adds explosive-effort
+  // discrimination for clubs on Premium plans. Defaults to 'lite' until
+  // detection completes — same conservative default as CoachShell.
+  const [catapultDataTier, setCatapultDataTier] = React.useState<"full" | "lite">("lite");
+
   React.useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,6 +141,17 @@ export default function CoachQuadrantPage() {
         .from("profiles").select("team_id").eq("id", user.id).maybeSingle();
       const teamId = profile?.team_id as string | undefined;
       if (!teamId || !alive) return;
+
+      // Detect Catapult data tier so SquadLoadTable can hide B2-3 columns
+      // for Lite teams (those columns will all be NULL → empty cells).
+      try {
+        const { data: tierData } = await sb.rpc("get_catapult_data_tier", { p_team_id: teamId });
+        if (alive) {
+          const t = String(tierData ?? "").toLowerCase();
+          setCatapultDataTier(t === "full" ? "full" : "lite");
+        }
+      } catch { /* keep default 'lite' */ }
+
       const today = new Date().toISOString().slice(0, 10);
       setSquadLoadDate(today);
       const startDate = (() => {
@@ -359,20 +376,27 @@ export default function CoachQuadrantPage() {
     return { risk, decoupled, peak, low };
   }, [points]);
 
+  const isLite = catapultDataTier !== "full";
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-      <LiteTierBanner
-        feature="Quadrant View"
-        reasonIs="Quadrant view þarf bæði RPE og fullt GPS load (PlayerLoad + B2-3 efforts) — síðari hlutinn er ekki tiltækur á núverandi Catapult-pakkanum ykkar."
-        reasonEn="Quadrant view needs both RPE and full GPS load (PlayerLoad + B2-3 efforts) — the latter isn't included in your current Catapult plan."
-      />
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold text-slate-900">{qt("pageTitle", lang)}</h1>
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
-              Gabbett 2017
+            {/* Citation badge — Gabbett 2016 (volume axis only, works on any
+                Catapult plan) on Lite, Gabbett 2017 (volume + B2-3 axis,
+                higher fidelity) on Full. Both papers are co-authored by
+                Tim Gabbett — the 2016 BJSM piece introduced ACWR using
+                total distance + sRPE; the 2017 follow-up added explosive-
+                effort axes for more granular discrimination. */}
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+              isLite
+                ? "bg-blue-100 text-blue-700"
+                : "bg-emerald-100 text-emerald-700"
+            }`}>
+              {isLite ? "Gabbett 2016 · Volume axis" : "Gabbett 2017 · Full axis"}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -443,6 +467,7 @@ export default function CoachQuadrantPage() {
           date={squadLoadDate || new Date().toISOString().slice(0, 10)}
           sport={teamSport}
           lang={lang === "EN" ? "EN" : "IS"}
+          catapultDataTier={catapultDataTier}
         />
       )}
 

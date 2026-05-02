@@ -226,8 +226,12 @@ function Section({
 // useful — hidden from teams on Lite tier so coaches don't navigate to
 // pages that look broken. Surfaced again automatically once B2-3 efforts
 // start arriving in player_external_load_daily.
+//
+// Note: /coach/quadrant is INTENTIONALLY allowed on Lite — it uses the
+// Gabbett 2016 volume-axis variant (total_distance × sRPE) which works
+// fine without B2-3. Only Indoor Load (FMP / IMA bands) and Decel
+// Intelligence (McBurnie 2022 B2-3 cluster) have no useful Lite fallback.
 const LITE_HIDDEN_HREFS = new Set<string>([
-  "/coach/quadrant",
   "/coach/indoor-load",
   "/coach/decel-intelligence",
 ]);

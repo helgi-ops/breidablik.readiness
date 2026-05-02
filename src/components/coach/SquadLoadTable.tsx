@@ -32,7 +32,10 @@ type Metric = {
   digits: number;
 };
 
-const FOOTBALL_METRICS: Metric[] = [
+// Football metric set for FULL Catapult plans (Gabbett 2017 — includes
+// B2-3 explosive-effort columns + Tot Accels/Decels for high-fidelity
+// load discrimination).
+const FOOTBALL_METRICS_FULL: Metric[] = [
   { key: "totalDistance",              label: "Total Distance (m)",         shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                                    digits: 0 },
   { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",        shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                         digits: 0 },
   { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)",        shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                         digits: 0 },
@@ -40,6 +43,21 @@ const FOOTBALL_METRICS: Metric[] = [
   { key: "totalAccelerations",         label: "Tot Accels (#)",             shortLabel: "Tot Accels",  aliases: ["totalAccelerations", "total_accelerations", "tot_as", "totAs"],                                       digits: 0 },
   { key: "decelBand2to3Efforts",       label: "Decel B2-3 Efforts (Gen 2)", shortLabel: "Decel B2-3",  aliases: ["decelBand2to3Efforts", "decel_band2to3_efforts", "decel_b2_3_tot_effs_gen2", "decelB23TotEffsGen2"],  digits: 0 },
   { key: "totalDecelerations",         label: "Tot Decels (#)",             shortLabel: "Tot Decels",  aliases: ["totalDecelerations", "total_decelerations", "tot_ds", "totDs"],                                       digits: 0 },
+];
+
+// Football metric set for LITE Catapult plans — drops B2-3 efforts and
+// Tot Accels/Decels (those columns aren't exposed on Lite plans). Adds
+// HSR Distance, Sprint Distance, Sprint Efforts and Max Velocity instead
+// — the highest-evidence injury proxies in the Malone 2017 / Buchheit
+// 2019 hamstring-injury literature when accel/decel data isn't available.
+const FOOTBALL_METRICS_LITE: Metric[] = [
+  { key: "totalDistance",              label: "Total Distance (m)",     shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                              digits: 0 },
+  { key: "highSpeedDistance",          label: "HSR Distance (m)",       shortLabel: "HSR Dist",    aliases: ["highSpeedDistance", "high_speed_distance", "hir_dist"],                                          digits: 0 },
+  { key: "sprintDistance",             label: "Sprint Distance (m)",    shortLabel: "Sprint Dist", aliases: ["sprintDistance", "sprint_distance"],                                                            digits: 0 },
+  { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",    shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                   digits: 0 },
+  { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)",    shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                   digits: 0 },
+  { key: "sprintEfforts",              label: "Sprint Efforts (#)",     shortLabel: "Sprint Eff",  aliases: ["velocity_band6_total_efforts_gen2", "velocityBand6TotalEffortsGen2", "sprintEfforts"],            digits: 0 },
+  { key: "maxVelocity",                label: "Max Velocity (km/h)",    shortLabel: "Max Vel",     aliases: ["maxVelocity", "max_velocity", "max_vel"],                                                       digits: 1 },
 ];
 
 const BASKETBALL_METRICS: Metric[] = [
@@ -111,13 +129,21 @@ export default function SquadLoadTable({
   date,
   sport = "football",
   lang = "EN",
+  catapultDataTier = "full",
 }: {
   players: SquadLoadPlayer[];
   date: string;
   sport?: "football" | "basketball" | string | null;
   lang?: "EN" | "IS";
+  /** When 'lite' the table swaps the B2-3 / Tot Accels columns out for
+   *  HSR / Sprint Distance / Sprint Efforts / Max Velocity — metrics
+   *  the lower-tier Catapult plans actually expose. Default 'full'
+   *  preserves backwards-compatible behavior for unaware callers. */
+  catapultDataTier?: "full" | "lite";
 }) {
-  const metrics = sport === "basketball" ? BASKETBALL_METRICS : FOOTBALL_METRICS;
+  const metrics = sport === "basketball"
+    ? BASKETBALL_METRICS
+    : (catapultDataTier === "lite" ? FOOTBALL_METRICS_LITE : FOOTBALL_METRICS_FULL);
   const rows = players.map((p) => ({
     name: p.name,
     position: p.position,
