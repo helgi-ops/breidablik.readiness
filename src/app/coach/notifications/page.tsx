@@ -13,6 +13,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PlayerRecoveryMessageModal from "@/components/coach/PlayerRecoveryMessageModal";
 
 type NotificationRow = {
   id: string;
@@ -27,6 +28,12 @@ type NotificationRow = {
   is_post_match: boolean;
   fired_at: string;
   acknowledged_at: string | null;
+  /** Set when the coach has already sent an AI recovery message for this
+   *  notification (see PlayerRecoveryMessageModal). Null until then. */
+  player_message_sent_at: string | null;
+  /** TRUE when Stig 2 auto-send orchestrator delivered the AI message
+   *  (no coach review). Drives the "🤖 Auto-sent" pill on the row. */
+  auto_sent: boolean;
   player_id: string;
   players: { full_name: string | null } | null;
 };
@@ -63,6 +70,8 @@ export default function CoachNotificationsPage() {
   const [includeAcked, setIncludeAcked] = React.useState(false);
   const [detecting, setDetecting] = React.useState(false);
   const [ackingId, setAckingId] = React.useState<string | null>(null);
+  // AI player-recovery-message modal — open per-notification.
+  const [draftFor, setDraftFor] = React.useState<NotificationRow | null>(null);
 
   const fetchNotifications = React.useCallback(async () => {
     setLoading(true);
@@ -223,19 +232,64 @@ export default function CoachNotificationsPage() {
                     })}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleAcknowledge(n.id)}
-                  disabled={ackingId === n.id}
-                  className="shrink-0 rounded-md border border-current/30 bg-white/80 px-3 py-1 text-xs hover:bg-white disabled:opacity-50"
-                >
-                  {ackingId === n.id ? "…" : (en ? "Acknowledge" : "Staðfest")}
-                </button>
+                <div className="flex shrink-0 flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDraftFor(n)}
+                    disabled={!n.players?.full_name}
+                    className={`rounded-md border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+                      n.player_message_sent_at
+                        ? n.auto_sent
+                          ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                          : "border-emerald-400 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        : "border-current/30 bg-white/80 text-current hover:bg-white"
+                    }`}
+                    title={n.player_message_sent_at
+                      ? n.auto_sent
+                        ? (en ? "AI auto-sent — click to view what was delivered" : "AI sendi sjálfvirkt — smelltu til að skoða hvað var sent")
+                        : (en ? "AI message already sent — click to view" : "AI skilaboð þegar send — smelltu til að skoða")
+                      : (en ? "Draft an AI recovery message to send to the player" : "Búa til AI recovery skilaboð til leikmanns")}
+                  >
+                    {n.player_message_sent_at
+                      ? n.auto_sent
+                        ? (en ? "🤖 Auto-sent" : "🤖 Sjálfvirkt")
+                        : (en ? "✓ AI msg sent" : "✓ AI sent")
+                      : (en ? "🤖 Draft AI msg" : "🤖 Draga upp AI skilaboð")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleAcknowledge(n.id)}
+                    disabled={ackingId === n.id}
+                    className="rounded-md border border-current/30 bg-white/80 px-3 py-1 text-xs hover:bg-white disabled:opacity-50"
+                  >
+                    {ackingId === n.id ? "…" : (en ? "Acknowledge" : "Staðfest")}
+                  </button>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* AI player-recovery-message modal — opens when coach clicks the
+          "Draft AI msg" button on a notification row. Wraps fetch +
+          edit + send so the coach has a single contained surface for
+          per-flag athlete outreach. */}
+      {draftFor && (
+        <PlayerRecoveryMessageModal
+          open
+          notificationId={draftFor.id}
+          playerName={draftFor.players?.full_name ?? "—"}
+          parameterLabel={
+            (PARAMETER_LABELS[draftFor.parameter] ?? { en: draftFor.parameter, is: draftFor.parameter })[
+              en ? "en" : "is"
+            ]
+          }
+          lang={en ? "EN" : "IS"}
+          onClose={() => setDraftFor(null)}
+          onSent={() => { setDraftFor(null); void fetchNotifications(); }}
+        />
+      )}
 
       {/* Acknowledged history toggle */}
       <div className="mt-6 border-t pt-4">

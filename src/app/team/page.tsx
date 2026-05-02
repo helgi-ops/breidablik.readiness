@@ -378,8 +378,11 @@ export default function TeamPage() {
 
     try {
       const authSession = await supabase.auth.getSession();
+      // Server reads searchParams.get("id"); previously the client sent
+      // `eventId=` which silently 400'd as "Missing event id" → surfaced
+      // here as the generic "Failed to delete event" toast.
       const response = await fetch(
-        `/api/team/schedule?eventId=${eventId}`,
+        `/api/team/schedule?id=${encodeURIComponent(eventId)}`,
         {
           method: "DELETE",
           headers: {
@@ -389,7 +392,8 @@ export default function TeamPage() {
       );
 
       if (!response.ok) {
-        setError("Failed to delete event");
+        const json = await response.json().catch(() => null);
+        setError(json?.error ?? "Failed to delete event");
         return;
       }
 

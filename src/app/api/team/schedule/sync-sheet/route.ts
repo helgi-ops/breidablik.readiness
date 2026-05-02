@@ -56,6 +56,16 @@ const LEGACY_MONTH_GIDS: Record<string, string> = {
 };
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
+// Icelandic month names (the natural Google Sheets tab naming for Icelandic
+// teams). Used to resolve the right tab without requiring the coach to copy
+// numeric gid values out of the URL — that workflow had broken every time
+// they added a new month and was the root of the 2026-05 sync failure.
+const IS_MONTH_NAMES: Record<number, string> = {
+  1: "Janúar", 2: "Febrúar", 3: "Mars",     4: "Apríl",
+  5: "Maí",    6: "Júní",    7: "Júlí",     8: "Ágúst",
+  9: "September", 10: "Október", 11: "Nóvember", 12: "Desember",
+};
+
 /**
  * Reads schedule sheet config from team_settings.
  * Expected JSON in settings column: { schedule_sheet_id: "...", schedule_month_gids: { "2026-04": "..." } }
@@ -70,15 +80,90 @@ async function getSheetConfig(supabase: ReturnType<typeof getSupabase>, teamId: 
 
   const s = (data as any)?.settings;
   if (s?.schedule_sheet_id) {
+    // Merge with legacy gids for Breiðablik so existing months keep working
+    // even after the coach adds a new sheet_id without re-supplying gids.
+    const baseGids = teamId === BREIDABLIK_TEAM_ID ? LEGACY_MONTH_GIDS : {};
     return {
       sheetId: s.schedule_sheet_id,
-      monthGids: s.schedule_month_gids ?? {},
+      monthGids: { ...baseGids, ...(s.schedule_month_gids ?? {}) },
     };
   }
 
   // Legacy fallback for Breiðablik
   if (teamId === BREIDABLIK_TEAM_ID) {
     return { sheetId: LEGACY_SHEET_ID, monthGids: LEGACY_MONTH_GIDS };
+  }
+
+  return null;
+}
+
+/* ── Sheet fetching ──────────────────────────────────────────────────────── */
+
+// Detect the gviz "sheet not found" failure mode. The endpoint returns 200
+// with HTML when the sheet name doesn't match anything, so a content-shape
+// check is necessary in addition to res.ok.
+function looksLikeValidCsv(body: string): boolean {
+  if (!body || body.length < 10) return false;
+  const head = body.slice(0, 100).trimStart();
+  if (head.startsWith("<")) return false; // HTML error page
+  return true;
+}
+
+async function fetchSheetByName(sheetId: string, sheetName: string): Promise<string | null> {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=0`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const body = await res.text();
+  return looksLikeValidCsv(body) ? body : null;
+}
+
+async function fetchSheetByGid(sheetId: string, gid: string): Promise<string | null> {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}&headers=0`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const body = await res.text();
+  return looksLikeValidCsv(body) ? body : null;
+}
+
+/**
+ * Resolve a month → CSV body, trying tab-name lookups first (no per-month
+ * setup needed) and falling back to the explicit gid map. Returns the CSV
+ * + a label describing how it was resolved (for logging / error context).
+ */
+async function fetchMonthCsv(
+  sheetId: string,
+  monthGids: Record<string, string>,
+  year: number,
+  month: number,
+): Promise<{ csv: string; resolvedVia: string } | null> {
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const isName = IS_MONTH_NAMES[month];
+  const yy = String(year).slice(-2);
+
+  // Try the most natural human-readable tab names an Icelandic coach is
+  // likely to have created. Order matters — most specific first to avoid
+  // matching a wrong "Maí" when there's both "Maí 2025" and "Maí 2026".
+  const nameAttempts = isName
+    ? [
+        `${isName} ${year}`,                    // "Maí 2026"
+        `${isName} ${yy}`,                       // "Maí 26"
+        `${isName.toUpperCase()} ${year}`,       // "MAÍ 2026"
+        `${isName.toUpperCase()} ${yy}`,         // "MAÍ 26"
+        isName,                                  // "Maí" (least specific)
+        isName.toUpperCase(),                    // "MAÍ"
+      ]
+    : [];
+
+  for (const name of nameAttempts) {
+    const csv = await fetchSheetByName(sheetId, name);
+    if (csv) return { csv, resolvedVia: `name="${name}"` };
+  }
+
+  // Fall back to explicit gid mapping (legacy / manually configured).
+  const gid = monthGids[monthKey];
+  if (gid) {
+    const csv = await fetchSheetByGid(sheetId, gid);
+    if (csv) return { csv, resolvedVia: `gid=${gid}` };
   }
 
   return null;
@@ -291,22 +376,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const gid = sheetConfig.monthGids[monthKey];
-  if (!gid) {
-    return NextResponse.json(
-      { error: `Enginn flipi stilltur fyrir ${monthKey}. Stilltu schedule_month_gids í team settings.` },
-      { status: 400 },
-    );
-  }
-
   try {
-    // Fetch CSV from Google Sheets
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetConfig.sheetId}/gviz/tq?tqx=out:csv&gid=${gid}&headers=0`;
-    const csvResp = await fetch(csvUrl);
-    if (!csvResp.ok) {
-      return NextResponse.json({ error: "Failed to fetch Google Sheet" }, { status: 502 });
+    // Resolve the month's tab — tries Icelandic month names first
+    // ("Maí", "Maí 2026", …), falls back to the explicit gid map.
+    const resolved = await fetchMonthCsv(
+      sheetConfig.sheetId, sheetConfig.monthGids, year, month,
+    );
+    if (!resolved) {
+      const isName = IS_MONTH_NAMES[month] ?? monthKey;
+      return NextResponse.json(
+        {
+          error: `Fannst enginn flipi fyrir ${monthKey} í Google Sheetinu. Vertu viss um að flipinn heiti "${isName}" eða "${isName} ${year}" — annars þarf að bæta gid-i fyrir þennan mánuð í team settings.`,
+        },
+        { status: 400 },
+      );
     }
-    const csv = await csvResp.text();
+    const csv = resolved.csv;
     const rows = parseSheet(csv);
     const events = mapRowsToEvents(rows, year, month, teamId, uid);
 
@@ -337,7 +422,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "Sync complete", synced: events.length, month: monthKey });
+    return NextResponse.json({
+      message: "Sync complete",
+      synced: events.length,
+      month: monthKey,
+      resolved_via: resolved.resolvedVia,
+    });
   } catch (err) {
     console.error("Sync error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

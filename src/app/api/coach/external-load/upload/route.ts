@@ -185,7 +185,13 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     player_id: playerId,
     team_id:   teamId,
     date:      b.date,
-    source:    "catapult_csv",
+    // source MUST equal "catapult" — every downstream widget filters
+    // player_external_load_daily by source='catapult' (Squad Load,
+    // Quadrant, Indoor Briefing, McBurnie engine, …). A separate
+    // value like "catapult_csv" makes the rows invisible everywhere.
+    // Provenance lives in external_load_uploads (filename, uploader,
+    // date_range) which is queryable separately for audit purposes.
+    source:    "catapult",
     external_athlete_id: b.athleteId ?? null,
     activity_count: b.sessions.size || 1,
 
@@ -260,7 +266,7 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
   cleaned.player_id = playerId;
   cleaned.team_id   = teamId;
   cleaned.date      = b.date;
-  cleaned.source    = "catapult_csv";
+  cleaned.source    = "catapult";
   return cleaned;
 }
 
