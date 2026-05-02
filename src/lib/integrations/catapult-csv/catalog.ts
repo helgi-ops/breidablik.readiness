@@ -27,12 +27,15 @@ export type CatapultMetricKey =
   | "periodName"
   | "position"
   | "durationMinutes"
+  | "mdDayLabel"          // OpenField "MD Day" tag (MD-3, MD+1, …) — context only
 
   // ── Volume ──
   | "totalDistance"
   | "distancePerMinute"
   | "highSpeedDistance"
   | "sprintDistance"
+  | "highSpeedEfforts"    // HSR effort count (vel-band 5+)
+  | "sprintEfforts"       // Sprint effort count (vel-band 6+) — alias key for clarity vs velocityBand6Efforts
 
   // ── Velocity bands (0-6) ──
   | "velocityBand1Distance"
@@ -46,6 +49,15 @@ export type CatapultMetricKey =
   // ── Player Load ──
   | "playerLoad"
   | "playerLoadPerMinute"
+
+  // ── Acceleration / Deceleration totals + peaks (CSV-only, not via API) ──
+  | "totalAccelerations"      // "Tot Accels" → tot_as
+  | "totalDecelerations"      // "Tot Decels" → tot_ds
+  | "accelB23Efforts"         // "Acceleration B2-3 Total Efforts (Gen 2)" → accel_b2_3_tot_effs_gen2
+  | "decelB23Efforts"         // "Deceleration B2-3 Total Efforts (Gen 2)" → decel_b2_3_tot_effs_gen2
+  | "accelDecelEfforts"       // "Accel&Decel Efforts" → accel_decel_efforts
+  | "maxAcceleration"         // "Max Acceleration" → max_acceleration
+  | "maxDeceleration"         // "Max Deceleration" → max_deceleration
 
   // ── IMA Acceleration (Bands 1-3 — low/med/high) ──
   | "imaAccelBand1"
@@ -115,16 +127,29 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["position", "athlete position", "playing position"] },
   { key: "durationMinutes", label: "Duration (min)", unit: "min",
     aliases: ["duration", "total duration", "session duration", "duration minutes", "duration min", "active time"] },
+  { key: "mdDayLabel", label: "MD Day",
+    aliases: ["md day", "matchday", "md-day", "md tag", "matchday tag", "md day label"] },
 
   // ─── Volume ──────────────────────────────────────────────────────────
   { key: "totalDistance", label: "Total Distance", unit: "m",
-    aliases: ["total distance", "distance", "distance m", "total distance m", "total dist"] },
+    aliases: ["total distance", "distance", "distance m", "total distance m", "total dist", "avg dist", "avg distance"] },
   { key: "distancePerMinute", label: "Distance / min", unit: "m/min",
     aliases: ["distance per minute", "distance min", "distance per min", "m per min", "dist per min", "meters per minute"] },
   { key: "highSpeedDistance", label: "High Speed Running", unit: "m",
     aliases: ["high speed running", "hsr", "high speed running m", "hsr distance", "hs distance", "high speed distance"] },
   { key: "sprintDistance", label: "Sprint Distance", unit: "m",
     aliases: ["sprint distance", "sprint dist", "sprint m", "sprinting distance"] },
+  // High Speed Efforts (count) — separate from HSR distance
+  // (Gen 2) suffix is stripped by normalizeColumnName, so aliases match the post-strip form.
+  { key: "highSpeedEfforts", label: "HS Efforts (#)", unit: "count",
+    aliases: ["high speed efforts", "hs efforts", "hsr efforts", "hsr effort count",
+              "velocity band 5 total efforts", "velocity band 5 total effort count",
+              "vel b5 efforts", "vel b5 total efforts"] },
+  // Sprint Efforts — explicit alias key (also writes to velocity_band6_total_efforts_gen2)
+  { key: "sprintEfforts", label: "Sprint Efforts (#)", unit: "count",
+    aliases: ["sprint efforts", "sprint effort count", "sprinting efforts",
+              "velocity band 6 total efforts", "velocity band 6 total effort count",
+              "vel b6 efforts", "vel b6 total efforts"] },
 
   // ─── Velocity bands ──────────────────────────────────────────────────
   { key: "velocityBand1Distance", label: "Velocity Band 1 (m)", unit: "m",
@@ -136,9 +161,13 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   { key: "velocityBand4Distance", label: "Velocity Band 4 (m)", unit: "m",
     aliases: ["velocity band 4 total distance", "vel band 4 distance", "v band 4 distance", "vb4 distance", "velocity band 4 distance"] },
   { key: "velocityBand5Distance", label: "Velocity Band 5 (m)", unit: "m",
-    aliases: ["velocity band 5 total distance", "vel band 5 distance", "v band 5 distance", "vb5 distance", "velocity band 5 distance"] },
+    aliases: ["velocity band 5 total distance", "vel band 5 distance", "v band 5 distance", "vb5 distance", "velocity band 5 distance",
+              // OpenField "Velocity B5 Avg Dist (Sess) (m)" — parens are stripped before matching
+              "velocity b5 avg dist", "vel b5 avg dist", "velocity band 5 avg dist"] },
   { key: "velocityBand6Distance", label: "Velocity Band 6 (m)", unit: "m",
-    aliases: ["velocity band 6 total distance", "vel band 6 distance", "v band 6 distance", "vb6 distance", "velocity band 6 distance", "v6 distance"] },
+    aliases: ["velocity band 6 total distance", "vel band 6 distance", "v band 6 distance", "vb6 distance", "velocity band 6 distance", "v6 distance",
+              // OpenField "Velocity B6 Avg Dist (Sess) (m)" — parens stripped
+              "velocity b6 avg dist", "vel b6 avg dist", "velocity band 6 avg dist"] },
   { key: "velocityBand6Efforts", label: "Velocity Band 6 Effort Count", unit: "count",
     aliases: ["velocity band 6 total effort count", "velocity band 6 effort count", "vel band 6 efforts", "vb6 efforts", "v6 efforts", "velocity band 6 efforts"] },
 
@@ -147,6 +176,31 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["player load", "total player load", "pl", "playerload", "player load total"] },
   { key: "playerLoadPerMinute", label: "Player Load / min",
     aliases: ["player load per minute", "player load min", "pl per min", "plpm", "playerloadperminute", "pl min"] },
+
+  // ─── Accel/Decel totals + B2-3 efforts + peaks (CSV-only) ───────────
+  { key: "totalAccelerations", label: "Tot Accels (#)", unit: "count",
+    aliases: ["tot accels", "total accels", "total accelerations", "tot as", "tot accelerations"] },
+  { key: "totalDecelerations", label: "Tot Decels (#)", unit: "count",
+    aliases: ["tot decels", "total decels", "total decelerations", "tot ds", "tot decelerations"] },
+  // "(Gen 2)" is stripped by normalizeColumnName (parens removed), so the
+  // alias must match the *post-strip* form: "Acceleration B2-3 Total Efforts"
+  { key: "accelB23Efforts", label: "Acceleration B2-3 Total Efforts (Gen 2)", unit: "count",
+    aliases: ["acceleration b2 3 total efforts", "acceleration b23 total efforts",
+              "acceleration b2-3 total efforts",
+              "accel b2 3 tot effs gen2", "accel b2 3 efforts", "accel b23 efforts",
+              "acceleration band 2 3 total efforts"] },
+  { key: "decelB23Efforts", label: "Deceleration B2-3 Total Efforts (Gen 2)", unit: "count",
+    aliases: ["deceleration b2 3 total efforts", "deceleration b23 total efforts",
+              "deceleration b2-3 total efforts",
+              "decel b2 3 tot effs gen2", "decel b2 3 efforts", "decel b23 efforts",
+              "deceleration band 2 3 total efforts"] },
+  { key: "accelDecelEfforts", label: "Accel & Decel Efforts", unit: "count",
+    aliases: ["accel decel efforts", "acceldecel efforts", "accel and decel efforts",
+              "accel & decel efforts", "acceleration deceleration efforts"] },
+  { key: "maxAcceleration", label: "Max Acceleration", unit: "m/s²",
+    aliases: ["max acceleration", "maximum acceleration", "peak acceleration", "max accel"] },
+  { key: "maxDeceleration", label: "Max Deceleration", unit: "m/s²",
+    aliases: ["max deceleration", "maximum deceleration", "peak deceleration", "max decel"] },
 
   // ─── IMA Accel/Decel (Bands 1-3) ─────────────────────────────────────
   { key: "imaAccelBand1", label: "IMA Accel Band 1", unit: "count",

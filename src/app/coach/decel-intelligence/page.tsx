@@ -24,7 +24,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 // PlayerDecelSummaryCard is different: it's a NARROW AI feature that
 // translates the 6 decel metrics into coach speak. Lives only on this page.
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
-import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
 
@@ -101,10 +100,18 @@ export default function CoachDecelIntelligencePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
-  // Refresh-baselines / Re-sync-7d / Diagnose-B3 buttons removed from this
-  // page (admin/dev concerns, not coach UX). Baselines run nightly via the
-  // refresh_mcburnie_decel_baselines cron; Catapult re-sync moved to
-  // /coach/catapult-upload; B3 diagnostic was a pure dev tool.
+  const [refreshing, setRefreshing] = React.useState(false);
+  // Backfill state — separate from baseline-refresh because backfill calls
+  // the live Catapult API for each day in the window and can take several
+  // minutes. Track per-day progress so the coach knows it's still working.
+  const [backfilling, setBackfilling] = React.useState(false);
+  const [backfillStatus, setBackfillStatus] = React.useState<string | null>(null);
+  // Decel B3 diagnostic — calls /api/integrations/catapult/debug-fields and
+  // surfaces only the decel-relevant subset so we can see exactly which
+  // parameter name Catapult is accepting and what raw key it returns. Used
+  // when the b3 column refuses to populate after a re-sync.
+  const [diagnosing, setDiagnosing] = React.useState(false);
+  const [diagnosis, setDiagnosis] = React.useState<unknown>(null);
 
   React.useEffect(() => { void load(); }, []);
 
@@ -245,8 +252,164 @@ export default function CoachDecelIntelligencePage() {
     }
   }
 
-  // refreshBaselines / diagnoseDecelB3 / backfillLastWeek removed — see
-  // state-block comment above. Re-sync action lives at /coach/catapult-upload.
+  async function refreshBaselines() {
+    setRefreshing(true);
+    try {
+      const sb = getSupabaseClient();
+      await sb.rpc("refresh_mcburnie_decel_baselines");
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Refresh villa");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  /**
+   * Diagnostic — calls /api/integrations/catapult/debug-fields with the user's
+   * JWT and pulls out only the decel-relevant subset. Helps us see WHY the b3
+   * column is still null after a re-sync: did Catapult reject our parameter
+   * names, or is it returning the data under a key our normalize.ts aliases
+   * don't recognise?
+   */
+  async function diagnoseDecelB3() {
+    setDiagnosing(true);
+    setError(null);
+    setDiagnosis(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Engin gilda session — endurinn­skráðu þig");
+        return;
+      }
+      // Use a recent high-volume training day so any b3 events that exist
+      // would show up. Apr 22 had 41 b2_3 + 15 sprints for Jónatan.
+      const probeDate = "2026-04-22";
+      const res = await fetch(
+        `/api/integrations/catapult/debug-fields?date=${probeDate}`,
+        { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+      );
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        setError(`Diagnostic villa: ${json?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      // Pick out only the b3-decel diagnostic fields so coach UI doesn't
+      // drown in the full debug payload (which has 80+ keys for FMP, IMA, etc.)
+      //
+      // Normalize fields are on the SessionMetric directly (NOT under
+      // .externalLoad — that's a different type used elsewhere). Look at
+      // normalizedFirst.imaBand3DecelCount, etc.
+      const normalizedExternal = (json.normalizedFirst as Record<string, unknown> | null) ?? {};
+      const norm = (k: string) => (normalizedExternal[k] === undefined ? "<undefined>" : normalizedExternal[k]);
+      // Filter raw keys for IMA Free Running so we can see whether Catapult
+      // returns them and under what name. ima_fr_band 7+8 are the indoor
+      // sprint proxy used by McBurnie engine.
+      const allKeys: string[] = (json.allRawKeys as string[]) ?? [];
+      const freeRunningKeys = allKeys.filter((k) => /free.*run|fr.?band|stride/i.test(k)).sort();
+      setDiagnosis({
+        date: json.date,
+        activity: json.activity,
+        athleteCount: json.athleteCount,
+        decelB3PlusParameters: json.decelB3PlusParameters,
+        decelB3PlusAcceptedParameters: json.decelB3PlusAcceptedParameters,
+        decelB3PlusRejectedParameters: json.decelB3PlusRejectedParameters,
+        decelB3PlusRevealedKeys: json.decelB3PlusRevealedKeys,
+        decelKeys: json.decelKeys,
+        decelKeysWithSamples: json.decelKeysWithSamples,
+        // IMA Free Running diagnostic
+        freeRunning_acceptedCount: json.freeRunningAcceptedCount,
+        freeRunning_batchSucceeded: json.freeRunningBatchSucceeded,
+        freeRunning_rejected_first3: (json.freeRunningRejectedParameters ?? []).slice(0, 3),
+        freeRunning_revealedKeys: json.freeRunningRevealedKeys,
+        freeRunning_keysInMergedPayload: freeRunningKeys,
+        // Normalized output — proves whether normalize.ts is doing its job.
+        // "<undefined>" string sentinel makes missing keys visible (otherwise
+        // JSON.stringify silently drops them).
+        normalize_has_normalizedFirst: json.normalizedFirst != null,
+        normalize_externalLoad_keys: Object.keys(normalizedExternal).sort(),
+        normalize_decelB23TotEffsGen2: norm("decelB23TotEffsGen2"),
+        normalize_decelB3PlusTotEffsGen2: norm("decelB3PlusTotEffsGen2"),
+        normalize_imaBand1DecelCount: norm("imaBand1DecelCount"),
+        normalize_imaBand2DecelCount: norm("imaBand2DecelCount"),
+        normalize_imaBand3DecelCount: norm("imaBand3DecelCount"),
+      });
+    } catch (e: any) {
+      setError(e?.message ?? "Diagnostic villa");
+    } finally {
+      setDiagnosing(false);
+    }
+  }
+
+  /**
+   * Re-fetch the last 7 days from Catapult so any newly-enabled Reporting
+   * Parameters (e.g. "Deceleration B3 Efforts (Gen 2)") populate retroactively.
+   *
+   * Catapult does NOT backfill historical data when you enable a new
+   * Reporting Parameter — it only starts capturing it for activities synced
+   * from that point forward. So the only way to upgrade existing rows is to
+   * re-run the per-day sync against the API with the new param active.
+   *
+   * Backfill is rate-limited to 7 days per click (≈ 3-5 min wall time) to
+   * stay well inside Vercel's 300s function timeout. Click again for older
+   * days if the 28-day window also needs upgrading.
+   */
+  async function backfillLastWeek() {
+    setBackfilling(true);
+    setError(null);
+    setBackfillStatus("Sæki JWT token…");
+    try {
+      const sb = getSupabaseClient();
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setError("Engin gilda session — endurinn­skráðu þig");
+        return;
+      }
+
+      // 7-day window ending yesterday (today's data isn't fully in yet)
+      const today = new Date();
+      const dateTo = new Date(today);
+      dateTo.setUTCDate(dateTo.getUTCDate() - 1);
+      const dateFrom = new Date(today);
+      dateFrom.setUTCDate(dateFrom.getUTCDate() - 7);
+      const fromStr = dateFrom.toISOString().slice(0, 10);
+      const toStr = dateTo.toISOString().slice(0, 10);
+
+      setBackfillStatus(`Endurnýja Catapult gögn ${fromStr} – ${toStr} (3-5 mín)…`);
+      const res = await fetch(
+        `/api/integrations/catapult/backfill?dateFrom=${fromStr}&dateTo=${toStr}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        const msg =
+          json?.error ||
+          (Array.isArray(json?.results)
+            ? json.results.find((r: any) => r.status === "error")?.warning
+            : undefined) ||
+          `HTTP ${res.status}`;
+        setError(`Backfill villa: ${msg}`);
+        return;
+      }
+
+      setBackfillStatus("Endur-reikna baselines með nýjum gögnum…");
+      await sb.rpc("refresh_mcburnie_decel_baselines");
+      await load();
+      setBackfillStatus(`Klárt — ${json.datesProcessed} dagar uppfærðir`);
+      // Clear status banner after 6s
+      setTimeout(() => setBackfillStatus(null), 6000);
+    } catch (e: any) {
+      setError(e?.message ?? "Backfill villa");
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   const counts = React.useMemo(() => {
     let red = 0, yellow = 0, green = 0, unknown = 0;
@@ -280,11 +443,6 @@ export default function CoachDecelIntelligencePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-      <LiteTierBanner
-        feature="Decel Intelligence"
-        reasonIs="McBurnie engine þarf B2-3 acceleration/deceleration efforts úr Catapult — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
-        reasonEn="The McBurnie engine needs B2-3 acceleration/deceleration efforts from Catapult — those aren't included in your current Catapult plan."
-      />
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -302,10 +460,31 @@ export default function CoachDecelIntelligencePage() {
             ForceFrame, CMJ) lives on the VALD/CMJ dashboard tab.
           </p>
         </div>
-        {/* Re-sync / Endur-reikna baselines / Greina Decel B3 buttons
-            removed — admin/dev concerns. Re-sync now lives at
-            /coach/catapult-upload, baselines run nightly via cron, B3
-            diagnostic was a one-off setup tool. */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={backfillLastWeek}
+            disabled={backfilling || refreshing || diagnosing}
+            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            title="Re-fetch the last 7 days from Catapult so newly-enabled Reporting Parameters (e.g. Decel B3) start filling historic rows."
+          >
+            {backfilling ? "Sæki…" : "↻ Re-sync síðustu 7 daga"}
+          </button>
+          <button
+            onClick={refreshBaselines}
+            disabled={refreshing || backfilling || diagnosing}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            {refreshing ? "Reikna…" : "↻ Endur-reikna baselines"}
+          </button>
+          <button
+            onClick={diagnoseDecelB3}
+            disabled={diagnosing || backfilling || refreshing}
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            title="Probe Catapult API to see exactly which Decel B3 parameter names it accepts and what raw key it returns the data under."
+          >
+            {diagnosing ? "Greini…" : "🔍 Greina Decel B3"}
+          </button>
+        </div>
       </div>
 
       {/* Counts */}
@@ -316,8 +495,43 @@ export default function CoachDecelIntelligencePage() {
         <CountCard tone="gray"    label="Insufficient data" n={counts.unknown} />
       </div>
 
-      {/* Backfill status banner + Decel-B3 diagnostic panel removed with
-          the buttons that drove them. */}
+      {/* Backfill progress banner — only visible while a re-sync is running.
+          Runs ~30-60s per day so 7 days = ~3-5 min wall time. Coach can leave
+          the page; backfill keeps running server-side until the route returns. */}
+      {backfillStatus && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+          <strong>Catapult re-sync</strong>: {backfillStatus}
+        </div>
+      )}
+
+      {/* Decel B3 diagnostic panel — only visible after the coach clicks
+          "🔍 Greina Decel B3". Renders the raw probe results so we can see
+          which Catapult parameter name was accepted and what raw key the
+          data came back under. Pre-formatted JSON for easy copy-paste. */}
+      {diagnosis != null && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <div className="mb-2 flex items-center justify-between">
+            <strong>Decel B3 diagnostic</strong>
+            <button
+              onClick={() => setDiagnosis(null)}
+              className="text-amber-700 hover:text-amber-900"
+              title="Hide diagnostic"
+            >
+              ✕
+            </button>
+          </div>
+          <pre className="overflow-x-auto rounded bg-white p-2 font-mono text-[10px] text-slate-800">
+            {JSON.stringify(diagnosis, null, 2)}
+          </pre>
+          <p className="mt-2 text-[10px] italic text-amber-800">
+            Look at <code>decelB3PlusAcceptedParameters</code> — if empty, Catapult
+            rejected ALL our parameter name variants. If populated, look at
+            <code> returnedKeys</code> for the raw key Catapult uses; that key needs
+            to be added to <code>normalize.ts</code> aliases. Also scan
+            <code> decelKeys</code> for any decel-named field already in the merged payload.
+          </p>
+        </div>
+      )}
 
       {/* Decel-source banner — tells the coach which Catapult field is feeding
           the McBurnie engine right now. b3+ = biomechanically aligned with the
@@ -495,7 +709,6 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.overload.cumulative_28d_count.toFixed(0)} decels`}
               caption={`28-day cumulative · baseline daily ≈ ${s.overload.baseline_daily_mean.toFixed(1)}`}
               hint="Red if cumulative > 1.5× expected total."
-              info="Total high-intensity decelerations (band 2-3, >2 m/s²) over the last 28 days vs the player's personal daily baseline. Catches the player who has been quietly stacking eccentric load. RED when the 28-day total is more than 1.5× their expected total — eccentric tissue load is accumulating faster than recovery (McBurnie 2022)."
             />
             <Detail
               title="Underload"
@@ -503,7 +716,6 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.underload.cumulative_7d_count.toFixed(0)} / ${s.underload.match_day_demand.toFixed(1)}`}
               caption={`7-day exposure / match-day demand · ${s.underload.match_days_observed} match days observed`}
               hint="Red if 7-day < 50% of match demand."
-              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand (higher injury risk in the next match, especially hamstring and ACL)."
             />
             <Detail
               title="Decel : Accel Coupling"
@@ -515,7 +727,6 @@ function PlayerRow({ row }: { row: Row }) {
                   : `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`
               }
               hint="Eccentric:concentric balance. Red if <0.7 or >2.0. ASP personal-z (Osgnach 2023) above 0 means more decel-skewed than the player's own normal pattern."
-              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — lacks braking control, hamstring risk) or >2.0 (one-sided, brake-heavy — chronic eccentric load). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
             />
             <Detail
               title="Decel : Sprint Coupling"
@@ -527,7 +738,6 @@ function PlayerRow({ row }: { row: Row }) {
                   : `Awaiting Catapult Vel B6+ Total # Efforts (Gen 2) field. Will populate after next sync.`
               }
               hint="McBurnie's primary risk metric. Red if <0.5 (sprinting without proper braking)."
-              info="McBurnie's primary risk metric. Ratio of decelerations to high-speed sprint efforts. A player who sprints without proportional braking volume is exposing knees, ankles and hamstrings to forces they're not conditioned for. RED if <0.5 — sprint exposure outpacing braking control. Yellow ≥0.5 but below the player's healthy range."
             />
             <Detail
               title="Exposure Concentration"
@@ -535,7 +745,6 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.concentration.peak_day_pct_of_28d.toFixed(1)}%`}
               caption={`Peak day's share of 28-day total · ${s.concentration.distinct_high_intensity_days} active days`}
               hint="Red if peak-day > 30% of monthly volume."
-              info="How much of the 28-day decel volume happened on the single peak day. Spread is good, concentration is risky. RED if more than 30% of monthly volume in one day — sudden spike rather than chronic accumulation, which is the classic injury-pattern signature. Look for this when the rest of the week was quiet."
             />
             {/* Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel count) */}
             {row.cutting && (
@@ -549,7 +758,6 @@ function PlayerRow({ row }: { row: Row }) {
                     : "7d / 28d total · awaiting baseline"
                 }
                 hint="Dos'Santos 2021. Proxy via IMA B3 decels. Red if z ≥ 1.5 vs personal 28d distribution. Sharp 70-90° cuts produce highest knee-joint load."
-                info="Sharp 70-90° change-of-direction cuts produce the highest knee-joint load and are the dominant non-contact ACL injury mechanism (Dos'Santos 2021). MicroPulse uses IMA Band 3 deceleration count as a proxy — high IMA decels at high intensity correlate with cutting volume. Personal-z compares the last 7 days against the player's own 28-day distribution. RED if z ≥ 1.5 — meaningfully above their normal cutting load."
               />
             )}
             {/* Osgnach 2023 — MPE Recovery Time (recovery lengthening = early fatigue) */}
@@ -568,7 +776,6 @@ function PlayerRow({ row }: { row: Row }) {
                     : "Awaiting baseline"
                 }
                 hint="Osgnach 2023. Inter-MPE recovery time lengthening (positive z) is sharper than HSR drop as a fatigue signal. Red if z ≥ 1.5."
-                info="Average recovery time between Metabolic Power Equivalent (MPE) high-intensity efforts. When this lengthens it means the player needs more rest between bursts — an early-fatigue signal that's sharper than the classic HSR drop because it shows up before raw running output declines (Osgnach 2023). RED if z ≥ 1.5 — recovery is meaningfully longer than the player's own 28-day baseline."
               />
             )}
           </div>
@@ -578,16 +785,12 @@ function PlayerRow({ row }: { row: Row }) {
   );
 }
 
-function Detail({ title, flag, big, caption, hint, info }: {
+function Detail({ title, flag, big, caption, hint }: {
   title: string;
   flag: Flag;
   big: string;
   caption: string;
   hint: string;
-  /** Optional longer explanation surfaced via a hoverable info icon next
-   *  to the title. Coaches without S&C background want to know WHY a
-   *  metric matters and WHAT the red threshold actually means. */
-  info?: string;
 }) {
   const dot = {
     red: "bg-red-500",
@@ -602,26 +805,6 @@ function Detail({ title, flag, big, caption, hint, info }: {
         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
           {title}
         </span>
-        {info && (
-          // Hover OR focus to reveal — keyboard-accessible. The tooltip is
-          // anchored bottom-left of the icon so it doesn't get clipped by
-          // the card edge on the right side of the grid.
-          <span className="relative inline-flex group">
-            <button
-              type="button"
-              aria-label={`More info about ${title}`}
-              className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300 text-[9px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400"
-            >
-              i
-            </button>
-            <span
-              role="tooltip"
-              className="invisible group-hover:visible group-focus-within:visible absolute left-0 top-5 z-30 w-72 rounded-md border border-slate-200 bg-white p-3 text-[11px] leading-relaxed text-slate-700 shadow-lg"
-            >
-              {info}
-            </span>
-          </span>
-        )}
       </div>
       <div className="mt-1 text-xl font-bold text-slate-900">{big}</div>
       <div className="text-[11px] text-slate-600">{caption}</div>

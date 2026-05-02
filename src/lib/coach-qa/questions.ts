@@ -44,6 +44,50 @@ export type Question = {
 
 export const COACH_QUESTIONS: Question[] = [
   {
+    id:    "minutes_capacity",
+    label: "How many minutes can he handle in the next match?",
+    hint:  "Estimated minute capacity from 7-day training load vs his typical match demand",
+    data_keys: ["decel_status", "active_injuries", "match_calendar", "recent_load", "wellness_recent", "vald_strength"],
+    prompt: `Question: Based on the load this player has accumulated in the last 7 days,
+how many minutes can he realistically tolerate in the next match?
+
+You will receive a 'minute_capacity_context' block with pre-computed numbers:
+  - typical_match_player_load   = his average Player Load on a full match
+  - cumulative_7d_player_load   = sum of his last 7 days of total Player Load
+  - load_ratio_7d_vs_match      = cumulative_7d / typical_match (key metric)
+  - max_session_pl_7d           = biggest single training/match in past 7d
+  - days_since_last_match       = how long since his last match
+  - days_since_injury_return    = if returning from injury, days since return_date
+                                  (null if no injury or already long-cleared)
+
+Use the load_ratio_7d_vs_match as your primary signal:
+  - ratio ≥ 1.5  → he has built capacity ≥ a full match → 90 minutes
+  - ratio 1.0–1.5 → solid capacity → 75–90 minutes
+  - ratio 0.5–1.0 → moderate capacity → 45–60 minutes
+  - ratio 0.2–0.5 → limited capacity → 20–30 minutes
+  - ratio < 0.2  → very low capacity → 15 minutes max, or hold him out
+
+THEN apply these caps:
+  - If days_since_injury_return is 0–7 → cap at 30 minutes regardless of ratio
+  - If days_since_injury_return is 8–14 → cap at 60 minutes
+  - If days_since_injury_return is 15–21 → cap at 75 minutes
+  - If max_session_pl_7d is at least typical_match_player_load (he has had a match-equivalent session) → no cap
+  - If wellness has been consistently poor (multiple poor_sleep/sore days in pattern) → drop one tier
+
+Answer in 2-3 sentences. Structure:
+  - Sentence 1: a specific minute number or tight range (e.g. "About 60 minutes" or
+    "Full 90 — no restriction"). Be concrete; coaches need a number.
+  - Sentence 2: the dominant reason (e.g. "his last 7 days carried 2.1× a normal match
+    in load, so the legs are conditioned" or "only 9 days back from the hamstring,
+    so capacity is fine but recurrence risk forces the cap").
+  - Sentence 3 (only if needed): a watch-out for substituting earlier (e.g. "watch
+    his speed in the last 15 — first match back").
+
+Round to coach-friendly numbers: 15, 30, 45, 60, 75, 90. Don't say "47 minutes".
+If the data is too sparse to compute (typical_match_player_load is null), say
+"limited match-load history — recommend starting at 60 and adjusting live" and stop.`,
+  },
+  {
     id:    "biggest_risk",
     label: "What's his biggest injury risk right now?",
     hint:  "Surfaces the single dominant risk factor across all signals",

@@ -90,6 +90,7 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
     date: string;
     accum: Record<string, number>;
     maxOf:  Record<string, number>;
+    firstStr: Record<string, string>;
     sessions: Set<string>;
   };
   const map = new Map<string, Bucket>();
@@ -105,6 +106,7 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
         date: r.date,
         accum: {},
         maxOf: {},
+        firstStr: {},
         sessions: new Set<string>(),
       };
       map.set(key, bucket);
@@ -114,10 +116,13 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
     // SUM these (counts, distances, energy)
     const SUM_FIELDS: CatapultMetricKey[] = [
       "totalDistance", "highSpeedDistance", "sprintDistance",
+      "highSpeedEfforts", "sprintEfforts",
       "velocityBand1Distance", "velocityBand2Distance", "velocityBand3Distance",
       "velocityBand4Distance", "velocityBand5Distance", "velocityBand6Distance",
       "velocityBand6Efforts",
       "playerLoad",
+      "totalAccelerations", "totalDecelerations",
+      "accelB23Efforts", "decelB23Efforts", "accelDecelEfforts",
       "imaAccelBand1", "imaAccelBand2", "imaAccelBand3",
       "imaDecelBand1", "imaDecelBand2", "imaDecelBand3",
       "imaFrBand1Strides", "imaFrBand2Strides", "imaFrBand3Strides", "imaFrBand4Strides",
@@ -133,6 +138,7 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
     // MAX these (peaks, rates that don't aggregate by sum)
     const MAX_FIELDS: CatapultMetricKey[] = [
       "maxVelocity", "avgVelocity", "maxHeartRate", "avgHeartRate",
+      "maxAcceleration", "maxDeceleration",
       "metabolicPower", "playerLoadPerMinute", "distancePerMinute",
       "imaFrBand1Rate", "imaFrBand2Rate", "imaFrBand3Rate", "imaFrBand4Rate",
       "imaFrBand5Rate", "imaFrBand6Rate", "imaFrBand7Rate", "imaFrBand8Rate",
@@ -140,8 +146,17 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
     for (const f of MAX_FIELDS) {
       const v = num(r.raw[f]);
       if (v != null) {
-        bucket.maxOf[f] = bucket.maxOf[f] != null ? Math.max(bucket.maxOf[f], v) : v;
+        // Max-of-magnitude: deceleration usually arrives as a negative number.
+        const mag = (f === "maxDeceleration") ? Math.abs(v) : v;
+        bucket.maxOf[f] = bucket.maxOf[f] != null ? Math.max(bucket.maxOf[f], mag) : mag;
       }
+    }
+
+    // STRING-FIRST: take the first non-empty value across periods (mdDay rarely varies within a day)
+    const STRING_FIELDS: CatapultMetricKey[] = ["mdDayLabel"];
+    for (const f of STRING_FIELDS) {
+      const v = (r.raw[f] ?? "").trim();
+      if (v && !bucket.firstStr[f]) bucket.firstStr[f] = v;
     }
   }
   return Array.from(map.values());
@@ -156,6 +171,16 @@ type AggregatedRow = ReturnType<typeof aggregateByAthleteAndDate>[number];
 function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
   const a = b.accum;
   const m = b.maxOf;
+  const s = b.firstStr;
+
+  // velocity_band6_total_efforts comes from either the explicit `Sprint Efforts`
+  // column (preferred — that's the canonical Catapult Gen 2 sprint count) or
+  // the legacy `Velocity Band 6 Effort Count` column. Fall back order matters
+  // because some CSV templates have both and the Sprint Efforts variant is
+  // typically the higher-fidelity one.
+  const sprintEffortsCount = a.sprintEfforts ?? a.velocityBand6Efforts ?? null;
+  const hsrEffortsCount    = a.highSpeedEfforts ?? null;
+
   const out: Record<string, unknown> = {
     player_id: playerId,
     team_id:   teamId,
@@ -164,16 +189,28 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     external_athlete_id: b.athleteId ?? null,
     activity_count: b.sessions.size || 1,
 
-    tot_ds: a.totalDistance ?? null,
-    hsr_distance_m: a.highSpeedDistance ?? null,
+    // Volume — actual schema column names (verified against Supabase information_schema):
+    //   high_speed_distance, sprint_distance, hir_dist, total_distance.
+    //   Velocity bands 1–4 distance columns do NOT exist; only 5 & 6.
+    total_distance:      a.totalDistance ?? null,
+    high_speed_distance: a.highSpeedDistance ?? null,
+    sprint_distance:     a.sprintDistance ?? null,
 
-    velocity_band1_total_distance: a.velocityBand1Distance ?? null,
-    velocity_band2_total_distance: a.velocityBand2Distance ?? null,
-    velocity_band3_total_distance: a.velocityBand3Distance ?? null,
-    velocity_band4_total_distance: a.velocityBand4Distance ?? null,
     velocity_band5_total_distance: a.velocityBand5Distance ?? null,
     velocity_band6_total_distance: a.velocityBand6Distance ?? null,
-    velocity_band6_total_efforts:  a.velocityBand6Efforts ?? null,
+
+    // Effort counts (Gen 2 schema — what the API integration writes too)
+    velocity_band5_total_efforts_gen2: hsrEffortsCount,
+    velocity_band6_total_efforts_gen2: sprintEffortsCount,
+
+    // Accel/Decel totals & B2-3 efforts (CSV-side counterpart to API integration)
+    tot_as: a.totalAccelerations ?? null,
+    tot_ds: a.totalDecelerations ?? null,
+    accel_b2_3_tot_effs_gen2: a.accelB23Efforts ?? null,
+    decel_b2_3_tot_effs_gen2: a.decelB23Efforts ?? null,
+    accel_decel_efforts: a.accelDecelEfforts ?? null,
+    max_acceleration:    m.maxAcceleration ?? null,
+    max_deceleration:    m.maxDeceleration ?? null,
 
     total_player_load:        a.playerLoad ?? null,
     player_load_per_minute:   m.playerLoadPerMinute ?? null,
@@ -211,6 +248,8 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     max_heart_rate: m.maxHeartRate ?? null,
 
     session_duration_minutes: a.durationMinutes ?? null,
+
+    md_day_label: s.mdDayLabel ?? null,
   };
   // Strip nulls so partial uploads don't clobber existing data
   const cleaned: Record<string, unknown> = {};

@@ -119,14 +119,6 @@ export async function PATCH(req: Request) {
       updates.notes = body.notes;
     }
 
-    // Stig 2 — auto-send AI player recovery messages opt-in.
-    // Boolean flag; PATCH gates the value but the AI orchestrator does
-    // its own ELITE check before delivering anything, so accepting this
-    // on a non-ELITE team is harmless (it just won't fire).
-    if (typeof body.auto_send_player_recovery_messages === "boolean") {
-      updates.auto_send_player_recovery_messages = body.auto_send_player_recovery_messages;
-    }
-
     // Catapult integration credentials
     if (typeof body.catapult_api_key === "string" || body.catapult_api_key === null) {
       updates.catapult_api_key = body.catapult_api_key;

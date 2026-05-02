@@ -80,22 +80,21 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
-// MechanicalLoadIndexCard moved to /coach/load-intelligence (was on the GPS Data tab).
+import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
-// VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
+import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
-// TeamMetabolicSummary moved to /coach/load-intelligence (was on the GPS Data tab).
+import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import CoachGpsManualEntry from "@/components/coach/CoachGpsManualEntry";
-// GpsLoadIntelligence moved to /coach/load-intelligence (was on the GPS Data tab).
+import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import CoachDrillsTab from "@/components/coach/CoachDrillsTab";
 import TrainerDashboard from "@/components/trainer/TrainerDashboard";
-// (TeamSwitcher moved into CoachShell sidebar — coach can swap teams from
-//  the sidebar header now, no longer rendered here.)
+import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 
 /* ── Error boundary for TrainerDashboard ──────────────── */
 class TrainerErrorBoundary extends React.Component<
@@ -2786,8 +2785,16 @@ export default function CoachPage() {
     return resolvedTeamId;
   }
 
-  // (handleTeamSwitch removed — team switching now happens via the sidebar
-  //  TeamSwitcher in CoachShell, which persists profiles.team_id and reloads.)
+  /** Handle team switch from TeamSwitcher */
+  function handleTeamSwitch(team: CoachTeam) {
+    setCoachTeamId(team.id);
+    setTeamSport(team.sport || null);
+    setTeamType(team.teamType);
+    // Reset tab to "today" when switching teams
+    setDashTab("today");
+    setRows([]);
+    setLoading(true);
+  }
 
   /** -----------------------------
    * Fetch helpers
@@ -6899,9 +6906,14 @@ export default function CoachPage() {
   // and the regular coach data-loading never calls setLoading(false) for PT teams.
   if (teamType === "personal_trainer" && coachTeamId) {
     return (
-      <TrainerErrorBoundary>
-        <TrainerDashboard teamId={coachTeamId} />
-      </TrainerErrorBoundary>
+      <div className="space-y-4">
+        <div className="flex justify-end px-4 pt-2">
+          <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
+        </div>
+        <TrainerErrorBoundary>
+          <TrainerDashboard teamId={coachTeamId} />
+        </TrainerErrorBoundary>
+      </div>
     );
   }
 
@@ -6937,10 +6949,13 @@ export default function CoachPage() {
           { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
           { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
         ];
-        // Overflow tabs (volatility, vald, strength, trend, rtp) used to
-        // sit behind a "More ▾" dropdown here — moved to the sidebar
-        // Monitoring section as first-class links. The ?tab=… URLs still
-        // route through this page so deep links land on the right view.
+        // Overflow — niche player-monitoring views (volatility, jump testing,
+        // VBT, longitudinal trends, RTP). MD Comparison + Session moved out
+        // of this row entirely — they live in the top-nav Planning dropdown.
+        const MORE_TABS: Array<typeof dashTab> = ["volatility", "vald", "strength", "trend", "rtp"];
+        const moreLabel = lang === "IS" ? "Meira" : "More";
+
+        const isMoreActive = MORE_TABS.includes(dashTab);
 
         const TabBtn = ({ tabId }: { tabId: typeof dashTab }) => {
           const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
@@ -6985,12 +7000,48 @@ export default function CoachPage() {
                   </Link>
                 ))}
 
-                {/* "More" dropdown removed — Volatility / VALD / Strength /
-                    Trends / RTP now live as first-class links in the
-                    Monitoring section of the sidebar. The underlying tab
-                    rendering (?tab=volatility etc) still works so sidebar
-                    links land directly on the right view. */}
+                {/* "More" dropdown — overflow in-app tabs */}
+                <div className="relative group">
+                  <button
+                    className={`flex items-center gap-1 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isMoreActive
+                        ? "border-slate-900 text-slate-900"
+                        : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    {isMoreActive ? labels[dashTab] : moreLabel}
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <div className="invisible group-hover:visible absolute left-0 top-full z-50 mt-0 min-w-[200px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                    {MORE_TABS.map((tabId) => {
+                      const isLocked = proTabs.has(tabId) && !isAtLeastPro && !planLoading;
+                      return (
+                        <button
+                          key={tabId}
+                          onClick={() => setDashTab(tabId)}
+                          className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                            dashTab === tabId
+                              ? "bg-slate-50 font-semibold text-slate-900"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          <span>{labels[tabId]}</span>
+                          {isLocked && (
+                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+
+              {/* Team switcher */}
+              <TeamSwitcher currentTeamId={coachTeamId} onSwitch={handleTeamSwitch} />
 
               {/* Language toggle */}
               <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
@@ -7037,10 +7088,11 @@ export default function CoachPage() {
             playerBaselines={playerBaselines}
             playerCounterfactuals={playerCounterfactualsMap}
           />
-          {/* Verdict-accuracy / calibration widget moved to the Reporting
-              Center — coaches doing their morning briefing don't want
-              system-health metrics in the way. See the System health
-              section at the bottom of /coach/reporting-center. */}
+          {/* Calibration widget — proves the system's verdicts are
+              actually predictive (last 30 days). Hidden when sample
+              size is too small (<30 scoreable verdicts) so we don't
+              show noisy percentages. */}
+          <VerdictAccuracyCard lang={lang} />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
@@ -7905,9 +7957,29 @@ export default function CoachPage() {
           return { a7: fmt(a7), c28: fmt(c28), acwr };
         }
 
-        // acwrColor / acwrBg / gpsRows / noData / computeSnapshot used to
-        // live here for the Squad Load 7d/28d/ACWR table — moved with the
-        // table to /coach/quadrant via the SquadLoadTable component.
+        function acwrColor(v: number | null): string {
+          if (v == null) return "text-slate-400";
+          if (v > 1.5) return "text-red-600 font-semibold";
+          if (v > 1.3) return "text-amber-600 font-semibold";
+          if (v >= 0.8) return "text-emerald-700";
+          return "text-blue-600 font-semibold"; // < 0.8 — of lítið álag
+        }
+
+        function acwrBg(v: number | null): string {
+          if (v == null) return "";
+          if (v > 1.5) return "bg-red-50";
+          if (v > 1.3) return "bg-amber-50";
+          if (v >= 0.8) return "bg-emerald-50";
+          return "bg-blue-50"; // < 0.8 — of lítið álag
+        }
+
+        const gpsRows = gpsAllPlayers.map((p) => ({
+          name: p.name,
+          position: p.position,
+          snapshots: GPS_METRICS.map((m) => computeSnapshot(p.history, m.aliases, m.digits)),
+        }));
+
+        const noData = !gpsLoading && gpsRows.length === 0;
 
         // ── Today's session overview ──────────────────────────────────────
         const todayPlayerRows = gpsAllPlayers.map((p) => {
@@ -8162,15 +8234,90 @@ export default function CoachPage() {
               </CardContent>
             </Card>
 
-            {/* GpsLoadIntelligence + Squad Load + MLI + MLS moved out:
-                - Load Intelligence + MLI + MLS → /coach/load-intelligence
-                  (Internal:External coupling story).
-                - Squad Load 7d/28d/ACWR table → /coach/quadrant (Quadrant
-                  IS the acute/chronic story so the table sits naturally
-                  alongside the 2x2 chart).
-                GPS Data tab now keeps just the daily snapshot table
-                above plus the manual entry below — pure "what did each
-                player do today" view. */}
+            {/* ── Load Intelligence (computed signals overview) ── */}
+            {!gpsLoading && gpsAllPlayers.length > 0 && (
+              <GpsLoadIntelligence
+                players={gpsAllPlayers}
+                date={gpsDate}
+                lang={lang as "IS" | "EN"}
+              />
+            )}
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">GPS Data — Squad Load</CardTitle>
+                    <CardDescription className="mt-1 text-sm text-slate-500">
+                      7-day acute · 28-day chronic · ACWR per player · Catapult
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" />&lt;0.8 Low</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />0.8–1.3 OK</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />1.3–1.5 Elevated</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" />&gt;1.5 High</span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {gpsLoading ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">Loading GPS data…</div>
+                ) : noData ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">
+                    No Catapult GPS data available. Sync Catapult to load player data.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 whitespace-nowrap border-r border-slate-200">
+                            Player
+                          </th>
+                          {GPS_METRICS.map((m) => (
+                            <th key={m.key} colSpan={3} className="px-2 py-2.5 text-center text-xs font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap">
+                              {m.shortLabel}
+                            </th>
+                          ))}
+                        </tr>
+                        <tr className="border-b border-slate-200 bg-slate-50/60">
+                          <th className="sticky left-0 z-10 bg-slate-50/60 px-4 py-1.5 border-r border-slate-200" />
+                          {GPS_METRICS.map((m) => (
+                            <React.Fragment key={m.key}>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500 border-l border-slate-200">7D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">28D</th>
+                              <th className="px-3 py-1.5 text-center text-[11px] font-medium text-slate-500">ACWR</th>
+                            </React.Fragment>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gpsRows.map((player, i) => (
+                          <tr key={player.name} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-slate-100/60`}>
+                            <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-900 whitespace-nowrap border-r border-slate-200" style={{ background: i % 2 === 0 ? "white" : "rgb(248 250 252 / 0.4)" }}>
+                              <div>{player.name}</div>
+                              <div className="text-[11px] text-slate-400">{player.position}</div>
+                            </td>
+                            {player.snapshots.map((snap, si) => (
+                              <React.Fragment key={si}>
+                                <td className="px-3 py-2 text-center text-slate-700 border-l border-slate-100 tabular-nums">{snap.a7}</td>
+                                <td className="px-3 py-2 text-center text-slate-500 tabular-nums">{snap.c28}</td>
+                                <td className={`px-3 py-2 text-center tabular-nums ${acwrColor(snap.acwr)} ${acwrBg(snap.acwr)}`}>
+                                  {snap.acwr == null ? "—" : snap.acwr.toFixed(2)}
+                                </td>
+                              </React.Fragment>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <MechanicalLoadIndexCard teamId={coachTeamId} />
+            <TeamMetabolicSummary teamId={coachTeamId} />
             <CoachGpsManualEntry
               teamId={coachTeamId}
               date={today}

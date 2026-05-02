@@ -21,9 +21,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantChart";
-import SquadLoadTable, { type SquadLoadPlayer } from "@/components/coach/SquadLoadTable";
 import { useLang, type Lang } from "@/lib/lang";
-import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Window = 7 | 14 | 28;
 
@@ -110,74 +108,10 @@ export default function CoachQuadrantPage() {
   const [teamLabel, setTeamLabel] = React.useState<string>("");
   const [computedAt, setComputedAt] = React.useState<string>("");
 
-  // Squad Load table data — moved here from the GPS Data tab. Quadrant
-  // IS the acute/chronic story so this is the natural companion to the
-  // 2x2 chart above.
-  const [squadLoadPlayers, setSquadLoadPlayers] = React.useState<SquadLoadPlayer[]>([]);
-  const [squadLoadDate, setSquadLoadDate] = React.useState<string>("");
-  const [teamSport, setTeamSport] = React.useState<string | null>(null);
-
   React.useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowDays]);
-
-  // Squad Load full-history fetch — runs once, independent of the
-  // 7/14/28 slider above (the table always shows 7d acute / 28d
-  // chronic / ACWR per metric, slider doesn't apply).
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      const sb = getSupabaseClient();
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await sb
-        .from("profiles").select("team_id").eq("id", user.id).maybeSingle();
-      const teamId = profile?.team_id as string | undefined;
-      if (!teamId || !alive) return;
-      const today = new Date().toISOString().slice(0, 10);
-      setSquadLoadDate(today);
-      const startDate = (() => {
-        const d = new Date(`${today}T00:00:00.000Z`);
-        d.setUTCDate(d.getUTCDate() - 35);
-        return d.toISOString().slice(0, 10);
-      })();
-      const { data: roster } = await sb
-        .from("players")
-        .select("id, full_name, position")
-        .eq("team_id", teamId)
-        .eq("is_active", true)
-        .order("full_name");
-      if (!alive || !roster?.length) { setSquadLoadPlayers([]); return; }
-      const playerIds = (roster as Array<{ id: string }>).map((r) => String(r.id));
-      const { data: loadData } = await sb
-        .from("player_external_load_daily")
-        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod")
-        .in("source", ["catapult", "manual"])
-        .in("player_id", playerIds)
-        .gte("date", startDate)
-        .lte("date", today)
-        .order("date");
-      if (!alive) return;
-      const byPlayer = new Map<string, Array<Record<string, unknown>>>();
-      for (const row of (loadData ?? []) as Array<Record<string, unknown>>) {
-        const pid = String(row.player_id);
-        const list = byPlayer.get(pid) ?? [];
-        list.push(row);
-        byPlayer.set(pid, list);
-      }
-      const result = (roster as Array<{ id: string; full_name?: string; position?: string }>)
-        .filter((p) => (byPlayer.get(String(p.id)) ?? []).length > 0)
-        .map((p) => ({
-          id: String(p.id),
-          name: String(p.full_name ?? ""),
-          position: String(p.position ?? "—"),
-          history: byPlayer.get(String(p.id)) ?? [],
-        }));
-      if (alive) setSquadLoadPlayers(result);
-    })();
-    return () => { alive = false; };
-  }, []);
 
   async function load() {
     setLoading(true);
@@ -198,11 +132,10 @@ export default function CoachQuadrantPage() {
 
       const { data: team } = await sb
         .from("teams")
-        .select("name, club_short_name, sport")
+        .select("name, club_short_name")
         .eq("id", teamId)
         .maybeSingle();
       setTeamLabel((team?.club_short_name || team?.name) ?? "");
-      setTeamSport((team?.sport as string | null) ?? null);
 
       // Roster
       const { data: roster, error: rosterErr } = await sb
@@ -361,11 +294,6 @@ export default function CoachQuadrantPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-      <LiteTierBanner
-        feature="Quadrant View"
-        reasonIs="Quadrant view þarf bæði RPE og fullt GPS load (PlayerLoad + B2-3 efforts) — síðari hlutinn er ekki tiltækur á núverandi Catapult-pakkanum ykkar."
-        reasonEn="Quadrant view needs both RPE and full GPS load (PlayerLoad + B2-3 efforts) — the latter isn't included in your current Catapult plan."
-      />
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -431,20 +359,6 @@ export default function CoachQuadrantPage() {
           />
         )}
       </div>
-
-      {/* Squad Load — 7d / 28d / ACWR per player per metric. Moved here
-          from the GPS Data tab where it was crammed alongside the raw
-          daily numbers; this page is the natural home since the
-          Quadrant chart above already tells the acute/chronic story
-          visually. */}
-      {squadLoadPlayers.length > 0 && (
-        <SquadLoadTable
-          players={squadLoadPlayers}
-          date={squadLoadDate || new Date().toISOString().slice(0, 10)}
-          sport={teamSport}
-          lang={lang === "EN" ? "EN" : "IS"}
-        />
-      )}
 
       {/* Helper text below chart */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">

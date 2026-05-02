@@ -256,13 +256,6 @@ export default function CatapultUploadPage() {
         </div>
       )}
 
-      {/* API re-sync — for clubs WITH OpenField API access. Used after a
-          new Reporting Parameter is enabled in Catapult (e.g. Decel B3
-          Efforts Gen 2) so the last 7 days backfill with the new column.
-          Catapult does not retroactively populate new params on existing
-          activities; only new syncs see them. */}
-      {step === 1 && <CatapultApiResync />}
-
       {/* Step indicator */}
       <div className="mb-4 flex items-center gap-2 flex-wrap">
         {([
@@ -525,92 +518,5 @@ export default function CatapultUploadPage() {
         </Card>
       )}
     </div>
-  );
-}
-
-// ── API re-sync (moved from /coach/decel-intelligence) ───────────────
-// Re-fetches the last 7 days from Catapult OpenField via the API. Used
-// when a new Reporting Parameter has been enabled (e.g. Decel B3 Efforts
-// Gen 2) — Catapult doesn't retroactively populate new params on
-// existing activities, so the only way to upgrade historic rows is to
-// re-run the per-day sync with the new param active. Also re-runs the
-// McBurnie baseline refresh once the rows land.
-function CatapultApiResync() {
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function run() {
-    setBusy(true);
-    setError(null);
-    setStatus("Sæki JWT token…");
-    try {
-      const sb = getSupabaseClient();
-      const { data: sessionData } = await sb.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        setError("Engin gilda session — endurinnskráðu þig.");
-        return;
-      }
-      const today = new Date();
-      const dateTo = new Date(today);
-      dateTo.setUTCDate(dateTo.getUTCDate() - 1);
-      const dateFrom = new Date(today);
-      dateFrom.setUTCDate(dateFrom.getUTCDate() - 7);
-      const fromStr = dateFrom.toISOString().slice(0, 10);
-      const toStr = dateTo.toISOString().slice(0, 10);
-
-      setStatus(`Endurnýja Catapult gögn ${fromStr} – ${toStr} (3-5 mín)…`);
-      const res = await fetch(
-        `/api/integrations/catapult/backfill?dateFrom=${fromStr}&dateTo=${toStr}`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
-      );
-      const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        const msg =
-          json?.error ||
-          (Array.isArray(json?.results)
-            ? json.results.find((r: { status: string; warning?: string }) => r.status === "error")?.warning
-            : undefined) ||
-          `HTTP ${res.status}`;
-        setError(`Backfill villa: ${msg}`);
-        return;
-      }
-      setStatus("Endur-reikna McBurnie baselines með nýjum gögnum…");
-      await sb.rpc("refresh_mcburnie_decel_baselines");
-      setStatus(`Klárt — ${json.datesProcessed} dagar uppfærðir.`);
-      setTimeout(() => setStatus(null), 8000);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Backfill villa");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="mb-4 border-dashed">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold">API re-sync — síðustu 7 daga</CardTitle>
-        <CardDescription className="text-xs">
-          Fyrir lið MEÐ OpenField API — endurnýjar gögn síðustu 7 daga svo nýir Reporting
-          Parameters (t.d. Decel B3 Efforts Gen 2) komi inn í eldri raðir. Tekur 3-5 mín.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Button onClick={run} disabled={busy} variant="outline" size="sm">
-          {busy ? "Sæki…" : "↻ Re-sync síðustu 7 daga"}
-        </Button>
-        {status && (
-          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
-            {status}
-          </div>
-        )}
-        {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {error}
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }

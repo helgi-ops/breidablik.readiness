@@ -41,7 +41,7 @@ async function authenticate(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const result = await authenticate(req);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 401 });
-  const { uid, profile, supabase } = result;
+  const { profile, supabase } = result;
 
   // Verify coach/admin role
   const role = profile.role?.toUpperCase();
@@ -75,14 +75,6 @@ export async function POST(req: NextRequest) {
         title: title.trim().slice(0, 500),
         description: description ? description.trim().slice(0, 2000) : null,
         location: location ? location.trim().slice(0, 500) : null,
-        // created_by is NOT NULL with no default — manual inserts must
-        // populate it explicitly, otherwise Postgres rejects with 23502
-        // and the UI surfaces a generic "Failed to create event".
-        created_by: uid,
-        // source defaults to 'manual' but be explicit so deletes from the
-        // sync-sheet path don't accidentally wipe these out (sync-sheet
-        // only deletes WHERE source = 'google_sheet').
-        source: "manual",
       })
       .select()
       .single();
@@ -115,10 +107,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const url = new URL(req.url);
-  // Accept both `id` (canonical) and `eventId` (legacy client name) so
-  // older callers keep working — saves a future "looks fine but doesn't
-  // work" round-trip if the param drifts again.
-  const eventId = url.searchParams.get("id") ?? url.searchParams.get("eventId");
+  const eventId = url.searchParams.get("id");
 
   if (!eventId) {
     return NextResponse.json({ error: "Missing event id" }, { status: 400 });

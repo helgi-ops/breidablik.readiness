@@ -26,7 +26,6 @@ import {
   type RawDecelInputs,
 } from "@/lib/micropulse/decelNarrative";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
-import { getCatapultDataTier, LITE_TIER_BLOCKED_RESPONSE } from "@/lib/micropulse/catapultTier";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -357,15 +356,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const isElite = await isEliteTeam(supabase, auth.teamId);
   if (!isElite) {
     return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
-  }
-
-  // Catapult-tier gate (Lite Mode). Decel Narrative is built on the
-  // McBurnie engine which needs B2-3 efforts — without that data the
-  // narrative would either fail validation or hallucinate. Block early
-  // so we don't burn an AI call on a team that can't render the result.
-  const catapultTier = await getCatapultDataTier(supabase, auth.teamId);
-  if (catapultTier === "lite") {
-    return NextResponse.json(LITE_TIER_BLOCKED_RESPONSE.body, { status: LITE_TIER_BLOCKED_RESPONSE.status });
   }
 
   // Verify player belongs to team
