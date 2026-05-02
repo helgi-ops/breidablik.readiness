@@ -6945,25 +6945,28 @@ export default function CoachPage() {
         // Primary in-app tabs — daily monitoring workflow
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
         // Standalone routes for deeper monitoring analytics — render as Links.
-        // Indoor Load + Decel Intel are LITE-gated: they need B2-3 efforts
-        // and IMA Free Running bands the lower-tier Catapult plans don't
-        // expose. Same hidden-set as CoachSidebar's LITE_HIDDEN_HREFS so
-        // both nav surfaces stay in sync.
-        //
-        // Quadrant is INTENTIONALLY allowed on Lite — it falls back to the
-        // Gabbett 2016 volume-axis variant (total_distance × sRPE) which
-        // works fine without B2-3.
+        // Tier-aware filtering mirrors the sidebar:
+        //   LITE: hides Indoor Load + Decel Intel (need B2-3/IMA bands),
+        //         shows HSR Intelligence (Malone 2017 equivalent for Lite)
+        //   FULL: hides HSR Intelligence (redundant with higher-fidelity
+        //         Decel Intel on Full), shows Indoor + Decel.
+        // Quadrant is shown on both — Gabbett 2016 (volume) on Lite,
+        // Gabbett 2017 (volume + B2-3) on Full.
         const LITE_HIDDEN_HREFS = new Set<string>([
           "/coach/indoor-load", "/coach/decel-intelligence",
+        ]);
+        const FULL_HIDDEN_HREFS = new Set<string>([
+          "/coach/hsr-intelligence",
         ]);
         const ALL_EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
           { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },
           { href: "/coach/indoor-load",        label: { EN: "Indoor Load",      IS: "Indoor Load" } },
           { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
+          { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intel.",       IS: "HSR Intel." } },
           { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
         ];
         const EXTERNAL_TABS = catapultDataTier === "full"
-          ? ALL_EXTERNAL_TABS
+          ? ALL_EXTERNAL_TABS.filter((t) => !FULL_HIDDEN_HREFS.has(t.href))
           : ALL_EXTERNAL_TABS.filter((t) => !LITE_HIDDEN_HREFS.has(t.href));
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar

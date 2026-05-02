@@ -57,6 +57,10 @@ const monitoringLinks: SidebarLink[] = [
   { href: "/coach/quadrant",           label: { EN: "Quadrant view",                    IS: "Quadrant view" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load",                      IS: "Indoor Load" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
+  // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
+  // shown only when LITE_VISIBLE_HREFS filtering swaps it in. Built on
+  // Malone 2017 + Buchheit 2014 evidence.
+  { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
   { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
@@ -236,6 +240,14 @@ const LITE_HIDDEN_HREFS = new Set<string>([
   "/coach/decel-intelligence",
 ]);
 
+// Pages shown ONLY on Lite tier — Lite-specific equivalents of Premium
+// features. /coach/hsr-intelligence is the Malone 2017 + Buchheit 2014
+// counterpart to Decel Intelligence; on Full plans it's redundant with
+// the higher-fidelity Decel page so we hide it.
+const FULL_HIDDEN_HREFS = new Set<string>([
+  "/coach/hsr-intelligence",
+]);
+
 // ─── Public Sidebar ─────────────────────────────────────────────────────────
 export function CoachSidebar({
   isAdmin,
@@ -274,12 +286,13 @@ export function CoachSidebar({
 
   const isOnCoach = pathname === "/coach" && currentTab == null;
 
-  // Filter Lite-gated items out of Monitoring when the team's Catapult
-  // tier doesn't expose B2-3 efforts. See migration 20260502170000.
+  // Filter Monitoring items by Catapult data tier. Lite teams get the
+  // /coach/hsr-intelligence page (Malone 2017) instead of the Premium-
+  // only Decel Intelligence + Indoor Load. See migration 20260502170000.
   const isLite = catapultDataTier !== "full";
   const monitoringLinksForTier = isLite
     ? monitoringLinks.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
-    : monitoringLinks;
+    : monitoringLinks.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
 
   return (
     <div className="flex h-full flex-col">
