@@ -24,6 +24,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 // PlayerDecelSummaryCard is different: it's a NARROW AI feature that
 // translates the 6 decel metrics into coach speak. Lives only on this page.
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
+import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
 
@@ -279,6 +280,11 @@ export default function CoachDecelIntelligencePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      <LiteTierBanner
+        feature="Decel Intelligence"
+        reasonIs="McBurnie engine þarf B2-3 acceleration/deceleration efforts úr Catapult — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
+        reasonEn="The McBurnie engine needs B2-3 acceleration/deceleration efforts from Catapult — those aren't included in your current Catapult plan."
+      />
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

@@ -23,6 +23,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantChart";
 import SquadLoadTable, { type SquadLoadPlayer } from "@/components/coach/SquadLoadTable";
 import { useLang, type Lang } from "@/lib/lang";
+import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Window = 7 | 14 | 28;
 
@@ -360,6 +361,11 @@ export default function CoachQuadrantPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      <LiteTierBanner
+        feature="Quadrant View"
+        reasonIs="Quadrant view þarf bæði RPE og fullt GPS load (PlayerLoad + B2-3 efforts) — síðari hlutinn er ekki tiltækur á núverandi Catapult-pakkanum ykkar."
+        reasonEn="Quadrant view needs both RPE and full GPS load (PlayerLoad + B2-3 efforts) — the latter isn't included in your current Catapult plan."
+      />
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

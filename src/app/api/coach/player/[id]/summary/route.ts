@@ -71,6 +71,12 @@ async function buildSummaryInput(
   playerId:    string,
   windowDays:  7 | 14,
   coachVerdict: CoachVerdictInput = null,
+  /** When 'lite' the team's Catapult plan doesn't expose B2-3 efforts,
+   *  so the McBurnie payload (decel_sub_engine), Sharp Cut signals, and
+   *  ASP-burst metrics are all stripped from the input — they would
+   *  produce empty/misleading output. AI is told to lean on wellness +
+   *  Velocity / HSR instead. */
+  catapultTier: "full" | "lite" = "full",
 ) {
   // Window dates for the pattern/EDI/MPE windows
   const windowStart = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
@@ -426,9 +432,15 @@ async function buildSummaryInput(
     // Ground-truth verdict the coach is currently looking at on screen.
     coach_visible_verdict: coachVerdict ?? null,
     pattern:                pattern.data ?? null,
-    decel_sub_engine:       mcburniePayload ?? null,
+    // McBurnie payload, Sharp Cut and ASP burst metrics depend on
+    // B2-3 acceleration/deceleration efforts the Lite-tier Catapult
+    // plans don't expose. Strip them entirely on Lite teams so the AI
+    // literally can't see them — better than the AI inferring noise from
+    // empty fields and inventing decel observations that don't exist.
+    decel_sub_engine:         catapultTier === "full" ? (mcburniePayload ?? null) : null,
     has_recent_strength_test: hasRecentStrengthTest,
-    indoor_state:           indoorStatus.data ?? null,
+    catapult_tier:            catapultTier,
+    indoor_state:             indoorStatus.data ?? null,
     active_injuries: (injuries.data ?? []).map((i: Record<string, unknown>) => ({
       type:      i.injury_type,
       side:      i.body_side,
@@ -438,8 +450,8 @@ async function buildSummaryInput(
     })),
     // Newer metrics (Sharp Cut, MPE, ASP, EDI, ACWR-like) — all optional
     // so existing prompts work even when these are null.
-    sharp_cut:        sharpCut.data ?? null,
-    asp_burst:        aspBurst.data ?? null,
+    sharp_cut:        catapultTier === "full" ? (sharpCut.data ?? null) : null,
+    asp_burst:        catapultTier === "full" ? (aspBurst.data ?? null) : null,
     mpe_recovery:     mpeRecovery,
     edi_window_avg:   ediAvg,
     acwr_like:        acwrLike,
@@ -572,6 +584,20 @@ STRUCTURE:
   baseline". It does NOT mean "the player feels fresh" or "took a test
   recently". Never echo that word literally — translate to coach speak
   ("no fatigue dip in today's jump") only when the test is actually present.
+
+═══════ CATAPULT TIER (LITE MODE) — STRICT ═══════
+- catapult_tier is either "full" or "lite". When 'lite', the team's Catapult
+  plan does NOT expose B2-3 acceleration/deceleration efforts, so the
+  decel_sub_engine, sharp_cut, and asp_burst fields are forcibly NULL.
+- When catapult_tier === "lite":
+    NEVER mention deceleration burden, A:D coupling, sharp braking,
+    sprint:decel coupling, McBurnie engine, or any decel-derived metric.
+    Those signals literally do not exist for this team — referencing them
+    is a hallucination.
+    Lean on wellness, recent_load_14d (HSR / Sprint / Player Load),
+    pattern.persistent_self_reports, and verdict_streak instead.
+- When catapult_tier === "full":
+    Use the EXTRA SIGNALS section below as normal.
 
 EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdict):
 - sharp_cut.cuts_personal_z > 1.0 → "sharp braking work above his usual" (in coach speak)
@@ -946,11 +972,17 @@ async function generateAndStore(
   let summary: { summary: string };
   let issues: string | null = null;
 
+  // Resolve the team's Catapult tier so the summary input strips
+  // McBurnie/Sharp-Cut/ASP fields for Lite teams. Lazy-imported to keep
+  // the AI route fast when the helper isn't needed.
+  const { getCatapultDataTier } = await import("@/lib/micropulse/catapultTier");
+  const catapultTier = await getCatapultDataTier(supabase as unknown as Parameters<typeof getCatapultDataTier>[0], teamId);
+
   // Try up to 2 attempts — LLM hallucinations are random; a second try usually
   // produces clean output. We don't want to surface a 422 to the coach unless
   // both attempts fail, since that breaks the silent-fallback UX.
   try {
-    input = await buildSummaryInput(supabase, playerId, windowDays, coachVerdict);
+    input = await buildSummaryInput(supabase, playerId, windowDays, coachVerdict, catapultTier);
     // Detect active injury from input bundle so the validator can enforce
     // the injury-override rules (block "cleared for full session" etc.).
     const hasActiveInjury = Array.isArray((input as { active_injuries?: unknown[] }).active_injuries)

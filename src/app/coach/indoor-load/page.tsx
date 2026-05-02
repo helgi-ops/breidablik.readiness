@@ -20,6 +20,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red";
 type ScoreBand = "light" | "below_average" | "typical" | "heavy" | "spike";
@@ -760,6 +761,11 @@ export default function CoachIndoorLoadPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
+      <LiteTierBanner
+        feature="Indoor Load"
+        reasonIs="Indoor Load reiknar úr FMP IMA-bands gögnum sem eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
+        reasonEn="Indoor Load is computed from FMP IMA-band data that's not included in your current Catapult plan."
+      />
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
