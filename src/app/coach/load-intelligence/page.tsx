@@ -27,6 +27,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
+import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import { useLang } from "@/lib/lang";
 
 type GpsPlayerInput = {
@@ -175,6 +176,10 @@ export default function LoadIntelligencePage() {
           date={today}
           lang={lang === "EN" ? "EN" : "IS"}
         />
+      )}
+
+      {!loading && !error && teamId && (
+        <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
       )}
 
       {!loading && !error && teamId && <MechanicalLoadIndexCard teamId={teamId} />}
