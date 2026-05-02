@@ -115,7 +115,10 @@ export async function DELETE(req: NextRequest) {
   }
 
   const url = new URL(req.url);
-  const eventId = url.searchParams.get("id");
+  // Accept both `id` (canonical) and `eventId` (legacy client name) so
+  // older callers keep working — saves a future "looks fine but doesn't
+  // work" round-trip if the param drifts again.
+  const eventId = url.searchParams.get("id") ?? url.searchParams.get("eventId");
 
   if (!eventId) {
     return NextResponse.json({ error: "Missing event id" }, { status: 400 });
