@@ -130,7 +130,7 @@ async function buildSummaryInput(
     // mirror the metric_definitions block from ask/route.ts.
     supabase
       .from("player_external_load_daily")
-      .select("date, mpe_recovery_avg_s, mpe_count_est, edi, total_player_load, total_distance, high_metabolic_load_distance_m")
+      .select("date, mpe_recovery_avg_s, mpe_count_est, edi, total_player_load, total_distance, high_metabolic_load_distance_m, sprint_distance")
       .eq("player_id", playerId)
       .gte("date", windowStart)
       .order("date", { ascending: false }),
@@ -388,6 +388,71 @@ async function buildSummaryInput(
     postMatchContext.is_post_match = true;
   }
 
+  // ── Hader 2019 post-match recovery forecast ──
+  // Hader et al. (2019) Sports Med Open meta-analysis (11 studies, 165 athletes):
+  // sprint distance >5.5 m/s (≈19.8 km/h, equivalent to Velocity Band 6+) is the
+  // single strongest predictor of acute (24h) post-match fatigue. Total distance
+  // is NOT sensitive. Per 100m of sprint distance → +30% creatine kinase + −0.5%
+  // CMJ peak power 24h post-match.
+  //
+  // We translate that biomarker dose-response into a coach-facing "recovery
+  // shift": how much longer this player needs vs his/her typical match recovery.
+  // Computed as (this match's sprint_distance / personal median match sprint) − 1,
+  // capped at ±60% to avoid noise from rare extreme matches. Only fires when
+  // postMatchContext.is_post_match is true AND we have ≥3 historical matches
+  // to anchor the personal median.
+  let recoveryForecast: { match_sprint_m: number | null; personal_median_sprint_m: number | null; shift_pct: number | null; samples: number } | null = null;
+  if (postMatchContext.is_post_match && postMatchContext.match_date) {
+    // 1) Look up sprint distance on the actual match date from the window
+    const matchRow = (extLoadWindow.data ?? []).find(
+      (r: Record<string, unknown>) => r.date === postMatchContext.match_date,
+    ) as { sprint_distance?: number | null } | undefined;
+    const matchSprintM = matchRow ? Number(matchRow.sprint_distance ?? 0) : 0;
+
+    // 2) Personal median match sprint over the last 90 days. Pull match dates
+    //    from match_player_minutes (≥30 min played to count) and join against
+    //    player_external_load_daily for the sprint values.
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    const { data: matchDatesRows } = await supabase
+      .from("match_player_minutes")
+      .select("match_date, minutes_played, is_dnp")
+      .eq("player_id", playerId)
+      .gte("match_date", ninetyDaysAgo);
+    const validMatchDates = ((matchDatesRows ?? []) as Array<{ match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)
+      .filter((m) => !m.is_dnp && (m.minutes_played ?? 0) >= 30)
+      .map((m) => m.match_date);
+
+    let personalMedian = 0;
+    if (validMatchDates.length >= 3) {
+      const { data: matchSprintData } = await supabase
+        .from("player_external_load_daily")
+        .select("date, sprint_distance")
+        .eq("player_id", playerId)
+        .in("date", validMatchDates)
+        .gt("sprint_distance", 0);
+      const sprints = ((matchSprintData ?? []) as Array<{ sprint_distance: number | null }>)
+        .map((r) => Number(r.sprint_distance ?? 0))
+        .filter((v) => v > 0)
+        .sort((a, b) => a - b);
+      if (sprints.length >= 3) {
+        personalMedian = sprints[Math.floor(sprints.length / 2)];
+      }
+    }
+
+    if (matchSprintM > 0 && personalMedian > 0) {
+      // Raw shift, capped at ±60% (Hader's data is most reliable in the typical
+      // ±30% range; outside that the linear extrapolation gets unreliable)
+      const rawShift = (matchSprintM / personalMedian) - 1;
+      const cappedShift = Math.max(-0.6, Math.min(0.6, rawShift));
+      recoveryForecast = {
+        match_sprint_m: Math.round(matchSprintM),
+        personal_median_sprint_m: Math.round(personalMedian),
+        shift_pct: Math.round(cappedShift * 100),
+        samples: validMatchDates.length,
+      };
+    }
+  }
+
   // ── Compute MPE Recovery rolling z-score (Osgnach 2023) ──
   const mpeSeries = (extLoadWindow.data ?? [])
     .map((r: Record<string, unknown>) => Number(r.mpe_recovery_avg_s))
@@ -459,6 +524,12 @@ async function buildSummaryInput(
     // Match-day awareness — if today is post-match, load spikes are expected
     // and should be framed as such, not as concerning overreach.
     match_context:    postMatchContext,
+    // Hader 2019 — sprint-distance-derived recovery forecast. Null when not
+    // post-match or when personal median can't be established (<3 historical
+    // matches with sprint data). When non-null, shift_pct is the predicted
+    // recovery time delta vs the player's typical match recovery. Positive
+    // = needs more recovery than usual, negative = needs less than usual.
+    recovery_forecast: recoveryForecast,
     // ── New enrichments (2026-05-02) ──
     // Daily wellness shape (replaces sole reliance on counts) so AI can
     // describe the week's trajectory ("dipped Thu-Fri, recovered weekend").
@@ -672,6 +743,24 @@ MATCH-DAY CONTEXT — CRITICAL:
   load spike from yesterday is fully expected.
 - If days_since_match = 2 (MD+2), load echo still partly normal but starting
   to fade — slight concern only if other signals also fire (sleep + soreness).
+
+RECOVERY FORECAST (Hader 2019) — when present:
+- The input may include recovery_forecast (only fires post-match with ≥3 historical
+  matches anchoring personal median sprint distance). Fields:
+    match_sprint_m            — sprint distance in the just-played match (m)
+    personal_median_sprint_m  — player's typical match sprint volume
+    shift_pct                 — predicted recovery time delta vs typical (e.g. +25
+                                means "needs ~25% longer recovery than usual")
+    samples                   — number of historical matches in the median
+- When recovery_forecast.shift_pct >= 15 → mention specifically. Frame as:
+    "Yesterday's match: <match_sprint_m>m sprint vs his usual <personal_median_sprint_m>m
+    — predict roughly <shift_pct>% longer recovery than typical"
+- When shift_pct is between -10 and +10, the match was typical. Don't mention
+  the forecast — saying "normal recovery expected" adds no value.
+- When shift_pct <= -15, the match was easy for him. May be worth noting only if
+  paired with a verdict mismatch ("light match yesterday but red flagged today —
+  likely something else, not match load").
+- NEVER cite recovery_forecast values when recovery_forecast is null.
 
 When several extra signals fire together, mention 1-2 in sentence 2 — the most
 salient ones — not all. Quality > comprehensiveness.
