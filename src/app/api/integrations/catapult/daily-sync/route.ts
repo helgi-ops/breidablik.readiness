@@ -58,7 +58,17 @@ async function syncOneTeam(
   return { teamId: config?.teamId ?? "env-default", result };
 }
 
-async function runSync(request: Request, explicitDate?: string | null) {
+function dateMinusDaysIso(refIso: string, n: number): string {
+  const d = new Date(`${refIso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+async function runSync(
+  request: Request,
+  explicitDate?: string | null,
+  explicitDaysBack?: number | null,
+) {
   if (!isAuthorized(request) && !(await isAuthorizedCoach(request))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -69,6 +79,28 @@ async function runSync(request: Request, explicitDate?: string | null) {
     const debugIma = url.searchParams.get("debugIma") === "1";
     const skipPush = url.searchParams.get("skipPush") === "1";
     const targetDate = date ?? new Date().toISOString().slice(0, 10);
+
+    // daysBack lets a coach catch matches/sessions that were uploaded to
+    // Catapult AFTER the day they were played. Common case: a Saturday
+    // match isn't downloaded from the vest until Sunday morning. Without
+    // a backward window the Sunday Sync button would only ask Catapult
+    // for Sunday-dated activities and miss the Saturday match. With
+    // daysBack: 2 the route sweeps targetDate, targetDate-1, targetDate-2.
+    // Capped at 14 to bound the API call count per sync.
+    const daysBackParam =
+      explicitDaysBack ??
+      (url.searchParams.get("daysBack") != null
+        ? Number(url.searchParams.get("daysBack"))
+        : null);
+    const daysBack = Math.max(0, Math.min(14, Number.isFinite(daysBackParam) ? Number(daysBackParam) : 0));
+
+    // Build the list of dates to sync. Order: oldest → newest, so the
+    // most recent date's notification push fires last (after the freshest
+    // data has landed in the table).
+    const datesToSync: string[] = [];
+    for (let i = daysBack; i >= 0; i--) {
+      datesToSync.push(dateMinusDaysIso(targetDate, i));
+    }
 
     // ── Collect all Catapult configs to sync ──────────────────────
     const teamConfigs = await getTeamsWithCatapultCredentials();
@@ -93,17 +125,30 @@ async function runSync(request: Request, explicitDate?: string | null) {
       return NextResponse.json({ ok: false, error: "No Catapult credentials configured" }, { status: 400 });
     }
 
-    // ── Sync each team sequentially ──────────────────────────────
-    const results: Array<{ teamId: string; result: unknown; error?: string }> = [];
+    // ── Sync each team for each date sequentially ────────────────
+    // When daysBack=0 (default cron path) datesToSync is just [targetDate]
+    // and behaviour is identical to before. When daysBack>0 (Sync button
+    // on Today) we also sweep prior days so late-uploaded sessions get
+    // picked up. results[] retains the targetDate row at the END so the
+    // single-team flat-response path below still returns the most recent
+    // sync outcome.
+    const results: Array<{ teamId: string; date: string; result: unknown; error?: string }> = [];
     const syncedTeamIds = new Set<string>();
     for (const config of configs) {
-      try {
-        const r = await syncOneTeam(targetDate, config, debugIma);
-        results.push(r);
-        if (config?.teamId) syncedTeamIds.add(config.teamId);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Sync failed";
-        results.push({ teamId: config?.teamId ?? "env-default", result: null, error: message });
+      for (const syncDate of datesToSync) {
+        try {
+          const r = await syncOneTeam(syncDate, config, debugIma);
+          results.push({ ...r, date: syncDate });
+          if (config?.teamId) syncedTeamIds.add(config.teamId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Sync failed";
+          results.push({
+            teamId: config?.teamId ?? "env-default",
+            date: syncDate,
+            result: null,
+            error: message,
+          });
+        }
       }
     }
 
@@ -179,11 +224,31 @@ async function runSync(request: Request, explicitDate?: string | null) {
       }
     }
 
-    // Single team? Return flat response for backward compatibility
-    if (results.length === 1 && !results[0].error) {
+    // Single team? Return flat response for backward compatibility.
+    // When multiple dates were synced for a single team (daysBack > 0)
+    // we aggregate storedCount / unmatchedCount across the date sweep so
+    // the Sync button toast shows the total, not just one day.
+    const distinctTeamCount = new Set(
+      configs.map((c) => c?.teamId ?? "env-default"),
+    ).size;
+    if (distinctTeamCount === 1 && results.every((r) => !r.error)) {
+      const aggregated = {
+        storedCount: 0,
+        unmatchedCount: 0,
+        datesSynced: results.length,
+      } as Record<string, number>;
+      for (const r of results) {
+        const inner = (r.result ?? {}) as Record<string, unknown>;
+        aggregated.storedCount += Number(inner.storedCount ?? 0);
+        aggregated.unmatchedCount += Number(inner.unmatchedCount ?? 0);
+      }
       return NextResponse.json({
         ok: true,
-        result: results[0].result,
+        // When daysBack=0 keep returning the original single-result shape
+        // so callers that read `result.storedCount` still work.
+        result: results.length === 1 ? results[0].result : aggregated,
+        // Per-date breakdown for callers that want it.
+        perDate: results.length > 1 ? results : undefined,
         push: pushResult,
         rpeReminder: rpeReminderResult,
         notified: shouldNotify,
@@ -206,11 +271,14 @@ async function runSync(request: Request, explicitDate?: string | null) {
 }
 
 export async function GET(request: Request) {
-  return runSync(request, null);
+  return runSync(request, null, null);
 }
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const date = typeof body?.date === "string" && body.date.trim().length ? body.date.trim() : null;
-  return runSync(request, date);
+  const daysBack = typeof body?.daysBack === "number" && Number.isFinite(body.daysBack)
+    ? body.daysBack
+    : null;
+  return runSync(request, date, daysBack);
 }

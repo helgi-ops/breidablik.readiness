@@ -46,14 +46,29 @@ export default function CoachMatchMinutesPage() {
   const [matchDateDirty, setMatchDateDirty] = useState(false);
   const [isHome, setIsHome] = useState<boolean | null>(null);
   const [isHomeDirty, setIsHomeDirty] = useState(false);
+  // Currently active team — resolved from profiles.team_id (the team the
+  // coach picked in the sidebar TeamSwitcher). The match-minutes view is
+  // not RLS-team-scoped (it returns every player the user can see across
+  // all their teams), so we MUST filter on the client by team_id or the
+  // table will mix players from multiple clubs together.
+  const [teamId, setTeamId] = useState<string | null>(null);
 
-  async function load() {
+  const supabase = useMemo(() => getSupabaseClient(), []);
+
+  async function load(teamIdParam: string | null) {
     setLoading(true);
     setError("");
 
+    if (!teamIdParam) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("v_coach_match_minutes_input")
-      .select("*");
+      .select("*")
+      .eq("team_id", teamIdParam);
 
     if (error) {
       setError(error.message);
@@ -74,12 +89,38 @@ export default function CoachMatchMinutesPage() {
     setLoading(false);
   }
 
+  // Resolve the coach's currently active team, then load. Re-run whenever
+  // the active team changes (e.g. after switching teams in the sidebar).
   useEffect(() => {
-    load();
-  }, []);
+    let alive = true;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (alive) {
+          setError("Not signed in");
+          setLoading(false);
+        }
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("team_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      const tid = (profile as { team_id?: string | null } | null)?.team_id ?? null;
+      if (!alive) return;
+      setTeamId(tid);
+      if (!tid) {
+        setError("No team linked to this account");
+        setLoading(false);
+        return;
+      }
+      await load(tid);
+    })();
+    return () => { alive = false; };
+  }, [supabase]);
 
-    const supabase = useMemo(() => getSupabaseClient(), []);
-    
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -124,7 +165,6 @@ export default function CoachMatchMinutesPage() {
 
     // Use the override date if the coach changed it, otherwise use the view date
     const effectiveDate = matchDateDirty && matchDate ? matchDate : null;
-    const teamId = rows.find((r) => r.team_id)?.team_id;
 
     // If match date, opponent, or home/away was changed, ensure match_schedule row exists
     if (teamId && (matchDateDirty || opponentDirty || isHomeDirty)) {
@@ -172,7 +212,7 @@ export default function CoachMatchMinutesPage() {
     setOpponentDirty(false);
     setMatchDateDirty(false);
     setIsHomeDirty(false);
-    await load();
+    await load(teamId);
     setSaving(false);
   }
 
@@ -199,7 +239,7 @@ export default function CoachMatchMinutesPage() {
             </div>
 
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={load} disabled={loading || saving}>
+              <Button variant="secondary" onClick={() => load(teamId)} disabled={loading || saving}>
                 Refresh
               </Button>
               <Button onClick={saveAll} disabled={loading || saving}>

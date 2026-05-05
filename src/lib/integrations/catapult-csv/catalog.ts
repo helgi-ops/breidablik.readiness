@@ -178,10 +178,15 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["player load per minute", "player load min", "pl per min", "plpm", "playerloadperminute", "pl min"] },
 
   // ─── Accel/Decel totals + B2-3 efforts + peaks (CSV-only) ───────────
+  // OpenField Activity Report header uses the unqualified "Acceleration
+  // Efforts" / "Deceleration Efforts" column names — these are the
+  // session-total accel/decel counts and map to tot_as / tot_ds.
   { key: "totalAccelerations", label: "Tot Accels (#)", unit: "count",
-    aliases: ["tot accels", "total accels", "total accelerations", "tot as", "tot accelerations"] },
+    aliases: ["tot accels", "total accels", "total accelerations", "tot as", "tot accelerations",
+              "acceleration efforts", "accel efforts"] },
   { key: "totalDecelerations", label: "Tot Decels (#)", unit: "count",
-    aliases: ["tot decels", "total decels", "total decelerations", "tot ds", "tot decelerations"] },
+    aliases: ["tot decels", "total decels", "total decelerations", "tot ds", "tot decelerations",
+              "deceleration efforts", "decel efforts"] },
   // "(Gen 2)" is stripped by normalizeColumnName (parens removed), so the
   // alias must match the *post-strip* form: "Acceleration B2-3 Total Efforts"
   { key: "accelB23Efforts", label: "Acceleration B2-3 Total Efforts (Gen 2)", unit: "count",

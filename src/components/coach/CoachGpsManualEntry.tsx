@@ -61,15 +61,26 @@ export default function CoachGpsManualEntry({ teamId, date, getAuthHeaders }: Pr
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  // Per-entry date — defaults to the prop (today) but the coach can pick
+  // any past date. Critical because matches/sessions are often only
+  // logged the morning AFTER they happened. Without this control the
+  // form silently wrote every entry into today's row, so a Sunday-morning
+  // entry of Saturday's match data would be stored on Sunday.
+  const [editDate, setEditDate] = useState<string>(date);
+  // Keep editDate in sync if the prop changes (e.g. date navigator on
+  // a parent page) AND the coach hasn't manually overridden yet.
+  useEffect(() => {
+    setEditDate(date);
+  }, [date]);
 
   /* Load roster + existing entries */
   const loadData = useCallback(async () => {
-    if (!teamId || !date) return;
+    if (!teamId || !editDate) return;
     try {
       setLoading(true);
       const headers = await getAuthHeaders();
       const res = await fetch(
-        `/api/coach/gps-entry?teamId=${teamId}&date=${date}`,
+        `/api/coach/gps-entry?teamId=${teamId}&date=${editDate}`,
         { headers }
       );
       if (!res.ok) throw new Error(await res.text());
@@ -81,7 +92,7 @@ export default function CoachGpsManualEntry({ teamId, date, getAuthHeaders }: Pr
     } finally {
       setLoading(false);
     }
-  }, [teamId, date, getAuthHeaders]);
+  }, [teamId, editDate, getAuthHeaders]);
 
   useEffect(() => {
     loadData();
@@ -124,7 +135,7 @@ export default function CoachGpsManualEntry({ teamId, date, getAuthHeaders }: Pr
         headers,
         body: JSON.stringify({
           playerId: selectedPlayerId,
-          date,
+          date: editDate,
           ...form,
         }),
       });
@@ -154,6 +165,33 @@ export default function CoachGpsManualEntry({ teamId, date, getAuthHeaders }: Pr
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Date picker — always visible so coach can switch days even
+            while the roster is loading. Defaults to today (the prop) but
+            can be set to any past date. Cannot be set in the future. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Dagsetning æfingar / leiks</label>
+            <input
+              type="date"
+              max={date}
+              value={editDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setEditDate(e.target.value);
+                  setSelectedPlayerId("");
+                  setFeedback(null);
+                }
+              }}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {editDate !== date && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+              Skráir gögn fyrir <strong>{editDate}</strong> — ekki í dag ({date}).
+            </div>
+          )}
+        </div>
+
         {loading ? (
           <p className="text-sm text-slate-400">Hleð leikmannalista...</p>
         ) : (
@@ -188,7 +226,7 @@ export default function CoachGpsManualEntry({ teamId, date, getAuthHeaders }: Pr
                 {/* Existing data warning */}
                 {existingEntry && existingEntry.source !== "manual" && (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                    ⚠️ Þessi leikmaður er nú þegar með GPS gögn frá <strong>{existingEntry.source}</strong> fyrir {date}.
+                    ⚠️ Þessi leikmaður er nú þegar með GPS gögn frá <strong>{existingEntry.source}</strong> fyrir {editDate}.
                     Ef þú vistar munu þessi gögn yfirskrifast.
                   </div>
                 )}

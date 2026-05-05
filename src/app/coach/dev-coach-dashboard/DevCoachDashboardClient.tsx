@@ -11,7 +11,7 @@ import { RtpTab } from "./RtpTab";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import computeTeamDecision from "@/lib/decision/engine";
 import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
@@ -1766,29 +1766,24 @@ export default function CoachPage() {
   // Tab is URL-driven so the workspace tab bar (lifted to CoachShell or
   // accessed from Planning dropdown) can deep-link to a specific view.
   //
-  // We read `?tab=` from window.location.search rather than Next.js's
-  // useSearchParams() — the latter requires the consuming subtree to be
-  // wrapped in <Suspense>, otherwise static prerender fails. Reading on
-  // the client sidesteps that. Initial render is "today" until the
-  // useEffect runs (one frame later for deep-links).
+  // We use Next.js's useSearchParams() so the dashTab re-syncs on EVERY
+  // URL change — including client-side Link navigations from the sidebar
+  // (e.g. "VALD / CMJ" → /coach?tab=vald). The earlier popstate-only
+  // listener missed those because client-side navigation inside the
+  // App Router doesn't fire popstate. The dashboard page (/coach) is
+  // declared `force-dynamic` so the Suspense requirement that
+  // useSearchParams() normally imposes does not block prerender here.
+  const searchParams = useSearchParams();
   const [dashTab, setDashTabState] = useState<CoachTab>("today");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sync = () => {
-      const params = new URLSearchParams(window.location.search);
-      const t = params.get("tab");
-      if (t && VALID_TABS.has(t as CoachTab)) {
-        setDashTabState(t as CoachTab);
-      } else {
-        setDashTabState("today");
-      }
-    };
-    sync();
-    window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const t = searchParams?.get("tab") ?? null;
+    if (t && VALID_TABS.has(t as CoachTab)) {
+      setDashTabState(t as CoachTab);
+    } else {
+      setDashTabState("today");
+    }
+  }, [searchParams]);
 
   // setDashTab also pushes to URL so deep-links + back-button work.
   const setDashTab = React.useCallback((next: CoachTab) => {
@@ -2542,16 +2537,23 @@ export default function CoachPage() {
       setCatapultSyncing(true);
       setCatapultSyncMessage("");
       const headers = await getCoachAuthHeaders();
+      // daysBack: 2 makes the Sync button sweep today + the previous 2
+      // calendar days (3 in total). This catches matches/sessions that
+      // were played yesterday but only uploaded from the vest dock the
+      // morning after — a common workflow that the single-day default
+      // would otherwise miss entirely.
       const res = await fetch("/api/integrations/catapult/daily-sync", {
         method: "POST",
         headers,
-        body: JSON.stringify({ date: entryDate }),
+        body: JSON.stringify({ date: entryDate, daysBack: 2 }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync Catapult.");
       const stored = Number(json?.result?.storedCount ?? 0);
       const unmatched = Number(json?.result?.unmatchedCount ?? 0);
-      setCatapultSyncMessage(`Catapult synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      const datesSynced = Number(json?.result?.datesSynced ?? 1);
+      const sweepNote = datesSynced > 1 ? ` (${datesSynced} days)` : "";
+      setCatapultSyncMessage(`Catapult synced: ${stored} stored${sweepNote}${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
       await loadToday();
     } catch (e: any) {
       setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");

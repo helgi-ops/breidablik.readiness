@@ -105,6 +105,47 @@ export function findHeaderLine(
   return { headerLineIndex: bestIdx, headerCells: bestCells };
 }
 
+/**
+ * Extract the session date from the OpenField "Activity Report" preamble.
+ *
+ * The Activity Report export (the per-session "ctr-report-activity-…" file
+ * coaches grab from OpenField) puts the session date in a key/value pair
+ * at the top of the file, NOT as a per-row column:
+ *
+ *     Date:,04/05/2026
+ *     "Start Time:",18:22:37
+ *     "Unix Start Time:",1777915357
+ *     Duration:,6605
+ *     "Num Players:",14
+ *     ...
+ *     <empty row>
+ *     "Player Name","Period Name","Period Number",...
+ *     "Bjartur Bjarmi Barkarson",Session,0,...
+ *
+ * Without this extraction every parsed row has date=null, which causes the
+ * Bootstrap importer to silently drop them all (you see "0 athlete-day
+ * rows" in the upload UI).
+ *
+ * Returns ISO YYYY-MM-DD if a Date: row is found in the preamble, else null.
+ */
+export function extractMetadataDate(lines: string[], delim: string, headerLineIndex: number): string | null {
+  // Only scan rows ABOVE the detected header row.
+  const limit = Math.min(headerLineIndex, 15);
+  for (let i = 0; i < limit; i++) {
+    const cells = splitCsvLine(lines[i], delim);
+    if (cells.length < 2) continue;
+    // Match keys like "Date:", "Date :", " date:" etc. (case-insensitive,
+    // trim trailing colon and whitespace before comparing).
+    const key = (cells[0] ?? "").replace(/[:\s]+$/g, "").trim().toLowerCase();
+    if (key === "date" || key === "session date" || key === "activity date") {
+      const value = (cells[1] ?? "").trim();
+      const iso = normalizeDateCell(value);
+      if (iso) return iso;
+    }
+  }
+  return null;
+}
+
 export function mapHeaderColumns(headerCells: string[]): {
   matched: Map<number, CatapultMetricKey>;
   unmatched: Map<number, string>;
@@ -180,6 +221,13 @@ export function parseCatapultCsv(
     }
   }
 
+  // Activity Report fallback — when the file has a metadata preamble with
+  // "Date:,DD/MM/YYYY" but no per-row date column (per-row Date column
+  // would have been picked up by mapHeaderColumns above), apply the
+  // preamble date to every row so they don't all get filtered out as
+  // dateless. Only used as a fallback — per-row dates always win.
+  const fallbackDate = extractMetadataDate(lines, delimiter, headerLineIndex);
+
   const rows: CatapultCsvRow[] = [];
   for (let i = headerLineIndex + 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i], delimiter);
@@ -210,6 +258,13 @@ export function parseCatapultCsv(
     }
 
     if (Object.keys(raw).length === 0) continue;
+
+    // Apply preamble Date: to rows that have no per-row date.
+    if (!date && fallbackDate) {
+      date = fallbackDate;
+      raw.date = fallbackDate;
+    }
+
     rows.push({ raw, athleteName, athleteId, date, sessionName, periodName });
   }
 
