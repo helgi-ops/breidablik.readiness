@@ -82,6 +82,45 @@ function int(v: string | undefined): number | null {
   return n == null ? null : Math.round(n);
 }
 
+/**
+ * Pre-aggregation dedupe — Activity Report exports include both a canonical
+ * session-total row (periodName = "Session", periodNumber 0) AND a duplicate
+ * "Auto Created Period" row with identical values. Summing them doubles every
+ * count/distance for every athlete. When a canonical Session row exists for
+ * a given (athlete, date), drop the auto-created/numbered-period duplicates.
+ *
+ * Timeline-format exports don't have this duplication and survive untouched
+ * because none of their rows match the "Session" periodName.
+ */
+function dedupeAutoCreatedPeriods(rows: CatapultCsvRow[]): CatapultCsvRow[] {
+  // Group by (athlete, date), then check whether a canonical Session row exists.
+  const groupKey = (r: CatapultCsvRow) =>
+    `${r.athleteId ?? r.athleteName ?? ""}|${r.date ?? ""}`;
+  const groups = new Map<string, CatapultCsvRow[]>();
+  for (const r of rows) {
+    const list = groups.get(groupKey(r)) ?? [];
+    list.push(r);
+    groups.set(groupKey(r), list);
+  }
+  const out: CatapultCsvRow[] = [];
+  for (const list of groups.values()) {
+    const hasSession = list.some(
+      (r) => (r.periodName ?? "").trim().toLowerCase() === "session",
+    );
+    if (hasSession) {
+      // Keep only the canonical Session row(s); drop "Auto Created Period"
+      // and any other numbered sub-periods that are duplicates of the total.
+      out.push(...list.filter(
+        (r) => (r.periodName ?? "").trim().toLowerCase() === "session",
+      ));
+    } else {
+      // No Session-total row → must aggregate from sub-periods.
+      out.push(...list);
+    }
+  }
+  return out;
+}
+
 /** Aggregate multiple rows for the same (athleteKey, date) by summing counts/distances and taking max for peaks */
 function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
   type Bucket = {
@@ -311,7 +350,10 @@ export async function POST(req: NextRequest) {
     ? new Map<string, CatapultMetricKey>(Object.entries(body.columnOverrides))
     : undefined;
   const parsed = parseCatapultCsv(body.csv, overrides);
-  const aggregated = aggregateByAthleteAndDate(parsed.rows);
+  // Drop "Auto Created Period" duplicate rows before summing — see comment
+  // on dedupeAutoCreatedPeriods. Otherwise every count/distance is doubled.
+  const dedupedRows = dedupeAutoCreatedPeriods(parsed.rows);
+  const aggregated = aggregateByAthleteAndDate(dedupedRows);
 
   // Distinct source athletes in the CSV
   const sourceAthletes = new Map<string, { id: string | null; name: string | null }>();
