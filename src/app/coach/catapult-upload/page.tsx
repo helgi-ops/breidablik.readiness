@@ -472,15 +472,25 @@ export default function CatapultUploadPage() {
             <Button variant="outline" onClick={reset}>Velja aðra skrá</Button>
             <Button
               onClick={handleCommit}
-              disabled={committing || unmappedAthletes.length > 0 || mappedCount === 0}
+              disabled={committing || mappedCount === 0}
             >
-              {committing ? "Vista…" : `Vista ${preview.aggregatedRows} athlete-day raðir`}
+              {committing
+                ? "Vista…"
+                : unmappedAthletes.length > 0
+                ? `Vista ${mappedCount} leikmenn (sleppi ${unmappedAthletes.length})`
+                : `Vista ${preview.aggregatedRows} athlete-day raðir`}
             </Button>
           </div>
           {commitErr && <p className="text-sm text-rose-600 text-right">{commitErr}</p>}
-          {unmappedAthletes.length > 0 && (
+          {unmappedAthletes.length > 0 && mappedCount > 0 && (
             <p className="text-xs text-amber-700 text-right">
-              {unmappedAthletes.length} leikmenn enn án mapping — confirmaðu þá fyrst.
+              {unmappedAthletes.length} leikm. án mapping verða <strong>ekki vistaðir</strong> —
+              t.d. ef þeir eru meiddir eða ekki á svæðinu. Þú getur uploadað aftur seinna.
+            </p>
+          )}
+          {mappedCount === 0 && (
+            <p className="text-xs text-rose-700 text-right">
+              Að minnsta kosti einn leikmaður verður að vera mapped til að vista.
             </p>
           )}
         </div>
