@@ -313,7 +313,17 @@ export function computeCatapultExternalLoadSignals(args: {
   const highDecelSpike = ratio(getHighDecelEfforts(today), baseline.chronic28dAvg.highDecelEfforts);
   const highAccelSpike = ratio(getHighAccelEfforts(today), baseline.chronic28dAvg.highAccelEfforts);
 
-  const decelBurdenScore = dataQuality === "insufficient"
+  // Lite-tier guard: when the team has NEVER had B2-3 efforts in their
+  // 28-day chronic baseline (=== 0 for both highAccelEfforts and
+  // highDecelEfforts), they're on a Catapult plan that doesn't expose
+  // B2-3. Returning a number from computeDecelBurdenScore in that case
+  // produces a misleading "0.35 MODERATE" tile because totalDecelSpike
+  // ratio explodes against a zero baseline while the high-intensity
+  // contribution is always 0. Suppress to null so the UI hides the tile.
+  const hasB23Baseline =
+    baseline.chronic28dAvg.highDecelEfforts > 0 ||
+    baseline.chronic28dAvg.highAccelEfforts > 0;
+  const decelBurdenScore = dataQuality === "insufficient" || !hasB23Baseline
     ? null
     : computeDecelBurdenScore(highDecelSpike, decelSpike);
   const decelBurdenBand = decelBurdenToBand(decelBurdenScore);

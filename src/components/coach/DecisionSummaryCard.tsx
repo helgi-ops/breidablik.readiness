@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, type FC } from "react";
+import { useState, useEffect, useMemo, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 import { useLang, type Lang } from "@/lib/lang";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { computeFosterMetrics, fosterStatus, type FosterMetrics } from "@/lib/micropulse/foster";
 
 // ── Minimal types (mirrored from dashboard Row) ───────────────────────────
 
@@ -814,7 +816,11 @@ const PlayerModal: FC<{
   lang?: Lang;
   /** Team-level load pipeline override — see DecisionSummaryCard prop. */
   trainingMode?: "auto" | "indoor" | "outdoor";
-}> = ({ row, onClose, lang = "EN", trainingMode = "auto" }) => {
+  /** Foster Monotony & Strain (per player, last 7 days). Surfaces the
+   *  Lite-tier overtraining-risk signal directly in this modal so coaches
+   *  see it at the point of decision, not on a separate page. */
+  foster?: FosterMetrics | null;
+}> = ({ row, onClose, lang = "EN", trainingMode = "auto", foster = null }) => {
   const displayAction = resolveDisplayAction(row);
   const cfg = STATE_CONFIG[displayAction ?? ""] ?? UNKNOWN_STATE;
   const verdict = getIcelandicVerdict(displayAction, row._injury_status, row._injury_body_part, lang);
@@ -1232,7 +1238,7 @@ const PlayerModal: FC<{
           })()}
 
           {/* Readiness ↔ Load detail */}
-          <ReadinessLoadDetail row={row} lang={lang} />
+          <ReadinessLoadDetail row={row} lang={lang} foster={foster} />
 
           {/* Action */}
           <div className={`rounded-xl border ${cfg.actionBgClass} px-5 py-5`}>
@@ -1427,7 +1433,14 @@ const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
 };
 
 /** Detailed readiness + load section for player modal */
-const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
+const ReadinessLoadDetail: FC<{
+  row: DecisionSummaryRow;
+  lang?: Lang;
+  /** Foster Monotony & Strain (Foster 1998) for this player — surfaced
+   *  here so Lite-tier coaches see overtraining risk inside the per-player
+   *  modal instead of having to navigate to /coach/load-intelligence. */
+  foster?: FosterMetrics | null;
+}> = ({ row, lang = "EN", foster = null }) => {
   const readiness = getReadinessItems(row);
   const load = getLoadItems(row);
   if (readiness.length === 0 && load.length === 0) return null;
@@ -1529,10 +1542,15 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row
           const fatigue = row._today_fatigue_type ?? null;
           const spike = row._today_player_load_spike ?? null;
           const signalsDate = row._load_signals_date ?? null;
+          const hasFoster =
+            foster != null &&
+            foster.monotony != null &&
+            foster.strain != null;
           const hasAny =
             (nbs != null && Number.isFinite(nbs)) ||
             (comp != null && Number.isFinite(comp)) ||
-            (spike != null && Number.isFinite(spike));
+            (spike != null && Number.isFinite(spike)) ||
+            hasFoster;
           if (!hasAny) return null;
 
           // Heading reflects the date the signals were computed for —
@@ -1614,6 +1632,33 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row
                     <span className="text-sm font-bold text-indigo-800 leading-tight pt-1">{fatigueLabel}</span>
                   </div>
                 ) : null}
+                {(() => {
+                  // Foster Monotony & Strain (Foster 1998) per player —
+                  // works on Lite tier from RPE × duration alone (no GPS
+                  // required). Surfaces overtraining risk at the point
+                  // of decision instead of forcing the coach to navigate
+                  // to /coach/load-intelligence.
+                  const f = foster;
+                  if (!f || f.monotony == null || f.strain == null) return null;
+                  const monotony = f.monotony;
+                  const strain = f.strain;
+                  const status = fosterStatus(monotony, strain);
+                  const tone = status === "danger"
+                    ? { cls: "border-rose-300 bg-rose-50 text-rose-700", label: "Danger" }
+                    : status === "watch"
+                    ? { cls: "border-amber-300 bg-amber-50 text-amber-700", label: "Watch" }
+                    : { cls: "border-emerald-200 bg-emerald-50 text-emerald-700", label: "Safe" };
+                  return (
+                    <div
+                      className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${tone.cls}`}
+                      title={`Foster Monotony & Strain (last 7 days). Monotony ${monotony.toFixed(2)} (${monotony > 2.0 ? "HIGH" : monotony > 1.5 ? "WATCH" : "SAFE"}) — day-to-day load variability. Strain ${Math.round(strain).toLocaleString()} AU (${strain > 6000 ? "DANGER" : strain > 4500 ? "WATCH" : "SAFE"}) — weekly load × monotony. Foster 1998 thresholds.`}
+                    >
+                      <span className="text-[9px] font-semibold uppercase opacity-70">Foster strain</span>
+                      <span className="text-lg font-bold tabular-nums">{Math.round(strain).toLocaleString()}</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide">{tone.label} · M {monotony.toFixed(2)}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );
@@ -2046,6 +2091,66 @@ const DecisionSummaryCard: FC<{
   const [selectedRow, setSelectedRow] = useState<DecisionSummaryRow | null>(null);
   const [lang] = useLang();
 
+  // Foster Monotony & Strain per player — single team-wide fetch on
+  // mount, computed in memory, indexed by player_id. Surfaces the
+  // Lite-tier overtraining-risk signal (Foster 1998) inside the
+  // per-player modal so coaches don't have to navigate to a separate
+  // page to read it. Works on RPE × duration alone — no GPS needed.
+  const [fosterByPlayer, setFosterByPlayer] = useState<Map<string, FosterMetrics>>(new Map());
+  const playerIds = useMemo(() => rows.map((r) => r.player_id), [rows]);
+
+  useEffect(() => {
+    if (playerIds.length === 0) return;
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const today = new Date().toISOString().slice(0, 10);
+        const start = (() => {
+          const d = new Date(`${today}T00:00:00.000Z`);
+          d.setUTCDate(d.getUTCDate() - 6);
+          return d.toISOString().slice(0, 10);
+        })();
+        const { data } = await sb
+          .from("session_rpe_entries")
+          .select("player_id, session_date, session_load")
+          .in("player_id", playerIds)
+          .gte("session_date", start)
+          .lte("session_date", today)
+          .gt("session_load", 0);
+        if (!alive) return;
+        const rpeRows = (data ?? []) as Array<{ player_id: string; session_date: string; session_load: number | null }>;
+
+        // Build dense 7-day window per player; zero-pad missing days
+        // so SD reflects true variability, not just "I trained 3 days
+        // and skipped 4" (that's monotony of zero, not low monotony).
+        const windowDates: string[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(`${today}T00:00:00.000Z`);
+          d.setUTCDate(d.getUTCDate() - i);
+          windowDates.push(d.toISOString().slice(0, 10));
+        }
+        const byPlayer = new Map<string, Map<string, number>>();
+        for (const r of rpeRows) {
+          const inner = byPlayer.get(r.player_id) ?? new Map<string, number>();
+          inner.set(r.session_date, (inner.get(r.session_date) ?? 0) + Number(r.session_load ?? 0));
+          byPlayer.set(r.player_id, inner);
+        }
+        const out = new Map<string, FosterMetrics>();
+        for (const pid of playerIds) {
+          const inner = byPlayer.get(pid) ?? new Map<string, number>();
+          const loads = windowDates.map((d) => ({ date: d, load: inner.get(d) ?? 0 }));
+          const metrics = computeFosterMetrics(loads);
+          out.set(pid, metrics);
+        }
+        if (alive) setFosterByPlayer(out);
+      } catch {
+        // best-effort — Foster tile just won't render if fetch fails
+      }
+    })();
+    return () => { alive = false; };
+  }, [playerIds]);
+
   if (!rows.length) return null;
 
   const sorted = [...rows].sort((a, b) => {
@@ -2103,7 +2208,13 @@ const DecisionSummaryCard: FC<{
 
       {/* Detail modal — click anywhere outside or press Escape to close */}
       {selectedRow && (
-        <PlayerModal row={selectedRow} onClose={() => setSelectedRow(null)} lang={lang} trainingMode={trainingMode} />
+        <PlayerModal
+          row={selectedRow}
+          onClose={() => setSelectedRow(null)}
+          lang={lang}
+          trainingMode={trainingMode}
+          foster={fosterByPlayer.get(selectedRow.player_id) ?? null}
+        />
       )}
     </Card>
   );
