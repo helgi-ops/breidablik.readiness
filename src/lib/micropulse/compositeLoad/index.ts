@@ -329,7 +329,7 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
       );
     } else if (decelBurdenVal != null && decelBurdenVal >= 0.45) {
       escalationReasons.push(
-        "Decel burden is elevated — high-intensity braking actions above normal. Monitor hamstring/calf load."
+        "Decel burden is elevated — high-intensity braking actions above normal. Monitor ACL / quadriceps / patellar tendon load (peak quad activation 161% MVC during decel — McBurnie 2022)."
       );
     }
     if (residualDecelBandLabel === "HIGH") {
@@ -343,7 +343,7 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
     }
     if (input.accelDecelRatio != null && input.accelDecelRatio < 0.7) {
       escalationReasons.push(
-        `Accel:Decel ratio ${input.accelDecelRatio.toFixed(2)} — eccentric-dominant session. Elevated hamstring/calf strain risk.`
+        `Accel:Decel ratio ${input.accelDecelRatio.toFixed(2)} — eccentric-dominant session. Elevated ACL + quadriceps + patellar tendon strain risk (decel mid-eccentric foot strike → quad 161% MVC + hamstring −87% co-activation per McBurnie 2022).`
       );
     }
     // HID% fatigue trend (Harper et al. 2019)

@@ -43,8 +43,10 @@ next-env.d.ts
 # ── Sport science research library (large binary corpus, not source) ──
 research/
 
-# ── Word/Excel temp lockfiles ──
+# ── Word/Excel/LibreOffice temp + lockfiles ──
 ~$*
+.~lock.*
+lu*.tmp
 
 # ── Generated deliverable docs (live in workspace, not source) ──
 MicroPulse Coach Guide.pdf

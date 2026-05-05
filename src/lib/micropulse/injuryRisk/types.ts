@@ -59,7 +59,7 @@ export type InjuryRiskInput = {
   decelBurdenScore?: number;
   /** Residual Decel band — 3-day accumulated deceleration stress. */
   residualDecelBand?: "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
-  /** Accel:decel ratio. <0.7 = eccentric-dominant (hamstring/calf risk). */
+  /** Accel:decel ratio. <0.7 = eccentric-dominant (ACL / quadriceps / patellar tendon risk — peak quad activation 161% MVC during decel + hamstring −87% co-activation per McBurnie 2022). >1.3 = concentric-dominant (hamstring strain risk on sprint side). */
   accelDecelRatio?: number;
 
   // ── HID% fatigue trend (Harper et al. 2019) ────────────────────────

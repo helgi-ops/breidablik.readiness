@@ -201,7 +201,7 @@ export default function GpsLoadIntelligence({
     },
     accelDecelRatio: {
       title: "Acc:Dec hlutfall",
-      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (<0.7) = mikil deceleration, hamstring/calf áhætta. BAL (0.7–1.3) = jafnvægi. CON (>1.3) = mikil acceleration, glute/quad álag.",
+      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (<0.7) = mikil deceleration, ACL + framanlæri (quadriceps) + patellar tendon áhætta (peak quad activation 161% MVC í decel — McBurnie 2022). BAL (0.7–1.3) = jafnvægi. CON (>1.3) = mikil acceleration, hamstring + glute áhætta (hamstring vinnur hart í late swing phase af sprint).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
@@ -226,7 +226,7 @@ export default function GpsLoadIntelligence({
     },
     accelDecelRatio: {
       title: "Acc:Dec Ratio",
-      body: "Ratio of high-intensity accelerations vs decelerations. ECC (<0.7) = heavy braking, hamstring/calf risk. BAL (0.7–1.3) = balanced. CON (>1.3) = heavy acceleration, glute/quad load.",
+      body: "Ratio of high-intensity accelerations vs decelerations. ECC (<0.7) = heavy braking, ACL + quadriceps + patellar tendon risk (peak quad activation reaches 161% MVC during deceleration — McBurnie 2022). BAL (0.7–1.3) = balanced. CON (>1.3) = heavy acceleration, hamstring + glute risk (hamstring works hard in late-swing sprint phase).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
@@ -524,7 +524,7 @@ function CohortAlerts({ rows, lang }: { rows: PlayerSignalRow[]; lang: "IS" | "E
   if (eccentricRisk.length > 0) {
     alerts.push({
       severity: "high",
-      title: lang === "IS" ? "Eccentric-ríkt + hátt decel burden — hamstring/calf áhætta" : "Eccentric-dominant + elevated decel burden — hamstring/calf risk",
+      title: lang === "IS" ? "Eccentric-ríkt + hátt decel burden — ACL / framanlæri / patellar tendon áhætta" : "Eccentric-dominant + elevated decel burden — ACL / quadriceps / patellar tendon risk",
       names: eccentricRisk.map((r) => r.name),
     });
   }

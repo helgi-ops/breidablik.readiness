@@ -503,7 +503,7 @@ function PlayerRow({ row }: { row: Row }) {
               big={`${s.underload.cumulative_7d_count.toFixed(0)} / ${s.underload.match_day_demand.toFixed(1)}`}
               caption={`7-day exposure / match-day demand · ${s.underload.match_days_observed} match days observed`}
               hint="Red if 7-day < 50% of match demand."
-              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand (higher injury risk in the next match, especially hamstring and ACL)."
+              info="The player's last 7 days of decel exposure compared with their typical match-day demand. Detraining signal — if a player isn't getting enough decel work in training, they're underprepared for what a match throws at them. RED when 7-day total drops below 50% of match demand. Per McBurnie 2022, peak quad activation reaches 161% of MVC during deceleration; under-prepared exposure leaves the quadriceps under-conditioned for that eccentric load, while reduced hamstring co-activation increases anterior tibial translation — primary risk is ACL, with quadriceps strain and patellar tendon overload as secondary risks."
             />
             <Detail
               title="Decel : Accel Coupling"
@@ -515,7 +515,7 @@ function PlayerRow({ row }: { row: Row }) {
                   : `${s.accel_coupling.metric_name} · healthy ${s.accel_coupling.healthy_range}`
               }
               hint="Eccentric:concentric balance. Red if <0.7 or >2.0. ASP personal-z (Osgnach 2023) above 0 means more decel-skewed than the player's own normal pattern."
-              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — lacks braking control, hamstring risk) or >2.0 (one-sided, brake-heavy — chronic eccentric load). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
+              info="Ratio of decelerations to accelerations. Healthy athletes brake roughly as often as they accelerate (0.8–1.2). RED if <0.7 (one-sided, accel-heavy — sprint volume outpacing braking control, raises hamstring strain risk on the sprint side and ACL risk when forced to brake suddenly without preparation). RED if >2.0 (one-sided, brake-heavy — chronic eccentric load on quad and patellar tendon, with cumulative ACL exposure from repeated high-impact braking). The ASP personal-z (Osgnach 2023) catches drift from the player's own pattern even when the absolute ratio still looks fine."
             />
             <Detail
               title="Decel : Sprint Coupling"
@@ -527,7 +527,7 @@ function PlayerRow({ row }: { row: Row }) {
                   : `Awaiting Catapult Vel B6+ Total # Efforts (Gen 2) field. Will populate after next sync.`
               }
               hint="McBurnie's primary risk metric. Red if <0.5 (sprinting without proper braking)."
-              info="McBurnie's primary risk metric. Ratio of decelerations to high-speed sprint efforts. A player who sprints without proportional braking volume is exposing knees, ankles and hamstrings to forces they're not conditioned for. RED if <0.5 — sprint exposure outpacing braking control. Yellow ≥0.5 but below the player's healthy range."
+              info="McBurnie's primary risk metric. Ratio of decelerations to high-speed sprint efforts. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side — heavy sprint with limited brake exposure is a dual mechanism. RED if <0.5 — sprint exposure outpacing braking control. Yellow ≥0.5 but below the player's healthy range."
             />
             <Detail
               title="Exposure Concentration"

@@ -1673,7 +1673,7 @@ const ReadinessLoadDetail: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row
                 {adRatio != null && profileLabel ? (
                   <div
                     className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${profileTone}`}
-                    title="Accel÷Decel ratio from high-intensity efforts. <0.7 = eccentric-dominant (hamstring/calf risk), >1.3 = concentric-dominant (glute/quad load)."
+                    title="Accel÷Decel ratio from high-intensity efforts. <0.7 = eccentric-dominant (ACL + quadriceps + patellar tendon risk — peak quad activation 161% MVC during deceleration per McBurnie 2022), >1.3 = concentric-dominant (hamstring + glute risk from sprint exposure)."
                   >
                     <span className="text-[9px] font-semibold uppercase opacity-70">Accel:Decel</span>
                     <span className="text-lg font-bold tabular-nums">{adRatio.toFixed(2)}</span>

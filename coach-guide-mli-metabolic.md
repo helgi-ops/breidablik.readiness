@@ -25,7 +25,7 @@ Scorið er **0–100** og byggist á samanburði við eigin sögu leikmannsins (
 ### Sub-scores útskýrðar
 
 **DSS — Deceleration Subscore (40% af MLI)**
-Mælir **hægingar** — þetta er þyngsta konan. Þegar leikmaður stoppar hart eða breytir um stefnu þurfa hamstringar og hnéliðir að taka þyngdina. DSS er yfirleitt hæst eftir markmót eða þjálfun með mikla sprettavinnu.
+Mælir **hægingar** — þetta er þyngsta konan. Þegar leikmaður stoppar hart eða breytir um stefnu eru framanlæri (quadriceps), patellar tendon og ACL undir mestu álagi (peak quadriceps activation 161% MVC í decel mid-eccentric foot strike, hamstring co-activation −87% — McBurnie 2022 → anterior tibial translation). DSS er yfirleitt hæst eftir markmót eða þjálfun með mikla sprettavinnu.
 
 **ASS — Acceleration Subscore (20% af MLI)**
 Mælir **hraðanir** — fókusar á sprint-upphafs. Þegar 100 í ASS er þetta vísbending um mikla sprettavinnu þann dag.
@@ -44,7 +44,7 @@ Mælir **heildarþéttleika** — player load á mínútu og IMA-heildarfjölda.
 |------|---------|
 | **Extreme** | MLI ≥ 85 — þessi dagur er langt yfir meðallagi leikmannsins |
 | **Residual elevated** | Uppsafnað álag er hærra en venjulegt þótt dagurinn einn sé ekki extreme |
-| **Decel spike** | DSS er sérstaklega hár miðað við rest af MLI — hamstrings og hné í áhættu |
+| **Decel spike** | DSS er sérstaklega hár miðað við rest af MLI — ACL, framanlæri (quadriceps) og patellar tendon í áhættu |
 
 ---
 

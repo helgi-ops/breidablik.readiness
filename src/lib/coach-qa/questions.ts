@@ -52,7 +52,7 @@ export const COACH_QUESTIONS: Question[] = [
 
 Answer in 2-3 sentences. Structure:
 - Sentence 1: name the body region or system at highest risk (hamstring / groin / knee / ankle / general overload). If no real risk, say "no elevated injury risk — train normally".
-- Sentence 2: which specific signals are pointing there (sharp cuts + low hip-ER strength → groin/ACL; A:D imbalance + recurring soreness → hamstring; etc.)
+- Sentence 2: which specific signals are pointing there (sharp cuts + low hip-ER strength → groin/ACL; A:D ratio <0.7 (eccentric-dominant) + recurring soreness → ACL / quadriceps / patellar tendon; A:D ratio >1.3 (concentric-dominant) + sprint exposure → hamstring; etc.)
 - Sentence 3 (only if amber/red): one specific protective action (drill modification, recovery focus, strength priority).
 
 Be honest about absence of risk. Coaches lose trust fast if you invent risks that aren't there.`,
