@@ -55,12 +55,41 @@ const PARAMETER_LABELS: Record<string, { en: string; is: string }> = {
 };
 
 // Direction badge so the coach can see at a glance whether a player is being
-// over-trained or under-trained. Wellness drops use a separate badge style.
+// over-trained or under-trained. Wellness signals are special: the score is
+// 1–5 with HIGHER = better-feeling, so a "drop" in score means symptom-rise
+// (more pain, less sleep, less energy). The chip text follows the symptom
+// language used in the summary so coach doesn't see "DROP" + "rose" side
+// by side and have to mentally reconcile them.
 const DIRECTION_LABELS: Record<string, { en: string; is: string; cls: string }> = {
-  overload:     { en: "↑ OVER",  is: "↑ YFIR",  cls: "bg-rose-100 text-rose-800 border-rose-300" },
-  underload:    { en: "↓ UNDER", is: "↓ UNDIR", cls: "bg-amber-100 text-amber-800 border-amber-300" },
-  wellness_drop:{ en: "↓ DROP",  is: "↓ FALL",  cls: "bg-slate-100 text-slate-700 border-slate-300" },
+  overload:           { en: "↑ OVER",     is: "↑ YFIR",      cls: "bg-rose-100 text-rose-800 border-rose-300" },
+  underload:          { en: "↓ UNDER",    is: "↓ UNDIR",     cls: "bg-amber-100 text-amber-800 border-amber-300" },
+  wellness_drop:      { en: "↓ WORSE",    is: "↓ VERRA",     cls: "bg-slate-100 text-slate-700 border-slate-300" },
 };
+
+// Wellness-specific override — when direction is wellness_drop, picks a
+// label that matches the symptom direction the coach reads in the summary.
+const WELLNESS_PARAM_LABELS: Record<string, { en: string; is: string }> = {
+  wellness_soreness:  { en: "↑ SORE",     is: "↑ EYMSL"  },
+  wellness_sleep:     { en: "↓ SLEEP",    is: "↓ SVEFN"  },
+  wellness_energy:    { en: "↓ ENERGY",   is: "↓ ORKA"   },
+  wellness_readiness: { en: "↓ READINESS", is: "↓ READINESS" },
+};
+
+function getDirectionChip(parameter: string, direction: string, lang: "en" | "is") {
+  if (direction === "wellness_drop") {
+    const wellnessLabel = WELLNESS_PARAM_LABELS[parameter];
+    const base = DIRECTION_LABELS.wellness_drop;
+    if (wellnessLabel) {
+      return { en: wellnessLabel.en, is: wellnessLabel.is, cls: base.cls }[lang === "en" ? "en" : "is"]
+        ? { label: wellnessLabel[lang], cls: base.cls }
+        : { label: base[lang], cls: base.cls };
+    }
+    return { label: base[lang], cls: base.cls };
+  }
+  const dir = DIRECTION_LABELS[direction];
+  if (!dir) return null;
+  return { label: dir[lang], cls: dir.cls };
+}
 
 export default function CoachNotificationsPage() {
   const [lang] = useLang();
@@ -177,7 +206,7 @@ export default function CoachNotificationsPage() {
         {unacked.map((n) => {
           const style = SEVERITY_STYLES[n.severity];
           const paramLbl = PARAMETER_LABELS[n.parameter] ?? { en: n.parameter, is: n.parameter };
-          const dirLbl = DIRECTION_LABELS[n.direction];
+          const dirChip = getDirectionChip(n.parameter, n.direction, en ? "en" : "is");
           const summary = en ? n.summary : (n.summary_is ?? n.summary);
           return (
             <div
@@ -194,9 +223,9 @@ export default function CoachNotificationsPage() {
                     <span className="text-xs px-1.5 py-0.5 rounded-full border border-current/20">
                       {en ? paramLbl.en : paramLbl.is}
                     </span>
-                    {dirLbl && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${dirLbl.cls}`}>
-                        {en ? dirLbl.en : dirLbl.is}
+                    {dirChip && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${dirChip.cls}`}>
+                        {dirChip.label}
                       </span>
                     )}
                     {n.is_post_match && (
