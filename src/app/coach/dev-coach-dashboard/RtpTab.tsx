@@ -661,12 +661,15 @@ export function RtpTab({ coachTeamId, lang }: Props) {
   const [filterStatus, setFilterStatus] = useState<"active" | "all">("active");
 
   // Fetch full active player list from players table (not today's readiness view)
+  // Must filter by team_id — without it, the dropdown leaks every player from
+  // every team in the system (same bug we hit on /coach/match-minutes).
   useEffect(() => {
     if (!coachTeamId) return;
     supabase
       .from("players")
       .select("id, full_name, position")
       .eq("is_active", true)
+      .eq("team_id", coachTeamId)
       .order("full_name")
       .then(({ data }) => {
         setPlayers(
