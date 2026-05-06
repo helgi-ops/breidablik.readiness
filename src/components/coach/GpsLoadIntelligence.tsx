@@ -50,8 +50,8 @@ function computePlayerSignals(player: GpsPlayerInput, date: string): PlayerSigna
 
   if (!normalized.length) return null;
 
-  const { today, baseline } = computeCatapultExternalLoadBaseline({ rows: normalized, date });
-  const signals = computeCatapultExternalLoadSignals({ today, baseline });
+  const { today, baseline, daysSinceData } = computeCatapultExternalLoadBaseline({ rows: normalized, date });
+  const signals = computeCatapultExternalLoadSignals({ today, baseline, daysSinceData });
 
   // Residual decel (3-day)
   const dayMinus = (d: string, n: number) => {

@@ -25,6 +25,13 @@ function startOfWindow(date: string, days: number): string {
   return base.toISOString().slice(0, 10);
 }
 
+/** Whole-day distance between two ISO YYYY-MM-DD dates (later - earlier). */
+export function daysBetween(earlier: string, later: string): number {
+  const a = new Date(`${earlier}T00:00:00.000Z`).getTime();
+  const b = new Date(`${later}T00:00:00.000Z`).getTime();
+  return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+
 function hasSameOrEarlierDate(rowDate: string, targetDate: string): boolean {
   return rowDate <= targetDate;
 }
@@ -145,7 +152,20 @@ export async function fetchCatapultDailyLoadRows(args: {
 export function computeCatapultExternalLoadBaseline(args: {
   rows: CatapultDailyLoadRow[];
   date: string;
-}): { today: CatapultDailyLoadRow | null; baseline: CatapultExternalLoadBaseline } {
+}): {
+  today: CatapultDailyLoadRow | null;
+  baseline: CatapultExternalLoadBaseline;
+  /**
+   * Whole-day distance between args.date and today.date. Zero when the
+   * exact-date row was found; positive when the fallback path picked a
+   * previous training day. Used downstream by signals.ts to apply Hader
+   * 2019 recovery decay to spike ratios so a Sunday match doesn't keep
+   * looking like "today's spike" three days later.
+   */
+  daysSinceData: number;
+  /** True when today is a fallback row (no exact-date match). */
+  isStale: boolean;
+} {
   const sorted = [...args.rows].sort((a, b) => a.date.localeCompare(b.date));
   const exactToday = sorted.find((row) => row.date === args.date) ?? null;
   // When today has no GPS data yet (morning check-in before training),
@@ -157,12 +177,16 @@ export function computeCatapultExternalLoadBaseline(args: {
   const baselineRows = today && !exactToday
     ? previousRows.filter((row) => row.date !== today.date)
     : previousRows;
+  const isStale = !!today && !exactToday;
+  const daysSinceData = isStale && today ? daysBetween(today.date, args.date) : 0;
   const acute3dRows = baselineRows.slice(-3);
   const acute7dRows = baselineRows.slice(-7);
   const chronic28dRows = baselineRows.slice(-28);
 
   return {
     today,
+    daysSinceData,
+    isStale,
     baseline: {
       acute3d: {
         playerLoad: sum(acute3dRows.map((row) => row.playerLoad ?? 0)),

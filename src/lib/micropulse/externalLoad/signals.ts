@@ -31,6 +31,48 @@ function ratio(today: number | null | undefined, baseline: number): number | nul
   return clamp(today / Math.max(baseline, SMALL_NUMBER), 0, MAX_RATIO);
 }
 
+/**
+ * Hader 2019 post-match recovery decay applied to spike ratios when the
+ * "today" row is actually a fallback (no GPS data exists for the requested
+ * date — coach is viewing a rest day morning before any training has been
+ * uploaded). Without this, a Sunday match with PL 2.18× kept showing as
+ * "today's PL 2.18×" through Wed (MD+3) even though the players had two
+ * full rest days to recover.
+ *
+ * Curve approximates Hader 2019 CK / CMJ / HRV recovery after a 90-min
+ * football match plus contemporary rest-day adaptations:
+ *
+ *   D+0 (same day)  → 1.00 (no decay — show full spike)
+ *   D+1             → 0.55 (acute neuromuscular fatigue still present)
+ *   D+2             → 0.30 (mostly recovered, residual stiffness)
+ *   D+3             → 0.15 (essentially baseline)
+ *   D+4             → 0.05 (negligible)
+ *   D+5+            → 0.00
+ *
+ * Applied to each spike ratio (PL, HIR, decel, accel, density, band6,
+ * FMP, IMA, B2-3 efforts) so the composite/burden score also reflects
+ * the actual current load state, not stale carryover.
+ */
+function haderDecay(daysSince: number): number {
+  if (daysSince <= 0) return 1.0;
+  if (daysSince === 1) return 0.55;
+  if (daysSince === 2) return 0.30;
+  if (daysSince === 3) return 0.15;
+  if (daysSince === 4) return 0.05;
+  return 0;
+}
+
+function decayedRatio(
+  today: number | null | undefined,
+  baseline: number,
+  daysSince: number,
+): number | null {
+  const r = ratio(today, baseline);
+  if (r == null) return null;
+  if (daysSince <= 0) return r;
+  return r * haderDecay(daysSince);
+}
+
 function normalizeRatio(value: number | null, elevated = 1.1, high = 1.6): number {
   if (value == null) return 0;
   if (value <= elevated) return 0;
@@ -278,8 +320,15 @@ export function computeCatapultExternalLoadSignals(args: {
   baseline: CatapultExternalLoadBaseline;
   indoorMode?: boolean;
   sportType?: "football" | "basketball";
+  /**
+   * Days between args.date and today.date. > 0 when "today" is a fallback
+   * row (no GPS uploaded yet for the requested date). Spike ratios get
+   * Hader 2019 decay applied so a Sunday match doesn't keep producing
+   * a 2.18× PL spike alert through Wed (MD+3).
+   */
+  daysSinceData?: number;
 }): CatapultExternalLoadSignals {
-  const { today, baseline, indoorMode = false, sportType = "football" } = args;
+  const { today, baseline, indoorMode = false, sportType = "football", daysSinceData = 0 } = args;
 
   // Basketball always uses indoor mode regardless of toggle
   const effectiveIndoor = sportType === "basketball" ? true : indoorMode;
@@ -293,25 +342,29 @@ export function computeCatapultExternalLoadSignals(args: {
 
   // ── GPS-based signals (always computed, may be null indoors) ───────────────
 
-  const playerLoadSpike = ratio(today?.playerLoad ?? null, baseline.chronic28dAvg.playerLoad);
-  const hirSpike = ratio(getHirDistance(today), baseline.chronic28dAvg.hirDist);
-  const decelSpike = ratio(getDecelLoad(today), baseline.chronic28dAvg.decelLoad);
-  const accelSpike = ratio(getAccelLoad(today), baseline.chronic28dAvg.accelLoad);
-  const maxVelocityExposureRatio = ratio(today?.maxVelocity ?? null, baseline.chronic28dAvg.maxVelocity);
-  const densityStressRatio = ratio(getDensityStress(today), baseline.chronic28dAvg.densityStress);
-  const band6ExposureRatio = ratio(getBand6Distance(today), baseline.chronic28dAvg.band6Distance);
+  // All spike ratios pass through decayedRatio so a stale "today" row
+  // (fallback to most recent training day on a rest morning) gets Hader
+  // 2019 recovery decay applied. daysSinceData=0 means no fallback was
+  // used → no decay → identical to the prior behavior.
+  const playerLoadSpike = decayedRatio(today?.playerLoad ?? null, baseline.chronic28dAvg.playerLoad, daysSinceData);
+  const hirSpike = decayedRatio(getHirDistance(today), baseline.chronic28dAvg.hirDist, daysSinceData);
+  const decelSpike = decayedRatio(getDecelLoad(today), baseline.chronic28dAvg.decelLoad, daysSinceData);
+  const accelSpike = decayedRatio(getAccelLoad(today), baseline.chronic28dAvg.accelLoad, daysSinceData);
+  const maxVelocityExposureRatio = decayedRatio(today?.maxVelocity ?? null, baseline.chronic28dAvg.maxVelocity, daysSinceData);
+  const densityStressRatio = decayedRatio(getDensityStress(today), baseline.chronic28dAvg.densityStress, daysSinceData);
+  const band6ExposureRatio = decayedRatio(getBand6Distance(today), baseline.chronic28dAvg.band6Distance, daysSinceData);
 
   // ── FMP-based signals (always computed, primary when indoor) ───────────────
 
-  const fmpDynamicHighSpike = ratio(today?.fmpDynamicHighS ?? null, baseline.chronic28dAvg.fmpDynamicHighS);
-  const fmpDynamicMediumSpike = ratio(today?.fmpDynamicMediumS ?? null, baseline.chronic28dAvg.fmpDynamicMediumS);
-  const fmpRunningHighSpike = ratio(today?.fmpRunningHighS ?? null, baseline.chronic28dAvg.fmpRunningHighS);
-  const imaTotalSpike = ratio(today?.imaTotal ?? null, baseline.chronic28dAvg.imaTotal);
+  const fmpDynamicHighSpike = decayedRatio(today?.fmpDynamicHighS ?? null, baseline.chronic28dAvg.fmpDynamicHighS, daysSinceData);
+  const fmpDynamicMediumSpike = decayedRatio(today?.fmpDynamicMediumS ?? null, baseline.chronic28dAvg.fmpDynamicMediumS, daysSinceData);
+  const fmpRunningHighSpike = decayedRatio(today?.fmpRunningHighS ?? null, baseline.chronic28dAvg.fmpRunningHighS, daysSinceData);
+  const imaTotalSpike = decayedRatio(today?.imaTotal ?? null, baseline.chronic28dAvg.imaTotal, daysSinceData);
 
   // ── Deceleration-specific metrics ─────────────────────────────────────────
 
-  const highDecelSpike = ratio(getHighDecelEfforts(today), baseline.chronic28dAvg.highDecelEfforts);
-  const highAccelSpike = ratio(getHighAccelEfforts(today), baseline.chronic28dAvg.highAccelEfforts);
+  const highDecelSpike = decayedRatio(getHighDecelEfforts(today), baseline.chronic28dAvg.highDecelEfforts, daysSinceData);
+  const highAccelSpike = decayedRatio(getHighAccelEfforts(today), baseline.chronic28dAvg.highAccelEfforts, daysSinceData);
 
   // Lite-tier guard: when the team has NEVER had B2-3 efforts in their
   // 28-day chronic baseline (=== 0 for both highAccelEfforts and

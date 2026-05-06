@@ -73,8 +73,14 @@ export function buildCatapultReadinessContextFromRows(args: {
   indoorMode?: boolean;
   sportType?: "football" | "basketball";
 }): CatapultReadinessContext {
-  const { today, baseline } = computeCatapultExternalLoadBaseline(args);
-  const signals = computeCatapultExternalLoadSignals({ today, baseline, indoorMode: args.indoorMode, sportType: args.sportType });
+  const { today, baseline, daysSinceData } = computeCatapultExternalLoadBaseline(args);
+  const signals = computeCatapultExternalLoadSignals({
+    today,
+    baseline,
+    indoorMode: args.indoorMode,
+    sportType: args.sportType,
+    daysSinceData,
+  });
   const modifier = buildCatapultReadinessModifier({ today, baseline, signals });
   return { today, baseline, signals, modifier };
 }
