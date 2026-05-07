@@ -73,19 +73,24 @@ export default function CatapultUploadPage() {
   //   daily     = routine post-session upload (1 day)
   const [mode, setMode] = useState<"bootstrap" | "daily">("daily");
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [csv, setCsv] = useState<string>("");
-  const [filename, setFilename] = useState<string>("");
+  // Multiple files supported — drag a whole month's worth in at once and
+  // the wizard parses each, unions the athlete list across them, asks for
+  // a single round of mapping, then commits each file in turn with the
+  // same athleteMap. Big bootstrap saves 17 manual click cycles.
+  type FileEntry = { filename: string; csv: string; preview: PreviewResult };
+  const [files, setFiles] = useState<FileEntry[]>([]);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [teamPlayers, setTeamPlayers] = useState<TeamPlayer[]>([]);
 
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState<{ done: number; total: number } | null>(null);
   const [previewErr, setPreviewErr] = useState<string | null>(null);
 
   // Manual athlete mapping: sourceKey → player_id
   const [manualMap, setManualMap] = useState<Record<string, string>>({});
 
   const [committing, setCommitting] = useState(false);
+  const [commitProgress, setCommitProgress] = useState<{ done: number; total: number } | null>(null);
   const [commitErr, setCommitErr] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResult | null>(null);
 
@@ -112,41 +117,70 @@ export default function CatapultUploadPage() {
     })();
   }, [supabase]);
 
-  // ─── File picker → read text → preview API ─────────────────────────────
-  async function handleFile(file: File) {
-    setFilename(file.name);
-    const text = await file.text();
-    setCsv(text);
+  // ─── File picker → parse each → preview API ────────────────────────────
+  // Accepts N files. For each: read text, POST phase=preview, accumulate
+  // an entry. After all are parsed, jump to step 2 with the unioned
+  // athlete list. Failure on one file aborts the whole batch — better
+  // to fail fast than half-load and confuse the coach.
+  async function handleFiles(picked: File[]) {
+    if (picked.length === 0) return;
+    setFiles([]);
     setPreviewErr(null);
-    setPreview(null);
     setManualMap({});
     setPreviewing(true);
+    setPreviewProgress({ done: 0, total: picked.length });
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setPreviewErr("Ekki innskráður."); setPreviewing(false); return; }
+    if (!session) { setPreviewErr("Ekki innskráður."); setPreviewing(false); setPreviewProgress(null); return; }
 
-    const res = await fetch("/api/coach/external-load/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        phase: "preview",
-        team_id: teamId,
-        source: "catapult",
-        filename: file.name,
-        csv: text,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) { setPreviewErr(json.error ?? "Villa við greiningu."); setPreviewing(false); return; }
+    const entries: FileEntry[] = [];
+    for (let i = 0; i < picked.length; i++) {
+      const file = picked[i];
+      try {
+        const text = await file.text();
+        const res = await fetch("/api/coach/external-load/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            phase: "preview",
+            team_id: teamId,
+            source: "catapult",
+            filename: file.name,
+            csv: text,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setPreviewErr(`${file.name}: ${json.error ?? "Villa við greiningu."}`);
+          setPreviewing(false);
+          setPreviewProgress(null);
+          return;
+        }
+        entries.push({ filename: file.name, csv: text, preview: json as PreviewResult });
+        setPreviewProgress({ done: i + 1, total: picked.length });
+      } catch (err) {
+        setPreviewErr(`${file.name}: ${err instanceof Error ? err.message : "Villa"}`);
+        setPreviewing(false);
+        setPreviewProgress(null);
+        return;
+      }
+    }
 
-    setPreview(json as PreviewResult);
+    setFiles(entries);
 
-    // Auto-suggest manual mappings for unresolved athletes
+    // Auto-suggest mappings across the union of athletes from every file.
+    // First-seen wins on duplicates (sourceKey is stable).
+    const seen = new Map<string, SourceAthlete>();
+    for (const e of entries) {
+      for (const a of e.preview.sourceAthletes) {
+        if (!seen.has(a.sourceKey)) seen.set(a.sourceKey, a);
+      }
+    }
     const auto: Record<string, string> = {};
-    for (const a of (json as PreviewResult).sourceAthletes) {
+    for (const a of seen.values()) {
       if (a.playerId) continue;
       if (!a.sourceName) continue;
       let best: { id: string; score: number } | null = null;
@@ -158,59 +192,149 @@ export default function CatapultUploadPage() {
     }
     setManualMap(auto);
     setPreviewing(false);
+    setPreviewProgress(null);
     setStep(2);
   }
 
   async function handleCommit() {
-    if (!preview) return;
+    if (files.length === 0) return;
     setCommitErr(null);
     setCommitting(true);
+    setCommitProgress({ done: 0, total: files.length });
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setCommitErr("Ekki innskráður."); setCommitting(false); return; }
+    if (!session) { setCommitErr("Ekki innskráður."); setCommitting(false); setCommitProgress(null); return; }
 
-    const res = await fetch("/api/coach/external-load/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        phase: "commit",
-        team_id: teamId,
-        source: "catapult",
-        filename,
-        csv,
-        athleteMap: manualMap,
-      }),
+    // Loop through files, commit each with the shared athleteMap. Sum the
+    // result counts so step 3 shows the total. Stop at first failure so
+    // partial uploads don't silently swallow errors.
+    let totalCommitted = 0;
+    let totalParsed = 0;
+    let totalAthletes = 0;
+    let totalUnmapped = 0;
+    let earliestStart: string | null = null;
+    let latestEnd: string | null = null;
+    const allUnmappedColumns = new Set<string>();
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      try {
+        const res = await fetch("/api/coach/external-load/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            phase: "commit",
+            team_id: teamId,
+            source: "catapult",
+            filename: f.filename,
+            csv: f.csv,
+            athleteMap: manualMap,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setCommitErr(`${f.filename}: ${json.error ?? "Villa við vistun."}`);
+          setCommitting(false);
+          setCommitProgress(null);
+          return;
+        }
+        totalCommitted += json.rowsCommitted ?? 0;
+        totalParsed += json.rowsParsed ?? 0;
+        totalAthletes = Math.max(totalAthletes, json.athletesTotal ?? 0);
+        totalUnmapped = Math.max(totalUnmapped, json.athletesUnmapped ?? 0);
+        if (json.dateRange) {
+          if (!earliestStart || json.dateRange.start < earliestStart) earliestStart = json.dateRange.start;
+          if (!latestEnd || json.dateRange.end > latestEnd) latestEnd = json.dateRange.end;
+        }
+        for (const c of json.unmappedColumns ?? []) allUnmappedColumns.add(c);
+        setCommitProgress({ done: i + 1, total: files.length });
+      } catch (err) {
+        setCommitErr(`${f.filename}: ${err instanceof Error ? err.message : "Villa"}`);
+        setCommitting(false);
+        setCommitProgress(null);
+        return;
+      }
+    }
+
+    const dateRange = earliestStart && latestEnd
+      ? { start: earliestStart, end: latestEnd, days: Math.round((+new Date(latestEnd) - +new Date(earliestStart)) / 86400000) + 1 }
+      : null;
+
+    setResult({
+      rowsCommitted: totalCommitted,
+      rowsParsed: totalParsed,
+      athletesTotal: totalAthletes,
+      athletesUnmapped: totalUnmapped,
+      dateRange,
+      unmappedColumns: Array.from(allUnmappedColumns),
     });
-    const json = await res.json();
-    if (!res.ok) { setCommitErr(json.error ?? "Villa við vistun."); setCommitting(false); return; }
-    setResult(json as CommitResult);
     setCommitting(false);
+    setCommitProgress(null);
     setStep(3);
   }
 
   function reset() {
-    setStep(1); setCsv(""); setFilename("");
-    setPreview(null); setPreviewErr(null);
-    setManualMap({}); setResult(null); setCommitErr(null);
+    setStep(1);
+    setFiles([]);
+    setPreviewErr(null);
+    setManualMap({});
+    setResult(null);
+    setCommitErr(null);
+    setPreviewProgress(null);
+    setCommitProgress(null);
   }
 
   // ─── Render ────────────────────────────────────────────────────────────
+  // Aggregate the union of file previews so step 2 shows one summary
+  // and one mapping list regardless of how many CSVs were dropped in.
+
+  const aggregated = useMemo(() => {
+    const athleteByKey = new Map<string, SourceAthlete>();
+    const unmappedColumnsByHeader = new Map<string, { index: number; header: string }>();
+    let totalAggregatedRows = 0;
+    let earliestStart: string | null = null;
+    let latestEnd: string | null = null;
+
+    for (const f of files) {
+      // First-seen wins; if the same athlete appears in multiple files,
+      // we use the first preview's resolution metadata (which is fine since
+      // the alias cache is global by team_id+source).
+      for (const a of f.preview.sourceAthletes) {
+        if (!athleteByKey.has(a.sourceKey)) athleteByKey.set(a.sourceKey, a);
+      }
+      for (const c of f.preview.unmatchedColumns) {
+        if (!unmappedColumnsByHeader.has(c.header)) unmappedColumnsByHeader.set(c.header, c);
+      }
+      totalAggregatedRows += f.preview.aggregatedRows;
+      if (f.preview.dateRange) {
+        if (!earliestStart || f.preview.dateRange.start < earliestStart) earliestStart = f.preview.dateRange.start;
+        if (!latestEnd || f.preview.dateRange.end > latestEnd) latestEnd = f.preview.dateRange.end;
+      }
+    }
+
+    const dateRange = earliestStart && latestEnd
+      ? { start: earliestStart, end: latestEnd, days: Math.round((+new Date(latestEnd) - +new Date(earliestStart)) / 86400000) + 1 }
+      : null;
+
+    return {
+      athletes: Array.from(athleteByKey.values()),
+      unmappedColumns: Array.from(unmappedColumnsByHeader.values()),
+      aggregatedRows: totalAggregatedRows,
+      dateRange,
+    };
+  }, [files]);
 
   const unmappedAthletes = useMemo(
-    () => (preview?.sourceAthletes ?? []).filter(
-      (a) => !a.playerId && !manualMap[a.sourceKey],
-    ),
-    [preview, manualMap],
+    () => aggregated.athletes.filter((a) => !a.playerId && !manualMap[a.sourceKey]),
+    [aggregated.athletes, manualMap],
   );
 
   const mappedCount = useMemo(
-    () => (preview?.sourceAthletes ?? []).filter(
-      (a) => a.playerId || manualMap[a.sourceKey],
-    ).length,
-    [preview, manualMap],
+    () => aggregated.athletes.filter((a) => a.playerId || manualMap[a.sourceKey]).length,
+    [aggregated.athletes, manualMap],
   );
 
   return (
@@ -309,18 +433,24 @@ export default function CatapultUploadPage() {
             <input
               type="file"
               accept=".csv,text/csv"
+              multiple
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFile(f);
+                const fs = Array.from(e.target.files ?? []);
+                if (fs.length > 0) void handleFiles(fs);
               }}
               className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-foreground file:text-background file:px-4 file:py-2 file:text-sm file:font-medium hover:file:bg-foreground/90"
             />
-            {previewing && <p className="text-sm text-muted-foreground">Greini skrá…</p>}
+            {previewing && previewProgress && (
+              <p className="text-sm text-muted-foreground">
+                Greini skrár… {previewProgress.done} / {previewProgress.total}
+              </p>
+            )}
             {previewErr && <p className="text-sm text-rose-600">{previewErr}</p>}
 
             <div className="rounded-md border bg-emerald-50 p-3 text-xs text-emerald-800">
               <strong>⏱ Tekur ~2 mínútur.</strong> Þú getur uploadað hvenær sem er eftir æfingu —
-              best á sama kvöldi svo morgun-briefingin sé tilbúin.
+              best á sama kvöldi svo morgun-briefingin sé tilbúin. Þú getur dregið eina eða
+              fleiri skrár inn í einu.
             </div>
           </CardContent>
         </Card>
@@ -340,13 +470,18 @@ export default function CatapultUploadPage() {
             <input
               type="file"
               accept=".csv,text/csv"
+              multiple
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFile(f);
+                const fs = Array.from(e.target.files ?? []);
+                if (fs.length > 0) void handleFiles(fs);
               }}
               className="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-foreground file:text-background file:px-4 file:py-2 file:text-sm file:font-medium hover:file:bg-foreground/90"
             />
-            {previewing && <p className="text-sm text-muted-foreground">Greini skrá…</p>}
+            {previewing && previewProgress && (
+              <p className="text-sm text-muted-foreground">
+                Greini skrár… {previewProgress.done} / {previewProgress.total}
+              </p>
+            )}
             {previewErr && <p className="text-sm text-rose-600">{previewErr}</p>}
 
             <div className="rounded-md border bg-blue-50 p-3 text-xs text-blue-800 space-y-1">
@@ -360,13 +495,18 @@ export default function CatapultUploadPage() {
                 Með 28-daga bootstrap-i kveikir kerfið á <strong>strax frá degi 1</strong> — og þú
                 þarft bara að gera þetta einu sinni.
               </div>
+              <div className="pt-1">
+                <strong>📂 Margar skrár í einu:</strong> dragðu eins margar Activity Report CSV
+                inn og þú vilt — kerfið parses allar í einu, sameinar leikmenn og tímabil, og
+                þú þarft aðeins eitt mapping-skref og einn Commit.
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* ─── STEP 2: Mapping review ──────────────────────────────────── */}
-      {step === 2 && preview && (
+      {step === 2 && files.length > 0 && (
         <div className="space-y-4">
           {/* Summary card */}
           <Card>
@@ -375,38 +515,61 @@ export default function CatapultUploadPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
               <div>
-                <div className="text-muted-foreground text-xs">Skrá</div>
-                <div className="font-mono text-xs truncate">{filename}</div>
+                <div className="text-muted-foreground text-xs">Skrár</div>
+                <div className="font-medium">
+                  {files.length} {files.length === 1 ? "skrá" : "skrár"}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">Tímabil</div>
                 <div>
-                  {preview.dateRange
-                    ? `${preview.dateRange.start} → ${preview.dateRange.end} (${preview.dateRange.days} dag${preview.dateRange.days === 1 ? "ur" : "ar"})`
+                  {aggregated.dateRange
+                    ? `${aggregated.dateRange.start} → ${aggregated.dateRange.end} (${aggregated.dateRange.days} dag${aggregated.dateRange.days === 1 ? "ur" : "ar"})`
                     : "Ekkert"}
                 </div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">Athlete-day raðir</div>
-                <div>{preview.aggregatedRows}</div>
+                <div>{aggregated.aggregatedRows}</div>
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">Leikmenn</div>
-                <div>{mappedCount} / {preview.sourceAthletes.length} mapped</div>
+                <div>{mappedCount} / {aggregated.athletes.length} mapped</div>
               </div>
             </CardContent>
           </Card>
+
+          {/* File list — collapsed details so coach knows exactly what was parsed */}
+          {files.length > 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Skrár í þessu upload-i</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {files.map((f) => (
+                  <div key={f.filename} className="flex items-center justify-between text-xs border-b last:border-0 py-1.5">
+                    <span className="font-mono truncate">{f.filename}</span>
+                    <span className="text-muted-foreground shrink-0 ml-3">
+                      {f.preview.aggregatedRows} raðir · {f.preview.sourceAthletes.length} leikm.
+                      {f.preview.dateRange && ` · ${f.preview.dateRange.start}`}
+                    </span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Athlete mapping */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Tengja leikmenn</CardTitle>
               <CardDescription>
+                Sameinaður listi yfir alla leikmenn úr {files.length === 1 ? "skránni" : `öllum ${files.length} skrám`}.
                 Sjálfvirkt cache-að eftir fyrsta upload. Þú þarft bara að confirma athletes sem hafa ekki verið séðir áður.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {preview.sourceAthletes.map((a) => {
+              {aggregated.athletes.map((a) => {
                 const resolvedId = a.playerId ?? manualMap[a.sourceKey];
                 const isCached = a.resolvedFrom === "cached_id" || a.resolvedFrom === "cached_name";
                 return (
@@ -449,19 +612,19 @@ export default function CatapultUploadPage() {
             </CardContent>
           </Card>
 
-          {/* Diagnostic: unmapped columns */}
-          {preview.unmatchedColumns.length > 0 && (
+          {/* Diagnostic: unmapped columns (union across files) */}
+          {aggregated.unmappedColumns.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Óþekkt CSV dálkar ({preview.unmatchedColumns.length})</CardTitle>
+                <CardTitle className="text-base">Óþekkt CSV dálkar ({aggregated.unmappedColumns.length})</CardTitle>
                 <CardDescription>
                   Þessir dálkar verða ekki vistaðir. Ef einhver er mikilvægur, sendu mér nafnið og við bætum við aliasum.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1">
-                  {preview.unmatchedColumns.map((c) => (
-                    <Badge key={c.index} variant="outline" className="text-[10px] font-mono">{c.header}</Badge>
+                  {aggregated.unmappedColumns.map((c) => (
+                    <Badge key={c.header} variant="outline" className="text-[10px] font-mono">{c.header}</Badge>
                   ))}
                 </div>
               </CardContent>
@@ -469,16 +632,18 @@ export default function CatapultUploadPage() {
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={reset}>Velja aðra skrá</Button>
+            <Button variant="outline" onClick={reset}>Velja aðrar skrár</Button>
             <Button
               onClick={handleCommit}
               disabled={committing || mappedCount === 0}
             >
-              {committing
+              {committing && commitProgress
+                ? `Vista skrá ${commitProgress.done + 1} / ${commitProgress.total}…`
+                : committing
                 ? "Vista…"
                 : unmappedAthletes.length > 0
                 ? `Vista ${mappedCount} leikmenn (sleppi ${unmappedAthletes.length})`
-                : `Vista ${preview.aggregatedRows} athlete-day raðir`}
+                : `Vista ${aggregated.aggregatedRows} athlete-day raðir`}
             </Button>
           </div>
           {commitErr && <p className="text-sm text-rose-600 text-right">{commitErr}</p>}
@@ -530,6 +695,9 @@ export default function CatapultUploadPage() {
             )}
             <div className="pt-2">
               <Button variant="outline" onClick={reset}>Uploada fleiri gögnum</Button>
+              <span className="text-xs text-muted-foreground ml-2">
+                {result.unmappedColumns?.length ? `· ${result.unmappedColumns.length} óþekktir dálkar sleppt` : ""}
+              </span>
             </div>
           </CardContent>
         </Card>
