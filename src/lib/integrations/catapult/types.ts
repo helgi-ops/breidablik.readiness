@@ -73,6 +73,10 @@ export type CatapultSessionMetric = {
   imaAccel?: number | null;
   imaDecel?: number | null;
   imaCod?: number | null;
+  /** L/R CoD splits — sum of Left Low + Medium + High counts. Used for Bishop 2020 asymmetry. */
+  imaCodLeft?: number | null;
+  /** L/R CoD splits — sum of Right Low + Medium + High counts. */
+  imaCodRight?: number | null;
   imaTotal?: number | null;
   codEvents?: number | null;
   impacts?: number | null;
@@ -82,6 +86,8 @@ export type CatapultSessionMetric = {
       accel: string[];
       decel: string[];
       cod: string[];
+      codLeft?: string[];
+      codRight?: string[];
       impacts: string[];
       playerloadPerMin: string[];
       imaTotal: string[];
@@ -187,6 +193,8 @@ export type NormalizedExternalLoad = {
     imaAccel?: number | null;
     imaDecel?: number | null;
     imaCod?: number | null;
+    imaCodLeft?: number | null;
+    imaCodRight?: number | null;
     imaTotal?: number | null;
     codEvents?: number | null;
     impacts?: number | null;

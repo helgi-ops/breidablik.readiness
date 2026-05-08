@@ -75,6 +75,10 @@ export type CatapultMetricKey =
   | "imaFrBand1Rate"    | "imaFrBand2Rate"    | "imaFrBand3Rate"    | "imaFrBand4Rate"
   | "imaFrBand5Rate"    | "imaFrBand6Rate"    | "imaFrBand7Rate"    | "imaFrBand8Rate"
 
+  // ── IMA Change of Direction Left/Right (Stride Intelligence asymmetry) ──
+  | "imaCodLeftHigh"   | "imaCodLeftMedium"   | "imaCodLeftLow"
+  | "imaCodRightHigh"  | "imaCodRightMedium"  | "imaCodRightLow"
+
   // ── Metabolic ──
   | "hmld"             // High Metabolic Load Distance
   | "metabolicPower"
@@ -256,6 +260,22 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["ima free running band 7 average stride rate", "ima free run band 7 rate", "imafreerunning band 7 average stride rate"] },
   { key: "imaFrBand8Rate", label: "IMA FR Band 8 Stride Rate", unit: "/s",
     aliases: ["ima free running band 8 average stride rate", "ima free run band 8 rate", "imafreerunning band 8 average stride rate"] },
+
+  // ─── IMA Change of Direction L/R splits (Stride Intelligence asymmetry) ───
+  // Catapult exports CoD as Left/Right × Low/Medium/High. Sum sides to compute
+  // |L-R|/((L+R)/2)*100 asymmetry index. >15% = injury-risk flag (Bishop 2020).
+  { key: "imaCodLeftHigh", label: "IMA CoD Left High", unit: "count",
+    aliases: ["ima cod left high", "ima cod left high count", "ima change of direction left high"] },
+  { key: "imaCodLeftMedium", label: "IMA CoD Left Medium", unit: "count",
+    aliases: ["ima cod left medium", "ima cod left medium count", "ima change of direction left medium"] },
+  { key: "imaCodLeftLow", label: "IMA CoD Left Low", unit: "count",
+    aliases: ["ima cod left low", "ima cod left low count", "ima change of direction left low"] },
+  { key: "imaCodRightHigh", label: "IMA CoD Right High", unit: "count",
+    aliases: ["ima cod right high", "ima cod right high count", "ima change of direction right high"] },
+  { key: "imaCodRightMedium", label: "IMA CoD Right Medium", unit: "count",
+    aliases: ["ima cod right medium", "ima cod right medium count", "ima change of direction right medium"] },
+  { key: "imaCodRightLow", label: "IMA CoD Right Low", unit: "count",
+    aliases: ["ima cod right low", "ima cod right low count", "ima change of direction right low"] },
 
   // ─── Metabolic ───────────────────────────────────────────────────────
   { key: "hmld", label: "High Metabolic Load Distance", unit: "m",

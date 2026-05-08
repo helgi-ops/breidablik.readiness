@@ -14,6 +14,8 @@ import { computeMechanicalLoad, type MechanicalLoadSourceRow } from "@/lib/micro
 import { computeMetabolicLoad, type MetabolicLoadSourceRow } from "@/lib/micropulse/metabolicLoad";
 import { flagAgainstBaseline, type AthleteMetricBaseline } from "@/lib/micropulse/baselines";
 import { fetchRecentDecisions, recordPlayerDecision } from "@/lib/micropulse/domain/decision/history";
+import { loadStrideIntelligence } from "@/lib/micropulse/strideIntelligence/loader";
+import type { StrideIntelligencePayload } from "@/lib/micropulse/strideIntelligence";
 import type { RecentDecision } from "@/lib/micropulse/domain/decision/sequence";
 import { deriveSignalTrend, type SignalTrend } from "@/lib/micropulse/domain/decision/forecast";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
@@ -342,6 +344,33 @@ async function fetchTeamRpeForDate(
   return result;
 }
 
+/**
+ * Fetch Stride Intelligence (cadence drift, L/R cutting asymmetry,
+ * GPS-IMA decoupling) for every player in parallel. Returns a Map
+ * keyed by player_id. Players with no Catapult IMA Free Running
+ * row for the date map to null — the decision engine treats null
+ * as "no signal" rather than "all green".
+ */
+async function fetchStrideIntelForPlayers(
+  sb: ReturnType<typeof getAdminClient>,
+  playerIds: string[],
+  date: string,
+): Promise<Map<string, StrideIntelligencePayload | null>> {
+  const out = new Map<string, StrideIntelligencePayload | null>();
+  if (!playerIds.length) return out;
+  await Promise.all(
+    playerIds.map(async (pid) => {
+      try {
+        const payload = await loadStrideIntelligence(sb, { playerId: pid, date });
+        out.set(pid, payload);
+      } catch {
+        out.set(pid, null);
+      }
+    }),
+  );
+  return out;
+}
+
 async function fetchYesterdayContext(
   sb: ReturnType<typeof getAdminClient>,
   teamId: string,
@@ -587,6 +616,12 @@ async function buildPlayerSource(args: {
    * streak-only logic with reduced confidence.
    */
   signalTrend?: SignalTrend | null;
+  /**
+   * Stride Intelligence payload (IMA Free Running 8-band → cadence drift,
+   * stride length compression, L/R CoD asymmetry, GPS-IMA decoupling).
+   * Null when player has no Catapult IMA data for the date.
+   */
+  strideIntel?: StrideIntelligencePayload | null;
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -841,6 +876,7 @@ async function buildPlayerSource(args: {
       concernLevel: compositeLoad.concernLevel,
       summary: loadSummaryParts.join(" | "),
     },
+    strideIntel: args.strideIntel ?? null,
     hardBlock: false,
     recentDecisions: args.recentDecisions ?? null,
     signalTrend: args.signalTrend ?? null,
@@ -965,7 +1001,7 @@ export async function GET(req: Request) {
     // Basketball teams are always indoor regardless of toggle
     const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
-    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer, signalTrendByPlayer] = await Promise.all([
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer, signalTrendByPlayer, strideIntelByPlayer] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -977,6 +1013,7 @@ export async function GET(req: Request) {
       fetchWellnessBaselines(sb, playerIds),
       fetchRecentDecisions(playerIds, 7),
       fetchScoreTrendByPlayer(sb, playerIds, date),
+      fetchStrideIntelForPlayers(sb, playerIds, date),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -1003,6 +1040,7 @@ export async function GET(req: Request) {
             wellnessBaselines: wellnessBaselinesByPlayer.get(String(row.player_id)) ?? null,
             recentDecisions: recentDecisionsByPlayer.get(String(row.player_id)) ?? null,
             signalTrend: signalTrendByPlayer.get(String(row.player_id)) ?? null,
+            strideIntel: strideIntelByPlayer.get(String(row.player_id)) ?? null,
           })
         );
       } catch {

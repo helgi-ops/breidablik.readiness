@@ -166,6 +166,8 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
       "imaDecelBand1", "imaDecelBand2", "imaDecelBand3",
       "imaFrBand1Strides", "imaFrBand2Strides", "imaFrBand3Strides", "imaFrBand4Strides",
       "imaFrBand5Strides", "imaFrBand6Strides", "imaFrBand7Strides", "imaFrBand8Strides",
+      "imaCodLeftHigh", "imaCodLeftMedium", "imaCodLeftLow",
+      "imaCodRightHigh", "imaCodRightMedium", "imaCodRightLow",
       "hmld", "totalMetabolicEnergy",
       "durationMinutes",
     ];
@@ -283,6 +285,14 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     ima_fr_band6_avg_stride_rate: m.imaFrBand6Rate ?? null,
     ima_fr_band7_avg_stride_rate: m.imaFrBand7Rate ?? null,
     ima_fr_band8_avg_stride_rate: m.imaFrBand8Rate ?? null,
+
+    // L/R IMA Change of Direction (Stride Intelligence asymmetry)
+    ima_cod_left_high:    a.imaCodLeftHigh    ?? null,
+    ima_cod_left_medium:  a.imaCodLeftMedium  ?? null,
+    ima_cod_left_low:     a.imaCodLeftLow     ?? null,
+    ima_cod_right_high:   a.imaCodRightHigh   ?? null,
+    ima_cod_right_medium: a.imaCodRightMedium ?? null,
+    ima_cod_right_low:    a.imaCodRightLow    ?? null,
 
     high_metabolic_load_distance_m: a.hmld ?? null,
     metabolic_power: m.metabolicPower ?? null,

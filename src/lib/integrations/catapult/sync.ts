@@ -167,6 +167,8 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.imaAccel = sumNullable(current.externalLoad.imaAccel, row.externalLoad.imaAccel);
     current.externalLoad.imaDecel = sumNullable(current.externalLoad.imaDecel, row.externalLoad.imaDecel);
     current.externalLoad.imaCod = sumNullable(current.externalLoad.imaCod, row.externalLoad.imaCod);
+    current.externalLoad.imaCodLeft = sumNullable(current.externalLoad.imaCodLeft, row.externalLoad.imaCodLeft);
+    current.externalLoad.imaCodRight = sumNullable(current.externalLoad.imaCodRight, row.externalLoad.imaCodRight);
     current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
     current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
     current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
@@ -263,6 +265,14 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_accel: row.externalLoad.imaAccel ?? null,
     ima_decel: row.externalLoad.imaDecel ?? null,
     ima_cod: row.externalLoad.imaCod ?? null,
+    // L/R CoD splits — used for Bishop 2020 asymmetry index in Stride Intelligence.
+    // We don't have separate Low/Medium/High columns from the API aggregation
+    // (the IMA CoD endpoint returns each tier separately, but we collapse during
+    // normalization), so we write the totals into the *_low columns and leave
+    // medium/high null. The summary view sums all three so the result is
+    // identical for asymmetry computation.
+    ima_cod_left_low: row.externalLoad.imaCodLeft ?? null,
+    ima_cod_right_low: row.externalLoad.imaCodRight ?? null,
     ima_total: row.externalLoad.imaTotal ?? null,
     cod_events: row.externalLoad.codEvents ?? null,
     impacts: row.externalLoad.impacts ?? null,

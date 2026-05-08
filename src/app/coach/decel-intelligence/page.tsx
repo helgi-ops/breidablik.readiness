@@ -24,6 +24,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 // PlayerDecelSummaryCard is different: it's a NARROW AI feature that
 // translates the 6 decel metrics into coach speak. Lives only on this page.
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
+import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
@@ -487,6 +488,11 @@ function PlayerRow({ row }: { row: Row }) {
               the LLM never invents its own reading of the numbers — see
               lib/micropulse/decelNarrative for the design rationale. */}
           <PlayerDecelSummaryCard playerId={row.player_id} />
+
+          {/* Stride Intelligence — IMA Free Running 8-band stride mechanics +
+              L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits
+              alongside McBurnie because both are stride-mechanical signals. */}
+          <StrideIntelligenceCard playerId={row.player_id} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail

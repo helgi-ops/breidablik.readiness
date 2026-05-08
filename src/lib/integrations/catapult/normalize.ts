@@ -572,6 +572,27 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     findMatchingEntries(record, (entry) => entry.canonical.includes("ima") && entry.canonical.includes("cod")),
   );
 
+  // L/R splits — Catapult exports IMA CoD Left/Right × Low/Medium/High.
+  // Sum each side independently so we can compute Bishop 2020 asymmetry index.
+  const codLeftEntries = preferCountLike(
+    findMatchingEntries(
+      record,
+      (entry) =>
+        entry.canonical.includes("ima") &&
+        entry.canonical.includes("cod") &&
+        entry.canonical.includes("left"),
+    ),
+  );
+  const codRightEntries = preferCountLike(
+    findMatchingEntries(
+      record,
+      (entry) =>
+        entry.canonical.includes("ima") &&
+        entry.canonical.includes("cod") &&
+        entry.canonical.includes("right"),
+    ),
+  );
+
   const impactEntries = preferCountLike(
     findMatchingEntries(record, (entry) => entry.canonical.includes("ima") && entry.canonical.includes("impact")),
   );
@@ -586,6 +607,8 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   const imaAccel = nullIfZero(toInteger(sumEntries(accelEntries)));
   const imaDecel = nullIfZero(toInteger(sumEntries(decelEntries)));
   const imaCod = nullIfZero(toInteger(sumEntries(codEntries)));
+  const imaCodLeft = nullIfZero(toInteger(sumEntries(codLeftEntries)));
+  const imaCodRight = nullIfZero(toInteger(sumEntries(codRightEntries)));
   const impacts = nullIfZero(toInteger(sumEntries(impactEntries)));
 
   const imaTotal = nullIfZero(
@@ -606,6 +629,8 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     imaAccel,
     imaDecel,
     imaCod,
+    imaCodLeft,
+    imaCodRight,
     imaTotal,
     codEvents,
     impacts,
@@ -617,6 +642,8 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
         accel: accelEntries.map((entry) => entry.key),
         decel: decelEntries.map((entry) => entry.key),
         cod: codEntries.map((entry) => entry.key),
+        codLeft: codLeftEntries.map((entry) => entry.key),
+        codRight: codRightEntries.map((entry) => entry.key),
         impacts: impactEntries.map((entry) => entry.key),
         playerloadPerMin: directPlayerLoadPerMin != null ? ["player_load_per_minute"] : durationMinutes != null ? ["duration_minutes"] : [],
         imaTotal: directImaTotal != null ? ["ima_total_efforts"] : [],
@@ -843,6 +870,8 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       imaAccel: normalizedIma.imaAccel,
       imaDecel: normalizedIma.imaDecel,
       imaCod: normalizedIma.imaCod,
+      imaCodLeft: normalizedIma.imaCodLeft,
+      imaCodRight: normalizedIma.imaCodRight,
       imaTotal: normalizedIma.imaTotal,
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,
@@ -1017,6 +1046,8 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.imaAccel = sumNullable(current.imaAccel, metric.imaAccel);
     current.imaDecel = sumNullable(current.imaDecel, metric.imaDecel);
     current.imaCod = sumNullable(current.imaCod, metric.imaCod);
+    current.imaCodLeft = sumNullable(current.imaCodLeft, metric.imaCodLeft);
+    current.imaCodRight = sumNullable(current.imaCodRight, metric.imaCodRight);
     current.imaTotal = sumNullable(current.imaTotal, metric.imaTotal);
     current.codEvents = sumNullable(current.codEvents, metric.codEvents);
     current.impacts = sumNullable(current.impacts, metric.impacts);
@@ -1110,6 +1141,8 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaAccel: metric.imaAccel ?? null,
       imaDecel: metric.imaDecel ?? null,
       imaCod: metric.imaCod ?? null,
+      imaCodLeft: metric.imaCodLeft ?? null,
+      imaCodRight: metric.imaCodRight ?? null,
       imaTotal: metric.imaTotal ?? null,
       codEvents: metric.codEvents ?? null,
       impacts: metric.impacts ?? null,

@@ -36,6 +36,16 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("RESIDUAL_MLI_HIGH") || triggeredRules.includes("RESIDUAL_MLI_CAUTION")) {
     lines.push("Accumulated mechanical stress over multiple days is elevated.");
   }
+  if (
+    triggeredRules.includes("STRIDE_CADENCE_DROP") ||
+    triggeredRules.includes("STRIDE_LENGTH_DROP") ||
+    triggeredRules.includes("GPS_IMA_DECOUPLING")
+  ) {
+    lines.push("Stride mechanics differ from this athlete's normal pattern — possible NM fatigue or compensation.");
+  }
+  if (triggeredRules.includes("COD_LR_ASYMMETRY")) {
+    lines.push("Left/right cutting asymmetry is above the injury-risk threshold.");
+  }
   return Array.from(new Set(lines)).slice(0, 4);
 }
 
@@ -55,6 +65,10 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("GLOBAL_FATIGUE")) drivers.push("Global fatigue (mechanical + metabolic)");
   if (triggeredRules.includes("RESIDUAL_MLI_HIGH")) drivers.push("High accumulated mechanical load (3-day)");
   if (triggeredRules.includes("RESIDUAL_MLI_CAUTION")) drivers.push("Elevated accumulated mechanical load (3-day)");
+  if (triggeredRules.includes("STRIDE_CADENCE_DROP")) drivers.push("Cadence below personal baseline");
+  if (triggeredRules.includes("STRIDE_LENGTH_DROP")) drivers.push("Stride length compressing");
+  if (triggeredRules.includes("COD_LR_ASYMMETRY")) drivers.push("Left/right cutting asymmetry");
+  if (triggeredRules.includes("GPS_IMA_DECOUPLING")) drivers.push("GPS-IMA decoupling (effort vs distance)");
   return Array.from(new Set(drivers)).slice(0, 5);
 }
 

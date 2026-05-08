@@ -1,6 +1,7 @@
 import type { InjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import type { ExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildDecisionInputFromReadinessContext, buildTrainingRecommendation } from "@/lib/micropulse/decision";
+import type { StrideIntelligencePayload } from "@/lib/micropulse/strideIntelligence";
 import type { DailyAthleteSnapshot } from "../snapshot/types";
 import { buildDecisionExplanationLines, buildDecisionReasons, buildDecisionRecommendations } from "./explanations";
 import { buildDecisionFlags } from "./flags";
@@ -56,6 +57,15 @@ type BuildAthleteDecisionParams = {
     overallFlag?: "green" | "yellow" | "red" | "unknown" | null;
     summary?: string | null;
   } | null;
+  /**
+   * Stride Intelligence — IMA-derived movement-quality signals (cadence,
+   * stride length, L/R CoD asymmetry, GPS-IMA decoupling). Mode-agnostic
+   * (works indoor + outdoor). When provided, driver reasons are merged
+   * into the load summary and the highest-severity driver bumps the
+   * load concern toward the next tier (watch → low, concern → moderate,
+   * high → high). Optional; omit to skip.
+   */
+  strideIntel?: StrideIntelligencePayload | null;
   hardBlock?: boolean | null;
   explicitRecoveryDay?: boolean | null;
   /**
@@ -201,6 +211,11 @@ export function buildAthleteDecision(params: BuildAthleteDecisionParams): Athlet
   else if (indoorAcwrFlag === "yellow") loadSummaryParts.push("Indoor ACWR in YELLOW — outside 0.8–1.3 sweet spot.");
   if (decelOverallFlag === "red") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag RED — multiple deceleration dimensions out of safe range.");
   else if (decelOverallFlag === "yellow") loadSummaryParts.push(params.decelIntelligence?.summary ?? "Decel Intelligence (McBurnie 2022) overall flag YELLOW — at least one deceleration dimension elevated.");
+  // Stride Intelligence — push every fired driver into the load summary.
+  // Severity is captured in the reason string; UI can color-code separately.
+  if (params.strideIntel?.reasons?.length) {
+    for (const r of params.strideIntel.reasons) loadSummaryParts.push(r);
+  }
   const loadSummaryCombined = loadSummaryParts.length ? loadSummaryParts.join(" ") : null;
 
   const baseReasons = buildDecisionReasons({
