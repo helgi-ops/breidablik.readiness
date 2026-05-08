@@ -572,24 +572,36 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     findMatchingEntries(record, (entry) => entry.canonical.includes("ima") && entry.canonical.includes("cod")),
   );
 
-  // L/R splits — Catapult exports IMA CoD Left/Right × Low/Medium/High.
-  // Sum each side independently so we can compute Bishop 2020 asymmetry index.
+  // L/R splits — Catapult exports both:
+  //   - "IMA CoD Left/Right High/Medium/Low" (derived params, often 0 unless
+  //     thresholds are configured in OpenField)
+  //   - ima_band1/2/3_left_count, ima_band1/2/3_right_count (raw IMU
+  //     direction-event counts, always populated)
+  // We match BOTH so we have the raw counts as fallback when the derived
+  // parameters return 0. If both match the same data, the sum still works
+  // (zeros don't add anything). For Bishop 2020 asymmetry index.
   const codLeftEntries = preferCountLike(
     findMatchingEntries(
       record,
-      (entry) =>
-        entry.canonical.includes("ima") &&
-        entry.canonical.includes("cod") &&
-        entry.canonical.includes("left"),
+      (entry) => {
+        const c = entry.canonical;
+        // Explicit "IMA CoD Left X" derived parameter
+        if (c.includes("ima") && c.includes("cod") && c.includes("left")) return true;
+        // Raw direction-event counts: ima_band{1,2,3}_left_count
+        if (/^imaband[1-3]leftcount$/.test(c)) return true;
+        return false;
+      },
     ),
   );
   const codRightEntries = preferCountLike(
     findMatchingEntries(
       record,
-      (entry) =>
-        entry.canonical.includes("ima") &&
-        entry.canonical.includes("cod") &&
-        entry.canonical.includes("right"),
+      (entry) => {
+        const c = entry.canonical;
+        if (c.includes("ima") && c.includes("cod") && c.includes("right")) return true;
+        if (/^imaband[1-3]rightcount$/.test(c)) return true;
+        return false;
+      },
     ),
   );
 

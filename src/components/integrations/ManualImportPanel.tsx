@@ -61,8 +61,8 @@ export default function ManualImportPanel({ descriptors, onImport, lastSummary }
         className="mt-2 min-h-[140px] w-full rounded border px-2 py-1 text-[11px]"
         value={payloadText}
         onChange={(event) => setPayloadText(event.target.value)}
-        placeholder='JSON example: {"data":[{"athlete_id":"123","timestamp":"2026-03-14","recovery_score":73}]}
-CSV example: metricKey,category,externalAthleteId,timestamp,numericValue,unit'
+        placeholder={'JSON example: {"data":[{"athlete_id":"123","timestamp":"2026-03-14","recovery_score":73}]}\nCSV example: metricKey,category,externalAthleteId,timestamp,numericValue,unit'}
+        suppressHydrationWarning
       />
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
