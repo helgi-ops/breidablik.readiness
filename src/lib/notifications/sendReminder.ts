@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getMissingPlayersForToday } from "@/lib/notifications/checkins";
-import type { ReminderType } from "@/lib/notifications/schedule";
+import type { ReminderProfile, ReminderType } from "@/lib/notifications/schedule";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 
 type SubscriptionRow = {
@@ -142,9 +142,14 @@ export async function sendReminderToMissingPlayers(
     scheduledSlot: string;
     dateKey: string;
     timeZone: string;
+    profile?: ReminderProfile;
   }
 ) {
-  const missing = await getMissingPlayersForToday(sb, { dateKey: args.dateKey, timeZone: args.timeZone });
+  const missing = await getMissingPlayersForToday(sb, {
+    dateKey: args.dateKey,
+    timeZone: args.timeZone,
+    profile: args.profile,
+  });
   const missingPlayers = missing.players;
 
   const subscriptionsByPlayer = await getLatestActiveSubscriptionByPlayer(

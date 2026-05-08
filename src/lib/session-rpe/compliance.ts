@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getDateKeyInTimezone, getOperationalTimezone } from "@/lib/notifications/schedule";
+import {
+  getDateKeyInTimezone,
+  getOperationalTimezone,
+  type ReminderProfile,
+} from "@/lib/notifications/schedule";
 import { getReminderSlotsForDateKey, isPlayerExpectedForRpe } from "@/lib/session-rpe/reminderConfig";
 
 type EligiblePlayerRow = {
@@ -9,6 +13,11 @@ type EligiblePlayerRow = {
   full_name: string | null;
   team_id: string | null;
   user_id: string | null;
+};
+
+type TeamProfileRow = {
+  id: string;
+  reminder_profile: string | null;
 };
 
 type SubmissionRow = {
@@ -73,9 +82,22 @@ export type RpeCompliancePayload = {
   notExpectedPlayers: RpeCompliancePlayer[];
 };
 
+async function getTeamIdsForProfile(
+  sb: SupabaseClient,
+  profile: ReminderProfile,
+): Promise<Set<string>> {
+  const { data, error } = await sb
+    .from("teams")
+    .select("id, reminder_profile")
+    .eq("reminder_profile", profile);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as TeamProfileRow[];
+  return new Set(rows.map((r) => String(r.id)));
+}
+
 export async function getEligiblePlayersForRpe(
   sb: SupabaseClient,
-  args: { teamId?: string | null }
+  args: { teamId?: string | null; profile?: ReminderProfile }
 ): Promise<RpeCompliancePlayer[]> {
   let query = sb.from("players").select("id, full_name, team_id, user_id").not("user_id", "is", null);
   if (args.teamId) {
@@ -83,11 +105,17 @@ export async function getEligiblePlayersForRpe(
   }
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return ((data ?? []) as EligiblePlayerRow[]).map((row) => ({
+
+  const all = ((data ?? []) as EligiblePlayerRow[]).map((row) => ({
     player_id: row.id,
     player_name: row.full_name ?? "Unknown player",
     team_id: row.team_id ?? null,
   }));
+
+  if (!args.profile) return all;
+
+  const teamIds = await getTeamIdsForProfile(sb, args.profile);
+  return all.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
 }
 
 function summarizeSubmissions(rows: SubmissionRow[], playersById: Map<string, RpeCompliancePlayer>) {
@@ -113,20 +141,23 @@ function summarizeSubmissions(rows: SubmissionRow[], playersById: Map<string, Rp
 
 export async function getRpeComplianceForDate(
   sb: SupabaseClient,
-  args?: { teamId?: string | null; dateKey?: string; timeZone?: string }
+  args?: { teamId?: string | null; dateKey?: string; timeZone?: string; profile?: ReminderProfile }
 ): Promise<RpeCompliancePayload> {
   const timeZone = args?.timeZone ?? getOperationalTimezone();
   const dateKey = args?.dateKey ?? getDateKeyInTimezone(new Date(), timeZone);
-  const slots = getReminderSlotsForDateKey(dateKey, timeZone);
+  const slots = getReminderSlotsForDateKey(dateKey, timeZone, null, args?.profile ?? "breidablik_custom");
   const slotKeys = slots.map((s) => s.slotKey);
 
-  const allPlayers = await getEligiblePlayersForRpe(sb, { teamId: args?.teamId ?? null });
+  const allPlayers = await getEligiblePlayersForRpe(sb, {
+    teamId: args?.teamId ?? null,
+    profile: args?.profile,
+  });
   const playersById = new Map(allPlayers.map((p) => [p.player_id, p]));
 
   const expectedPlayers: RpeCompliancePlayer[] = [];
   const notExpectedPlayers: RpeCompliancePlayer[] = [];
   for (const player of allPlayers) {
-    if (isPlayerExpectedForRpe({ dateKey, timeZone })) expectedPlayers.push(player);
+    if (isPlayerExpectedForRpe({ dateKey, timeZone, profile: args?.profile })) expectedPlayers.push(player);
     else notExpectedPlayers.push(player);
   }
 

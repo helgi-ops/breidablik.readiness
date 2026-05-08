@@ -1,12 +1,18 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getDateKeyInTimezone, getNextScheduledSlot, getOperationalTimezone } from "@/lib/notifications/schedule";
+import {
+  getDateKeyInTimezone,
+  getNextScheduledSlot,
+  getOperationalTimezone,
+  type ReminderProfile,
+} from "@/lib/notifications/schedule";
 
 type ActivePlayerRow = {
   id: string;
   full_name: string | null;
   user_id: string | null;
+  team_id: string | null;
 };
 
 type CheckinRow = {
@@ -17,21 +23,52 @@ type LastSendRow = {
   sent_at: string | null;
 };
 
+type TeamProfileRow = {
+  id: string;
+  reminder_profile: string | null;
+};
+
 export type ActivePlayer = {
   id: string;
   full_name: string | null;
+  team_id: string | null;
 };
 
-export async function getActivePlayers(sb: SupabaseClient): Promise<ActivePlayer[]> {
-  const { data, error } = await sb.from("players").select("id, full_name, user_id").not("user_id", "is", null);
+async function getTeamIdsForProfile(
+  sb: SupabaseClient,
+  profile: ReminderProfile,
+): Promise<Set<string>> {
+  const { data, error } = await sb
+    .from("teams")
+    .select("id, reminder_profile")
+    .eq("reminder_profile", profile);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as TeamProfileRow[];
+  return new Set(rows.map((r) => String(r.id)));
+}
+
+export async function getActivePlayers(
+  sb: SupabaseClient,
+  args?: { profile?: ReminderProfile },
+): Promise<ActivePlayer[]> {
+  const { data, error } = await sb
+    .from("players")
+    .select("id, full_name, user_id, team_id")
+    .not("user_id", "is", null);
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as ActivePlayerRow[])
+  const all = ((data ?? []) as ActivePlayerRow[])
     .filter((p) => Boolean(p?.id))
     .map((p) => ({
       id: p.id,
       full_name: p.full_name ?? null,
+      team_id: p.team_id ?? null,
     }));
+
+  if (!args?.profile) return all;
+
+  const teamIds = await getTeamIdsForProfile(sb, args.profile);
+  return all.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
 }
 
 export async function getCheckedInPlayerIds(
@@ -53,12 +90,12 @@ export async function getCheckedInPlayerIds(
 
 export async function getMissingPlayersForToday(
   sb: SupabaseClient,
-  args?: { dateKey?: string; timeZone?: string }
+  args?: { dateKey?: string; timeZone?: string; profile?: ReminderProfile }
 ): Promise<{ dateKey: string; players: ActivePlayer[] }> {
   const timeZone = args?.timeZone || getOperationalTimezone();
   const dateKey = args?.dateKey || getDateKeyInTimezone(new Date(), timeZone);
 
-  const players = await getActivePlayers(sb);
+  const players = await getActivePlayers(sb, { profile: args?.profile });
   const playerIds = players.map((p) => p.id);
   const checkedInSet = await getCheckedInPlayerIds(sb, { dateKey, playerIds });
 
@@ -70,7 +107,7 @@ export async function getMissingPlayersForToday(
 
 export async function getCheckinComplianceSummary(
   sb: SupabaseClient,
-  args?: { dateKey?: string; timeZone?: string }
+  args?: { dateKey?: string; timeZone?: string; profile?: ReminderProfile }
 ): Promise<{
   dateKey: string;
   totalActivePlayers: number;
@@ -82,7 +119,7 @@ export async function getCheckinComplianceSummary(
   const timeZone = args?.timeZone || getOperationalTimezone();
   const dateKey = args?.dateKey || getDateKeyInTimezone(new Date(), timeZone);
 
-  const players = await getActivePlayers(sb);
+  const players = await getActivePlayers(sb, { profile: args?.profile });
   const checkedInSet = await getCheckedInPlayerIds(sb, {
     dateKey,
     playerIds: players.map((p) => p.id),
@@ -98,7 +135,7 @@ export async function getCheckinComplianceSummary(
 
   if (sendErr) throw new Error(sendErr.message);
 
-  const nextSlot = getNextScheduledSlot({ timeZone });
+  const nextSlot = getNextScheduledSlot({ timeZone, profile: args?.profile });
 
   return {
     dateKey,

@@ -1,5 +1,7 @@
 export type ReminderType = "first" | "second" | "manual";
 
+export type ReminderProfile = "standard" | "breidablik_custom" | "none";
+
 export type ScheduledSlot = {
   reminderType: Exclude<ReminderType, "manual">;
   slotKey: string;
@@ -9,16 +11,35 @@ export type ScheduledSlot = {
 
 const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-// 0=Sun, 1=Mon, ... 6=Sat
-export const reminderSchedule: Record<number, readonly [string, string]> = {
-  1: ["09:00", "10:00"],
-  2: ["12:00", "13:00"],
-  3: ["09:00", "10:00"],
-  4: ["12:00", "13:00"],
-  5: ["09:00", "10:00"],
-  6: ["09:00", "10:00"],
-  0: ["09:00", "10:00"],
+// Schedule per profile.
+//   standard: simple daily schedule — single check-in reminder at 09:00.
+//   breidablik_custom: legacy multi-slot schedule (Breiðablik historical).
+//   none: no scheduled checkin reminders.
+export const reminderSchedules: Record<ReminderProfile, Record<number, readonly string[]>> = {
+  standard: {
+    0: ["09:00"],
+    1: ["09:00"],
+    2: ["09:00"],
+    3: ["09:00"],
+    4: ["09:00"],
+    5: ["09:00"],
+    6: ["09:00"],
+  },
+  breidablik_custom: {
+    1: ["09:00", "10:00"],
+    2: ["12:00", "13:00"],
+    3: ["09:00", "10:00"],
+    4: ["12:00", "13:00"],
+    5: ["09:00", "10:00"],
+    6: ["09:00", "10:00"],
+    0: ["09:00", "10:00"],
+  },
+  none: {},
 };
+
+// Backwards compat — kept so older imports of `reminderSchedule` keep working.
+// Points to the breidablik_custom profile (the historical default).
+export const reminderSchedule = reminderSchedules.breidablik_custom;
 
 export function getOperationalTimezone() {
   const raw = String(process.env.APP_TIMEZONE || "Atlantic/Reykjavik").trim();
@@ -81,14 +102,23 @@ function minutesFromHHMM(hhmm: string) {
   return h * 60 + m;
 }
 
-export function getCurrentScheduledSlot(args?: { now?: Date; timeZone?: string; toleranceMinutes?: number }): ScheduledSlot | null {
+export function getCurrentScheduledSlot(args?: {
+  now?: Date;
+  timeZone?: string;
+  toleranceMinutes?: number;
+  profile?: ReminderProfile;
+}): ScheduledSlot | null {
   const timeZone = args?.timeZone || getOperationalTimezone();
   const tolerance = args?.toleranceMinutes ?? 5;
   const now = args?.now ?? new Date();
+  const profile: ReminderProfile = args?.profile ?? "breidablik_custom";
+
+  const profileSchedule = reminderSchedules[profile];
+  if (!profileSchedule) return null;
 
   const parts = getDateParts(now, timeZone);
-  const slots = reminderSchedule[parts.weekday];
-  if (!slots) return null;
+  const slots = profileSchedule[parts.weekday];
+  if (!slots || !slots.length) return null;
 
   const minuteOfDay = parts.hour * 60 + parts.minute;
 
@@ -114,15 +144,21 @@ export function getDateKeyInTimezone(now = new Date(), timeZone = getOperational
   return getDateParts(now, timeZone).dateKey;
 }
 
-export function getNextScheduledSlot(args?: { now?: Date; timeZone?: string }): { weekday: number; slotTime: string; slotKey: string; label: string } {
+export function getNextScheduledSlot(args?: {
+  now?: Date;
+  timeZone?: string;
+  profile?: ReminderProfile;
+}): { weekday: number; slotTime: string; slotKey: string; label: string } {
   const now = args?.now ?? new Date();
   const timeZone = args?.timeZone || getOperationalTimezone();
+  const profile: ReminderProfile = args?.profile ?? "breidablik_custom";
+  const profileSchedule = reminderSchedules[profile] || {};
   const current = getDateParts(now, timeZone);
   const nowMinute = current.hour * 60 + current.minute;
 
   for (let dayOffset = 0; dayOffset < 8; dayOffset += 1) {
     const wd = (current.weekday + dayOffset) % 7;
-    const slots = reminderSchedule[wd] || [];
+    const slots = profileSchedule[wd] || [];
     for (const slot of slots) {
       const slotMinute = minutesFromHHMM(slot);
       if (dayOffset === 0 && slotMinute <= nowMinute) continue;

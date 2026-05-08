@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRpeComplianceForDate } from "@/lib/session-rpe/compliance";
 import { rpeReminderConfig, type RpeReminderType } from "@/lib/session-rpe/reminderConfig";
+import type { ReminderProfile } from "@/lib/notifications/schedule";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 
 type SubscriptionRow = {
@@ -127,12 +128,14 @@ export async function sendRpeReminderToMissingPlayers(
     dateKey: string;
     timeZone: string;
     teamId?: string | null;
+    profile?: ReminderProfile;
   }
 ) {
   const compliance = await getRpeComplianceForDate(sb, {
     teamId: args.teamId ?? null,
     dateKey: args.dateKey,
     timeZone: args.timeZone,
+    profile: args.profile,
   });
 
   const allMissing = compliance.missingPlayers;

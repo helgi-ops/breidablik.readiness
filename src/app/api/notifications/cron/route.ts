@@ -5,7 +5,12 @@
  */
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getCurrentScheduledSlot, getDateKeyInTimezone, getOperationalTimezone } from "@/lib/notifications/schedule";
+import {
+  getCurrentScheduledSlot,
+  getDateKeyInTimezone,
+  getOperationalTimezone,
+  type ReminderProfile,
+} from "@/lib/notifications/schedule";
 import { sendReminderToMissingPlayers } from "@/lib/notifications/sendReminder";
 import { sendRpeReminderToMissingPlayers } from "@/lib/notifications/sendRpeReminder";
 import { getCurrentScheduledSlot as getCurrentRpeScheduledSlot } from "@/lib/session-rpe/reminderConfig";
@@ -18,6 +23,10 @@ export const runtime = "nodejs";
 type CronBody = {
   dryRun?: boolean;
 };
+
+// Profiles dispatched on each cron tick. 'none' is intentionally excluded —
+// teams on that profile do not receive automated reminders.
+const ACTIVE_REMINDER_PROFILES: ReminderProfile[] = ["standard", "breidablik_custom"];
 
 function isAuthorized(req: Request): boolean {
   // Vercel automatically sends "Authorization: Bearer <CRON_SECRET>" for scheduled cron jobs.
@@ -48,20 +57,27 @@ export async function POST(req: Request) {
     const timeZone = getOperationalTimezone();
     const dateKey = getDateKeyInTimezone(new Date(), timeZone);
     const now = new Date();
+
     // Use a wide tolerance so the cron still matches even if Vercel fires it
     // several minutes late (common — Pro plan can be 5–15 min off schedule).
-    const checkinSlot = getCurrentScheduledSlot({ timeZone, toleranceMinutes: 30 });
-    const rpeSlot = getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 30 });
+    const profileSlots = ACTIVE_REMINDER_PROFILES.map((profile) => ({
+      profile,
+      checkinSlot: getCurrentScheduledSlot({ timeZone, toleranceMinutes: 30, profile }),
+      rpeSlot: getCurrentRpeScheduledSlot({ timeZone, toleranceMinutes: 30, profile }),
+    }));
+
     const readinessEmailSlot = matchReadinessEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
     const rpeEmailSlot = matchRpeEmailSchedule({ now, timeZone, toleranceMinutes: 30 });
 
     // CMJ reminder fires at the second checkin reminder window (10:00 Mon/Wed/Fri/Sat/Sun,
-    // 13:00 Tue/Thu) — right around when players are completing their checkin.
-    // This means it arrives as players are already looking at the app, so the message
-    // to "hop á ForceDecks" lands at a useful moment.
-    const isCmjSlot = checkinSlot?.reminderType === "second";
+    // 13:00 Tue/Thu) — this corresponds to the breidablik_custom profile's "second" slot.
+    const breidablikCheckin = profileSlots.find((p) => p.profile === "breidablik_custom")?.checkinSlot ?? null;
+    const isCmjSlot = breidablikCheckin?.reminderType === "second";
 
-    if (!checkinSlot && !rpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot) {
+    const anyCheckinSlot = profileSlots.some((p) => p.checkinSlot);
+    const anyRpeSlot = profileSlots.some((p) => p.rpeSlot);
+
+    if (!anyCheckinSlot && !anyRpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot) {
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -77,63 +93,81 @@ export async function POST(req: Request) {
         dryRun: true,
         dateKey,
         timeZone,
-        checkin: checkinSlot
-          ? {
-              reminderType: checkinSlot.reminderType,
-              scheduledSlot: checkinSlot.slotKey,
-            }
-          : null,
-        rpe: rpeSlot
-          ? {
-              reminderType: rpeSlot.reminderType,
-              scheduledSlot: rpeSlot.slotKey,
-            }
-          : null,
+        profiles: profileSlots.map((p) => ({
+          profile: p.profile,
+          checkin: p.checkinSlot
+            ? { reminderType: p.checkinSlot.reminderType, scheduledSlot: p.checkinSlot.slotKey }
+            : null,
+          rpe: p.rpeSlot
+            ? { reminderType: p.rpeSlot.reminderType, scheduledSlot: p.rpeSlot.slotKey }
+            : null,
+        })),
         readinessEmail: readinessEmailSlot
-          ? {
-              localTime: readinessEmailSlot.localTime,
-              slotKey: readinessEmailSlot.slotKey,
-            }
+          ? { localTime: readinessEmailSlot.localTime, slotKey: readinessEmailSlot.slotKey }
           : null,
         rpeEmail: rpeEmailSlot
-          ? {
-              localTime: rpeEmailSlot.localTime,
-              slotKey: rpeEmailSlot.slotKey,
-            }
+          ? { localTime: rpeEmailSlot.localTime, slotKey: rpeEmailSlot.slotKey }
           : null,
         cmj: isCmjSlot ? { slot: "07:00", active: true } : null,
       });
     }
 
     const sb = getSupabaseAdmin();
-    const checkinResult = checkinSlot
-      ? await sendReminderToMissingPlayers(sb, {
+
+    type CheckinPerProfile = {
+      profile: ReminderProfile;
+      reminderType: string;
+      scheduledSlot: string;
+      result: Awaited<ReturnType<typeof sendReminderToMissingPlayers>>;
+    };
+    type RpePerProfile = {
+      profile: ReminderProfile;
+      reminderType: string;
+      scheduledSlot: string;
+      result: Awaited<ReturnType<typeof sendRpeReminderToMissingPlayers>>;
+    };
+
+    const checkinResults: CheckinPerProfile[] = [];
+    const rpeResults: RpePerProfile[] = [];
+
+    for (const { profile, checkinSlot, rpeSlot } of profileSlots) {
+      if (checkinSlot) {
+        const result = await sendReminderToMissingPlayers(sb, {
           reminderType: checkinSlot.reminderType,
           scheduledSlot: checkinSlot.slotKey,
           dateKey,
           timeZone,
-        })
-      : null;
-
-    const rpeResult = rpeSlot
-      ? await sendRpeReminderToMissingPlayers(sb, {
+          profile,
+        });
+        checkinResults.push({
+          profile,
+          reminderType: checkinSlot.reminderType,
+          scheduledSlot: checkinSlot.slotKey,
+          result,
+        });
+      }
+      if (rpeSlot) {
+        const result = await sendRpeReminderToMissingPlayers(sb, {
           reminderType: rpeSlot.reminderType,
           scheduledSlot: rpeSlot.slotKey,
           dateKey,
           timeZone,
-        })
-      : null;
+          profile,
+        });
+        rpeResults.push({
+          profile,
+          reminderType: rpeSlot.reminderType,
+          scheduledSlot: rpeSlot.slotKey,
+          result,
+        });
+      }
+    }
+
     const readinessEmailResult = readinessEmailSlot
-      ? await runReadinessEmailReminders(sb, {
-          dateKey,
-          timeZone,
-        })
+      ? await runReadinessEmailReminders(sb, { dateKey, timeZone })
       : null;
     const rpeEmailResult = rpeEmailSlot
-      ? await runRpeEmailReminders(sb, {
-          dateKey,
-          timeZone,
-        })
+      ? await runRpeEmailReminders(sb, { dateKey, timeZone })
       : null;
 
     // CMJ reminder: fetch all team IDs and send to each team
@@ -153,20 +187,8 @@ export async function POST(req: Request) {
       ok: true,
       dateKey,
       timeZone,
-      checkin: checkinSlot
-        ? {
-            reminderType: checkinSlot.reminderType,
-            scheduledSlot: checkinSlot.slotKey,
-            result: checkinResult,
-          }
-        : null,
-      rpe: rpeSlot
-        ? {
-            reminderType: rpeSlot.reminderType,
-            scheduledSlot: rpeSlot.slotKey,
-            result: rpeResult,
-          }
-        : null,
+      checkin: checkinResults.length ? checkinResults : null,
+      rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot
         ? {
             localTime: readinessEmailSlot.localTime,

@@ -1,4 +1,4 @@
-import { getOperationalTimezone } from "@/lib/notifications/schedule";
+import { getOperationalTimezone, type ReminderProfile } from "@/lib/notifications/schedule";
 import type { TrainingSlotsConfig } from "@/lib/config/teamTrainingSlots";
 
 export type RpeReminderType = "first" | "second" | "manual";
@@ -14,24 +14,46 @@ type WeekdaySlotConfig = Record<number, readonly string[]>;
 
 const DAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-// RPE reminder windows — sent AFTER training so players can rate the session.
-// Mon/Wed/Fri/Sat/Sun: training at 11:00, ends ~12:30 → first reminder 14:00, second 15:00
-// Tue/Thu: training at 14:00, ends ~15:30 → first reminder 16:00, second 17:00
+// RPE reminder windows per profile.
+//
+// standard: simple — single 21:30 daily reminder if the player hasn't
+//   submitted RPE for today's session. Skipped on OFF days via week_plans.
+//
+// breidablik_custom: legacy schedule — sent AFTER training so players can rate
+//   the session. Mon/Wed/Fri/Sat/Sun: training at 11:00 → first 14:00,
+//   second 15:00. Tue/Thu: training at 14:00 → first 16:00, second 17:00.
+const rpeProfileSchedules: Record<ReminderProfile, WeekdaySlotConfig> = {
+  standard: {
+    0: ["21:30"],
+    1: ["21:30"],
+    2: ["21:30"],
+    3: ["21:30"],
+    4: ["21:30"],
+    5: ["21:30"],
+    6: ["21:30"],
+  },
+  breidablik_custom: {
+    1: ["14:00", "15:00"],
+    2: ["16:00", "17:00"],
+    3: ["14:00", "15:00"],
+    4: ["16:00", "17:00"],
+    5: ["14:00", "15:00"],
+    6: ["14:00", "15:00"],
+    0: ["14:00", "15:00"],
+  },
+  none: {},
+};
+
 export const rpeReminderConfig: {
   weekendEnabled: boolean;
   weekdaySlots: WeekdaySlotConfig;
   copy: Record<RpeReminderType, { title: string; body: string }>;
 } = {
   weekendEnabled: true,
-  weekdaySlots: {
-    1: ["14:00", "15:00"], // Mon — after 11:00 training
-    2: ["16:00", "17:00"], // Tue — after 14:00 training
-    3: ["14:00", "15:00"], // Wed
-    4: ["16:00", "17:00"], // Thu
-    5: ["14:00", "15:00"], // Fri
-    6: ["14:00", "15:00"], // Sat — after 11:00 training
-    0: ["14:00", "15:00"], // Sun — same pattern as Mon/Wed/Fri/Sat
-  },
+  // Backwards-compat default — the breidablik_custom schedule has been the
+  // legacy global default. Code that imports this map without specifying a
+  // profile keeps the historical behavior.
+  weekdaySlots: rpeProfileSchedules.breidablik_custom,
   copy: {
     first: {
       title: "Session RPE reminder",
@@ -96,22 +118,25 @@ function minutesFromHHMM(hhmm: string) {
 
 function effectiveSlotsForWeekday(
   weekday: number,
-  override: TrainingSlotsConfig | null | undefined
+  override: TrainingSlotsConfig | null | undefined,
+  profile: ReminderProfile = "breidablik_custom",
 ): readonly string[] {
   const overrideSlots = override?.weekday_slots?.[String(weekday) as "0" | "1" | "2" | "3" | "4" | "5" | "6"];
   const overrideTimes = overrideSlots?.rpe_reminders;
   if (overrideTimes && overrideTimes.length) return overrideTimes;
-  return rpeReminderConfig.weekdaySlots[weekday] ?? [];
+  const profileMap = rpeProfileSchedules[profile] ?? {};
+  return profileMap[weekday] ?? [];
 }
 
 export function getReminderSlotsForDate(
   date: Date,
   timeZone = getOperationalTimezone(),
   teamOverride: TrainingSlotsConfig | null = null,
+  profile: ReminderProfile = "breidablik_custom",
 ): RpeReminderSlot[] {
   const parts = getDateParts(date, timeZone);
   if (!rpeReminderConfig.weekendEnabled && (parts.weekday === 0 || parts.weekday === 6)) return [];
-  const slots = effectiveSlotsForWeekday(parts.weekday, teamOverride);
+  const slots = effectiveSlotsForWeekday(parts.weekday, teamOverride, profile);
   const day = DAY_LABELS[parts.weekday];
   return slots.map((time, index) => ({
     reminderType: index === 0 ? "first" : "second",
@@ -125,10 +150,11 @@ export function getReminderSlotsForDateKey(
   dateKey: string,
   timeZone = getOperationalTimezone(),
   teamOverride: TrainingSlotsConfig | null = null,
+  profile: ReminderProfile = "breidablik_custom",
 ): RpeReminderSlot[] {
   const weekday = getWeekdayFromDateKey(dateKey, timeZone);
   if (!rpeReminderConfig.weekendEnabled && (weekday === 0 || weekday === 6)) return [];
-  const slots = effectiveSlotsForWeekday(weekday, teamOverride);
+  const slots = effectiveSlotsForWeekday(weekday, teamOverride, profile);
   const day = DAY_LABELS[weekday];
   return slots.map((time, index) => ({
     reminderType: index === 0 ? "first" : "second",
@@ -143,12 +169,14 @@ export function getCurrentScheduledSlot(args?: {
   timeZone?: string;
   toleranceMinutes?: number;
   teamOverride?: TrainingSlotsConfig | null;
+  profile?: ReminderProfile;
 }): RpeReminderSlot | null {
   const now = args?.now ?? new Date();
   const timeZone = args?.timeZone ?? getOperationalTimezone();
   const tolerance = args?.toleranceMinutes ?? 6;
+  const profile: ReminderProfile = args?.profile ?? "breidablik_custom";
   const parts = getDateParts(now, timeZone);
-  const slots = getReminderSlotsForDate(now, timeZone, args?.teamOverride ?? null);
+  const slots = getReminderSlotsForDate(now, timeZone, args?.teamOverride ?? null, profile);
   if (!slots.length) return null;
 
   const minuteOfDay = parts.hour * 60 + parts.minute;
@@ -166,13 +194,14 @@ export function isPlayerExpectedForRpe(args: {
   timeZone?: string;
   player?: { is_active?: boolean | null } | null;
   teamOverride?: TrainingSlotsConfig | null;
+  profile?: ReminderProfile;
 }): boolean {
   if (args.player?.is_active === false) return false;
   const slots = getReminderSlotsForDateKey(
     args.dateKey,
     args.timeZone ?? getOperationalTimezone(),
     args.teamOverride ?? null,
+    args.profile ?? "breidablik_custom",
   );
   return slots.length > 0;
 }
-
