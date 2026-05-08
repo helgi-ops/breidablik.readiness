@@ -92,9 +92,27 @@ export type StrideIntelligencePayload = {
 };
 
 const MIN_COD_EVENTS_FOR_ASYMMETRY = 5;
-const COD_ASYMMETRY_WATCH_PCT = 9; // Bishop 2020 — trend-towards-asymmetry zone
-const COD_ASYMMETRY_CONCERN_PCT = 15; // Mid-tier — increased injury risk
-const COD_ASYMMETRY_HIGH_PCT = 18; // Bishop 2020 — serious imbalance
+
+// Asymmetry thresholds — DUAL CHECK design.
+//
+// Background: our L/R source is raw IMA band1+2+3 left/right counts (all
+// direction events at low/medium/high intensity). This captures NATURAL
+// dominant-foot bias which makes population-wide thresholds (Bishop 2020 at
+// 9/15/18%) too sensitive — it would flag everyone constantly. The Bishop
+// numbers were derived from explicit cutting-task tests, not raw direction
+// events. From real Breiðablik data (May 2026, 17 players) the distribution
+// is: median 19%, p75 23%, p90 28%, p95 34% — so absolute thresholds at
+// 9/15/18% don't fit our metric.
+//
+// Solution: flag when EITHER condition is true:
+//   1. Personal-z spike: today's asymmetry is sudden vs the player's own
+//      28-day mean (catches new injury / acute compensation)
+//   2. Absolute outlier: above population p90/p95 regardless of baseline
+//      (catches biomechanically-risky asymmetry even when it's "normal" for
+//      that player)
+const COD_ASYMMETRY_WATCH_PCT = 25;  // ~p75-p80 — trend toward concern
+const COD_ASYMMETRY_CONCERN_PCT = 30; // ~p90 — meaningful imbalance
+const COD_ASYMMETRY_HIGH_PCT = 40;   // ~p95+ — serious imbalance regardless of baseline
 const Z_WATCH = -1.0;
 const Z_CONCERN = -1.5;
 const Z_HIGH = -2.0;
@@ -205,6 +223,7 @@ export function buildStrideIntelligence(
     cadence?: StrideBaselineRef | null;
     strideLengthHsr?: StrideBaselineRef | null;
     gpsImaDecoupling?: StrideBaselineRef | null;
+    codLrAsymmetry?: StrideBaselineRef | null;
   } | null,
 ): StrideIntelligencePayload {
   const metrics = computeStrideMetrics(row);
@@ -253,25 +272,63 @@ export function buildStrideIntelligence(
     }
   }
 
-  // 3. L/R CoD asymmetry — absolute threshold (independent of personal baseline)
-  if (metrics.codLrAsymmetryPct != null && metrics.codLrAsymmetryPct >= COD_ASYMMETRY_WATCH_PCT) {
-    const severity = severityFromAsymmetry(metrics.codLrAsymmetryPct);
-    drivers.push({
-      driver: "COD_LR_ASYMMETRY",
-      z: null,
-      value: metrics.codLrAsymmetryPct,
-      severity,
-    });
-    const direction = metrics.codLeftTotal > metrics.codRightTotal ? "left-dominant" : "right-dominant";
-    reasons.push(
-      `L/R CoD asymmetry ${metrics.codLrAsymmetryPct.toFixed(0)}% (${direction}) — ${
-        severity === "high"
-          ? "above 18% imbalance threshold (Bishop 2020). Investigate before next match."
-          : severity === "concern"
-            ? "above 15% injury-risk threshold."
-            : "in 9–15% trend-towards-asymmetry zone."
-      }`,
-    );
+  // 3. L/R CoD asymmetry — DUAL CHECK (personal-z spike OR absolute outlier).
+  // See threshold comments above for rationale. Picks the WORSE of the two
+  // signals so a sudden +2σ spike at 28% gets flagged "high" (acute spike
+  // matters) AND a player whose normal is already 40% gets flagged "high"
+  // (biomechanically risky regardless of baseline).
+  if (metrics.codLrAsymmetryPct != null && metrics.codLrAsymmetryPct >= 5) {
+    const asymBase = (baselines as { codLrAsymmetry?: StrideBaselineRef | null } | null | undefined)
+      ?.codLrAsymmetry;
+    let zSpike: number | null = null;
+    if (
+      asymBase?.status === "active" &&
+      asymBase.mean != null &&
+      asymBase.sd != null
+    ) {
+      zSpike = zScore(metrics.codLrAsymmetryPct, asymBase.mean, asymBase.sd);
+    }
+
+    // Personal-z severity (positive z = spike vs own baseline)
+    let personalSev: StrideDriverFlag["severity"] | null = null;
+    if (zSpike != null) {
+      if (zSpike >= 2.0) personalSev = "high";
+      else if (zSpike >= 1.5) personalSev = "concern";
+      else if (zSpike >= 1.0) personalSev = "watch";
+    }
+
+    // Absolute severity (outlier vs population)
+    let absoluteSev: StrideDriverFlag["severity"] | null = null;
+    if (metrics.codLrAsymmetryPct >= COD_ASYMMETRY_HIGH_PCT) absoluteSev = "high";
+    else if (metrics.codLrAsymmetryPct >= COD_ASYMMETRY_CONCERN_PCT) absoluteSev = "concern";
+    else if (metrics.codLrAsymmetryPct >= COD_ASYMMETRY_WATCH_PCT) absoluteSev = "watch";
+
+    // Pick worst — high > concern > watch > null
+    const rank = (s: StrideDriverFlag["severity"] | null) =>
+      s === "high" ? 3 : s === "concern" ? 2 : s === "watch" ? 1 : 0;
+    const finalSev =
+      rank(personalSev) >= rank(absoluteSev) ? personalSev : absoluteSev;
+
+    if (finalSev) {
+      drivers.push({
+        driver: "COD_LR_ASYMMETRY",
+        z: zSpike,
+        value: metrics.codLrAsymmetryPct,
+        severity: finalSev,
+      });
+      const direction = metrics.codLeftTotal > metrics.codRightTotal ? "left-dominant" : "right-dominant";
+      const baselineStr = asymBase?.mean != null ? ` (baseline ${asymBase.mean.toFixed(0)}%)` : "";
+      const zStr = zSpike != null ? ` ${zSpike >= 0 ? "+" : ""}${zSpike.toFixed(1)}σ` : "";
+      reasons.push(
+        `L/R CoD asymmetry ${metrics.codLrAsymmetryPct.toFixed(0)}%${zStr} ${direction}${baselineStr} — ${
+          finalSev === "high"
+            ? "serious imbalance — investigate before next match"
+            : finalSev === "concern"
+              ? "meaningful imbalance vs personal norm or population"
+              : "trending toward concern"
+        }`,
+      );
+    }
   }
 
   // 4. GPS-IMA decoupling — drifting positive vs personal baseline

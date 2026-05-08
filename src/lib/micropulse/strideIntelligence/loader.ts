@@ -187,5 +187,6 @@ export async function loadStrideIntelligence(
     cadence: toBaselineRef(blMap.get(STRIDE_BASELINE_METRIC_KEYS.cadence)),
     strideLengthHsr: toBaselineRef(blMap.get(STRIDE_BASELINE_METRIC_KEYS.strideLengthHsr)),
     gpsImaDecoupling: toBaselineRef(blMap.get(STRIDE_BASELINE_METRIC_KEYS.gpsImaDecoupling)),
+    codLrAsymmetry: toBaselineRef(blMap.get(STRIDE_BASELINE_METRIC_KEYS.codLrAsymmetry)),
   });
 }
