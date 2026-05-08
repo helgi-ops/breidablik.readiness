@@ -956,9 +956,25 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
  * last-ditch fallback for orgs whose API returns the human-readable form.
  */
 function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, number | null> {
+  // Helper: try aliases in order, return first non-zero non-null. Falls back
+  // to first non-null if all values are 0. This is critical because V2 Free
+  // Running requires sustained continuous running periods, which return 0 in
+  // start/stop sports like football. V1 counts individual stride events and
+  // is usually non-zero. We want the first NON-ZERO value, not just the first
+  // value that happens to be present.
+  function firstNonZero(aliases: string[]): number | null {
+    let firstSeen: number | null = null;
+    for (const alias of aliases) {
+      const v = extractMetric(flat, [alias]);
+      if (v != null && firstSeen == null) firstSeen = v;
+      if (v != null && v !== 0) return v;
+    }
+    return firstSeen;
+  }
+
   const out: Record<string, number | null> = {};
   for (let band = 1; band <= 8; band++) {
-    // Stride count — V2 total_strides is the canonical modern key.
+    // Stride count — try V2 first, fall through to V1 if V2 is 0.
     const strideAliases = [
       `ima_v2_free_run_band${band}_total_strides`,
       `ima_v2_free_run_band${band}_event_count`,
@@ -991,9 +1007,9 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
       `imafreerunningband${band}totalplayerload`,
       `ima_fr_band${band}_total_player_load`,
     ];
-    out[`imaFrBand${band}StrideCount`] = toInteger(extractMetric(flat, strideAliases));
-    out[`imaFrBand${band}AvgStrideRate`] = extractMetric(flat, rateAliases);
-    out[`imaFrBand${band}TotalPlayerLoad`] = extractMetric(flat, loadAliases);
+    out[`imaFrBand${band}StrideCount`] = toInteger(firstNonZero(strideAliases));
+    out[`imaFrBand${band}AvgStrideRate`] = firstNonZero(rateAliases);
+    out[`imaFrBand${band}TotalPlayerLoad`] = firstNonZero(loadAliases);
   }
   return out;
 }
