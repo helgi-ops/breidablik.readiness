@@ -365,11 +365,11 @@ function stenOverrideWarning(
   if (displayAction !== "FULL" || sten == null) return null;
   if (sten <= 2) return {
     level: "critical",
-    text: `Mixed signals — wellness STEN ${sten} flagged RECOVERY but load picture cleared FULL. Confirm with the player before training.`,
+    text: `Mixed signals — wellness STEN ${sten} flagged RECOVERY but load picture cleared FULL. Confirm with the player before the training session.`,
   };
   if (sten <= 4) return {
     level: "caution",
-    text: `Mixed signals — wellness STEN ${sten} flagged MODIFIED but load picture cleared FULL. Confirm with the player before training.`,
+    text: `Mixed signals — wellness STEN ${sten} flagged MODIFIED but load picture cleared FULL. Confirm with the player before the training session.`,
   };
   return null;
 }
@@ -499,7 +499,7 @@ function buildCoachActionBlock(
   // is to talk to the player, not to send them straight into a full session.
   if (displayAction === "FULL_OVERRIDE_RISKY") {
     return {
-      headline: "Confirm with player at warm-up",
+      headline: "Confirm with player before training session",
       details: [
         "Wellness flagged recovery — load picture cleared full",
         "Decide intensity after talking to him",
@@ -662,8 +662,8 @@ const VERDICT_MAP: Record<string, BilingualVerdict> = {
       IS: "Álagsmynd cleared, en líðan flaggaði recovery",
     },
     recommendation: {
-      EN: "Engines disagree. Confirm with the player at warm-up before deciding intensity; pull at first sign of pain.",
-      IS: "Kerfin eru ósammála. Spyrðu leikmanninn í upphitun áður en þú ákveður ákefð; draga út við fyrsta merki um sársauka.",
+      EN: "Engines disagree. Confirm with the player before the training session and decide intensity then; pull at first sign of pain.",
+      IS: "Kerfin eru ósammála. Talaðu við leikmanninn fyrir æfingu og ákveddu ákefð þá; draga út við fyrsta merki um sársauka.",
     },
   },
   MODIFIED: {

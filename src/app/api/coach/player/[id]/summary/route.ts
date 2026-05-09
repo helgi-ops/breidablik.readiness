@@ -362,11 +362,17 @@ async function buildSummaryInput(
     session_type?: string | null;
   };
   const recentSessRows: SessionRow[] = (recentSessions.data ?? []) as SessionRow[];
-  let postMatchContext: { is_post_match: boolean; match_date: string | null; days_since_match: number | null; today_md_day: string | null } = {
+  let postMatchContext: { is_post_match: boolean; match_date: string | null; days_since_match: number | null; today_md_day: string | null; match_minutes_played: number | null; high_match_minutes: boolean } = {
     is_post_match: false,
     match_date: null,
     days_since_match: null,
     today_md_day: null,
+    // Filled below from match_player_minutes when a match date is detected
+    match_minutes_played: null,
+    // Helmsen / Carling / Nédélec et al. — playing 60+ minutes triggers
+    // meaningful 24-72h recovery debt. Used by the AI prompt to push toward
+    // recovery framing on MD+1 even when load metrics look flat.
+    high_match_minutes: false,
   };
   for (const s of recentSessRows) {
     const md = String(s.md_day_resolved ?? "").toUpperCase();
@@ -386,6 +392,27 @@ async function buildSummaryInput(
   // Also flag MD+1 / MD+2 explicitly as post-match
   if (postMatchContext.today_md_day === "MD+1" || postMatchContext.today_md_day === "MD+2") {
     postMatchContext.is_post_match = true;
+  }
+
+  // ── Match minutes lookup for the detected match date ──────────────────
+  // 60+ min played is a well-established threshold for meaningful 24-72h
+  // recovery debt (Carling 2018, Nédélec 2012, Helsen 2018). We pull this
+  // up to the prompt so the AI can frame MD+1 / MD+2 as recovery even when
+  // load looks moderate.
+  if (postMatchContext.match_date) {
+    const { data: minutesRow } = await supabase
+      .from("match_player_minutes")
+      .select("minutes_played, is_dnp")
+      .eq("player_id", playerId)
+      .eq("match_date", postMatchContext.match_date)
+      .maybeSingle();
+    if (minutesRow && !minutesRow.is_dnp) {
+      const min = Number(minutesRow.minutes_played ?? 0);
+      if (Number.isFinite(min) && min > 0) {
+        postMatchContext.match_minutes_played = min;
+        postMatchContext.high_match_minutes = min >= 60;
+      }
+    }
   }
 
   // ── Hader 2019 post-match recovery forecast ──
@@ -829,6 +856,26 @@ MATCH-DAY CONTEXT — CRITICAL:
   load spike from yesterday is fully expected.
 - If days_since_match = 2 (MD+2), load echo still partly normal but starting
   to fade — slight concern only if other signals also fire (sleep + soreness).
+
+MATCH-MINUTES RULE — CRITICAL:
+- match_context.match_minutes_played is the actual minutes the player was on
+  the pitch in the match. high_match_minutes = true means he played 60+ min
+  (Carling 2018, Nédélec 2012, Helsen 2018: 60-min threshold for meaningful
+  24-72h recovery debt — significant CK + perceived fatigue elevation).
+- When high_match_minutes = true AND days_since_match = 1 (MD+1):
+    * Default the action recommendation to "recovery session today" or
+      "modified session — keep intensity capped". Do NOT default to "ready
+      for full work" even if the load engine cleared FULL.
+    * Acceptable phrasings:
+        "Played <minutes_played> minutes yesterday — push recovery session
+         today and target full intensity for MD+2."
+        "60+ minute match yesterday — protect with a recovery / lighter
+         session today even though load metrics look flat."
+- When high_match_minutes = true AND days_since_match = 2 (MD+2):
+    * Frame as "still inside the recovery window from a 60+ min match" —
+      modified intensity acceptable, full sprints only if wellness is green.
+- When match_minutes_played is null OR < 60, do NOT mention minutes
+  specifically — fall back to the standard load + wellness narrative.
 
 RECOVERY FORECAST (Hader 2019) — when present:
 - The input may include recovery_forecast (only fires post-match with ≥3 historical
