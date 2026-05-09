@@ -201,21 +201,60 @@ function normaliseAction(raw: string | null | undefined): string | null {
 function resolveDisplayAction(row: DecisionSummaryRow): string | null {
   // 1. Final prescription (most complete source)
   const prescAction = normaliseAction(row._final_recommendation_decision?.finalRecommendation?.action);
-  if (prescAction) return prescAction;
-
-  // 2. Coach/system decision (matches Squad tab final_decision field)
   const finalDec = normaliseAction(row.final_decision);
-  if (finalDec) return finalDec;
-
   const sysDec = normaliseAction(row.system_decision);
-  if (sysDec) return sysDec;
 
-  // 3. Flag (same mapping as flagToAction in dashboard) — same source as Squad tab colours
-  const fromFlag = flagToDisplayAction(row.final_flag);
-  if (fromFlag) return fromFlag;
+  let action: string | null = null;
+  if (prescAction) action = prescAction;
+  else if (finalDec) action = finalDec;
+  else if (sysDec) action = sysDec;
+  else action = flagToDisplayAction(row.final_flag) ?? colorToDisplayAction(row.final_color);
 
-  // 4. Color (fallback)
-  return colorToDisplayAction(row.final_color);
+  return applyOverrideGuardrail(action, row, sysDec);
+}
+
+/**
+ * Override guardrail — when the coach has pushed a system RECOVERY/MODIFIED
+ * up to FULL but the underlying wellness or load signals are still red, the
+ * verdict header is downgraded from FULL → FULL_OVERRIDE_RISKY so the
+ * coach sees an explicit amber "Coach-cleared" badge instead of a clean
+ * green ✅. The actual prescription/decision isn't changed — coaches
+ * always have final authority. This is purely about visual honesty.
+ *
+ * Triggers when ALL of:
+ *   - Final action is FULL
+ *   - System action was RECOVERY or MODIFIED (override happened upward)
+ *   - At least ONE of:
+ *       • ≥2 wellness scores in the red band (≤2 / 5 on the 1–5 readiness scale)
+ *       • Personal-z ≤ −1.5 (well below personal baseline)
+ *       • Final flag/color is RED
+ *       • Composite concern is "high" or "moderate"
+ */
+function applyOverrideGuardrail(
+  action: string | null,
+  row: DecisionSummaryRow,
+  systemAction: string | null,
+): string | null {
+  if (action !== "FULL") return action;
+  const overrideUpward = systemAction === "RECOVERY" || systemAction === "MODIFIED";
+  if (!overrideUpward) return action;
+
+  const sleepBad = (row.sleep_quality ?? 5) <= 2;
+  const sorenessBad = (row.muscle_soreness ?? 5) <= 2;
+  const energyBad = (row.fatigue_energy ?? 5) <= 2;
+  const moodBad = (row.stress_mood ?? 5) <= 2;
+  const wellnessRedCount = [sleepBad, sorenessBad, energyBad, moodBad].filter(Boolean).length;
+
+  const zBad = row._z_today != null && Number.isFinite(row._z_today) && row._z_today <= -1.5;
+  const colorRed =
+    String(row.final_color ?? "").toLowerCase() === "red" ||
+    String(row.final_flag ?? "").toUpperCase() === "RED";
+  const compositeBad =
+    row._today_composite_concern === "high" || row._today_composite_concern === "moderate";
+
+  const concernCount = (wellnessRedCount >= 2 ? 1 : 0) + (zBad ? 1 : 0) + (colorRed ? 1 : 0) + (compositeBad ? 1 : 0);
+  if (concernCount >= 1) return "FULL_OVERRIDE_RISKY";
+  return action;
 }
 
 // ── Text helpers ──────────────────────────────────────────────────────────
@@ -537,6 +576,22 @@ const STATE_CONFIG: Record<string, StateConfig> = {
     actionHeadlineClass: "text-emerald-900",
     sortPriority: 3,
   },
+  // Visually distinct "FULL but coach overrode the system's RECOVERY/MODIFIED
+  // recommendation while signals are still red". Same priority as MODIFIED so
+  // the row sorts up next to other concerns; styled amber (not green) so the
+  // coach immediately sees the discrepancy on the modal header.
+  FULL_OVERRIDE_RISKY: {
+    label: "OVERRIDE",
+    emoji: "⚠️",
+    topBarClass: "bg-amber-500",
+    cardBorderClass: "border-amber-300",
+    cardBgClass: "bg-amber-50/30",
+    badgeBgClass: "bg-amber-500",
+    badgeTextClass: "text-white",
+    actionBgClass: "bg-amber-100 border-amber-200",
+    actionHeadlineClass: "text-amber-900",
+    sortPriority: 2,
+  },
 };
 
 const UNKNOWN_STATE: StateConfig = {
@@ -575,6 +630,21 @@ const VERDICT_MAP: Record<string, BilingualVerdict> = {
     recommendation: {
       EN: "No restrictions — full training, sprint work OK",
       IS: "Engin takmörk — fullt æfing, sprint work OK",
+    },
+  },
+  // Coach overrode a system RECOVERY/MODIFIED to FULL while wellness or load
+  // signals are still red. Verdict is honoured (coach decision wins) but the
+  // copy makes the discrepancy explicit so it can't be glanced past.
+  FULL_OVERRIDE_RISKY: {
+    icon: "⚠️",
+    label: { EN: "Coach-cleared", IS: "Þjálfari-clearaður" },
+    sentence: {
+      EN: "Cleared by coach — system flagged recovery",
+      IS: "Clearaður af þjálfara — kerfi mælti með recovery",
+    },
+    recommendation: {
+      EN: "Decision overrides STEN/load signals. Monitor warm-up + first sprints; pull at first sign of pain.",
+      IS: "Ákvörðun yfirskrifar STEN/álagsmerki. Fylgjast vel með upphitun + fyrstu sprettum; draga út við fyrsta merki um sársauka.",
     },
   },
   MODIFIED: {

@@ -266,7 +266,7 @@ export async function runIllnessAutoClear(
       injuryId: ill.id,
       playerId: ill.player_id,
       cleared: true,
-      reason: `cleared (${recentSessions.length} sessions, baseline ${chronicMean.toFixed(0)})`,
+      reason: `cleared via ${path} path (fast=${fastSessions.length}, long=${longSessions.length}, baseline=${chronicMean.toFixed(0)}, red=${redCount})`,
     });
   }
 
