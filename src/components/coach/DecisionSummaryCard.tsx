@@ -494,6 +494,20 @@ function buildCoachActionBlock(
     };
   }
 
+  // ── FULL_OVERRIDE_RISKY ────────────────────────────────────────────────
+  // Load engine cleared FULL but wellness flagged recovery — coach action
+  // is to talk to the player, not to send them straight into a full session.
+  if (displayAction === "FULL_OVERRIDE_RISKY") {
+    return {
+      headline: "Confirm with player at warm-up",
+      details: [
+        "Wellness flagged recovery — load picture cleared full",
+        "Decide intensity after talking to him",
+        "Pull at first sign of pain",
+      ],
+    };
+  }
+
   // ── FULL ───────────────────────────────────────────────────────────────
   const details: string[] = [];
   // Check if there are any minor exposure notes even on a full decision

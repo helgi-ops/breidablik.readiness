@@ -521,21 +521,38 @@ async function buildSummaryInput(
   }
   const overrideConflict = overrideConflictSignals.length > 0
     ? {
-        verdict_state: coachVerdict?.state ?? null,
         red_signals: overrideConflictSignals,
         message:
-          "Load engine cleared the player to FULL/Ready, but today's self-reported wellness shows red signals. The wellness and load engines disagree — NO coach action is implied. Summary MUST mention this internal discrepancy explicitly without attributing it to the coach.",
+          "Load engine cleared the player to FULL/Ready, but today's self-reported wellness shows red signals. The wellness and load engines disagree — NO coach action is implied, and there is no override or 'OVERRIDE_RISKY' state to mention by name. Summary MUST acknowledge the discrepancy in plain language without attributing it to a coach decision and without echoing internal state codes.",
       }
+    : null;
+
+  // Normalise internal state codes to coach-readable labels before sending
+  // to the AI — otherwise it echoes things like "FULL_OVERRIDE_RISKY"
+  // verbatim into the summary text. The verdict-state code is internal to
+  // the engine, not user-facing language.
+  const friendlyVerdictState = (() => {
+    const raw = String(coachVerdict?.state ?? "").toUpperCase();
+    if (raw === "FULL_OVERRIDE_RISKY") return "Mixed signals";
+    if (raw === "FULL") return "Ready";
+    if (raw === "MODIFIED") return "Modified";
+    if (raw === "RECOVERY") return "Recovery";
+    if (raw === "HOLD") return "Held out";
+    return coachVerdict?.state ?? null;
+  })();
+  const sanitisedCoachVerdict = coachVerdict
+    ? { ...coachVerdict, state: friendlyVerdictState }
     : null;
 
   return {
     player_name:    (playerInfo.data?.full_name as string | null) ?? "Player",
     position:       (playerInfo.data?.position as string | null) ?? null,
     window_days:    windowDays,
-    // Ground-truth verdict the coach is currently looking at on screen.
-    coach_visible_verdict: coachVerdict ?? null,
-    // Non-null when the coach has overridden a system warning — see the
-    // OVERRIDE-CONFLICT prompt section for the required framing.
+    // Ground-truth verdict the coach is currently looking at on screen,
+    // with internal state codes normalised to human-readable labels.
+    coach_visible_verdict: sanitisedCoachVerdict,
+    // Non-null when the load and wellness engines disagree — see the
+    // ENGINE-CONFLICT prompt section for the required framing.
     override_conflict: overrideConflict,
     pattern:                pattern.data ?? null,
     // McBurnie payload, Sharp Cut and ASP burst metrics depend on
