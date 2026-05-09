@@ -352,8 +352,12 @@ function stenToBand(sten: number): StenBand {
   };
 }
 
-// Returns a warning when coach has set FULL but STEN signals the player is below baseline.
-// This makes the override explicit and conscious rather than accidental.
+// Returns a warning when the load engine has cleared FULL but the wellness
+// engine (STEN) is below baseline — i.e. the two engines disagree and the
+// load picture happened to "win". The banner makes this internal conflict
+// visible to the coach. Wording deliberately attributes the discrepancy to
+// the SYSTEM, not to a coach override (which would be confusing — no coach
+// action has actually happened).
 function stenOverrideWarning(
   displayAction: string | null,
   sten: number | null
@@ -361,11 +365,11 @@ function stenOverrideWarning(
   if (displayAction !== "FULL" || sten == null) return null;
   if (sten <= 2) return {
     level: "critical",
-    text: `STEN ${sten} — system recommended RECOVERY. Coach override is active.`,
+    text: `Mixed signals — wellness STEN ${sten} flagged RECOVERY but load picture cleared FULL. Confirm with the player before training.`,
   };
   if (sten <= 4) return {
     level: "caution",
-    text: `STEN ${sten} — system recommended MODIFIED. Coach override is active.`,
+    text: `Mixed signals — wellness STEN ${sten} flagged MODIFIED but load picture cleared FULL. Confirm with the player before training.`,
   };
   return null;
 }
@@ -574,12 +578,13 @@ const STATE_CONFIG: Record<string, StateConfig> = {
     actionHeadlineClass: "text-emerald-900",
     sortPriority: 3,
   },
-  // Visually distinct "FULL but coach overrode the system's RECOVERY/MODIFIED
-  // recommendation while signals are still red". Same priority as MODIFIED so
-  // the row sorts up next to other concerns; styled amber (not green) so the
-  // coach immediately sees the discrepancy on the modal header.
+  // Visually distinct "load engine cleared FULL while wellness engine flagged
+  // RECOVERY/MODIFIED" — i.e. the two sub-engines disagree and the load
+  // picture happened to win the verdict pipeline. NO coach action required
+  // for this state; it's purely a system-internal conflict that needs a
+  // human review before training.
   FULL_OVERRIDE_RISKY: {
-    label: "OVERRIDE",
+    label: "MIXED",
     emoji: "⚠️",
     topBarClass: "bg-amber-500",
     cardBorderClass: "border-amber-300",
@@ -630,19 +635,21 @@ const VERDICT_MAP: Record<string, BilingualVerdict> = {
       IS: "Engin takmörk — fullt æfing, sprint work OK",
     },
   },
-  // Coach overrode a system RECOVERY/MODIFIED to FULL while wellness or load
-  // signals are still red. Verdict is honoured (coach decision wins) but the
-  // copy makes the discrepancy explicit so it can't be glanced past.
+  // The load engine has cleared FULL while the wellness engine flagged
+  // RECOVERY/MODIFIED — i.e. the two sub-engines disagree and the load
+  // picture happened to win the verdict pipeline. NO coach action is
+  // implied; this is purely a system-internal conflict that needs a coach
+  // review (and possibly a manual override) before training.
   FULL_OVERRIDE_RISKY: {
     icon: "⚠️",
-    label: { EN: "Coach-cleared", IS: "Þjálfari-clearaður" },
+    label: { EN: "Mixed signals", IS: "Misvísandi merki" },
     sentence: {
-      EN: "Cleared by coach — system flagged recovery",
-      IS: "Clearaður af þjálfara — kerfi mælti með recovery",
+      EN: "Load picture cleared full, but wellness check flagged recovery",
+      IS: "Álagsmynd cleared, en líðan flaggaði recovery",
     },
     recommendation: {
-      EN: "Decision overrides STEN/load signals. Monitor warm-up + first sprints; pull at first sign of pain.",
-      IS: "Ákvörðun yfirskrifar STEN/álagsmerki. Fylgjast vel með upphitun + fyrstu sprettum; draga út við fyrsta merki um sársauka.",
+      EN: "Engines disagree. Confirm with the player at warm-up before deciding intensity; pull at first sign of pain.",
+      IS: "Kerfin eru ósammála. Spyrðu leikmanninn í upphitun áður en þú ákveður ákefð; draga út við fyrsta merki um sársauka.",
     },
   },
   MODIFIED: {
@@ -980,7 +987,7 @@ const PlayerModal: FC<{
                 </svg>
                 <div>
                   <p className={`text-sm font-bold leading-snug ${warn.level === "critical" ? "text-rose-800" : "text-amber-800"}`}>
-                    Coach override active
+                    Engine conflict — review before training
                   </p>
                   <p className={`text-sm leading-snug mt-0.5 ${warn.level === "critical" ? "text-rose-700" : "text-amber-700"}`}>
                     {warn.text}

@@ -490,11 +490,14 @@ async function buildSummaryInput(
     ? Number((plRecentSum / (plWindowSum / Math.max(plSeries.length / 7, 1))).toFixed(2))
     : null;
 
-  // ── Override conflict detector ─────────────────────────────────────────
-  // When coachVerdict is "Ready"/"Full"/GREEN but TODAY's wellness shows red
-  // signals (sleep ≤2, soreness ≤2, energy ≤2, mood ≤2), the coach has
-  // overridden a system recommendation. The AI summary MUST acknowledge
-  // this rather than echoing the "system is green" framing.
+  // ── Engine-conflict detector ───────────────────────────────────────────
+  // When coachVerdict is "Ready"/"Full"/GREEN but TODAY's self-reported
+  // wellness shows red signals (sleep ≤2, soreness ≤2, energy ≤2), the
+  // load engine and the wellness engine disagree — the load engine cleared
+  // the player to FULL while the wellness check flagged recovery. NO coach
+  // action is implied; the verdict pipeline simply happened to side with
+  // the load picture. The AI summary MUST acknowledge this internal
+  // discrepancy rather than echoing "system is green".
   const todayIso2 = new Date().toISOString().slice(0, 10);
   const todayWellnessRow = ((wellnessSeries.data ?? []) as Array<Record<string, unknown>>).find(
     (r) => String(r.entry_date ?? "") === todayIso2,
@@ -518,10 +521,10 @@ async function buildSummaryInput(
   }
   const overrideConflict = overrideConflictSignals.length > 0
     ? {
-        coach_set_state: coachVerdict?.state ?? null,
+        verdict_state: coachVerdict?.state ?? null,
         red_signals: overrideConflictSignals,
         message:
-          "Coach has cleared player to FULL/Ready, but today's self-reported wellness shows red signals. Summary MUST mention this conflict explicitly.",
+          "Load engine cleared the player to FULL/Ready, but today's self-reported wellness shows red signals. The wellness and load engines disagree — NO coach action is implied. Summary MUST mention this internal discrepancy explicitly without attributing it to the coach.",
       }
     : null;
 
@@ -741,28 +744,33 @@ EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdic
 - The wellness_daily block does NOT contain a "sleep" or "readiness"
   field — if you write "sleep was 1/5" you've hallucinated the field.
 
-═══════ OVERRIDE-CONFLICT (CRITICAL — surface honestly) ═══════
-- The input may include override_conflict (non-null only when the coach has
-  set a Ready/Full/GREEN verdict while today's self-reported wellness has
-  ≥1 score in the red band, e.g. sleep_quality ≤2, soreness ≤2, energy ≤2).
+═══════ ENGINE-CONFLICT (CRITICAL — surface honestly) ═══════
+- The input may include override_conflict (non-null only when the load
+  engine produced a Ready/Full/GREEN verdict while today's self-reported
+  wellness has ≥1 score in the red band, e.g. sleep_quality ≤2, soreness
+  ≤2, energy ≤2). This is a SYSTEM-INTERNAL conflict — the wellness and
+  load engines disagree. NO coach action is implied.
 - When override_conflict is non-null:
     * NEVER write "system is green across X" — the system is NOT green.
-      The coach has overridden a system warning.
-    * Frame the verdict as a coach-cleared decision with explicit awareness
-      of the underlying signals. Acceptable phrasings:
-        "Coach has cleared <player> for full session despite <signal X>
-         and <signal Y> coming in low this morning."
-        "Cleared by coach for full work — wellness check shows <signals>
-         below baseline, so monitor warm-up and pull at first sign of
-         pain."
+      The two sub-engines disagree.
+    * NEVER attribute the verdict to a coach decision ("the coach cleared
+      <player>", "coach has overridden", "manual override"). The coach
+      has done nothing. The load engine simply happened to side with FULL
+      when the wellness engine flagged recovery.
+    * Frame as engine disagreement with explicit awareness of the red
+      signals. Acceptable phrasings:
+        "Load picture cleared <player> for full work, but wellness check
+         shows <signal X> and <signal Y> below baseline this morning —
+         confirm with him at warm-up before deciding intensity."
+        "Mixed signals: load looks fine but <signals> came in low. Worth
+         a quick check-in before the session starts."
     * Reference the specific red_signals from override_conflict.red_signals
       using natural language ("sleep was poor", "energy is low", "soreness
-      elevated"). DO NOT echo the raw "sleep_quality=2/5" format — convert
-      to coach-readable prose.
+      elevated"). DO NOT echo the raw "sleep_quality=2/5" format.
     * Action recommendation should add monitoring guidance, NOT pure
       reassurance. "Standard recovery protocol" alone is wrong here —
       add "watch for symptoms during warm-up" or similar.
-- When override_conflict is null, do NOT mention coach overrides at all.
+- When override_conflict is null, do NOT mention engine conflicts at all.
 
 ═══════ VERDICT STREAK (NEW — context coaches care about) ═══════
 - verdict_streak.{state, days_in_state, previous_state, coach_overrides_in_window}
