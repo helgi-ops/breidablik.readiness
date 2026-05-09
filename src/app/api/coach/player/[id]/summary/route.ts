@@ -490,12 +490,50 @@ async function buildSummaryInput(
     ? Number((plRecentSum / (plWindowSum / Math.max(plSeries.length / 7, 1))).toFixed(2))
     : null;
 
+  // ── Override conflict detector ─────────────────────────────────────────
+  // When coachVerdict is "Ready"/"Full"/GREEN but TODAY's wellness shows red
+  // signals (sleep ≤2, soreness ≤2, energy ≤2, mood ≤2), the coach has
+  // overridden a system recommendation. The AI summary MUST acknowledge
+  // this rather than echoing the "system is green" framing.
+  const todayIso2 = new Date().toISOString().slice(0, 10);
+  const todayWellnessRow = ((wellnessSeries.data ?? []) as Array<Record<string, unknown>>).find(
+    (r) => String(r.entry_date ?? "") === todayIso2,
+  );
+  const overrideConflictSignals: string[] = [];
+  if (todayWellnessRow && coachVerdict?.state) {
+    const isReady = ["ready", "full", "green", "green_plus"].includes(
+      String(coachVerdict.state).toLowerCase(),
+    );
+    if (isReady) {
+      const sleep = Number(todayWellnessRow.sleep_quality ?? 5);
+      const soreness = Number(todayWellnessRow.muscle_soreness ?? 5);
+      const energy = Number(todayWellnessRow.fatigue_energy ?? 5);
+      if (Number.isFinite(sleep) && sleep <= 2)
+        overrideConflictSignals.push(`sleep_quality=${sleep}/5`);
+      if (Number.isFinite(soreness) && soreness <= 2)
+        overrideConflictSignals.push(`muscle_soreness=${soreness}/5`);
+      if (Number.isFinite(energy) && energy <= 2)
+        overrideConflictSignals.push(`fatigue_energy=${energy}/5`);
+    }
+  }
+  const overrideConflict = overrideConflictSignals.length > 0
+    ? {
+        coach_set_state: coachVerdict?.state ?? null,
+        red_signals: overrideConflictSignals,
+        message:
+          "Coach has cleared player to FULL/Ready, but today's self-reported wellness shows red signals. Summary MUST mention this conflict explicitly.",
+      }
+    : null;
+
   return {
     player_name:    (playerInfo.data?.full_name as string | null) ?? "Player",
     position:       (playerInfo.data?.position as string | null) ?? null,
     window_days:    windowDays,
     // Ground-truth verdict the coach is currently looking at on screen.
     coach_visible_verdict: coachVerdict ?? null,
+    // Non-null when the coach has overridden a system warning — see the
+    // OVERRIDE-CONFLICT prompt section for the required framing.
+    override_conflict: overrideConflict,
     pattern:                pattern.data ?? null,
     // McBurnie payload, Sharp Cut and ASP burst metrics depend on
     // B2-3 acceleration/deceleration efforts the Lite-tier Catapult
@@ -702,6 +740,29 @@ EXTRA SIGNALS YOU MAY USE WHEN PRESENT (lower priority than coach_visible_verdic
 - Never invent specific scores. Never say "his sleep was 2/5 yesterday".
 - The wellness_daily block does NOT contain a "sleep" or "readiness"
   field — if you write "sleep was 1/5" you've hallucinated the field.
+
+═══════ OVERRIDE-CONFLICT (CRITICAL — surface honestly) ═══════
+- The input may include override_conflict (non-null only when the coach has
+  set a Ready/Full/GREEN verdict while today's self-reported wellness has
+  ≥1 score in the red band, e.g. sleep_quality ≤2, soreness ≤2, energy ≤2).
+- When override_conflict is non-null:
+    * NEVER write "system is green across X" — the system is NOT green.
+      The coach has overridden a system warning.
+    * Frame the verdict as a coach-cleared decision with explicit awareness
+      of the underlying signals. Acceptable phrasings:
+        "Coach has cleared <player> for full session despite <signal X>
+         and <signal Y> coming in low this morning."
+        "Cleared by coach for full work — wellness check shows <signals>
+         below baseline, so monitor warm-up and pull at first sign of
+         pain."
+    * Reference the specific red_signals from override_conflict.red_signals
+      using natural language ("sleep was poor", "energy is low", "soreness
+      elevated"). DO NOT echo the raw "sleep_quality=2/5" format — convert
+      to coach-readable prose.
+    * Action recommendation should add monitoring guidance, NOT pure
+      reassurance. "Standard recovery protocol" alone is wrong here —
+      add "watch for symptoms during warm-up" or similar.
+- When override_conflict is null, do NOT mention coach overrides at all.
 
 ═══════ VERDICT STREAK (NEW — context coaches care about) ═══════
 - verdict_streak.{state, days_in_state, previous_state, coach_overrides_in_window}

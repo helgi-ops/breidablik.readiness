@@ -214,21 +214,26 @@ function resolveDisplayAction(row: DecisionSummaryRow): string | null {
 }
 
 /**
- * Override guardrail — when the coach has pushed a system RECOVERY/MODIFIED
- * up to FULL but the underlying wellness or load signals are still red, the
+ * Override guardrail — when the displayed verdict is FULL but the player's
+ * personal-z (converted to STEN) is in the override-warning territory, the
  * verdict header is downgraded from FULL → FULL_OVERRIDE_RISKY so the
  * coach sees an explicit amber "Coach-cleared" badge instead of a clean
  * green ✅. The actual prescription/decision isn't changed — coaches
  * always have final authority. This is purely about visual honesty.
  *
- * Triggers when ALL of:
- *   - Final action is FULL
- *   - System action was RECOVERY or MODIFIED (override happened upward)
- *   - At least ONE of:
- *       • ≥2 wellness scores in the red band (≤2 / 5 on the 1–5 readiness scale)
- *       • Personal-z ≤ −1.5 (well below personal baseline)
- *       • Final flag/color is RED
- *       • Composite concern is "high" or "moderate"
+ * Detection mirrors the existing stenOverrideWarning() logic so the badge
+ * and the inline override banner stay in sync. The system "recommended
+ * RECOVERY/MODIFIED" view is INFERRED from STEN (z-score → STEN), not
+ * stored in a separate system_decision field — so we use the same source.
+ *
+ * Triggers when:
+ *   - displayAction = FULL
+ *   - personal-z is available
+ *   - Derived STEN ≤ 4 (system would have recommended MODIFIED or worse)
+ *
+ * The systemAction parameter is also accepted as a belt-and-braces signal:
+ * if the engine writes RECOVERY/MODIFIED into system_decision explicitly we
+ * trust it even when STEN data is missing.
  */
 function applyOverrideGuardrail(
   action: string | null,
@@ -236,24 +241,17 @@ function applyOverrideGuardrail(
   systemAction: string | null,
 ): string | null {
   if (action !== "FULL") return action;
-  const overrideUpward = systemAction === "RECOVERY" || systemAction === "MODIFIED";
-  if (!overrideUpward) return action;
 
-  const sleepBad = (row.sleep_quality ?? 5) <= 2;
-  const sorenessBad = (row.muscle_soreness ?? 5) <= 2;
-  const energyBad = (row.fatigue_energy ?? 5) <= 2;
-  const moodBad = (row.stress_mood ?? 5) <= 2;
-  const wellnessRedCount = [sleepBad, sorenessBad, energyBad, moodBad].filter(Boolean).length;
+  // STEN-based detection (primary path — mirrors stenOverrideWarning)
+  const z = row._z_today;
+  const stenOverride =
+    z != null && Number.isFinite(z) && zToSten(z) <= 4;
 
-  const zBad = row._z_today != null && Number.isFinite(row._z_today) && row._z_today <= -1.5;
-  const colorRed =
-    String(row.final_color ?? "").toLowerCase() === "red" ||
-    String(row.final_flag ?? "").toUpperCase() === "RED";
-  const compositeBad =
-    row._today_composite_concern === "high" || row._today_composite_concern === "moderate";
+  // Explicit system-action mismatch (fallback when stored)
+  const explicitOverride =
+    systemAction === "RECOVERY" || systemAction === "MODIFIED";
 
-  const concernCount = (wellnessRedCount >= 2 ? 1 : 0) + (zBad ? 1 : 0) + (colorRed ? 1 : 0) + (compositeBad ? 1 : 0);
-  if (concernCount >= 1) return "FULL_OVERRIDE_RISKY";
+  if (stenOverride || explicitOverride) return "FULL_OVERRIDE_RISKY";
   return action;
 }
 
