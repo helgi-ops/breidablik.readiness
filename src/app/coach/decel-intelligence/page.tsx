@@ -25,6 +25,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 // translates the 6 decel metrics into coach speak. Lives only on this page.
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
 import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
+import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
@@ -493,6 +494,11 @@ function PlayerRow({ row }: { row: Row }) {
               L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits
               alongside McBurnie because both are stride-mechanical signals. */}
           <StrideIntelligenceCard playerId={row.player_id} />
+
+          {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
+              over Catapult total_player_load. Indoor-friendly external load
+              spike detector; complements internal-load (RPE) ACWR. */}
+          <PlayerLoadAcwrCard playerId={row.player_id} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail

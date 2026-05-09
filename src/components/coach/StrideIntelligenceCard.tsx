@@ -210,24 +210,101 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
     );
   }
 
+  // Common pulled-out state so we can use it on both fully-loaded and rest-day branches.
+  const trend = data?.trend ?? [];
+  const cadenceBaseline = data?.baselines.stride_cadence_weighted ?? null;
+  const strideLengthBaseline = data?.baselines.stride_length_hsr_m ?? null;
+  const decouplingBaseline = data?.baselines.stride_gps_ima_decoupling ?? null;
+  const asymBaseline = data?.baselines.stride_cod_lr_asym_pct ?? null;
+
+  // Find latest non-empty session in trend (most recent day with strides recorded)
+  const latestSession = (() => {
+    for (let i = trend.length - 1; i >= 0; i -= 1) {
+      const r = trend[i];
+      if (r.totalStrides && r.totalStrides > 0) return r;
+    }
+    return null;
+  })();
+
+  // REST-DAY BRANCH — no Catapult row for today, but we may still have trend + baselines.
+  // Show baseline values + 14-day sparkline so the coach has context on rest days.
   if (!data?.today) {
+    const hasAnyTrendData = trend.some((r) => r.totalStrides && r.totalStrides > 0);
+
     return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="text-sm font-medium text-slate-800">Stride Intelligence</div>
-        <div className="mt-1 text-xs text-slate-600">
-          No IMA Free Running data for {data?.date ?? "today"}. This card lights up
-          once Catapult Vector S7+ stride detection is captured (works indoor and outdoor).
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-slate-900">Stride Intelligence</div>
+            <div className="text-[11px] text-slate-500">
+              IMA Free Running · {data?.date ?? "today"} ·{" "}
+              {latestSession
+                ? `last session ${latestSession.date}`
+                : "awaiting first session"}
+            </div>
+          </div>
+          <span className="rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            rest day
+          </span>
         </div>
+
+        {!hasAnyTrendData ? (
+          <div className="mt-3 text-xs text-slate-600">
+            No IMA Free Running sessions recorded in the last 14 days. This card
+            lights up once Catapult Vector S7+ stride detection is captured
+            (works indoor and outdoor).
+          </div>
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <MetricTile
+                title="Cadence"
+                value={cadenceBaseline?.mean ?? null}
+                unit="Hz"
+                baselineMean={cadenceBaseline?.mean}
+                trendValues={trend.map((r) => r.cadenceWeighted)}
+                helper="14-day baseline · vol-weighted"
+              />
+              <MetricTile
+                title="Stride length (HSR)"
+                value={strideLengthBaseline?.mean ?? null}
+                unit="m/stride"
+                baselineMean={strideLengthBaseline?.mean}
+                trendValues={trend.map((r) => r.strideLengthHsr)}
+                helper="14-day baseline · HSR/strides"
+              />
+              <MetricTile
+                title="L/R asymmetry"
+                value={asymBaseline?.mean ?? null}
+                unit="%"
+                baselineMean={asymBaseline?.mean}
+                trendValues={trend.map((r) => r.codLrAsymmetryPct)}
+                helper="14-day baseline · |L−R|/avg"
+              />
+              <MetricTile
+                title="GPS-IMA decoupling"
+                value={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
+                unit="%pt"
+                baselineMean={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
+                trendValues={trend.map((r) =>
+                  r.gpsImaDecoupling != null ? r.gpsImaDecoupling * 100 : null,
+                )}
+                helper="14-day baseline · HSR−HiLoad"
+              />
+            </div>
+
+            <div className="mt-2 text-[10px] text-slate-500">
+              No session today — values shown are personal baselines from the last
+              28 days. Card refreshes when next training is uploaded.
+            </div>
+          </>
+        )}
       </div>
     );
   }
 
   const t = data.today;
   const m = t.metrics;
-  const trend = data.trend;
-  const cadenceBaseline = data.baselines.stride_cadence_weighted ?? null;
-  const strideLengthBaseline = data.baselines.stride_length_hsr_m ?? null;
-  const decouplingBaseline = data.baselines.stride_gps_ima_decoupling ?? null;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
