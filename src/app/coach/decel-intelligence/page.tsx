@@ -26,6 +26,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
 import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
+import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red" | "unknown";
@@ -499,6 +500,13 @@ function PlayerRow({ row }: { row: Row }) {
               over Catapult total_player_load. Indoor-friendly external load
               spike detector; complements internal-load (RPE) ACWR. */}
           <PlayerLoadAcwrCard playerId={row.player_id} />
+
+          {/* Coach can manually assign a recovery protocol — VST Reset, MD+1
+              bundle, etc. — to this player. Auto-trigger from match-load
+              detection runs nightly; this is the manual override. */}
+          <div className="flex justify-end">
+            <CoachAssignProtocolButton playerId={row.player_id} />
+          </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Detail

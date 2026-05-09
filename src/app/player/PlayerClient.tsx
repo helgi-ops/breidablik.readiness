@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
+import PlayerRecoveryAssignmentsCard from "@/components/recovery/PlayerRecoveryAssignmentsCard";
 import { usePushAutoResubscribe } from "@/lib/push/usePushAutoResubscribe";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
@@ -4831,6 +4832,12 @@ export default function PlayerClient() {
             <MissingCheckinBanner lang={lang} />
           </div>
         ) : null}
+
+        {/* Recovery routines — auto-hidden when no assignments. Shows post-match
+            VST Reset, MD+1 morning bundle, or coach-assigned protocols. */}
+        <div className="mb-5">
+          <PlayerRecoveryAssignmentsCard />
+        </div>
 
         {/* Main grid */}
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
