@@ -623,6 +623,34 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   const imaCodRight = nullIfZero(toInteger(sumEntries(codRightEntries)));
   const impacts = nullIfZero(toInteger(sumEntries(impactEntries)));
 
+  // Per-intensity CoD splits (Bishop 2020 needs intensity-tier asymmetry).
+  // Catapult exposes these as "IMA CoD Left High/Medium/Low" — canonical
+  // form drops spaces so we look for substrings in the canonical key. The
+  // raw imaband{1,2,3} numeric form maps band1→low, band2→medium, band3→high.
+  const sumByLevel = (
+    entries: ReturnType<typeof preferCountLike>,
+    level: "low" | "medium" | "high",
+    bandDigit: "1" | "2" | "3",
+  ) =>
+    nullIfZero(
+      toInteger(
+        sumEntries(
+          entries.filter((e) => {
+            const c = e.canonical;
+            return c.includes(level) || c.includes(`band${bandDigit}`);
+          }),
+        ),
+      ),
+    );
+
+  // Catapult intensity → numeric band: low=1, medium=2, high=3.
+  const imaCodLeftHigh   = sumByLevel(codLeftEntries,  "high",   "3");
+  const imaCodLeftMedium = sumByLevel(codLeftEntries,  "medium", "2");
+  const imaCodLeftLow    = sumByLevel(codLeftEntries,  "low",    "1");
+  const imaCodRightHigh   = sumByLevel(codRightEntries, "high",   "3");
+  const imaCodRightMedium = sumByLevel(codRightEntries, "medium", "2");
+  const imaCodRightLow    = sumByLevel(codRightEntries, "low",    "1");
+
   const imaTotal = nullIfZero(
     toInteger(
       directImaTotal ??
@@ -643,6 +671,12 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     imaCod,
     imaCodLeft,
     imaCodRight,
+    imaCodLeftHigh,
+    imaCodLeftMedium,
+    imaCodLeftLow,
+    imaCodRightHigh,
+    imaCodRightMedium,
+    imaCodRightLow,
     imaTotal,
     codEvents,
     impacts,
@@ -884,6 +918,12 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       imaCod: normalizedIma.imaCod,
       imaCodLeft: normalizedIma.imaCodLeft,
       imaCodRight: normalizedIma.imaCodRight,
+      imaCodLeftHigh: normalizedIma.imaCodLeftHigh,
+      imaCodLeftMedium: normalizedIma.imaCodLeftMedium,
+      imaCodLeftLow: normalizedIma.imaCodLeftLow,
+      imaCodRightHigh: normalizedIma.imaCodRightHigh,
+      imaCodRightMedium: normalizedIma.imaCodRightMedium,
+      imaCodRightLow: normalizedIma.imaCodRightLow,
       imaTotal: normalizedIma.imaTotal,
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,
@@ -1076,6 +1116,12 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.imaCod = sumNullable(current.imaCod, metric.imaCod);
     current.imaCodLeft = sumNullable(current.imaCodLeft, metric.imaCodLeft);
     current.imaCodRight = sumNullable(current.imaCodRight, metric.imaCodRight);
+    current.imaCodLeftHigh = sumNullable(current.imaCodLeftHigh, metric.imaCodLeftHigh);
+    current.imaCodLeftMedium = sumNullable(current.imaCodLeftMedium, metric.imaCodLeftMedium);
+    current.imaCodLeftLow = sumNullable(current.imaCodLeftLow, metric.imaCodLeftLow);
+    current.imaCodRightHigh = sumNullable(current.imaCodRightHigh, metric.imaCodRightHigh);
+    current.imaCodRightMedium = sumNullable(current.imaCodRightMedium, metric.imaCodRightMedium);
+    current.imaCodRightLow = sumNullable(current.imaCodRightLow, metric.imaCodRightLow);
     current.imaTotal = sumNullable(current.imaTotal, metric.imaTotal);
     current.codEvents = sumNullable(current.codEvents, metric.codEvents);
     current.impacts = sumNullable(current.impacts, metric.impacts);
@@ -1171,6 +1217,12 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaCod: metric.imaCod ?? null,
       imaCodLeft: metric.imaCodLeft ?? null,
       imaCodRight: metric.imaCodRight ?? null,
+      imaCodLeftHigh: metric.imaCodLeftHigh ?? null,
+      imaCodLeftMedium: metric.imaCodLeftMedium ?? null,
+      imaCodLeftLow: metric.imaCodLeftLow ?? null,
+      imaCodRightHigh: metric.imaCodRightHigh ?? null,
+      imaCodRightMedium: metric.imaCodRightMedium ?? null,
+      imaCodRightLow: metric.imaCodRightLow ?? null,
       imaTotal: metric.imaTotal ?? null,
       codEvents: metric.codEvents ?? null,
       impacts: metric.impacts ?? null,

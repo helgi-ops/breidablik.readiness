@@ -169,6 +169,12 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.imaCod = sumNullable(current.externalLoad.imaCod, row.externalLoad.imaCod);
     current.externalLoad.imaCodLeft = sumNullable(current.externalLoad.imaCodLeft, row.externalLoad.imaCodLeft);
     current.externalLoad.imaCodRight = sumNullable(current.externalLoad.imaCodRight, row.externalLoad.imaCodRight);
+    current.externalLoad.imaCodLeftHigh   = sumNullable(current.externalLoad.imaCodLeftHigh,   row.externalLoad.imaCodLeftHigh);
+    current.externalLoad.imaCodLeftMedium = sumNullable(current.externalLoad.imaCodLeftMedium, row.externalLoad.imaCodLeftMedium);
+    current.externalLoad.imaCodLeftLow    = sumNullable(current.externalLoad.imaCodLeftLow,    row.externalLoad.imaCodLeftLow);
+    current.externalLoad.imaCodRightHigh   = sumNullable(current.externalLoad.imaCodRightHigh,   row.externalLoad.imaCodRightHigh);
+    current.externalLoad.imaCodRightMedium = sumNullable(current.externalLoad.imaCodRightMedium, row.externalLoad.imaCodRightMedium);
+    current.externalLoad.imaCodRightLow    = sumNullable(current.externalLoad.imaCodRightLow,    row.externalLoad.imaCodRightLow);
     current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
     current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
     current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
@@ -265,14 +271,29 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_accel: row.externalLoad.imaAccel ?? null,
     ima_decel: row.externalLoad.imaDecel ?? null,
     ima_cod: row.externalLoad.imaCod ?? null,
-    // L/R CoD splits — used for Bishop 2020 asymmetry index in Stride Intelligence.
-    // We don't have separate Low/Medium/High columns from the API aggregation
-    // (the IMA CoD endpoint returns each tier separately, but we collapse during
-    // normalization), so we write the totals into the *_low columns and leave
-    // medium/high null. The summary view sums all three so the result is
-    // identical for asymmetry computation.
-    ima_cod_left_low: row.externalLoad.imaCodLeft ?? null,
-    ima_cod_right_low: row.externalLoad.imaCodRight ?? null,
+    // L/R CoD splits per intensity tier (Bishop 2020 — high-intensity asymmetry
+    // is the injury-relevant signal; low-tier is often a positional habit).
+    // When the per-intensity values are unavailable (older payloads, certain
+    // Catapult firmwares) we fall back to writing the aggregate into _low so
+    // overall asymmetry computation still works downstream.
+    ima_cod_left_high:   row.externalLoad.imaCodLeftHigh   ?? null,
+    ima_cod_left_medium: row.externalLoad.imaCodLeftMedium ?? null,
+    ima_cod_left_low:
+      row.externalLoad.imaCodLeftLow
+      ?? (
+        row.externalLoad.imaCodLeftHigh == null && row.externalLoad.imaCodLeftMedium == null
+          ? row.externalLoad.imaCodLeft ?? null
+          : null
+      ),
+    ima_cod_right_high:   row.externalLoad.imaCodRightHigh   ?? null,
+    ima_cod_right_medium: row.externalLoad.imaCodRightMedium ?? null,
+    ima_cod_right_low:
+      row.externalLoad.imaCodRightLow
+      ?? (
+        row.externalLoad.imaCodRightHigh == null && row.externalLoad.imaCodRightMedium == null
+          ? row.externalLoad.imaCodRight ?? null
+          : null
+      ),
     ima_total: row.externalLoad.imaTotal ?? null,
     cod_events: row.externalLoad.codEvents ?? null,
     impacts: row.externalLoad.impacts ?? null,
