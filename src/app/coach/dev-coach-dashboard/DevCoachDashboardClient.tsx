@@ -1942,6 +1942,11 @@ export default function CoachPage() {
   // verdict instead of asserting a load/wellness recommendation that would
   // be misleading on a non-training day.
   const [teamDayType, setTeamDayType] = useState<string | null>(null);
+  // High-intensity L/R CoD asymmetry % per player over the last 14 days.
+  // Bishop 2020: > 15% high-tier asymmetry is the strongest predictor of
+  // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
+  // Decision Summary modal — informational only, NOT a verdict modifier.
+  const [playerCodHighAsym, setPlayerCodHighAsym] = useState<Record<string, number>>({});
   const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
   // VBT fatigue flags per player
   const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
@@ -3873,6 +3878,77 @@ export default function CoachPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachVerified, coachTeamId, today]);
 
+  // ── Bulk high-tier CoD asymmetry per player (last 14d) ────────────────
+  // Single query returns Left/Right high-intensity CoD totals for every
+  // player on the team. We compute the asymmetry % client-side and only
+  // store ones ≥ 15% (Bishop 2020 concern threshold) — the chronic-risk
+  // chip in DecisionSummaryCard renders only when this map has the player.
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) {
+      setPlayerCodHighAsym({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const start = new Date();
+        start.setDate(start.getDate() - 13);
+        const startIso = start.toISOString().slice(0, 10);
+
+        // Pull team players first (we filter the load table by player_id
+        // explicitly — RLS may already do this but being explicit keeps
+        // the result tight when the dashboard is in admin pilot-mode).
+        const { data: pl } = await supabase
+          .from("players")
+          .select("id")
+          .eq("team_id", coachTeamId)
+          .eq("is_active", true);
+        if (!alive) return;
+        const playerIds = ((pl ?? []) as Array<{ id: string }>).map((r) => r.id);
+        if (playerIds.length === 0) {
+          setPlayerCodHighAsym({});
+          return;
+        }
+
+        const { data: rows } = await supabase
+          .from("player_external_load_daily")
+          .select("player_id, ima_cod_left_high, ima_cod_right_high")
+          .in("player_id", playerIds)
+          .eq("source", "catapult")
+          .gte("date", startIso)
+          .lte("date", today);
+        if (!alive) return;
+
+        const totals = new Map<string, { left: number; right: number }>();
+        for (const r of (rows ?? []) as Array<{
+          player_id: string;
+          ima_cod_left_high: number | null;
+          ima_cod_right_high: number | null;
+        }>) {
+          const cur = totals.get(r.player_id) ?? { left: 0, right: 0 };
+          cur.left += Number(r.ima_cod_left_high ?? 0) || 0;
+          cur.right += Number(r.ima_cod_right_high ?? 0) || 0;
+          totals.set(r.player_id, cur);
+        }
+
+        const out: Record<string, number> = {};
+        for (const [pid, { left, right }] of totals) {
+          const max = Math.max(left, right);
+          if (max <= 0) continue;
+          const pct = (Math.abs(left - right) / max) * 100;
+          // Only store ≥ 15% (concern + high zones) so the chip renders
+          // only when actionable — keeps memory tidy and logic simple.
+          if (pct >= 15) out[pid] = Number(pct.toFixed(1));
+        }
+        if (alive) setPlayerCodHighAsym(out);
+      } catch {
+        // Silently ignore — chronic-risk chip simply won't render.
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
+
   // coach display name
   useEffect(() => {
     let alive = true;
@@ -4872,24 +4948,24 @@ export default function CoachPage() {
   // populated. When that happens AND we have a real `playerLoadSpike`, derive
   // a synthetic burden from the PL spike so the composite reflects actual
   // training volume rather than reporting "no data".
-  const playerComposites = useMemo<
-    Record<string, {
-      compositeScore: number;
-      concernLevel: "none" | "low" | "moderate" | "high";
-      fatigueType: string | null;
-      /** Today PL ÷ 28d baseline PL, raw ratio. null when no PL data. */
-      playerLoadSpike: number | null;
-      /** loadRatio ∈ [0, 1] derived from spike: 0 = no training, 0.5 = on baseline, 1.0 = 2× baseline or more. */
-      loadRatio: number | null;
-    }>
-  >(() => {
-    const out: Record<string, {
-      compositeScore: number;
-      concernLevel: "none" | "low" | "moderate" | "high";
-      fatigueType: string | null;
-      playerLoadSpike: number | null;
-      loadRatio: number | null;
-    }> = {};
+  type PlayerCompositeEntry = {
+    compositeScore: number;
+    concernLevel: "none" | "low" | "moderate" | "high";
+    fatigueType: string | null;
+    /** Today PL ÷ 28d baseline PL, raw ratio. null when no PL data. */
+    playerLoadSpike: number | null;
+    /** loadRatio ∈ [0, 1] derived from spike: 0 = no training, 0.5 = on baseline, 1.0 = 2× baseline or more. */
+    loadRatio: number | null;
+    // Per-source spike ratios surfaced in the Today quadrant's breakdown panel.
+    hirSpike: number | null;
+    decelSpike: number | null;
+    accelSpike: number | null;
+    imaTotalSpike: number | null;
+    fmpDynamicHighSpike: number | null;
+    mode: "indoor" | "outdoor" | null;
+  };
+  const playerComposites = useMemo<Record<string, PlayerCompositeEntry>>(() => {
+    const out: Record<string, PlayerCompositeEntry> = {};
 
     // Local clone of signals.ts normalizeRatio — keep weights consistent.
     const normalizePlSpike = (spike: number | null | undefined): number | null => {
@@ -4951,13 +5027,37 @@ export default function CoachPage() {
         ? Math.max(0, Math.min(1, plSpike / 2))
         : null;
 
+      // Extract per-source spikes for the breakdown panel in the
+      // detail view. All optional — `signals.ts` may not populate every
+      // field on every team (indoor mode skips HIR, outdoor skips FMP).
+      const numOrNull = (v: unknown): number | null =>
+        typeof v === "number" && Number.isFinite(v) ? v : null;
+      const reportedMode = String(catapultSignals?.dataQuality ?? "");
+      // Mode is inferred from which spike fields are populated in signals.ts —
+      // FMP signals indicate indoor mode, HIR/decel indicate outdoor.
+      const fmpHigh = numOrNull(catapultSignals?.fmpDynamicHighSpike);
+      const hirSpike = numOrNull(catapultSignals?.hirSpike);
+      const inferredMode: "indoor" | "outdoor" | null =
+        fmpHigh != null && fmpHigh > 0 ? "indoor"
+          : hirSpike != null && hirSpike > 0 ? "outdoor"
+          : null;
+
       out[pid] = {
         compositeScore: result.compositeScore,
         concernLevel: result.concernLevel,
         fatigueType: result.fatigueType ?? null,
         playerLoadSpike: plSpike,
         loadRatio,
+        // Per-source spikes for breakdown panel
+        hirSpike,
+        decelSpike: numOrNull(catapultSignals?.decelSpike),
+        accelSpike: numOrNull(catapultSignals?.accelSpike),
+        imaTotalSpike: numOrNull(catapultSignals?.imaTotalSpike),
+        fmpDynamicHighSpike: fmpHigh,
+        mode: inferredMode,
       };
+      // reportedMode is captured in case we want to expose data quality later
+      void reportedMode;
     }
     return out;
   }, [rowsWithAdaptive]);
@@ -7329,6 +7429,10 @@ export default function CoachPage() {
                 // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
                 // Drives the OFF_DAY verdict override in the modal.
                 _team_day_type: teamDayType,
+                // Bishop 2020 high-tier L/R CoD asymmetry % over 14d.
+                // Only set when ≥ 15% (concern + high zones); informational
+                // chip only — does NOT modify the verdict.
+                _cod_high_asym_pct: playerCodHighAsym[r.player_id] ?? null,
               };
 
               // Enrich with most recent GPS load from catapult history

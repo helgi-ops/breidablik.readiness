@@ -43,6 +43,21 @@ export type PlayerComposite = {
   playerLoadSpike?: number | null;
   /** Relative training load mapped to [0,1]: 0 = none, 0.5 = on baseline, 1.0 = 2×+ baseline. */
   loadRatio?: number | null;
+  // ── Per-source spikes (raw ratios, ~0–3) used by the detail-panel
+  // breakdown so coaches can see WHAT is driving the composite. All
+  // optional — only the available ones get rendered.
+  /** High-intensity running distance ratio (outdoor McBurnie signal). */
+  hirSpike?: number | null;
+  /** Decel load ratio — McBurnie 2022 mechanical braking signal. */
+  decelSpike?: number | null;
+  /** Accel load ratio. */
+  accelSpike?: number | null;
+  /** Sum of IMA (CoD + Accel + Decel) ratio — primary indoor mechanical signal. */
+  imaTotalSpike?: number | null;
+  /** FMP Dynamic High duration ratio — explosive lateral / cutting (indoor). */
+  fmpDynamicHighSpike?: number | null;
+  /** Which mode the composite was computed for. Drives which spikes to show. */
+  mode?: "indoor" | "outdoor" | null;
 };
 
 type ApiResponse = {
@@ -792,6 +807,67 @@ export default function ReadinessLoadQuadrant({
                 <div className="mt-1 text-xs text-slate-700">
                   {c.suggestion[selectedQuad]}
                 </div>
+
+                {/* Composite breakdown — what's driving today's score.
+                    Only shown in composite mode and when at least one
+                    spike is populated. Each row is a per-source spike
+                    ratio (today / 28d baseline) with a small visual bar.
+                    Coach can see which signal pushed the dot's position. */}
+                {useComposite && selComp ? (() => {
+                  type Row = { label: string; spike: number | null; weight: string };
+                  const isIndoor = selComp.mode === "indoor";
+                  const rows: Row[] = isIndoor
+                    ? [
+                        { label: "FMP Dynamic High", spike: selComp.fmpDynamicHighSpike ?? null, weight: "34%" },
+                        { label: "Player Load",      spike: selComp.playerLoadSpike ?? null,    weight: "26%" },
+                        { label: "IMA total (CoD+Accel+Decel)", spike: selComp.imaTotalSpike ?? null, weight: "20%" },
+                      ]
+                    : [
+                        { label: "HIR distance",     spike: selComp.hirSpike ?? null,    weight: "34%" },
+                        { label: "Decel load",       spike: selComp.decelSpike ?? null,  weight: "26%" },
+                        { label: "Player Load",      spike: selComp.playerLoadSpike ?? null, weight: "—" },
+                      ];
+                  const visible = rows.filter((r) => r.spike != null && Number.isFinite(r.spike) && (r.spike as number) > 0);
+                  if (visible.length === 0) return null;
+                  // Bar fills based on spike ratio: 1.0 = baseline = 50% width;
+                  // 1.6 (high band) = 100% width; flag red at ≥ 1.5.
+                  const barPct = (s: number) => Math.max(2, Math.min(100, ((s - 0.5) / 1.1) * 100));
+                  const barColor = (s: number) =>
+                    s >= 1.5 ? "bg-rose-400" : s >= 1.15 ? "bg-amber-400" : "bg-emerald-400";
+                  return (
+                    <div className="mt-3 rounded-md border border-slate-200 bg-white/70 p-2">
+                      <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-slate-500">
+                        <span>Composite breakdown</span>
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700">
+                          {isIndoor ? "INDOOR" : "OUTDOOR"} · {selComp.compositeScore.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {visible.map((r) => (
+                          <div key={r.label} className="flex items-center gap-2 text-[11px]">
+                            <span className="w-36 shrink-0 text-slate-600">{r.label}</span>
+                            <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`absolute inset-y-0 left-0 ${barColor(r.spike as number)}`}
+                                style={{ width: `${barPct(r.spike as number)}%` }}
+                              />
+                            </div>
+                            <span className="w-12 shrink-0 text-right tabular-nums font-semibold text-slate-700">
+                              {(r.spike as number).toFixed(2)}×
+                            </span>
+                            <span className="w-9 shrink-0 text-right text-[10px] text-slate-400">
+                              {r.weight}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-1.5 text-[10px] leading-snug text-slate-500">
+                        Spike = today ÷ 28-day baseline. Bar turns amber ≥ 1.15× and red ≥ 1.5×. Weights are
+                        the contribution to the composite per signals.ts ({isIndoor ? "indoor" : "outdoor"} mode).
+                      </div>
+                    </div>
+                  );
+                })() : null}
               </div>
             );
           })() : null}
