@@ -83,6 +83,11 @@ const SB_COPY = {
     saving: "Vista…",
     saved: "Vistað!",
     saveError: "Villa við að vista",
+    emptyTitle: "Tilbúinn að byggja æfingu?",
+    emptyStep1: "1. Veldu MD-day efst (t.d. MD-1, MD-3, MD+1) — kerfið dregur upp team-sögu og setur sjálfvirkt target PL",
+    emptyStep2: "2. Bættu við 3–5 drillum úr safninu til vinstri — smelltu á + eða á drilluna sjálfa",
+    emptyStep3: "3. Skoðaðu totals og PL band bar sem birtast efst, vista síðan og hlaða niður PDF",
+    emptyTip: "Tip: drillur eru flokkaðar eftir stimulus (LOC / MECH / MIX / TECH) — einföld blanda er 1 LOC + 1 MECH + 1 MIX",
   },
   EN: {
     other: "Other",
@@ -142,6 +147,11 @@ const SB_COPY = {
     saving: "Saving…",
     saved: "Saved!",
     saveError: "Error saving session",
+    emptyTitle: "Ready to build a session?",
+    emptyStep1: "1. Pick an MD day above (e.g. MD-1, MD-3, MD+1) — we'll load team history and auto-set target PL",
+    emptyStep2: "2. Add 3–5 drills from the library on the left — click + or the drill itself",
+    emptyStep3: "3. Watch totals and the PL band bar appear at the top, then save and download the PDF",
+    emptyTip: "Tip: drills are tagged by stimulus (LOC / MECH / MIX / TECH) — a simple blend is 1 LOC + 1 MECH + 1 MIX",
   },
 } as const;
 
@@ -933,17 +943,20 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
           </div>
         )}
 
-        {/* Totals strip */}
-        <div className="grid grid-cols-2 divide-x divide-slate-100 sm:grid-cols-4 lg:grid-cols-8">
-          <TotalCell label="Player Load" value={n(totals.player_load, 0)} accent="blue" emphasis />
-          <TotalCell label="Duration" value={n(totals.duration_min, 0)} suffix={t.min} emphasis />
-          <TotalCell label="Distance" value={n(totals.distance_m, 0)} suffix="m" />
-          <TotalCell label={t.plPerMin} value={avgPlPerMin != null ? avgPlPerMin.toFixed(2) : "–"} />
-          <TotalCell label="Vel B5" value={n(totals.vel_b5, 0)} suffix="m" />
-          <TotalCell label="Vel B6" value={n(totals.vel_b6, 0)} suffix="m" />
-          <TotalCell label="Accel B2-3" value={n(totals.accel_b23, 0)} />
-          <TotalCell label="Decel B2-3" value={n(totals.decel_b23, 0)} />
-        </div>
+        {/* Totals strip — only show when there are drills in the session
+            (avoids zero-filled visual noise on first paint) */}
+        {items.length > 0 && (
+          <div className="grid grid-cols-2 divide-x divide-slate-100 sm:grid-cols-4 lg:grid-cols-8">
+            <TotalCell label="Player Load" value={n(totals.player_load, 0)} accent="blue" emphasis />
+            <TotalCell label="Duration" value={n(totals.duration_min, 0)} suffix={t.min} emphasis />
+            <TotalCell label="Distance" value={n(totals.distance_m, 0)} suffix="m" />
+            <TotalCell label={t.plPerMin} value={avgPlPerMin != null ? avgPlPerMin.toFixed(2) : "–"} />
+            <TotalCell label="Vel B5" value={n(totals.vel_b5, 0)} suffix="m" />
+            <TotalCell label="Vel B6" value={n(totals.vel_b6, 0)} suffix="m" />
+            <TotalCell label="Accel B2-3" value={n(totals.accel_b23, 0)} />
+            <TotalCell label="Decel B2-3" value={n(totals.decel_b23, 0)} />
+          </div>
+        )}
 
         {/* Metabolic totals strip (only when any drill has MetPwr data) */}
         {totals.hasMetabolic && (
@@ -1247,8 +1260,33 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
               )}
             </div>
           {items.length === 0 ? (
-            <div className="p-4 text-center text-sm text-gray-500">
-              {t.noDrillsSelected}
+            <div className="p-5">
+              <div className="mb-3 text-center">
+                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </div>
+                <div className="text-sm font-semibold text-slate-900">{t.emptyTitle}</div>
+              </div>
+              <ol className="mx-auto max-w-md space-y-2 text-[12.5px] text-slate-600">
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700">1</span>
+                  <span>{t.emptyStep1.replace(/^1\.\s*/, "")}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700">2</span>
+                  <span>{t.emptyStep2.replace(/^2\.\s*/, "")}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700">3</span>
+                  <span>{t.emptyStep3.replace(/^3\.\s*/, "")}</span>
+                </li>
+              </ol>
+              <div className="mx-auto mt-4 max-w-md rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11.5px] text-amber-900">
+                {t.emptyTip}
+              </div>
             </div>
           ) : (
             <ul className="divide-y">
