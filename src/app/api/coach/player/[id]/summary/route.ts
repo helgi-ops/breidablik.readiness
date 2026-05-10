@@ -109,7 +109,7 @@ async function buildSummaryInput(
       .order("injury_date", { ascending: false })
       .limit(3),
     supabase.rpc("get_indoor_load_status", { p_player_id: playerId }),
-    supabase.from("players").select("full_name, position").eq("id", playerId).maybeSingle(),
+    supabase.from("players").select("full_name, position, team_id").eq("id", playerId).maybeSingle(),
     // Dos'Santos 2021 — Sharp Cut Load (proxy via IMA Band 3 decel)
     supabase
       .from("v_sharp_cut_hip_er_risk")
@@ -571,10 +571,32 @@ async function buildSummaryInput(
     ? { ...coachVerdict, state: friendlyVerdictState }
     : null;
 
+  // Today's planned day type from week_plans (TRAIN/RECOVERY/GAME/OFF).
+  // When OFF, the AI must NOT phrase recovery context as "today's session"
+  // or "warm-up" — there is no session today. We capture this here so the
+  // prompt has it as ground truth alongside the coach-visible verdict.
+  const todayDateIso = new Date().toISOString().slice(0, 10);
+  const playerTeamId = (playerInfo.data?.team_id as string | null) ?? null;
+  let teamDayType: string | null = null;
+  if (playerTeamId) {
+    const { data: wp } = await supabase
+      .from("week_plans")
+      .select("day_type")
+      .eq("team_id", playerTeamId)
+      .eq("day_date", todayDateIso)
+      .maybeSingle();
+    const dt = wp?.day_type as string | null | undefined;
+    teamDayType = dt ? String(dt).toUpperCase() : null;
+  }
+
   return {
     player_name:    (playerInfo.data?.full_name as string | null) ?? "Player",
     position:       (playerInfo.data?.position as string | null) ?? null,
     window_days:    windowDays,
+    // Today's planned day type — drives the OFF-day phrasing rule in the
+    // system prompt. When "OFF", the AI MUST frame everything as "next
+    // training day" not "today's session".
+    team_day_type:  teamDayType,
     // Ground-truth verdict the coach is currently looking at on screen,
     // with internal state codes normalised to human-readable labels.
     coach_visible_verdict: sanitisedCoachVerdict,
@@ -857,6 +879,24 @@ MATCH-DAY CONTEXT — CRITICAL:
 - If days_since_match = 2 (MD+2), load echo still partly normal but starting
   to fade — slight concern only if other signals also fire (sleep + soreness).
 
+OFF-DAY RULE — CRITICAL:
+- team_day_type comes from the team's week_plan for today and is one of
+  TRAIN / RECOVERY / GAME / OFF / null.
+- When team_day_type = "OFF", NO SESSION IS SCHEDULED TODAY. The summary
+  MUST NOT contain any of: "today's session", "warm-up", "before training",
+  "monitor him at warm-up", "push intensity", "ready for full work",
+  "post-match protocol applies", "modified session today", or any phrasing
+  that implies the player is training today.
+- Acceptable phrasing on OFF days:
+    "Off-day today — wellness check-in noted; verdicts resume on the next
+     training day."
+    "No training scheduled today; the recovery picture suggests <X> when
+     work resumes <next training day reference>."
+- You MAY still mention recent context (last match, recent load trend) but
+  always frame it as "context for the next training day", not "today".
+- When team_day_type is anything else (TRAIN/RECOVERY/GAME) or null, the
+  standard rules apply.
+
 MATCH-MINUTES RULE — CRITICAL:
 - match_context.match_minutes_played is the actual minutes the player was on
   the pitch in the match. high_match_minutes = true means he played 60+ min
@@ -1021,15 +1061,40 @@ const CLEARANCE_PHRASES = [
   /\bfull\s+session\s+today\b/i,
 ];
 
+// Phrases that imply a session is happening today — forbidden when the
+// team's week_plan marks today as OFF. Catches "monitor him at warm-up",
+// "before training", "post-match protocol applies", "ready for full work",
+// "modified session today", etc. so the AI can't contradict the OFF day
+// verdict the coach sees at the top of the modal.
+const OFF_DAY_FORBIDDEN_PHRASES = [
+  /\bwarm[-\s]?up\b/i,
+  /\bbefore (?:training|the session)\b/i,
+  /\b(?:today'?s|today is) (?:session|training|practice)\b/i,
+  /\bpush(?:ing)? (?:intensity|him today)\b/i,
+  /\bready for (?:full|max) (?:work|training|session|intensity)\b/i,
+  /\bpost[-\s]?match protocol applies\b/i,
+  /\bmodified session today\b/i,
+  /\bclear(?:ed)? for (?:a )?full session\b/i,
+];
+
 function validateSummary(
   text: string,
   windowDays: 7 | 14,
   coachVerdict: CoachVerdictInput,
   hasActiveInjury: boolean = false,
   hasRecentStrengthTest: boolean = false,
+  teamDayType: string | null = null,
 ): string | null {
   for (const re of FORBIDDEN_TERMS) {
     if (re.test(text)) return `Contains forbidden jargon/ratio: ${re.source}`;
+  }
+  // OFF-day override — catches phrases that imply training today.
+  if (String(teamDayType ?? "").toUpperCase() === "OFF") {
+    for (const re of OFF_DAY_FORBIDDEN_PHRASES) {
+      if (re.test(text)) {
+        return `Today is OFF day — forbidden phrase: "${re.source}"`;
+      }
+    }
   }
   // Strength-test override — strength-test phrases are forbidden when
   // no recent (≤4d) cmj/nordbord/forceframe was passed to the AI.
@@ -1213,12 +1278,16 @@ async function generateAndStore(
     // remains fresh" hallucinations when no CMJ/Nordbord/ForceFrame in the
     // last 4 days was actually visible to the model.
     const hasRecentStrengthTest = Boolean((input as { has_recent_strength_test?: boolean }).has_recent_strength_test);
+    // OFF-day awareness — passed to validator so we reject AI output that
+    // talks about "today's session", "warm-up", etc. when no training is
+    // scheduled today per the team's week_plan.
+    const teamDayType = (input as { team_day_type?: string | null }).team_day_type ?? null;
     summary = await callClaude(input);
-    issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest);
+    issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest, teamDayType);
     if (issues) {
       console.warn("[player-summary] First attempt failed validation, retrying", { issues });
       summary = await callClaude(input);
-      issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest);
+      issues = validateSummary(summary.summary, windowDays, coachVerdict, hasActiveInjury, hasRecentStrengthTest, teamDayType);
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

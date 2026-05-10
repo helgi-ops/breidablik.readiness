@@ -115,6 +115,12 @@ export type DecisionSummaryRow = {
    *  day where no session is scheduled. Wellness data still logged for
    *  trend continuity. */
   _team_day_type?: string | null;
+  /** High-intensity L/R Change-of-Direction asymmetry % over the last
+   *  14 days (Bishop 2020). Surfaced as a chronic-risk chip in the
+   *  Decision Summary modal when ≥ 15% — informational, NOT a verdict
+   *  modifier. Coaches use it to decide whether to skip max-effort
+   *  cutting drills today; the daily verdict pipeline stays clean. */
+  _cod_high_asym_pct?: number | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -498,6 +504,21 @@ function buildCoachActionBlock(
   displayAction: string | null,
   final: PrescriptionDecision | null
 ): ActionBlock {
+  // ── OFF_DAY ────────────────────────────────────────────────────────────
+  // Today is OFF in the team's week_plans — no session is scheduled.
+  // Wellness check-ins still feed the trend; the coach action is
+  // explicitly "no action required today" so the surface doesn't
+  // contradict the OFF day verdict at the top of the modal.
+  if (displayAction === "OFF_DAY") {
+    return {
+      headline: "No training scheduled today",
+      details: [
+        "Wellness check-in noted for trend continuity",
+        "Verdicts resume on the next training day",
+      ],
+    };
+  }
+
   // ── RECOVERY / HOLD ────────────────────────────────────────────────────
   if (displayAction === "RECOVERY" || displayAction === "HOLD") {
     const details: string[] = [];
@@ -2241,6 +2262,45 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                 </div>
               )}
             </>
+          );
+        })()}
+
+        {/* Chronic-risk chip — Bishop 2020 high-tier L/R CoD asymmetry over
+            14 days. Informational only (does NOT modify the verdict): coach
+            decides whether to swap max-effort cutting drills for unilateral
+            work today. We only render when:
+              - high-tier asymmetry ≥ 15% (concern + high zones)
+              - and the verdict isn't already RECOVERY/HOLD/OFF (where the
+                chip would be redundant — player isn't doing the high-intensity
+                work today anyway). */}
+        {(() => {
+          const pct = row._cod_high_asym_pct;
+          if (pct == null || !Number.isFinite(pct) || pct < 15) return null;
+          if (
+            displayAction === "RECOVERY" ||
+            displayAction === "HOLD" ||
+            displayAction === "OFF_DAY"
+          ) {
+            return null;
+          }
+          const isHigh = pct >= 18;
+          return (
+            <div
+              className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+                isHigh
+                  ? "border-rose-200 bg-rose-50 text-rose-900"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }`}
+              title="Bishop 2020: high-intensity L/R CoD asymmetry > 15% is the strongest predictor of non-contact lower-limb injury. Chronic baseline signal — does not change today's verdict."
+            >
+              <span className="mt-0.5 shrink-0">⚠️</span>
+              <span>
+                <span className="font-semibold">
+                  Chronic L/R asymmetry {pct.toFixed(1)}% (high-tier, 14d)
+                </span>
+                {" · "}Consider unilateral work or skip max-effort cutting drills today.
+              </span>
+            </div>
           );
         })()}
 
