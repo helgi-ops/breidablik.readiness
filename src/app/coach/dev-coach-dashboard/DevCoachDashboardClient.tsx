@@ -1976,6 +1976,16 @@ export default function CoachPage() {
   // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
   // Decision Summary modal — informational only, NOT a verdict modifier.
   const [playerCodHighAsym, setPlayerCodHighAsym] = useState<Record<string, number>>({});
+  // Sprint Speed Drop per player (today vs personal top-3 mean over 28d).
+  // Only stored when drop ≥ 3% AND the player has a HSR-meaningful session
+  // today AND ≥ 4 reference sessions in the window. Sub-3% is normal noise
+  // (Buchheit 2014). > 10% drop ≈ 3–4× hamstring injury risk (Edouard 2019,
+  // Malone 2018). Surfaced as informational chip in DecisionSummaryCard —
+  // does NOT modify today's verdict (verdict modulation deferred until
+  // 2–3 coaches confirm the rule fits their workflow).
+  const [playerSprintDrop, setPlayerSprintDrop] = useState<
+    Record<string, { dropPct: number; todayKmh: number; refKmh: number }>
+  >({});
   const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
   // VBT fatigue flags per player
   const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
@@ -3972,6 +3982,98 @@ export default function CoachPage() {
         if (alive) setPlayerCodHighAsym(out);
       } catch {
         // Silently ignore — chronic-risk chip simply won't render.
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
+
+  // ── Bulk Sprint Speed Drop per player (today vs personal top-3 mean 28d) ──
+  // Computes the same logic as src/lib/micropulse/sprintSpeedDrop/index.ts
+  // but inline against the team-batched query, so we make one round-trip
+  // for the whole squad. We coalesce max_velocity and max_vel (API sync vs
+  // CSV upload write to different columns historically) and gate by HSR ≥
+  // SPRINT_HSR_FLOOR — players who didn't sprint today aren't "suppressed".
+  // Only stored when drop ≥ 3% (above session-to-session noise; Buchheit 2014).
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) {
+      setPlayerSprintDrop({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const start = new Date(`${today}T00:00:00Z`);
+        start.setUTCDate(start.getUTCDate() - 27);
+        const startIso = start.toISOString().slice(0, 10);
+
+        const { data: pl } = await supabase
+          .from("players")
+          .select("id")
+          .eq("team_id", coachTeamId)
+          .eq("is_active", true);
+        if (!alive) return;
+        const playerIds = ((pl ?? []) as Array<{ id: string }>).map((r) => r.id);
+        if (playerIds.length === 0) {
+          setPlayerSprintDrop({});
+          return;
+        }
+
+        const { data: rows } = await supabase
+          .from("player_external_load_daily")
+          .select("player_id, date, max_velocity, max_vel, high_speed_distance")
+          .in("player_id", playerIds)
+          .eq("source", "catapult")
+          .gte("date", startIso)
+          .lte("date", today);
+        if (!alive) return;
+
+        const HSR_FLOOR_M = 200;
+        const MIN_REF = 4;
+        const TOP_N = 3;
+
+        const byPlayer = new Map<string, Array<{ date: string; mv: number; hsr: number }>>();
+        for (const id of playerIds) byPlayer.set(id, []);
+        for (const r of (rows ?? []) as Array<{
+          player_id: string;
+          date: string;
+          max_velocity: number | null;
+          max_vel: number | null;
+          high_speed_distance: number | null;
+        }>) {
+          const a = typeof r.max_velocity === "number" && Number.isFinite(r.max_velocity) ? r.max_velocity : null;
+          const b = typeof r.max_vel === "number" && Number.isFinite(r.max_vel) ? r.max_vel : null;
+          const mv = a != null && b != null ? Math.max(a, b) : (a ?? b);
+          const hsr = typeof r.high_speed_distance === "number" && Number.isFinite(r.high_speed_distance)
+            ? r.high_speed_distance : null;
+          if (mv == null || hsr == null) continue;
+          if (mv <= 0 || hsr < HSR_FLOOR_M) continue;
+          const arr = byPlayer.get(r.player_id);
+          if (arr) arr.push({ date: r.date, mv, hsr });
+        }
+
+        const out: Record<string, { dropPct: number; todayKmh: number; refKmh: number }> = {};
+        for (const [pid, sessions] of byPlayer) {
+          const todayRow = sessions.find((s) => s.date === today);
+          if (!todayRow) continue; // no HSR-meaningful session today → no drop to report
+          const refCandidates = sessions
+            .filter((s) => s.date !== today)
+            .map((s) => s.mv)
+            .sort((a, b) => b - a);
+          if (refCandidates.length < MIN_REF) continue;
+          const topN = refCandidates.slice(0, TOP_N);
+          const ref = topN.reduce((s, x) => s + x, 0) / topN.length;
+          const dropPct = ((ref - todayRow.mv) / ref) * 100;
+          if (dropPct < 3) continue; // sub-3% is normal noise
+          out[pid] = {
+            dropPct: Number(dropPct.toFixed(1)),
+            todayKmh: Number((todayRow.mv * 3.6).toFixed(1)),
+            refKmh: Number((ref * 3.6).toFixed(1)),
+          };
+        }
+        if (alive) setPlayerSprintDrop(out);
+      } catch {
+        // Silently ignore — sprint-drop chip simply won't render.
       }
     })();
     return () => { alive = false; };
@@ -7525,6 +7627,15 @@ export default function CoachPage() {
                 // Only set when ≥ 15% (concern + high zones); informational
                 // chip only — does NOT modify the verdict.
                 _cod_high_asym_pct: playerCodHighAsym[r.player_id] ?? null,
+                // Sprint Speed Drop today vs personal top-3 mean (28d).
+                // Edouard 2019 / Malone 2018 — > 10% drop = elevated hamstring
+                // injury risk. Only set when drop ≥ 3% AND HSR-meaningful
+                // session today AND ≥ 4 reference sessions exist. Informational
+                // chip only — does NOT modify the verdict (deferred until 2-3
+                // coaches confirm rule fit).
+                _sprint_drop_pct: playerSprintDrop[r.player_id]?.dropPct ?? null,
+                _sprint_today_kmh: playerSprintDrop[r.player_id]?.todayKmh ?? null,
+                _sprint_ref_kmh: playerSprintDrop[r.player_id]?.refKmh ?? null,
               };
 
               // Enrich with most recent GPS load from catapult history

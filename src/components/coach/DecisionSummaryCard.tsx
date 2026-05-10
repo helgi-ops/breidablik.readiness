@@ -121,6 +121,17 @@ export type DecisionSummaryRow = {
    *  modifier. Coaches use it to decide whether to skip max-effort
    *  cutting drills today; the daily verdict pipeline stays clean. */
   _cod_high_asym_pct?: number | null;
+  /** Drop in today's max sprint speed (m/s) vs the player's personal
+   *  reference (top-3 mean over 28d). Surfaced as a chip when ≥ 3% drop.
+   *  Sport-science background: > 10% drop ≈ 3–4× hamstring injury risk
+   *  (Edouard 2019, Malone 2018). Informational chip — coach decides
+   *  whether to cap top-end sprint exposure today. Verdict pipeline
+   *  unchanged for now (defer hard-rule until 2–3 coaches confirm fit). */
+  _sprint_drop_pct?: number | null;
+  /** Today's max sprint speed in km/h, for chip display. */
+  _sprint_today_kmh?: number | null;
+  /** Personal-peak reference in km/h, for chip display. */
+  _sprint_ref_kmh?: number | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -2299,6 +2310,57 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                   Chronic L/R asymmetry {pct.toFixed(1)}% (high-tier, 14d)
                 </span>
                 {" · "}Consider unilateral work or skip max-effort cutting drills today.
+              </span>
+            </div>
+          );
+        })()}
+
+        {/* Sprint Speed Drop chip — Edouard 2019 / Malone 2018 / Buchheit 2014.
+            A drop in today's max sprint velocity vs the player's personal
+            top-3 mean over 28d is one of the strongest hamstring-injury
+            predictors. Render only when:
+              - drop ≥ 3% (above session-to-session noise threshold)
+              - and the verdict isn't already RECOVERY/HOLD/OFF (player
+                isn't doing high-intensity work today anyway).
+            Informational chip — does NOT modify today's verdict. */}
+        {(() => {
+          const drop = row._sprint_drop_pct;
+          if (drop == null || !Number.isFinite(drop) || drop < 3) return null;
+          if (
+            displayAction === "RECOVERY" ||
+            displayAction === "HOLD" ||
+            displayAction === "OFF_DAY"
+          ) {
+            return null;
+          }
+          const today = row._sprint_today_kmh;
+          const ref = row._sprint_ref_kmh;
+          const isHigh = drop >= 12;
+          const isConcern = drop >= 7;
+          const tone = isHigh
+            ? "border-rose-200 bg-rose-50 text-rose-900"
+            : isConcern
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : "border-amber-100 bg-amber-50/60 text-amber-900";
+          const action = isHigh
+            ? "Avoid maximal sprint exposure today — high hamstring-injury band."
+            : isConcern
+              ? "Cap top-end sprints; monitor closely."
+              : "Watch trend over next 1–2 sessions.";
+          const ctx = today != null && ref != null
+            ? ` (${today.toFixed(1)} vs ${ref.toFixed(1)} km/h)`
+            : "";
+          return (
+            <div
+              className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
+              title="Edouard 2019 / Malone 2018: a > 10% drop in maximal sprint speed vs personal peak is associated with 3–4× higher hamstring-injury risk. Today's max velocity is compared to the top-3 mean over the last 28 days."
+            >
+              <span className="mt-0.5 shrink-0">🏃</span>
+              <span>
+                <span className="font-semibold">
+                  Sprint speed −{drop.toFixed(1)}% vs personal peak{ctx}
+                </span>
+                {" · "}{action}
               </span>
             </div>
           );
