@@ -7448,8 +7448,22 @@ export default function CoachPage() {
                 const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
                 const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
                 const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
-                const rec = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
-                const externalLoadLine = teamExternalLoadSummary?.summaryLines[0] ?? null;
+                // OFF day override — when the week-plan or auto-classifier marks
+                // today as a rest day, the load-based "consider RECOVERY" text
+                // becomes nonsense (there's no session to modify, no high-risk
+                // players to protect from training that isn't happening).
+                // Surface a coach-friendly OFF day message instead and hide the
+                // load-context lines that don't apply.
+                const isOffDay = teamDayType === "OFF" || dayStateInfo.state === "OFF_DAY";
+                const recDefault = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
+                const rec = isOffDay
+                  ? (lang === "IS"
+                      ? "Frídagur — engin æfing í dag. Notaðu morguninn til að ljúka skráningum, recovery-protocols og að fara yfir gögnin frá síðustu æfingu."
+                      : "Rest day — no session today. Use the morning to close out check-ins, run recovery protocols, and review yesterday's data.")
+                  : recDefault;
+                const externalLoadLine = isOffDay
+                  ? null
+                  : (teamExternalLoadSummary?.summaryLines[0] ?? null);
                 const nFull = teamSignal?.n_full ?? 0;
                 const nReduced = teamSignal?.n_reduced ?? 0;
                 const nRecovery = teamSignal?.n_recovery ?? 0;
@@ -7568,10 +7582,27 @@ export default function CoachPage() {
                     </div>
 
                     <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
-                      <div className="text-[10px] uppercase tracking-wide opacity-80">Coach recommendation</div>
+                      <div className="text-[10px] uppercase tracking-wide opacity-80">
+                        {isOffDay ? (lang === "IS" ? "Dagurinn í dag" : "Today") : "Coach recommendation"}
+                      </div>
                       <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
+                      {/* Day-state context row.
+                          Default: shows internal state code + reason (useful for
+                          the engine-aware coach when verdicts feel off).
+                          On OFF days the raw state code is jargon — show a
+                          plain-language confirmation instead. */}
                       <div className="mt-2 text-xs text-slate-600">
-                        Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
+                        {isOffDay ? (
+                          <>
+                            {lang === "IS"
+                              ? "Frídagur staðfestur úr week-plan. Engin æfing skráð fyrir liðið í dag."
+                              : "Confirmed rest day from the week plan. No team session scheduled today."}
+                          </>
+                        ) : (
+                          <>
+                            Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
+                          </>
+                        )}
                       </div>
                       {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
                     </div>
