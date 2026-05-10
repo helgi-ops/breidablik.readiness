@@ -7448,19 +7448,177 @@ export default function CoachPage() {
                 const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
                 const neuralState = String(teamNeuralSummary?.dominantState ?? "—");
                 const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
-                // OFF day override — when the week-plan or auto-classifier marks
-                // today as a rest day, the load-based "consider RECOVERY" text
-                // becomes nonsense (there's no session to modify, no high-risk
-                // players to protect from training that isn't happening).
-                // Surface a coach-friendly OFF day message instead and hide the
-                // load-context lines that don't apply.
+                // OFF day detection — drives both the narrative builder
+                // and which secondary lines we surface below.
                 const isOffDay = teamDayType === "OFF" || dayStateInfo.state === "OFF_DAY";
-                const recDefault = summaryLines(teamIntel?.recommendation ?? risk.recommendation, 1)[0] ?? "—";
-                const rec = isOffDay
-                  ? (lang === "IS"
-                      ? "Frídagur — engin æfing í dag. Notaðu morguninn til að ljúka skráningum, recovery-protocols og að fara yfir gögnin frá síðustu æfingu."
-                      : "Rest day — no session today. Use the morning to close out check-ins, run recovery protocols, and review yesterday's data.")
-                  : recDefault;
+
+                // ── Coach narrative builder ─────────────────────────────
+                // Reads every tile in Today Command Center and stitches a
+                // 1–2 sentence headline + per-signal detail + 1–3 action
+                // bullets in plain coach language. Goal: coach can read
+                // this in 5 seconds and know exactly what to do today
+                // WITHOUT having to interpret the raw tile values.
+                //
+                // Build is deterministic (no LLM) so it's instant, never
+                // hallucinates, and works offline. Inputs come from the
+                // same state the tiles consume — single source of truth.
+                const nFullN = teamSignal?.n_full ?? 0;
+                const nReducedN = teamSignal?.n_reduced ?? 0;
+                const nRecoveryN = teamSignal?.n_recovery ?? 0;
+                const nTotal = nFullN + nReducedN + nRecoveryN;
+                const volPct = typeof teamIntel?.volatility_pct === "number" ? teamIntel.volatility_pct : null;
+                const volCount = teamIntel?.n_volatile ?? 0;
+                const avgRisk = typeof teamPerformanceIntelligence?.averageRiskScore === "number"
+                  ? teamPerformanceIntelligence.averageRiskScore : null;
+                const protectedCount = teamRulesSummary?.protectedPlayersCount ?? 0;
+                const adjustedCount = teamRulesSummary?.overriddenPlayersCount ?? 0;
+                const baselineMaturity = String(teamIntel?.baseline_maturity ?? "—");
+                const baselineCount = teamIntel?.n_players ?? 0;
+                const fatigueLow = fatigueDominant === "normal" || fatigueDominant === "—" || fatigueDominant === "none" || fatigueDominant.toLowerCase() === "none";
+                const neuralStable = /stable|normal|peaked/i.test(neuralState);
+                const nextDayLow = /low|safe/i.test(nextDayRisk);
+                const fatigueLabelLower = fatigueDominant.toLowerCase().replace(/_fatigue$/, "");
+
+                const narrative: { headline: string; detail: string; bullets: string[] } = (() => {
+                  // OFF day path — different story entirely
+                  if (isOffDay) {
+                    const bullets: string[] = [];
+                    if (volCount > 0) {
+                      bullets.push(lang === "IS"
+                        ? `${volCount} leikmaður er sveiflukenndur — sendu quick check-in í gegnum kerfið.`
+                        : `${volCount} player is volatile — send a quick check-in via the system.`);
+                    }
+                    if (protectedCount > 0 || adjustedCount > 0) {
+                      bullets.push(lang === "IS"
+                        ? `Yfirfar Recovery Protocols fyrir ${protectedCount + adjustedCount} leikmenn sem eru í protected/adjusted stöðu.`
+                        : `Review Recovery Protocols for the ${protectedCount + adjustedCount} player(s) currently protected/adjusted.`);
+                    }
+                    if (nReducedN === 0 && nRecoveryN === 0 && volCount === 0) {
+                      bullets.push(lang === "IS"
+                        ? "Ekkert að fylgjast með í dag — góður dagur til að skipuleggja næstu æfingu."
+                        : "Nothing flagged today — good day to plan tomorrow's session.");
+                    }
+                    return {
+                      headline: lang === "IS" ? "Frídagur — ekkert á dagskrá fyrir liðið." : "Rest day — no session for the squad.",
+                      detail: lang === "IS"
+                        ? `${nFullN} af ${nTotal} skiluðu wellness check-in og halda baseline-trendinu gangandi. Nýttu daginn í recovery og undirbúning.`
+                        : `${nFullN} of ${nTotal} completed wellness check-in to keep the baseline trend running. Use the day for recovery and prep.`,
+                      bullets,
+                    };
+                  }
+
+                  // Training day path — risk-driven narrative
+                  const headline: string = (() => {
+                    if (risk.level === "HIGH") {
+                      return lang === "IS"
+                        ? `Áhættudagur — ${nReducedN + nRecoveryN} af ${nTotal} eru ekki klárir í fulla æfingu.`
+                        : `Caution day — ${nReducedN + nRecoveryN} of ${nTotal} aren't ready for a full session.`;
+                    }
+                    if (risk.level === "CAUTION") {
+                      return lang === "IS"
+                        ? `Blandaður dagur — meirihluti tilbúinn en ${nReducedN + nRecoveryN} þurfa breytt eða styttra plan.`
+                        : `Mixed day — most are ready but ${nReducedN + nRecoveryN} need a modified or shortened session.`;
+                    }
+                    if (nFullN === nTotal && fatigueLow && neuralStable && nextDayLow) {
+                      return lang === "IS"
+                        ? `Liðið er hresst og tilbúið — öruggur dagur til að keyra hörð plön.`
+                        : `Squad is fresh and ready — safe day to run a hard session.`;
+                    }
+                    return lang === "IS"
+                      ? `Liðið er nokkuð stöðugt — keyra plan eins og venjulega.`
+                      : `Squad is broadly stable — run the plan as normal.`;
+                  })();
+
+                  const sentences: string[] = [];
+                  // Sentence 1: availability
+                  if (nReducedN === 0 && nRecoveryN === 0) {
+                    sentences.push(lang === "IS"
+                      ? `Allir ${nFullN} klárir í fulla æfingu.`
+                      : `All ${nFullN} cleared for a full session.`);
+                  } else {
+                    const parts: string[] = [];
+                    if (nFullN > 0) parts.push(lang === "IS" ? `${nFullN} klárir` : `${nFullN} ready`);
+                    if (nReducedN > 0) parts.push(lang === "IS" ? `${nReducedN} skerðing` : `${nReducedN} reduced`);
+                    if (nRecoveryN > 0) parts.push(lang === "IS" ? `${nRecoveryN} í recovery` : `${nRecoveryN} in recovery`);
+                    sentences.push(parts.join(" · ") + ".");
+                  }
+
+                  // Sentence 2: fatigue / neural / next-day context
+                  const ctx: string[] = [];
+                  if (!fatigueLow) {
+                    ctx.push(lang === "IS"
+                      ? `ríkjandi þreyta er ${fatigueLabelLower}`
+                      : `dominant fatigue is ${fatigueLabelLower}`);
+                  }
+                  if (!neuralStable) {
+                    ctx.push(lang === "IS"
+                      ? `taugaálag ${neuralState.toLowerCase()}`
+                      : `neural load ${neuralState.toLowerCase()}`);
+                  }
+                  if (!nextDayLow) {
+                    ctx.push(lang === "IS"
+                      ? `morgundagsáhætta ${nextDayRisk.toLowerCase()}`
+                      : `next-day risk ${nextDayRisk.toLowerCase()}`);
+                  }
+                  if (volPct != null && volPct >= 25) {
+                    ctx.push(lang === "IS"
+                      ? `${volPct.toFixed(0)}% sveiflukennt (${volCount} leikm.)`
+                      : `${volPct.toFixed(0)}% volatile (${volCount} player${volCount === 1 ? "" : "s"})`);
+                  }
+                  if (avgRisk != null && avgRisk >= 60) {
+                    ctx.push(lang === "IS"
+                      ? `meðaláhætta liðsins ${avgRisk.toFixed(0)}/100`
+                      : `team avg risk ${avgRisk.toFixed(0)}/100`);
+                  }
+                  if (ctx.length > 0) {
+                    sentences.push((lang === "IS" ? "Sjáanlegt: " : "Notable: ") + ctx.join(", ") + ".");
+                  } else if (fatigueLow && neuralStable && nextDayLow) {
+                    sentences.push(lang === "IS"
+                      ? `Engin þreytutilhneiging, taugaálag stöðugt og morgundagsáhætta lág.`
+                      : `No fatigue dominance, nervous system stable, low next-day risk.`);
+                  }
+
+                  // Sentence 3: baseline confidence note (only if low)
+                  if (baselineMaturity.toLowerCase() === "calibrating" || baselineMaturity.toLowerCase() === "building") {
+                    sentences.push(lang === "IS"
+                      ? `Athugaðu að baseline er enn að byggjast hjá ${baselineCount} leikmönnum — verdict-irnir geta hreyfst þegar fleiri dagar safnast saman.`
+                      : `Note: baselines are still building for ${baselineCount} players — verdicts may shift as more sessions accrue.`);
+                  }
+
+                  // Action bullets
+                  const bullets: string[] = [];
+                  if (risk.level === "HIGH") {
+                    bullets.push(lang === "IS"
+                      ? `Lækka heildaráreynslu um ~30%, sleppa þungum eccentrics og lengja recovery-blokkir.`
+                      : `Cut total load by ~30%, drop heavy eccentrics, extend recovery blocks.`);
+                  } else if (risk.level === "CAUTION") {
+                    bullets.push(lang === "IS"
+                      ? `Halda gæðum á key actions en lækka volume (~20% færri sets) hjá þeim sem eru REDUCED.`
+                      : `Keep quality on key actions but trim volume (~20% fewer sets) for the REDUCED group.`);
+                  }
+                  if (nRecoveryN > 0) {
+                    bullets.push(lang === "IS"
+                      ? `${nRecoveryN} leikmaður í recovery — pull úr hörðum blokkum, gefðu individual recovery plan.`
+                      : `${nRecoveryN} player(s) in recovery — pull from hard blocks, assign individual recovery plan.`);
+                  }
+                  if (nReducedN > 0 && risk.level !== "HIGH") {
+                    bullets.push(lang === "IS"
+                      ? `Cap PL á ${nReducedN} REDUCED leikmönnum við ~60–80% af plani.`
+                      : `Cap PL for the ${nReducedN} REDUCED player(s) at ~60–80% of plan.`);
+                  }
+                  if (volPct != null && volPct >= 30 && volCount > 0) {
+                    bullets.push(lang === "IS"
+                      ? `${volCount} leikmaður er sveiflukenndur — fyrsta 10 mín warm-up er gott eyrnaslag á dagsformi.`
+                      : `${volCount} player(s) volatile — first 10 min of warm-up is your read on today's form.`);
+                  }
+                  if (bullets.length === 0) {
+                    bullets.push(lang === "IS"
+                      ? `Keyra plan eins og venjulega — ekkert sem þarf að breyta.`
+                      : `Run the plan as designed — nothing needs to change.`);
+                  }
+
+                  return { headline, detail: sentences.join(" "), bullets };
+                })();
                 const externalLoadLine = isOffDay
                   ? null
                   : (teamExternalLoadSummary?.summaryLines[0] ?? null);
@@ -7583,15 +7741,32 @@ export default function CoachPage() {
 
                     <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
                       <div className="text-[10px] uppercase tracking-wide opacity-80">
-                        {isOffDay ? (lang === "IS" ? "Dagurinn í dag" : "Today") : "Coach recommendation"}
+                        {isOffDay ? (lang === "IS" ? "Dagurinn í dag" : "Today") : (lang === "IS" ? "Túlkun MicroPulse" : "MicroPulse interpretation")}
                       </div>
-                      <div className="mt-2 text-base font-semibold text-slate-900">{rec}</div>
+
+                      {/* Coach narrative — built deterministically from the
+                          tile values above. Headline → 1–2 sentence story →
+                          1–3 action bullets. Coach can read this and act
+                          without scanning every tile. */}
+                      <div className="mt-2 text-base font-semibold text-slate-900">{narrative.headline}</div>
+                      <div className="mt-1.5 text-sm text-slate-700 leading-relaxed">{narrative.detail}</div>
+                      {narrative.bullets.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                          {narrative.bullets.map((b, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="mt-0.5 shrink-0 text-slate-500">→</span>
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
                       {/* Day-state context row.
-                          Default: shows internal state code + reason (useful for
-                          the engine-aware coach when verdicts feel off).
+                          Default: shows internal state code + reason (useful
+                          for the engine-aware coach when verdicts feel off).
                           On OFF days the raw state code is jargon — show a
                           plain-language confirmation instead. */}
-                      <div className="mt-2 text-xs text-slate-600">
+                      <div className="mt-3 border-t border-slate-200/70 pt-2 text-xs text-slate-600">
                         {isOffDay ? (
                           <>
                             {lang === "IS"
@@ -7600,11 +7775,12 @@ export default function CoachPage() {
                           </>
                         ) : (
                           <>
-                            Day state diagnostic: <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
+                            <span className="opacity-70">{lang === "IS" ? "Bakgrunnur" : "Diagnostic"}: </span>
+                            <span className="font-medium text-slate-700">{dayStateInfo.state}</span> · {dayStateInfo.reason}
                           </>
                         )}
                       </div>
-                      {externalLoadLine ? <div className="mt-2 text-xs text-slate-600">External load: <span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
+                      {externalLoadLine ? <div className="mt-1 text-xs text-slate-600"><span className="opacity-70">{lang === "IS" ? "Ytra álag" : "External load"}: </span><span className="font-medium text-slate-700">{externalLoadLine}</span></div> : null}
                     </div>
                   </>
                 );
