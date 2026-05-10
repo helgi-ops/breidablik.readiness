@@ -1931,6 +1931,17 @@ export default function CoachPage() {
 
   // MLI + Metabolic Load per player (for Decision Summary enrichment)
   const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
+  // Most recent match minutes per player — feeds the MD+1 hard-recovery
+  // guardrail in DecisionSummaryCard. Carling 2018 / Nédélec 2012 / Helsen
+  // 2018: 60+ minute match triggers 24-72h recovery debt.
+  const [playerMatchMinutes, setPlayerMatchMinutes] = useState<
+    Record<string, { minutes_played: number; match_date: string }>
+  >({});
+  // Team's planned day type from week_plans for `today`. When "OFF", the
+  // Decision Summary modal shows a neutral "OFF day — no training scheduled"
+  // verdict instead of asserting a load/wellness recommendation that would
+  // be misleading on a non-training day.
+  const [teamDayType, setTeamDayType] = useState<string | null>(null);
   const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
   // VBT fatigue flags per player
   const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
@@ -3800,6 +3811,67 @@ export default function CoachPage() {
     loadReminderStatus(today);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachVerified, today]);
+
+  // ── Match minutes (last 3 days) per player ────────────────────────────
+  // Powers the MD+1 hard-recovery guardrail in DecisionSummaryCard:
+  // 60+ min played in yesterday's match → today's verdict force-mapped to
+  // RECOVERY, regardless of how the load engine reads.
+  useEffect(() => {
+    if (!coachVerified) return;
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await getCoachAuthHeaders();
+        const res = await fetch(
+          `/api/coach/team/match-minutes?date=${encodeURIComponent(today)}`,
+          { headers },
+        );
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          ok: boolean;
+          byPlayer: Record<string, { minutes_played: number; match_date: string }>;
+        };
+        if (alive && json?.byPlayer) setPlayerMatchMinutes(json.byPlayer);
+      } catch {
+        // Silently ignore — guardrail simply won't trigger when data is missing.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, today]);
+
+  // ── Team's planned day type for today (week_plans.day_type) ───────────
+  // When OFF, the Decision Summary modal swaps its verdict to "OFF day"
+  // instead of falsely asserting a load or wellness verdict for a day
+  // where no session is scheduled. Wellness check-ins are still captured
+  // and feed the trend; only the headline changes.
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) {
+      setTeamDayType(null);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("week_plans")
+          .select("day_type")
+          .eq("team_id", coachTeamId)
+          .eq("day_date", today)
+          .maybeSingle();
+        if (!alive) return;
+        if (error) return;
+        const dt = data?.day_type as string | null | undefined;
+        setTeamDayType(dt ? String(dt).toUpperCase() : null);
+      } catch {
+        // Silently ignore — verdict simply won't switch to OFF_DAY.
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
 
   // coach display name
   useEffect(() => {
@@ -7249,6 +7321,16 @@ export default function CoachPage() {
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
             <DecisionSummaryCard rows={rows.map((r) => {
+              // Match-minutes lookup (powers MD+1 hard-recovery guardrail)
+              const matchMin = playerMatchMinutes[r.player_id] ?? null;
+              const matchMinutesEnrichment = {
+                _yesterday_match_minutes: matchMin?.minutes_played ?? null,
+                _yesterday_match_date: matchMin?.match_date ?? null,
+                // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
+                // Drives the OFF_DAY verdict override in the modal.
+                _team_day_type: teamDayType,
+              };
+
               // Enrich with most recent GPS load from catapult history
               // Try entry date first (today), then yesterday
               const ed = r.entry_date ?? today;
@@ -7404,6 +7486,7 @@ export default function CoachPage() {
 
               return {
                 ...r,
+                ...matchMinutesEnrichment,
                 _yesterday_load: yRow ? {
                   totalDistance: yRow.totalDistance ?? null,
                   playerLoad: yRow.playerLoad ?? null,

@@ -97,6 +97,24 @@ export type DecisionSummaryRow = {
   _today_composite_score?: number | null;
   /** Composite load concern band: "none" | "low" | "moderate" | "high". */
   _today_composite_concern?: "none" | "low" | "moderate" | "high" | null;
+  /** Minutes the player was on the pitch in the most recent match (DNP excluded).
+   *  When ≥60 AND today is MD+1, the verdict is force-mapped to RECOVERY
+   *  irrespective of the load engine — sport-science consensus
+   *  (Carling 2018, Nédélec 2012, Helsen 2018).
+   *  Populated by the coach dashboard from match_player_minutes; null when
+   *  no match data is available. */
+  _yesterday_match_minutes?: number | null;
+  /** ISO date of the match the minutes refer to. Used to verify the
+   *  minutes data is actually from yesterday before triggering the
+   *  guardrail. */
+  _yesterday_match_date?: string | null;
+  /** Team's planned day type from week_plans for today
+   *  ("TRAIN" | "RECOVERY" | "GAME" | "OFF" | null).
+   *  When "OFF", the verdict is force-mapped to OFF_DAY so the modal
+   *  doesn't claim "load picture cleared full" or "mixed signals" on a
+   *  day where no session is scheduled. Wellness data still logged for
+   *  trend continuity. */
+  _team_day_type?: string | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -240,9 +258,36 @@ function applyOverrideGuardrail(
   row: DecisionSummaryRow,
   systemAction: string | null,
 ): string | null {
+  // ── HARD OVERRIDE: today is OFF day per team's week_plans ─────────────
+  // No training is scheduled today. The load/wellness verdicts ("Cleared
+  // full", "Mixed signals", etc.) are misleading on OFF days because
+  // they imply a session that isn't happening. Wellness data is still
+  // captured for trend continuity but the verdict surface should reflect
+  // the team's planned day.
+  // Coach can still see all the underlying data inside the modal; this
+  // only changes the headline.
+  if (String(row._team_day_type ?? "").toUpperCase() === "OFF") {
+    return "OFF_DAY";
+  }
+
+  // ── HARD OVERRIDE: 60+ min match yesterday → MD+1 = RECOVERY ───────────
+  // Sport-science consensus (Carling 2018, Nédélec 2012, Helsen 2018):
+  // playing 60+ minutes triggers meaningful 24-72h recovery debt
+  // (CK + perceived fatigue elevated). MD+1 is recovery regardless of how
+  // the load engine reads — coach can still manually override with full
+  // knowledge of the trade-off.
+  if (
+    (action === "FULL" || action === "MODIFIED" || action === "FULL_OVERRIDE_RISKY") &&
+    row._yesterday_match_minutes != null &&
+    row._yesterday_match_minutes >= 60 &&
+    isYesterday(row._yesterday_match_date ?? null)
+  ) {
+    return "RECOVERY";
+  }
+
   if (action !== "FULL") return action;
 
-  // STEN-based detection (primary path — mirrors stenOverrideWarning)
+  // ── STEN-based engine-conflict detection (mirrors stenOverrideWarning)
   const z = row._z_today;
   const stenOverride =
     z != null && Number.isFinite(z) && zToSten(z) <= 4;
@@ -253,6 +298,18 @@ function applyOverrideGuardrail(
 
   if (stenOverride || explicitOverride) return "FULL_OVERRIDE_RISKY";
   return action;
+}
+
+/** Returns true when the supplied ISO date is exactly one calendar day
+ *  before today (UTC). Used to confirm the match-minutes field actually
+ *  refers to yesterday before triggering the MD+1 guardrail. */
+function isYesterday(iso: string | null): boolean {
+  if (!iso) return false;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const day = new Date(`${iso}T00:00:00Z`);
+  const diff = (today.getTime() - day.getTime()) / 86_400_000;
+  return diff === 1;
 }
 
 // ── Text helpers ──────────────────────────────────────────────────────────
@@ -609,6 +666,21 @@ const STATE_CONFIG: Record<string, StateConfig> = {
     actionHeadlineClass: "text-amber-900",
     sortPriority: 2,
   },
+  // Today is OFF day per team's week_plans — no training scheduled.
+  // Wellness check-in still logged (so the trend continues), but the
+  // verdict surface is neutral instead of asserting a load/wellness verdict.
+  OFF_DAY: {
+    label: "OFF",
+    emoji: "🌙",
+    topBarClass: "bg-slate-400",
+    cardBorderClass: "border-slate-200",
+    cardBgClass: "bg-slate-50/40",
+    badgeBgClass: "bg-slate-500",
+    badgeTextClass: "text-white",
+    actionBgClass: "bg-slate-100 border-slate-200",
+    actionHeadlineClass: "text-slate-800",
+    sortPriority: 4, // sort after FULL — least urgent
+  },
 };
 
 const UNKNOWN_STATE: StateConfig = {
@@ -691,6 +763,21 @@ const VERDICT_MAP: Record<string, BilingualVerdict> = {
     recommendation: {
       EN: "Medical/injury hold — do not include in team session",
       IS: "Medical/injury hold — ekki hafa með í team-session",
+    },
+  },
+  // OFF day per team's week_plans — no session scheduled. Wellness
+  // check-in is still captured for trend continuity but the engine
+  // verdict is neutral instead of asserting a load/wellness recommendation.
+  OFF_DAY: {
+    icon: "🌙",
+    label: { EN: "OFF day", IS: "Frídagur" },
+    sentence: {
+      EN: "No training scheduled today",
+      IS: "Engin æfing skráð í dag",
+    },
+    recommendation: {
+      EN: "Wellness check-in noted for trend. No action required today — verdicts resume on the next training day.",
+      IS: "Líðan-check-in skráð fyrir trend. Engin aðgerð í dag — verdicts halda áfram næsta æfingadag.",
     },
   },
 };
