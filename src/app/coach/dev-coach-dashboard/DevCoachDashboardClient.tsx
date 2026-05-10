@@ -476,6 +476,35 @@ type Row = {
 /** -----------------------------
  * Helpers (safe parsing etc.)
  * ----------------------------- */
+
+/** Small "i" info icon with hover/focus tooltip — used on Today Command Center
+ *  tiles. Mirrors the pattern from /coach/decel-intelligence so coaches get a
+ *  consistent way to learn what each metric means without needing a manual.
+ *  Tooltip is anchored bottom-left so it doesn't get clipped by the right
+ *  edge of the grid. */
+function CommandTileInfo({ title, info }: { title: string; info: string }) {
+  return (
+    <span className="relative inline-flex group">
+      <button
+        type="button"
+        aria-label={`More info about ${title}`}
+        className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current text-[9px] font-bold opacity-70 hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-current"
+      >
+        i
+      </button>
+      <span
+        role="tooltip"
+        // opacity-100 here is a defence in depth — even if the tile/parent
+        // applies opacity, this span starts a fresh stacking context via
+        // `isolate` and stays fully opaque so the text is readable.
+        className="invisible group-hover:visible group-focus-within:visible absolute left-0 top-5 z-50 w-72 rounded-md border border-slate-200 bg-white p-3 text-[11px] leading-relaxed text-slate-700 shadow-lg normal-case tracking-normal font-normal opacity-100 isolate"
+      >
+        {info}
+      </span>
+    </span>
+  );
+}
+
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -7322,13 +7351,49 @@ export default function CoachPage() {
                 const nFull = teamSignal?.n_full ?? 0;
                 const nReduced = teamSignal?.n_reduced ?? 0;
                 const nRecovery = teamSignal?.n_recovery ?? 0;
-                const statusTiles = [
-                  { label: "Full", value: String(nFull), sub: "Availability", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-                  { label: "Reduced", value: String(nReduced), sub: "Modified", tone: "border-amber-200 bg-amber-50 text-amber-800" },
-                  { label: "Recovery", value: String(nRecovery), sub: "Protected", tone: "border-rose-200 bg-rose-50 text-rose-800" },
-                  { label: "Dominant fatigue", value: fatigueDominant, sub: "Team signal", tone: "border-slate-200 bg-slate-50 text-slate-800" },
-                  { label: "Neural load", value: neuralState, sub: "Current state", tone: "border-slate-200 bg-slate-50 text-slate-800" },
-                  { label: "Next-day risk", value: nextDayRisk, sub: "Forecast", tone: "border-slate-200 bg-slate-50 text-slate-800" },
+                const statusTiles: Array<{ label: string; value: string; sub: string; tone: string; info: string }> = [
+                  {
+                    label: "Full",
+                    value: String(nFull),
+                    sub: "Availability",
+                    tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+                    info: "Players cleared for full training today — no readiness or load red flags. Hard sessions are safe for these players.",
+                  },
+                  {
+                    label: "Reduced",
+                    value: String(nReduced),
+                    sub: "Modified",
+                    tone: "border-amber-200 bg-amber-50 text-amber-800",
+                    info: "Players who should still train but with adjustments — lower volume, skip the hardest blocks, or cap PL around ~60–80% of plan.",
+                  },
+                  {
+                    label: "Recovery",
+                    value: String(nRecovery),
+                    sub: "Protected",
+                    tone: "border-rose-200 bg-rose-50 text-rose-800",
+                    info: "Players who need a recovery day instead of training — high fatigue, illness, return-to-play, or 60+ match minutes yesterday.",
+                  },
+                  {
+                    label: "Dominant fatigue",
+                    value: fatigueDominant,
+                    sub: "Team signal",
+                    tone: "border-slate-200 bg-slate-50 text-slate-800",
+                    info: "The most common fatigue type across the squad today (neural, metabolic, mechanical, perceptual). Helps you decide what kind of session would hit hardest right now.",
+                  },
+                  {
+                    label: "Neural load",
+                    value: neuralState,
+                    sub: "Current state",
+                    tone: "border-slate-200 bg-slate-50 text-slate-800",
+                    info: "Squad-level central nervous system state, read from VBT / jump tests and wellness trends. Stable = nervous system is responding normally · Suppressed = needs recovery before another high-output day.",
+                  },
+                  {
+                    label: "Next-day risk",
+                    value: nextDayRisk,
+                    sub: "Forecast",
+                    tone: "border-slate-200 bg-slate-50 text-slate-800",
+                    info: "Forecast of how the squad will look tomorrow based on today's load and recent trajectory. Low = safe to plan a hard session tomorrow · Elevated = expect more reds.",
+                  },
                 ];
 
                 return (
@@ -7342,7 +7407,10 @@ export default function CoachPage() {
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                       {statusTiles.map((tile) => (
                         <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
-                          <div className="text-[10px] uppercase tracking-wide opacity-80">{tile.label}</div>
+                          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                            <span className="opacity-80">{tile.label}</span>
+                            <CommandTileInfo title={tile.label} info={tile.info} />
+                          </div>
                           <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
                           <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
                         </div>
@@ -7352,22 +7420,46 @@ export default function CoachPage() {
                     {/* Compact intelligence row — unique metrics from removed intel tab */}
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       <div className={`${compactTileClass} border-violet-200 bg-violet-50 text-violet-800`}>
-                        <div className="text-[10px] uppercase tracking-wide opacity-80">Volatility</div>
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                          <span className="opacity-80">Volatility</span>
+                          <CommandTileInfo
+                            title="Volatility"
+                            info="% of the squad whose readiness or load is bouncing around outside their normal range. High volatility = unpredictable response — expect more variance in how players show up to the next session."
+                          />
+                        </div>
                         <div className="mt-1 text-lg font-semibold tabular-nums">{teamIntel?.volatility_pct != null ? `${teamIntel.volatility_pct}%` : "—"}</div>
                         <div className="mt-1 text-xs opacity-75">{teamIntel?.n_volatile ?? 0} volatile</div>
                       </div>
                       <div className={`${compactTileClass} border-blue-200 bg-blue-50 text-blue-800`}>
-                        <div className="text-[10px] uppercase tracking-wide opacity-80">Avg risk</div>
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                          <span className="opacity-80">Avg risk</span>
+                          <CommandTileInfo
+                            title="Avg risk"
+                            info="Squad's average injury-risk score (0–100), driven by recent load spikes, asymmetries, prior injuries and acute flags. Watch the trend more than the absolute number — a steady rise across sessions matters more than today's value."
+                          />
+                        </div>
                         <div className="mt-1 text-lg font-semibold tabular-nums">{teamPerformanceIntelligence?.averageRiskScore != null ? teamPerformanceIntelligence.averageRiskScore.toFixed(1) : "—"}</div>
                         <div className="mt-1 text-xs opacity-75">Team average</div>
                       </div>
                       <div className={`${compactTileClass} border-slate-200 bg-slate-50 text-slate-800`}>
-                        <div className="text-[10px] uppercase tracking-wide opacity-80">Protected</div>
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                          <span className="opacity-80">Protected</span>
+                          <CommandTileInfo
+                            title="Protected"
+                            info="Players currently protected by a hard rule (illness, injury, return-to-play, or post-match recovery). 'Adjusted' = players where the engine modified the verdict from what raw signals would otherwise say."
+                          />
+                        </div>
                         <div className="mt-1 text-lg font-semibold tabular-nums">{teamRulesSummary?.protectedPlayersCount ?? 0}</div>
                         <div className="mt-1 text-xs opacity-75">{teamRulesSummary?.overriddenPlayersCount ?? 0} adjusted</div>
                       </div>
                       <div className={`${compactTileClass} border-slate-200 bg-slate-50 text-slate-800`}>
-                        <div className="text-[10px] uppercase tracking-wide opacity-80">Baseline</div>
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+                          <span className="opacity-80">Baseline</span>
+                          <CommandTileInfo
+                            title="Baseline"
+                            info="How mature each player's personal baseline is. Stable = enough history (~14+ days of check-ins / GPS) to flag deviations confidently. Building = still gathering data, so verdicts may shift as the baseline settles."
+                          />
+                        </div>
                         <div className="mt-1 text-lg font-semibold tabular-nums">{teamIntel?.baseline_maturity ?? "—"}</div>
                         <div className="mt-1 text-xs opacity-75">{teamIntel?.n_players ?? 0} players</div>
                       </div>
