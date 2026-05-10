@@ -90,10 +90,10 @@ const COPY = {
     session: "Æfing",
     axisReady: "Readiness",
     axisPl: "Planned PL",
-    axisComposite: "Composite álag · PL + IMA (0 = ekkert · 0.5 = baseline · 1.0 = 2×)",
-    composite: "Composite álag (PL + IMA)",
-    compositeBands: "Vegið: PL spike + IMA decel/accel/CoD spike + HIR. 0.5 = baseline · >0.75 = 1.5× baseline · punktur verður rauður ef composite áhættuskor er hátt.",
-    usingComposite: "X-ás er composite mechanical load score: PL spike dagsins + IMA-byggt decel/accel/change-of-direction álag, vegið eftir indoor/outdoor mode (Foster + Hill-Haas + McBurnie). Hverjum leikmanni er borið saman við hans eigin 28-daga baseline.",
+    axisComposite: "Heildarálag · hlaup + skarpar hreyfingar (0.5 = venjulegt · 1.0 = mjög mikið)",
+    composite: "Heildarálag (hlaup + skarpar hreyfingar)",
+    compositeBands: "Því lengra til hægri, því þyngri dagur. Grænt = eðlilegt eða létt · gult/rautt = mun þyngra en leikmaðurinn er vanur — fylgstu vel með.",
+    usingComposite: "Heildarálag dagsins — hlaupaálag plús skarpar hreyfingar (hraðaaukningar, snöggar bremsur og stefnubreytingar). Hver punktur er borinn saman við það sem leikmaðurinn er vanur að gera síðustu 4 vikurnar.",
     fallbackHint: "Enn vantar GPS-álag fyrir suma leikmenn — brotnar línur nota planned_pl/target sem fallback.",
     plannedFallback: "planned (engin GPS)",
     legend: {
@@ -120,6 +120,15 @@ const COPY = {
     playerStatus: "Staða",
     click: "Smelltu á punkt fyrir nánari upplýsingar",
     close: "Loka",
+    breakdownTitle: "Hvað er að ýta upp álaginu í dag",
+    breakdownFooter: "Talan sýnir hvað dagurinn er stór miðað við venjulegan dag (1.0× = venjulegt). Gult ≥ 1.15× · Rautt ≥ 1.5×.",
+    breakdownLabels: {
+      fmpHigh: "Snöggar hreyfingar (innanhúss)",
+      playerLoad: "Player Load (heildaráreynsla)",
+      imaTotal: "Stefnubreytingar, hröðun & bremsa",
+      hir: "Háhraðahlaup",
+      decel: "Snöggar bremsur",
+    },
   },
   EN: {
     title: "Readiness × Load",
@@ -134,10 +143,10 @@ const COPY = {
     session: "Session",
     axisReady: "Readiness",
     axisPl: "Planned PL",
-    axisComposite: "Composite load · PL + IMA (0 = none · 0.5 = baseline · 1.0 = 2×)",
-    composite: "Composite load (PL + IMA)",
-    compositeBands: "Weighted blend: PL spike + IMA decel/accel/CoD spike + HIR. 0.5 = baseline · >0.75 = 1.5× baseline · dot turns red when composite risk is high.",
-    usingComposite: "X-axis is a composite mechanical load score: today's PL spike + IMA-derived decel/accel/change-of-direction load, weighted per indoor/outdoor mode (Foster + Hill-Haas + McBurnie). Each player is compared against their own 28-day baseline.",
+    axisComposite: "Total load · running + sharp moves (0.5 = normal · 1.0 = very high)",
+    composite: "Total load (running + sharp moves)",
+    compositeBands: "Further right = harder day. Green = normal or light · amber/red = much harder than the player is used to — watch closely.",
+    usingComposite: "Today's total load on the player — running load plus sharp movements (accelerations, hard braking and change of direction). Each dot is compared to what that player normally does over the last 4 weeks.",
     fallbackHint: "Some players still missing GPS — dashed dots use planned_pl/target as a fallback.",
     plannedFallback: "planned (no GPS)",
     legend: {
@@ -164,6 +173,15 @@ const COPY = {
     playerStatus: "Status",
     click: "Click a dot for details",
     close: "Close",
+    breakdownTitle: "What's pushing today's load up",
+    breakdownFooter: "The number shows how big the day is vs. a normal day (1.0× = normal). Amber ≥ 1.15× · Red ≥ 1.5×.",
+    breakdownLabels: {
+      fmpHigh: "Sharp moves (indoor)",
+      playerLoad: "Player Load (overall workload)",
+      imaTotal: "Cuts, accels & braking",
+      hir: "High-speed running",
+      decel: "Hard braking",
+    },
   },
 } as const;
 
@@ -816,16 +834,17 @@ export default function ReadinessLoadQuadrant({
                 {useComposite && selComp ? (() => {
                   type Row = { label: string; spike: number | null; weight: string };
                   const isIndoor = selComp.mode === "indoor";
+                  const bl = c.breakdownLabels;
                   const rows: Row[] = isIndoor
                     ? [
-                        { label: "FMP Dynamic High", spike: selComp.fmpDynamicHighSpike ?? null, weight: "34%" },
-                        { label: "Player Load",      spike: selComp.playerLoadSpike ?? null,    weight: "26%" },
-                        { label: "IMA total (CoD+Accel+Decel)", spike: selComp.imaTotalSpike ?? null, weight: "20%" },
+                        { label: bl.fmpHigh,    spike: selComp.fmpDynamicHighSpike ?? null, weight: "34%" },
+                        { label: bl.playerLoad, spike: selComp.playerLoadSpike ?? null,    weight: "26%" },
+                        { label: bl.imaTotal,   spike: selComp.imaTotalSpike ?? null,      weight: "20%" },
                       ]
                     : [
-                        { label: "HIR distance",     spike: selComp.hirSpike ?? null,    weight: "34%" },
-                        { label: "Decel load",       spike: selComp.decelSpike ?? null,  weight: "26%" },
-                        { label: "Player Load",      spike: selComp.playerLoadSpike ?? null, weight: "—" },
+                        { label: bl.hir,        spike: selComp.hirSpike ?? null,    weight: "34%" },
+                        { label: bl.decel,      spike: selComp.decelSpike ?? null,  weight: "26%" },
+                        { label: bl.playerLoad, spike: selComp.playerLoadSpike ?? null, weight: "—" },
                       ];
                   const visible = rows.filter((r) => r.spike != null && Number.isFinite(r.spike) && (r.spike as number) > 0);
                   if (visible.length === 0) return null;
@@ -837,7 +856,7 @@ export default function ReadinessLoadQuadrant({
                   return (
                     <div className="mt-3 rounded-md border border-slate-200 bg-white/70 p-2">
                       <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-slate-500">
-                        <span>Composite breakdown</span>
+                        <span>{c.breakdownTitle}</span>
                         <span className="rounded-full bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700">
                           {isIndoor ? "INDOOR" : "OUTDOOR"} · {selComp.compositeScore.toFixed(2)}
                         </span>
@@ -862,8 +881,7 @@ export default function ReadinessLoadQuadrant({
                         ))}
                       </div>
                       <div className="mt-1.5 text-[10px] leading-snug text-slate-500">
-                        Spike = today ÷ 28-day baseline. Bar turns amber ≥ 1.15× and red ≥ 1.5×. Weights are
-                        the contribution to the composite per signals.ts ({isIndoor ? "indoor" : "outdoor"} mode).
+                        {c.breakdownFooter}
                       </div>
                     </div>
                   );
