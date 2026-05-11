@@ -38,6 +38,27 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
   >(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // AI refinement state
+  type AiSuggestion = {
+    blockId: string;
+    position: number;
+    currentExerciseId: string;
+    suggestedExerciseId: string;
+    reason: string;
+    citedSignals: string[];
+    confidence: "low" | "moderate" | "high";
+  };
+  type AiResult = {
+    suggestedOverrides: AiSuggestion[];
+    narrative: string;
+    suggestedPlayerNote?: string;
+    generatedAt: string;
+  };
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AiResult | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
+
   // Trigger a refetch of the session (used after swap apply / clear)
   const reload = () => setReloadKey((k) => k + 1);
 
@@ -288,6 +309,185 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
             </div>
           )}
         </>
+      )}
+
+      {/* AI Refinement block — ELITE-gated; reads player history + wellness
+          notes + signals and suggests coach overrides on top of the
+          deterministic engine. Coach reviews and one-click applies. */}
+      {!noStrength && (
+        <div className="mt-4 border-t border-indigo-200 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold text-violet-900">
+                ✨ {t("AI refinement", "AI sérstilling")}
+                <span className="ml-1 rounded-full border border-violet-300 bg-white px-1.5 py-px text-[8px] uppercase tracking-wide text-violet-700">
+                  ELITE
+                </span>
+              </p>
+              <p className="text-[10px] text-violet-700">
+                {t(
+                  "Reads history + wellness notes, suggests coach swaps with cited signals.",
+                  "Les sögu + wellness notes, leggur til breytingar með rökstuðningi.",
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setAiLoading(true);
+                setAiError(null);
+                setAiResult(null);
+                try {
+                  const sb = getSupabaseClient();
+                  const { data: sess } = await sb.auth.getSession();
+                  const token = sess?.session?.access_token;
+                  if (!token) {
+                    setAiError(t("Not signed in", "Ekki innskráð(ur)"));
+                    return;
+                  }
+                  const mdParam = md === "AUTO" ? undefined :
+                    md === "MD+1" ? "+1" : md.replace("MD-", "");
+                  const res = await fetch(`/api/coach/player/${playerId}/ai-strength-refinement`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ md: mdParam }),
+                  });
+                  const json = await res.json().catch(() => ({}));
+                  if (res.status === 402) {
+                    setAiError(t(
+                      "AI refinement is an ELITE feature.",
+                      "AI sérstilling er ELITE-eiginleiki.",
+                    ));
+                    return;
+                  }
+                  if (!res.ok) {
+                    setAiError(typeof json?.error === "string" ? json.error : "AI failed");
+                    return;
+                  }
+                  setAiResult(json.result as AiResult);
+                } catch (e) {
+                  setAiError(e instanceof Error ? e.message : "Network error");
+                } finally {
+                  setAiLoading(false);
+                }
+              }}
+              disabled={aiLoading}
+              className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                aiLoading
+                  ? "bg-violet-200 text-violet-700 cursor-wait"
+                  : "bg-violet-600 text-white hover:bg-violet-700"
+              }`}
+              title={t(
+                "Asks Claude (AI) to read this player's history + wellness notes and suggest 0-3 swaps.",
+                "Spyr Claude (AI) að lesa sögu + wellness notes leikmannsins og leggja til 0-3 breytingar.",
+              )}
+            >
+              {aiLoading
+                ? t("Analysing…", "Greini…")
+                : aiResult
+                  ? t("Re-run", "Endurkeyra")
+                  : t("Run AI refinement", "Keyra AI sérstillingu")}
+            </button>
+          </div>
+          {aiError && (
+            <p className="mt-2 text-[11px] text-rose-700">{aiError}</p>
+          )}
+          {aiResult && (
+            <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/50 p-3">
+              {aiResult.narrative && (
+                <p className="text-xs text-slate-800 leading-relaxed">{aiResult.narrative}</p>
+              )}
+              {aiResult.suggestedOverrides.length === 0 ? (
+                <p className="mt-2 text-[11px] text-violet-800 italic">
+                  {t(
+                    "No refinements suggested — the engine's prescription already fits this player today.",
+                    "Engar sérstillingar — kerfið hefur þegar lagað æfinguna að þessum leikmanni í dag.",
+                  )}
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {aiResult.suggestedOverrides.map((s, idx) => (
+                    <li
+                      key={`${s.blockId}-${s.position}-${idx}`}
+                      className="rounded border border-violet-300 bg-white p-2 text-[11px]"
+                    >
+                      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                        <span className="font-semibold text-violet-900">
+                          {s.currentExerciseId.replace(/^ex_/, "").replace(/_/g, " ")}
+                          {" → "}
+                          {s.suggestedExerciseId.replace(/^ex_/, "").replace(/_/g, " ")}
+                        </span>
+                        <span className={`rounded-full px-1.5 py-px text-[9px] font-bold uppercase ${
+                          s.confidence === "high" ? "bg-emerald-600 text-white"
+                            : s.confidence === "moderate" ? "bg-amber-500 text-white"
+                              : "bg-slate-400 text-white"
+                        }`}>
+                          {s.confidence}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-700">{s.reason}</p>
+                      {s.citedSignals.length > 0 && (
+                        <p className="mt-1 text-[10px] text-slate-500 italic">
+                          {t("Signals cited: ", "Vitnaðar vísbendingar: ")}
+                          {s.citedSignals.join(" · ")}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        disabled={applyingIdx === idx}
+                        onClick={async () => {
+                          setApplyingIdx(idx);
+                          try {
+                            const sb = getSupabaseClient();
+                            const { data: sess } = await sb.auth.getSession();
+                            const token = sess?.session?.access_token;
+                            if (!token) return;
+                            await fetch(`/api/coach/player/${playerId}/strength-override`, {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${token}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                blockId: s.blockId,
+                                position: s.position,
+                                exerciseId: s.suggestedExerciseId,
+                                originalExerciseId: s.currentExerciseId,
+                                notes: `AI: ${s.reason.slice(0, 200)}`,
+                              }),
+                            });
+                            reload();
+                          } catch {
+                            // silent
+                          } finally {
+                            setApplyingIdx(null);
+                          }
+                        }}
+                        className="mt-2 rounded bg-violet-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-violet-700 disabled:bg-violet-300"
+                      >
+                        {applyingIdx === idx
+                          ? t("Applying…", "Beiti…")
+                          : t("Apply this swap", "Beita þessari breytingu")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {aiResult.suggestedPlayerNote && (
+                <p className="mt-3 rounded border border-indigo-200 bg-white p-2 text-[10px] italic text-slate-700">
+                  <span className="font-semibold not-italic text-indigo-900">
+                    {t("Suggested player note: ", "Tillaga að player-skilaboðum: ")}
+                  </span>
+                  {aiResult.suggestedPlayerNote}
+                </p>
+              )}
+              <p className="mt-2 text-[9px] text-violet-600/80">
+                {t("Generated ", "Búið til ")}
+                {new Date(aiResult.generatedAt).toLocaleTimeString()}
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Send-to-player block (only when there's a real session) */}

@@ -588,11 +588,11 @@ export default function PlayerCheckinPage() {
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Dæmi: veikindi, óvenjulegt stress, annað sem skiptir máli…"
+                placeholder="Skrifaðu ef þú finnur fyrir sárindum (t.d. 'mjóhryggur stífur eftir leik', 'hamstring viðkvæmur'), veikindum eða öðru sem skiptir máli…"
                 className="min-h-[120px] rounded-xl"
               />
               <div className="text-xs text-muted-foreground">
-                Valfrjálst — en getur hjálpað þjálfara að setja rétta áætlun.
+                Valfrjálst — AI sérstillingakerfið les þetta og getur stungið upp á breytingum á styrktaræfingu þinni.
               </div>
             </div>
           ) : null}

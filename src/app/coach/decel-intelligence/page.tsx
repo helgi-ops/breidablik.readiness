@@ -516,7 +516,9 @@ function PlayerRow({ row }: { row: Row }) {
 
           {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
               over Catapult total_player_load. Indoor-friendly external load
-              spike detector; complements internal-load (RPE) ACWR. */}
+              spike detector; complements internal-load (RPE) ACWR.
+              NOTE: Strength session card lives on its own page at /coach/strength
+              to keep this page focused on decel intelligence. */}
           <PlayerLoadAcwrCard playerId={row.player_id} />
 
           {/* Coach can manually assign a recovery protocol — VST Reset, MD+1

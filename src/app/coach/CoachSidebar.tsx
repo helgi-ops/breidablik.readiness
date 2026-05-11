@@ -74,6 +74,7 @@ const planningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach?tab=md",             label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
   { href: "/coach?tab=drills",         label: { EN: "Session builder",     IS: "Session builder" } },
+  { href: "/coach/strength",           label: { EN: "Strength (micro-dose)", IS: "Styrktaræfing (micro-dose)" } },
   { href: "/coach/templates",          label: { EN: "Session templates",   IS: "Session templates" } },
   { href: "/coach/custom-templates",   label: { EN: "Custom templates",    IS: "Sérsniðnar templates" } },
   { href: "/coach/recovery-protocols", label: { EN: "Recovery protocols",  IS: "Recovery protocols" } },
