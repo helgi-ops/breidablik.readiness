@@ -27,7 +27,7 @@ import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCar
 import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
 import SprintExposureCard from "@/components/coach/SprintExposureCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
-// import CoDAsymmetryCard from "@/components/coach/CoDAsymmetryCard";
+import CodAsymCard from "@/components/coach/CodAsymCard";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
@@ -491,18 +491,20 @@ function PlayerRow({ row }: { row: Row }) {
               without S&C background. Pre-computed interpretation in TS so
               the LLM never invents its own reading of the numbers — see
               lib/micropulse/decelNarrative for the design rationale. */}
-          <PlayerDecelSummaryCard playerId={row.player_id} /> */}
+          <PlayerDecelSummaryCard playerId={row.player_id} />
 
           {/* Stride Intelligence — IMA Free Running 8-band stride mechanics +
               L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits
               alongside McBurnie because both are stride-mechanical signals. */}
-          <StrideIntelligenceCard playerId={row.player_id} /> */}
+          <StrideIntelligenceCard playerId={row.player_id} />
 
           {/* L/R CoD asymmetry by intensity tier (Bishop 2020). Same IMA CoD
               data as the Stride card's L/R tile, but split into Low/Med/High
               so coaches can see whether the asymmetry sits in the
-              injury-relevant high-intensity tier or just at jog-pace. */}
-          {/* <CoDAsymmetryCard playerId={row.player_id} /> */}
+              injury-relevant high-intensity tier or just at jog-pace.
+              File renamed to CodAsymCard to dodge the macOS↔Linux case
+              mismatch that the original CoDAsymmetryCard.tsx kept tripping. */}
+          <CodAsymCard playerId={row.player_id} />
 
           {/* Sprint Exposure — VOLUME-side companion to Sprint Speed Drop.
               Bands 5-8 stride count over the last 7 days vs the player's
@@ -510,18 +512,18 @@ function PlayerRow({ row }: { row: Row }) {
               flags hamstring injury risk from undertraining; over 150%
               flags accumulated overload. Self-hides when no match-day
               baseline is available yet. */}
-          <SprintExposureCard playerId={row.player_id} /> */}
+          <SprintExposureCard playerId={row.player_id} />
 
           {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
               over Catapult total_player_load. Indoor-friendly external load
               spike detector; complements internal-load (RPE) ACWR. */}
-          <PlayerLoadAcwrCard playerId={row.player_id} /> */}
+          <PlayerLoadAcwrCard playerId={row.player_id} />
 
           {/* Coach can manually assign a recovery protocol — VST Reset, MD+1
               bundle, etc. — to this player. Auto-trigger from match-load
               detection runs nightly; this is the manual override. */}
           <div className="flex justify-end">
-            <CoachAssignProtocolButton playerId={row.player_id} /> */}
+            <CoachAssignProtocolButton playerId={row.player_id} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
