@@ -58,8 +58,40 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
 
   if (loading) return null;
   if (!payload) return null;
-  // Hide when there's not enough match-day baseline yet
-  if (payload.band === "INSUFFICIENT_DATA") return null;
+
+  // Empty state — show a small explainer instead of hiding completely so
+  // coach knows the card exists but is awaiting data. Hides only the
+  // visual bar + numbers, keeps the title visible.
+  if (payload.band === "INSUFFICIENT_DATA") {
+    const why =
+      payload.matchDaysObserved < 2
+        ? (lang === "IS"
+            ? `Þarf ≥ 2 leikdaga (≥60 mín) með IMA bands 5-8 stride gögnum í síðustu 28 dögum til að reikna match-day demand. Núna: ${payload.matchDaysObserved} leikdagar með band-gögnum.`
+            : `Need ≥ 2 match days (≥60 min) with IMA bands 5-8 stride data in the last 28 days to compute match-day demand. Currently: ${payload.matchDaysObserved} match days with band data.`)
+        : (lang === "IS"
+            ? `Þarf ≥ 2 æfingadaga með bands 5-8 stride gögnum í síðustu viku. Núna: ${payload.daysObserved7d} af 7.`
+            : `Need ≥ 2 training days with bands 5-8 stride data in the last 7 days. Currently: ${payload.daysObserved7d} of 7.`);
+    return (
+      <div className="rounded-lg border-2 border-slate-200 bg-slate-50 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
+          {lang === "IS" ? "Sprint Exposure (vika)" : "Sprint Exposure (week)"}
+        </h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {lang === "IS"
+            ? "IMA bands 5-8 strides síðustu 7 daga vs leikdags-meðaltal (Malone 2018)"
+            : "IMA bands 5-8 strides last 7d vs match-day average (Malone 2018)"}
+        </p>
+        <p className="mt-3 text-xs text-slate-600 leading-relaxed">
+          {why}
+        </p>
+        <p className="mt-2 text-[10px] text-slate-400 leading-snug">
+          {lang === "IS"
+            ? "Eftir Catapult IMA Free Running fix nýlega geta eldri activities vantað bands 5-8 stride gögn. Kortið birtist sjálfkrafa um leið og baseline er reiknanlegur."
+            : "After the recent Catapult IMA Free Running fix, older activities may be missing bands 5-8 stride data. The card lights up automatically once the baseline is computable."}
+        </p>
+      </div>
+    );
+  }
 
   const band: SprintExposureBand = payload.band;
   const pct = payload.exposureRatio != null
