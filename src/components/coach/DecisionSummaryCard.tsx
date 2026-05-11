@@ -1061,6 +1061,43 @@ const PlayerModal: FC<{
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Trend forecast — fits a linear trend over the last 14 days of STEN
+  // and projects 3 days out. Pure deterministic, fetched once on modal
+  // open. Surfaced as a one-line hint above the AI summary so coach gets
+  // the forward-looking signal instantly (no AI generation wait).
+  const [trendForecast, setTrendForecast] = useState<{
+    text: string;
+    direction: "improving" | "stable" | "declining" | "sharply_declining";
+    projectedSten3d: number | null;
+    todaySten: number | null;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: sess } = await sb.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/coach/player/${row.player_id}/trend-forecast?lang=${lang}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!alive) return;
+        if (json?.text && json?.payload) {
+          setTrendForecast({
+            text: json.text as string,
+            direction: json.payload.direction,
+            projectedSten3d: json.payload.projectedSten3d ?? null,
+            todaySten: json.payload.todaySten ?? null,
+          });
+        }
+      } catch { /* silent — trend hint is optional */ }
+    })();
+    return () => { alive = false; };
+  }, [row.player_id, lang]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1125,6 +1162,34 @@ const PlayerModal: FC<{
                   <p className={`text-sm leading-snug mt-0.5 ${warn.level === "critical" ? "text-rose-700" : "text-amber-700"}`}>
                     {warn.text}
                   </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Trend forecast — 14-day STEN slope projected 3 days forward.
+              Deterministic, instant — coach sees the forward-looking
+              signal before the AI summary loads. Hidden when trend is
+              stable / low-confidence (the formatter returns "" then). */}
+          {trendForecast && trendForecast.text && (() => {
+            const tone = trendForecast.direction === "improving"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : trendForecast.direction === "sharply_declining"
+                ? "border-rose-200 bg-rose-50 text-rose-900"
+                : "border-amber-200 bg-amber-50 text-amber-900";
+            const icon = trendForecast.direction === "improving" ? "↗" : "↘";
+            return (
+              <div className={`rounded-xl border-2 px-5 py-4 ${tone}`}>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 shrink-0 text-2xl leading-none">{icon}</span>
+                  <div className="flex-1">
+                    <p className="text-xs uppercase tracking-widest font-semibold opacity-70">
+                      {lang === "IS" ? "Spá fyrir næstu 3 daga" : "3-day forecast"}
+                    </p>
+                    <p className="mt-1 text-sm font-medium leading-snug">
+                      {trendForecast.text}
+                    </p>
+                  </div>
                 </div>
               </div>
             );
