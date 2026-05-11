@@ -366,12 +366,12 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           helper="vol-weighted across bands"
         />
         <MetricTile
-          title="Stride length (HSR)"
+          title="Sprint stride length"
           value={m.strideLengthHsr}
           unit="m/stride"
           baselineMean={strideLengthBaseline?.mean}
           trendValues={trend.map((r) => r.strideLengthHsr)}
-          helper="HSR distance ÷ hi-velocity strides"
+          helper="Sprint distance ÷ top-band sprint strides"
         />
         <MetricTile
           title="L/R asymmetry"

@@ -153,10 +153,21 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   }
   const cadenceWeighted = totalStrides > 0 ? weightedSum / totalStrides : null;
 
-  // Stride length proxy at high speed.
-  const hsrDist = Number(row.hsrDistance ?? 0);
+  // Stride length proxy at SPRINT speed (not just HSR).
+  // Earlier version used hsrDistance / (bands 5-8) which produced unrealistic
+  // ~0.15 m/stride values — bands 5-8 of IMA Free Running V2 are stride-rate
+  // bands that also capture high-cadence jogging, inflating the denominator.
+  // Narrowing to the TOP band (band 8 = top stride-rate / true sprint cadence)
+  // against the top GPS velocity band (sprintDistance = velocity_band6) gives
+  // a clean "metres covered per sprint stride" value in the expected 1.8–2.5
+  // m/stride range — matches sport-science convention (Edouard 2019, Mendiguchia
+  // 2020) where sprint stride length tracks hamstring/sprint mechanics.
+  const sprintDist = Number(row.sprintDistance ?? 0);
+  const sprintStrides = counts[7] ?? 0; // band 8 (0-indexed)
   const strideLengthHsr =
-    hiVelocityStrides > 0 && Number.isFinite(hsrDist) ? hsrDist / hiVelocityStrides : null;
+    sprintStrides > 0 && Number.isFinite(sprintDist) && sprintDist > 0
+      ? sprintDist / sprintStrides
+      : null;
 
   const codL = Number(row.codLeft ?? 0);
   const codR = Number(row.codRight ?? 0);
@@ -171,6 +182,7 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   // We compare the share of HSR distance vs the share of high-band stride load.
   // If HSR distance is high but high-band stride load is low for the same session,
   // the ratio (HSR_share - HiLoad_share) is positive and growing → decoupling.
+  const hsrDist = Number(row.hsrDistance ?? 0);
   const totalDist = Number(row.totalDistance ?? 0);
   const totalPlayerLoad = nullSafeSum(loads);
   let gpsImaDecoupling: number | null = null;
