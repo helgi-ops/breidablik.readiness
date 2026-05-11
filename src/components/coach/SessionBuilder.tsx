@@ -88,6 +88,13 @@ const SB_COPY = {
     emptyStep2: "2. Bættu við 3–5 drillum úr safninu til vinstri — smelltu á + eða á drilluna sjálfa",
     emptyStep3: "3. Skoðaðu totals og PL band bar sem birtast efst, vista síðan og hlaða niður PDF",
     emptyTip: "Tip: drillur eru flokkaðar eftir stimulus (LOC / MECH / MIX / TECH) — einföld blanda er 1 LOC + 1 MECH + 1 MIX",
+    quickStart: "Fljót-byrja með sniðmáti",
+    tplMD1Name: "MD-1 · Aktivering",
+    tplMD1Desc: "Stutt, létt, beitt — focus á TECH/MIX, ~250 PL",
+    tplMD3Name: "MD-3 · Styrkur",
+    tplMD3Desc: "Hátt álag, MECH-ráðandi — accel/decel work, ~500 PL",
+    tplMDplus1Name: "MD+1 · Endurheimt",
+    tplMDplus1Desc: "Mjög lágt álag, mestmegnis LOC — flow + breath, ~150 PL",
   },
   EN: {
     other: "Other",
@@ -152,6 +159,13 @@ const SB_COPY = {
     emptyStep2: "2. Add 3–5 drills from the library on the left — click + or the drill itself",
     emptyStep3: "3. Watch totals and the PL band bar appear at the top, then save and download the PDF",
     emptyTip: "Tip: drills are tagged by stimulus (LOC / MECH / MIX / TECH) — a simple blend is 1 LOC + 1 MECH + 1 MIX",
+    quickStart: "Quick-start with a template",
+    tplMD1Name: "MD-1 · Activation",
+    tplMD1Desc: "Short, light, sharp — focus on TECH/MIX, ~250 PL",
+    tplMD3Name: "MD-3 · Strength",
+    tplMD3Desc: "High load, MECH-dominated — accel/decel work, ~500 PL",
+    tplMDplus1Name: "MD+1 · Recovery",
+    tplMDplus1Desc: "Very low load, mostly LOC — flow + breath, ~150 PL",
   },
 } as const;
 
@@ -1284,6 +1298,54 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
                   <span>{t.emptyStep3.replace(/^3\.\s*/, "")}</span>
                 </li>
               </ol>
+
+              {/* Quick-start templates: one click sets MD day + session name + stimulus filter.
+                  Coach still picks the actual drills, but MD-history loads target PL automatically. */}
+              <div className="mx-auto mt-4 max-w-md">
+                <div className="mb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {t.quickStart}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {([
+                    { md: "MD-1", name: t.tplMD1Name, desc: t.tplMD1Desc, stimulus: "technical" as const, accent: "sky" },
+                    { md: "MD-3", name: t.tplMD3Name, desc: t.tplMD3Desc, stimulus: "mechanical" as const, accent: "orange" },
+                    { md: "MD+1", name: t.tplMDplus1Name, desc: t.tplMDplus1Desc, stimulus: "locomotive" as const, accent: "emerald" },
+                  ]).map((tpl) => (
+                    <button
+                      key={tpl.md}
+                      type="button"
+                      onClick={() => {
+                        setSessionName(tpl.name);
+                        setMdDay(tpl.md);
+                        setFilterStimulus(tpl.stimulus);
+                        setTargetPL(""); // Let MD-history auto-populate
+                      }}
+                      className={`group flex flex-col rounded-lg border bg-white p-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
+                        tpl.accent === "sky"
+                          ? "border-sky-200 hover:border-sky-400"
+                          : tpl.accent === "orange"
+                          ? "border-orange-200 hover:border-orange-400"
+                          : "border-emerald-200 hover:border-emerald-400"
+                      }`}
+                    >
+                      <div className={`mb-1 text-[11px] font-bold uppercase tracking-wider ${
+                        tpl.accent === "sky" ? "text-sky-700"
+                          : tpl.accent === "orange" ? "text-orange-700"
+                          : "text-emerald-700"
+                      }`}>
+                        {tpl.md}
+                      </div>
+                      <div className="mb-1 text-[12px] font-semibold leading-tight text-slate-900">
+                        {tpl.name.replace(/^MD[+-]?\d?\s*·\s*/, "")}
+                      </div>
+                      <div className="text-[10.5px] leading-snug text-slate-500">
+                        {tpl.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="mx-auto mt-4 max-w-md rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11.5px] text-amber-900">
                 {t.emptyTip}
               </div>

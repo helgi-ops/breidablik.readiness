@@ -392,6 +392,49 @@ export function buildDecelInterpretation(input: RawDecelInputs): DecelInterpreta
   };
 }
 
+// ─── Deterministic fallback narrative ──────────────────────────────────────
+
+/**
+ * Build a non-AI narrative from the structured interpretation. Used when:
+ *   - The Claude call fails (rate-limit, network, 5xx)
+ *   - Or the AI output fails validation twice in a row
+ *
+ * Stitches the per-metric `coach_phrase` fields together. Direction and
+ * severity come straight from the data, so this can never hallucinate or
+ * contradict the chips above the card. Capped at ~3 sentences so it reads
+ * like the AI version, just less personalised.
+ */
+export function buildFallbackNarrative(interp: DecelInterpretation): string {
+  const concernEntries = Object.values(interp.metrics)
+    .filter((m): m is MetricLabel => Boolean(m && m.severity !== "ok"))
+    // Concern (red) before watch (yellow). Stable order preserved otherwise.
+    .sort((a, b) => {
+      if (a.severity === b.severity) return 0;
+      if (a.severity === "concern") return -1;
+      if (b.severity === "concern") return 1;
+      return 0;
+    });
+
+  const firstName = interp.player.name.split(/\s+/)[0] || interp.player.name;
+
+  if (concernEntries.length === 0) {
+    return `${firstName}'s decel metrics all sit in his healthy range — overload, underload, coupling and concentration are all green. Nothing flagged today; train as planned.`;
+  }
+
+  // Up to 2 concerning phrases in the body, plus a closing recommendation.
+  const top = concernEntries.slice(0, 2);
+  const lead = top
+    .map((m) => m.coach_phrase)
+    .join("; ");
+
+  const tail =
+    concernEntries.some((m) => m.severity === "concern")
+      ? "Worth a coach conversation before today's session — adjust intensity if it lines up with how he's feeling."
+      : "Watch closely — not yet a hard concern, but trending in a direction worth noting.";
+
+  return `${firstName}: ${lead}. ${tail}`;
+}
+
 // ─── Validator ─────────────────────────────────────────────────────────────
 
 /** Returns the first validation issue, or null if the text is acceptable. */

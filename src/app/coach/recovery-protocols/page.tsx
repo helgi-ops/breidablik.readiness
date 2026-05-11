@@ -24,6 +24,43 @@ export default function CoachRecoveryProtocolsPage() {
         in conversation with your players.
       </div>
 
+      {/* TV view shortcuts — open the same protocol on a locker-room display
+          so players can follow drill-by-drill with a countdown overlay. */}
+      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-xs text-violet-900">
+        <div className="mb-1.5 font-semibold">📺 Player TV view</div>
+        <div className="mb-2">
+          Open a fullscreen, drill-by-drill view of any protocol on the locker-room
+          screen. Players can follow along without coach narration — auto-advancing
+          countdown, big breath cues, manual prev/next via remote arrow keys.
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/coach/display/recovery?protocol=post_match_vst_reset"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-violet-300 bg-white px-2.5 py-1 font-medium text-violet-700 hover:bg-violet-100"
+          >
+            Open Post-Match VST Reset →
+          </a>
+          <a
+            href="/coach/display/recovery?protocol=md_plus_1_recovery_bundle"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-violet-300 bg-white px-2.5 py-1 font-medium text-violet-700 hover:bg-violet-100"
+          >
+            Open MD+1 Recovery Bundle →
+          </a>
+          <a
+            href="/coach/display/recovery?protocol=pre_match_neural_activation"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-violet-300 bg-white px-2.5 py-1 font-medium text-violet-700 hover:bg-violet-100"
+          >
+            Open Pre-Match Activation →
+          </a>
+        </div>
+      </div>
+
       <RecoveryProtocolList />
     </div>
   );

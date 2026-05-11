@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   buildDecelInterpretation,
+  buildFallbackNarrative,
   validateDecelNarrative,
   type RawDecelInputs,
 } from "@/lib/micropulse/decelNarrative";
@@ -306,6 +307,7 @@ async function generate(
 
   let result: { narrative: string };
   let issues: string | null = null;
+  let usedFallback = false;
   try {
     result = await callClaude(systemPrompt, userMessage);
     issues = validateDecelNarrative(result.narrative, interp);
@@ -316,19 +318,23 @@ async function generate(
       issues = validateDecelNarrative(result.narrative, interp);
     }
   } catch (e) {
-    return NextResponse.json(
-      { error: `Generation failed: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 500 },
-    );
+    // Claude call failed (rate-limit, network, 5xx). Fall back to a
+    // deterministic narrative built from the structured interpretation
+    // rather than hiding the card — coach still gets useful info.
+    console.warn("[decel-summary] Claude call failed, using deterministic fallback", {
+      err: e instanceof Error ? e.message : String(e),
+    });
+    result = { narrative: buildFallbackNarrative(interp) };
+    issues = null;
+    usedFallback = true;
   }
   if (issues) {
-    return NextResponse.json(
-      {
-        error: `Validation failed after retry: ${issues}`,
-        narrative: result.narrative,
-      },
-      { status: 422 },
-    );
+    // Validation failed twice. Use the deterministic fallback narrative
+    // instead of returning 422 — the chips above the card are accurate
+    // even when the AI couldn't summarise them in prose.
+    console.warn("[decel-summary] Validation failed after retry, using deterministic fallback", { issues });
+    result = { narrative: buildFallbackNarrative(interp) };
+    usedFallback = true;
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -340,6 +346,10 @@ async function generate(
     narrative: result.narrative,
     generated_at: new Date().toISOString(),
     interpretation: interp,
+    // True when the narrative comes from the deterministic builder
+    // (Claude failed or its output failed validation twice). UI may
+    // tag this so coaches know it's rule-based rather than AI prose.
+    fallback: usedFallback,
   });
 }
 

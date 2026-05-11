@@ -16,6 +16,10 @@ type DecelSummaryResponse = {
   cached?: boolean;
   narrative?: string;
   generated_at?: string;
+  /** True when the narrative was built from rules (deterministic) rather than
+   *  by Claude — happens when Claude is unavailable or its output failed
+   *  validation. The narrative is still accurate; just no LLM personality. */
+  fallback?: boolean;
   error?: string;
 };
 
@@ -88,9 +92,41 @@ export function PlayerDecelSummaryCard({
     );
   }
 
-  // Silent failure — hide the card when generation fails (missing API key,
-  // no decel data, etc.) rather than showing a broken state.
-  if (error && !loading && !data) return null;
+  // Generation failed and we have no cached narrative to fall back on.
+  // We previously hid the card silently, but that left coaches wondering
+  // whether the system was broken or whether the player simply had no data.
+  // Show a small honest placeholder with a Retry button instead.
+  if (error && !loading && !data) {
+    // Differentiate between "no data" (404 from API) and other failures
+    // so the coach knows whether to wait for more sessions or to retry.
+    const isNoData = /no decel data/i.test(error);
+    return (
+      <div className={`rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs ${className}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold uppercase tracking-wide text-slate-500">
+              🧠 Plain-language decel read
+            </div>
+            <p className="mt-1 text-slate-700">
+              {isNoData
+                ? "Not enough decel data yet — this player needs a few more Catapult sessions before the AI can summarise. The chips above still show the raw status."
+                : "AI summary unavailable right now (generation failed). The chips above still show the raw status — try again in a moment."}
+            </p>
+          </div>
+          {!isNoData && (
+            <button
+              type="button"
+              onClick={() => void fetchNarrative(true)}
+              disabled={regenerating}
+              className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:border-purple-400 hover:text-purple-700 disabled:opacity-50"
+            >
+              {regenerating ? "Retrying…" : "Retry"}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-lg border border-purple-200 bg-gradient-to-br from-purple-50 to-violet-50 p-3 ${className}`}>
@@ -124,6 +160,14 @@ export function PlayerDecelSummaryCard({
         <div className="mt-2 flex items-center gap-2 text-[10px] text-purple-500">
           {data.cached && (
             <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-purple-700">cached</span>
+          )}
+          {data.fallback && (
+            <span
+              title="Built from rules instead of AI — happens when Claude is unavailable or its output failed validation. Still accurate; just no LLM phrasing."
+              className="rounded-full bg-slate-100 px-1.5 py-0.5 text-slate-600"
+            >
+              rule-based
+            </span>
           )}
           {data.generated_at && (
             <span>

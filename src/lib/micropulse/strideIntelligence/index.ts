@@ -153,20 +153,27 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
   }
   const cadenceWeighted = totalStrides > 0 ? weightedSum / totalStrides : null;
 
-  // Stride length proxy at SPRINT speed (not just HSR).
-  // Earlier version used hsrDistance / (bands 5-8) which produced unrealistic
-  // ~0.15 m/stride values — bands 5-8 of IMA Free Running V2 are stride-rate
-  // bands that also capture high-cadence jogging, inflating the denominator.
-  // Narrowing to the TOP band (band 8 = top stride-rate / true sprint cadence)
-  // against the top GPS velocity band (sprintDistance = velocity_band6) gives
-  // a clean "metres covered per sprint stride" value in the expected 1.8–2.5
-  // m/stride range — matches sport-science convention (Edouard 2019, Mendiguchia
-  // 2020) where sprint stride length tracks hamstring/sprint mechanics.
-  const sprintDist = Number(row.sprintDistance ?? 0);
-  const sprintStrides = counts[7] ?? 0; // band 8 (0-indexed)
+  // Average stride length across the whole session.
+  //
+  // Iteration history (kept for posterity so we don't repeat the mistake):
+  //  v1: hsrDistance / (bands 5-8 strides) → 0.15 m/stride (too low).
+  //      Bands 5-8 are stride-RATE bands, not velocity bands — they capture
+  //      every fast-cadence step including high-cadence jogging.
+  //  v2: sprintDistance / band-8 strides → 0.02 m/stride (worse).
+  //      Same root cause: band 8 = top stride-rate, NOT top velocity. A
+  //      player jogging at 3 m/s with 4 Hz cadence racks up band-8 strides
+  //      while contributing zero sprint distance.
+  //  v3 (current): totalDistance / totalStrides.
+  //      Coach-friendly average stride length across the session. Normal
+  //      range 0.8–1.4 m/stride for field-sport mixed-pace sessions
+  //      (Buchheit 2014). A drop in this metric reflects shorter, more
+  //      frequent steps — a known fatigue / sprint-mechanic compensation
+  //      pattern (Mendiguchia 2020). Trends matter more than absolute
+  //      values; baseline z-score flags individual decline.
+  const totalDistForStride = Number(row.totalDistance ?? 0);
   const strideLengthHsr =
-    sprintStrides > 0 && Number.isFinite(sprintDist) && sprintDist > 0
-      ? sprintDist / sprintStrides
+    totalStrides > 0 && Number.isFinite(totalDistForStride) && totalDistForStride > 0
+      ? totalDistForStride / totalStrides
       : null;
 
   const codL = Number(row.codLeft ?? 0);
