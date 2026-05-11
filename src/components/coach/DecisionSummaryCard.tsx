@@ -2600,26 +2600,22 @@ const DecisionSummaryCard: FC<{
   if (!rows.length) return null;
 
   // Coach-attention rule — true when a card MUST be looked at today.
-  // Drives the "Show only attention" toggle. Designed to be explicit so
-  // we never accidentally hide a player who has a real flag.
+  // Drives the "Show only attention" toggle.
+  //
+  // SCOPE: ACUTE concerns only — anything that changes TODAY's session
+  // decision. Matches the Daily Briefing "ATTENTION N all clear" count
+  // so the two surfaces never contradict each other.
+  //
+  // Chronic-risk chips (Bishop 2020 CoD asymmetry, Edouard 2019 sprint
+  // speed drop, etc.) are INFORMATIONAL — they remain visible on the
+  // player cards themselves but do NOT count toward "needs attention"
+  // because they don't change the verdict for today's session. A coach
+  // glancing at the dashboard wants the acute count; chronic context
+  // lives on the cards for when they drill into a specific player.
   const needsAttention = (row: DecisionSummaryRow): boolean => {
     const action = resolveDisplayAction(row);
     if (action === "RECOVERY" || action === "MODIFIED" || action === "REDUCED" || action === "HOLD") return true;
     if (row._injury_status === "injured" || row._injury_status === "rehabilitation" || row._injury_status === "rtp_training") return true;
-    // Sprint Speed Drop ≥ 3% (Edouard 2019 watch threshold)
-    if (typeof row._sprint_drop_pct === "number" && row._sprint_drop_pct >= 3) return true;
-    // High-tier CoD asymmetry ≥ 15% (Bishop 2020 concern)
-    if (typeof row._cod_high_asym_pct === "number" && row._cod_high_asym_pct >= 15) return true;
-    // VBT velocity drop logged this week
-    if (Array.isArray(row._vbt_fatigue_flags) && row._vbt_fatigue_flags.length > 0) return true;
-    // Day-over-day worsening of ≥ 1 STEN band
-    if (typeof row._dz === "number" && row._dz <= -0.4) return true;
-    // Decel burden flagged elevated/high
-    if (row._today_decel_burden_band === "elevated" || row._today_decel_burden_band === "high") return true;
-    // Hidden-fatigue signal (HID% drop while distance stable)
-    if (row._today_hid_fatigue_flag === true) return true;
-    // Indoor red flags
-    if (row._indoor_mcburnie_flag === "red" || row._indoor_acwr_flag === "red") return true;
     return false;
   };
 
