@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
+import { buildPushBody, loadPushContext } from "@/lib/notifications/narrativePushBody";
 
 /**
  * Pull notifications that haven't been pushed yet for a team, send PWA push
@@ -20,7 +21,7 @@ export async function pushNewCoachNotifications(
 ): Promise<number> {
   const { data: pendingNotifs } = await supabase
     .from("coach_notifications")
-    .select("id, parameter, severity, summary, summary_is, players(full_name)")
+    .select("id, parameter, direction, severity, summary, summary_is, value_now, value_prev, player_id, players(full_name)")
     .eq("team_id", teamId)
     .is("push_sent_at", null)
     .is("acknowledged_at", null)
@@ -52,11 +53,20 @@ export async function pushNewCoachNotifications(
   }>;
 
   type NotifLite = {
-    id: string; parameter: string; severity: string;
+    id: string; parameter: string; direction: string | null; severity: string;
     summary: string; summary_is: string | null;
+    value_now: number | null; value_prev: number | null;
+    player_id: string;
     players: { full_name: string | null } | null;
   };
   const notifRows = pendingNotifs as unknown as NotifLite[];
+
+  // Batch-load 2 days of wellness scores per player so the narrative
+  // builder can derive WHY context (Sleep 4→2, soreness rose) without
+  // a per-notification round trip. One query, used by every push below.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const playerIds = Array.from(new Set(notifRows.map((n) => n.player_id).filter(Boolean)));
+  const pushContext = await loadPushContext(supabase, playerIds, todayIso);
 
   let pushed = 0;
   for (const notif of notifRows) {
@@ -65,8 +75,20 @@ export async function pushNewCoachNotifications(
       notif.severity === "urgent"  ? `🚨 ${playerName}` :
       notif.severity === "warning" ? `⚠️ ${playerName}` :
                                      `ℹ️ ${playerName}`;
-    const body = notif.summary_is ?? notif.summary;
-    const payload = { title, body: body.slice(0, 120), url: "/coach/notifications" };
+    // Default to IS body since most pilots are Iceland clubs; falls
+    // back to EN automatically when summary_is is null.
+    const body = buildPushBody({
+      parameter: notif.parameter,
+      direction: notif.direction,
+      severity: notif.severity,
+      summary: notif.summary,
+      summary_is: notif.summary_is,
+      value_now: notif.value_now,
+      value_prev: notif.value_prev,
+      player_id: notif.player_id,
+      player_name: playerName,
+    }, pushContext, "IS");
+    const payload = { title, body, url: "/coach/notifications" };
 
     for (const sub of subRows) {
       if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;

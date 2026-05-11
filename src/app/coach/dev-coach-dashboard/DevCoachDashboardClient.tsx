@@ -1987,6 +1987,15 @@ export default function CoachPage() {
   const [playerSprintDrop, setPlayerSprintDrop] = useState<
     Record<string, { dropPct: number; todayKmh: number; refKmh: number }>
   >({});
+  // ELITE-tier "Ask Claude for deeper analysis" button on the Coach
+  // Recommendation card. Clicking POSTs to /api/coach/team-analysis,
+  // which gates on plan_tier=ELITE and runs Haiku on team facts.
+  // Result is rendered inline below the deterministic narrative.
+  const [aiTeamAnalysis, setAiTeamAnalysis] = useState<{
+    paragraph_1: string; paragraph_2: string; generated_at: string;
+  } | null>(null);
+  const [aiTeamLoading, setAiTeamLoading] = useState(false);
+  const [aiTeamError, setAiTeamError] = useState<string | null>(null);
   const [playerMetabolic, setPlayerMetabolic] = useState<Record<string, { score: number | null; band: string | null }>>({});
   // VBT fatigue flags per player
   const [playerVbtFatigue, setPlayerVbtFatigue] = useState<Record<string, Array<{
@@ -7760,6 +7769,94 @@ export default function CoachPage() {
                             </li>
                           ))}
                         </ul>
+                      )}
+
+                      {/* ELITE AI deeper-analysis button. Sends team facts to
+                          Claude Haiku, which writes 2 paragraphs of context
+                          and connections that the rule-based narrative can't
+                          see (e.g. "the four reduced players all share the
+                          midfield rotation, so the box-to-box workload is
+                          concentrated"). Gated server-side; PRO/FREE see a
+                          402 → renders the upgrade prompt inline. */}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setAiTeamLoading(true);
+                            setAiTeamError(null);
+                            try {
+                              const { data: sess } = await supabase.auth.getSession();
+                              const token = sess?.session?.access_token;
+                              if (!token) { setAiTeamError("Not signed in"); return; }
+                              const res = await fetch("/api/coach/team-analysis", {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                                body: "{}",
+                              });
+                              const json = await res.json();
+                              if (res.status === 402) {
+                                setAiTeamError(lang === "IS"
+                                  ? "Þessi greining er ELITE-eiginleiki. Uppfærðu áskrift til að nýta dýpri AI túlkun."
+                                  : "Deeper analysis is an ELITE feature. Upgrade your plan to unlock AI interpretation.");
+                                return;
+                              }
+                              if (!res.ok) {
+                                setAiTeamError(typeof json?.error === "string" ? json.error : "AI generation failed");
+                                return;
+                              }
+                              setAiTeamAnalysis({
+                                paragraph_1: String(json.paragraph_1 ?? ""),
+                                paragraph_2: String(json.paragraph_2 ?? ""),
+                                generated_at: String(json.generated_at ?? new Date().toISOString()),
+                              });
+                            } catch (e) {
+                              setAiTeamError(e instanceof Error ? e.message : "Network error");
+                            } finally {
+                              setAiTeamLoading(false);
+                            }
+                          }}
+                          disabled={aiTeamLoading}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                            aiTeamLoading
+                              ? "border-slate-300 bg-slate-100 text-slate-500 cursor-wait"
+                              : "border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100"
+                          }`}
+                          title={lang === "IS"
+                            ? "Sendir samantekt á Claude (AI) sem skrifar 2 málsgreinar með dýpri samhengi en deterministic kerfið getur séð. ELITE-eiginleiki."
+                            : "Sends today's squad facts to Claude (AI) for a 2-paragraph deeper interpretation with context the rule-based engine can't surface. ELITE feature."}
+                        >
+                          <span>✨</span>
+                          {aiTeamLoading
+                            ? (lang === "IS" ? "Greini…" : "Analysing…")
+                            : aiTeamAnalysis
+                              ? (lang === "IS" ? "Endurtaka greiningu" : "Re-run analysis")
+                              : (lang === "IS" ? "Smelltu fyrir dýpri greiningu" : "Press for deeper analysis")
+                          }
+                          {!aiTeamAnalysis && (
+                            <span className="rounded-full border border-violet-300 bg-white px-1.5 py-px text-[9px] uppercase tracking-wide text-violet-700">
+                              ELITE
+                            </span>
+                          )}
+                        </button>
+                        {aiTeamError && (
+                          <span className="text-xs text-rose-700">{aiTeamError}</span>
+                        )}
+                      </div>
+
+                      {/* AI analysis result (2 paragraphs from Claude) */}
+                      {aiTeamAnalysis && (
+                        <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/50 p-3">
+                          <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-violet-700">
+                            <span>✨ {lang === "IS" ? "AI dýpri túlkun" : "AI deeper analysis"}</span>
+                            <span className="opacity-70">{new Date(aiTeamAnalysis.generated_at).toLocaleTimeString()}</span>
+                          </div>
+                          {aiTeamAnalysis.paragraph_1 && (
+                            <p className="text-sm text-slate-800 leading-relaxed">{aiTeamAnalysis.paragraph_1}</p>
+                          )}
+                          {aiTeamAnalysis.paragraph_2 && (
+                            <p className="mt-2 text-sm text-slate-800 leading-relaxed">{aiTeamAnalysis.paragraph_2}</p>
+                          )}
+                        </div>
                       )}
 
                       {/* Day-state context row.
