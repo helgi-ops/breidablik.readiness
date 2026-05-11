@@ -171,7 +171,12 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
             {payload.matchDayDemand != null ? Math.round(payload.matchDayDemand).toLocaleString("is-IS") : "—"}
           </div>
           <div className="text-[9px] text-slate-500">
-            {lang === "IS" ? `meðaltal úr ${payload.matchDaysObserved} leikjum` : `avg of ${payload.matchDaysObserved} matches`}
+            {payload.matchDaysObserved === 1
+              ? (lang === "IS" ? "úr 1 leik (lág vissa)" : "from 1 match (low confidence)")
+              : (lang === "IS"
+                  ? `meðaltal úr ${payload.matchDaysObserved} leikjum`
+                  : `avg of ${payload.matchDaysObserved} matches`)
+            }
           </div>
         </div>
         <div className="rounded border border-slate-200 bg-white px-2 py-1.5">

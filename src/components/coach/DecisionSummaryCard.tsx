@@ -132,6 +132,23 @@ export type DecisionSummaryRow = {
   _sprint_today_kmh?: number | null;
   /** Personal-peak reference in km/h, for chip display. */
   _sprint_ref_kmh?: number | null;
+  /** Sprint Exposure band (Malone 2018) — weekly bands 5-8 stride volume
+   *  vs match-day demand baseline. Volume-side companion to Sprint Speed
+   *  Drop (which is quality-side).
+   *    UNDERLOAD  (< 50%)   → 3× hamstring injury risk per Malone
+   *    WATCH      (50–80%)  → playable but undertrained
+   *    SAFE       (80–130%) → sweet spot
+   *    OVERLOAD   (> 150%)  → accumulated spike
+   *  Surfaced as a chip in the Decision Summary card and gated into the
+   *  "Needs attention" filter. Informational — does NOT modify today's
+   *  verdict (Buchheit 2019: chronic-risk signals should inform, not
+   *  override, acute decisions). */
+  _sprint_exposure_band?: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
+  /** Exposure ratio (acuteSum7d ÷ matchDayDemand). 1.0 = matches demand. */
+  _sprint_exposure_ratio?: number | null;
+  /** Number of match days observed in the 28-day window (confidence indicator;
+   *  1 = low confidence, 2+ = standard, surfaced in the chip tooltip). */
+  _sprint_exposure_match_days?: number | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -2589,6 +2606,83 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
+        {/* Sprint Exposure chip — Malone 2018 volume-side companion to the
+            Sprint Speed Drop chip above. UNDERLOAD (< 50% of match demand)
+            is associated with ~3× hamstring injury risk; OVERLOAD (> 150%)
+            is an accumulated spike. Render only when:
+              - band is UNDERLOAD / WATCH / OVERLOAD (skip SAFE + INSUF_DATA)
+              - verdict isn't RECOVERY / HOLD / OFF (no high-intensity work)
+            Informational chip — does NOT modify today's verdict, mirroring
+            Sprint Speed Drop's stance until 2–3 coaches confirm fit. */}
+        {(() => {
+          const band = row._sprint_exposure_band;
+          const ratio = row._sprint_exposure_ratio;
+          if (
+            band == null ||
+            band === "SAFE" ||
+            band === "INSUFFICIENT_DATA" ||
+            ratio == null ||
+            !Number.isFinite(ratio)
+          ) {
+            return null;
+          }
+          if (
+            displayAction === "RECOVERY" ||
+            displayAction === "HOLD" ||
+            displayAction === "OFF_DAY"
+          ) {
+            return null;
+          }
+          const pct = Math.round(ratio * 100);
+          const matchDays = row._sprint_exposure_match_days ?? 0;
+          const lowConfidence = matchDays <= 1;
+          const isSevere = band === "UNDERLOAD" || band === "OVERLOAD";
+          const tone = isSevere
+            ? "border-rose-200 bg-rose-50 text-rose-900"
+            : "border-amber-200 bg-amber-50 text-amber-900";
+          // Band labels are the same in both languages (sport-science loanwords).
+          const bandLabel =
+            band === "UNDERLOAD" ? "Undertrained"
+              : band === "OVERLOAD" ? "Spike"
+                : "Watch";
+          const action = (() => {
+            if (band === "UNDERLOAD") {
+              return lang === "IS"
+                ? "Bætið við sprint-blokk MD-3/MD-4 til að lyfta vikulegri sprint-exposure."
+                : "Add a sprint block at MD-3/MD-4 to lift weekly sprint exposure.";
+            }
+            if (band === "OVERLOAD") {
+              return lang === "IS"
+                ? "Lækkið sprint-volume næstu 2 daga; forðist max-effort sprett."
+                : "Cap sprint volume the next 2 days; avoid max-effort sprints.";
+            }
+            return lang === "IS"
+              ? "Fylgjast með — top up ef leikur er á næstu leiti."
+              : "Monitor — top up if a match is coming up.";
+          })();
+          const headline = lang === "IS"
+            ? `Sprint exposure ${pct}% af leikdags-meðaltali`
+            : `Sprint exposure ${pct}% of match demand`;
+          const conf = lowConfidence
+            ? (lang === "IS" ? " (úr 1 leik — lág vissa)" : " (1-match baseline — low confidence)")
+            : "";
+          return (
+            <div
+              className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
+              title="Malone 2018: weekly sprint exposure < 50% of match demand → ~3× hamstring injury risk. > 150% is an accumulated spike. Bands 5-8 of Catapult IMA Free Running are summed over the last 7 days and compared to the per-match average across the last 28 days."
+            >
+              <span className="mt-0.5 shrink-0">📊</span>
+              <span>
+                <span className="font-semibold">
+                  {headline} · {bandLabel}
+                  {conf}
+                </span>
+                {" · "}{action}
+              </span>
+            </div>
+          );
+        })()}
+
         {/* Readiness ↔ Load context strip */}
         <ReadinessLoadStrip row={row} lang={lang} />
       </div>
@@ -2693,10 +2787,17 @@ const DecisionSummaryCard: FC<{
   // because they don't change the verdict for today's session. A coach
   // glancing at the dashboard wants the acute count; chronic context
   // lives on the cards for when they drill into a specific player.
+  //
+  // EXCEPTION: Sprint Exposure (Malone 2018) is technically a 7-day signal,
+  // but UNDERLOAD / OVERLOAD bands are actionable TODAY — the coach should
+  // add (UNDERLOAD) or cap (OVERLOAD) sprint volume in the current session.
+  // WATCH is excluded (50–80% is still close to demand). This keeps the
+  // filter focused on what changes today's plan.
   const needsAttention = (row: DecisionSummaryRow): boolean => {
     const action = resolveDisplayAction(row);
     if (action === "RECOVERY" || action === "MODIFIED" || action === "REDUCED" || action === "HOLD") return true;
     if (row._injury_status === "injured" || row._injury_status === "rehabilitation" || row._injury_status === "rtp_training") return true;
+    if (row._sprint_exposure_band === "UNDERLOAD" || row._sprint_exposure_band === "OVERLOAD") return true;
     return false;
   };
 

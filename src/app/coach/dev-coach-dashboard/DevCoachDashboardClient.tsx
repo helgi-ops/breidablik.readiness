@@ -66,6 +66,10 @@ import {
   loadAdminConfigSnapshotFromStorage,
   type AdminConfigSnapshot,
 } from "@/lib/micropulse/adminConfig";
+import {
+  computeSprintExposure,
+  type DailySprintExposure,
+} from "@/lib/micropulse/sprintExposure";
 import ExplainabilityDrawer from "@/components/performanceIntelligence/ExplainabilityDrawer";
 import PerformanceIntelligencePanel from "@/components/performanceIntelligence/PerformanceIntelligencePanel";
 import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
@@ -1986,6 +1990,20 @@ export default function CoachPage() {
   // 2–3 coaches confirm the rule fits their workflow).
   const [playerSprintDrop, setPlayerSprintDrop] = useState<
     Record<string, { dropPct: number; todayKmh: number; refKmh: number }>
+  >({});
+  // Sprint Exposure per player (Malone 2018 — volume-side hamstring risk).
+  // Weekly sum of IMA bands 5-8 strides vs the player's match-day demand
+  // baseline (avg per match over last 28d). UNDERLOAD < 50% → 3× hamstring
+  // injury risk; OVERLOAD > 150% → accumulated spike. Companion to Sprint
+  // Speed Drop (quality side) — together they form full hamstring-injury
+  // surveillance (Buchheit 2019: monitor both quality + volume).
+  // Computed inline against the team-batched query for one round-trip.
+  const [playerSprintExposure, setPlayerSprintExposure] = useState<
+    Record<string, {
+      band: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA";
+      ratio: number | null;
+      matchDaysObserved: number;
+    }>
   >({});
   // ELITE-tier "Ask Claude for deeper analysis" button on the Coach
   // Recommendation card. Clicking POSTs to /api/coach/team-analysis,
@@ -4084,6 +4102,117 @@ export default function CoachPage() {
         if (alive) setPlayerSprintDrop(out);
       } catch {
         // Silently ignore — sprint-drop chip simply won't render.
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, coachTeamId, today]);
+
+  // ── Bulk Sprint Exposure per player (Malone 2018 — volume-side) ──────
+  // Companion to Sprint Speed Drop above. Pulls last 28 days of IMA bands
+  // 5-8 stride counts + match_player_minutes ≥60 to flag true match days,
+  // then runs the pure computeSprintExposure() per player. One round-trip
+  // for the whole squad. Each player's result is stored in the map and
+  // injected onto the DecisionSummary row as _sprint_exposure_* below.
+  useEffect(() => {
+    if (!coachVerified || !coachTeamId) {
+      setPlayerSprintExposure({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const start = new Date(`${today}T00:00:00Z`);
+        start.setUTCDate(start.getUTCDate() - 27);
+        const startIso = start.toISOString().slice(0, 10);
+
+        const { data: pl } = await supabase
+          .from("players")
+          .select("id")
+          .eq("team_id", coachTeamId)
+          .eq("is_active", true);
+        if (!alive) return;
+        const playerIds = ((pl ?? []) as Array<{ id: string }>).map((r) => r.id);
+        if (playerIds.length === 0) {
+          setPlayerSprintExposure({});
+          return;
+        }
+
+        // Bands 5-8 daily stride counts for the whole squad
+        const { data: rows } = await supabase
+          .from("player_external_load_daily")
+          .select(
+            "player_id, date, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count"
+          )
+          .in("player_id", playerIds)
+          .eq("source", "catapult")
+          .gte("date", startIso)
+          .lte("date", today);
+        if (!alive) return;
+
+        // Match days (≥60 min) for the squad — used to flag rows as match days
+        const matchDaysByPlayer = new Map<string, Set<string>>();
+        try {
+          const { data: mm } = await supabase
+            .from("match_player_minutes")
+            .select("player_id, match_date, minutes_played")
+            .in("player_id", playerIds)
+            .gte("match_date", startIso)
+            .lte("match_date", today)
+            .gte("minutes_played", 60);
+          for (const r of (mm ?? []) as Array<{
+            player_id: string; match_date: string;
+          }>) {
+            if (!matchDaysByPlayer.has(r.player_id)) matchDaysByPlayer.set(r.player_id, new Set());
+            matchDaysByPlayer.get(r.player_id)!.add(r.match_date);
+          }
+        } catch {
+          /* table optional on some tiers — proceed without match-day data */
+        }
+
+        // Group bands 5-8 by player and shape into DailySprintExposure rows
+        const byPlayer = new Map<string, DailySprintExposure[]>();
+        for (const id of playerIds) byPlayer.set(id, []);
+        for (const r of (rows ?? []) as Array<{
+          player_id: string;
+          date: string;
+          ima_fr_band5_stride_count: number | null;
+          ima_fr_band6_stride_count: number | null;
+          ima_fr_band7_stride_count: number | null;
+          ima_fr_band8_stride_count: number | null;
+        }>) {
+          const b5 = Number(r.ima_fr_band5_stride_count ?? 0) || 0;
+          const b6 = Number(r.ima_fr_band6_stride_count ?? 0) || 0;
+          const b7 = Number(r.ima_fr_band7_stride_count ?? 0) || 0;
+          const b8 = Number(r.ima_fr_band8_stride_count ?? 0) || 0;
+          const sum = b5 + b6 + b7 + b8;
+          const matchDays = matchDaysByPlayer.get(r.player_id);
+          const list = byPlayer.get(r.player_id);
+          if (!list) continue;
+          list.push({
+            date: r.date,
+            hiBandStrides: sum > 0 ? sum : null,
+            isMatchDay: matchDays?.has(r.date) ?? false,
+          });
+        }
+
+        const out: Record<string, {
+          band: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA";
+          ratio: number | null;
+          matchDaysObserved: number;
+        }> = {};
+        for (const [pid, daily] of byPlayer) {
+          if (daily.length === 0) continue;
+          const payload = computeSprintExposure(daily, today);
+          out[pid] = {
+            band: payload.band,
+            ratio: payload.exposureRatio,
+            matchDaysObserved: payload.matchDaysObserved,
+          };
+        }
+        if (alive) setPlayerSprintExposure(out);
+      } catch {
+        // Silently ignore — exposure chip simply won't render.
       }
     })();
     return () => { alive = false; };
@@ -7948,6 +8077,13 @@ export default function CoachPage() {
                 _sprint_drop_pct: playerSprintDrop[r.player_id]?.dropPct ?? null,
                 _sprint_today_kmh: playerSprintDrop[r.player_id]?.todayKmh ?? null,
                 _sprint_ref_kmh: playerSprintDrop[r.player_id]?.refKmh ?? null,
+                // Sprint Exposure (Malone 2018 — volume-side hamstring risk).
+                // Bands 5-8 weekly stride sum vs match-day demand baseline.
+                // Surfaced as chip in DecisionSummaryCard + counts toward
+                // "Needs attention" filter for UNDERLOAD / OVERLOAD bands.
+                _sprint_exposure_band: playerSprintExposure[r.player_id]?.band ?? null,
+                _sprint_exposure_ratio: playerSprintExposure[r.player_id]?.ratio ?? null,
+                _sprint_exposure_match_days: playerSprintExposure[r.player_id]?.matchDaysObserved ?? null,
               };
 
               // Enrich with most recent GPS load from catapult history

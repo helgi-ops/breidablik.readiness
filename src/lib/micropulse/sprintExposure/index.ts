@@ -69,7 +69,14 @@ export type SprintExposurePayload = {
 
 const ACUTE_DAYS = 7;
 const CHRONIC_DAYS = 28;
-const MIN_MATCH_DAYS = 2;
+// MIN_MATCH_DAYS = 1: league teams often have only one match per 28-day
+// window for a given player (rotations, injuries, international breaks).
+// We surface match-day demand as soon as 1 match is observed and let the
+// UI flag confidence ("based on 1 match" caveat) so coaches can weight it.
+// Sport-science note: a single match is noisier than a 2-3 match average
+// but still beats no baseline — Buchheit 2019 explicitly recommends
+// progressive baseline confidence rather than gated thresholds.
+const MIN_MATCH_DAYS = 1;
 const MIN_TRAINING_DAYS_7D = 2;
 
 const BAND_UNDERLOAD_MAX = 0.5;
