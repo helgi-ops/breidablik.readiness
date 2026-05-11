@@ -281,6 +281,39 @@ function buildUserPayload(
   });
 }
 
+/** Extract the first balanced JSON object from a string, ignoring any
+ *  text or markdown fences around it. Handles strings + escapes correctly
+ *  so braces inside quoted values don't trip the balance counter.
+ *  Claude Haiku sometimes returns extra commentary after the JSON or
+ *  wraps it in ``` fences — this is robust against both. */
+function extractFirstJsonObject(text: string): unknown {
+  const cleaned = text
+    .replace(/^[^{]*```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const firstBrace = cleaned.indexOf("{");
+  if (firstBrace < 0) throw new Error("No JSON object in response");
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = firstBrace; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        const candidate = cleaned.slice(firstBrace, i + 1);
+        return JSON.parse(candidate);
+      }
+    }
+  }
+  throw new Error("Unbalanced JSON braces in Claude response");
+}
+
 async function callClaude(systemPrompt: string, userMessage: string): Promise<unknown> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -305,8 +338,7 @@ async function callClaude(systemPrompt: string, userMessage: string): Promise<un
   }
   const json = await res.json() as { content?: Array<{ type: string; text?: string }> };
   const textContent = json.content?.find((c) => c.type === "text")?.text ?? "";
-  const cleaned = textContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  return JSON.parse(cleaned);
+  return extractFirstJsonObject(textContent);
 }
 
 /** Validate + sanitize Claude's output against actual session shape. */

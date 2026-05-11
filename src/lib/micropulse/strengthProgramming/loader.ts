@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MdContext, PlayerStrengthSnapshot } from "./types";
 import type { CoachOverride } from "./index";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
+import { parseWellnessNote, mergeNoteIntoSoreAreas } from "./noteParser";
 
 /** Load coach manual exercise overrides for one player on one date. */
 export async function loadCoachOverrides(
@@ -160,7 +161,11 @@ async function fetchDecelBurden(
   }
 }
 
-/** Read latest readiness entry — wellness sub-scores + sore-areas array. */
+/** Read latest readiness entry — wellness sub-scores + sore-areas array.
+ *  Now also parses the free-text `notes` column with the bilingual
+ *  keyword matcher (noteParser.ts) and merges any detected
+ *  contraindications into the sore_areas array so the existing
+ *  adaptation rules pick them up automatically — no AI required. */
 async function fetchWellness(
   sb: SupabaseClient,
   playerId: string,
@@ -173,7 +178,7 @@ async function fetchWellness(
     const startIso = startOfDayIso(2, todayIso); // today + 2 prior days fallback
     const { data } = await sb
       .from("readiness_entries")
-      .select("entry_date, sleep_quality, muscle_soreness, fatigue_energy, stress_mood, sore_areas")
+      .select("entry_date, sleep_quality, muscle_soreness, fatigue_energy, stress_mood, sore_areas, notes")
       .eq("player_id", playerId)
       .gte("entry_date", startIso)
       .lte("entry_date", todayIso)
@@ -184,13 +189,17 @@ async function fetchWellness(
       sleep_quality: number | null; muscle_soreness: number | null;
       fatigue_energy: number | null; stress_mood: number | null;
       sore_areas: string[] | null;
+      notes: string | null;
     };
+    const checkboxAreas = Array.isArray(r.sore_areas) ? r.sore_areas : [];
+    const parsedFromNote = parseWellnessNote(r.notes);
+    const mergedSoreAreas = mergeNoteIntoSoreAreas(checkboxAreas, parsedFromNote);
     return {
       sleepQuality: r.sleep_quality,
       muscleSoreness: r.muscle_soreness,
       fatigueEnergy: r.fatigue_energy,
       stressMood: r.stress_mood,
-      soreAreas: Array.isArray(r.sore_areas) ? r.sore_areas : [],
+      soreAreas: mergedSoreAreas,
     };
   } catch {
     return empty;
