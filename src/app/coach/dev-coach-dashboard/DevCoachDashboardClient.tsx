@@ -84,6 +84,7 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
+import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
@@ -7787,6 +7788,13 @@ export default function CoachPage() {
               })()}
             </CardContent>
           </Card>
+
+          {/* Weekly Narrative — strategic 7-day overview between Today
+              Command Center and the per-day briefings. Reads training-load
+              data + verdict history across the squad and emits a one-line
+              story + 2–3 supporting facts + forward-looking recommendation.
+              Self-hides when there's not enough data yet (fresh teams). */}
+          <WeeklyNarrativeCard teamId={coachTeamId} />
 
           {/* Indoor Briefing — team-level executive summary.
               Hidden when team training_mode is explicitly set to "outdoor" — the

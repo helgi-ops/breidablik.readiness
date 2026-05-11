@@ -2465,6 +2465,12 @@ const DecisionSummaryCard: FC<{
 }> = ({ rows, trainingMode = "auto" }) => {
   const [selectedRow, setSelectedRow] = useState<DecisionSummaryRow | null>(null);
   const [lang] = useLang();
+  // Smart filter — when ON, hide all green/FULL players and show only
+  // those that need coach attention (REDUCED, RECOVERY, HOLD, injuries,
+  // chronic-risk chips, big day-over-day drops). Coach can flip this to
+  // skip the boring 25 cards and see only the ~3–4 that matter today.
+  // Default OFF so first-time coaches see the whole squad.
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   // Foster Monotony & Strain per player — single team-wide fetch on
   // mount, computed in memory, indexed by player_id. Surfaces the
@@ -2528,12 +2534,39 @@ const DecisionSummaryCard: FC<{
 
   if (!rows.length) return null;
 
+  // Coach-attention rule — true when a card MUST be looked at today.
+  // Drives the "Show only attention" toggle. Designed to be explicit so
+  // we never accidentally hide a player who has a real flag.
+  const needsAttention = (row: DecisionSummaryRow): boolean => {
+    const action = resolveDisplayAction(row);
+    if (action === "RECOVERY" || action === "MODIFIED" || action === "REDUCED" || action === "HOLD") return true;
+    if (row._injury_status === "injured" || row._injury_status === "rehabilitation" || row._injury_status === "rtp_training") return true;
+    // Sprint Speed Drop ≥ 3% (Edouard 2019 watch threshold)
+    if (typeof row._sprint_drop_pct === "number" && row._sprint_drop_pct >= 3) return true;
+    // High-tier CoD asymmetry ≥ 15% (Bishop 2020 concern)
+    if (typeof row._cod_high_asym_pct === "number" && row._cod_high_asym_pct >= 15) return true;
+    // VBT velocity drop logged this week
+    if (Array.isArray(row._vbt_fatigue_flags) && row._vbt_fatigue_flags.length > 0) return true;
+    // Day-over-day worsening of ≥ 1 STEN band
+    if (typeof row._dz === "number" && row._dz <= -0.4) return true;
+    // Decel burden flagged elevated/high
+    if (row._today_decel_burden_band === "elevated" || row._today_decel_burden_band === "high") return true;
+    // Hidden-fatigue signal (HID% drop while distance stable)
+    if (row._today_hid_fatigue_flag === true) return true;
+    // Indoor red flags
+    if (row._indoor_mcburnie_flag === "red" || row._indoor_acwr_flag === "red") return true;
+    return false;
+  };
+
   const sorted = [...rows].sort((a, b) => {
     const pa = (STATE_CONFIG[resolveDisplayAction(a) ?? ""] ?? UNKNOWN_STATE).sortPriority;
     const pb = (STATE_CONFIG[resolveDisplayAction(b) ?? ""] ?? UNKNOWN_STATE).sortPriority;
     if (pa !== pb) return pa - pb;
     return a.full_name.localeCompare(b.full_name);
   });
+
+  const attentionRows = sorted.filter(needsAttention);
+  const visibleRows = attentionOnly ? attentionRows : sorted;
 
   const counts = sorted.reduce<Record<string, number>>((acc, row) => {
     const a = resolveDisplayAction(row) ?? "UNKNOWN";
@@ -2553,7 +2586,7 @@ const DecisionSummaryCard: FC<{
               Per-player training decision today
             </CardDescription>
           </div>
-          {/* Quick tally */}
+          {/* Quick tally + smart filter toggle */}
           <div className="flex items-center gap-2 flex-wrap">
             {counts["RECOVERY"] != null && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
@@ -2570,15 +2603,53 @@ const DecisionSummaryCard: FC<{
                 🟢 {counts["FULL"]} full
               </span>
             )}
+
+            {/* Smart filter toggle — flip from "all 28 cards" to "just the
+                ones that need attention today". Disabled when nothing is
+                flagged so the button doesn't suggest there's hidden work. */}
+            <button
+              type="button"
+              onClick={() => setAttentionOnly((v) => !v)}
+              disabled={attentionRows.length === 0}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${
+                attentionRows.length === 0
+                  ? "border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                  : attentionOnly
+                    ? "border border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              title={attentionRows.length === 0
+                ? (lang === "IS" ? "Engin viðvörun í dag — engir leikmenn til að fela." : "No flags today — nothing to filter.")
+                : (lang === "IS"
+                  ? `Sýna aðeins ${attentionRows.length} leikmenn sem þurfa athygli í dag (felur ${sorted.length - attentionRows.length} græn spjöld).`
+                  : `Show only the ${attentionRows.length} player(s) needing attention today (hides ${sorted.length - attentionRows.length} green cards).`)
+              }
+            >
+              <span>{attentionOnly ? "✓" : "⚑"}</span>
+              {lang === "IS" ? "Þurfa athygli" : "Needs attention"}
+              <span className={`rounded-full px-1.5 py-px text-[10px] font-bold ${
+                attentionOnly ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+              }`}>
+                {attentionRows.length}
+              </span>
+            </button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sorted.map((row) => (
-            <PlayerCard key={row.player_id} row={row} onClick={() => setSelectedRow(row)} lang={lang} />
-          ))}
-        </div>
+        {visibleRows.length === 0 ? (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            {lang === "IS"
+              ? "🎉 Allir leikmenn eru í lagi í dag — engin viðvörun. Smelltu á 'Þurfa athygli' til að sjá allt liðið."
+              : "🎉 Every player is clear today — no flags. Toggle 'Needs attention' off to see the full squad."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleRows.map((row) => (
+              <PlayerCard key={row.player_id} row={row} onClick={() => setSelectedRow(row)} lang={lang} />
+            ))}
+          </div>
+        )}
       </CardContent>
 
       {/* Detail modal — click anywhere outside or press Escape to close */}
