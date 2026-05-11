@@ -25,7 +25,9 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 // translates the 6 decel metrics into coach speak. Lives only on this page.
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
 import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
+import SprintExposureCard from "@/components/coach/SprintExposureCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
+import CoDAsymmetryCard from "@/components/coach/CoDAsymmetryCard";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
@@ -495,6 +497,20 @@ function PlayerRow({ row }: { row: Row }) {
               L/R CoD asymmetry. Mode-agnostic (works indoor + outdoor). Sits
               alongside McBurnie because both are stride-mechanical signals. */}
           <StrideIntelligenceCard playerId={row.player_id} />
+
+          {/* L/R CoD asymmetry by intensity tier (Bishop 2020). Same IMA CoD
+              data as the Stride card's L/R tile, but split into Low/Med/High
+              so coaches can see whether the asymmetry sits in the
+              injury-relevant high-intensity tier or just at jog-pace. */}
+          <CoDAsymmetryCard playerId={row.player_id} />
+
+          {/* Sprint Exposure — VOLUME-side companion to Sprint Speed Drop.
+              Bands 5-8 stride count over the last 7 days vs the player's
+              28-day match-day demand baseline (Malone 2018). Under 50%
+              flags hamstring injury risk from undertraining; over 150%
+              flags accumulated overload. Self-hides when no match-day
+              baseline is available yet. */}
+          <SprintExposureCard playerId={row.player_id} />
 
           {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
               over Catapult total_player_load. Indoor-friendly external load
