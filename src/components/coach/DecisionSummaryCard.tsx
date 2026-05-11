@@ -275,6 +275,27 @@ function applyOverrideGuardrail(
   row: DecisionSummaryRow,
   systemAction: string | null,
 ): string | null {
+  // ── HARDEST OVERRIDE: active injury / illness / RTP ────────────────────
+  // When the player is in the injury pipeline, the load/wellness engines
+  // are irrelevant — coach action is dictated by physio plan, not the
+  // engine. Previously the verdict BADGE was injury-aware (shows "Rehab")
+  // but the COACH ACTION block still said "Clear for full session" because
+  // displayAction stayed as FULL. That's a real contradiction the coach
+  // could read as permission to send the player in.
+  //
+  // Map:
+  //   injured       → RECOVERY  (acute, no team session)
+  //   rehabilitation → RECOVERY (physio phase, no team session)
+  //   rtp_training  → MODIFIED  (running with team, but restricted)
+  //   cleared       → (no override, engine verdict applies)
+  const injStatus = row._injury_status;
+  if (injStatus === "injured" || injStatus === "rehabilitation") {
+    return "RECOVERY";
+  }
+  if (injStatus === "rtp_training") {
+    return "MODIFIED";
+  }
+
   // ── HARD OVERRIDE: today is OFF day per team's week_plans ─────────────
   // No training is scheduled today. The load/wellness verdicts ("Cleared
   // full", "Mixed signals", etc.) are misleading on OFF days because
@@ -513,8 +534,58 @@ type ActionBlock = {
 
 function buildCoachActionBlock(
   displayAction: string | null,
-  final: PrescriptionDecision | null
+  final: PrescriptionDecision | null,
+  /** Optional injury context — when present, action text overrides the
+   *  generic RECOVERY/MODIFIED copy with rehab-specific instructions so
+   *  the coach never sees "Clear for full session" or generic "Keep off
+   *  main session" for a player whose physio plan is the real driver. */
+  injury?: {
+    status?: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+    bodyPart?: string | null;
+    rtpStage?: number | null;
+    isIllness?: boolean;
+  } | null,
 ): ActionBlock {
+  // ── HARDEST OVERRIDE: active injury / illness ─────────────────────────
+  // When the player is actively in the injury pipeline, action copy must
+  // come from rehab logic, not from the load engine. Mirrors the same
+  // override priority used in applyOverrideGuardrail().
+  if (injury) {
+    if (injury.status === "injured" || injury.status === "rehabilitation") {
+      if (injury.isIllness) {
+        return {
+          headline: "Recovering from illness — no team session",
+          details: [
+            "Light rehab or full rest per medical advice",
+            "Re-check next training day before clearing",
+          ],
+        };
+      }
+      const where = injury.bodyPart ? ` (${injury.bodyPart})` : "";
+      return {
+        headline: `Follow rehab plan${where} — no team session`,
+        details: [
+          "Physio program takes priority over team load",
+          "Coach action: monitor pain / swelling reports",
+        ],
+      };
+    }
+    if (injury.status === "rtp_training") {
+      const stage = typeof injury.rtpStage === "number" ? injury.rtpStage : null;
+      const where = injury.bodyPart ? ` (${injury.bodyPart})` : "";
+      const stageText = stage != null ? `RTP stage ${stage}/5${where}` : `Return to play${where}`;
+      return {
+        headline: `${stageText} — modified work only`,
+        details: [
+          stage != null && stage <= 3
+            ? "Running / individual conditioning, no team contact drills"
+            : "Partial team integration — skip max-effort cutting and 1v1 duels",
+          "Pull immediately at first sign of pain or compensation",
+        ],
+      };
+    }
+  }
+
   // ── OFF_DAY ────────────────────────────────────────────────────────────
   // Today is OFF in the team's week_plans — no session is scheduled.
   // Wellness check-ins still feed the trend; the coach action is
@@ -1048,7 +1119,12 @@ const PlayerModal: FC<{
   const trendText = trendToText(trendDir) ?? deltaToText(row._dz);
   const primarySentence = buildPrimaryDriverSentence(primaryDriver, zText, trendText);
   const allSecondary = buildSecondaryLabels(final?.primaryDrivers, primaryDriver?.key);
-  const actionBlock = buildCoachActionBlock(displayAction, final);
+  const actionBlock = buildCoachActionBlock(displayAction, final, {
+    status: row._injury_status ?? null,
+    bodyPart: row._injury_body_part ?? null,
+    rtpStage: row._injury_rtp_stage ?? null,
+    isIllness: isIllnessRecord(row._injury_body_part),
+  });
   const decisionReasons = buildDecisionReasons(
     row._final_recommendation_decision ?? null,
     displayAction
@@ -2280,7 +2356,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
     ? buildSecondaryLabels(final?.primaryDrivers, primaryDriver?.key)
     : [];
 
-  const actionBlock = buildCoachActionBlock(displayAction, final);
+  const actionBlock = buildCoachActionBlock(displayAction, final, {
+    status: row._injury_status ?? null,
+    bodyPart: row._injury_body_part ?? null,
+    rtpStage: row._injury_rtp_stage ?? null,
+    isIllness: isIllnessRecord(row._injury_body_part),
+  });
 
   return (
     <div
