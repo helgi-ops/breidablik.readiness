@@ -1492,6 +1492,57 @@ function readinessColor(value: number): { bg: string; text: string } {
   return { bg: "bg-emerald-100", text: "text-emerald-700" };
 }
 
+/** Plain-language descriptor for a wellness 1–5 score. Returned only for
+ *  the extreme bands (≤ 2 = bad, ≥ 4 = good) so coach gets an instant
+ *  qualitative read for the chips that actually matter. The middle band
+ *  (=3) returns null — "OK" labels add visual noise without insight.
+ *  Soreness has the same scale convention as the others (1 = sore, 5 = fresh)
+ *  so the same mapping works across all four metrics. */
+function readinessDescriptor(value: number, lang: Lang = "EN"): string | null {
+  if (value <= 1) return lang === "IS" ? "Slæmt" : "Bad";
+  if (value <= 2) return lang === "IS" ? "Lélegt" : "Poor";
+  if (value >= 5) return lang === "IS" ? "Frábært" : "Great";
+  if (value >= 4) return lang === "IS" ? "Gott" : "Good";
+  return null;
+}
+
+/** Build a coach-friendly tooltip for a wellness chip. Combines the score,
+ *  the qualitative band and (when available) the descriptor — so coach
+ *  hovering "Svefn 2" sees "Sleep quality: 2/5 — Lélegt". */
+function readinessTooltip(label: string, value: number, lang: Lang = "EN"): string {
+  const desc = readinessDescriptor(value, lang);
+  return desc ? `${label}: ${value}/5 — ${desc}` : `${label}: ${value}/5`;
+}
+
+/** Day-over-day delta badge derived from existing _dz field (z-score
+ *  change vs yesterday). Coach sees direction-of-change at a glance
+ *  without having to remember yesterday's STEN. Threshold ±0.4 is one
+ *  STEN band — anything smaller is noise.
+ *  Returns null when _dz is missing or under threshold. */
+function buildDeltaBadge(dz: number | null | undefined, lang: Lang = "EN"): {
+  text: string; tone: "up" | "down";
+} | null {
+  if (dz == null || !Number.isFinite(dz)) return null;
+  const big = Math.abs(dz) >= 0.8;
+  if (dz >= 0.4) {
+    return {
+      text: lang === "IS"
+        ? (big ? "↑↑ Mun betri en í gær" : "↑ Betri en í gær")
+        : (big ? "↑↑ Much better than yesterday" : "↑ Better than yesterday"),
+      tone: "up",
+    };
+  }
+  if (dz <= -0.4) {
+    return {
+      text: lang === "IS"
+        ? (big ? "↓↓ Mun verri en í gær" : "↓ Verri en í gær")
+        : (big ? "↓↓ Much worse than yesterday" : "↓ Worse than yesterday"),
+      tone: "down",
+    };
+  }
+  return null;
+}
+
 function getReadinessItems(row: DecisionSummaryRow): ReadinessItem[] {
   const items: ReadinessItem[] = [];
   if (row.sleep_quality != null) items.push({ label: "Sleep quality", shortLabel: "Svefn", value: row.sleep_quality });
@@ -1562,25 +1613,27 @@ function buildSorenessLoadNote(row: DecisionSummaryRow): string | null {
 }
 
 /** Compact readiness + load strip for player cards */
-const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow }> = ({ row }) => {
+const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
   const readiness = getReadinessItems(row);
   const load = getLoadItems(row);
   if (readiness.length === 0 && load.length === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-      {/* Readiness pills */}
+      {/* Readiness pills — score + qualitative descriptor when extreme */}
       {readiness.length > 0 && (
         <div className="flex items-center gap-1">
           {readiness.map((item) => {
             const col = readinessColor(item.value);
+            const desc = readinessDescriptor(item.value, lang);
             return (
               <span
                 key={item.shortLabel}
-                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold ${col.bg} ${col.text}`}
-                title={`${item.label}: ${item.value}/5`}
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${col.bg} ${col.text}`}
+                title={readinessTooltip(item.label, item.value, lang)}
               >
-                {item.shortLabel} {item.value}
+                <span>{item.shortLabel} {item.value}</span>
+                {desc && <span className="opacity-80 font-medium">· {desc}</span>}
               </span>
             );
           })}
@@ -2199,6 +2252,30 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
             )}
           </div>
         </div>
+
+        {/* Day-over-day delta badge — derived from existing _dz field
+            (z-score change vs yesterday). Coach sees direction of change
+            at a glance without remembering yesterday's STEN. Renders only
+            when |Δz| ≥ 0.4 (about one STEN band) — sub-threshold is noise. */}
+        {(() => {
+          const delta = buildDeltaBadge(row._dz, lang);
+          if (!delta) return null;
+          const tone = delta.tone === "up"
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+            : "bg-rose-50 text-rose-700 border border-rose-200";
+          return (
+            <div className="flex">
+              <span
+                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}
+                title={lang === "IS"
+                  ? "Breyting í STEN-stigi miðað við gærdaginn (eigin grunnlína)."
+                  : "Change in STEN score vs yesterday (personal baseline)."}
+              >
+                {delta.text}
+              </span>
+            </div>
+          );
+        })()}
         {/* Injury / illness context line — body part + estimated return */}
         {isInjured && (row._injury_body_part || row._injury_estimated_return) && (
           <p
@@ -2367,7 +2444,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
         })()}
 
         {/* Readiness ↔ Load context strip */}
-        <ReadinessLoadStrip row={row} />
+        <ReadinessLoadStrip row={row} lang={lang} />
       </div>
     </div>
   );
