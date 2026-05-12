@@ -61,10 +61,13 @@ const communicationLinks: SidebarLink[] = [
 //     Answers "how is the squad trending and what is each player capable of
 //     right now?" Includes neuromuscular tests (VALD/CMJ, Strength/VBT)
 //     which are capacity assessments rather than daily-load decisions.
+// All Load Monitoring labels end in "Intelligence" — consistent naming
+// pattern signals to coaches that these are analytical surfaces (not raw
+// data dumps) and groups them visually in the sidebar.
 const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
-  { href: "/coach/quadrant",           label: { EN: "Quadrant view",                    IS: "Quadrant view" } },
-  { href: "/coach/indoor-load",        label: { EN: "Indoor Load",                      IS: "Indoor Load" } },
+  { href: "/coach/quadrant",           label: { EN: "Quadrant Intelligence",            IS: "Quadrant Intelligence" } },
+  { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
   // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
