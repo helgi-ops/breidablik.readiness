@@ -2535,6 +2535,16 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
             return null;
           }
           const isHigh = pct >= 18;
+          const headline = lang === "IS"
+            ? `Sterki munur á fótunum (${pct.toFixed(0)}%)`
+            : `One leg working harder than the other (${pct.toFixed(0)}%)`;
+          const action = isHigh
+            ? (lang === "IS"
+              ? "Sleppa hörðum cutting æfingum í dag. Vinna einn fót í einu (split squat, B-stance) til að jafna."
+              : "Skip hard cutting drills today. Do single-leg work (split squat, B-stance) to even it out.")
+            : (lang === "IS"
+              ? "Bæta við einfættri vinnu í dag — meiri vinnu á veikari fót."
+              : "Add some single-leg work today — extra reps on the weaker side.");
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
@@ -2542,14 +2552,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                   ? "border-rose-200 bg-rose-50 text-rose-900"
                   : "border-amber-200 bg-amber-50 text-amber-900"
               }`}
-              title="Bishop 2020: high-intensity L/R CoD asymmetry > 15% is the strongest predictor of non-contact lower-limb injury. Chronic baseline signal — does not change today's verdict."
+              title="Bishop 2020: high-tier L/R CoD asymmetry > 15% is the strongest predictor of non-contact lower-limb injury (~3× risk). 14-day rolling window. Chronic baseline signal — does not change today's verdict, but coach should consider unilateral work."
             >
               <span className="mt-0.5 shrink-0">⚠️</span>
               <span>
-                <span className="font-semibold">
-                  Chronic L/R asymmetry {pct.toFixed(1)}% (high-tier, 14d)
-                </span>
-                {" · "}Consider unilateral work or skip max-effort cutting drills today.
+                <span className="font-semibold">{headline}</span>
+                {" · "}{action}
               </span>
             </div>
           );
@@ -2583,24 +2591,36 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
               ? "border-amber-200 bg-amber-50 text-amber-900"
               : "border-amber-100 bg-amber-50/60 text-amber-900";
           const action = isHigh
-            ? "Avoid maximal sprint exposure today — high hamstring-injury band."
+            ? (lang === "IS"
+              ? "Sleppa max-spretti í dag. Hamstring áhætta há — halda æfingu undir 80% sprett-hraða."
+              : "No max sprints today. Hamstring risk is high — keep all sprint work under 80%.")
             : isConcern
-              ? "Cap top-end sprints; monitor closely."
-              : "Watch trend over next 1–2 sessions.";
-          const ctx = today != null && ref != null
-            ? ` (${today.toFixed(1)} vs ${ref.toFixed(1)} km/h)`
-            : "";
+              ? (lang === "IS"
+                ? "Forðast max-spretti í dag. Fylgjast vel með næstu 1-2 æfingar."
+                : "Avoid max sprints today. Watch closely the next 1-2 sessions.")
+              : (lang === "IS"
+                ? "Fylgjast með í næstu 1-2 æfingum."
+                : "Watch this over the next 1-2 sessions.");
+          const speedContext = today != null && ref != null
+            ? (lang === "IS"
+              ? `${today.toFixed(1)} km/klst í dag, hámark er ${ref.toFixed(1)}`
+              : `${today.toFixed(1)} km/h today, peak is ${ref.toFixed(1)}`)
+            : null;
+          const headline = lang === "IS"
+            ? `Hægari sprettir en venjulega (${drop.toFixed(0)}% undir hámarki)`
+            : `Slower sprints than usual (${drop.toFixed(0)}% below peak)`;
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="Edouard 2019 / Malone 2018: a > 10% drop in maximal sprint speed vs personal peak is associated with 3–4× higher hamstring-injury risk. Today's max velocity is compared to the top-3 mean over the last 28 days."
+              title="Edouard 2019 / Malone 2018: a > 10% drop in max sprint speed vs personal peak is associated with 3-4× higher hamstring-injury risk. Today's max velocity is compared to the top-3 mean over the last 28 days. Sub-3% drops are normal session-to-session noise."
             >
               <span className="mt-0.5 shrink-0">🏃</span>
               <span>
-                <span className="font-semibold">
-                  Sprint speed −{drop.toFixed(1)}% vs personal peak{ctx}
-                </span>
+                <span className="font-semibold">{headline}</span>
                 {" · "}{action}
+                {speedContext && (
+                  <span className="block mt-0.5 text-[10px] opacity-80">{speedContext}</span>
+                )}
               </span>
             </div>
           );
@@ -2640,32 +2660,42 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           const tone = isSevere
             ? "border-rose-200 bg-rose-50 text-rose-900"
             : "border-amber-200 bg-amber-50 text-amber-900";
-          // Band labels are the same in both languages (sport-science loanwords).
-          const bandLabel =
-            band === "UNDERLOAD" ? "Undertrained"
-              : band === "OVERLOAD" ? "Spike"
-                : "Watch";
-          const action = (() => {
+          // Plain-language headline + action — coach-facing, no jargon.
+          const headline = (() => {
             if (band === "UNDERLOAD") {
               return lang === "IS"
-                ? "Bætið við sprint-blokk MD-3/MD-4 til að lyfta vikulegri sprint-exposure."
-                : "Add a sprint block at MD-3/MD-4 to lift weekly sprint exposure.";
+                ? `Of fáir sprettir í vikunni (aðeins ${pct}% miðað við leik)`
+                : `Not enough sprinting this week (only ${pct}% of match demand)`;
             }
             if (band === "OVERLOAD") {
               return lang === "IS"
-                ? "Lækkið sprint-volume næstu 2 daga; forðist max-effort sprett."
-                : "Cap sprint volume the next 2 days; avoid max-effort sprints.";
+                ? `Of margir sprettir í vikunni (${pct}% miðað við leik)`
+                : `Too much sprinting this week (${pct}% of match demand)`;
             }
             return lang === "IS"
-              ? "Fylgjast með — top up ef leikur er á næstu leiti."
-              : "Monitor — top up if a match is coming up.";
+              ? `Sprett-magn aðeins lægra en venjulega (${pct}% af leik)`
+              : `Sprint volume slightly below normal (${pct}% of match demand)`;
           })();
-          const headline = lang === "IS"
-            ? `Sprint exposure ${pct}% af leikdags-meðaltali`
-            : `Sprint exposure ${pct}% of match demand`;
+          const action = (() => {
+            if (band === "UNDERLOAD") {
+              return lang === "IS"
+                ? "Bæta við sprett-blokk fyrir næstu æfingu — gæti aukið meiðslaáhættu á hamstring."
+                : "Add a sprint block to the next session — undertraining raises hamstring injury risk.";
+            }
+            if (band === "OVERLOAD") {
+              return lang === "IS"
+                ? "Skera niður spretti næstu 2 daga. Sleppa max-effort sprettum."
+                : "Cut sprint volume the next 2 days. No max-effort sprints.";
+            }
+            return lang === "IS"
+              ? "Fylgjast með — bæta við smávegis ef leikur er á næstu leiti."
+              : "Watch this — top up a bit if a match is coming up.";
+          })();
           const conf = lowConfidence
-            ? (lang === "IS" ? " (úr 1 leik — lág vissa)" : " (1-match baseline — low confidence)")
-            : "";
+            ? (lang === "IS"
+              ? "Bara 1 leikur til viðmiðunar — túlka með varúð."
+              : "Only 1 match in baseline — interpret with caution.")
+            : null;
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
@@ -2673,11 +2703,11 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
             >
               <span className="mt-0.5 shrink-0">📊</span>
               <span>
-                <span className="font-semibold">
-                  {headline} · {bandLabel}
-                  {conf}
-                </span>
+                <span className="font-semibold">{headline}</span>
                 {" · "}{action}
+                {conf && (
+                  <span className="block mt-0.5 text-[10px] opacity-80 italic">{conf}</span>
+                )}
               </span>
             </div>
           );
