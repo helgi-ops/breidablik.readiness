@@ -316,7 +316,7 @@ export async function GET(req: Request) {
           .from("week_plans")
           .select("*")
           .eq("team_id", player.team_id)
-          .eq("plan_date", date)
+          .eq("day_date", date)
           .maybeSingle();
         if (error) return null;
         return data as Record<string, unknown> | null;

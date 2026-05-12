@@ -40,10 +40,27 @@
 export type DailySprintExposure = {
   /** ISO YYYY-MM-DD. */
   date: string;
-  /** Sum of stride counts in IMA bands 5-8 (high-velocity bands). */
+  /** Sum of stride counts in IMA bands 5-8 (high-velocity bands). null when
+   *  no IMA data captured (older Catapult activities before Free Running
+   *  was enabled in OpenField). The loader injects GPS-derived estimates
+   *  on match days where this is null but GPS sprint efforts > 0 — see
+   *  `hiBandStridesEstimated`. */
   hiBandStrides: number | null;
   /** Whether the player played ≥ 60 minutes that day (true match day). */
   isMatchDay: boolean;
+  /** Whether the day was on the team's match schedule (week_plans GAME).
+   *  Distinguishes "match scheduled but no stride data captured" from
+   *  "no match that day". Used for the transparency line in the UI. */
+  isScheduledGame?: boolean;
+  /** True when hiBandStrides was derived from GPS V5+V6 sprint efforts
+   *  using a per-player IMA-to-effort ratio (calibrated from an
+   *  IMA-complete match day). Lets the UI distinguish "measured" from
+   *  "estimated" match days and lets us tag the baseline confidence. */
+  hiBandStridesEstimated?: boolean;
+  /** Sum of GPS V5+V6 sprint-effort counts (gen2 algorithm). Kept on the
+   *  row so the loader can compute the per-player IMA-to-effort calibration
+   *  ratio in one pass without re-querying. */
+  v5v6Efforts?: number | null;
 };
 
 export type SprintExposureBand =
@@ -61,8 +78,22 @@ export type SprintExposurePayload = {
   /** acuteSum7d ÷ matchDayDemand. null when demand is unknown. */
   exposureRatio: number | null;
   band: SprintExposureBand;
-  /** Number of match days observed in the 28-day window. */
+  /** Number of match days with non-null stride data — used for the baseline.
+   *  Includes BOTH measured (real IMA) and estimated (GPS-derived) days. */
   matchDaysObserved: number;
+  /** Number of match days where IMA bands 5-8 came from real Catapult data
+   *  (Free Running enabled). Subset of matchDaysObserved. */
+  matchDaysMeasured: number;
+  /** Number of match days where the stride count was estimated from GPS V5+V6
+   *  sprint efforts using the player's own match-derived ratio. The estimate
+   *  uses ONE measured match as calibration anchor (Catapult fixed Free Running
+   *  going forward but older activities can't be backfilled). Subset of
+   *  matchDaysObserved. matchDaysObserved = matchDaysMeasured + matchDaysEstimated. */
+  matchDaysEstimated: number;
+  /** Total match days on the team schedule in the 28d window (any source).
+   *  Used to surface "5 scheduled, 3 captured" transparency in the UI when
+   *  some matches were DNP, manual entries, or had no GPS/IMA data at all. */
+  matchDaysScheduled: number;
   /** Number of training/match days with non-null hi-band strides in last 7d. */
   daysObserved7d: number;
 };
@@ -149,7 +180,12 @@ export function computeSprintExposure(
     ? acuteRows.reduce((s, r) => s + (r.hiBandStrides as number), 0)
     : null;
 
-  // Match-day demand: average bands 5-8 sum across matches in 28d window
+  // Match-day demand: average bands 5-8 sum across matches in 28d window.
+  // Includes BOTH IMA-measured days and GPS-estimated days. The loader has
+  // already filled hiBandStrides with the per-player IMA-to-effort estimate
+  // on days where real IMA was missing (Catapult Free Running disabled at
+  // ingest time). Track measured vs estimated separately so the UI can
+  // explain how many match days are real vs derived.
   const matchRows = rows.filter((r) =>
     r.date >= start28Iso &&
     r.date <= todayIso &&
@@ -159,6 +195,15 @@ export function computeSprintExposure(
     r.hiBandStrides! > 0
   );
   const matchDaysObserved = matchRows.length;
+  const matchDaysMeasured = matchRows.filter(
+    (r) => r.hiBandStridesEstimated !== true,
+  ).length;
+  const matchDaysEstimated = matchRows.length - matchDaysMeasured;
+  const matchDaysScheduled = rows.filter((r) =>
+    r.date >= start28Iso &&
+    r.date <= todayIso &&
+    (r.isScheduledGame === true || r.isMatchDay)
+  ).length;
   const matchDayDemand = matchDaysObserved >= MIN_MATCH_DAYS
     ? matchRows.reduce((s, r) => s + (r.hiBandStrides as number), 0) / matchDaysObserved
     : null;
@@ -175,6 +220,9 @@ export function computeSprintExposure(
       exposureRatio: null,
       band: "INSUFFICIENT_DATA",
       matchDaysObserved,
+      matchDaysMeasured,
+      matchDaysEstimated,
+      matchDaysScheduled,
       daysObserved7d,
     };
   }
@@ -186,6 +234,9 @@ export function computeSprintExposure(
     exposureRatio,
     band: bandFromRatio(exposureRatio),
     matchDaysObserved,
+    matchDaysMeasured,
+    matchDaysEstimated,
+    matchDaysScheduled,
     daysObserved7d,
   };
 }

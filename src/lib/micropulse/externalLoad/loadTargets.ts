@@ -329,17 +329,17 @@ async function findRecentMatchDates(args: {
     /* table may not exist or be queryable — continue */
   }
 
-  // 2. week_plans.day_type = 'GAME'
+  // 2. week_plans.day_type = 'GAME' — column is `day_date` (NOT `plan_date`)
   try {
     const { data: plans } = await sb
       .from("week_plans")
-      .select("plan_date, day_type")
+      .select("day_date, day_type")
       .eq("team_id", teamId)
-      .gte("plan_date", fromDate)
-      .lte("plan_date", toDate)
+      .gte("day_date", fromDate)
+      .lte("day_date", toDate)
       .ilike("day_type", "game");
-    for (const r of (plans ?? []) as Array<{ plan_date: string }>) {
-      if (r.plan_date) dateSet.add(r.plan_date);
+    for (const r of (plans ?? []) as Array<{ day_date: string }>) {
+      if (r.day_date) dateSet.add(r.day_date);
     }
   } catch {
     /* continue */

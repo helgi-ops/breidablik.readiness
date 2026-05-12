@@ -146,9 +146,19 @@ export type DecisionSummaryRow = {
   _sprint_exposure_band?: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
   /** Exposure ratio (acuteSum7d ÷ matchDayDemand). 1.0 = matches demand. */
   _sprint_exposure_ratio?: number | null;
-  /** Number of match days observed in the 28-day window (confidence indicator;
-   *  1 = low confidence, 2+ = standard, surfaced in the chip tooltip). */
+  /** Number of match days in the baseline (measured + GPS-estimated combined). */
   _sprint_exposure_match_days?: number | null;
+  /** Subset of match days whose stride count came from real Catapult IMA
+   *  Free Running data (post-fix activities, post 2026-05-08 in Breiðablik). */
+  _sprint_exposure_match_days_measured?: number | null;
+  /** Subset of match days where the stride count was estimated from GPS V5+V6
+   *  sprint efforts using the player's own match-derived ratio. Older Catapult
+   *  activities can't be re-processed, so we estimate from GPS — same unit. */
+  _sprint_exposure_match_days_estimated?: number | null;
+  /** Total match days on the team schedule in the 28-day window — used for
+   *  the "5 scheduled, 3 captured" transparency line when matches were DNP /
+   *  data gaps. Populated by the bulk fetch on dev-coach-dashboard. */
+  _sprint_exposure_match_days_scheduled?: number | null;
   /** Fatigue type hint: "normal" | "mechanical_fatigue" | "metabolic_fatigue" | "global_fatigue". */
   _today_fatigue_type?: string | null;
   /** PlayerLoad spike today vs 28d baseline (raw ratio, ~0–3). */
@@ -2655,7 +2665,12 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           }
           const pct = Math.round(ratio * 100);
           const matchDays = row._sprint_exposure_match_days ?? 0;
+          const matchDaysMeasured = row._sprint_exposure_match_days_measured ?? matchDays;
+          const matchDaysEstimated = row._sprint_exposure_match_days_estimated ?? 0;
+          const matchDaysScheduled = row._sprint_exposure_match_days_scheduled ?? matchDays;
           const lowConfidence = matchDays <= 1;
+          const dataGap = matchDaysScheduled > matchDays;
+          const hasGpsEstimate = matchDaysEstimated > 0;
           const isSevere = band === "UNDERLOAD" || band === "OVERLOAD";
           const tone = isSevere
             ? "border-rose-200 bg-rose-50 text-rose-900"
@@ -2691,11 +2706,34 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
               ? "Fylgjast með — bæta við smávegis ef leikur er á næstu leiti."
               : "Watch this — top up a bit if a match is coming up.";
           })();
-          const conf = lowConfidence
-            ? (lang === "IS"
-              ? "Bara 1 leikur til viðmiðunar — túlka með varúð."
-              : "Only 1 match in baseline — interpret with caution.")
-            : null;
+          // Confidence line — be transparent about how the baseline was
+          // built. Three layers, in priority order:
+          //   1. measured + estimated mix → say so ("2 measured + 1 GPS-estimated")
+          //   2. data gap (scheduled > observed) → say so ("3 of 5 matches")
+          //   3. genuinely 1 match → "low confidence"
+          const conf = (() => {
+            if (hasGpsEstimate) {
+              if (matchDaysMeasured === 0) {
+                return lang === "IS"
+                  ? `Byggt á ${matchDays} leik${matchDays === 1 ? "" : "jum"} (öll GPS-áætluð, eldri IMA gögn vantar).`
+                  : `Based on ${matchDays} match${matchDays === 1 ? "" : "es"} (all GPS-estimated — older IMA data missing).`;
+              }
+              return lang === "IS"
+                ? `Byggt á ${matchDays} leikjum (${matchDaysMeasured} mæld + ${matchDaysEstimated} GPS-áætluð).`
+                : `Based on ${matchDays} matches (${matchDaysMeasured} measured + ${matchDaysEstimated} GPS-estimated).`;
+            }
+            if (dataGap) {
+              return lang === "IS"
+                ? `Byggt á ${matchDays} af ${matchDaysScheduled} leikjum í síðustu 4 vikum (hinir vantar gögn).`
+                : `Based on ${matchDays} of ${matchDaysScheduled} matches in the last 4 weeks (others missing data).`;
+            }
+            if (lowConfidence) {
+              return lang === "IS"
+                ? "Bara 1 leikur til viðmiðunar — túlka með varúð."
+                : "Only 1 match in baseline — interpret with caution.";
+            }
+            return null;
+          })();
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}

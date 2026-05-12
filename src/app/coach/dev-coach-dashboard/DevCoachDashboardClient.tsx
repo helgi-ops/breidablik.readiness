@@ -2003,6 +2003,9 @@ export default function CoachPage() {
       band: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA";
       ratio: number | null;
       matchDaysObserved: number;
+      matchDaysMeasured: number;
+      matchDaysEstimated: number;
+      matchDaysScheduled: number;
     }>
   >({});
   // ELITE-tier "Ask Claude for deeper analysis" button on the Coach
@@ -4140,11 +4143,14 @@ export default function CoachPage() {
           return;
         }
 
-        // Bands 5-8 daily stride counts for the whole squad
+        // Bands 5-8 daily stride counts + GPS V5/V6 sprint-effort counts.
+        // GPS efforts serve as a fallback proxy on match days where IMA
+        // Free Running wasn't captured (older Catapult activities before
+        // they fixed the config). See loader.ts for full calibration logic.
         const { data: rows } = await supabase
           .from("player_external_load_daily")
           .select(
-            "player_id, date, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count"
+            "player_id, date, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, velocity_band5_total_efforts_gen2, velocity_band6_total_efforts_gen2"
           )
           .in("player_id", playerIds)
           .eq("source", "catapult")
@@ -4163,13 +4169,13 @@ export default function CoachPage() {
         try {
           const { data: wp } = await supabase
             .from("week_plans")
-            .select("plan_date, day_type")
+            .select("day_date, day_type")
             .eq("team_id", coachTeamId)
-            .gte("plan_date", startIso)
-            .lte("plan_date", today);
-          for (const r of (wp ?? []) as Array<{ plan_date: string; day_type: string | null }>) {
+            .gte("day_date", startIso)
+            .lte("day_date", today);
+          for (const r of (wp ?? []) as Array<{ day_date: string; day_type: string | null }>) {
             const dt = String(r.day_type ?? "").toUpperCase();
-            if (dt === "GAME" || dt === "MATCH") teamGameDays.add(r.plan_date);
+            if (dt === "GAME" || dt === "MATCH") teamGameDays.add(r.day_date);
           }
         } catch {
           /* week_plans optional on some setups */
@@ -4200,9 +4206,18 @@ export default function CoachPage() {
           /* table optional on some tiers — proceed without match-day data */
         }
 
-        // Group bands 5-8 by player and shape into DailySprintExposure rows
-        const byPlayer = new Map<string, DailySprintExposure[]>();
-        for (const id of playerIds) byPlayer.set(id, []);
+        // Phase 1: shape raw per-player per-date facts (IMA strides + GPS
+        // V5+V6 sprint-effort counts). We need both before we can compute
+        // the per-player calibration ratio in Phase 2.
+        type RawRow = {
+          date: string;
+          imaSum: number;
+          v5v6Efforts: number;
+          isMatchDay: boolean;
+          isScheduledGame: boolean;
+        };
+        const rawByPlayer = new Map<string, Map<string, RawRow>>();
+        for (const id of playerIds) rawByPlayer.set(id, new Map());
         for (const r of (rows ?? []) as Array<{
           player_id: string;
           date: string;
@@ -4210,34 +4225,109 @@ export default function CoachPage() {
           ima_fr_band6_stride_count: number | null;
           ima_fr_band7_stride_count: number | null;
           ima_fr_band8_stride_count: number | null;
+          velocity_band5_total_efforts_gen2: number | null;
+          velocity_band6_total_efforts_gen2: number | null;
         }>) {
           const b5 = Number(r.ima_fr_band5_stride_count ?? 0) || 0;
           const b6 = Number(r.ima_fr_band6_stride_count ?? 0) || 0;
           const b7 = Number(r.ima_fr_band7_stride_count ?? 0) || 0;
           const b8 = Number(r.ima_fr_band8_stride_count ?? 0) || 0;
-          const sum = b5 + b6 + b7 + b8;
-          const matchDays = matchDaysByPlayer.get(r.player_id);
-          const list = byPlayer.get(r.player_id);
-          if (!list) continue;
-          list.push({
+          const v5e = Number(r.velocity_band5_total_efforts_gen2 ?? 0) || 0;
+          const v6e = Number(r.velocity_band6_total_efforts_gen2 ?? 0) || 0;
+          const playerMatchDays = matchDaysByPlayer.get(r.player_id);
+          const map = rawByPlayer.get(r.player_id);
+          if (!map) continue;
+          map.set(r.date, {
             date: r.date,
-            hiBandStrides: sum > 0 ? sum : null,
-            isMatchDay: matchDays?.has(r.date) ?? false,
+            imaSum: b5 + b6 + b7 + b8,
+            v5v6Efforts: v5e + v6e,
+            isMatchDay: playerMatchDays?.has(r.date) ?? false,
+            isScheduledGame: teamGameDays.has(r.date),
           });
         }
+        // Inject scheduled game days that produced no row at all
+        for (const [, map] of rawByPlayer) {
+          for (const d of teamGameDays) {
+            if (!map.has(d)) {
+              map.set(d, {
+                date: d,
+                imaSum: 0,
+                v5v6Efforts: 0,
+                isMatchDay: true,
+                isScheduledGame: true,
+              });
+            }
+          }
+        }
 
+        // Phase 2: per-player calibration + GPS-fallback estimation.
+        // For each player, find match days where both IMA and GPS efforts
+        // are present, derive their personal strides-per-effort ratio,
+        // and estimate IMA on match days where only GPS is available.
         const out: Record<string, {
           band: "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA";
           ratio: number | null;
           matchDaysObserved: number;
+          matchDaysMeasured: number;
+          matchDaysEstimated: number;
+          matchDaysScheduled: number;
         }> = {};
-        for (const [pid, daily] of byPlayer) {
-          if (daily.length === 0) continue;
+        for (const [pid, rawMap] of rawByPlayer) {
+          if (rawMap.size === 0) continue;
+          const rawArr = Array.from(rawMap.values());
+          // Calibrate from this player's own IMA-complete match days
+          const calDays = rawArr.filter(
+            (r) => r.isMatchDay && r.imaSum > 0 && r.v5v6Efforts > 0,
+          );
+          let imaPerEffort: number | null = null;
+          if (calDays.length > 0) {
+            const totIma = calDays.reduce((s, r) => s + r.imaSum, 0);
+            const totEff = calDays.reduce((s, r) => s + r.v5v6Efforts, 0);
+            if (totEff > 0) imaPerEffort = totIma / totEff;
+          }
+          // Build final rows with GPS-derived match-day estimates
+          const daily: DailySprintExposure[] = rawArr
+            .map<DailySprintExposure>((r) => {
+              if (r.imaSum > 0) {
+                return {
+                  date: r.date,
+                  hiBandStrides: r.imaSum,
+                  isMatchDay: r.isMatchDay,
+                  isScheduledGame: r.isScheduledGame,
+                  hiBandStridesEstimated: false,
+                };
+              }
+              if (
+                r.isMatchDay &&
+                r.v5v6Efforts > 0 &&
+                imaPerEffort != null &&
+                imaPerEffort > 0
+              ) {
+                return {
+                  date: r.date,
+                  hiBandStrides: Math.round(r.v5v6Efforts * imaPerEffort),
+                  isMatchDay: true,
+                  isScheduledGame: r.isScheduledGame,
+                  hiBandStridesEstimated: true,
+                };
+              }
+              return {
+                date: r.date,
+                hiBandStrides: null,
+                isMatchDay: r.isMatchDay,
+                isScheduledGame: r.isScheduledGame,
+                hiBandStridesEstimated: false,
+              };
+            })
+            .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
           const payload = computeSprintExposure(daily, today);
           out[pid] = {
             band: payload.band,
             ratio: payload.exposureRatio,
             matchDaysObserved: payload.matchDaysObserved,
+            matchDaysMeasured: payload.matchDaysMeasured,
+            matchDaysEstimated: payload.matchDaysEstimated,
+            matchDaysScheduled: payload.matchDaysScheduled,
           };
         }
         if (alive) setPlayerSprintExposure(out);
@@ -8114,6 +8204,9 @@ export default function CoachPage() {
                 _sprint_exposure_band: playerSprintExposure[r.player_id]?.band ?? null,
                 _sprint_exposure_ratio: playerSprintExposure[r.player_id]?.ratio ?? null,
                 _sprint_exposure_match_days: playerSprintExposure[r.player_id]?.matchDaysObserved ?? null,
+                _sprint_exposure_match_days_measured: playerSprintExposure[r.player_id]?.matchDaysMeasured ?? null,
+                _sprint_exposure_match_days_estimated: playerSprintExposure[r.player_id]?.matchDaysEstimated ?? null,
+                _sprint_exposure_match_days_scheduled: playerSprintExposure[r.player_id]?.matchDaysScheduled ?? null,
               };
 
               // Enrich with most recent GPS load from catapult history

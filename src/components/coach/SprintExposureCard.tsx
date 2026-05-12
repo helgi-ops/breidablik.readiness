@@ -171,12 +171,35 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
             {payload.matchDayDemand != null ? Math.round(payload.matchDayDemand).toLocaleString("is-IS") : "—"}
           </div>
           <div className="text-[9px] text-slate-500">
-            {payload.matchDaysObserved === 1
-              ? (lang === "IS" ? "úr 1 leik (lág vissa)" : "from 1 match (low confidence)")
-              : (lang === "IS"
-                  ? `meðaltal úr ${payload.matchDaysObserved} leikjum`
-                  : `avg of ${payload.matchDaysObserved} matches`)
-            }
+            {(() => {
+              const observed = payload.matchDaysObserved;
+              const measured = payload.matchDaysMeasured ?? observed;
+              const estimated = payload.matchDaysEstimated ?? 0;
+              const scheduled = payload.matchDaysScheduled ?? observed;
+              // Layered attribution — explain estimation source first,
+              // schedule gap second, low confidence third.
+              if (estimated > 0) {
+                if (measured === 0) {
+                  return lang === "IS"
+                    ? `úr ${observed} leikjum (öll GPS-áætluð)`
+                    : `from ${observed} matches (all GPS-estimated)`;
+                }
+                return lang === "IS"
+                  ? `úr ${observed} leikjum (${measured} mæld + ${estimated} GPS-áætluð)`
+                  : `from ${observed} matches (${measured} measured + ${estimated} GPS-estimated)`;
+              }
+              if (scheduled > observed) {
+                return lang === "IS"
+                  ? `úr ${observed} af ${scheduled} leikjum (gögn vantar fyrir hina)`
+                  : `from ${observed} of ${scheduled} matches (others missing data)`;
+              }
+              if (observed === 1) {
+                return lang === "IS" ? "úr 1 leik (lág vissa)" : "from 1 match (low confidence)";
+              }
+              return lang === "IS"
+                ? `meðaltal úr ${observed} leikjum`
+                : `avg of ${observed} matches`;
+            })()}
           </div>
         </div>
         <div className="rounded border border-slate-200 bg-white px-2 py-1.5">

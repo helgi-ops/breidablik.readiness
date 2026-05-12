@@ -331,18 +331,21 @@ async function fetchMdContext(
     const endDate = new Date(`${todayIso}T00:00:00Z`);
     endDate.setUTCDate(endDate.getUTCDate() + 5);
     const endIso = endDate.toISOString().slice(0, 10);
+    // NOTE: week_plans column is `day_date`, not `plan_date`. Earlier draft
+    // got the column name wrong, which silently broke MD-context detection
+    // (everything defaulted to MD-3 because the query returned no rows).
     const { data } = await sb
       .from("week_plans")
-      .select("plan_date, day_type")
+      .select("day_date, day_type")
       .eq("team_id", teamId)
-      .gte("plan_date", todayIso)
-      .lte("plan_date", endIso)
-      .order("plan_date", { ascending: true });
-    const rows = (data ?? []) as Array<{ plan_date: string; day_type: string | null }>;
+      .gte("day_date", todayIso)
+      .lte("day_date", endIso)
+      .order("day_date", { ascending: true });
+    const rows = (data ?? []) as Array<{ day_date: string; day_type: string | null }>;
     const game = rows.find((r) => String(r.day_type ?? "").toUpperCase() === "GAME");
     if (!game) return "MD-3";
     const today = new Date(`${todayIso}T00:00:00Z`).getTime();
-    const gameTs = new Date(`${game.plan_date}T00:00:00Z`).getTime();
+    const gameTs = new Date(`${game.day_date}T00:00:00Z`).getTime();
     const days = Math.round((gameTs - today) / (1000 * 60 * 60 * 24));
     if (days === 1) return "MD-1";
     if (days === 2) return "MD-2";
