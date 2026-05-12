@@ -47,39 +47,76 @@ const communicationLinks: SidebarLink[] = [
 // Watch list / Daily Briefing. So Players lives in Admin, not Monitoring.
 // Week setup is the entry-point of the planning workflow → top of Planning.
 //
-// Items previously hidden behind the dashboard's "More ▼" dropdown
-// (Volatility, VALD/CMJ, Strength/VBT, Trends, Injuries/RTP) are surfaced
-// here as first-class sidebar links so coaches can find them. They render
-// inside the dashboard via ?tab=… deep links; the existing tab bar still
-// works for anyone who finds it from there.
-const monitoringLinks: SidebarLink[] = [
+// Monitoring split into three groups (May 2026):
+//
+//   Load Monitoring — daily training load + biomechanical session profiles.
+//     Answers "what did the team train today and how?" Includes the IMU/GPS
+//     load surfaces (Decel + IMA Intelligence) because those describe
+//     session shape and intensity, not injury verdicts per se.
+//
+//   Injury Monitoring — explicit injury / RTP tracking and threshold alerts.
+//     Answers "who is hurt or flagged, and what do we do about it?"
+//
+//   Performance Analytics — longer-window analytical views and capacity tests.
+//     Answers "how is the squad trending and what is each player capable of
+//     right now?" Includes neuromuscular tests (VALD/CMJ, Strength/VBT)
+//     which are capacity assessments rather than daily-load decisions.
+const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
   { href: "/coach/quadrant",           label: { EN: "Quadrant view",                    IS: "Quadrant view" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load",                      IS: "Indoor Load" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
   // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
-  // shown only when LITE_VISIBLE_HREFS filtering swaps it in. Built on
-  // Malone 2017 + Buchheit 2014 evidence.
+  // shown only when LITE filtering keeps it (Malone 2017 + Buchheit 2014).
   { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
+];
+
+const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
-  { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
-  { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
-  { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
-  { href: "/coach?tab=trend",          label: { EN: "Trends",                           IS: "Þróun" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
-const planningLinks: SidebarLink[] = [
+const performanceAnalyticsLinks: SidebarLink[] = [
+  { href: "/coach?tab=trend",          label: { EN: "Trends",                           IS: "Þróun" } },
+  { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
+  { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
+  { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
+];
+
+// Planning split into pitch / S&C workflows (May 2026). Coaches were
+// struggling to find Strength + Recovery in a flat list dominated by
+// pitch-session items. The two workflows have different owners at most
+// clubs (head coach vs S&C coach) so separating them mirrors how the
+// staff actually splits responsibilities.
+const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach?tab=md",             label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
   { href: "/coach?tab=drills",         label: { EN: "Session builder",     IS: "Session builder" } },
-  { href: "/coach/strength",           label: { EN: "Strength (micro-dose)", IS: "Styrktaræfing (micro-dose)" } },
-  { href: "/coach/templates",          label: { EN: "Session templates",   IS: "Session templates" } },
-  { href: "/coach/custom-templates",   label: { EN: "Custom templates",    IS: "Sérsniðnar templates" } },
-  { href: "/coach/recovery-protocols", label: { EN: "Recovery protocols",  IS: "Recovery protocols" } },
   { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
+];
+
+// /coach/templates is a library of pre-built S&C/recovery programmes
+// (categories: microdose, rehab, prehab, strength, power, recovery,
+// activation, matchday). /coach/custom-templates lets the coach build
+// custom cluster structures (Garcia-Ramos, French Contrast, etc.).
+// Both are strength-coach tools, not pitch-session tools, so they sit
+// under Strength Planning with strength-aware names.
+const strengthPlanningLinks: SidebarLink[] = [
+  // /coach/strength is the DAILY action page — per-player ~20 min sessions
+  // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
+  // Sidebar label deliberately says "Today's session" rather than
+  // "Strength (micro-dose)" because (a) the parent section is already
+  // "Strength Planning" so "Strength" is redundant, and (b) new coaches
+  // don't know the micro-dose term yet — "today's session" makes the
+  // daily-action role obvious. The page itself keeps the "Strength —
+  // Micro-dose" heading and Rønnestad citation so the brand term stays
+  // visible once they're on the page.
+  { href: "/coach/strength",           label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  { href: "/coach/templates",          label: { EN: "Programme library",     IS: "Prógrammasafn" } },
+  { href: "/coach/custom-templates",   label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
+  { href: "/coach/recovery-protocols", label: { EN: "Recovery protocols",    IS: "Recovery protocols" } },
 ];
 
 const adminLinks: SidebarLink[] = [
@@ -292,11 +329,15 @@ export function CoachSidebar({
 
   // Filter Monitoring items by Catapult data tier. Lite teams get the
   // /coach/hsr-intelligence page (Malone 2017) instead of the Premium-
-  // only Decel Intelligence + Indoor Load. See migration 20260502170000.
+  // only Decel Intelligence + Indoor Load + IMA Intelligence. See
+  // migration 20260502170000. Applied per sub-group.
   const isLite = catapultDataTier !== "full";
-  const monitoringLinksForTier = isLite
-    ? monitoringLinks.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
-    : monitoringLinks.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
+  const filterForTier = (links: SidebarLink[]) => isLite
+    ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
+    : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
+  const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
+  const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
+  const performanceAnalyticsForTier = filterForTier(performanceAnalyticsLinks);
 
   return (
     <div className="flex h-full flex-col">
@@ -340,16 +381,40 @@ export function CoachSidebar({
           onNavigate={onNavigate}
         />
         <Section
-          label={lang === "IS" ? "Eftirlit" : "Monitoring"}
-          links={monitoringLinksForTier}
+          label={lang === "IS" ? "Álagseftirlit" : "Load Monitoring"}
+          links={loadMonitoringForTier}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}
           onNavigate={onNavigate}
         />
         <Section
-          label={lang === "IS" ? "Skipulag" : "Planning"}
-          links={planningLinks}
+          label={lang === "IS" ? "Meiðslaeftirlit" : "Injury Monitoring"}
+          links={injuryMonitoringForTier}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+        />
+        <Section
+          label={lang === "IS" ? "Frammistöðugreining" : "Performance Analytics"}
+          links={performanceAnalyticsForTier}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+        />
+        <Section
+          label={lang === "IS" ? "Liðs-skipulag" : "Team Planning"}
+          links={teamPlanningLinks}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+        />
+        <Section
+          label={lang === "IS" ? "Styrktarskipulag" : "Strength Planning"}
+          links={strengthPlanningLinks}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}
