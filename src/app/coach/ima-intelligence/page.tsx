@@ -84,6 +84,10 @@ const I18N = {
     EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is the strongest single predictor of non-contact lower-limb injury (Bishop 2020). Flagged when total CoD ≥ 10 efforts.",
     IS: "CoD ósamhverfa > 15% á háa intensity Change-of-Direction event-um er sterkasti spáþáttur non-contact neðri-líkams meiðsla (Bishop 2020). Merkt þegar heildar CoD ≥ 10 efforts.",
   },
+  legend4: {
+    EN: "An asterisk (*) on vs baseline means the comparison is based on only 1 training day in the 14-day window — common right now because most pre-Catapult-fix training days have no IMA data. The baseline strengthens automatically as more post-fix days accumulate.",
+    IS: "Stjarna (*) á vs grunnlína þýðir að samanburðurinn byggir á aðeins 1 æfingadegi í 14-daga gluggi — algengt núna því flest pre-Catapult-fix æfingadagar hafa engin IMA gögn. Grunnlínan styrkist sjálfkrafa þegar fleiri post-fix dagar safnast saman.",
+  },
 } as const;
 
 function t(key: keyof typeof I18N, lang: Lang): string {
@@ -433,6 +437,11 @@ function PlayerRow({ player }: { player: ImaPlayerDay }) {
     codAsym > 10 ? "text-amber-600 font-semibold" :
     "text-emerald-700";
 
+  // Low-confidence baseline (only 1 training day in the 14-day window).
+  // Common during the Catapult Free Running rollout — pre-fix training
+  // days had IMA = 0 so most weeks only have 1-2 qualifying days right now.
+  const lowConfidenceBaseline = player.sprint_baseline_days === 1;
+
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
       <td className="px-3 py-2">
@@ -445,8 +454,15 @@ function PlayerRow({ player }: { player: ImaPlayerDay }) {
       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.mid_strides.toLocaleString() : "—"}</td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.high_strides.toLocaleString() : "—"}</td>
       <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{hasData ? player.sprint_strides.toLocaleString() : "—"}</td>
-      <td className={`px-3 py-2 text-right tabular-nums ${baselineColor}`}>
-        {baselinePct == null ? "—" : `${baselinePct.toFixed(0)}%`}
+      <td
+        className={`px-3 py-2 text-right tabular-nums ${baselineColor} ${lowConfidenceBaseline ? "italic" : ""}`}
+        title={lowConfidenceBaseline ? "Low confidence — based on only 1 training day (others pre-Catapult fix)" : undefined}
+      >
+        {baselinePct == null
+          ? "—"
+          : lowConfidenceBaseline
+            ? `${baselinePct.toFixed(0)}%*`
+            : `${baselinePct.toFixed(0)}%`}
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-slate-500">
         {hasData ? `${player.cod_left_high} / ${player.cod_right_high}` : "—"}
@@ -468,6 +484,7 @@ function LegendCard({ lang }: { lang: Lang }) {
         <li>• {t("legend1", lang)}</li>
         <li>• {t("legend2", lang)}</li>
         <li>• {t("legend3", lang)}</li>
+        <li>• {t("legend4", lang)}</li>
       </ul>
     </div>
   );

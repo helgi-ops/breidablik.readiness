@@ -61,6 +61,10 @@ export type ImaPlayerDay = {
   sprint_strides: number;
   /** Personal 14-day training-only avg of bands 5-8 — null if no baseline. */
   sprint_baseline_avg: number | null;
+  /** Number of training days with IMA b5-8 > 0 that backed the baseline.
+   *  1 = low confidence (transition period after Catapult Free Running fix),
+   *  2+ = standard. Surfaced in the UI so coaches can weight accordingly. */
+  sprint_baseline_days: number;
   /** Today's bands 5-8 ÷ baseline × 100. null if no baseline. */
   sprint_vs_baseline_pct: number | null;
   // Change of Direction — three-tier breakdown (low / medium / high).

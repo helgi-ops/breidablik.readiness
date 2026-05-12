@@ -137,8 +137,14 @@ export async function loadImaDayProfile(
       + (Number(r.ima_fr_band7_stride_count) || 0)
       + (Number(r.ima_fr_band8_stride_count) || 0)
     );
-    const sprint_baseline_avg = baselineValues.length >= 2
-      ? baselineValues.reduce((s, v) => s + v, 0) / baselineValues.length
+    // Baseline minimum is 1 day during the Catapult Free Running transition
+    // (May 2026): many pre-fix training days have IMA = 0 so requiring 2
+    // qualifying days would hide baselines for most of the squad. As more
+    // post-fix training days accumulate the average naturally stabilises.
+    // 1-day baselines are flagged as low-confidence in the UI.
+    const sprint_baseline_days = baselineValues.length;
+    const sprint_baseline_avg = sprint_baseline_days >= 1
+      ? baselineValues.reduce((s, v) => s + v, 0) / sprint_baseline_days
       : null;
     const sprint_vs_baseline_pct = sprint_baseline_avg != null && sprint_baseline_avg > 0
       ? (sprint / sprint_baseline_avg) * 100
@@ -154,6 +160,7 @@ export async function loadImaDayProfile(
       high_strides: high,
       sprint_strides: sprint,
       sprint_baseline_avg,
+      sprint_baseline_days,
       sprint_vs_baseline_pct,
       cod_left_low: codLeftLow,
       cod_right_low: codRightLow,
