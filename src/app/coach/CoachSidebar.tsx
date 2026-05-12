@@ -57,6 +57,7 @@ const monitoringLinks: SidebarLink[] = [
   { href: "/coach/quadrant",           label: { EN: "Quadrant view",                    IS: "Quadrant view" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load",                      IS: "Indoor Load" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
+  { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
   // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
   // shown only when LITE_VISIBLE_HREFS filtering swaps it in. Built on
   // Malone 2017 + Buchheit 2014 evidence.
@@ -240,6 +241,7 @@ function Section({
 const LITE_HIDDEN_HREFS = new Set<string>([
   "/coach/indoor-load",
   "/coach/decel-intelligence",
+  "/coach/ima-intelligence",
 ]);
 
 // Pages shown ONLY on Lite tier — Lite-specific equivalents of Premium
