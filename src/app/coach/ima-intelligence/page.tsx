@@ -67,8 +67,11 @@ const I18N = {
   colHigh: { EN: "b7-8", IS: "b7-8" },
   colSprint: { EN: "Sprint (b5-8)", IS: "Sprint (b5-8)" },
   colSprintVsBaseline: { EN: "vs baseline", IS: "vs grunnlína" },
-  colCod: { EN: "CoD L/R", IS: "CoD L/H" },
-  colCodAsym: { EN: "CoD asym.", IS: "CoD ósamh." },
+  colCod: { EN: "CoD L/R (high)", IS: "CoD L/H (há)" },
+  colCodAsym: { EN: "CoD asym. (high)", IS: "CoD ósamh. (há)" },
+  expand: { EN: "Expand CoD breakdown", IS: "Sjá CoD sundurliðun" },
+  collapse: { EN: "Collapse", IS: "Loka" },
+  codBreakdownLabel: { EN: "Change-of-Direction breakdown", IS: "Stefnubreyting sundurliðun" },
   backToDashboard: { EN: "← Back to dashboard", IS: "← Til baka á dashboard" },
   openInDecel: { EN: "Decel Intelligence →", IS: "Decel Intelligence →" },
   howToRead: { EN: "How to read this", IS: "Hvernig á að lesa þetta" },
@@ -350,6 +353,16 @@ type SortKey = "name" | "total" | "sprint" | "vs_baseline" | "cod_asym";
 function PerPlayerTable({ profile, lang }: { profile: ImaSessionProfile; lang: Lang }) {
   const [sortKey, setSortKey] = React.useState<SortKey>("sprint");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+
+  const toggleExpand = (playerId: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  };
 
   const players = React.useMemo(() => {
     const arr = [...profile.per_player];
@@ -385,6 +398,7 @@ function PerPlayerTable({ profile, lang }: { profile: ImaSessionProfile; lang: L
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <th className="w-8 px-2 py-2"></th>
               <Th onClick={() => onSort("name")} active={sortKey === "name"} dir={sortDir}>{t("colPlayer", lang)}</Th>
               <Th onClick={() => onSort("total")} active={sortKey === "total"} dir={sortDir} align="right">{t("colTotal", lang)}</Th>
               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600">{t("colLow", lang)}</th>
@@ -398,7 +412,13 @@ function PerPlayerTable({ profile, lang }: { profile: ImaSessionProfile; lang: L
           </thead>
           <tbody>
             {players.map(p => (
-              <PlayerRow key={p.player_id} player={p} />
+              <PlayerRow
+                key={p.player_id}
+                player={p}
+                isExpanded={expanded.has(p.player_id)}
+                onToggle={() => toggleExpand(p.player_id)}
+                lang={lang}
+              />
             ))}
           </tbody>
         </table>
@@ -420,7 +440,11 @@ function Th({ children, onClick, active, dir, align }: {
   );
 }
 
-function PlayerRow({ player }: { player: ImaPlayerDay }) {
+function PlayerRow({
+  player, isExpanded, onToggle, lang,
+}: {
+  player: ImaPlayerDay; isExpanded: boolean; onToggle: () => void; lang: Lang;
+}) {
   const hasData = player.total_strides > 0;
   const baselinePct = player.sprint_vs_baseline_pct;
   const baselineColor =
@@ -443,34 +467,128 @@ function PlayerRow({ player }: { player: ImaPlayerDay }) {
   const lowConfidenceBaseline = player.sprint_baseline_days === 1;
 
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50">
-      <td className="px-3 py-2">
-        <Link href={`/coach/decel-intelligence?player=${player.player_id}`} className="font-medium text-slate-900 hover:text-blue-600">
-          {player.full_name}
-        </Link>
-      </td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{hasData ? player.total_strides.toLocaleString() : "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.low_strides.toLocaleString() : "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.mid_strides.toLocaleString() : "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.high_strides.toLocaleString() : "—"}</td>
-      <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{hasData ? player.sprint_strides.toLocaleString() : "—"}</td>
-      <td
-        className={`px-3 py-2 text-right tabular-nums ${baselineColor} ${lowConfidenceBaseline ? "italic" : ""}`}
-        title={lowConfidenceBaseline ? "Low confidence — based on only 1 training day (others pre-Catapult fix)" : undefined}
-      >
-        {baselinePct == null
-          ? "—"
-          : lowConfidenceBaseline
-            ? `${baselinePct.toFixed(0)}%*`
-            : `${baselinePct.toFixed(0)}%`}
-      </td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-        {hasData ? `${player.cod_left_high} / ${player.cod_right_high}` : "—"}
-      </td>
-      <td className={`px-3 py-2 text-right tabular-nums ${codColor}`}>
-        {codAsym == null ? "—" : `${codAsym.toFixed(0)}%`}
-      </td>
-    </tr>
+    <>
+      <tr className="border-b border-slate-100 hover:bg-slate-50">
+        <td className="px-2 py-2 text-center">
+          <button
+            onClick={onToggle}
+            disabled={!hasData}
+            aria-label={isExpanded ? t("collapse", lang) : t("expand", lang)}
+            title={isExpanded ? t("collapse", lang) : t("expand", lang)}
+            className={`inline-flex h-6 w-6 items-center justify-center rounded text-xs text-slate-500 transition-transform ${
+              hasData ? "hover:bg-slate-200 hover:text-slate-900" : "opacity-30 cursor-not-allowed"
+            } ${isExpanded ? "rotate-90" : ""}`}
+          >
+            ▸
+          </button>
+        </td>
+        <td className="px-3 py-2">
+          <Link href={`/coach/decel-intelligence?player=${player.player_id}`} className="font-medium text-slate-900 hover:text-blue-600">
+            {player.full_name}
+          </Link>
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-700">{hasData ? player.total_strides.toLocaleString() : "—"}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.low_strides.toLocaleString() : "—"}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.mid_strides.toLocaleString() : "—"}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-500">{hasData ? player.high_strides.toLocaleString() : "—"}</td>
+        <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">{hasData ? player.sprint_strides.toLocaleString() : "—"}</td>
+        <td
+          className={`px-3 py-2 text-right tabular-nums ${baselineColor} ${lowConfidenceBaseline ? "italic" : ""}`}
+          title={lowConfidenceBaseline ? "Low confidence — based on only 1 training day (others pre-Catapult fix)" : undefined}
+        >
+          {baselinePct == null
+            ? "—"
+            : lowConfidenceBaseline
+              ? `${baselinePct.toFixed(0)}%*`
+              : `${baselinePct.toFixed(0)}%`}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+          {hasData ? `${player.cod_left_high} / ${player.cod_right_high}` : "—"}
+        </td>
+        <td className={`px-3 py-2 text-right tabular-nums ${codColor}`}>
+          {codAsym == null ? "—" : `${codAsym.toFixed(0)}%`}
+        </td>
+      </tr>
+      {isExpanded && hasData && (
+        <tr className="border-b border-slate-200 bg-slate-50/50">
+          <td colSpan={10} className="px-4 py-3">
+            <PlayerCodBreakdown player={player} lang={lang} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// Per-player 3-tier CoD breakdown. Mirrors the team-level CoD profile but
+// scoped to this player's day. Bishop 2020: only flag high-tier asymmetry
+// aggressively (low/medium are often positional habit and less actionable).
+function PlayerCodBreakdown({ player, lang }: { player: ImaPlayerDay; lang: Lang }) {
+  const tiers: Array<{
+    label: string; left: number; right: number; asym: number | null; emphasize: boolean;
+  }> = [
+    { label: t("tierLow", lang),    left: player.cod_left_low,    right: player.cod_right_low,    asym: player.cod_asymmetry_low_pct,    emphasize: false },
+    { label: t("tierMedium", lang), left: player.cod_left_medium, right: player.cod_right_medium, asym: player.cod_asymmetry_medium_pct, emphasize: false },
+    { label: t("tierHigh", lang),   left: player.cod_left_high,   right: player.cod_right_high,   asym: player.cod_asymmetry_pct,        emphasize: true  },
+  ];
+
+  const maxTotal = Math.max(
+    player.cod_left_low + player.cod_right_low,
+    player.cod_left_medium + player.cod_right_medium,
+    player.cod_left_high + player.cod_right_high,
+    1,
+  );
+
+  return (
+    <div className="ml-8">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        {t("codBreakdownLabel", lang)}
+      </div>
+      <div className="space-y-1.5">
+        {tiers.map(tier => {
+          const total = tier.left + tier.right;
+          const widthPct = (total / maxTotal) * 100;
+          const leftPct = total > 0 ? (tier.left / total) * 100 : 50;
+          const asymColor =
+            tier.asym == null ? "text-slate-400" :
+            tier.emphasize && tier.asym > 15 ? "text-rose-700 font-bold" :
+            tier.emphasize && tier.asym > 10 ? "text-amber-700 font-semibold" :
+            "text-slate-600";
+          return (
+            <div key={tier.label} className="flex items-center gap-3 text-xs">
+              <div className="w-32 shrink-0 text-slate-700">{tier.label}</div>
+              <div className="flex-1">
+                <div
+                  className="relative h-3 rounded-full bg-slate-200"
+                  style={{ width: total > 0 ? `${widthPct}%` : "0%", minWidth: total > 0 ? "20px" : "0" }}
+                >
+                  {total > 0 && (
+                    <>
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-l-full bg-blue-500"
+                        style={{ width: `${leftPct}%` }}
+                        title={`L: ${tier.left}`}
+                      />
+                      <div
+                        className="absolute inset-y-0 right-0 rounded-r-full bg-purple-500"
+                        style={{ width: `${100 - leftPct}%` }}
+                        title={`R: ${tier.right}`}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="w-40 shrink-0 text-right tabular-nums text-slate-600">
+                {tier.left} L / {tier.right} R
+                {tier.asym != null && (
+                  <span className={`ml-2 ${asymColor}`}>· {tier.asym.toFixed(0)}%</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
