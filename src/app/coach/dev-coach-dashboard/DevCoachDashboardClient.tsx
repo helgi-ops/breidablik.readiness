@@ -4110,10 +4110,12 @@ export default function CoachPage() {
 
   // ── Bulk Sprint Exposure per player (Malone 2018 — volume-side) ──────
   // Companion to Sprint Speed Drop above. Pulls last 28 days of IMA bands
-  // 5-8 stride counts + match_player_minutes ≥60 to flag true match days,
-  // then runs the pure computeSprintExposure() per player. One round-trip
-  // for the whole squad. Each player's result is stored in the map and
-  // injected onto the DecisionSummary row as _sprint_exposure_* below.
+  // 5-8 stride counts + a UNION of week_plans (GAME day_type) and
+  // match_player_minutes (≥30 min) to flag match days, then runs the pure
+  // computeSprintExposure() per player. Using week_plans as the primary
+  // source catches matches that aren't fully logged in match_player_minutes
+  // (the original ≥60-min filter was missing real games and creating the
+  // "single-match low-confidence" spike for every player).
   useEffect(() => {
     if (!coachVerified || !coachTeamId) {
       setPlayerSprintExposure({});
@@ -4150,8 +4152,36 @@ export default function CoachPage() {
           .lte("date", today);
         if (!alive) return;
 
-        // Match days (≥60 min) for the squad — used to flag rows as match days
+        // Match days — UNION of (a) team week_plans GAME days and (b) per-
+        // player match_player_minutes ≥30 min. week_plans is the authoritative
+        // schedule source; minutes is a secondary signal for clubs that log
+        // appearances. Both contribute to the same matchDaysByPlayer map.
         const matchDaysByPlayer = new Map<string, Set<string>>();
+
+        // (a) Team-level GAME days from week_plans — apply to every player
+        const teamGameDays = new Set<string>();
+        try {
+          const { data: wp } = await supabase
+            .from("week_plans")
+            .select("plan_date, day_type")
+            .eq("team_id", coachTeamId)
+            .gte("plan_date", startIso)
+            .lte("plan_date", today);
+          for (const r of (wp ?? []) as Array<{ plan_date: string; day_type: string | null }>) {
+            const dt = String(r.day_type ?? "").toUpperCase();
+            if (dt === "GAME" || dt === "MATCH") teamGameDays.add(r.plan_date);
+          }
+        } catch {
+          /* week_plans optional on some setups */
+        }
+        if (teamGameDays.size > 0) {
+          for (const pid of playerIds) {
+            matchDaysByPlayer.set(pid, new Set(teamGameDays));
+          }
+        }
+
+        // (b) Per-player appearances (lowered to ≥30 min — partial games still
+        // represent real sprint exposure)
         try {
           const { data: mm } = await supabase
             .from("match_player_minutes")
@@ -4159,7 +4189,7 @@ export default function CoachPage() {
             .in("player_id", playerIds)
             .gte("match_date", startIso)
             .lte("match_date", today)
-            .gte("minutes_played", 60);
+            .gte("minutes_played", 30);
           for (const r of (mm ?? []) as Array<{
             player_id: string; match_date: string;
           }>) {

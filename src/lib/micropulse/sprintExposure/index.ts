@@ -79,9 +79,30 @@ const CHRONIC_DAYS = 28;
 const MIN_MATCH_DAYS = 1;
 const MIN_TRAINING_DAYS_7D = 2;
 
-const BAND_UNDERLOAD_MAX = 0.5;
-const BAND_WATCH_MAX = 0.8;
-const BAND_SAFE_MAX = 1.5;
+// Threshold rationale (revised May 12 after Höskuldur empirical check):
+//
+// Originally we compared the WEEKLY TOTAL (training + match days) against a
+// single-match demand. That double-counts the match itself (it's in both
+// numerator and denominator) and forces every active player above 100%.
+// In our Breiðablik data, EVERY player was reading 150-220% = "Spike",
+// which is implausible — they were just having normal football weeks.
+//
+// New formulation:
+//   - Numerator = TRAINING-ONLY strides across the 7-day window (matches
+//     excluded — see computeSprintExposure below).
+//   - Denominator = average per-match strides in the 28-day window.
+//   - Ratio is now training-load relative to a single match's worth of
+//     high-cadence work. A normal football week has 3-4 training days,
+//     so a healthy ratio sits in 0.8-1.5× (i.e. training delivers roughly
+//     one match's worth across the week, give or take).
+//
+// Sport-science anchor: Malone 2018 found undertraining (acute ≪ chronic
+// HSR exposure) elevates hamstring injury risk ~3×. The exact thresholds
+// vary by paper; what matters is that our bands match real-week data so
+// the engine flags meaningful deviations, not normal weeks.
+const BAND_UNDERLOAD_MAX = 0.5;  // <50% of one match's worth across whole week = undertrained
+const BAND_WATCH_MAX = 0.8;       // 50-80% = playable but light
+const BAND_SAFE_MAX = 1.8;        // 80-180% = normal football week (was 1.5 — too tight)
 
 export function bandFromRatio(ratio: number | null): SprintExposureBand {
   if (ratio == null || !Number.isFinite(ratio)) return "INSUFFICIENT_DATA";
@@ -93,7 +114,14 @@ export function bandFromRatio(ratio: number | null): SprintExposureBand {
 
 /** Compute the sprint-exposure payload for one player from a window of
  *  daily rows. `rows` should cover at least the last 28 days. `todayIso`
- *  is the anchor date — only rows on or before it are considered. */
+ *  is the anchor date — only rows on or before it are considered.
+ *
+ *  KEY DESIGN — acute sum is TRAINING-ONLY (match days excluded). Match
+ *  days are also in the chronic match-demand denominator, so including
+ *  them in acute would double-count the match itself and pin every player
+ *  above 100%. The training-only ratio gives a clean "how much sprint
+ *  work did the player do across the week, relative to a typical match?"
+ *  reading. A healthy in-season football week sits at 80-180%. */
 export function computeSprintExposure(
   rows: ReadonlyArray<DailySprintExposure>,
   todayIso: string,
@@ -106,10 +134,12 @@ export function computeSprintExposure(
   start28.setUTCDate(start28.getUTCDate() - (CHRONIC_DAYS - 1));
   const start28Iso = start28.toISOString().slice(0, 10);
 
-  // Acute: sum of bands 5-8 strides across last 7 days
+  // Acute: TRAINING-only strides across last 7 days (match days excluded
+  // because they're in the denominator's average — see header note).
   const acuteRows = rows.filter((r) =>
     r.date >= start7Iso &&
     r.date <= todayIso &&
+    !r.isMatchDay &&
     typeof r.hiBandStrides === "number" &&
     Number.isFinite(r.hiBandStrides) &&
     r.hiBandStrides! > 0

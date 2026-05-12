@@ -384,7 +384,7 @@ export async function loadPlayerStrengthSnapshot(
     mdContext,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
-    loadSprintExposure(sb, { playerId, todayIso }),
+    loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
     fetchCodAsymmetry(sb, playerId, todayIso),
     fetchDecelBurden(sb, playerId, todayIso),
     fetchWellness(sb, playerId, todayIso),
