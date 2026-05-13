@@ -62,6 +62,22 @@ const I18N = {
   pct:       { EN: "% of MD",               IS: "% af MD" },
   samples:   { EN: "Samples",               IS: "Sýni" },
   status:    { EN: "Status",                IS: "Staða" },
+  weekHsrTip: {
+    EN: "Total high-speed running distance (>19.8 km/h, GPS V5+V6) accumulated by this player across the last 7 days of training + matches. Includes today. The numerator of the % of MD ratio.",
+    IS: "Heildar high-speed running vegalengd (>19.8 km/h, GPS V5+V6) sem leikmaðurinn safnaði yfir síðustu 7 daga (æfingar + leikir). Inniheldur daginn í dag. Teljarinn í % af MD hlutfallinu.",
+  },
+  mdBaseTip: {
+    EN: "Player's personal match-day demand — median HSR distance from their own matches (≥60 min played). When ≥3 matches available, uses the player's own match median. With fewer matches we fall back to a synthetic baseline from the player's top 10% training sessions (Buchheit 2018 method).",
+    IS: "Persónuleg leikdags-krafa leikmannsins — miðgildi HSR vegalengdar úr hans eigin leikjum (≥60 mín spilaðar). Þegar ≥3 leikir eru í boði notar kerfið leikmanns-eigin miðgildi. Færri leikir → synthetic baseline úr top 10% æfinga (Buchheit 2018 aðferð).",
+  },
+  pctTip: {
+    EN: "HSR 7d ÷ MD baseline × 100. Buchheit 95% rule: players who reach ≥95% of their match-day demand by MD-1 enter the match prepared. Sustained <80% across the cycle = acute injury risk. >110% = consider easing MD-1 to avoid pre-match fatigue.",
+    IS: "HSR 7d ÷ MD baseline × 100. Buchheit 95% reglan: leikmenn sem ná ≥95% af leikdags-kröfu fyrir MD-1 mæta tilbúnir. Viðvarandi <80% yfir hringinn = acute injury risk. >110% = íhuga mýkri MD-1 til að forðast pre-match fatigue.",
+  },
+  statusTip: {
+    EN: "READY 95-110% sweet spot. WATCH 80-95% top up in MD-1. UNDER <80% high injury risk — consider reduced minutes or longer warm-up. OVER >110% modify last session to avoid pre-match fatigue. Status is informational — the coach decides whether to act.",
+    IS: "READY 95-110% sweet spot. WATCH 80-95% bæta við í MD-1. UNDER <80% há meiðsla-áhætta — íhuga færri mínútur eða lengri upphitun. OVER >110% breyta síðustu æfingu til að forðast pre-match fatigue. Staða er informational — þjálfari ákveður hvort hann bregst við.",
+  },
   flagUnder:        { EN: "UNDER",  IS: "UNDIR" },
   flagWatch:        { EN: "WATCH",  IS: "FYLGJAST MEÐ" },
   flagReady:        { EN: "READY",  IS: "TILBÚIÐ" },
@@ -79,6 +95,22 @@ const I18N = {
 
 function tt<K extends keyof typeof I18N>(k: K, lang: "EN" | "IS"): string {
   return lang === "EN" ? I18N[k].EN : I18N[k].IS;
+}
+
+// Reusable info-icon for column headers. Renders a small (i) chip with
+// the tooltip text on hover. Same visual style as the Foster Monotony
+// + Strain card and Decel Intelligence info icons — keeps the UI
+// consistent across all MicroPulse analytical surfaces.
+function InfoIcon({ tip }: { tip: string }) {
+  return (
+    <span
+      title={tip}
+      aria-label={tip}
+      className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-400 text-[9px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+    >
+      i
+    </span>
+  );
 }
 
 function dateMinusDays(refIso: string, n: number): string {
@@ -295,11 +327,31 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">{tt("player", lang)}</th>
-                  <th className="px-3 py-2 text-right font-medium">{tt("weekHsr", lang)}</th>
-                  <th className="px-3 py-2 text-right font-medium">{tt("mdBase", lang)}</th>
-                  <th className="px-3 py-2 text-right font-medium">{tt("pct", lang)}</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {tt("weekHsr", lang)}
+                      <InfoIcon tip={tt("weekHsrTip", lang)} />
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {tt("mdBase", lang)}
+                      <InfoIcon tip={tt("mdBaseTip", lang)} />
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {tt("pct", lang)}
+                      <InfoIcon tip={tt("pctTip", lang)} />
+                    </span>
+                  </th>
                   <th className="px-3 py-2 text-right font-medium">{tt("samples", lang)}</th>
-                  <th className="px-4 py-2 text-center font-medium">{tt("status", lang)}</th>
+                  <th className="px-4 py-2 text-center font-medium">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      {tt("status", lang)}
+                      <InfoIcon tip={tt("statusTip", lang)} />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
