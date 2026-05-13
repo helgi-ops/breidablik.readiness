@@ -6595,11 +6595,13 @@ export default function CoachPage() {
       label: string,
       value: string,
       valueClassName: string,
-      tileClassName = "border-[#ece7de] bg-[#f7f4ee]"
+      tileClassName = "border-[#ece7de] bg-[#f7f4ee]",
+      hint?: string,
     ) => (
       <div className={`min-w-[150px] flex-1 rounded-[20px] border px-4 py-3 ${tileClassName}`}>
         <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-slate-700">{label}</div>
         <div className={`mt-2 text-[22px] font-semibold leading-none tabular-nums ${valueClassName}`}>{value}</div>
+        {hint ? <div className="mt-1.5 text-[11px] leading-tight text-slate-500">{hint}</div> : null}
       </div>
     );
 
@@ -6793,9 +6795,37 @@ export default function CoachPage() {
 
           <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="grid flex-1 gap-3 md:grid-cols-3">
-              {renderMetricTile("Z-SCORE", zText, zVal != null && zVal > 0 ? "text-[#3f6f1f]" : "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
-              {renderMetricTile("DELTA Z", dzText, dzVal != null ? "text-[#3f6f1f]" : "text-slate-900", "border-[#dce9c9] bg-[#eaf4da]")}
-              {renderMetricTile("STEN", stenText, "text-slate-900", "border-[#ece7de] bg-[#f7f4ee]")}
+              {/* Renamed Z-SCORE / DELTA Z / STEN to plain-language labels (May 2026).
+                  Coaches don't think in z-scores — they think "is he above or below
+                  his usual?" The actual numbers stay so power users still see the
+                  precision; the labels + hints translate. */}
+              {renderMetricTile(
+                "Today",
+                zText,
+                zVal != null && zVal > 0 ? "text-[#3f6f1f]" : "text-slate-900",
+                "border-[#ece7de] bg-[#f7f4ee]",
+                zVal == null ? "vs his usual" :
+                  zVal > 0.5 ? "above his usual" :
+                  zVal < -0.5 ? "below his usual" :
+                  "around his usual",
+              )}
+              {renderMetricTile(
+                "vs yesterday",
+                dzText,
+                dzVal != null && dzVal > 0 ? "text-[#3f6f1f]" : dzVal != null && dzVal < 0 ? "text-rose-700" : "text-slate-900",
+                "border-[#dce9c9] bg-[#eaf4da]",
+                dzVal == null ? "change since last reading" :
+                  dzVal > 0.3 ? "improving" :
+                  dzVal < -0.3 ? "trending down" :
+                  "stable",
+              )}
+              {renderMetricTile(
+                "Rating",
+                stenText === "—" ? "—" : `${stenText}/10`,
+                "text-slate-900",
+                "border-[#ece7de] bg-[#f7f4ee]",
+                "0–10 scale (5 = squad average)",
+              )}
             </div>
 
             <button
@@ -8457,66 +8487,61 @@ export default function CoachPage() {
           </div>
           {coachTeamId && <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} teamId={coachTeamId} />}
 
-          {/* Players needing review */}
+          {/* Squad status banner (compact). Replaced the previous giant
+              8-tile KPI grid + duplicate sections (May 2026) that took up
+              ~400px of vertical space showing zeros most of the time.
+              Now: 1-line green summary when nothing flagged, compact
+              chip-list when any flag exists — only non-zero items shown. */}
           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 pb-3">
-              <div>
-                <div className={sectionTitleClass}>Players needing review today</div>
-                <div className={sectionSubtitleClass}>{flaggedReviewStats.lowReadiness} with low readiness today</div>
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-gray-500">Operational workspace · scan · decide · confirm</div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-[10px] uppercase tracking-wide text-gray-500">Review context</div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-400">Today only</div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                {/* "Needs review" tile replaced by "Low readiness" until the
-                    confidence pipeline is fixed — see DailyBriefingCard.tsx
-                    for the full rationale. Low readiness (red+yellow) is a
-                    real, coach-facing signal. */}
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Low readiness</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
+            {(() => {
+              // Aggregate every flag the coach might care about
+              const flags: Array<{ label: string; count: number; tone: "red" | "amber" | "slate" }> = [
+                { label: "Low readiness",       count: flaggedReviewStats.lowReadiness,    tone: "red" },
+                { label: "Pain flag",           count: flaggedReviewStats.painFlag,        tone: "red" },
+                { label: "High neural load",    count: flaggedReviewStats.highNeuralLoad,  tone: "amber" },
+                { label: "Neural bias applied", count: reviewContextStats.neuralBiasApplied,  tone: "amber" },
+                { label: "High next-day risk",  count: reviewContextStats.highNextDayRisk, tone: "amber" },
+                { label: "Manual review",       count: flaggedReviewStats.manualReview,    tone: "slate" },
+                { label: "Locked cards",        count: reviewContextStats.lockedRows,      tone: "slate" },
+              ];
+              const activeFlags = flags.filter(f => f.count > 0);
+              const allClear = activeFlags.length === 0;
+              const toneClasses: Record<typeof flags[0]["tone"], string> = {
+                red: "bg-rose-50 text-rose-800 border-rose-200",
+                amber: "bg-amber-50 text-amber-900 border-amber-200",
+                slate: "bg-slate-50 text-slate-700 border-slate-200",
+              };
+              if (allClear) {
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg">✓</span>
+                      <div>
+                        <div className="text-sm font-semibold text-emerald-900">All players ready today</div>
+                        <div className="text-xs text-emerald-700">
+                          {counts.green} green · {counts.yellow} yellow · {counts.red} red — no flags require attention
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Today's flags ({activeFlags.reduce((s, f) => s + f.count, 0)})
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeFlags.map(f => (
+                      <span key={f.label} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${toneClasses[f.tone]}`}>
+                        {f.label}
+                        <span className="rounded-sm bg-white/60 px-1.5 text-[11px] font-bold tabular-nums">{f.count}</span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Neural bias</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.neuralBiasApplied}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>High next-day risk</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.highNextDayRisk}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Locked cards</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{reviewContextStats.lockedRows}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-gray-50 p-2.5">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">Players flagged today</div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>High neural load</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.highNeuralLoad}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Low readiness</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.lowReadiness}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Pain flag</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.painFlag}</div>
-                </div>
-                <div className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className={statLabelClass}>Manual review</div>
-                  <div className="mt-0.5 text-base font-semibold tabular-nums">{flaggedReviewStats.manualReview}</div>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="grid gap-3 lg:grid-cols-12">
