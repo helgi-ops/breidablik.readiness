@@ -30,6 +30,18 @@ create index if not exists strength_session_overrides_player_date_idx
 create index if not exists strength_session_overrides_team_date_idx
   on public.strength_session_overrides (team_id, override_date desc);
 
+-- Explicit grants — required from Oct 30 2026 onward (Supabase Data API
+-- policy change announced May 13, 2026). Existing tables grandfather in
+-- but newly-created tables need explicit GRANT before PostgREST /
+-- supabase-js can see them. Defensive even though this migration runs on
+-- the existing Breiðablik project before the cutover.
+-- Service role retains full access (server-side jobs need to insert
+-- coach overrides during AI Refinement flow). Authenticated role gets
+-- CRUD; RLS policies below scope to coach's team. anon role intentionally
+-- excluded — overrides should never be public.
+grant select, insert, update, delete on public.strength_session_overrides to authenticated;
+grant select, insert, update, delete on public.strength_session_overrides to service_role;
+
 -- RLS
 alter table public.strength_session_overrides enable row level security;
 
