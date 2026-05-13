@@ -72,6 +72,14 @@ const I18N = {
   weeklyLoad:   { EN: "Weekly load",     IS: "Vikuálag" },
   monotony:     { EN: "Monotony",        IS: "Monotony" },
   strain:       { EN: "Strain",          IS: "Strain" },
+  monotonyTip:  {
+    EN: "Monotony = mean weekly load ÷ standard deviation. Measures how SAME each day's training is. >2.0 means very little day-to-day variation — even at modest volume this raises illness/injury risk (Foster 1998). Coach lever: vary intensity day-to-day, even if total weekly volume stays the same.",
+    IS: "Monotony = meðal-vikuálag ÷ staðalfrávik. Mælir hversu LÍK æfingar eru dag frá degi. >2.0 þýðir mjög lítill breytileiki milli daga — jafnvel í hófi-magni eykur þetta veikinda/meiðsla-áhættu (Foster 1998). Þjálfara-aðgerð: breyta intensity milli daga, jafnvel þótt heildar vikumagn haldist eins.",
+  },
+  strainTip:    {
+    EN: "Strain = weekly load × monotony. Combined signal beats either metric alone (Foster 1998). >4500 AU = watch; >6000 AU = illness/injury danger zone. Two players with the same weekly load can have very different strain if one trains evenly and the other has spikes.",
+    IS: "Strain = vikuálag × monotony. Sameinað merki er sterkara en hvor mæling fyrir sig (Foster 1998). >4500 AU = fylgjast með; >6000 AU = veikinda/meiðsla-svæði. Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain ef annar æfir jafnt en hinn hefur spikes.",
+  },
   days:         { EN: "Days",            IS: "Dagar" },
   flag:         { EN: "Status",          IS: "Staða" },
   noData:       { EN: "No load data in the last 7 days. Players need to log RPE after sessions, or upload Catapult data.",
@@ -298,8 +306,30 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
                   <th className="px-4 py-2 text-left font-medium">{tt("player", lang)}</th>
                   <th className="px-3 py-2 text-right font-medium">{tt("days", lang)}</th>
                   <th className="px-3 py-2 text-right font-medium">{tt("weeklyLoad", lang)}</th>
-                  <th className="px-3 py-2 text-right font-medium">{tt("monotony", lang)}</th>
-                  <th className="px-3 py-2 text-right font-medium">{tt("strain", lang)}</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {tt("monotony", lang)}
+                      <span
+                        title={tt("monotonyTip", lang)}
+                        className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-400 text-[9px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                        aria-label={tt("monotonyTip", lang)}
+                      >
+                        i
+                      </span>
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {tt("strain", lang)}
+                      <span
+                        title={tt("strainTip", lang)}
+                        className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-400 text-[9px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                        aria-label={tt("strainTip", lang)}
+                      >
+                        i
+                      </span>
+                    </span>
+                  </th>
                   <th className="px-4 py-2 text-center font-medium">{tt("flag", lang)}</th>
                 </tr>
               </thead>
