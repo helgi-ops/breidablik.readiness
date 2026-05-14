@@ -261,7 +261,7 @@ export default function ClientInviteAcceptPage({
         const ok = await callAccept();
         if (ok) {
           setSuccess(true);
-          setTimeout(() => router.push("/player"), 1400);
+          setTimeout(() => router.push("/client"), 1400);
         }
       } else {
         // Show a "check your email" style success — but for PT clients we
@@ -287,7 +287,7 @@ export default function ClientInviteAcceptPage({
     const ok = await callAccept();
     if (ok) {
       setSuccess(true);
-      setTimeout(() => router.push("/player"), 1400);
+      setTimeout(() => router.push("/client"), 1400);
     }
     setSubmitting(false);
   }

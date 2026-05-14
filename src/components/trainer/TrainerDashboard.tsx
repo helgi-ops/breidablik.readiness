@@ -9,6 +9,7 @@ import PlanAssigner from "./PlanAssigner";
 import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
 import LvProfilePanel from "./LvProfilePanel";
 import ExplosivePowerPanel from "./ExplosivePowerPanel";
+import PtClientSummaryCard from "./PtClientSummaryCard";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -563,6 +564,18 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                           </div>
                         </div>
                       )}
+                      {/* AI Client Summary — Haiku-generated digest of the
+                          last 14 days. Only renders when the client row is
+                          expanded so we don't spam the API on dashboard load
+                          for every client. Cached server-side per
+                          (trainer, client, window). */}
+                      <div className="col-span-2 sm:col-span-5">
+                        <PtClientSummaryCard
+                          clientId={client.id}
+                          clientName={client.name}
+                          lang={isIS ? "IS" : "EN"}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
