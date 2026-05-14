@@ -125,15 +125,24 @@ const teamPlanningLinks: SidebarLink[] = [
 // Programme library / Isometric / Recovery deliberately live on the
 // team side only, not here.
 const ptStrengthLinks: SidebarLink[] = [
-  { href: "/coach/custom-templates", label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
+  { href: "/coach/starter-templates", label: { EN: "Starter templates",     IS: "Tilbúin kerfi" } },
+  { href: "/coach/custom-templates",  label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
   // LV Profile renders as a TrainerDashboard tab on PT side, so the
   // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
   // pattern coach-side uses for dashTab navigation.
-  { href: "/coach?tab=lvProfile",    label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  { href: "/coach?tab=lvProfile",     label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
 ];
 const ptAdminLinks: SidebarLink[] = [
   { href: "/coach?tab=invitations",  label: { EN: "Invitations",   IS: "Boð" } },
   { href: "/coach/settings",         label: { EN: "Settings",      IS: "Stillingar" } },
+];
+
+// PT Communication links — same as team-side communicationLinks but WITHOUT
+// "Team Page". The /team page is football-team facing (squad roster, fixtures,
+// team-wide notes) and irrelevant to a 1-on-1 personal trainer relationship.
+const ptCommunicationLinks: SidebarLink[] = [
+  { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
+  { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
 ];
 
 const strengthPlanningLinks: SidebarLink[] = [
@@ -413,7 +422,7 @@ export function CoachSidebar({
           />
           <Section
             label={lang === "IS" ? "Samskipti" : "Communication"}
-            links={communicationLinks}
+            links={ptCommunicationLinks}
             pathname={pathname}
             currentTab={currentTab}
             lang={lang}
