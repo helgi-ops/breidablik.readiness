@@ -6139,12 +6139,18 @@ export default function CoachPage() {
   /** -----------------------------
    * Render helpers
    * ----------------------------- */
-  const renderActionPills = (pid: string, locked: boolean) => {
-    const current = draftAction[pid] ?? "FULL";
+  const renderActionPills = (
+    pid: string,
+    locked: boolean,
+    savedAction: TrainingAction = "FULL",
+  ) => {
+    const current = draftAction[pid] ?? savedAction;
+    const isDirty = draftAction[pid] != null && draftAction[pid] !== savedAction;
 
     const pill = (value: TrainingAction, label: string) => {
       const active = current === value;
       const disabled = locked && !isAdmin;
+      const activeDirty = active && isDirty;
       return (
         <button
           key={value}
@@ -6154,7 +6160,11 @@ export default function CoachPage() {
           className={[
             "inline-flex h-12 min-w-[108px] items-center justify-center rounded-xl border px-4 text-sm font-semibold tracking-wide transition-colors",
             disabled ? "cursor-not-allowed opacity-50" : "",
-            active ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50",
+            active
+              ? activeDirty
+                ? "border-amber-500 bg-amber-500 text-white shadow-sm ring-2 ring-amber-300"
+                : "border-slate-900 bg-slate-900 text-white shadow-sm"
+              : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50",
           ].join(" ")}
           aria-pressed={active}
         >
@@ -6164,10 +6174,18 @@ export default function CoachPage() {
     };
 
     return (
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {pill("FULL", "FULL")}
-        {pill("REDUCED", "REDUCED")}
-        {pill("RECOVERY", "RECOVERY")}
+      <div className="flex w-full flex-col items-end gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {pill("FULL", "FULL")}
+          {pill("REDUCED", "REDUCED")}
+          {pill("RECOVERY", "RECOVERY")}
+        </div>
+        {isDirty ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+            {lang === "EN" ? "Unsaved — click Save below" : "Óvistað — smelltu Vista neðst"}
+          </span>
+        ) : null}
       </div>
     );
   };
@@ -6562,21 +6580,53 @@ export default function CoachPage() {
         : adaptationLinesRaw;
 
     const currentMessage = (draftMessage[pid] ?? r.coach_message ?? "").trim();
-    const readinessInputSummary = `Score ${rawTotalScore ?? "—"} · Logged ${new Date(r.created_at).toLocaleTimeString("is-IS", {
+    const loggedTime = new Date(r.created_at).toLocaleTimeString("is-IS", {
       hour: "2-digit",
       minute: "2-digit",
-    })}`;
-    const fatigueSummaryText = [fatigueType !== "NONE" ? fatigueType : null, fatigueSeverity || null, adaptationSummary || null].filter(Boolean).join(" · ") || "No fatigue flags";
+    });
+    const readinessInputSummary = lang === "IS"
+      ? `Skor ${rawTotalScore ?? "—"} · Skráð ${loggedTime}`
+      : `Score ${rawTotalScore ?? "—"} · Logged ${loggedTime}`;
+    const fatigueSummaryText =
+      [fatigueType !== "NONE" ? fatigueType : null, fatigueSeverity || null, adaptationSummary || null].filter(Boolean).join(" · ")
+      || (lang === "IS" ? "Engin þreytuflögg" : "No fatigue flags");
     const trainingSessionSummary =
       graphSession.mode === "graph"
-        ? graphSession.ateDecisionPanel?.sessionLabel ?? "Training graph session"
-        : "Legacy template rendering";
+        ? graphSession.ateDecisionPanel?.sessionLabel ?? (lang === "IS" ? "Æfing í dag" : "Training graph session")
+        : (lang === "IS" ? "Eldra sniðmát" : "Legacy template rendering");
     const neuralSummaryText = neural
       ? `${neural.neuralLoadState} · ${neural.nextDayRisk}`
       : neuralBiasApplied
-      ? "Bias applied"
-      : "No neural load data";
-    const coachMessageSummary = currentMessage ? currentMessage : "No coach message";
+        ? (lang === "IS" ? "Þreytuvog beitt" : "Bias applied")
+        : (lang === "IS" ? "Engin neural-gögn" : "No neural load data");
+    const coachMessageSummary = currentMessage
+      ? currentMessage
+      : (lang === "IS" ? "Engin skilaboð" : "No coach message");
+
+    // ── Section-header labels for the Show details accordion ──
+    // Bilingual; falls back to EN. Single source of truth so we don't drift.
+    const sectionHeaders = lang === "IS"
+      ? {
+          readinessDecision: "Ákvörðun um æfingar",
+          injuryRisk: "Meiðslaáhætta",
+          readinessInputs: "Inntak (wellness + ytra álag)",
+          fatigueAdaptation: "Þreyta & aðlögun",
+          trainingSession: "Æfingaplan",
+          neuralLoad: "Neural-álag",
+          coachMessage: "Skilaboð frá þjálfara",
+        }
+      : {
+          readinessDecision: "Readiness decision",
+          injuryRisk: "Injury risk",
+          readinessInputs: "Readiness inputs",
+          fatigueAdaptation: "Fatigue & adaptation",
+          trainingSession: "Training session",
+          neuralLoad: "Neural load",
+          coachMessage: "Coach message",
+        };
+    const subHeaders = lang === "IS"
+      ? { why: "Hvers vegna", action: "Aðgerð þjálfara", recommendation: "Tillaga", risk: "Áhætta", confidence: "Vissustig", inputs: "Inntak", missing: "Vantar", fallbacks: "Fallbacks", adjustments: "Aðlaganir", externalLoad: "Ytra álag", todayVsTeam: "Í dag vs lið", weeklyLoad: "Vikuálag" }
+      : { why: "Why", action: "Coach action", recommendation: "Recommendation", risk: "Risk", confidence: "Decision confidence", inputs: "Inputs", missing: "Missing", fallbacks: "Fallbacks", adjustments: "Adjustments", externalLoad: "External load", todayVsTeam: "Today vs Team", weeklyLoad: "Weekly Load" };
 
     const isSectionOpen = (sectionKey: PlayerDetailSectionKey, defaultOpen = false) =>
       detailSectionOpenByPlayer[pid]?.[sectionKey] ?? defaultOpen;
@@ -6732,7 +6782,7 @@ export default function CoachPage() {
             </div>
 
             <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[360px] xl:items-end">
-              {renderActionPills(pid, r.is_locked)}
+              {renderActionPills(pid, r.is_locked, (r.training_action ?? "FULL") as TrainingAction)}
             </div>
           </div>
 
@@ -6844,14 +6894,75 @@ export default function CoachPage() {
 
         {isOpen ? (
           <div className="mt-3 space-y-3">
+            {/* ── Status strip — 2-second scannable summary of the four key signals.
+                Coach can spot what's notable before deciding which section to open. */}
+            {(() => {
+              const stateTone = (s: string) =>
+                s === "GREEN" ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : s === "YELLOW" ? "border-amber-300 bg-amber-50 text-amber-800"
+                : s === "RED" ? "border-red-300 bg-red-50 text-red-800"
+                : "border-slate-300 bg-white text-slate-600";
+              const riskTone = (level: string) => {
+                const up = String(level).toUpperCase();
+                return up.startsWith("HIGH") ? "border-red-300 bg-red-50 text-red-800"
+                  : up.startsWith("MOD") || up.startsWith("MEDIUM") ? "border-amber-300 bg-amber-50 text-amber-800"
+                  : "border-emerald-300 bg-emerald-50 text-emerald-800";
+              };
+              const neuralLabel = neural?.neuralLoadState ?? (neuralBiasApplied ? (lang === "IS" ? "Vog beitt" : "Bias") : "—");
+              const neuralTone = neural?.neuralLoadState === "CRITICAL"
+                ? "border-red-300 bg-red-50 text-red-800"
+                : neural?.neuralLoadState === "RISING"
+                ? "border-amber-300 bg-amber-50 text-amber-800"
+                : "border-emerald-300 bg-emerald-50 text-emerald-800";
+              const volScore = typeof volatilitySummary?.overallScore === "number" ? volatilitySummary.overallScore : null;
+              const volTone = volScore == null
+                ? "border-slate-200 bg-slate-50 text-slate-600"
+                : volScore >= 60
+                ? "border-red-300 bg-red-50 text-red-800"
+                : volScore >= 30
+                ? "border-amber-300 bg-amber-50 text-amber-800"
+                : "border-emerald-300 bg-emerald-50 text-emerald-800";
+              const chipBase = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold";
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`${chipBase} ${stateTone(String(athleteDecision.athleteState))}`}>
+                      <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Ákvörðun" : "Decision"}</span>
+                      {athleteDecision.athleteState}
+                    </span>
+                    <span className={`${chipBase} ${riskTone(String(injuryRiskDecision.injuryRiskLevel))}`}>
+                      <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Meiðsl." : "Injury"}</span>
+                      {injuryRiskDecision.injuryRiskLevel}
+                    </span>
+                    <span className={`${chipBase} ${neuralTone}`}>
+                      <span className="text-[9px] uppercase tracking-wide opacity-70">Neural</span>
+                      {neuralLabel}
+                    </span>
+                    <span className={`${chipBase} ${volTone}`}>
+                      <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Sveifla" : "Volatility"}</span>
+                      {volScore == null ? "—" : volScore.toFixed(1)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection("coachMessage", false)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V3a1 1 0 0 1 1-1z"/></svg>
+                    {lang === "IS" ? "Skilaboð" : "Note"}
+                    {currentMessage ? <span className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden="true" /> : null}
+                  </button>
+                </div>
+              );
+            })()}
             {renderAccordionSection(
               "readinessDecision",
-              "Readiness decision",
-              `${athleteDecision.athleteState} · Confidence: ${explainableDecision.confidence}${explainableDecision.confidenceHint ? ` · ${explainableDecision.confidenceHint}` : ""}`,
+              sectionHeaders.readinessDecision,
+              `${athleteDecision.athleteState} · ${lang === "IS" ? "Vissustig" : "Confidence"}: ${explainableDecision.confidence}${explainableDecision.confidenceHint ? ` · ${explainableDecision.confidenceHint}` : ""}`,
               <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.why}</div>
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
                       {athleteDecision.reasons.map((line) => (
                         <li key={`${pid}-exp-why-${line}`}>{line}</li>
@@ -6860,7 +6971,7 @@ export default function CoachPage() {
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Coach action</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.action}</div>
                       {performanceIntelligence ? (
                         <button
                           type="button"
@@ -7039,11 +7150,11 @@ export default function CoachPage() {
 
             {renderAccordionSection(
               "injuryRisk",
-              "Injury risk",
-              `${injuryRiskDecision.injuryRiskLevel} · Confidence: ${injuryRiskDecision.confidence}`,
+              sectionHeaders.injuryRisk,
+              `${injuryRiskDecision.injuryRiskLevel} · ${subHeaders.confidence}: ${injuryRiskDecision.confidence}`,
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.why}</div>
                   <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
                     {injuryRiskDecision.why.map((line) => (
                       <li key={`${pid}-inj-why-${line}`}>{line}</li>
@@ -7051,7 +7162,7 @@ export default function CoachPage() {
                   </ul>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recommendation</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.recommendation}</div>
                   <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-800">
                     {injuryRiskDecision.recommendation.map((line) => (
                       <li key={`${pid}-inj-rec-${line}`}>{line}</li>
@@ -7063,7 +7174,7 @@ export default function CoachPage() {
 
             {renderAccordionSection(
               "readinessInputs",
-              "Readiness inputs",
+              sectionHeaders.readinessInputs,
               readinessInputSummary,
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -7081,13 +7192,13 @@ export default function CoachPage() {
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">External load</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.externalLoad}</div>
                     <div className="text-xs text-slate-500">Catapult</div>
                   </div>
                   {externalLoadToday ? (
                     <div className="mt-3 space-y-4">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Today vs Team</div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.todayVsTeam}</div>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                           {todayVsTeamMetrics.map((item) => {
                             const tone = externalLoadTone(item.value, item.teamAverage);
@@ -7107,7 +7218,7 @@ export default function CoachPage() {
                       </div>
 
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Weekly Load</div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.weeklyLoad}</div>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                           {weeklyLoadMetrics.map((item) => {
                             const tone = externalLoadTone(item.weekly.acute7Avg, item.weekly.chronic28Avg);
@@ -7142,47 +7253,86 @@ export default function CoachPage() {
                     </div>
                   ) : (
                     <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      No Catapult external load synced for this player on this date.
+                      {lang === "IS"
+                        ? "Engin Catapult-gögn fyrir þennan leikmann í dag."
+                        : "No Catapult external load synced for this player on this date."}
                     </div>
                   )}
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                  Supporting metrics: <span className="font-mono">z {numFmt(explainableDecision.supportingMetrics?.zScore ?? null)} · Δz {numFmt(explainableDecision.supportingMetrics?.deltaZ ?? null)} · acwr {numFmt(explainableDecision.supportingMetrics?.acwr ?? null)} · sleep {numFmt(explainableDecision.supportingMetrics?.sleepScore ?? null)} · hrvΔ {numFmt(explainableDecision.supportingMetrics?.hrvChangePct ?? null)} · vol {numFmt(explainableDecision.supportingMetrics?.volatility ?? null)}</span>
-                </div>
+                {/* Supporting metrics duplicate-removed — same z/Δz already in the
+                    Supporting metrics tile above; full chronic/sleep/HRV breakdown
+                    surfaces in the Trends tab. Keeps Readiness inputs scannable. */}
               </div>
             )}
 
             {renderAccordionSection(
               "fatigueAdaptation",
-              "Fatigue & adaptation",
+              sectionHeaders.fatigueAdaptation,
               fatigueSummaryText,
               <div className="space-y-4">
-                {fatigue ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    <div className="font-semibold text-slate-900">Fatigue</div>
-                    <div className="mt-2">
-                      Type: <span className="font-mono">{fatigueType}</span>
-                      {fatigueSeverity ? (
-                        <>
-                          {" "}
-                          · Severity: <span className="font-mono">{fatigueSeverity}</span>
-                        </>
+                {fatigue ? (() => {
+                  const sevTone =
+                    fatigueSeverity === "HIGH" ? "border-red-300 bg-red-50 text-red-800"
+                    : fatigueSeverity === "MODERATE" ? "border-amber-300 bg-amber-50 text-amber-800"
+                    : "border-slate-200 bg-white text-slate-700";
+                  const typeTone = fatigueType === "NONE"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-amber-200 bg-amber-50 text-amber-900";
+                  const chipBase = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold";
+                  return (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-3 text-sm text-slate-700">
+                      <div className="font-semibold text-slate-900">
+                        {lang === "IS" ? "Þreyta" : "Fatigue"}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`${chipBase} ${typeTone}`}>
+                          <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Tegund" : "Type"}</span>
+                          {fatigueType}
+                        </span>
+                        {fatigueSeverity ? (
+                          <span className={`${chipBase} ${sevTone}`}>
+                            <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Alvarl." : "Severity"}</span>
+                            {fatigueSeverity}
+                          </span>
+                        ) : null}
+                      </div>
+                      {!!fatigueDrivers?.length ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                            {lang === "IS" ? "Drifkraftar" : "Drivers"}:
+                          </span>
+                          {fatigueDrivers.slice(0, 6).map((d, idx) => (
+                            <span key={`${pid}-fatigue-driver-${idx}`} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                              {driverLabel(d)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {!!fatigue?.recommendedModifiers?.length ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                            {lang === "IS" ? "Aðlaganir" : "Modifiers"}:
+                          </span>
+                          {fatigue.recommendedModifiers.map((m: string, idx: number) => (
+                            <span key={`${pid}-fatigue-mod-${idx}`} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                              {m}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
-                    {!!fatigueDrivers?.length ? (
-                      <div className="mt-1">Drivers: <span className="font-mono">{fatigueDrivers.slice(0, 6).map(driverLabel).join(", ")}</span></div>
-                    ) : null}
-                    {!!fatigue?.recommendedModifiers?.length ? (
-                      <div className="mt-1">Modifiers: <span className="font-mono">{fatigue.recommendedModifiers.join(", ")}</span></div>
-                    ) : null}
+                  );
+                })() : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    {lang === "IS" ? "Engin þreytugögn tiltæk." : "No fatigue detail available."}
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No fatigue detail available.</div>
                 )}
 
                 {adaptationSummary || adaptationLines.length > 0 ? (
                   <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                    <div className="font-semibold text-slate-900">Adaptation</div>
+                    <div className="font-semibold text-slate-900">
+                      {lang === "IS" ? "Aðlögun" : "Adaptation"}
+                    </div>
                     {adaptationSummary ? <div className="mt-2">{adaptationSummary}</div> : null}
                     {adaptationLines.length ? (
                       <ul className="mt-2 list-disc space-y-1.5 pl-5">
@@ -7208,16 +7358,21 @@ export default function CoachPage() {
                     }
                   >
                     <span className={`transition-transform ${volatilityExpanded ? "rotate-90" : ""}`} aria-hidden="true">▸</span>
-                    <span>Recent volatility{typeof volatilitySummary.overallScore === "number" ? ` · ${volatilitySummary.overallScore.toFixed(1)}` : ""}</span>
+                    <span>
+                      {lang === "IS" ? "Sveiflur síðustu daga" : "Recent volatility"}
+                      {typeof volatilitySummary.overallScore === "number" ? ` · ${volatilitySummary.overallScore.toFixed(1)}` : ""}
+                    </span>
                   </button>
 
                   {volatilityExpanded ? (
                     <div id={volatilityPanelId} className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-900">Recent volatility</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {lang === "IS" ? "Sveiflur síðustu daga" : "Recent volatility"}
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold tabular-nums text-slate-700">
-                            Score {typeof volatilitySummary.overallScore === "number" ? `${volatilitySummary.overallScore.toFixed(1)}/100` : "—"}
+                            {lang === "IS" ? "Skor" : "Score"} {typeof volatilitySummary.overallScore === "number" ? `${volatilitySummary.overallScore.toFixed(1)}/100` : "—"}
                           </span>
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${volatilityLevelTone(volatilitySummary.level)}`}>
                             {volatilityLevelLabel(volatilitySummary.level)}
@@ -7225,12 +7380,16 @@ export default function CoachPage() {
                         </div>
                       </div>
                       <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                        Last {volatilitySummary.windowDays || volatilitySummary.sampleSize || 0} days
+                        {lang === "IS"
+                          ? `Síðustu ${volatilitySummary.windowDays || volatilitySummary.sampleSize || 0} dagar`
+                          : `Last ${volatilitySummary.windowDays || volatilitySummary.sampleSize || 0} days`}
                       </div>
                       <div className="mt-2 text-sm text-slate-700">{volatilitySummary.interpretation}</div>
                       {volatilitySummary.drivers.length ? (
                         <div className="mt-2 text-xs text-slate-600">
-                          <span className="font-medium text-slate-700">Main drivers:</span> {summarizeDrivers(volatilitySummary)}
+                          <span className="font-medium text-slate-700">
+                            {lang === "IS" ? "Helstu drifkraftar" : "Main drivers"}:
+                          </span> {summarizeDrivers(volatilitySummary)}
                         </div>
                       ) : null}
                       {volatilitySummary.drivers.length ? (
@@ -7245,7 +7404,7 @@ export default function CoachPage() {
                       {volatilitySummary.dailyComposite.length >= 2 ? (
                         <div className="mt-3 rounded-xl border border-slate-200 bg-white px-2 py-2">
                           <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                            <span>Volatility trend</span>
+                            <span>{lang === "IS" ? "Sveiflu-stefna" : "Volatility trend"}</span>
                             <span className="tabular-nums">min {Math.min(...volatilitySummary.dailyComposite).toFixed(1)} · max {Math.max(...volatilitySummary.dailyComposite).toFixed(1)}</span>
                           </div>
                           <svg viewBox="0 0 220 44" className="h-11 w-full" role="img" aria-label="Recent volatility line graph">
@@ -7279,11 +7438,13 @@ export default function CoachPage() {
 
             {renderAccordionSection(
               "trainingSession",
-              "Training session",
+              sectionHeaders.trainingSession,
               trainingSessionSummary,
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-slate-900">Session planning</span>
+                  <span className="text-sm font-semibold text-slate-900">
+                    {lang === "IS" ? "Skipulagning æfingar" : "Session planning"}
+                  </span>
                   <span
                     className={
                       graphSession.mode === "graph"
@@ -7291,7 +7452,7 @@ export default function CoachPage() {
                         : "inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
                     }
                   >
-                    Session source: {graphSession.mode === "graph" ? "Training Graph" : "Legacy template"}
+                    {lang === "IS" ? "Heimild" : "Source"}: {graphSession.mode === "graph" ? "Training Graph" : (lang === "IS" ? "Eldra sniðmát" : "Legacy template")}
                   </span>
                 </div>
 
@@ -7301,10 +7462,16 @@ export default function CoachPage() {
                       <div className="text-sm font-semibold text-slate-900">{graphSession.ateDecisionPanel.title}</div>
                       {graphSession.ateDecisionPanel.sourceLabel ? <span className="text-[10px] uppercase tracking-wide text-slate-500">{graphSession.ateDecisionPanel.sourceLabel}</span> : null}
                     </div>
-                    <div className="mt-2 text-sm text-slate-700">Session: {graphSession.ateDecisionPanel.sessionLabel}</div>
-                    <div className="mt-1 text-sm text-slate-500">State: {graphSession.ateDecisionPanel.athleteStateLabel}</div>
-                    <div className="mt-1 text-sm text-slate-500">MD: {graphSession.ateDecisionPanel.mdContextLabel}</div>
-                    {graphSession.ateDecisionPanel.adjustmentLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Adjustments</div> : null}
+                    <div className="mt-2 text-sm text-slate-700">
+                      {lang === "IS" ? "Æfing" : "Session"}: {graphSession.ateDecisionPanel.sessionLabel}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {lang === "IS" ? "Staða" : "State"}: {graphSession.ateDecisionPanel.athleteStateLabel}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      MD: {graphSession.ateDecisionPanel.mdContextLabel}
+                    </div>
+                    {graphSession.ateDecisionPanel.adjustmentLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.adjustments}</div> : null}
                     {graphSession.ateDecisionPanel.adjustmentLines.length ? (
                       <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
                         {graphSession.ateDecisionPanel.adjustmentLines.map((line) => (
@@ -7312,7 +7479,7 @@ export default function CoachPage() {
                         ))}
                       </ul>
                     ) : null}
-                    {graphSession.ateDecisionPanel.reasonLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Why</div> : null}
+                    {graphSession.ateDecisionPanel.reasonLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.why}</div> : null}
                     {graphSession.ateDecisionPanel.reasonLines.length ? (
                       <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-600">
                         {graphSession.ateDecisionPanel.reasonLines.slice(0, 4).map((line) => (
@@ -7320,7 +7487,7 @@ export default function CoachPage() {
                         ))}
                       </ul>
                     ) : null}
-                    {graphSession.ateDecisionPanel.riskFlagLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Risk</div> : null}
+                    {graphSession.ateDecisionPanel.riskFlagLines.length ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.risk}</div> : null}
                     {graphSession.ateDecisionPanel.riskFlagLines.length ? (
                       <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-amber-700">
                         {graphSession.ateDecisionPanel.riskFlagLines.slice(0, 3).map((line) => (
@@ -7331,7 +7498,7 @@ export default function CoachPage() {
 
                     <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Decision confidence</div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{subHeaders.confidence}</div>
                         <span
                           className={
                             decisionConfidence.level === "HIGH"
@@ -7341,12 +7508,16 @@ export default function CoachPage() {
                               : "inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700"
                           }
                         >
-                          {decisionConfidence.level === "HIGH" ? "High" : decisionConfidence.level === "MEDIUM" ? "Medium" : "Low"}
+                          {decisionConfidence.level === "HIGH"
+                            ? (lang === "IS" ? "Hár" : "High")
+                            : decisionConfidence.level === "MEDIUM"
+                              ? (lang === "IS" ? "Miðlungs" : "Medium")
+                              : (lang === "IS" ? "Lágur" : "Low")}
                         </span>
                       </div>
-                      <div className="mt-2 text-xs text-slate-600">Inputs: {decisionConfidence.inputsUsed.length ? decisionConfidence.inputsUsed.join(", ") : "None"}</div>
-                      <div className="mt-1 text-xs text-slate-600">Missing: {decisionConfidence.missingInputs.length ? decisionConfidence.missingInputs.join(", ") : "None"}</div>
-                      <div className="mt-1 text-xs text-slate-600">Fallbacks: {decisionConfidence.fallbackUsed ? "Partial" : "None"}</div>
+                      <div className="mt-2 text-xs text-slate-600">{subHeaders.inputs}: {decisionConfidence.inputsUsed.length ? decisionConfidence.inputsUsed.join(", ") : (lang === "IS" ? "Engir" : "None")}</div>
+                      <div className="mt-1 text-xs text-slate-600">{subHeaders.missing}: {decisionConfidence.missingInputs.length ? decisionConfidence.missingInputs.join(", ") : (lang === "IS" ? "Engir" : "None")}</div>
+                      <div className="mt-1 text-xs text-slate-600">{subHeaders.fallbacks}: {decisionConfidence.fallbackUsed ? (lang === "IS" ? "Hluti" : "Partial") : (lang === "IS" ? "Engir" : "None")}</div>
                     </div>
                   </div>
                 ) : (
@@ -7439,36 +7610,110 @@ export default function CoachPage() {
                   ) : null}
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  <div>Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span></div>
-                  <div className="mt-1">Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=<span className="font-mono">{r.coach_decision ?? "—"}</span> · final=<span className="font-mono">{r.final_decision ?? "—"}</span> · source=<span className="font-mono">{r.final_source ?? "—"}</span></div>
-                  <div className="mt-1">Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span> · Updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span></div>
-                </div>
+                {/* Engine debug — admin-only. Was previously shown to every coach;
+                    technical info (stage IDs, reason codes, raw timestamps) is
+                    only useful for diagnosing pipeline issues. */}
+                {isAdmin ? (
+                  <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                    <summary className="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {lang === "IS" ? "Tæknilegar upplýsingar (admin)" : "Engine debug (admin)"}
+                    </summary>
+                    <div className="mt-2">Auto reason: <span className="font-mono">{r.final_reason ?? "—"}</span></div>
+                    <div className="mt-1">Stage4: system=<span className="font-mono">{r.system_decision ?? "—"}</span> · coach=<span className="font-mono">{r.coach_decision ?? "—"}</span> · final=<span className="font-mono">{r.final_decision ?? "—"}</span> · source=<span className="font-mono">{r.final_source ?? "—"}</span></div>
+                    <div className="mt-1">Readiness id: <span className="font-mono">{r.readiness_entry_id ?? "—"}</span> · Updated: <span className="font-mono">{r.stage4_updated_at ?? "—"}</span></div>
+                  </details>
+                ) : null}
               </div>
             )}
 
             {renderAccordionSection(
               "neuralLoad",
-              "Neural load",
+              sectionHeaders.neuralLoad,
               neuralSummaryText,
               <div className="space-y-4">
-                {neural ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    <div>State: <span className="font-mono">{neural.neuralLoadState}</span> · Trajectory: <span className="font-mono">{neural.readinessTrajectory}</span> · Next-day risk: <span className="font-mono">{neural.nextDayRisk}</span> · Score: <span className="font-mono">{neural.neuralLoadScore}</span></div>
-                    <div className="mt-2">Summary: <span className="font-mono">{neural.summary}</span></div>
-                    {!!neural.drivers?.length ? (
-                      <div className="mt-2">Drivers: <span className="font-mono">{neural.drivers.slice(0, 4).map((d) => `${d.label}(+${d.points})`).join(", ")}</span></div>
-                    ) : null}
+                {neural ? (() => {
+                  const stateTone = neural.neuralLoadState === "CRITICAL"
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : neural.neuralLoadState === "RISING"
+                      ? "border-amber-300 bg-amber-50 text-amber-800"
+                      : "border-emerald-300 bg-emerald-50 text-emerald-800";
+                  const trajTone = neural.readinessTrajectory === "DECLINING"
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : neural.readinessTrajectory === "IMPROVING"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-300 bg-white text-slate-700";
+                  const riskTone = neural.nextDayRisk === "HIGH"
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : neural.nextDayRisk === "MODERATE"
+                      ? "border-amber-300 bg-amber-50 text-amber-800"
+                      : "border-emerald-300 bg-emerald-50 text-emerald-800";
+                  const chipBase = "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold";
+                  return (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`${chipBase} ${stateTone}`}>
+                          <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Staða" : "State"}</span>
+                          {neural.neuralLoadState}
+                        </span>
+                        <span className={`${chipBase} ${trajTone}`}>
+                          <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Stefna" : "Trajectory"}</span>
+                          {neural.readinessTrajectory}
+                        </span>
+                        <span className={`${chipBase} ${riskTone}`}>
+                          <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Næsta dag" : "Next-day"}</span>
+                          {neural.nextDayRisk}
+                        </span>
+                        <span className={`${chipBase} border-slate-300 bg-white text-slate-700`}>
+                          <span className="text-[9px] uppercase tracking-wide opacity-70">{lang === "IS" ? "Skor" : "Score"}</span>
+                          <span className="tabular-nums">{neural.neuralLoadScore}</span>
+                        </span>
+                      </div>
+                      {neural.summary ? (
+                        <div className="text-sm leading-6 text-slate-700">{neural.summary}</div>
+                      ) : null}
+                      {!!neural.drivers?.length ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                            {lang === "IS" ? "Drifkraftar" : "Drivers"}:
+                          </span>
+                          {neural.drivers.slice(0, 6).map((d, idx) => (
+                            <span
+                              key={`${pid}-nl-driver-${idx}-${d.label}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700"
+                            >
+                              {d.label}
+                              <span className="tabular-nums text-slate-500">+{d.points}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })() : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    {lang === "IS" ? "Engin neural-gögn." : "No neural load data."}
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">No neural load data.</div>
                 )}
 
                 {neuralBiasApplied ? (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    <div>Applied: <span className="font-mono">yes</span></div>
-                    <div className="mt-2">Why: <span className="font-mono">{neuralBiasWhy || "Neural risk signals crossed bias threshold."}</span></div>
-                    {!!r._neural_bias_reason_codes?.length ? <div className="mt-2">Codes: <span className="font-mono">{r._neural_bias_reason_codes.join(", ")}</span></div> : null}
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800">
+                      {lang === "IS" ? "Þreytuvog beitt" : "Bias applied"}
+                    </div>
+                    <div className="mt-2 leading-6">
+                      {neuralBiasWhy || (lang === "IS"
+                        ? "Neural-merki fóru yfir vog-mörk."
+                        : "Neural risk signals crossed bias threshold.")}
+                    </div>
+                    {!!r._neural_bias_reason_codes?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {r._neural_bias_reason_codes.map((code: string) => (
+                          <span key={`${pid}-bias-${code}`} className="inline-flex items-center rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                            {code}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -7476,7 +7721,7 @@ export default function CoachPage() {
 
             {renderAccordionSection(
               "coachMessage",
-              "Coach message",
+              sectionHeaders.coachMessage,
               coachMessageSummary,
               <div className="space-y-3">
                 <textarea
@@ -7485,10 +7730,12 @@ export default function CoachPage() {
                   value={draftMessage[pid] ?? ""}
                   onChange={(e) => setDraftMessage((p) => ({ ...p, [pid]: e.target.value }))}
                   disabled={isSaving || (r.is_locked && !isAdmin)}
-                  placeholder="Skrifaðu coach skilaboð…"
+                  placeholder={lang === "IS" ? "Skrifaðu skilaboð til leikmanns…" : "Write a message to the player…"}
                 />
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                  Save = confirmed (editable). Lock = endanlegt fyrir daginn. Auto-lock: {AUTO_LOCK_MINUTES_BEFORE} mín fyrir session start.
+                  {lang === "IS"
+                    ? `Vista = staðfest (breytanlegt). Læsa = endanlegt fyrir daginn. Sjálfvirk læsing: ${AUTO_LOCK_MINUTES_BEFORE} mín fyrir æfingu.`
+                    : `Save = confirmed (editable). Lock = final for the day. Auto-lock: ${AUTO_LOCK_MINUTES_BEFORE} min before session start.`}
                 </div>
               </div>
             )}
@@ -8569,7 +8816,15 @@ export default function CoachPage() {
                     <Button variant="outline" onClick={() => loadToday()} disabled={loading || genLoading}>
                       {loading ? "Hleð..." : "Refresh"}
                     </Button>
-                    <Button onClick={generateTodayDecisionsForTeam} disabled={genLoading || loading || saveAllLoading}>
+                    <Button
+                      onClick={generateTodayDecisionsForTeam}
+                      disabled={genLoading || loading || saveAllLoading}
+                      title={
+                        lang === "EN"
+                          ? "Re-runs the decision engine for every player. Overwrites any pending manual changes — save drafts first."
+                          : "Endurkeyrir ákvörðunarvélina fyrir alla leikmenn. Yfirskrifar ósvistaðar handvirkar breytingar — vistaðu drög fyrst."
+                      }
+                    >
                       {genLoading ? ct.actions.generating : ct.actions.generateDecisions}
                     </Button>
                     {(() => {
@@ -8693,6 +8948,63 @@ export default function CoachPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Sticky bottom save bar — appears whenever the coach has unsaved draft action changes.
+              Sits above content with a fixed position so the coach never has to scroll back to the
+              top filter bar to commit changes. */}
+          {(() => {
+            const dirtyCount = rows.filter((r) => {
+              if (r.is_locked && !isAdmin) return false;
+              const pid = String(r.player_id);
+              const draft = draftAction[pid];
+              const current = (r.training_action ?? "FULL") as TrainingAction;
+              return draft != null && draft !== current;
+            }).length;
+            if (dirtyCount === 0) return null;
+            return (
+              <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 transform">
+                <div className="flex items-center gap-3 rounded-2xl border border-amber-300 bg-white px-4 py-3 shadow-xl ring-1 ring-amber-200">
+                  <div className="flex items-center gap-2">
+                    <span className="relative inline-flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800">
+                      {lang === "EN"
+                        ? `${dirtyCount} unsaved change${dirtyCount === 1 ? "" : "s"}`
+                        : `${dirtyCount} óvistuð breyting${dirtyCount === 1 ? "" : "ar"}`}
+                    </span>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      // Discard all dirty drafts: reset draftAction back to saved value per row
+                      setDraftAction(() => {
+                        const next: Record<string, TrainingAction> = {};
+                        for (const r of rows) {
+                          const pid = String(r.player_id);
+                          next[pid] = (r.training_action ?? "FULL") as TrainingAction;
+                        }
+                        return next;
+                      });
+                    }}
+                    variant="outline"
+                    disabled={saveAllLoading || loading}
+                  >
+                    {lang === "EN" ? "Discard" : "Henda"}
+                  </Button>
+                  <Button
+                    onClick={saveAllDirty}
+                    disabled={saveAllLoading || loading}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {saveAllLoading
+                      ? (lang === "EN" ? "Saving…" : "Vistandi…")
+                      : (lang === "EN" ? `Save all (${dirtyCount})` : `Vista allt (${dirtyCount})`)}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
       )}

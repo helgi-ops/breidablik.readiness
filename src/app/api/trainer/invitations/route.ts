@@ -121,9 +121,13 @@ export async function POST(req: Request) {
 
     if (error) throw new Error(error.message);
 
-    // Build signup URL with token
+    // Build invite URL. We point at /invite/client/[token] (NOT the legacy
+    // /signup?invite=… path which routes through the coach signup form and
+    // would create the new account with role=COACH — that's exactly how
+    // Aníta Rut ended up as a coach on 2026-05-14). The dedicated page
+    // handles signup + accept inline and writes role=PLAYER throughout.
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.micropulse.is";
-    const signupUrl = `${baseUrl}/signup?invite=${invite.token}&team_id=${teamId}`;
+    const signupUrl = `${baseUrl}/invite/client/${invite.token}`;
 
     return NextResponse.json({
       invitation: invite,

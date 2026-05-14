@@ -7,6 +7,8 @@ import { TRAINER_COPY } from "./trainerCopy";
 import PlanBuilder from "./PlanBuilder";
 import PlanAssigner from "./PlanAssigner";
 import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
+import LvProfilePanel from "./LvProfilePanel";
+import ExplosivePowerPanel from "./ExplosivePowerPanel";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -85,7 +87,7 @@ interface PlanAssignment {
   status: string;
 }
 
-type TrainerTab = "clients" | "invitations" | "plans" | "isometrics";
+type TrainerTab = "clients" | "invitations" | "plans" | "isometrics" | "lvProfile" | "explosive";
 
 /* ── Component ───────────────────────────────────────── */
 
@@ -95,7 +97,65 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const isIS = lang === "IS";
   // supabase is imported from @/lib/supabaseClient
 
-  const [tab, setTab] = useState<TrainerTab>("clients");
+  // Admin gate — only MicroPulse super-admin (Helgi) sees the "explosive"
+  // tab. Personal trainers don't have write-access to the Explosive Power
+  // 12w library; it lives on the super-admin surface at /coach/pt-explosive.
+  // The tab is kept here only so Helgi can preview it inside the PT
+  // dashboard if needed; everyone else gets a 5-tab strip.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return;
+      const { data: prof } = await supabase
+        .from("profiles").select("role").eq("id", uid).maybeSingle();
+      if (!alive) return;
+      const role = String((prof as { role?: string } | null)?.role ?? "").toLowerCase();
+      if (role === "admin") setIsAdmin(true);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Visible tab list — explosive only included when caller is admin.
+  // Build a const variant of TrainerTab[] so we can drop "explosive" cleanly
+  // without TS widening.
+  const visibleTabs: TrainerTab[] = isAdmin
+    ? ["clients", "invitations", "plans", "isometrics", "lvProfile", "explosive"]
+    : ["clients", "invitations", "plans", "isometrics", "lvProfile"];
+
+  // Tab is URL-driven so the CoachSidebar can deep-link into a specific
+  // TrainerDashboard tab via /coach?tab=explosive (etc). Defaults to
+  // 'clients' when no param is present, or when a non-admin lands with
+  // ?tab=explosive (would otherwise show a tab that doesn't exist in the
+  // strip).
+  const [tab, setTab] = useState<TrainerTab>(() => {
+    if (typeof window === "undefined") return "clients";
+    const p = new URLSearchParams(window.location.search).get("tab");
+    const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile","explosive"];
+    return (valid.includes(p as TrainerTab) ? (p as TrainerTab) : "clients");
+  });
+
+  // Bounce non-admin off the explosive tab once we know their role.
+  useEffect(() => {
+    if (!isAdmin && tab === "explosive") setTab("clients");
+  }, [isAdmin, tab]);
+
+  // Keep tab synced when the URL changes (e.g., sidebar link click on the
+  // same page — Next's client router updates location.search without
+  // remounting the component).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => {
+      const p = new URLSearchParams(window.location.search).get("tab");
+      const valid: TrainerTab[] = ["clients","invitations","plans","isometrics","lvProfile","explosive"];
+      if (valid.includes(p as TrainerTab)) setTab(p as TrainerTab);
+      else setTab("clients");
+    };
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
   const [clients, setClients] = useState<Client[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
@@ -340,7 +400,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
-        {(["clients", "invitations", "plans", "isometrics"] as TrainerTab[]).map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -722,6 +782,26 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {/* ── Isometrics tab ────────────────────────────── */}
       {tab === "isometrics" && (
         <IsometricProtocolLibrary lang={lang === "EN" ? "EN" : "IS"} />
+      )}
+
+      {/* ── Load-Velocity Profile tab (ELITE add-on, per-client) ── */}
+      {tab === "lvProfile" && (
+        <LvProfilePanel
+          lang={lang === "EN" ? "EN" : "IS"}
+          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+        />
+      )}
+
+      {/* ── Explosive Power 12-week programme (admin-only) ──
+          The Explosive Power library is owned by the MicroPulse super-admin
+          (Helgi, eigandi síðunnar). Personal trainers don't get the tab in
+          the strip; the body is double-gated here so a stale ?tab=explosive
+          URL can never render the panel for a non-admin user. */}
+      {tab === "explosive" && isAdmin && (
+        <ExplosivePowerPanel
+          lang={lang === "EN" ? "EN" : "IS"}
+          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+        />
       )}
 
       {/* Plan Builder Modal */}

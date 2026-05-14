@@ -79,11 +79,41 @@ export async function GET(req: NextRequest) {
 
   const supabase = getSupabase();
 
+  // Determine whether the team is a personal-trainer team. For PT teams,
+  // every custom template is private to its creator — two PTs on the same
+  // internal team (or any future cross-PT sharing) must never see each
+  // other's programmes. For football/team coaches the whole staff shares
+  // the template library, so no extra filter is applied.
+  const { data: teamRow } = await supabase
+    .from("teams")
+    .select("team_type")
+    .eq("id", auth.teamId)
+    .maybeSingle();
+  const isPtTeam = String((teamRow as { team_type?: string } | null)?.team_type ?? "").toLowerCase()
+    === "personal_trainer";
+
   // ?table_name=xxx  →  return GREEN records for that table (for editing)
   const table_name = req.nextUrl.searchParams.get("table_name");
   if (table_name) {
     if (!/^[a-z][a-z0-9_]*$/.test(table_name))
       return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
+
+    // PT ownership check — the metadata row for this table must belong to
+    // the calling trainer. Otherwise return 403 (don't leak existence with
+    // a 404). Bypass for non-PT teams: any team coach may read team-level
+    // templates.
+    if (isPtTeam) {
+      const { data: ownerRow } = await supabase
+        .from("custom_template_sets")
+        .select("created_by")
+        .eq("team_id", auth.teamId)
+        .eq("table_name", table_name)
+        .maybeSingle();
+      const ownerId = (ownerRow as { created_by?: string | null } | null)?.created_by ?? null;
+      if (ownerId && ownerId !== auth.userId) {
+        return NextResponse.json({ ok: false, error: "Engin heimild" }, { status: 403 });
+      }
+    }
 
     const season_phase = req.nextUrl.searchParams.get("season_phase") || undefined;
 
@@ -104,14 +134,23 @@ export async function GET(req: NextRequest) {
   // No table_name  →  list all sets (metadata only).
   // Splits team templates (player_id IS NULL) vs player overrides (player_id NOT NULL)
   // so the UI can render them in separate sections.
-  const { data, error } = await supabase
+  //
+  // PT teams: scope by created_by so each PT sees only their own templates.
+  // Non-PT teams: list everything for the team.
+  let listQuery = supabase
     .from("custom_template_sets")
     .select(
       "id, set_name, sport, gender, season_phase, table_name, md_days, created_at, " +
-        "player_id, parent_table_name, start_date, end_date, note",
+        "player_id, parent_table_name, start_date, end_date, note, created_by",
     )
     .eq("team_id", auth.teamId)
     .order("created_at", { ascending: false });
+  if (isPtTeam) {
+    // Show rows the caller authored OR legacy rows without created_by (so
+    // pre-migration work isn't orphaned). Other PTs' rows are hidden.
+    listQuery = listQuery.or(`created_by.eq.${auth.userId},created_by.is.null`);
+  }
+  const { data, error } = await listQuery;
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 

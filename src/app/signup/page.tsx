@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Lang = "IS" | "EN";
@@ -78,9 +78,22 @@ const COPY = {
 
 function SignupForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const presetTeamId = searchParams.get("team_id") ?? "";
   const presetSport  = (searchParams.get("sport") ?? "") as Sport | "";
   const coachInviteToken = searchParams.get("coach_invite") ?? "";
+
+  // Backward-compat: pre-May-2026 PT client invitations emitted URLs of the
+  // form /signup?invite=TOKEN&team_id=… which routed everyone through the
+  // coach signup form (role:"COACH"). New invites point at /invite/client/
+  // [token] directly, but any link already in the wild must still land
+  // those users on the correct flow.
+  const legacyClientInvite = searchParams.get("invite") ?? "";
+  useEffect(() => {
+    if (legacyClientInvite) {
+      router.replace(`/invite/client/${encodeURIComponent(legacyClientInvite)}`);
+    }
+  }, [legacyClientInvite, router]);
 
   const [lang, setLang] = useState<Lang>("IS");
   const t = COPY[lang];

@@ -119,6 +119,18 @@ function Sparkline({
   );
 }
 
+function InfoIcon({ tip }: { tip: string }) {
+  return (
+    <span
+      title={tip}
+      aria-label={tip}
+      className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-slate-400 text-[9px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+    >
+      i
+    </span>
+  );
+}
+
 function MetricTile({
   title,
   value,
@@ -126,6 +138,7 @@ function MetricTile({
   baselineMean,
   trendValues,
   helper,
+  tooltip,
 }: {
   title: string;
   value: number | null;
@@ -133,10 +146,14 @@ function MetricTile({
   baselineMean?: number | null;
   trendValues: Array<number | null>;
   helper?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{title}</div>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
+        <span>{title}</span>
+        {tooltip ? <InfoIcon tip={tooltip} /> : null}
+      </div>
       <div className="mt-1 flex items-baseline gap-1">
         <span className="text-lg font-semibold text-slate-900">{fmtNum(value, 2)}</span>
         {unit && <span className="text-xs text-slate-500">{unit}</span>}
@@ -153,6 +170,19 @@ function MetricTile({
     </div>
   );
 }
+
+// ── Coach-friendly explanations for each stride metric ──
+// Single source of truth so REST-DAY and SESSION branches stay in sync.
+const STRIDE_TIPS = {
+  cadence:
+    "Stride frequency in Hz (strides/sec), volume-weighted across all velocity bands. Higher = quicker turnover. A drop of ≥0.5 Hz vs baseline signals neuromuscular fatigue (Buchheit 2018) — usually before HSR distance drops.",
+  strideLength:
+    "Average stride length at high-speed running (>15 km/h), in metres/stride. Compression of ≥0.10 m vs baseline suggests posterior-chain fatigue or reduced power output — hamstring caution flag.",
+  asymmetry:
+    "Side-to-side imbalance in high-intensity change-of-direction efforts: |Left − Right| ÷ average %. Bishop 2020 thresholds: <9% normal · 9–15% watch · 15–18% concern · >18% high-tier (≈3× ACL / hamstring injury risk).",
+  decoupling:
+    "Gap between high-speed running distance and high-load stride detection (percentage points). Large gaps (>15 %pt) mean the player is producing effort that doesn't translate into distance — mechanical inefficiency or fatigue under load.",
+} as const;
 
 export default function StrideIntelligenceCard({ playerId }: { playerId: string }) {
   const [data, setData] = useState<StrideApiResponse | null>(null);
@@ -264,6 +294,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
                 baselineMean={cadenceBaseline?.mean}
                 trendValues={trend.map((r) => r.cadenceWeighted)}
                 helper="14-day baseline · vol-weighted"
+                tooltip={STRIDE_TIPS.cadence}
               />
               <MetricTile
                 title="Stride length (HSR)"
@@ -272,6 +303,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
                 baselineMean={strideLengthBaseline?.mean}
                 trendValues={trend.map((r) => r.strideLengthHsr)}
                 helper="14-day baseline · HSR/strides"
+                tooltip={STRIDE_TIPS.strideLength}
               />
               <MetricTile
                 title="L/R asymmetry"
@@ -280,6 +312,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
                 baselineMean={asymBaseline?.mean}
                 trendValues={trend.map((r) => r.codLrAsymmetryPct)}
                 helper="14-day baseline · |L−R|/avg"
+                tooltip={STRIDE_TIPS.asymmetry}
               />
               <MetricTile
                 title="GPS-IMA decoupling"
@@ -290,6 +323,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
                   r.gpsImaDecoupling != null ? r.gpsImaDecoupling * 100 : null,
                 )}
                 helper="14-day baseline · HSR−HiLoad"
+                tooltip={STRIDE_TIPS.decoupling}
               />
             </div>
 
@@ -364,6 +398,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           baselineMean={cadenceBaseline?.mean}
           trendValues={trend.map((r) => r.cadenceWeighted)}
           helper="vol-weighted across bands"
+          tooltip={STRIDE_TIPS.cadence}
         />
         <MetricTile
           title="Avg stride length"
@@ -372,6 +407,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           baselineMean={strideLengthBaseline?.mean}
           trendValues={trend.map((r) => r.strideLengthHsr)}
           helper="Total distance ÷ total strides (session avg)"
+          tooltip={STRIDE_TIPS.strideLength}
         />
         <MetricTile
           title="L/R asymmetry"
@@ -383,6 +419,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
               ? "needs ≥5 CoD events"
               : `L${m.codLeftTotal} · R${m.codRightTotal}`
           }
+          tooltip={STRIDE_TIPS.asymmetry}
         />
         <MetricTile
           title="GPS-IMA decoupling"
@@ -391,6 +428,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           baselineMean={decouplingBaseline?.mean != null ? decouplingBaseline.mean * 100 : null}
           trendValues={trend.map((r) => (r.gpsImaDecoupling != null ? r.gpsImaDecoupling * 100 : null))}
           helper="HSR share − HiLoad share"
+          tooltip={STRIDE_TIPS.decoupling}
         />
       </div>
 

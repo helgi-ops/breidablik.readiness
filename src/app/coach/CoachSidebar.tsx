@@ -106,20 +106,47 @@ const teamPlanningLinks: SidebarLink[] = [
 // custom cluster structures (Garcia-Ramos, French Contrast, etc.).
 // Both are strength-coach tools, not pitch-session tools, so they sit
 // under Strength Planning with strength-aware names.
+// ── Personal-Training mode sidebar ───────────────────────────────────
+// PT teams (team_type='personal_trainer') don't use the football-coach
+// Monitoring/Planning/Admin layout. Their daily workflow is: client
+// overview → assign / adjust programmes → message client. Everything
+// else from the football side (Decel Intel, Indoor Load, Match minutes,
+// Week setup, etc.) is irrelevant. Keep the surface tiny.
+//
+// PT side keeps the strength tools that are genuinely PT-shaped:
+//   • Custom programmes — build per-client cluster/contrast structures.
+//     Helgi's Explosive Power 12w shows up as a pinned card INSIDE this
+//     page (admin-only) rather than as its own sidebar entry, because
+//     it's just a programme he authored — not a separate sidebar tool.
+//   • Load-Velocity Profile — ELITE per-client add-on (Banyard 2017,
+//     González-Badillo 2010). LV ramp tests + DSI are core to ANY
+//     serious 1-on-1 strength practice.
+//
+// Programme library / Isometric / Recovery deliberately live on the
+// team side only, not here.
+const ptStrengthLinks: SidebarLink[] = [
+  { href: "/coach/custom-templates", label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
+  // LV Profile renders as a TrainerDashboard tab on PT side, so the
+  // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
+  // pattern coach-side uses for dashTab navigation.
+  { href: "/coach?tab=lvProfile",    label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+];
+const ptAdminLinks: SidebarLink[] = [
+  { href: "/coach?tab=invitations",  label: { EN: "Invitations",   IS: "Boð" } },
+  { href: "/coach/settings",         label: { EN: "Settings",      IS: "Stillingar" } },
+];
+
 const strengthPlanningLinks: SidebarLink[] = [
   // /coach/strength is the DAILY action page — per-player ~20 min sessions
   // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
-  // Sidebar label deliberately says "Today's session" rather than
-  // "Strength (micro-dose)" because (a) the parent section is already
-  // "Strength Planning" so "Strength" is redundant, and (b) new coaches
-  // don't know the micro-dose term yet — "today's session" makes the
-  // daily-action role obvious. The page itself keeps the "Strength —
-  // Micro-dose" heading and Rønnestad citation so the brand term stays
-  // visible once they're on the page.
-  { href: "/coach/strength",           label: { EN: "Today's session",       IS: "Æfing dagsins" } },
-  { href: "/coach/templates",          label: { EN: "Programme library",     IS: "Prógrammasafn" } },
-  { href: "/coach/custom-templates",   label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
-  { href: "/coach/recovery-protocols", label: { EN: "Recovery protocols",    IS: "Recovery protocols" } },
+  { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  { href: "/coach/templates",           label: { EN: "Programme library",     IS: "Prógrammasafn" } },
+  { href: "/coach/custom-templates",    label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
+  // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo
+  // 2010, Banyard 2017) used by strength coaches to set per-player loads.
+  { href: "/coach/lv-profile",          label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  { href: "/coach/isometric-protocols", label: { EN: "Isometric protocols",   IS: "Ísómetrísk prótocol" } },
+  { href: "/coach/recovery-protocols",  label: { EN: "Recovery protocols",    IS: "Recovery protocols" } },
 ];
 
 const adminLinks: SidebarLink[] = [
@@ -134,6 +161,13 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
+// Super-admin links — visible ONLY to MicroPulse owner/admin accounts
+// (e.g. Helgi). Hidden from all coach/trainer users by the `{isAdmin &&}`
+// guard around the section render.
+//
+// Explosive Power 12w is NOT here — it's mounted under PT Strength training
+// (still admin-only) so Helgi can reach it alongside Custom programmes and
+// LV Profile rather than via a separate super-admin section.
 const superAdminLinks: SidebarLink[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
 ];
@@ -300,6 +334,7 @@ export function CoachSidebar({
   currentTab,
   currentTeamId,
   catapultDataTier,
+  teamType,
   onSwitchTeam,
   onNavigate,
 }: {
@@ -318,6 +353,10 @@ export function CoachSidebar({
    *  features that need B2-3 / IMA bands; 'full' shows everything. Default
    *  'lite' (conservative — show fewer items when undetermined). */
   catapultDataTier?: "full" | "lite";
+  /** Team type from teams.team_type. 'personal_trainer' switches the
+   *  sidebar to the PT-mode layout (Dashboard + Strength training +
+   *  Settings). Anything else gets the football-coach layout. */
+  teamType?: string | null;
   /** Invoked when the coach picks a different team from the switcher. The
    *  shell handles persistence (writes profiles.team_id) and reload. */
   onSwitchTeam: (team: CoachTeam) => void;
@@ -329,6 +368,80 @@ export function CoachSidebar({
   const pathname = usePathname() ?? "";
 
   const isOnCoach = pathname === "/coach" && currentTab == null;
+  const isPt = String(teamType ?? "").toLowerCase() === "personal_trainer";
+
+  // ── Personal-Training mode ────────────────────────────────────────
+  // PT teams get a 4-section sidebar: Dashboard / Strength training /
+  // Admin / (optional MicroPulse super-admin). No football monitoring
+  // surfaces, no team-planning sections — clean and minimal.
+  if (isPt) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="px-3 pt-3">
+          <TeamSwitcher currentTeamId={currentTeamId} onSwitch={onSwitchTeam} />
+        </div>
+
+        <nav className="flex flex-col gap-0.5 px-3 pt-4">
+          <Link
+            href="/coach"
+            onClick={onNavigate}
+            className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
+              isOnCoach
+                ? "bg-slate-900 text-white font-medium"
+                : "text-slate-800 hover:bg-slate-100"
+            }`}
+          >
+            <span>Dashboard</span>
+            {notesCount > 0 && (
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                isOnCoach ? "bg-white/20 text-white" : "bg-blue-500 text-white"
+              }`}>
+                {notesCount}
+              </span>
+            )}
+          </Link>
+        </nav>
+
+        <div className="flex-1 overflow-y-auto px-3 pb-4">
+          <Section
+            label={lang === "IS" ? "Styrktarþjálfun" : "Strength training"}
+            links={ptStrengthLinks}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+          <Section
+            label={lang === "IS" ? "Samskipti" : "Communication"}
+            links={communicationLinks}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+          <Section
+            label="Admin"
+            links={ptAdminLinks}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+            badges={{ pending: pendingCount }}
+          />
+          {isAdmin && (
+            <Section
+              label="MicroPulse"
+              links={superAdminLinks}
+              pathname={pathname}
+              currentTab={currentTab}
+              lang={lang}
+              onNavigate={onNavigate}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Filter Monitoring items by Catapult data tier. Lite teams get the
   // /coach/hsr-intelligence page (Malone 2017) instead of the Premium-

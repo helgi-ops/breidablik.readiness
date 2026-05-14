@@ -6,6 +6,8 @@ export const TRAINER_COPY = {
       exercises: "Æfingasafn",
       invitations: "Boð",
       isometrics: "Ísómetrísk prótocol",
+      lvProfile: "LV próf",
+      explosive: "Sprengikraftur 12v",
     },
     header: {
       title: "Einkaþjálfun",
@@ -112,6 +114,8 @@ export const TRAINER_COPY = {
       exercises: "Exercise Library",
       invitations: "Invitations",
       isometrics: "Isometric Protocols",
+      lvProfile: "LV Profile",
+      explosive: "Explosive Power 12w",
     },
     header: {
       title: "Personal Training",

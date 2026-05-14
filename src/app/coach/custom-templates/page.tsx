@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { generateYellow, generateRed, buildTableName } from "@/lib/micropulse/templateAutoGenerate";
 import type { TemplateBlock, TemplateRecord } from "@/lib/micropulse/templateAutoGenerate";
@@ -545,6 +546,31 @@ const MD_DAY_LABELS: Record<string, string> = {
   "MD+1":  "MD+1 — Dagur eftir leik",
   "MD+2":  "MD+2 — Tveimur dögum eftir leik",
   "MD+3":  "MD+3 — Þremur dögum eftir leik",
+};
+
+// Weekday picker — used when no games are on the calendar (offseason, and
+// any PT-mode work where the trainer plans around the week rather than
+// around match-day). MD-N labels would be meaningless here, so we swap to
+// regular weekdays with the same selection UX. Persisted to the dynamic
+// records table under md_day exactly like MD codes — the column is just text.
+const WEEKDAYS = [
+  "MÁN",
+  "ÞRI",
+  "MIÐ",
+  "FIM",
+  "FÖS",
+  "LAU",
+  "SUN",
+] as const;
+
+const WEEKDAY_LABELS: Record<string, string> = {
+  "MÁN": "Mánudagur",
+  "ÞRI": "Þriðjudagur",
+  "MIÐ": "Miðvikudagur",
+  "FIM": "Fimmtudagur",
+  "FÖS": "Föstudagur",
+  "LAU": "Laugardagur",
+  "SUN": "Sunnudagur",
 };
 
 type Step = 1 | 2 | 3 | 4;
@@ -2081,6 +2107,10 @@ type TeamOption = {
   name: string;
   sport: string | null;
   gender: string | null;
+  /** teams.team_type — drives the PT-vs-football UX split. PT teams hide
+   *  the gender chip, never list football teams alongside, and use the
+   *  trainer's own name as the team. */
+  teamType: string | null;
   isPrimary: boolean;
 };
 
@@ -2142,6 +2172,29 @@ export default function CustomTemplatesPage() {
 
   // Days that already have records in DB (for the current set being edited)
   const [existingDays, setExistingDays] = useState<string[]>([]);
+
+  // Admin detection — Helgi (the site owner) gets the pinned Explosive
+  // Power 12w card at the top of the "Mitt æfingakerfi" list. It's not
+  // stored as a custom_template_sets row because it has a different
+  // (phase-based) shape; it lives in pt_explosive_programmes and renders
+  // through the dedicated ExplosivePowerPanel. Other PTs / coaches never
+  // see the card.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: prof } = await supabase
+        .from("profiles").select("role").eq("id", user.id).maybeSingle();
+      if (!alive) return;
+      if (String((prof as { role?: string } | null)?.role ?? "").toLowerCase() === "admin") {
+        setIsAdmin(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   // Track which workout structure was last applied per day (for context-aware exercise picker)
   const [dayStructureIds, setDayStructureIds] = useState<Record<string, string>>({});
@@ -2242,20 +2295,36 @@ export default function CustomTemplatesPage() {
       // 3) Fetch team details in one query
       const { data: teams } = await supabase
         .from("teams")
-        .select("id, name, sport, gender")
+        .select("id, name, sport, gender, team_type")
         .in("id", allTeamIds.map((t) => t.id));
 
       for (const t of (teams ?? []) as any[]) {
         const isPrimary = allTeamIds.find((x) => x.id === t.id)?.isPrimary ?? false;
-        collected.set(t.id, { id: t.id, name: t.name, sport: t.sport, gender: t.gender, isPrimary });
+        collected.set(t.id, {
+          id: t.id, name: t.name, sport: t.sport, gender: t.gender,
+          teamType: t.team_type ?? null,
+          isPrimary,
+        });
       }
 
-      const sorted = Array.from(collected.values()).sort((a, b) =>
+      const sortedAll = Array.from(collected.values()).sort((a, b) =>
         (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0)
       );
+
+      // PT vs football split. If the coach's PRIMARY team is a PT team, hide
+      // every non-PT team from the picker (and vice versa). Personal trainers
+      // working out of Helgi-style 1-on-1 setups don't need football teams
+      // bleeding into their client-template flow, and team coaches shouldn't
+      // see incidental PT teams either.
+      const primaryTeam = sortedAll.find((t) => t.isPrimary) ?? sortedAll[0];
+      const isPtPrimary = String(primaryTeam?.teamType ?? "").toLowerCase() === "personal_trainer";
+      const sorted = sortedAll.filter((t) => {
+        const isPt = String(t.teamType ?? "").toLowerCase() === "personal_trainer";
+        return isPtPrimary ? isPt : !isPt;
+      });
       setAllTeams(sorted);
 
-      // Auto-select primary (or first)
+      // Auto-select primary (or first) from the filtered list
       const primary = sorted.find((t) => t.isPrimary) ?? sorted[0];
       if (primary) setSelectedTeamId(primary.id);
     })();
@@ -2534,14 +2603,50 @@ export default function CustomTemplatesPage() {
       {/* Existing sets list */}
       {!showBuilder && (
         <div className="space-y-3">
+          {/* Pinned admin programme — Explosive Power 12w. Shown at the top
+              of the list for site-admin only. It's not a custom_template_sets
+              row (different shape, phase-based blocks live in
+              pt_explosive_programmes) but appears here as a regular card so
+              Helgi can reach it from his own programme library. */}
+          {isAdmin && (
+            <Link
+              href="/coach/pt-explosive"
+              className="block rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 transition-colors hover:from-amber-100 hover:to-orange-100"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-lg">⚡</span>
+                    <div className="font-semibold text-slate-900">Sprengikraftur — 12 vikur</div>
+                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                      Helgi&apos;s kerfi
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    Tvö 12-vikna kerfi: 4-fasa PUSH/PULL og 3–4 daga/viku rannsóknarmiðað. Beginner / Intermediate / Advanced með daglegri græn/gul/rauð aðlögun.
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    Aðeins sýnilegt þér (eigandi síðunnar). Suchomel 2018 · Cormier 2020 · Pareja-Blanco 2017.
+                  </div>
+                </div>
+                <div className="shrink-0 text-sm font-medium text-amber-800">Opna →</div>
+              </div>
+            </Link>
+          )}
+
           {loadingSets ? (
             <p className="text-sm text-muted-foreground">Hleður...</p>
           ) : sets.length === 0 && playerSets.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-                Ekkert eigið æfingakerfi til enn. Búðu til þitt fyrsta hér að ofan.
-              </CardContent>
-            </Card>
+            // Don't show the "no programmes yet" placeholder when the admin
+            // sees their pinned Explosive Power card — that IS a programme
+            // they already have, so the message would be misleading.
+            isAdmin ? null : (
+              <Card>
+                <CardContent className="pt-6 text-center text-sm text-muted-foreground">
+                  Ekkert eigið æfingakerfi til enn. Búðu til þitt fyrsta hér að ofan.
+                </CardContent>
+              </Card>
+            )
           ) : (
             sets.map((s) => (
               <Card key={s.id}>
@@ -2823,25 +2928,34 @@ export default function CustomTemplatesPage() {
                   </div>
                 )}
 
-                {allTeams.length === 1 && (
-                  <div className="flex items-center gap-3 rounded-xl border bg-muted/50 px-4 py-3">
-                    <div className="text-2xl">
-                      {SPORT_ICONS[teamSport ?? ""] ?? "🏅"}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm">{teamName ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground flex gap-2">
-                        {teamSport && <span className="capitalize">{teamSport}</span>}
-                        {teamGender && (
-                          <span className={`font-medium ${teamGender === "M" ? "text-blue-600" : "text-rose-500"}`}>
-                            {teamGender === "M" ? "Karlar" : "Konur"}
-                          </span>
+                {allTeams.length === 1 && (() => {
+                  // Suppress sport + gender chips on PT teams — a personal
+                  // trainer's "team" is just themselves, not a gendered roster.
+                  const isPt = String(selectedTeam?.teamType ?? "").toLowerCase() === "personal_trainer";
+                  return (
+                    <div className="flex items-center gap-3 rounded-xl border bg-muted/50 px-4 py-3">
+                      <div className="text-2xl">
+                        {isPt ? "🧑‍🏫" : (SPORT_ICONS[teamSport ?? ""] ?? "🏅")}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-sm">{teamName ?? "—"}</div>
+                        {!isPt && (
+                          <div className="text-xs text-muted-foreground flex gap-2">
+                            {teamSport && <span className="capitalize">{teamSport}</span>}
+                            {teamGender && (
+                              <span className={`font-medium ${teamGender === "M" ? "text-blue-600" : "text-rose-500"}`}>
+                                {teamGender === "M" ? "Karlar" : "Konur"}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
+                      <div className="ml-auto text-[10px] text-muted-foreground">
+                        {isPt ? "Personal trainer" : "Frá prófíl liðs"}
+                      </div>
                     </div>
-                    <div className="ml-auto text-[10px] text-muted-foreground">Frá prófíl liðs</div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {allTeams.length > 1 && (
                   <div className="grid gap-2">
@@ -2852,6 +2966,7 @@ export default function CustomTemplatesPage() {
                     <div className="grid gap-2 sm:grid-cols-2">
                       {allTeams.map((team) => {
                         const isSelected = selectedTeamId === team.id;
+                        const isPtCard = String(team.teamType ?? "").toLowerCase() === "personal_trainer";
                         return (
                           <button
                             key={team.id}
@@ -2864,23 +2979,34 @@ export default function CustomTemplatesPage() {
                             }`}
                           >
                             <div className="text-2xl shrink-0">
-                              {SPORT_ICONS[team.sport ?? ""] ?? "🏅"}
+                              {isPtCard ? "🧑‍🏫" : (SPORT_ICONS[team.sport ?? ""] ?? "🏅")}
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-semibold leading-tight truncate">{team.name}</div>
-                              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                {team.sport && <span className="capitalize">{team.sport}</span>}
-                                {team.gender && (
-                                  <span className={`font-medium ${team.gender === "M" ? "text-blue-600" : "text-rose-500"}`}>
-                                    {team.gender === "M" ? "Karlar" : "Konur"}
-                                  </span>
-                                )}
-                                {team.isPrimary && (
+                              {/* PT teams: no sport/gender chips — the trainer
+                                  IS the team, no roster to gender. */}
+                              {!isPtCard && (
+                                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  {team.sport && <span className="capitalize">{team.sport}</span>}
+                                  {team.gender && (
+                                    <span className={`font-medium ${team.gender === "M" ? "text-blue-600" : "text-rose-500"}`}>
+                                      {team.gender === "M" ? "Karlar" : "Konur"}
+                                    </span>
+                                  )}
+                                  {team.isPrimary && (
+                                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                                      Aðallið
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {isPtCard && team.isPrimary && (
+                                <div className="mt-0.5">
                                   <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                                     Aðallið
                                   </span>
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                             {isSelected && (
                               <div className="shrink-0 text-foreground text-sm font-bold">✓</div>
@@ -2900,7 +3026,17 @@ export default function CustomTemplatesPage() {
                       <button
                         key={phase.id}
                         type="button"
-                        onClick={() => setSeasonPhase((p) => p === phase.id ? null : phase.id)}
+                        onClick={() => setSeasonPhase((p) => {
+                          const next = p === phase.id ? null : phase.id;
+                          // Reset the day selection whenever we cross the
+                          // offseason boundary so users don't end up with
+                          // mixed MD-N / weekday tags in one set.
+                          const goingOff = next === "offseason";
+                          const leavingOff = p === "offseason" && next !== "offseason";
+                          if (goingOff) setSelectedDays(["MÁN"]);
+                          else if (leavingOff) setSelectedDays(["GENERIC"]);
+                          return next;
+                        })}
                         className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition-all ${
                           seasonPhase === phase.id ? phase.activeColor : `${phase.color} hover:opacity-80`
                         }`}
@@ -2949,43 +3085,53 @@ export default function CustomTemplatesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
-                <div className="grid gap-2">
-                  {MD_DAYS.map((day) => {
-                    const selected = selectedDays.includes(day);
-                    const alreadySaved = existingDays.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() =>
-                          setSelectedDays((prev) =>
-                            selected ? prev.filter((d) => d !== day) : [...prev, day]
-                          )
-                        }
-                        className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-                          selected ? "border-foreground bg-muted" : "hover:bg-muted/50"
-                        }`}
-                      >
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-xs font-bold ${selected ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}>
-                          {selected ? "✓" : " "}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium">{day}</div>
-                          <div className="text-xs text-muted-foreground">{MD_DAY_LABELS[day]}</div>
-                        </div>
-                        {alreadySaved && (
-                          <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${
-                            selected
-                              ? "text-amber-700 bg-amber-50 border border-amber-200"
-                              : "text-emerald-600 bg-emerald-50 border border-emerald-200"
-                          }`}>
-                            {selected ? "✏️ Uppfærist" : "✓ Í gagnagrunni"}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Offseason: no games on the calendar, so MD-N labels are
+                    meaningless. Swap the picker to weekdays. Stored under
+                    md_day in the dynamic records table just like MD codes. */}
+                {(() => {
+                  const isOff = seasonPhase === "offseason";
+                  const days = isOff ? WEEKDAYS : MD_DAYS;
+                  const labels = isOff ? WEEKDAY_LABELS : MD_DAY_LABELS;
+                  return (
+                    <div className="grid gap-2">
+                      {days.map((day) => {
+                        const selected = selectedDays.includes(day);
+                        const alreadySaved = existingDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() =>
+                              setSelectedDays((prev) =>
+                                selected ? prev.filter((d) => d !== day) : [...prev, day]
+                              )
+                            }
+                            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                              selected ? "border-foreground bg-muted" : "hover:bg-muted/50"
+                            }`}
+                          >
+                            <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-xs font-bold ${selected ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}>
+                              {selected ? "✓" : " "}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{day}</div>
+                              <div className="text-xs text-muted-foreground">{labels[day]}</div>
+                            </div>
+                            {alreadySaved && (
+                              <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${
+                                selected
+                                  ? "text-amber-700 bg-amber-50 border border-amber-200"
+                                  : "text-emerald-600 bg-emerald-50 border border-emerald-200"
+                              }`}>
+                                {selected ? "✏️ Uppfærist" : "✓ Í gagnagrunni"}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 <div className="flex justify-between gap-2">
                   <Button variant="outline" onClick={() => setStep(1)}>← Til baka</Button>
                   <Button onClick={() => { setCurrentDayIdx(0); setStep(3); }} disabled={selectedDays.length === 0}>
