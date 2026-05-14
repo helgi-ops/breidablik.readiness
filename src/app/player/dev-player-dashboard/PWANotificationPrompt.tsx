@@ -11,6 +11,41 @@ function getCurrentPermission(): PermState {
   return (Notification.permission as PermState) ?? "unknown";
 }
 
+/** Re-show the dismissed prompt after this many days. Players who said
+ *  "Ekki núna" still need reminders eventually — permanent dismissal led
+ *  to <30% adoption (Þór, Grindavík). 7 days = weekly reminder loop. */
+const DISMISS_REMIND_AFTER_DAYS = 7;
+
+function isDismissalStale(): boolean {
+  try {
+    const raw = localStorage.getItem("pwa-notif-dismissed-at");
+    if (!raw) {
+      // Legacy "1" flag from before timestamp tracking — treat as stale so
+      // we re-prompt these players once.
+      return localStorage.getItem("pwa-notif-dismissed") === "1";
+    }
+    const dismissedAt = Number(raw);
+    if (!Number.isFinite(dismissedAt)) return true;
+    const ageMs = Date.now() - dismissedAt;
+    return ageMs > DISMISS_REMIND_AFTER_DAYS * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+/** True when running on iOS Safari outside standalone (PWA) mode. iOS only
+ *  supports push from installed PWAs, so the prompt must guide install
+ *  instead of asking permission directly. */
+function isIosNonStandalone(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIos = /iPad|iPhone|iPod/.test(ua) && !(window as { MSStream?: unknown }).MSStream;
+  // navigator.standalone is iOS-specific
+  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
+    || window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+  return isIos && !standalone;
+}
+
 function BellIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -37,24 +72,52 @@ export default function PWANotificationPrompt() {
   const [uiState, setUiState] = useState<UiState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [iosInstallNeeded, setIosInstallNeeded] = useState(false);
 
   useEffect(() => {
-    // Check if user already dismissed this prompt
-    try {
-      if (localStorage.getItem("pwa-notif-dismissed") === "1") {
-        setDismissed(true);
-      }
-    } catch {
-      // ignore
-    }
+    // Re-show prompt every DISMISS_REMIND_AFTER_DAYS even after dismissal.
+    setDismissed(!isDismissalStale() && !!localStorage.getItem("pwa-notif-dismissed-at"));
     setPermission(getCurrentPermission());
+    setIosInstallNeeded(isIosNonStandalone());
   }, []);
+
+  // iOS Safari outside standalone — different copy, no permission ask
+  // (iOS doesn't expose Notification API in browser tabs).
+  if (iosInstallNeeded && !dismissed) {
+    return (
+      <div className="mx-4 mb-3 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 text-blue-600 shrink-0">
+            <BellIcon />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-900 leading-snug">
+              Settu upp sem app til að fá tilkynningar
+            </p>
+            <p className="text-xs text-blue-800/80 mt-0.5 leading-relaxed">
+              Tap-aðu á <span className="font-semibold">Share</span> ⤴ → <span className="font-semibold">&ldquo;Add to Home Screen&rdquo;</span>. Síðan opnar þú app-icon-ið og enable-ar tilkynningar — þá færðu áminningu um check-in.
+            </p>
+          </div>
+          <button
+            onClick={handleDismiss}
+            className="shrink-0 text-blue-400 hover:text-blue-600 p-0.5 -mt-0.5 -mr-0.5"
+            aria-label="Dismiss"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Don't show anything if:
   // - Notifications not supported
   // - Permission already granted (subscribed)
-  // - Permission denied (can't ask again)
-  // - User dismissed the banner
+  // - Permission denied (can't ask again from JS)
+  // - User dismissed the banner (and not yet stale)
   if (
     permission === "unknown" ||
     permission === "granted" ||
@@ -65,7 +128,12 @@ export default function PWANotificationPrompt() {
   }
 
   function handleDismiss() {
-    try { localStorage.setItem("pwa-notif-dismissed", "1"); } catch { /* ignore */ }
+    try {
+      // Store timestamp so we can re-show after DISMISS_REMIND_AFTER_DAYS
+      localStorage.setItem("pwa-notif-dismissed-at", String(Date.now()));
+      // Clean up legacy flag if present
+      localStorage.removeItem("pwa-notif-dismissed");
+    } catch { /* ignore */ }
     setDismissed(true);
   }
 
@@ -114,10 +182,10 @@ export default function PWANotificationPrompt() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-zinc-800 leading-snug">
-            Virkja tilkynningar
+            Ekki missa af check-in
           </p>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
-            Fáðu áminningu um check-in og þegar æfingarsgögn eru komin inn.
+            Án tilkynninga gleymist check-in oft og þá veit þjálfarinn ekki hvernig þér líður. Tap-aðu Virkja og samþykktu í kerfinu.
           </p>
           {uiState === "error" && errorMsg && (
             <p className="text-xs text-red-600 mt-1">{errorMsg}</p>

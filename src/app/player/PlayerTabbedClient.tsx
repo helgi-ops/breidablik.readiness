@@ -1226,8 +1226,13 @@ export default function DevPlayerClient() {
           unreadCount={unreadChatCount}
         />
       )}
-      {/* PWA notification opt-in prompt (only in PWA mode, only when not yet subscribed) */}
-      {isPwa && <PWANotificationPrompt />}
+      {/* Notification opt-in prompt — shows in PWA AND browser. Browser permission
+          ask works on Android Chrome + desktop; iOS Safari outside standalone
+          gets an "install as PWA" message instead (iOS only supports push from
+          installed PWAs). Component self-gates based on platform + permission.
+          Was previously gated to PWA-only which created a chicken-and-egg
+          problem and contributed to 17-50% adoption rates on new clubs. */}
+      <PWANotificationPrompt />
       {/* PWA bottom navigation bar */}
       {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} />}
     </>
