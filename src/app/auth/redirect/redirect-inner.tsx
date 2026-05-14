@@ -61,7 +61,7 @@ export default function RedirectInner() {
 
       const { data: profile, error: profErr } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, team_id")
         .eq("id", user.id)
         .single();
 
@@ -73,14 +73,30 @@ export default function RedirectInner() {
 
       const isCoachLike = role === "coach" || role === "admin" || role === "staff";
 
+      // PT clients (player role on a team_type='personal_trainer' team) get the
+      // /client PWA surface, NOT /player. The football team UI is irrelevant
+      // to them — no readiness check-in flow, no team-wide tactical pages.
+      let isPtClient = false;
+      if (role === "player" && profile?.team_id) {
+        const { data: team } = await supabase
+          .from("teams")
+          .select("team_type")
+          .eq("id", profile.team_id)
+          .maybeSingle();
+        isPtClient = String((team as any)?.team_type ?? "").toLowerCase() === "personal_trainer";
+      }
+
       if (next) {
         if (isCoachLike && next.startsWith("/coach")) return router.replace(next);
         if (isCoachLike && next.startsWith("/team")) return router.replace(next);
-        if (role === "player" && (next.startsWith("/player") || next.startsWith("/team")))
+        if (isPtClient && next.startsWith("/client")) return router.replace(next);
+        if (role === "player" && !isPtClient && (next.startsWith("/player") || next.startsWith("/team")))
           return router.replace(next);
       }
 
       if (isCoachLike) return router.replace("/coach");
+
+      if (isPtClient) return router.replace("/client");
 
       if (role === "player") {
         // Check-in done → team page, not done → checkin first
