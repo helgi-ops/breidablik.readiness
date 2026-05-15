@@ -13,6 +13,12 @@
 
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import {
+  computeFosterMonotonyStrain,
+  computeHeavyLiftingExposure,
+  forecastPR,
+} from "@/lib/trainer/loadIntelligence";
+import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
 
 export const runtime = "nodejs";
 
@@ -51,6 +57,11 @@ export async function GET(req: Request) {
     .maybeSingle();
 
   // ── Active Explosive Power assignment (admin-managed library) ─────
+  // Resolve which phase + which weekday block applies TODAY, based on the
+  // assignment start_date. The assignment's stored current_phase is
+  // authoritative if a trainer manually advances them, but if a client
+  // just started on the 1st and today is the 1st of week 4, we surface
+  // phase 2 automatically.
   const { data: epAssign } = await sb
     .from("pt_explosive_programme_assignments")
     .select("id, level, current_phase, programme_key, start_date, status")
@@ -60,26 +71,140 @@ export async function GET(req: Request) {
     .limit(1)
     .maybeSingle();
 
-  // Programme metadata (phase name + blocks for today's prescribed work).
   let explosive: {
-    level: string; phase: number; phase_name: string; weeks_label: string;
+    level: string;
+    /** Programme display name (e.g. "Pulling Derivative Power"). Surfaced
+     *  prominently on the client UI so they always recognise their plan,
+     *  even on rest days when phase_name alone is too cryptic. */
+    programme_name: string | null;
+    phase: number;
+    phase_name: string;
+    weeks_label: string;
+    week_in_phase: number | null;
+    weekday_label: string | null;
+    rest_day: boolean;
+    next_session_label: string | null;
+    /** When kind=session: only the block scheduled for today. When rest:
+     *  preview of the NEXT scheduled session (1 block) so client can see
+     *  what's coming. UI label distinguishes session-today vs preview. */
     blocks: unknown[];
+    /** Programme length so the client UI can render "Week 4 / 8" correctly
+     *  for 8-week starter templates vs 12-week Explosive Power. */
+    weeks_per_phase?: number;
+    total_phases?: number;
   } | null = null;
+
   if (epAssign) {
-    const ep = epAssign as { level: string; current_phase: number; programme_key: string };
-    const { data: prog } = await sb
+    const ep = epAssign as {
+      level: string; current_phase: number;
+      programme_key: string; start_date: string;
+    };
+
+    // Pull all phases at once so we don't need to hit the DB again on phase
+    // boundaries when start_date implies a different phase from current_phase.
+    // programme_name is fetched here so the client UI can show "Pulling
+    // Derivative Power" rather than just "Phase 1 — Hinge technique base"
+    // (the latter is meaningless without programme context, and looks like
+    // no programme is assigned at all on rest days).
+    const { data: allPhases } = await sb
       .from("pt_explosive_programmes")
-      .select("phase_name, weeks_label, blocks")
+      .select("phase, phase_name, weeks_label, blocks, weeks_per_phase, programme_name")
       .eq("programme_key", ep.programme_key)
       .eq("level", ep.level)
-      .eq("phase", ep.current_phase)
-      .maybeSingle();
-    if (prog) {
-      const p = prog as { phase_name: string; weeks_label: string; blocks: unknown[] };
-      explosive = {
-        level: ep.level, phase: ep.current_phase,
-        phase_name: p.phase_name, weeks_label: p.weeks_label, blocks: p.blocks ?? [],
+      .order("phase", { ascending: true });
+
+    const phaseRows = ((allPhases ?? []) as Array<{
+      phase: number; phase_name: string; weeks_label: string; blocks: unknown[];
+      weeks_per_phase: number | null;
+      programme_name: string | null;
+    }>);
+
+    if (phaseRows.length > 0) {
+      // First derive the date-implied slot (which phase + which block today).
+      // Fall back to using whichever phase's blocks come closest.
+      const firstPhaseBlocks = phaseRows[0]?.blocks ?? [];
+      const nBlocksGuess = Array.isArray(firstPhaseBlocks) ? firstPhaseBlocks.length : 0;
+      const blockNamesGuess = (Array.isArray(firstPhaseBlocks)
+        ? (firstPhaseBlocks as Array<{ name?: string | null }>).map((b) => b?.name ?? null)
+        : []);
+
+      const weeksPerPhase = phaseRows[0]?.weeks_per_phase ?? 3;
+      const totalPhases = phaseRows.length;
+
+      const slot = resolveProgrammeSlot({
+        programmeKey: ep.programme_key,
+        startDate: ep.start_date,
+        today,
+        nBlocks: nBlocksGuess,
+        blockNames: blockNamesGuess,
+        weeksPerPhase,
+        totalPhases,
+      });
+
+      // Pick which phase row to use. Prefer the date-implied phase; if the
+      // client hasn't started yet or has already finished, fall back to
+      // current_phase as stored on the assignment.
+      const phaseToShow = (slot.kind === "session" || slot.kind === "rest")
+        ? slot.phase
+        : ep.current_phase;
+      const phaseRow = phaseRows.find((p) => p.phase === phaseToShow) ?? phaseRows[0];
+      const blocks = Array.isArray(phaseRow.blocks) ? phaseRow.blocks : [];
+
+      const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
+      const programmeName = phaseRow.programme_name ?? null;
+      const common = {
+        weeks_per_phase: weeksPerPhase,
+        total_phases: totalPhases,
+        programme_name: programmeName,
       };
+      if (slot.kind === "session") {
+        explosive = {
+          level: ep.level,
+          phase: slot.phase,
+          phase_name: phaseRow.phase_name,
+          weeks_label: phaseRow.weeks_label,
+          week_in_phase: slot.weekInPhase,
+          weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
+          rest_day: false,
+          next_session_label: null,
+          blocks: [blocks[slot.blockIndex]].filter(Boolean),
+          ...common,
+        };
+      } else if (slot.kind === "rest") {
+        // On rest day, surface the NEXT session's exercises as a preview.
+        // Without this, the client sees "Hvíldardagur — Hvíldu vel í dag"
+        // and no programme detail, which feels like nothing was assigned.
+        // Preview = first block (same logic for both 2-day and 3-day
+        // starter programmes since fallback schedule starts with block 0
+        // on Monday). Client UI labels this as "Næsta æfing — preview".
+        const previewBlock = Array.isArray(blocks) && blocks.length > 0 ? blocks[0] : null;
+        explosive = {
+          level: ep.level,
+          phase: slot.phase,
+          phase_name: phaseRow.phase_name,
+          weeks_label: phaseRow.weeks_label,
+          week_in_phase: slot.weekInPhase,
+          weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
+          rest_day: true,
+          next_session_label: slot.nextSessionLabel,
+          blocks: previewBlock ? [previewBlock] : [],
+          ...common,
+        };
+      } else {
+        // not_started or completed — surface the assignment but no blocks.
+        explosive = {
+          level: ep.level,
+          phase: ep.current_phase,
+          phase_name: phaseRow.phase_name,
+          weeks_label: phaseRow.weeks_label,
+          week_in_phase: null,
+          weekday_label: null,
+          rest_day: true,
+          next_session_label: null,
+          blocks: [],
+          ...common,
+        };
+      }
     }
   }
 
@@ -123,6 +248,75 @@ export async function GET(req: Request) {
     }, null);
   }
 
+  // ── Smart insights (Foster + heavy-lifting exposure + top-PR forecast)
+  // These three are MicroPulse PT's main differentiators vs generic apps.
+  // All three are pure functions; we just feed them the right slice of
+  // already-fetched data so this endpoint stays one-round-trip.
+  const since7 = new Date(); since7.setDate(since7.getDate() - 7);
+  const since60 = new Date(); since60.setDate(since60.getDate() - 60);
+
+  // Session loads for Foster (sRPE × duration in arbitrary units)
+  const { data: rpeData } = await sb
+    .from("session_rpe_entries")
+    .select("session_date, session_load")
+    .eq("player_id", player.id)
+    .gte("session_date", since7.toISOString().slice(0, 10));
+  const sessionLoads = ((rpeData ?? []) as Array<{ session_date: string; session_load: number | null }>)
+    .filter((r) => r.session_load != null && Number.isFinite(r.session_load))
+    .map((r) => ({ date: r.session_date, load: Number(r.session_load) }));
+  const foster = computeFosterMonotonyStrain(sessionLoads, 7);
+
+  // Heavy-lifting exposure: sets ≥80% 1RM in last 7 days
+  const { data: setData } = await sb
+    .from("pt_exercise_set_logs")
+    .select("session_date, weight_kg, reps, exercise_name")
+    .eq("player_id", player.id)
+    .gte("session_date", since7.toISOString().slice(0, 10));
+  const sets = ((setData ?? []) as Array<{
+    session_date: string; weight_kg: number | null; reps: number | null; exercise_name: string;
+  }>).filter((s) => s.weight_kg != null && s.reps != null);
+  const exposure = computeHeavyLiftingExposure(
+    sets.map((s) => ({ date: s.session_date, weight_kg: Number(s.weight_kg), reps: Number(s.reps) })),
+    7,
+  );
+
+  // PR forecast — pick the exercise with the most logged sessions in the
+  // last 60 days, fit linear regression on top-set Epley e1RM.
+  const { data: setData60 } = await sb
+    .from("pt_exercise_set_logs")
+    .select("exercise_name, session_date, weight_kg, reps")
+    .eq("player_id", player.id)
+    .gte("session_date", since60.toISOString().slice(0, 10));
+  const sets60 = ((setData60 ?? []) as Array<{
+    exercise_name: string; session_date: string; weight_kg: number | null; reps: number | null;
+  }>).filter((s) => s.weight_kg != null && s.reps != null);
+  const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
+  // Group: exercise → date → max e1RM (top set per session)
+  const byExercise = new Map<string, Map<string, number>>();
+  for (const s of sets60) {
+    const w = Number(s.weight_kg), r = Number(s.reps);
+    if (!byExercise.has(s.exercise_name)) byExercise.set(s.exercise_name, new Map());
+    const dayMap = byExercise.get(s.exercise_name)!;
+    const e = epley(w, r);
+    if (!dayMap.has(s.session_date) || e > dayMap.get(s.session_date)!) dayMap.set(s.session_date, e);
+  }
+  let topExerciseName: string | null = null;
+  let topExerciseSessions = 0;
+  for (const [name, dayMap] of byExercise) {
+    if (dayMap.size > topExerciseSessions) {
+      topExerciseSessions = dayMap.size;
+      topExerciseName = name;
+    }
+  }
+  let prForecast: { exercise_name: string; forecast: ReturnType<typeof forecastPR> } | null = null;
+  if (topExerciseName) {
+    const points = Array.from(byExercise.get(topExerciseName)!.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, e1rm]) => ({ date, e1rm: Number(e1rm.toFixed(2)) }));
+    const fc = forecastPR(points);
+    if (fc) prForecast = { exercise_name: topExerciseName, forecast: fc };
+  }
+
   return NextResponse.json({
     ok: true,
     player: { id: player.id, full_name: player.full_name },
@@ -141,5 +335,10 @@ export async function GET(req: Request) {
           delta_kg: priorBw ? Number((latestBw.weight_kg - priorBw.weight_kg).toFixed(2)) : null,
         }
       : null,
+    intelligence: {
+      foster,
+      exposure,
+      pr_forecast: prForecast,
+    },
   });
 }
