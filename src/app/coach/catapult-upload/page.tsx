@@ -94,27 +94,62 @@ export default function CatapultUploadPage() {
   const [commitErr, setCommitErr] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResult | null>(null);
 
+  // Track team name so coaches can SEE which team they're uploading for —
+  // critical when an admin coaches multiple teams (e.g. Helgi at Breiðablik
+  // + Þór + Grindavík). Without this label, mis-targeted uploads happen.
+  const [teamName, setTeamName] = useState<string | null>(null);
+
   // ─── Resolve team + load roster ────────────────────────────────────────
+  // Re-runs on window focus so a team-switch in another tab/sidebar is
+  // picked up automatically. Previously this effect ran ONCE on mount,
+  // which captured the user's profile.team_id from then; switching teams
+  // afterwards left this page stuck on the old team's roster — surfaced as
+  // "wrong team's players in athlete-mapping dropdown" (reported 2026-05-15
+  // by Helgi: showed Breiðablik players when on Þór page).
   useEffect(() => {
-    (async () => {
+    let alive = true;
+    async function loadTeam() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || !alive) return;
       const { data: prof } = await supabase
         .from("profiles")
         .select("team_id")
         .eq("id", user.id)
         .maybeSingle();
       const tid = (prof as { team_id?: string } | null)?.team_id ?? null;
+      if (!alive) return;
       setTeamId(tid);
       if (tid) {
-        const { data } = await supabase
-          .from("players")
-          .select("id, full_name")
-          .eq("team_id", tid)
-          .order("full_name");
-        setTeamPlayers((data ?? []) as TeamPlayer[]);
+        const [{ data: roster }, { data: team }] = await Promise.all([
+          supabase
+            .from("players")
+            .select("id, full_name")
+            .eq("team_id", tid)
+            .order("full_name"),
+          supabase
+            .from("teams")
+            .select("name")
+            .eq("id", tid)
+            .maybeSingle(),
+        ]);
+        if (!alive) return;
+        setTeamPlayers((roster ?? []) as TeamPlayer[]);
+        setTeamName(((team as { name?: string } | null)?.name) ?? null);
+      } else {
+        setTeamPlayers([]);
+        setTeamName(null);
       }
-    })();
+    }
+    void loadTeam();
+
+    function onFocus() { void loadTeam(); }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, [supabase]);
 
   // ─── File picker → parse each → preview API ────────────────────────────
@@ -562,10 +597,18 @@ export default function CatapultUploadPage() {
           {/* Athlete mapping */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Tengja leikmenn</CardTitle>
+              <CardTitle className="text-base">
+                Tengja leikmenn
+                {teamName && (
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 align-middle">
+                    🏟️ {teamName}
+                  </span>
+                )}
+              </CardTitle>
               <CardDescription>
                 Sameinaður listi yfir alla leikmenn úr {files.length === 1 ? "skránni" : `öllum ${files.length} skrám`}.
                 Sjálfvirkt cache-að eftir fyrsta upload. Þú þarft bara að confirma athletes sem hafa ekki verið séðir áður.
+                {teamName && <span className="block mt-1 font-medium text-slate-700">Mappast við leikmenn í <strong>{teamName}</strong> — skiptu um lið í sidebar ef þú vilt annað.</span>}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
