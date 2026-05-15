@@ -4385,9 +4385,14 @@ export default function CoachPage() {
     setSaved({});
   }, [teamFilter, filter, search, coachVerified]);
 
-  // GPS tab — fetch ALL players with Catapult data, independent of readiness rows
+  // GPS tab — fetch CURRENT-TEAM players with Catapult data, independent of
+  // readiness rows. team_id filter is critical: Helgi (admin) and other
+  // multi-team coaches have RLS access to players across teams; without the
+  // filter they see other clubs' players in the GPS table (eg. Breiðablik
+  // names appearing on Afturelding's GPS tab — reported by user 2026-05-15).
   useEffect(() => {
     if (dashTab !== "gps" || !coachVerified) return;
+    if (!coachTeamId) return; // wait for team to load — never query without scope
     let alive = true;
     (async () => {
       setGpsLoading(true);
@@ -4398,6 +4403,7 @@ export default function CoachPage() {
           .from("players")
           .select("id, full_name, position")
           .eq("is_active", true)
+          .eq("team_id", coachTeamId)
           .order("full_name");
 
         if (!playerData?.length || !alive) return;
@@ -4438,7 +4444,7 @@ export default function CoachPage() {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashTab, coachVerified, gpsDate]);
+  }, [dashTab, coachVerified, gpsDate, coachTeamId]);
 
   /** -----------------------------
    * Derived UI data
