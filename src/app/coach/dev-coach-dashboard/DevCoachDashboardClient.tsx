@@ -1919,6 +1919,16 @@ export default function CoachPage() {
 
   // GPS tab — all players fetched independently of readiness rows
   const [gpsDate, setGpsDate] = useState<string>(() => todayISO()); // browsable date for GPS tab
+  // Track whether the coach has explicitly picked a date this session. If
+  // they have, we never auto-shift the date (their pick wins). If they
+  // haven't, we auto-shift to the team's most-recent-data-date so teams
+  // that upload irregularly (Þór, Afturelding, Grindavík) don't see an
+  // empty Today-view by default. Reset to false on team switch so each
+  // team gets its own latest-date default on first view.
+  const [gpsDateManuallySet, setGpsDateManuallySet] = useState(false);
+  // Latest date with data for the current team — surfaced as "Showing latest
+  // data: X" hint so coaches know they're not on today.
+  const [gpsLatestDataDate, setGpsLatestDataDate] = useState<string | null>(null);
   const [gpsAllPlayers, setGpsAllPlayers] = useState<Array<{
     id: string;
     name: string;
@@ -4385,6 +4395,13 @@ export default function CoachPage() {
     setSaved({});
   }, [teamFilter, filter, search, coachVerified]);
 
+  // Reset "manually-set" flag when team changes so each team gets its own
+  // most-recent-data default on first view. Also clear stale data state.
+  useEffect(() => {
+    setGpsDateManuallySet(false);
+    setGpsLatestDataDate(null);
+  }, [coachTeamId]);
+
   // GPS tab — fetch CURRENT-TEAM players with Catapult data, independent of
   // readiness rows. team_id filter is critical: Helgi (admin) and other
   // multi-team coaches have RLS access to players across teams; without the
@@ -4438,6 +4455,27 @@ export default function CoachPage() {
           }));
 
         if (alive) setGpsAllPlayers(result);
+
+        // Auto-shift gpsDate to the team's most-recent-data-date when:
+        //   (a) coach hasn't manually picked a date this session, AND
+        //   (b) gpsDate is currently > most-recent date (today is empty).
+        // For teams that upload irregularly (Þór, Afturelding, Grindavík)
+        // this avoids the "blank Today view" bug where default-today shows
+        // nothing because last CSV was days ago. Coaches who explicitly
+        // pick a date keep their pick.
+        if (alive && loadData && loadData.length > 0) {
+          const dates = (loadData as Array<{ date?: string }>)
+            .map((r) => String(r.date ?? "").slice(0, 10))
+            .filter(Boolean);
+          if (dates.length > 0) {
+            const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+            setGpsLatestDataDate(maxDate);
+            if (!gpsDateManuallySet && maxDate < refDate) {
+              setGpsDate(maxDate);
+              // Don't flip the manual flag — this is system-driven.
+            }
+          }
+        }
       } finally {
         if (alive) setGpsLoading(false);
       }
@@ -9324,14 +9362,14 @@ export default function CoachPage() {
               <div className="flex items-center gap-2">
                 <button
                   className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
-                  onClick={() => setGpsDate(addDaysISO(gpsDate, -1))}
+                  onClick={() => { setGpsDateManuallySet(true); setGpsDate(addDaysISO(gpsDate, -1)); }}
                   title={lang === "IS" ? "Dagur til baka" : "Previous day"}
                 >
                   ←
                 </button>
                 <button
                   className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
-                  onClick={() => setGpsDate(addDaysISO(gpsDate, 1))}
+                  onClick={() => { setGpsDateManuallySet(true); setGpsDate(addDaysISO(gpsDate, 1)); }}
                   disabled={gpsDate >= today}
                   title={lang === "IS" ? "Dagur áfram" : "Next day"}
                   style={{ opacity: gpsDate >= today ? 0.4 : 1 }}
@@ -9342,7 +9380,7 @@ export default function CoachPage() {
                   type="date"
                   value={gpsDate}
                   max={today}
-                  onChange={(e) => { if (e.target.value) setGpsDate(e.target.value); }}
+                  onChange={(e) => { if (e.target.value) { setGpsDateManuallySet(true); setGpsDate(e.target.value); } }}
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:ring-2 focus:ring-slate-300 focus:outline-none"
                 />
               </div>
@@ -9351,13 +9389,39 @@ export default function CoachPage() {
                 {!isViewingToday && (
                   <button
                     className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"
-                    onClick={() => setGpsDate(today)}
+                    onClick={() => { setGpsDateManuallySet(true); setGpsDate(today); }}
                   >
                     {lang === "IS" ? "Í dag" : "Today"}
                   </button>
                 )}
               </div>
             </div>
+
+            {/* "Showing latest data" hint — visible when system auto-shifted
+                away from today because the team hasn't uploaded recently.
+                Lets coach know the date isn't today and provides quick way
+                to jump back. Hidden when looking at today (no shift) or when
+                latest-data-date IS today (data is fresh). */}
+            {gpsLatestDataDate && gpsLatestDataDate < today && gpsDate === gpsLatestDataDate && !gpsDateManuallySet && (
+              <div className="-mt-2 mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4M12 16h.01" />
+                </svg>
+                <span className="flex-1">
+                  {lang === "IS"
+                    ? `Sýni nýjustu gögn: ${gpsLatestDataDate}. Engin uppfærsla síðan þá.`
+                    : `Showing latest data: ${gpsLatestDataDate}. No upload since.`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setGpsDateManuallySet(true); setGpsDate(today); }}
+                  className="rounded-md border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  {lang === "IS" ? "Sjá í dag" : "Jump to today"}
+                </button>
+              </div>
+            )}
 
             {/* ── Cumulative Weekly Load ────────────────────────── */}
             <section>
