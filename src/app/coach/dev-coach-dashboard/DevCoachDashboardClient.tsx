@@ -5825,11 +5825,20 @@ export default function CoachPage() {
     try {
       setPdfPostDownloading(true);
 
-      // ── 1. Fetch active players ──────────────────────────────
+      // ── 1. Fetch CURRENT-TEAM active players ─────────────────
+      // team_id filter is critical: admin coaches have RLS access to all
+      // players globally; without scope, the PDF would include other clubs'
+      // athletes. Same bug class as GPS tab (#310) and Catapult upload
+      // (#313). Audit found this as the third instance — fixed 2026-05-15.
+      if (!coachTeamId) {
+        alert("Lið ekki tilgreint — endurhladdu síðuna.");
+        return;
+      }
       const { data: playerData } = await supabase
         .from("players")
         .select("id, full_name, position")
         .eq("is_active", true)
+        .eq("team_id", coachTeamId)
         .order("full_name");
 
       if (!playerData?.length) {
