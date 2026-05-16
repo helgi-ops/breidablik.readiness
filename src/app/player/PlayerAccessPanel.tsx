@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import WearableConnectCard from "@/components/player/WearableConnectCard";
 
 // =============================================================================
 // PlayerAccessPanel
@@ -683,6 +684,14 @@ export default function PlayerAccessPanel({
           <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{t.kicker}</div>
           <div className="mt-1 text-base font-semibold text-zinc-900">{t.title}</div>
           <div className="mt-1 text-sm text-zinc-600">{t.sub}</div>
+        </div>
+
+        {/* Wearable connection — lives in the Privacy/Settings tab because
+            it's a data-sharing surface (player consents to syncing health
+            metrics from a third-party). Renders independently of the
+            access-control loading state below. */}
+        <div className="mt-5">
+          <WearableConnectCard />
         </div>
 
         {loading ? (
