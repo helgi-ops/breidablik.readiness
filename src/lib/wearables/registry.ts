@@ -8,9 +8,11 @@
 
 import type { WearableProvider, WearableProviderKey } from "./types";
 import { polarAccesslinkProvider } from "./polarAccesslink";
+import { whoopProvider } from "./whoop";
 
 const PROVIDERS: Partial<Record<WearableProviderKey, WearableProvider>> = {
   polar: polarAccesslinkProvider,
+  whoop: whoopProvider,
 };
 
 export function getWearableProvider(key: WearableProviderKey): WearableProvider {

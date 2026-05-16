@@ -33,7 +33,7 @@ export const WEARABLE_PROVIDER_AVAILABLE: Record<WearableProviderKey, boolean> =
   vital: false,
   apple_health: false,
   garmin: false,
-  whoop: false,
+  whoop: true,
   oura: false,
 };
 
