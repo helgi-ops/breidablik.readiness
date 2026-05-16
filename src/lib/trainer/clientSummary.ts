@@ -16,6 +16,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  computeFosterMonotonyStrain,
+  computeHeavyLiftingExposure,
+} from "@/lib/trainer/loadIntelligence";
 
 export type SummaryLang = "IS" | "EN";
 export type SummaryWindow = 7 | 14 | 30;
@@ -72,6 +76,19 @@ export type ClientSummaryInput = {
     last_top_set: { weight_kg: number; reps: number } | null;
     pct_change_e1rm: number | null;  // Epley 1RM estimate change %
   }>;
+  /** Foster monotony × strain over the last 7 days (overload risk detector) */
+  foster: {
+    monotony: number | null;
+    strain: number;
+    status: "ok" | "watch" | "deload_recommended" | "deload_required";
+    reason: string;
+  };
+  /** Pareja-Blanco heavy-lifting exposure over the last 7 days */
+  exposure: {
+    heavy_sets: number; cap: number; saturation: number;
+    status: "low" | "optimal" | "high" | "excessive";
+    reason: string;
+  };
 };
 
 export type ClientSummaryOutput = {
@@ -283,6 +300,23 @@ export async function buildClientSummaryInput(
     .sort((a, b) => b.sessions - a.sessions)
     .slice(0, 4);
 
+  // ── Foster monotony + strain (last 7 days, end-of-window anchor) ─────
+  // Always computed on a 7-day rolling window regardless of the summary
+  // window — Foster's interpretation only makes sense at week-scale.
+  const last7 = new Date(); last7.setDate(last7.getDate() - 7);
+  const last7Iso = last7.toISOString().slice(0, 10);
+  const fosterRows = rpeRows.filter((r) => r.session_date >= last7Iso && r.session_load != null);
+  const foster = computeFosterMonotonyStrain(
+    fosterRows.map((r) => ({ date: r.session_date, load: Number(r.session_load) })),
+    7,
+  );
+
+  // ── Heavy-lifting exposure (last 7 days) ─────────────────────────────
+  const heavySets = sets
+    .filter((s) => s.weight_kg != null && s.reps != null && s.session_date >= last7Iso)
+    .map((s) => ({ date: s.session_date, weight_kg: Number(s.weight_kg), reps: Number(s.reps) }));
+  const exposure = computeHeavyLiftingExposure(heavySets, 7);
+
   return {
     clientName,
     windowDays,
@@ -296,6 +330,15 @@ export async function buildClientSummaryInput(
     chatMessageCount: chatMessageCount ?? 0,
     sessionRpe,
     progression,
+    foster: {
+      monotony: foster.monotony, strain: foster.strain,
+      status: foster.status, reason: foster.reason,
+    },
+    exposure: {
+      heavy_sets: exposure.heavy_sets, cap: exposure.cap,
+      saturation: exposure.saturation, status: exposure.status,
+      reason: exposure.reason,
+    },
   };
 }
 
@@ -330,6 +373,22 @@ Strength progression:
 - Use pct_change_e1rm to qualify: <2% = "flat", 2-5% = "small gain", >5% = "meaningful gain".
 - Negative pct_change_e1rm = regression — flag it; could indicate fatigue, technique, or deload.
 - Never invent exercise names. If progression array is empty, say "no logged sets yet".
+
+Foster monotony × strain (overload detector — Foster 1998):
+- foster_monotony_strain.status:
+    "deload_required"    → recommend a deload week explicitly. Drop volume 40-50%.
+    "deload_recommended" → recommend a 30% volume drop or one rest day.
+    "watch"              → mention the pattern but no action yet.
+    "ok"                 → don't bring it up unless asked.
+- Always cite the monotony number when flagging (e.g., "monotony 1.62, strain 4800").
+
+Heavy-lifting exposure (Pareja-Blanco 2017):
+- heavy_lifting_exposure.status:
+    "excessive" → flag fatigue risk; suggest scaling next session intensity.
+    "high"      → mention the client is at the weekly cap; hold here.
+    "optimal"   → positive note ("in the productive zone").
+    "low"       → only mention if other signals suggest readiness for more.
+- Always cite the count (e.g., "26/25 sets ≥80%1RM").
 
 Output format — JSON only, no markdown:
 {
@@ -397,6 +456,8 @@ export function buildPromptPayload(input: ClientSummaryInput) {
       trend_total: s.trendTotal,
     },
     session_rpe: input.sessionRpe,
+    foster_monotony_strain: input.foster,
+    heavy_lifting_exposure: input.exposure,
     adherence: {
       scheduled_days: input.scheduledDays,
       completed_days: input.completedDays,
