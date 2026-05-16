@@ -768,18 +768,23 @@ function IconMoreH({ active }: { active: boolean }) {
 // mobile nav is 4-5 primary items; the rest go behind More.
 
 const PWA_PRIMARY_TABS = [
-  { key: "today"   as DevPlayerTab, tabKey: "today"   as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
-  { key: "rpe"     as DevPlayerTab, tabKey: "rpe"     as const, Icon: IconActivity, minTier: "pro"  as const, href: null as string | null },
-  { key: "chat"    as DevPlayerTab, tabKey: "chat"    as const, Icon: IconChat,     minTier: "free" as const, href: null as string | null },
-  { key: "history" as DevPlayerTab, tabKey: "history" as const, Icon: IconClock,    minTier: "free" as const, href: null as string | null },
+  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
+  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"  as const, href: null as string | null },
+  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free" as const, href: null as string | null },
+  // Dashboard chosen over History for primary: post-training GPS numbers
+  // (distance, sprints, accel/decel) are the daily "wow" content that
+  // engages players. History is a deep-dive used by <10% of players;
+  // moved to the More-sheet. PRO-locked for FREE tier — same pattern
+  // as RPE above; locked state shows up cleanly with a PRO badge.
+  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"  as const, href: null as string | null },
 ];
 
 const PWA_SECONDARY_TABS = [
-  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const, href: null as string | null },
-  { key: "today"     as DevPlayerTab, tabKey: "team"      as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
-  { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
-  { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
-  { key: "privacy"   as DevPlayerTab, tabKey: "privacy"   as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
+  { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
+  { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
+  { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
+  { key: "vald"     as DevPlayerTab, tabKey: "vald"     as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
+  { key: "privacy"  as DevPlayerTab, tabKey: "privacy"  as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
 ];
 
 // Kept for backwards-compat with anything still importing the old name.
