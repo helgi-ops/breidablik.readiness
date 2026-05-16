@@ -751,19 +751,40 @@ function IconShield({ active }: { active: boolean }) {
   );
 }
 
-// ── PWA bottom navigation bar ────────────────────────────────────────────────
+function IconMoreH({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
 
-const PWA_NAV_TAB_KEYS = [
-  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free"  as const, href: null as string | null },
-  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"   as const, href: null as string | null },
+// ── PWA bottom navigation bar ────────────────────────────────────────────────
+// Split into PRIMARY (always-visible at the bottom, max 5 incl. More button)
+// and SECONDARY (opens in a bottom-sheet via More). 9 tabs crammed in at
+// text-[9px] was unusable on iPhones — labels ran together. Best-practice
+// mobile nav is 4-5 primary items; the rest go behind More.
+
+const PWA_PRIMARY_TABS = [
+  { key: "today"   as DevPlayerTab, tabKey: "today"   as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
+  { key: "rpe"     as DevPlayerTab, tabKey: "rpe"     as const, Icon: IconActivity, minTier: "pro"  as const, href: null as string | null },
+  { key: "chat"    as DevPlayerTab, tabKey: "chat"    as const, Icon: IconChat,     minTier: "free" as const, href: null as string | null },
+  { key: "history" as DevPlayerTab, tabKey: "history" as const, Icon: IconClock,    minTier: "free" as const, href: null as string | null },
+];
+
+const PWA_SECONDARY_TABS = [
   { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"   as const, href: null as string | null },
-  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "today"     as DevPlayerTab, tabKey: "team"      as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
   { key: "strength"  as DevPlayerTab, tabKey: "strength"  as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
-  { key: "history"   as DevPlayerTab, tabKey: "history"   as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "vald"      as DevPlayerTab, tabKey: "vald"      as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
   { key: "privacy"   as DevPlayerTab, tabKey: "privacy"   as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
 ];
+
+// Kept for backwards-compat with anything still importing the old name.
+const PWA_NAV_TAB_KEYS = [...PWA_PRIMARY_TABS, ...PWA_SECONDARY_TABS];
+void PWA_NAV_TAB_KEYS;
 
 function PWABottomNav({
   activeTab,
@@ -781,50 +802,147 @@ function PWABottomNav({
   const isElite = planTier === "ELITE";
   const [lang] = useLang();
   const tabs = PLAYER_COPY[lang].tabs;
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  function isLocked(tier: string) {
+    return (tier === "pro" && !isAtLeastPro) || (tier === "elite" && !isElite);
+  }
+
+  function tabIsActive(key: DevPlayerTab, href: string | null) {
+    return !href && activeTab === key;
+  }
+
+  // True if the active tab is one of the secondary (More-sheet) entries —
+  // we highlight the More button in that case so the user knows where they
+  // are. Skip entries whose `key` collides with a primary (eg. "team" maps
+  // to key:"today" via href:"/team" — that's an href-only entry).
+  const secondaryActive = PWA_SECONDARY_TABS.some(
+    (t) => !t.href && t.key === activeTab,
+  );
+
+  const moreLabel = lang === "IS" ? "Meira" : "More";
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="flex">
-        {PWA_NAV_TAB_KEYS.map(({ key, tabKey, Icon, minTier, href }) => {
-          const label = tabs[tabKey] ?? tabKey;
-          const tier = minTier as string;
-          const locked =
-            (tier === "pro" && !isAtLeastPro) ||
-            (tier === "elite" && !isElite);
-          const isActive = !href && activeTab === key;
-          const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
-          return (
-            <button
-              key={tabKey}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
-                isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"
-              }`}
-              onClick={() => {
-                if (locked) return;
-                if (href) { router.push(href); return; }
-                onChange(key);
-              }}
-              aria-label={label}
-            >
-              <div className="relative">
-                <Icon active={isActive} />
-                {showBadge && (
-                  <span className="absolute -top-1.5 -right-2.5 flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 rounded-full text-[9px] font-bold text-white">
-                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
-                  </span>
-                )}
-              </div>
-              <span className={`text-[9px] font-semibold tracking-wide ${isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-400"}`}>
-                {label.toUpperCase()}
+    <>
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex">
+          {PWA_PRIMARY_TABS.map(({ key, tabKey, Icon, minTier, href }) => {
+            const label = tabs[tabKey] ?? tabKey;
+            const locked = isLocked(minTier);
+            const isActive = tabIsActive(key, href);
+            const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
+            return (
+              <button
+                key={tabKey}
+                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
+                  isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-500"
+                }`}
+                onClick={() => {
+                  if (locked) return;
+                  if (href) { router.push(href); return; }
+                  onChange(key);
+                }}
+                aria-label={label}
+              >
+                <div className="relative">
+                  <Icon active={isActive} />
+                  {showBadge && (
+                    <span className="absolute -top-1.5 -right-2.5 flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 rounded-full text-[9px] font-bold text-white">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[11px] font-medium tracking-tight mt-0.5 ${isActive ? "text-green-700" : locked ? "text-zinc-300" : "text-zinc-500"}`}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+              secondaryActive ? "text-green-700" : "text-zinc-500"
+            }`}
+            onClick={() => setMoreOpen(true)}
+            aria-label={moreLabel}
+          >
+            <IconMoreH active={secondaryActive} />
+            <span className={`text-[11px] font-medium tracking-tight mt-0.5 ${secondaryActive ? "text-green-700" : "text-zinc-500"}`}>
+              {moreLabel}
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      {/* More-sheet — opens upward, lists secondary tabs as a grid. Tap
+          anywhere outside or on a tab to close. Sized so it never collides
+          with the bottom nav. */}
+      {moreOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[60] bg-black/40"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden
+          />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-[61] bg-white rounded-t-2xl shadow-lg border-t border-zinc-200"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                {moreLabel}
               </span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="text-zinc-400 hover:text-zinc-700 -m-2 p-2"
+                aria-label={lang === "IS" ? "Loka" : "Close"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+              {PWA_SECONDARY_TABS.map(({ key, tabKey, Icon, minTier, href }) => {
+                const label = tabs[tabKey] ?? tabKey;
+                const locked = isLocked(minTier);
+                const isActive = tabIsActive(key, href);
+                return (
+                  <button
+                    key={tabKey}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border transition-colors ${
+                      isActive
+                        ? "border-green-200 bg-green-50 text-green-700"
+                        : locked
+                          ? "border-zinc-100 text-zinc-300"
+                          : "border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                    onClick={() => {
+                      if (locked) return;
+                      setMoreOpen(false);
+                      if (href) { router.push(href); return; }
+                      onChange(key);
+                    }}
+                    aria-label={label}
+                  >
+                    <Icon active={isActive} />
+                    <span className="text-xs font-medium">{label}</span>
+                    {locked && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+                        {minTier === "elite" ? "ELITE" : "PRO"}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
