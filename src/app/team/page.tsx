@@ -163,7 +163,7 @@ export default function TeamPage() {
         // Fetch user profile
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
-          .select("team_id, role")
+          .select("team_id, role, player_id")
           .eq("id", authData.user.id)
           .single();
 
@@ -172,11 +172,44 @@ export default function TeamPage() {
           setLoading(false);
           return;
         }
-        setProfile(profileData);
+
+        // Defensive: profile.team_id is sometimes NULL even when player.team_id
+        // is set (signup-flow desync — observed for Arnar Bjarki 2026-05-16).
+        // Fall back to player.team_id and auto-repair the profile so this
+        // doesn't recur on subsequent visits. Without this fallback the
+        // /api/team/page call sends teamId=null and gets a 403, surfacing as
+        // "Failed to fetch team data" with no recovery path for the user.
+        let effectiveTeamId: string | null = (profileData as { team_id: string | null }).team_id;
+        if (!effectiveTeamId && (profileData as { player_id?: string | null }).player_id) {
+          const { data: playerRow } = await supabase
+            .from("players")
+            .select("team_id")
+            .eq("id", (profileData as { player_id: string }).player_id)
+            .maybeSingle();
+          const playerTeamId = (playerRow as { team_id?: string | null } | null)?.team_id ?? null;
+          if (playerTeamId) {
+            effectiveTeamId = playerTeamId;
+            // Self-heal: write the fixed team_id back to the profile so
+            // future requests are clean. If the write fails (RLS, etc.)
+            // we still proceed with the in-memory fallback for this load.
+            await supabase
+              .from("profiles")
+              .update({ team_id: playerTeamId })
+              .eq("id", authData.user.id);
+          }
+        }
+
+        setProfile({ ...(profileData as Record<string, unknown>), team_id: effectiveTeamId } as typeof profileData);
+
+        if (!effectiveTeamId) {
+          setError("Þú ert ekki tengd/ur við lið. Hafðu samband við þjálfara.");
+          setLoading(false);
+          return;
+        }
 
         // Fetch team page data
         const response = await fetch(
-          `/api/team/page?teamId=${profileData.team_id}`,
+          `/api/team/page?teamId=${effectiveTeamId}`,
           {
             headers: {
               Authorization: `Bearer ${(await supabase.auth.getSession()).data?.session?.access_token ?? ""}`,
@@ -200,7 +233,7 @@ export default function TeamPage() {
         const { data: ts } = await supabase
           .from("team_settings")
           .select("settings")
-          .eq("team_id", profileData.team_id)
+          .eq("team_id", effectiveTeamId)
           .maybeSingle();
         const sid = (ts?.settings as Record<string, unknown> | null)?.schedule_sheet_id;
         if (typeof sid === "string" && sid.length > 0) {
