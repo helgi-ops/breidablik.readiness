@@ -24,7 +24,7 @@ import { supabase } from "@/lib/supabaseClient";
 import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
-import StreakCard from "@/components/player/StreakCard";
+import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -612,9 +612,13 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
   );
 }
 
-// ── Streak card portal ──────────────────────────────────────────────────────
+// ── Weekly digest card portal ───────────────────────────────────────────────
+//
+// "Vikan þín" — rolling 7-day summary including streak indicators.
+// Sits directly under the AteCommandCard. Replaces the older StreakCard mount
+// (StreakCard is still used on /team page).
 
-function StreakCardPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+function WeeklyDigestPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -625,7 +629,8 @@ function StreakCardPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?:
       if (cancelled) return;
       attempts += 1;
 
-      // Insert after AteCommandCard slot, or after the header card
+      // Anchor directly after the AteCommandCard, or fall back to the header
+      // card if AteCommandCard hasn't mounted yet.
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
       const anchor = ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
@@ -633,28 +638,29 @@ function StreakCardPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?:
         return;
       }
 
-      let slot = document.getElementById("dev-streak-card-slot");
+      let slot = document.getElementById("dev-weekly-digest-card-slot");
       if (!slot) {
         slot = document.createElement("div");
-        slot.id = "dev-streak-card-slot";
+        slot.id = "dev-weekly-digest-card-slot";
         slot.className = "mt-3";
       }
 
-      const target = ateSlot ?? anchor;
-      if (slot.parentElement !== target.parentElement || slot.previousElementSibling !== target) {
-        target.parentElement!.insertBefore(slot, target.nextSibling);
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
       }
 
       setMountNode((prev) => (prev === slot ? prev : slot));
     };
 
     place();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!mountNode || activeTab !== "today") return null;
 
-  return createPortal(<StreakCard lang={lang} />, mountNode);
+  return createPortal(<WeeklyDigestCard lang={lang} />, mountNode);
 }
 
 // ── PWA detection ────────────────────────────────────────────────────────────
@@ -1294,7 +1300,7 @@ export default function DevPlayerClient() {
         <PlayerClient />
       </div>
       <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />
-      <StreakCardPortal activeTab={activeTab} />
+      <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)
