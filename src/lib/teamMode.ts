@@ -1,7 +1,7 @@
 /**
  * src/lib/teamMode.ts
  *
- * Single source of truth for the team's operating mode.
+ * Single source of truth for the team's operating mode (server-safe).
  *
  *   Full Suite  → uses_wellness_features = true  (default for all existing teams)
  *     - Check-in + RPE + wearables + decision card
@@ -17,12 +17,13 @@
  *     - ACWR on external player_load
  *     - All GPS / IMA intelligence unchanged
  *
- * Used everywhere that gates a wellness component — Coach Sidebar, Player
- * PWA bottom nav, Decision Card, Vikan þín digest, notification scheduler.
+ * This file is server-safe — it only contains types, plain functions, and
+ * Supabase calls that work in any runtime. The matching client-side React
+ * hook lives in `src/lib/useTeamMode.ts` so server modules (e.g. the
+ * notification scheduler) can import this without dragging useState /
+ * useEffect into a server bundle.
  */
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TeamMode = "full_suite" | "gps_only";
@@ -60,48 +61,6 @@ export async function getTeamMode(
   const usesWellnessFeatures = (data as { uses_wellness_features?: boolean } | null)?.uses_wellness_features;
   const resolved = typeof usesWellnessFeatures === "boolean" ? usesWellnessFeatures : true;
   return { teamId, usesWellnessFeatures: resolved, mode: modeFromFlag(resolved) };
-}
-
-/** Client-side React hook. Returns null while loading, then the team mode
- *  row. Components that gate themselves on this should treat null as
- *  "loading" (render nothing or skeleton) — NOT as "hidden", because we
- *  don't want a flash of hidden state on a Full Suite team. */
-export function useTeamMode(teamId: string | null | undefined): TeamModeRow | null {
-  const [mode, setMode] = useState<TeamModeRow | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    async function load() {
-      if (!teamId) {
-        if (alive) setMode(null);
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from("team_settings")
-          .select("uses_wellness_features")
-          .eq("team_id", teamId)
-          .maybeSingle();
-        if (!alive) return;
-        if (error) {
-          // Default to Full Suite on read failure
-          setMode({ teamId, usesWellnessFeatures: true, mode: "full_suite" });
-          return;
-        }
-        const flag = (data as { uses_wellness_features?: boolean } | null)?.uses_wellness_features;
-        const resolved = typeof flag === "boolean" ? flag : true;
-        setMode({ teamId, usesWellnessFeatures: resolved, mode: modeFromFlag(resolved) });
-      } catch {
-        if (alive) setMode({ teamId, usesWellnessFeatures: true, mode: "full_suite" });
-      }
-    }
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [teamId]);
-
-  return mode;
 }
 
 /** Convenience helper: true if the team should show wellness features. */

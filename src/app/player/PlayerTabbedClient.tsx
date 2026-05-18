@@ -25,7 +25,8 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
-import { useTeamMode, isGpsOnly } from "@/lib/teamMode";
+import { useTeamMode } from "@/lib/useTeamMode";
+import { isGpsOnly } from "@/lib/teamMode";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 

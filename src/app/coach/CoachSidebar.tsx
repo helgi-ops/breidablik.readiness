@@ -26,7 +26,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
-import { useTeamMode, isGpsOnly } from "@/lib/teamMode";
+import { useTeamMode } from "@/lib/useTeamMode";
+import { isGpsOnly } from "@/lib/teamMode";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 type Bi = { EN: string; IS: string };
