@@ -67,6 +67,7 @@ export async function GET(req: Request) {
       team_id: teamId,
       indoor_mode: false,
       sport_type: "football",
+      uses_wellness_features: true,
       notes: null,
       updated_at: null,
       updated_by: null,
@@ -117,6 +118,13 @@ export async function PATCH(req: Request) {
     }
     if (typeof body.notes === "string" || body.notes === null) {
       updates.notes = body.notes;
+    }
+
+    // Operating mode flag — Full Suite (true) vs GPS Intelligence Only (false).
+    // Gates check-ins, RPE, wearables, decision card, and wellness
+    // notifications. GPS / IMA / external-load intelligence is unaffected.
+    if (typeof body.uses_wellness_features === "boolean") {
+      updates.uses_wellness_features = body.uses_wellness_features;
     }
 
     // Stig 2 — auto-send AI player recovery messages opt-in.

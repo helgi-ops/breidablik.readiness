@@ -216,7 +216,16 @@ function Sparkline({ values, lang }: { values: Array<number | null>; lang: Lang 
   );
 }
 
-export default function WeeklyDigestCard({ lang = "IS" }: { lang?: Lang }) {
+export default function WeeklyDigestCard({
+  lang = "IS",
+  hideWellness = false,
+}: {
+  lang?: Lang;
+  /** GPS-only team mode: hide check-in compliance, sparkline based on
+   *  readiness, stress chip, RPE chip. Keep the wearable strip + load /
+   *  total distance — those are still useful even without wellness. */
+  hideWellness?: boolean;
+}) {
   const [data, setData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState(true);
   const ct = COPY[lang];
@@ -258,8 +267,10 @@ export default function WeeklyDigestCard({ lang = "IS" }: { lang?: Lang }) {
     !data.wearable.connected;
 
   // Empty state — brand new player on day 1. Show a friendly CTA instead of
-  // hiding the card entirely.
+  // hiding the card entirely. GPS-only teams have no check-in CTA so the
+  // card just hides if there's nothing to show yet.
   if (isEmpty) {
+    if (hideWellness) return null;
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="text-sm font-semibold text-zinc-900">{ct.emptyTitle}</div>
@@ -280,59 +291,80 @@ export default function WeeklyDigestCard({ lang = "IS" }: { lang?: Lang }) {
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      {/* Header — title left, streak + week-count right */}
+      {/* Header — title left, streak + week-count right (hidden when no wellness) */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-zinc-900">{ct.title}</div>
           <div className="text-[11px] text-zinc-500">{ct.subtitle}</div>
         </div>
-        <div className="flex items-center gap-2 text-right">
-          {checkinStreak > 0 && (
-            <div className="flex flex-col items-end">
-              <div className="flex items-baseline gap-1">
-                <span className="text-base leading-none">{streakIcon(checkinStreak)}</span>
-                <span className="text-base font-bold tabular-nums text-zinc-900">{checkinStreak}</span>
+        {!hideWellness && (
+          <div className="flex items-center gap-2 text-right">
+            {checkinStreak > 0 && (
+              <div className="flex flex-col items-end">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-base leading-none">{streakIcon(checkinStreak)}</span>
+                  <span className="text-base font-bold tabular-nums text-zinc-900">{checkinStreak}</span>
+                </div>
+                <div className="text-[9px] uppercase tracking-wide text-zinc-400">{ct.inStreak}</div>
               </div>
-              <div className="text-[9px] uppercase tracking-wide text-zinc-400">{ct.inStreak}</div>
+            )}
+            <div className="flex flex-col items-end border-l border-zinc-200 pl-2.5">
+              <div className={`text-sm font-bold tabular-nums ${rateColor(data.compliance.checkinRate)}`}>
+                {data.compliance.checkinCount}/7
+              </div>
+              <div className="text-[9px] uppercase tracking-wide text-zinc-400">{ct.checkin}</div>
             </div>
-          )}
-          <div className="flex flex-col items-end border-l border-zinc-200 pl-2.5">
-            <div className={`text-sm font-bold tabular-nums ${rateColor(data.compliance.checkinRate)}`}>
-              {data.compliance.checkinCount}/7
-            </div>
-            <div className="text-[9px] uppercase tracking-wide text-zinc-400">{ct.checkin}</div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Sparkline */}
-      {data.compliance.checkinCount > 0 && (
+      {/* Sparkline — wellness-driven (readiness trend). Hidden in GPS-only mode. */}
+      {!hideWellness && data.compliance.checkinCount > 0 && (
         <div className="mt-3">
           <Sparkline values={data.series.map((p) => p.totalScore)} lang={lang} />
         </div>
       )}
 
-      {/* KPI grid */}
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label={ct.readiness} value={data.readiness.avgTotal != null ? data.readiness.avgTotal.toFixed(1) : "—"} suffix="/21" />
-        <Stat
-          label={ct.avgSleep}
-          value={
-            data.wearable.avgSleepMin != null
-              ? formatMinAsHm(data.wearable.avgSleepMin, ct.hours, ct.min)
-              : data.readiness.avgSleepQuality != null
-                ? `${data.readiness.avgSleepQuality.toFixed(1)}/6`
-                : "—"
-          }
-          accent={data.wearable.connected}
-        />
-        <Stat
-          label={ct.avgRpe}
-          value={data.load.avgRpe != null ? data.load.avgRpe.toFixed(1) : "—"}
-          suffix="/10"
-        />
-        <Stat label={ct.totalLoad} value={data.load.totalLoad > 0 ? data.load.totalLoad.toLocaleString("is-IS") : "—"} suffix="AU" />
-      </div>
+      {/* KPI grid — wellness mode shows readiness + sleep + RPE + load.
+          GPS-only mode shows only wearable-derived sleep (if connected) +
+          load. Readiness and RPE-derived stats hidden. */}
+      {hideWellness ? (
+        data.wearable.connected ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Stat
+              label={ct.avgSleep}
+              value={
+                data.wearable.avgSleepMin != null
+                  ? formatMinAsHm(data.wearable.avgSleepMin, ct.hours, ct.min)
+                  : "—"
+              }
+              accent
+            />
+            <Stat label={ct.totalLoad} value={data.load.totalLoad > 0 ? data.load.totalLoad.toLocaleString("is-IS") : "—"} suffix="AU" />
+          </div>
+        ) : null
+      ) : (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label={ct.readiness} value={data.readiness.avgTotal != null ? data.readiness.avgTotal.toFixed(1) : "—"} suffix="/21" />
+          <Stat
+            label={ct.avgSleep}
+            value={
+              data.wearable.avgSleepMin != null
+                ? formatMinAsHm(data.wearable.avgSleepMin, ct.hours, ct.min)
+                : data.readiness.avgSleepQuality != null
+                  ? `${data.readiness.avgSleepQuality.toFixed(1)}/6`
+                  : "—"
+            }
+            accent={data.wearable.connected}
+          />
+          <Stat
+            label={ct.avgRpe}
+            value={data.load.avgRpe != null ? data.load.avgRpe.toFixed(1) : "—"}
+            suffix="/10"
+          />
+          <Stat label={ct.totalLoad} value={data.load.totalLoad > 0 ? data.load.totalLoad.toLocaleString("is-IS") : "—"} suffix="AU" />
+        </div>
+      )}
 
       {/* Wearable strip — only when connected */}
       {data.wearable.connected && (
@@ -358,32 +390,35 @@ export default function WeeklyDigestCard({ lang = "IS" }: { lang?: Lang }) {
         </div>
       )}
 
-      {/* Footer chips: stress days + RPE streak/compliance */}
-      <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-        {data.readiness.stressDays > 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
-            <span>⚡</span>
-            <span className="font-medium tabular-nums">{data.readiness.stressDays}</span>
-            <span>{stressDayLabel}</span>
-          </span>
-        )}
-        {data.compliance.rpeDayCount > 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-700">
-            <span>💪</span>
-            <span className="font-medium tabular-nums">{data.compliance.rpeDayCount}/7</span>
-            <span>{ct.rpeDays}</span>
-          </span>
-        )}
-        {rpeStreak >= 3 && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
-            <span>{streakIcon(rpeStreak)}</span>
-            <span className="font-medium tabular-nums">{rpeStreak}</span>
-            <span>
-              {ct.rpe} {ct.inStreak}
+      {/* Footer chips: stress days + RPE streak/compliance.
+          All hidden in GPS-only mode (no wellness data to report on). */}
+      {!hideWellness && (
+        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+          {data.readiness.stressDays > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
+              <span>⚡</span>
+              <span className="font-medium tabular-nums">{data.readiness.stressDays}</span>
+              <span>{stressDayLabel}</span>
             </span>
-          </span>
-        )}
-      </div>
+          )}
+          {data.compliance.rpeDayCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-700">
+              <span>💪</span>
+              <span className="font-medium tabular-nums">{data.compliance.rpeDayCount}/7</span>
+              <span>{ct.rpeDays}</span>
+            </span>
+          )}
+          {rpeStreak >= 3 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
+              <span>{streakIcon(rpeStreak)}</span>
+              <span className="font-medium tabular-nums">{rpeStreak}</span>
+              <span>
+                {ct.rpe} {ct.inStreak}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

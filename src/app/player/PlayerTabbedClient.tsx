@@ -25,6 +25,7 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
+import { useTeamMode, isGpsOnly } from "@/lib/teamMode";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -618,7 +619,7 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
 // Sits directly under the AteCommandCard. Replaces the older StreakCard mount
 // (StreakCard is still used on /team page).
 
-function WeeklyDigestPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+function WeeklyDigestPortal({ activeTab, lang, hideWellness }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; hideWellness?: boolean }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -660,7 +661,7 @@ function WeeklyDigestPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang
 
   if (!mountNode || activeTab !== "today") return null;
 
-  return createPortal(<WeeklyDigestCard lang={lang} />, mountNode);
+  return createPortal(<WeeklyDigestCard lang={lang} hideWellness={hideWellness} />, mountNode);
 }
 
 // ── PWA detection ────────────────────────────────────────────────────────────
@@ -802,11 +803,16 @@ function PWABottomNav({
   onChange,
   planTier,
   unreadChatCount = 0,
+  hideWellness = false,
 }: {
   activeTab: DevPlayerTab;
   onChange: (tab: DevPlayerTab) => void;
   planTier: PlanTier;
   unreadChatCount?: number;
+  /** GPS-only team mode: hide RPE (and any future wellness tabs) from
+   *  the bottom nav. The slot stays balanced because primary tabs without
+   *  RPE come to 3 + More button = 4. */
+  hideWellness?: boolean;
 }) {
   const router = useRouter();
   const isAtLeastPro = planTier === "PRO" || planTier === "ELITE";
@@ -814,6 +820,10 @@ function PWABottomNav({
   const [lang] = useLang();
   const tabs = PLAYER_COPY[lang].tabs;
   const [moreOpen, setMoreOpen] = useState(false);
+
+  const primaryTabs = hideWellness
+    ? PWA_PRIMARY_TABS.filter((t) => t.key !== "rpe")
+    : PWA_PRIMARY_TABS;
 
   function isLocked(tier: string) {
     return (tier === "pro" && !isAtLeastPro) || (tier === "elite" && !isElite);
@@ -840,7 +850,7 @@ function PWABottomNav({
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex">
-          {PWA_PRIMARY_TABS.map(({ key, tabKey, Icon, minTier, href }) => {
+          {primaryTabs.map(({ key, tabKey, Icon, minTier, href }) => {
             const label = tabs[tabKey] ?? tabKey;
             const locked = isLocked(minTier);
             const isActive = tabIsActive(key, href);
@@ -972,6 +982,7 @@ export default function DevPlayerClient() {
   const [clubThemeColor, setClubThemeColor] = useState<string | null>(null);
   const [chatPlayerId, setChatPlayerId] = useState<string | null>(null);
   const [chatPlayerName, setChatPlayerName] = useState<string>("Leikmaður");
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -991,13 +1002,14 @@ export default function DevPlayerClient() {
         setChatPlayerName((prof as any).display_name || "Leikmaður");
       }
 
-      const teamId = (prof as any)?.team_id;
-      if (!teamId || !alive) return;
+      const tid = (prof as any)?.team_id;
+      if (!tid || !alive) return;
+      setTeamId(tid);
 
       const { data: team } = await supabase
         .from("teams")
         .select("plan_tier, club_theme_color")
-        .eq("id", teamId)
+        .eq("id", tid)
         .maybeSingle();
 
       if (alive && team) {
@@ -1013,6 +1025,11 @@ export default function DevPlayerClient() {
   const isElite = planTier === "ELITE";
   const isPwa = usePwaMode();
   const unreadChatCount = useUnreadCount(chatPlayerId, "player");
+
+  // GPS-only team mode: hide check-in / RPE / wearable / decision UI for
+  // players whose team is running on objective-data-only mode.
+  const teamMode = useTeamMode(teamId);
+  const hideWellness = isGpsOnly(teamMode);
 
   // If on a locked tab, redirect to today
   useEffect(() => {
@@ -1299,8 +1316,10 @@ export default function DevPlayerClient() {
       >
         <PlayerClient />
       </div>
-      <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />
-      <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
+      {/* Decision card depends on wellness check-in data — hide it entirely
+          in GPS-only team mode (would otherwise show "PENDING" forever). */}
+      {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />}
+      <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} hideWellness={hideWellness} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)
@@ -1363,7 +1382,7 @@ export default function DevPlayerClient() {
           problem and contributed to 17-50% adoption rates on new clubs. */}
       <PWANotificationPrompt />
       {/* PWA bottom navigation bar */}
-      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} />}
+      {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} />}
     </>
   );
 }

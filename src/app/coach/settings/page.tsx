@@ -71,6 +71,13 @@ export default function CoachSettingsPage() {
   const [indoorMode, setIndoorMode] = useState<boolean | null>(null);
   const [indoorModeLoading, setIndoorModeLoading] = useState(false);
   const [indoorModeError, setIndoorModeError] = useState("");
+  // Operating mode: Full Suite (wellness + GPS) vs GPS Intelligence Only
+  // (GPS / IMA / external load only — no check-in, RPE, wearables, decision card).
+  // Default true matches the DB default; existing teams are unaffected.
+  const [usesWellnessFeatures, setUsesWellnessFeatures] = useState<boolean>(true);
+  const [wellnessModeLoading, setWellnessModeLoading] = useState(false);
+  const [wellnessModeError, setWellnessModeError] = useState("");
+  const [wellnessConfirmOpen, setWellnessConfirmOpen] = useState<null | boolean>(null);
   // Ternary load pipeline override (auto/indoor/outdoor). Maps onto
   // teams.training_mode_default and supersedes the binary indoor_mode
   // toggle for verdict-pipeline purposes — existing indoor_mode flag
@@ -185,6 +192,7 @@ export default function CoachSettingsPage() {
           setSportType(json.sport_type === "basketball" ? "basketball" : "football");
           const tm = String(json.training_mode_default ?? "auto").toLowerCase();
           if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
+          setUsesWellnessFeatures(json.uses_wellness_features ?? true);
         }
       } catch { /* silently fail */ }
     };
@@ -220,6 +228,35 @@ export default function CoachSettingsPage() {
       setIndoorModeError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIndoorModeLoading(false);
+    }
+  }, [teamId, supabase]);
+
+  const setWellnessMode = useCallback(async (next: boolean) => {
+    if (!teamId) return;
+    setWellnessModeLoading(true);
+    setWellnessModeError("");
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ team_id: teamId, uses_wellness_features: next }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? "Failed to update");
+      }
+      setUsesWellnessFeatures(next);
+      setWellnessConfirmOpen(null);
+    } catch (err) {
+      setWellnessModeError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setWellnessModeLoading(false);
     }
   }, [teamId, supabase]);
 
@@ -381,6 +418,136 @@ export default function CoachSettingsPage() {
               <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Dynamic High 24%</span>
               <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Dynamic Med 14%</span>
               <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">Running High 4%</span>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Operating Mode: Full Suite vs GPS Intelligence Only ─────── */}
+      {teamId && (
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Operating mode / Rekstrarmáti</div>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-950">
+              {usesWellnessFeatures ? "Full Intelligence Suite" : "GPS Intelligence Only"}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-600">
+              {usesWellnessFeatures
+                ? "Wellness (check-in, RPE, wearables) er virkur með GPS og IMA gögnum. AI ákvarðanir reiknast út frá öllu saman."
+                : "Bara GPS og IMA gögn — check-in, RPE og wearable kröfur eru faldar fyrir leikmenn. ACWR og Foster nota external load (player_load) í staðinn fyrir sRPE."}
+            </p>
+            {wellnessModeError && (
+              <div className="mt-2 text-sm text-red-600">{wellnessModeError}</div>
+            )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {/* Card 1 — Full Suite */}
+            <button
+              type="button"
+              disabled={wellnessModeLoading}
+              onClick={() => {
+                if (usesWellnessFeatures) return;
+                setWellnessConfirmOpen(true);
+              }}
+              className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+                usesWellnessFeatures
+                  ? "border-emerald-600 bg-emerald-50 shadow-sm"
+                  : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50"
+              } ${wellnessModeLoading ? "opacity-60 cursor-wait" : ""}`}
+            >
+              {usesWellnessFeatures && (
+                <span className="absolute right-3 top-3 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Active</span>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" aria-hidden="true">🧠</span>
+                <div className="text-base font-semibold text-zinc-900">Full Intelligence Suite</div>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+                Wellness check-in, session RPE, wearable sync (Polar/Whoop), daglegar AI ákvarðanir, Foster og ACWR á sRPE × duration, og full GPS + IMA Intelligence.
+              </p>
+              <ul className="mt-3 space-y-1 text-[11px] text-zinc-700">
+                <li>✓ Daglegt wellness check-in</li>
+                <li>✓ Session RPE með AI ákvörðunum</li>
+                <li>✓ Wearable HRV + svefn sync</li>
+                <li>✓ Foster / ACWR á sRPE</li>
+                <li>✓ Allt GPS + IMA</li>
+              </ul>
+              <p className="mt-3 text-[10px] italic text-zinc-500">Best fyrir lið sem vilja byggja inn wellness í daglegri þjálfun.</p>
+            </button>
+
+            {/* Card 2 — GPS Only */}
+            <button
+              type="button"
+              disabled={wellnessModeLoading}
+              onClick={() => {
+                if (!usesWellnessFeatures) return;
+                setWellnessConfirmOpen(false);
+              }}
+              className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+                !usesWellnessFeatures
+                  ? "border-emerald-600 bg-emerald-50 shadow-sm"
+                  : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50"
+              } ${wellnessModeLoading ? "opacity-60 cursor-wait" : ""}`}
+            >
+              {!usesWellnessFeatures && (
+                <span className="absolute right-3 top-3 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Active</span>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" aria-hidden="true">📊</span>
+                <div className="text-base font-semibold text-zinc-900">GPS Intelligence Only</div>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+                Allir GPS-driven kort (Sprint, Decel, Stride, IMA, HSR vs MD), Foster og ACWR á external load. Engin check-in, engin RPE, engin wearable krafa frá leikmönnum.
+              </p>
+              <ul className="mt-3 space-y-1 text-[11px] text-zinc-700">
+                <li>✓ Allt GPS + IMA Intelligence</li>
+                <li>✓ Foster / ACWR á player_load</li>
+                <li>✓ Catapult / STATSports upload</li>
+                <li>✗ Wellness check-in (falinn)</li>
+                <li>✗ RPE og wearable (falin)</li>
+              </ul>
+              <p className="mt-3 text-[10px] italic text-zinc-500">Best fyrir lið með Catapult/STATSports sem vilja ekki krefjast wellness frá leikmönnum.</p>
+            </button>
+          </div>
+
+          <p className="mt-3 text-[11px] text-zinc-500">
+            Þú getur skipt um mode hvenær sem er. Söguleg gögn haldast óbreytt — bara sýnileiki á UI breytist. Notifications fyrir check-in/RPE eru sjálfvirkt slökkt í GPS-only mode.
+          </p>
+
+          {/* Confirm dialog */}
+          {wellnessConfirmOpen !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                <h3 className="text-base font-semibold text-zinc-900">
+                  {wellnessConfirmOpen
+                    ? "Skipta yfir í Full Intelligence Suite?"
+                    : "Skipta yfir í GPS Intelligence Only?"}
+                </h3>
+                <p className="mt-2 text-sm text-zinc-600">
+                  {wellnessConfirmOpen
+                    ? "Þetta virkjar wellness check-in, RPE, wearable sync, og daglegar AI ákvarðanir fyrir alla leikmenn. Söguleg gögn haldast óbreytt — bara sýnileiki á UI breytist."
+                    : "Þetta felur check-in, RPE, wearable og decision card fyrir alla leikmenn í liðinu. Notifications fyrir check-in/RPE slökkva. GPS, IMA og external-load kort virka eins og venjulega. Þú getur skipt aftur til baka hvenær sem er."}
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWellnessConfirmOpen(null)}
+                    disabled={wellnessModeLoading}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Hætta við
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWellnessMode(wellnessConfirmOpen)}
+                    disabled={wellnessModeLoading}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {wellnessModeLoading ? "Vista…" : "Staðfesta"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </section>

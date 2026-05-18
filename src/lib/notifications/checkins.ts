@@ -7,6 +7,7 @@ import {
   getOperationalTimezone,
   type ReminderProfile,
 } from "@/lib/notifications/schedule";
+import { getGpsOnlyTeamIds } from "@/lib/teamMode";
 
 type ActivePlayerRow = {
   id: string;
@@ -65,10 +66,18 @@ export async function getActivePlayers(
       team_id: p.team_id ?? null,
     }));
 
-  if (!args?.profile) return all;
+  // GPS-only teams opt OUT of wellness reminders entirely — check-ins and
+  // RPE prompts are not part of their workflow. Filter out their players
+  // before any reminder dispatch.
+  const gpsOnlyTeams = await getGpsOnlyTeamIds(sb);
+  const afterGpsFilter = gpsOnlyTeams.size === 0
+    ? all
+    : all.filter((p) => !(p.team_id && gpsOnlyTeams.has(String(p.team_id))));
+
+  if (!args?.profile) return afterGpsFilter;
 
   const teamIds = await getTeamIdsForProfile(sb, args.profile);
-  return all.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
+  return afterGpsFilter.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
 }
 
 export async function getCheckedInPlayerIds(

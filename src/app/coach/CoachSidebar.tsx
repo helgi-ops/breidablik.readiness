@@ -26,6 +26,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
+import { useTeamMode, isGpsOnly } from "@/lib/teamMode";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 type Bi = { EN: string; IS: string };
@@ -379,6 +380,11 @@ export function CoachSidebar({
   const isOnCoach = pathname === "/coach" && currentTab == null;
   const isPt = String(teamType ?? "").toLowerCase() === "personal_trainer";
 
+  // GPS-only teams hide the Communication section since check-in/RPE
+  // workflows are disabled. PT teams use their own gating below.
+  const teamMode = useTeamMode(currentTeamId);
+  const hideWellness = isGpsOnly(teamMode);
+
   // ── Personal-Training mode ────────────────────────────────────────
   // PT teams get a 4-section sidebar: Dashboard / Strength training /
   // Admin / (optional MicroPulse super-admin). No football monitoring
@@ -497,14 +503,16 @@ export function CoachSidebar({
 
       {/* Categorised sections */}
       <div className="flex-1 overflow-y-auto px-3 pb-4">
-        <Section
-          label={lang === "IS" ? "Samskipti" : "Communication"}
-          links={communicationLinks}
-          pathname={pathname}
-          currentTab={currentTab}
-          lang={lang}
-          onNavigate={onNavigate}
-        />
+        {!hideWellness && (
+          <Section
+            label={lang === "IS" ? "Samskipti" : "Communication"}
+            links={communicationLinks}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
         <Section
           label={lang === "IS" ? "Álagseftirlit" : "Load Monitoring"}
           links={loadMonitoringForTier}

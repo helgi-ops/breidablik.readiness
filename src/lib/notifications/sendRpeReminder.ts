@@ -5,6 +5,7 @@ import { getRpeComplianceForDate } from "@/lib/session-rpe/compliance";
 import { rpeReminderConfig, type RpeReminderType } from "@/lib/session-rpe/reminderConfig";
 import type { ReminderProfile } from "@/lib/notifications/schedule";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
+import { getGpsOnlyTeamIds } from "@/lib/teamMode";
 
 type SubscriptionRow = {
   id: string;
@@ -140,17 +141,25 @@ export async function sendRpeReminderToMissingPlayers(
 
   const allMissing = compliance.missingPlayers;
 
+  // GPS-only teams don't use RPE — skip their players entirely.
+  const gpsOnlyTeams = await getGpsOnlyTeamIds(sb);
+  const afterGpsFilter = gpsOnlyTeams.size === 0
+    ? allMissing
+    : allMissing.filter((p) => !(p.team_id && gpsOnlyTeams.has(String(p.team_id))));
+
   // Skip RPE reminders for teams whose week_plan marks today as OFF.
   const teamIdsForOffCheck = Array.from(
-    new Set(allMissing.map((p) => p.team_id).filter((id): id is string => Boolean(id)))
+    new Set(afterGpsFilter.map((p) => p.team_id).filter((id): id is string => Boolean(id)))
   );
   const offTeamIds = await getOffDayTeamIds(sb, {
     dateKey: args.dateKey,
     teamIds: teamIdsForOffCheck,
   });
 
-  const missing = allMissing.filter((p) => !(p.team_id && offTeamIds.has(String(p.team_id))));
-  const skippedOffDay = allMissing.length - missing.length;
+  const missing = afterGpsFilter.filter((p) => !(p.team_id && offTeamIds.has(String(p.team_id))));
+  const skippedOffDay = afterGpsFilter.length - missing.length;
+  const skippedGpsOnly = allMissing.length - afterGpsFilter.length;
+  void skippedGpsOnly;
 
   const subsByPlayer = await getLatestActiveSubscriptionByPlayer(
     sb,

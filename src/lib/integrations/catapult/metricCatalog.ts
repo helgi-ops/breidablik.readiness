@@ -38,7 +38,7 @@ export type CatapultWeeklyMetricSnapshot = {
 };
 
 const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
-  { key: "totalDistance", label: "Avg Dist (m)", digits: 0, acwrSupported: true, aliases: ["total_distance", "totalDistance"] },
+  { key: "totalDistance", label: "Distance / Session (m)", digits: 0, acwrSupported: true, aliases: ["total_distance", "totalDistance"] },
   {
     key: "velocityBand5TotalDistance",
     label: "Vel B5 Avg Dist (Sess) (m)",
@@ -104,6 +104,11 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
       "velocityBand4TotalEffortsGen2",
     ],
   },
+  // HIR Dist = High-Intensity Running distance. Catapult sometimes leaves
+  // `hir_dist` empty/zero, in which case getCatapultMetricValue() falls back
+  // to summing velocity band 5 + band 6 distance — the standard sport-science
+  // definition of HIR. Players see one consolidated HIR tile instead of
+  // three near-identical Vel B5 / Vel B6 / HIR boxes.
   { key: "hirDist", label: "HIR Dist (m)", digits: 0, acwrSupported: true, aliases: ["hir_dist", "hirDist"] },
   { key: "maxVelocity", label: "Max Vel (km/h)", digits: 1, aliases: ["max_vel", "max_velocity", "maxVel", "maxVelocity"] },
   {
@@ -207,6 +212,10 @@ export function getCatapultMetricDefinitions(): readonly CatapultMetricDefinitio
   return METRIC_DEFINITIONS;
 }
 
+// VB5 and VB6 are kept as their own tiles — coaches need to see the
+// breakdown between high-speed (band 5) and sprint (band 6) distance, not
+// just the combined HIR total. HIR Dist sits alongside them and now
+// auto-computes as VB5+VB6 when Catapult leaves hir_dist at 0.
 export function getDefaultCatapultTodayVsTeamMetricKeys(): CatapultMetricKey[] {
   return [
     "accelB23TotEffsGen2",
@@ -245,6 +254,21 @@ export function getCatapultMetricDefinition(key: CatapultMetricKey): CatapultMet
 export function getCatapultMetricValue(source: MetricSource, key: CatapultMetricKey): number | null {
   if (!source) return null;
   const definition = getCatapultMetricDefinition(key);
+  for (const alias of definition.aliases) {
+    const value = asNumber(source[alias]);
+    if (value != null && value > 0) return value;
+  }
+  // HIR Dist fallback: Catapult often leaves hir_dist at 0 even when the
+  // session has high-intensity running. Compute it as velocity band 5 +
+  // band 6 distance (the standard sport-science definition).
+  if (key === "hirDist") {
+    const b5 = asNumber(source["velocity_band5_total_distance"]) ?? asNumber(source["velocityBand5TotalDistance"]);
+    const b6 = asNumber(source["velocity_band6_total_distance"]) ?? asNumber(source["velocityBand6TotalDistance"]);
+    if (b5 != null || b6 != null) {
+      return (b5 ?? 0) + (b6 ?? 0);
+    }
+  }
+  // Otherwise, fall back to any alias even if zero
   for (const alias of definition.aliases) {
     const value = asNumber(source[alias]);
     if (value != null) return value;
