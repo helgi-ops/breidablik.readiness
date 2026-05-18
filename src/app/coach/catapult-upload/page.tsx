@@ -89,6 +89,14 @@ export default function CatapultUploadPage() {
   // Manual athlete mapping: sourceKey → player_id
   const [manualMap, setManualMap] = useState<Record<string, string>>({});
 
+  // Optional per-upload date override. When set, ALL rows in the upload
+  // get this date instead of whatever was parsed from the CSV.
+  // Necessary because Catapult Activity Report exports use the EXPORT date
+  // in the preamble "Date:" line — not the actual session date. A coach
+  // exporting a Sunday match on Monday morning ends up with all rows
+  // stamped Monday. Coach can correct that here in one step.
+  const [dateOverride, setDateOverride] = useState<string | null>(null);
+
   const [committing, setCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState<{ done: number; total: number } | null>(null);
   const [commitErr, setCommitErr] = useState<string | null>(null);
@@ -162,6 +170,7 @@ export default function CatapultUploadPage() {
     setFiles([]);
     setPreviewErr(null);
     setManualMap({});
+    setDateOverride(null);
     setPreviewing(true);
     setPreviewProgress({ done: 0, total: picked.length });
 
@@ -267,6 +276,7 @@ export default function CatapultUploadPage() {
             filename: f.filename,
             csv: f.csv,
             athleteMap: manualMap,
+            dateOverride: dateOverride,
           }),
         });
         const json = await res.json();
@@ -562,6 +572,32 @@ export default function CatapultUploadPage() {
                     ? `${aggregated.dateRange.start} → ${aggregated.dateRange.end} (${aggregated.dateRange.days} dag${aggregated.dateRange.days === 1 ? "ur" : "ar"})`
                     : "Ekkert"}
                 </div>
+                {/* Date override — Catapult Activity Reports use the EXPORT
+                    date (not session date), so the parsed range is often
+                    wrong when uploading a weekend match on Monday morning.
+                    Coach can correct in one click. */}
+                {aggregated.dateRange && aggregated.dateRange.days === 1 && (
+                  <div className="mt-1.5">
+                    <label className="block text-[10px] text-muted-foreground">
+                      Önnur dagsetning?
+                    </label>
+                    <input
+                      type="date"
+                      value={dateOverride ?? aggregated.dateRange.start}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        // Treat picking the same date as no override (cleaner state).
+                        setDateOverride(v === aggregated.dateRange?.start ? null : v || null);
+                      }}
+                      className="mt-0.5 h-7 w-full rounded-md border bg-background px-1.5 text-xs"
+                    />
+                    {dateOverride && (
+                      <div className="mt-0.5 text-[10px] font-medium text-amber-700">
+                        Allar raðir vistast undir {dateOverride}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-muted-foreground text-xs">Athlete-day raðir</div>

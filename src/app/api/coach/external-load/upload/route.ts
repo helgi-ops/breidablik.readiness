@@ -339,6 +339,12 @@ type CommitBody = {
   athleteMap: Record<string, string>;
   /** Optional manual column overrides (raw header → metric key) */
   columnOverrides?: Record<string, CatapultMetricKey>;
+  /** Optional ISO YYYY-MM-DD that overrides ALL row dates in this upload.
+   *  Use when the parsed CSV date is wrong — typically because Catapult
+   *  Activity Report exports stamp the EXPORT date in the preamble (not
+   *  the actual session date). The coach picks the real session date on
+   *  the upload UI and we apply it to every aggregated row before upsert. */
+  dateOverride?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -460,13 +466,22 @@ export async function POST(req: NextRequest) {
   const finalResolved = new Map<string, string>();
   for (const r of resolution) if (r.playerId) finalResolved.set(r.sourceKey, r.playerId);
 
+  // Apply optional date override BEFORE building DB rows. Validates strict
+  // ISO YYYY-MM-DD so we never write garbage like "yesterday" into the
+  // primary key column.
+  const overrideDate = body.phase === "commit" && typeof body.dateOverride === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dateOverride)
+    ? body.dateOverride
+    : null;
+
   // Build DB rows
   const dbRows = aggregated
     .map((b) => {
       const key = b.athleteId ?? b.athleteName ?? "";
       const playerId = finalResolved.get(key);
       if (!playerId) return null;
-      return aggregatedToDbRow(b, playerId, auth.teamId);
+      const row = aggregatedToDbRow(b, playerId, auth.teamId);
+      if (overrideDate) row.date = overrideDate;
+      return row;
     })
     .filter((x): x is Record<string, unknown> => x !== null);
 
