@@ -174,6 +174,7 @@ export async function POST(req: Request) {
     }
 
     const product = parsed.product;
+    const rawTestRows: Record<string, unknown>[] = [];
     const nordbordRows: Record<string, unknown>[] = [];
     const forceframeRows: Record<string, unknown>[] = [];
     let skippedNoPlayer = 0;
@@ -192,6 +193,27 @@ export async function POST(req: Request) {
         row.testType ?? "", row.movementPattern ?? "",
       ].join("|");
       const raw_test_id = deterministicUuid(keyStr);
+
+      // Parent raw-test row — the result tables FK onto vald_raw_tests.
+      // CSV uploads have no API account (account_id null) and store the raw
+      // CSV row as the payload for audit/traceability.
+      const payload = row.raw;
+      const payloadHash = createHash("sha1").update(JSON.stringify(payload)).digest("hex");
+      rawTestRows.push({
+        id: raw_test_id,
+        team_id: auth.teamId,
+        account_id: null,
+        sync_run_id: null,
+        vald_test_id: raw_test_id,
+        vald_athlete_id,
+        product,
+        test_type: row.testType,
+        test_timestamp: testTimestamp,
+        payload,
+        payload_hash: payloadHash,
+        ingestion_key: keyStr,
+        source: "csv",
+      });
 
       if (product === "nordbord") {
         const asym = computeAsymmetry({
@@ -244,6 +266,15 @@ export async function POST(req: Request) {
           source: "csv",
         });
       }
+    }
+
+    // Parent raw-test rows MUST be upserted before the result rows so the
+    // raw_test_id foreign key is satisfied.
+    if (rawTestRows.length > 0) {
+      const { error } = await sb
+        .from("vald_raw_tests")
+        .upsert(rawTestRows as never, { onConflict: "team_id,ingestion_key" });
+      if (error) return NextResponse.json({ ok: false, error: `Raw test upsert: ${error.message}` }, { status: 500 });
     }
 
     let committed = 0;
