@@ -250,14 +250,14 @@ export async function POST(req: Request) {
     if (nordbordRows.length > 0) {
       const { error } = await sb
         .from("vald_nordbord_results")
-        .upsert(nordbordRows as never, { onConflict: "raw_test_id" });
+        .upsert(nordbordRows as never, { onConflict: "raw_test_id,trial_number" });
       if (error) return NextResponse.json({ ok: false, error: `NordBord upsert: ${error.message}` }, { status: 500 });
       committed += nordbordRows.length;
     }
     if (forceframeRows.length > 0) {
       const { error } = await sb
         .from("vald_forceframe_results")
-        .upsert(forceframeRows as never, { onConflict: "raw_test_id" });
+        .upsert(forceframeRows as never, { onConflict: "raw_test_id,trial_number" });
       if (error) return NextResponse.json({ ok: false, error: `ForceFrame upsert: ${error.message}` }, { status: 500 });
       committed += forceframeRows.length;
     }

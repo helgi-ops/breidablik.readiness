@@ -35,59 +35,89 @@ export type ValdCsvFieldKey =
 
 type FieldDef = {
   key: ValdCsvFieldKey;
-  /** Lower-cased header substrings/aliases. First non-empty match wins. */
-  aliases: string[];
+  /** Each alias is a set of tokens that must ALL appear in the normalised
+   *  header. Multiple aliases = OR. */
+  aliases: string[][];
+  /** If ANY of these tokens appears in the header, the field is disqualified
+   *  — even if an alias matched. This is what stops the broad "force l"
+   *  pattern from grabbing "L Max Force Per Kg" or "L Time to Peak Force". */
+  exclude?: string[];
+  /** Which products this field is relevant for. Omitted = both. NordBord has
+   *  no relative-force column; ForceFrame has no avg-force column — gating
+   *  here keeps the column-mapping summary honest per product. */
+  products?: ValdCsvProduct[];
 };
 
 /**
- * Header aliases. VALD CSV headers carry display names with units in
- * brackets (e.g. "Max Force (L) [N]"). We match case-insensitively on
- * normalised headers (lowercased, brackets/units stripped). A header is
- * matched if it CONTAINS one of the aliases — so "l max force [n]" matches
- * the alias "max force l" via token comparison handled in matchHeader().
+ * Header catalog. VALD "Test Metrics" CSV headers carry display names with
+ * units (e.g. "L Max Force (N)", "L Max Force Per Kg (N/kg)"). normaliseHeader
+ * lowercases and strips bracket units, keeping the "(L)"/"(R)" side token.
+ *
+ * Real NordBord headers (verified from a Breiðablik export, 20 May 2026):
+ *   Name · Date UTC · Test · L/R Max Force (N) · L/R Avg Force (N) ·
+ *   Max/Avg/Impulse Imbalance (%) · L/R Min/Avg Time to Peak Force (s) ·
+ *   L/R Max/Avg Force Per Kg (N/kg) · L/R Max/Avg Impulse 100-250ms (N·s) ·
+ *   L/R Max/Avg Torque Per Kg (Nm/kg) · Notes
+ *
+ * The exclude lists keep us pinned to the four force columns + Max Imbalance
+ * and ignore the per-kg / time / impulse / torque derivatives.
  */
+const FORCE_DERIVATIVE_EXCLUDE = ["per", "kg", "time", "impulse", "torque", "rate", "rfd", "rsi"];
+
 const FIELD_CATALOG: FieldDef[] = [
-  { key: "profileName", aliases: ["profile", "athlete", "player", "name", "full name"] },
-  { key: "testDate", aliases: ["date", "test date", "date utc", "recorded", "timestamp"] },
-  { key: "testType", aliases: ["test type", "test", "protocol", "exercise", "metric"] },
-  { key: "bodyRegion", aliases: ["body region", "region"] },
-  { key: "movementPattern", aliases: ["movement", "pattern", "movement pattern", "direction"] },
-  // Peak / max force — left
-  { key: "leftPeakForce", aliases: [
-    "left peak force", "l peak force", "peak force l", "left max force", "l max force",
-    "max force l", "force l", "left force", "newtons l",
-  ] },
-  // Peak / max force — right
-  { key: "rightPeakForce", aliases: [
-    "right peak force", "r peak force", "peak force r", "right max force", "r max force",
-    "max force r", "force r", "right force", "newtons r",
-  ] },
-  // Average force — left (NordBord)
-  { key: "leftAvgForce", aliases: [
-    "left avg force", "l avg force", "avg force l", "left average force", "average force l",
-    "mean force l", "l mean force",
-  ] },
-  // Average force — right (NordBord)
-  { key: "rightAvgForce", aliases: [
-    "right avg force", "r avg force", "avg force r", "right average force", "average force r",
-    "mean force r", "r mean force",
-  ] },
-  // Relative force — left (ForceFrame)
-  { key: "leftRelativeForce", aliases: [
-    "left relative force", "l relative force", "relative force l", "left rel force",
-    "rel force l", "force/bw l", "l force/bw",
-  ] },
-  // Relative force — right (ForceFrame)
-  { key: "rightRelativeForce", aliases: [
-    "right relative force", "r relative force", "relative force r", "right rel force",
-    "rel force r", "force/bw r", "r force/bw",
-  ] },
-  { key: "asymmetryPercent", aliases: [
-    "asymmetry", "imbalance", "max imbalance", "asymmetry index", "l/r imbalance", "lsi",
-  ] },
-  { key: "asymmetrySide", aliases: [
-    "asymmetry side", "imbalance side", "weaker side", "dominant side", "side",
-  ] },
+  { key: "profileName", aliases: [["profile"], ["athlete"], ["player"], ["name"]] },
+  { key: "testDate", aliases: [["date"]], exclude: ["birth", "dob"] },
+  { key: "testType", aliases: [["test"]], exclude: ["date"] },
+  { key: "bodyRegion", aliases: [["body", "region"], ["region"]], products: ["forceframe"] },
+  { key: "movementPattern", aliases: [["movement"], ["pattern"]], products: ["forceframe"] },
+  // Peak / max force — left. Matches "L Max Force (N)" / "L Peak Force (N)".
+  {
+    key: "leftPeakForce",
+    aliases: [["max", "force", "l"], ["peak", "force", "l"]],
+    exclude: [...FORCE_DERIVATIVE_EXCLUDE, "avg", "min", "mean", "relative"],
+  },
+  {
+    key: "rightPeakForce",
+    aliases: [["max", "force", "r"], ["peak", "force", "r"]],
+    exclude: [...FORCE_DERIVATIVE_EXCLUDE, "avg", "min", "mean", "relative"],
+  },
+  // Average force — left (NordBord). Matches "L Avg Force (N)".
+  {
+    key: "leftAvgForce",
+    aliases: [["avg", "force", "l"], ["average", "force", "l"], ["mean", "force", "l"]],
+    exclude: [...FORCE_DERIVATIVE_EXCLUDE, "max", "min", "peak", "relative"],
+    products: ["nordbord"],
+  },
+  {
+    key: "rightAvgForce",
+    aliases: [["avg", "force", "r"], ["average", "force", "r"], ["mean", "force", "r"]],
+    exclude: [...FORCE_DERIVATIVE_EXCLUDE, "max", "min", "peak", "relative"],
+    products: ["nordbord"],
+  },
+  // Relative / per-bodyweight force — left (ForceFrame). Here per-kg is wanted.
+  {
+    key: "leftRelativeForce",
+    aliases: [["relative", "force", "l"], ["rel", "force", "l"], ["force", "per", "kg", "l"]],
+    exclude: ["time", "impulse", "torque", "avg", "mean", "min", "imbalance"],
+    products: ["forceframe"],
+  },
+  {
+    key: "rightRelativeForce",
+    aliases: [["relative", "force", "r"], ["rel", "force", "r"], ["force", "per", "kg", "r"]],
+    exclude: ["time", "impulse", "torque", "avg", "mean", "min", "imbalance"],
+    products: ["forceframe"],
+  },
+  // Asymmetry — only the headline "Max Imbalance (%)" / "Asymmetry" column,
+  // not the Avg / Impulse imbalance derivatives.
+  {
+    key: "asymmetryPercent",
+    aliases: [["max", "imbalance"], ["asymmetry"], ["lsi"]],
+    exclude: ["side", "time", "torque"],
+  },
+  {
+    key: "asymmetrySide",
+    aliases: [["imbalance", "side"], ["asymmetry", "side"], ["weaker", "side"], ["dominant", "side"]],
+  },
 ];
 
 export type ValdCsvRow = {
@@ -189,28 +219,30 @@ function normaliseHeader(h: string): string {
     .trim();
 }
 
-/** Returns the field key a raw header maps to, or null. */
-export function matchHeader(rawHeader: string): ValdCsvFieldKey | null {
+/** Returns the field key a raw header maps to, or null.
+ *  A field matches when one of its aliases is fully present AND none of its
+ *  exclude tokens appear. When several fields match, the one whose matching
+ *  alias has the most tokens (most specific) wins. When `product` is given,
+ *  fields not relevant to that product are skipped — so a NordBord CSV won't
+ *  surface ForceFrame-only relative-force columns and vice versa. */
+export function matchHeader(rawHeader: string, product?: ValdCsvProduct): ValdCsvFieldKey | null {
   const norm = normaliseHeader(rawHeader);
   if (!norm) return null;
-  // Try most-specific aliases first (longer alias = more specific).
-  let best: { key: ValdCsvFieldKey; len: number } | null = null;
+  const headerTokens = norm.split(" ").filter(Boolean);
+  const tokenSet = new Set(headerTokens);
+
+  let best: { key: ValdCsvFieldKey; tokens: number } | null = null;
   for (const def of FIELD_CATALOG) {
+    if (product && def.products && !def.products.includes(product)) continue;
+    if (def.exclude?.some((t) => tokenSet.has(t))) continue;
     for (const alias of def.aliases) {
-      if (headerContainsAlias(norm, alias) && (!best || alias.length > best.len)) {
-        best = { key: def.key, len: alias.length };
+      const matched = alias.every((t) => tokenSet.has(t));
+      if (matched && (!best || alias.length > best.tokens)) {
+        best = { key: def.key, tokens: alias.length };
       }
     }
   }
   return best?.key ?? null;
-}
-
-/** True if the normalised header contains all tokens of the alias, where a
- *  bare "l"/"r" token also matches "(l)"/"(r)" style side markers. */
-function headerContainsAlias(normHeader: string, alias: string): boolean {
-  const tokens = alias.split(" ").filter(Boolean);
-  const headerTokens = normHeader.split(" ").filter(Boolean);
-  return tokens.every((t) => headerTokens.includes(t));
 }
 
 // ── Value coercion ───────────────────────────────────────────────────────────
@@ -289,7 +321,7 @@ export function parseValdCsv(
   for (let i = 0; i < headerCells.length; i++) {
     const header = headerCells[i];
     const override = opts?.overrides?.get(header);
-    const key = override ?? matchHeader(header);
+    const key = override ?? matchHeader(header, product);
     if (key) matched.set(i, key);
     else if (header) unmatched.set(i, header);
   }
