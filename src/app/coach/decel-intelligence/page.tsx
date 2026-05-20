@@ -26,6 +26,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { PlayerDecelSummaryCard } from "@/components/coach/PlayerDecelSummaryCard";
 import StrideIntelligenceCard from "@/components/coach/StrideIntelligenceCard";
 import SprintExposureCard from "@/components/coach/SprintExposureCard";
+import SprintCadenceBandsCard from "@/components/coach/SprintCadenceBandsCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
 import CodAsymCard from "@/components/coach/CodAsymCard";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
@@ -53,7 +54,7 @@ type McBurnieStatus = {
   overload: { flag: Flag; cumulative_28d_count: number; baseline_daily_mean: number };
   underload: { flag: Flag; cumulative_7d_count: number; match_day_demand: number; match_days_observed: number };
   accel_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string };
-  sprint_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string; requires_field?: string };
+  sprint_coupling: { flag: Flag; recent_ratio: number; metric_name: string; healthy_range: string; requires_field?: string; personal_z?: number | null; baseline_days?: number };
   concentration: { flag: Flag; peak_day_pct_of_28d: number; distinct_high_intensity_days: number };
   // Neuromuscular capacity dims — load × capacity = compounded risk picture.
   // Each shows last-test freshness so coach can spot stale data; flag falls
@@ -514,6 +515,12 @@ function PlayerRow({ row }: { row: Row }) {
               baseline is available yet. */}
           <SprintExposureCard playerId={row.player_id} />
 
+          {/* IMA Free Running Bands 7-8 — the sprint-cadence stride volume
+              that now feeds the Decel:Sprint Coupling denominator (outdoor +
+              indoor). Shown here as the raw B7+8 readout so the coach can see
+              the actual stride volume behind the ratio. */}
+          <SprintCadenceBandsCard playerId={row.player_id} />
+
           {/* Player Load ACWR — Gabbett 2016 7-day acute / 28-day chronic ratio
               over Catapult total_player_load. Indoor-friendly external load
               spike detector; complements internal-load (RPE) ACWR.
@@ -560,14 +567,18 @@ function PlayerRow({ row }: { row: Row }) {
             <Detail
               title="Decel : Sprint Coupling"
               flag={s.sprint_coupling.flag}
-              big={s.sprint_coupling.recent_ratio > 0 ? s.sprint_coupling.recent_ratio.toFixed(2) : "—"}
-              caption={
-                s.sprint_coupling.recent_ratio > 0
-                  ? `${s.sprint_coupling.metric_name} · healthy ${s.sprint_coupling.healthy_range}`
-                  : `Awaiting Catapult Vel B6+ Total # Efforts (Gen 2) field. Will populate after next sync.`
+              big={
+                s.sprint_coupling.personal_z != null
+                  ? `${s.sprint_coupling.personal_z >= 0 ? "+" : ""}${s.sprint_coupling.personal_z.toFixed(2)}σ`
+                  : "—"
               }
-              hint="McBurnie's primary risk metric. Red if <0.5 (sprinting without proper braking)."
-              info="McBurnie's primary risk metric. Ratio of decelerations to high-speed sprint efforts. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side — heavy sprint with limited brake exposure is a dual mechanism. RED if <0.5 — sprint exposure outpacing braking control. Yellow ≥0.5 but below the player's healthy range."
+              caption={
+                s.sprint_coupling.personal_z != null
+                  ? `${s.sprint_coupling.metric_name}\nRatio ${s.sprint_coupling.recent_ratio.toFixed(3)} · baseline ${s.sprint_coupling.baseline_days ?? 0} days`
+                  : `Awaiting IMA Free Running Band 7/8 data — needs ≥6 days in the last 28 to set a personal baseline.`
+              }
+              hint="McBurnie's primary risk metric, flagged on personal-z. Red if z ≤ −1.5 (decel:sprint coupling well below the player's own norm)."
+              info="McBurnie's primary risk metric. Ratio of decelerations (IMA Band 3) to sprint-cadence strides (IMA Free Running Band 7+8) — an inertial signal that works outdoor and indoor alike. The absolute ratio magnitude is highly individual (stride mechanics, position, height), so the flag is set on personal-z: how far the player's recent 7-day coupling sits below their OWN 28-day daily-ratio norm. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side. RED if z ≤ −1.5 — coupling well below the player's norm. Yellow if z ≤ −1.0."
             />
             <Detail
               title="Exposure Concentration"
