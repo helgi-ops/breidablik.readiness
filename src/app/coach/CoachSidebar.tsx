@@ -169,6 +169,7 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
+  { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
   { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
