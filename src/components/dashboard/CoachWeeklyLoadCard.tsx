@@ -168,23 +168,36 @@ export default function CoachWeeklyLoadCard({
   const [players, setPlayers] = useState<PlayerOption[]>([]);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Fetch player roster once for the player selector
+  // Fetch player roster once for the player selector.
+  // NOTE: don't filter on is_active here — some legacy rows have NULL and
+  // the strict `.eq("is_active", true)` was excluding them, leaving the
+  // dropdown empty for teams whose players were imported before is_active
+  // was added (reported 2026-05-20, Breiðablik on /coach?tab=gps). RLS
+  // already restricts coaches to their own team's rows so all returned
+  // players are appropriate to show in the selector.
   useEffect(() => {
+    if (!teamId) return;
     (async () => {
-      const { data: roster } = await supabase
+      const { data: roster, error } = await supabase
         .from("players")
-        .select("id, full_name")
+        .select("id, full_name, is_active")
         .eq("team_id", teamId)
-        .eq("is_active", true)
         .order("full_name");
-      if (roster) {
-        setPlayers(
-          (roster as Array<{ id: string; full_name: string | null }>)
-            .map((p) => ({ id: p.id, name: p.full_name ?? "—" }))
-        );
+      if (error) {
+        // Surface the failure so it doesn't fail silently — empty dropdown
+        // looked identical to "no players on team" before this log.
+        console.error("[CoachWeeklyLoadCard] failed to load players:", error.message);
+        return;
       }
+      const rows = (roster ?? []) as Array<{ id: string; full_name: string | null; is_active: boolean | null }>;
+      // Treat is_active in (null, true) as "show" — only exclude players
+      // explicitly flagged inactive.
+      setPlayers(
+        rows
+          .filter((p) => p.is_active !== false)
+          .map((p) => ({ id: p.id, name: p.full_name ?? "—" }))
+      );
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId]);
 
   const fetchData = useCallback(() => {
@@ -224,7 +237,23 @@ export default function CoachWeeklyLoadCard({
     }
   }, [data, primaryKey]);
 
-  // Player mode with no selection: show selector only
+  // Auto-pick the first player as soon as the roster loads in player mode.
+  // Without this, switching to Player just shows an empty dropdown that the
+  // coach has to manually expand and pick from — fixed UX complaint that
+  // "Leikmenn koma ekki upp" (players don't come up) on /coach?tab=gps.
+  // This is a legitimate derive-from-async-source effect (player roster
+  // arrives after mount), hence the eslint-disable for set-state-in-effect.
+  useEffect(() => {
+    if (viewMode !== "player") return;
+    if (selectedPlayerId) return;
+    if (players.length === 0) return;
+    const first = [...players].sort((a, b) => a.name.localeCompare(b.name))[0];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (first) setSelectedPlayerId(first.id);
+  }, [viewMode, selectedPlayerId, players]);
+
+  // Player mode but roster hasn't loaded yet: show selector with explanation
+  // so the coach knows what's happening (empty dropdown looked broken).
   if (viewMode === "player" && !selectedPlayerId) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -246,6 +275,11 @@ export default function CoachWeeklyLoadCard({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {players.length === 0 && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              {lang === "IS" ? "Sæki leikmenn…" : "Loading players…"}
+            </p>
+          )}
         </div>
       </div>
     );
