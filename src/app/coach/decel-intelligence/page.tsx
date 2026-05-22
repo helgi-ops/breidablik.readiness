@@ -103,6 +103,18 @@ type Row = {
   asp?: AspBurst | null;
 };
 
+/**
+ * Convert a personal-z score to a STEN (Standard Ten) score.
+ * STEN is a 1-10 scale with mean 5.5 and SD 2 (STEN = 5.5 + 2·z),
+ * clamped to [1, 10]. Coaches read a 1-10 score more intuitively than
+ * a signed sigma value: 5-6 is "normal", below ~3 is the concern band.
+ * Flag thresholds map directly: z ≤ −1.5 → STEN ≤ 2.5 (red);
+ * z ≤ −1.0 → STEN ≤ 3.5 (watch).
+ */
+function toSten(z: number): number {
+  return Math.min(10, Math.max(1, 5.5 + 2 * z));
+}
+
 export default function CoachDecelIntelligencePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -569,16 +581,16 @@ function PlayerRow({ row }: { row: Row }) {
               flag={s.sprint_coupling.flag}
               big={
                 s.sprint_coupling.personal_z != null
-                  ? `${s.sprint_coupling.personal_z >= 0 ? "+" : ""}${s.sprint_coupling.personal_z.toFixed(2)}σ`
+                  ? `${toSten(s.sprint_coupling.personal_z).toFixed(1)} STEN`
                   : "—"
               }
               caption={
                 s.sprint_coupling.personal_z != null
-                  ? `${s.sprint_coupling.metric_name}\nRatio ${s.sprint_coupling.recent_ratio.toFixed(3)} · baseline ${s.sprint_coupling.baseline_days ?? 0} days`
+                  ? `${s.sprint_coupling.metric_name}\nRatio ${s.sprint_coupling.recent_ratio.toFixed(3)} · baseline ${s.sprint_coupling.baseline_days ?? 0} days · personal-z ${s.sprint_coupling.personal_z >= 0 ? "+" : ""}${s.sprint_coupling.personal_z.toFixed(2)}`
                   : `Awaiting IMA Free Running Band 7/8 data — needs ≥6 days in the last 28 to set a personal baseline.`
               }
-              hint="McBurnie's primary risk metric, flagged on personal-z. Red if z ≤ −1.5 (decel:sprint coupling well below the player's own norm)."
-              info="McBurnie's primary risk metric. Ratio of decelerations (IMA Band 3) to sprint-cadence strides (IMA Free Running Band 7+8) — an inertial signal that works outdoor and indoor alike. The absolute ratio magnitude is highly individual (stride mechanics, position, height), so the flag is set on personal-z: how far the player's recent 7-day coupling sits below their OWN 28-day daily-ratio norm. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side. RED if z ≤ −1.5 — coupling well below the player's norm. Yellow if z ≤ −1.0."
+              hint="McBurnie's primary risk metric, on a 1-10 STEN scale (mean 5.5). Red if STEN ≤ 2.5, watch if STEN ≤ 3.5 — decel:sprint coupling well below the player's own norm."
+              info="McBurnie's primary risk metric. Ratio of decelerations (IMA Band 3) to sprint-cadence strides (IMA Free Running Band 7+8) — an inertial signal that works outdoor and indoor alike. The absolute ratio magnitude is highly individual (stride mechanics, position, height), so the flag is set relative to the player's own norm: how far the recent 7-day coupling sits below their OWN 28-day daily-ratio baseline. That deviation is shown as a STEN (Standard Ten) score — a 1-10 scale with mean 5.5 and SD 2, so 5-6 is normal and below ~3 is the concern band. A player who sprints without proportional braking volume is exposing the knee (ACL via under-conditioned hamstring co-activation), quadriceps (eccentric overload on the next braking event) and ankle to forces they're not conditioned for. The hamstring is at risk on the sprint side, not the braking side. RED if STEN ≤ 2.5 (z ≤ −1.5) — coupling well below the player's norm. Yellow if STEN ≤ 3.5 (z ≤ −1.0)."
             />
             <Detail
               title="Exposure Concentration"

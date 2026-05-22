@@ -88,6 +88,7 @@ const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
   { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
   { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
+  { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
 ];
 
 // Planning split into pitch / S&C workflows (May 2026). Coaches were
@@ -170,6 +171,7 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
   { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
+  { href: "/coach/assessment-upload", label: { EN: "Assessment upload", IS: "Mælingaupphleðsla" } },
   { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
