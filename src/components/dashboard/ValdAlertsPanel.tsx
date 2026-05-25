@@ -27,9 +27,53 @@ type CmjResult = {
   rsiMod: number | null;
   relativePeakPowerWkg: number | null;
   timeToTakeoffMs: number | null;
+  peakForceN: number | null;
   asymmetryPct: number | null;
   asymmetrySide: string | null;
   testTimestamp: string;
+};
+
+/**
+ * Per-player CMJ force-time baseline (median of best daily trials over the
+ * 42 days before the selected date). Force-time metrics (RSI-mod, contraction
+ * time, peak force) are 2-4x more sensitive to residual neuromuscular fatigue
+ * than jump height — Marques et al. / Buchheit 2026, "Jump Height Lies".
+ */
+type CmjBaseline = {
+  jumpHeightCm: number | null;
+  rsiMod: number | null;
+  contractionMs: number | null; // time-to-takeoff
+  peakForceN: number | null;
+  days: number;
+};
+
+function median(values: number[]): number | null {
+  const xs = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (xs.length === 0) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+}
+
+type MetricDelta = { pct: number; tone: "good" | "bad" | "flat" };
+
+/** Percentage change of a recent value vs a baseline, classified against the
+ *  metric's direction-of-better. A change under 3% is treated as flat. */
+function metricDelta(
+  recent: number | null,
+  base: number | null,
+  higherIsBetter: boolean,
+): MetricDelta | null {
+  if (recent == null || base == null || base === 0) return null;
+  const pct = ((recent - base) / Math.abs(base)) * 100;
+  const worse = higherIsBetter ? pct < 0 : pct > 0;
+  const tone: MetricDelta["tone"] = Math.abs(pct) < 3 ? "flat" : worse ? "bad" : "good";
+  return { pct, tone };
+}
+
+const DELTA_TONE_CLASS: Record<MetricDelta["tone"], string> = {
+  good: "text-emerald-600",
+  bad: "text-rose-600",
+  flat: "text-slate-400",
 };
 
 type ActivePlayer = {
@@ -63,6 +107,7 @@ const PRIORITY_GROUPS: CmjRequiredEntry["reason"][] = ["neuromuscular", "protoco
 export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [snapshots, setSnapshots]       = useState<ValdSnapshotRow[]>([]);
   const [cmjResults, setCmjResults]     = useState<CmjResult[]>([]);
+  const [cmjBaselines, setCmjBaselines] = useState<Map<string, CmjBaseline>>(new Map());
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   const [mdDay, setMdDay]               = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
@@ -73,7 +118,13 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     if (!teamId) { setLoading(false); return; }
     const supabase = getSupabaseClient();
     setLoading(true);
-    const [snapshotRes, mdRes, playersRes, cmjRes] = await Promise.all([
+    // Start of the 42-day baseline window (the 42 days BEFORE the selected date).
+    const baselineWindowStart = (() => {
+      const d = new Date(`${date}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 42);
+      return d.toISOString().slice(0, 10);
+    })();
+    const [snapshotRes, mdRes, playersRes, cmjRes, baselineRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
         .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, explanation, players!inner(full_name)")
@@ -94,13 +145,23 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       // Fetch best CMJ per player for today directly from ForceDecks results
       supabase
         .from("vald_forcedecks_results")
-        .select("microplayer_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, time_to_takeoff_ms, asymmetry_percent, asymmetry_side, test_timestamp")
+        .select("microplayer_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, time_to_takeoff_ms, peak_force_n, asymmetry_percent, asymmetry_side, test_timestamp")
         .eq("team_id", teamId)
         .eq("test_type", "CMJ")
         .gte("test_timestamp", `${date}T00:00:00`)
         .lte("test_timestamp", `${date}T23:59:59`)
         .not("microplayer_id", "is", null)
         .order("jump_height_cm", { ascending: false }),
+      // 42-day baseline window — all CMJ trials before the selected date.
+      supabase
+        .from("vald_forcedecks_results")
+        .select("microplayer_id, jump_height_cm, rsi_mod, time_to_takeoff_ms, peak_force_n, test_timestamp")
+        .eq("team_id", teamId)
+        .eq("test_type", "CMJ")
+        .gte("test_timestamp", `${baselineWindowStart}T00:00:00`)
+        .lt("test_timestamp", `${date}T00:00:00`)
+        .not("microplayer_id", "is", null)
+        .not("jump_height_cm", "is", null),
     ]);
 
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -133,12 +194,50 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         rsiMod: row.rsi_mod != null ? Number(row.rsi_mod) : null,
         relativePeakPowerWkg: row.relative_peak_power_w_kg != null ? Number(row.relative_peak_power_w_kg) : null,
         timeToTakeoffMs: row.time_to_takeoff_ms != null ? Number(row.time_to_takeoff_ms) : null,
+        peakForceN: row.peak_force_n != null ? Number(row.peak_force_n) : null,
         asymmetryPct: row.asymmetry_percent != null ? Number(row.asymmetry_percent) : null,
         asymmetrySide: row.asymmetry_side ? String(row.asymmetry_side) : null,
         testTimestamp: String(row.test_timestamp ?? ""),
       });
     }
     setCmjResults(Array.from(bestPerPlayer.values()).sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
+
+    // ── 42-day force-time baselines ──────────────────────────────────────
+    // Per player: keep the best (highest-jump) trial of each test day, then
+    // take the median of each metric across days. Mirrors the "best trial"
+    // convention and reduces single-trial noise.
+    type DayBest = { day: string; jh: number; rsi: number | null; ttt: number | null; pf: number | null };
+    const dayBestByPlayer = new Map<string, Map<string, DayBest>>();
+    for (const row of ((baselineRes.data ?? []) as Array<Record<string, unknown>>)) {
+      const pid = String(row.microplayer_id ?? "");
+      const jh = Number(row.jump_height_cm);
+      if (!pid || !Number.isFinite(jh)) continue;
+      const day = String(row.test_timestamp ?? "").slice(0, 10);
+      if (!day) continue;
+      let days = dayBestByPlayer.get(pid);
+      if (!days) { days = new Map(); dayBestByPlayer.set(pid, days); }
+      const prev = days.get(day);
+      if (!prev || jh > prev.jh) {
+        days.set(day, {
+          day, jh,
+          rsi: row.rsi_mod != null ? Number(row.rsi_mod) : null,
+          ttt: row.time_to_takeoff_ms != null ? Number(row.time_to_takeoff_ms) : null,
+          pf: row.peak_force_n != null ? Number(row.peak_force_n) : null,
+        });
+      }
+    }
+    const baselines = new Map<string, CmjBaseline>();
+    for (const [pid, days] of dayBestByPlayer) {
+      const rows = Array.from(days.values());
+      baselines.set(pid, {
+        jumpHeightCm: median(rows.map((r) => r.jh)),
+        rsiMod: median(rows.flatMap((r) => (r.rsi != null ? [r.rsi] : []))),
+        contractionMs: median(rows.flatMap((r) => (r.ttt != null ? [r.ttt] : []))),
+        peakForceN: median(rows.flatMap((r) => (r.pf != null ? [r.pf] : []))),
+        days: rows.length,
+      });
+    }
+    setCmjBaselines(baselines);
 
     setSnapshots(mapped);
     setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
@@ -169,8 +268,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       if (!res.ok) throw new Error(json.error ?? "Sync mistókst");
       setSyncMsg("✓ Sync tókst — gögnin eru uppfærð");
       await fetchData();
-    } catch (e: any) {
-      setSyncMsg(`Villa: ${e.message}`);
+    } catch (e: unknown) {
+      setSyncMsg(`Villa: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setSyncing(false);
     }
@@ -291,7 +390,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
             </div>
           )}
 
-          {/* CMJ Results — today's best jump per player from ForceDecks */}
+          {/* CMJ Results — today's best jump per player from ForceDecks.
+              Each metric is shown vs the player's own 42-day baseline.
+              Force-time metrics (RSI-mod, contraction time, peak force) are
+              far more sensitive to fatigue than jump height. */}
           {!loading && cmjResults.length > 0 && (() => {
             const snapshotMap = new Map(snapshots.map((s) => [s.playerId, s]));
             return (
@@ -307,10 +409,9 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                       <tr className="border-b border-slate-100 bg-slate-50">
                         <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400">Leikmaður</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stökk</th>
-                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">vs 42d</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">RSI-mod ⭐</th>
-                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Rel. Power</th>
-                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Take-Off ⭐</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contraction ⭐</th>
+                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Peak force ⭐</th>
                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Asym</th>
                       </tr>
                     </thead>
@@ -320,40 +421,43 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                         const name = snap?.playerName ?? r.playerId;
                         const asymAbs = r.asymmetryPct != null ? Math.abs(r.asymmetryPct) : null;
                         const asymColor = asymAbs != null && asymAbs > 10 ? "text-amber-600 font-semibold" : "text-slate-500";
-                        // 42-day baseline comparison
-                        const baseline = snap?.cmjBaseline ?? null;
-                        const deltaPct = baseline != null && baseline > 0
-                          ? ((r.jumpHeightCm - baseline) / baseline) * 100
-                          : null;
-                        const deltaColor = deltaPct == null
-                          ? "text-slate-400"
-                          : deltaPct <= -10
-                          ? "text-red-600 font-semibold"
-                          : deltaPct <= -5
-                          ? "text-amber-600 font-semibold"
-                          : deltaPct >= 3
-                          ? "text-emerald-600 font-semibold"
-                          : "text-slate-500";
-                        const deltaLabel = deltaPct == null
-                          ? "–"
-                          : `${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`;
+
+                        const base = cmjBaselines.get(r.playerId) ?? null;
+                        const hasBaseline = base != null && base.days >= 3;
+                        const jumpD   = hasBaseline ? metricDelta(r.jumpHeightCm, base!.jumpHeightCm, true)  : null;
+                        const rsiD    = hasBaseline ? metricDelta(r.rsiMod, base!.rsiMod, true)              : null;
+                        const contrD  = hasBaseline ? metricDelta(r.timeToTakeoffMs, base!.contractionMs, false) : null;
+                        const forceD  = hasBaseline ? metricDelta(r.peakForceN, base!.peakForceN, true)      : null;
+
+                        // "Jump Height Lies": jump height looks fine but a
+                        // force-time metric has clearly regressed = hidden
+                        // residual neuromuscular fatigue.
+                        const jumpLooksFine = jumpD == null || jumpD.pct >= -5;
+                        const forceTimeDegraded =
+                          (rsiD?.tone === "bad" && Math.abs(rsiD.pct) >= 10) ||
+                          (contrD?.tone === "bad" && Math.abs(contrD.pct) >= 10) ||
+                          (forceD?.tone === "bad" && Math.abs(forceD.pct) >= 8);
+                        const hiddenFatigue = hasBaseline && jumpLooksFine && forceTimeDegraded;
+
                         return (
                           <tr key={r.playerId} className="hover:bg-slate-50/60">
-                            <td className="px-3 py-2 font-medium text-slate-700">{name}</td>
-                            <td className="px-3 py-2 text-right font-bold text-emerald-700 tabular-nums">{r.jumpHeightCm.toFixed(1)} cm</td>
-                            <td className={`px-3 py-2 text-right tabular-nums ${deltaColor}`}
-                                title={baseline != null ? `42d baseline: ${baseline.toFixed(1)} cm` : "No baseline"}>
-                              {deltaLabel}
+                            <td className="px-3 py-2 font-medium text-slate-700">
+                              <span className="inline-flex items-center gap-1.5">
+                                {name}
+                                {hiddenFatigue && (
+                                  <span
+                                    className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700"
+                                    title="Jump height looks normal but force-time metrics have regressed vs the player's 42-day baseline — possible hidden neuromuscular fatigue."
+                                  >
+                                    ⚠ Hidden fatigue
+                                  </span>
+                                )}
+                              </span>
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                              {r.rsiMod != null ? r.rsiMod.toFixed(2) : "–"}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                              {r.relativePeakPowerWkg != null ? `${r.relativePeakPowerWkg.toFixed(1)} W/kg` : "–"}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                              {r.timeToTakeoffMs != null ? `${r.timeToTakeoffMs.toFixed(0)} ms` : "–"}
-                            </td>
+                            <MetricCell value={`${r.jumpHeightCm.toFixed(1)} cm`} delta={jumpD} bold />
+                            <MetricCell value={r.rsiMod != null ? r.rsiMod.toFixed(2) : "–"} delta={rsiD} />
+                            <MetricCell value={r.timeToTakeoffMs != null ? `${r.timeToTakeoffMs.toFixed(0)} ms` : "–"} delta={contrD} />
+                            <MetricCell value={r.peakForceN != null ? `${r.peakForceN.toFixed(0)} N` : "–"} delta={forceD} />
                             <td className={`px-3 py-2 text-right tabular-nums ${asymColor}`}>
                               {asymAbs != null ? `${asymAbs.toFixed(1)}%${r.asymmetrySide ? ` ${r.asymmetrySide[0]}` : ""}` : "–"}
                             </td>
@@ -363,6 +467,11 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                     </tbody>
                   </table>
                 </div>
+                <p className="mt-1.5 text-[10px] leading-snug text-slate-400">
+                  ⭐ Force-time metrics. Each value is shown vs the player&apos;s own 42-day baseline (median of best daily trials).
+                  Jump height alone can stay flat while force-time metrics — RSI-mod, contraction time, peak force —
+                  reveal residual neuromuscular fatigue 2-4× more sensitively (Marques &amp; Buchheit 2026).
+                </p>
               </div>
             );
           })()}
@@ -480,6 +589,19 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       </div>
 
     </div>
+  );
+}
+
+function MetricCell({ value, delta, bold }: { value: string; delta: MetricDelta | null; bold?: boolean }) {
+  return (
+    <td className="px-3 py-2 text-right tabular-nums align-top">
+      <div className={bold ? "font-bold text-emerald-700" : "text-slate-600"}>{value}</div>
+      {delta != null && (
+        <div className={`text-[10px] font-semibold ${DELTA_TONE_CLASS[delta.tone]}`}>
+          {delta.pct >= 0 ? "+" : ""}{delta.pct.toFixed(1)}%
+        </div>
+      )}
+    </td>
   );
 }
 

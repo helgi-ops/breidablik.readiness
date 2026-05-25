@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { getSessionLoadBand } from "@/lib/session-rpe/formatters";
+import { getSessionLoadBand, resolveEffectiveSessionType } from "@/lib/session-rpe/formatters";
 
 type PlayerRow = {
   id: string;
@@ -106,6 +106,25 @@ export async function GET(req: Request) {
 
     if (yErr) return NextResponse.json({ ok: false, error: yErr.message }, { status: 500 });
 
+    // Week setup is the coach's authoritative plan for the day. The RPE
+    // monitoring view defers to it so a match day reads as a match even when
+    // players left the session-type at its training default.
+    let weekSetupDay: { day_type: string; focus: string | null } | null = null;
+    if (teamId) {
+      const { data: wpData } = await sb
+        .from("week_plans")
+        .select("day_type, focus")
+        .eq("team_id", teamId)
+        .eq("day_date", dateKey)
+        .maybeSingle();
+      if (wpData) {
+        weekSetupDay = {
+          day_type: String((wpData as { day_type?: string }).day_type ?? ""),
+          focus: ((wpData as { focus?: string | null }).focus ?? null) as string | null,
+        };
+      }
+    }
+
     const entries = (entriesData ?? []) as EntryRow[];
     const byPlayer = new Map<string, PlayerRow>();
     for (const p of players) byPlayer.set(p.id, p);
@@ -116,6 +135,11 @@ export async function GET(req: Request) {
       ...entry,
       player_name: byPlayer.get(entry.player_id)?.full_name ?? "Unknown player",
       load_band: getSessionLoadBand(Number(entry.session_load ?? 0)),
+      // Display type resolved against the Week setup (match day → match).
+      effective_session_type: resolveEffectiveSessionType(
+        entry.session_type,
+        weekSetupDay?.day_type,
+      ),
     }));
 
     const dailyTotalsMap = new Map<
@@ -191,6 +215,7 @@ export async function GET(req: Request) {
       ok: true,
       dateKey,
       teamId,
+      weekSetupDay,
       entries: enrichedEntries,
       dailyTotals,
       missingPlayers,

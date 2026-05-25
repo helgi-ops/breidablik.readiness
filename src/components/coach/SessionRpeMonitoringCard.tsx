@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { formatLoadBandClass, formatLoadBandLabel, formatSessionTypeLabel } from "@/lib/session-rpe/formatters";
+import {
+  formatLoadBandClass,
+  formatLoadBandLabel,
+  formatSessionTypeLabel,
+  formatWeekSetupDayLabel,
+} from "@/lib/session-rpe/formatters";
 
 type SessionRpeSummary = {
   totalExpectedPlayers: number;
@@ -18,6 +23,8 @@ type SessionRpeEntry = {
   player_id: string;
   player_name: string;
   session_type: string;
+  /** Session type resolved against the Week setup (e.g. match day → match). */
+  effective_session_type: string;
   duration_minutes: number;
   rpe: number;
   session_load: number;
@@ -42,11 +49,17 @@ type MissingPlayer = {
   status: "MISSING";
 };
 
+type WeekSetupDay = {
+  day_type: string;
+  focus: string | null;
+};
+
 type SummaryResponse = {
   ok: boolean;
   error?: string;
   dateKey: string;
   teamId: string | null;
+  weekSetupDay: WeekSetupDay | null;
   summary: SessionRpeSummary;
   entries: SessionRpeEntry[];
   dailyTotals: SessionRpeDailyTotal[];
@@ -212,6 +225,10 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
   const missingCount = data?.summary.missingSubmissions ?? 0;
   const compliancePercent = totalPlayers > 0 ? Math.round((submittedCount / totalPlayers) * 100) : 0;
 
+  const weekSetupDay = data?.weekSetupDay ?? null;
+  const weekDayLabel = weekSetupDay ? formatWeekSetupDayLabel(weekSetupDay.day_type) : null;
+  const isMatchDay = String(weekSetupDay?.day_type ?? "").trim().toUpperCase() === "GAME";
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -223,6 +240,20 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
               ? "—"
               : `${submittedCount} / ${totalPlayers} submitted · ${missingCount} missing · Compliance ${compliancePercent}%`}
           </div>
+          {!loading && weekDayLabel ? (
+            <div
+              className={`mt-1.5 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                isMatchDay
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-800"
+                  : "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+              title="Day type from Week setup"
+            >
+              <span className="opacity-70">Week setup:</span>
+              <span>{weekDayLabel}</span>
+              {weekSetupDay?.focus ? <span className="opacity-70">· {weekSetupDay.focus}</span> : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -314,7 +345,11 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
                       <div className="min-w-0 pr-2">
                         <div className="truncate font-medium text-slate-800">{row.player_name}</div>
                         <div className="truncate text-[11px] text-slate-500">
-                          {formatSessionTypeLabel(row.session_type)} · {row.duration_minutes} min ·{" "}
+                          {formatSessionTypeLabel(row.effective_session_type)}
+                          {row.effective_session_type !== row.session_type ? (
+                            <span className="text-indigo-600"> (Week setup)</span>
+                          ) : null}
+                          {" "}· {row.duration_minutes} min ·{" "}
                           {new Date(row.submitted_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </div>

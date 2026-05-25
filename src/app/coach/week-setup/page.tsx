@@ -516,6 +516,79 @@ export default function WeekSetupPage() {
     return autoMdDayEdits;
   }, [isManualWeek, manualNoMatchDayEdits, autoMdDayEdits]);
 
+  // Microcycle checks — evidence-informed periodization principles
+  // (Buchheit et al. 2024, "The 11 Principles of Microcycle Periodization").
+  // Each check reads the resolved 7-day previewDays array and flags a
+  // planned week that drifts from the evidence. Decision-support, not a block.
+  const microcycleChecks = useMemo<{ id: string; tone: "warn" | "info"; title: string; body: string }[]>(() => {
+    const days = previewDays;
+    const checks: { id: string; tone: "warn" | "info"; title: string; body: string }[] = [];
+    const gameIdx: number[] = [];
+    days.forEach((d, i) => { if (d.day_type === "GAME") gameIdx.push(i); });
+
+    // A "hard" training day = acquisition-phase intensity (force / speed / neural).
+    const isHardFocus = (focus: string | null | undefined) => {
+      const f = String(focus ?? "").toUpperCase();
+      return f.includes("FORCE") || f.includes("VELOCITY") || f.includes("NEURAL");
+    };
+
+    // 1. Rest day at MD+1 — Buchheit 2023: a day off at MD+2 is associated
+    //    with a substantially lower non-contact injury rate (Principle 2).
+    for (const g of gameIdx) {
+      if (days[g + 1]?.day_type === "OFF" &&
+          (days[g + 2]?.day_type === "TRAIN" || days[g + 2]?.day_type === "RECOVERY")) {
+        checks.push({
+          id: "rest-md2", tone: "warn",
+          title: "Hvíldardagur á MD+1",
+          body: "Frídagurinn er daginn eftir leik. Rannsóknir (Buchheit o.fl. 2023, 56 lið-tímabil) tengja frídag á MD+2 við marktækt lægri tíðni álagsmeiðsla — hópurinn mætir ferskari í fyrstu hörðu æfinguna. Íhugaðu að færa frídaginn á MD+2. (Regla 2)",
+        });
+        break;
+      }
+    }
+
+    // 2. No day off at all — at least one rest day per week; injury risk
+    //    rises beyond ~5-6 consecutive days on feet (Principle 1/2).
+    if (!days.some((d) => d.day_type === "OFF")) {
+      checks.push({
+        id: "no-off", tone: "warn",
+        title: "Enginn frídagur í vikunni",
+        body: "Vikan inniheldur engan frídag. Meiðslatíðni hækkar eftir 5-6 samfellda daga á fótum — rannsóknir mæla með a.m.k. einum frídegi í hverri viku. (Regla 1/2)",
+      });
+    }
+
+    // 3. Hard day in the taper — MD-2 and MD-1 should be light (Principle 8).
+    for (const g of gameIdx) {
+      const md1 = days[g - 1];
+      const md2 = days[g - 2];
+      const md1Hard = !!md1 && md1.day_type === "TRAIN" && isHardFocus(md1.focus);
+      const md2Hard = !!md2 && md2.day_type === "TRAIN" && isHardFocus(md2.focus);
+      if (md1Hard || md2Hard) {
+        checks.push({
+          id: "taper", tone: "warn",
+          title: "Þung æfing í niðurtröppun",
+          body: `${md1Hard ? "MD-1" : "MD-2"} er ákefðar-/kraftæfing. Síðustu 1-2 dagar fyrir leik eiga að vera léttir (polish / activation) — þung vinna svo nálægt leik er tengd hærri meiðslaáhættu og lakari leikdags-ferskleika. (Regla 8)`,
+        });
+        break;
+      }
+    }
+
+    // 4. Heavy strength/eccentric late post-match — eccentric work belongs
+    //    early in the microcycle (MD-4), not MD+3 (Principle 7).
+    for (const g of gameIdx) {
+      const md3 = days[g + 3];
+      if (md3 && md3.day_type === "TRAIN" && String(md3.focus ?? "").toUpperCase().includes("FORCE")) {
+        checks.push({
+          id: "ecc-late", tone: "info",
+          title: "Styrktaráhersla seint eftir leik",
+          body: "Þung kraft-/eccentric-vinna er sett á MD+3. Eccentric æfingar seint eftir leik gefa viðvarandi vöðvaskemmd (hækkað CK) og eymsli — best er að staðsetja þær snemma í vikunni (MD-4). (Regla 7)",
+        });
+        break;
+      }
+    }
+
+    return checks;
+  }, [previewDays]);
+
   async function handleApplyPlan() {
     setApplying(true);
     setError(null);
@@ -920,6 +993,46 @@ export default function WeekSetupPage() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Microcycle check — evidence-informed periodization review
+              (Buchheit et al. 2024, 11 Principles of Microcycle Periodization). */}
+          <div className="rounded-xl border p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Microcycle yfirferð</span>
+              {microcycleChecks.length === 0 ? (
+                <Badge variant="secondary" className="text-[10px]">✓ Í lagi</Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px]">{microcycleChecks.length} ábending</Badge>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Sjálfvirk yfirferð á vikuhringnum út frá rannsóknum (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.
+            </p>
+
+            {microcycleChecks.length === 0 ? (
+              <p className="mt-2 text-xs text-emerald-600">
+                Vikuhringurinn fylgir helstu microcycle-reglum — engin ábending.
+              </p>
+            ) : (
+              <div className="mt-2 grid gap-2">
+                {microcycleChecks.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`rounded-lg border p-2.5 ${
+                      c.tone === "warn"
+                        ? "border-amber-300 bg-amber-50 text-amber-900"
+                        : "border-sky-300 bg-sky-50 text-sky-900"
+                    }`}
+                  >
+                    <div className="text-xs font-semibold">{c.title}</div>
+                    <p className={`mt-0.5 text-[11px] leading-relaxed ${c.tone === "warn" ? "text-amber-800" : "text-sky-800"}`}>
+                      {c.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <Separator />
