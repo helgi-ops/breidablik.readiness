@@ -1962,6 +1962,10 @@ export default function CoachPage() {
   const [manualReminderSending, setManualReminderSending] = useState(false);
   const [catapultSyncing, setCatapultSyncing] = useState(false);
   const [catapultSyncMessage, setCatapultSyncMessage] = useState("");
+  // Backfill date — the daily Sync button only sweeps a trailing window, so a
+  // match whose vest data lands in OpenField late falls outside it. Backfill
+  // re-syncs one chosen day. Empty by default; coach picks the date.
+  const [backfillDate, setBackfillDate] = useState("");
   const [pdfDownloading, setPdfDownloading] = useState(false);
   // Compliance / imputation
   const [complianceSummary, setComplianceSummary] = useState<{
@@ -2653,6 +2657,41 @@ export default function CoachPage() {
       await loadToday();
     } catch (e: any) {
       setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");
+    } finally {
+      setCatapultSyncing(false);
+    }
+  }
+
+  // Backfill a single past day via the Catapult backfill endpoint. Unlike the
+  // daily Sync button (which only sweeps today + 2 prior days), this re-syncs
+  // any chosen date — used to recover a match whose vest data reached Catapult
+  // OpenField after the daily sweep window had already passed.
+  async function backfillCatapultForDate(date: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setCatapultSyncMessage("Veldu gilda dagsetningu fyrir backfill.");
+      return;
+    }
+    try {
+      setCatapultSyncing(true);
+      setCatapultSyncMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch(
+        `/api/integrations/catapult/backfill?dateFrom=${date}&dateTo=${date}`,
+        { method: "POST", headers },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Backfill mistókst.");
+      const stored = Array.isArray(json?.results)
+        ? (json.results as Array<{ stored?: number }>).reduce((s, r) => s + Number(r.stored ?? 0), 0)
+        : 0;
+      setCatapultSyncMessage(
+        stored > 0
+          ? `Backfill ${date}: ${stored} raðir vistaðar`
+          : `Backfill ${date}: engin Catapult activity fannst fyrir daginn`,
+      );
+      await loadToday();
+    } catch (e: unknown) {
+      setCatapultSyncMessage(e instanceof Error ? e.message : "Backfill mistókst.");
     } finally {
       setCatapultSyncing(false);
     }
@@ -7961,6 +8000,7 @@ export default function CoachPage() {
             recentDayTypes={recentDayTypes}
             playerBaselines={playerBaselines}
             playerCounterfactuals={playerCounterfactualsMap}
+            playerInjuries={playerInjuryStatus}
           />
           {/* Verdict-accuracy / calibration widget moved to the Reporting
               Center — coaches doing their morning briefing don't want
@@ -7994,15 +8034,38 @@ export default function CoachPage() {
                       {catapultSyncing ? ct.actions.syncingStatSport : ct.actions.syncStatSport}
                     </Button>
                   ) : gpsProvider !== "none" ? (
-                    <Button
-                      size="sm"
-                      onClick={() => syncCatapultForDate(today)}
-                      disabled={catapultSyncing || loading}
-                      className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
-                      {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => syncCatapultForDate(today)}
+                        disabled={catapultSyncing || loading}
+                        className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                        {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
+                      </Button>
+                      {/* Backfill a specific past day — for a match whose vest
+                          data reached Catapult after the daily sweep window. */}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          value={backfillDate}
+                          onChange={(e) => setBackfillDate(e.target.value)}
+                          className="h-8 rounded-md border border-slate-300 px-2 text-xs"
+                          title="Veldu dag til að sækja aftur"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => backfillCatapultForDate(backfillDate)}
+                          disabled={catapultSyncing || loading || !backfillDate}
+                          className="gap-1.5"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                          Backfill
+                        </Button>
+                      </div>
+                    </>
                   ) : null}
                   <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
                   <Button

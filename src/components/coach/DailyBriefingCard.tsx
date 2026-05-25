@@ -111,6 +111,17 @@ export type DailyBriefingCardProps = {
     descriptionEN: string;
     descriptionIS: string;
   }>>;
+  // ── Injury status (per player) ─────────────────────────────────
+  // Keyed by player_id. Sourced from player_injuries / injury_events
+  // (same data the Decision summary uses). When a player is in the
+  // injury pipeline the briefing must flag it explicitly — otherwise an
+  // injured player reads as an ordinary "yellow readiness" monitor row,
+  // which is misleading. Optional — absent map = no injury data.
+  playerInjuries?: Record<string, {
+    status: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+    bodyPart?: string | null;
+    injuryType?: string | null;
+  } | null>;
 };
 
 // ── Copy (IS / EN) ─────────────────────────────────────────────────────────
@@ -199,6 +210,14 @@ const COPY = {
       metabFatigue: "efnaskiptaálag",
       globalFatigue: "heildarþreyta",
       compositeHighPostMatch: "há composite load (eftir leik)",
+    },
+    injury: {
+      injured: "Meiddur — ekki í æfingu",
+      rehab: "Í endurhæfingu",
+      rtp: "RTP — takmörkuð þátttaka",
+      badgeInjured: "MEIDDUR",
+      badgeRehab: "ENDURHÆFING",
+      badgeRtp: "RTP",
     },
     // Compact-mode status phrases — single short label per player. Designed
     // for non-S&C coaches: action-implication first, no jargon, no numbers.
@@ -294,6 +313,14 @@ const COPY = {
       globalFatigue: "global fatigue",
       compositeHighPostMatch: "high composite load (post-match)",
     },
+    injury: {
+      injured: "Injured — not training",
+      rehab: "In rehabilitation",
+      rtp: "RTP — restricted participation",
+      badgeInjured: "INJURED",
+      badgeRehab: "REHAB",
+      badgeRtp: "RTP",
+    },
     // Compact-mode status phrases — single short label per player.
     compact: {
       recoveryFocus:    "Recovery focus",
@@ -387,6 +414,14 @@ type AttentionItem = {
     hypotheticalState: "GREEN" | "YELLOW" | "RED" | "GRAY";
     descriptionEN: string;
     descriptionIS: string;
+  } | null;
+  // Active injury — when set, the row is in the injury pipeline and is
+  // rendered with a prominent badge (shown in both Compact and Detailed
+  // modes) so it can never be mistaken for an ordinary readiness item.
+  injury?: {
+    kind: "injured" | "rehab" | "rtp";
+    badge: string;
+    detail: string;
   } | null;
 };
 
@@ -543,14 +578,43 @@ function buildAttentionList(
   playerCounterfactuals: DailyBriefingCardProps["playerCounterfactuals"] | null,
   recentDayTypes: Record<string, string | null> | null | undefined,
   todayIso: string,
+  playerInjuries: DailyBriefingCardProps["playerInjuries"] | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const cl = COPY[lang].compact;
+  const inj = COPY[lang].injury;
   const out: AttentionItem[] = [];
 
   for (const row of rows) {
     const reasons: string[] = [];
     let level: AttentionLevel = "ok";
+
+    // ── Active injury — highest-priority context. An injured player must
+    // never read as an ordinary readiness row: injury leads the reasons
+    // list and forces the row into the attention list even when the
+    // player's wellness readiness happens to be green.
+    const injRec = playerInjuries?.[String(row.player_id)] ?? null;
+    const injStatus = injRec?.status ?? null;
+    let injury: AttentionItem["injury"] = null;
+    if (injStatus === "injured" || injStatus === "rehabilitation" || injStatus === "rtp_training") {
+      const detail = [injRec?.bodyPart, injRec?.injuryType]
+        .map((x) => String(x ?? "").trim())
+        .filter(Boolean)
+        .join(" · ");
+      if (injStatus === "injured") {
+        injury = { kind: "injured", badge: inj.badgeInjured, detail };
+        reasons.push(inj.injured);
+        level = "alert";
+      } else if (injStatus === "rehabilitation") {
+        injury = { kind: "rehab", badge: inj.badgeRehab, detail };
+        reasons.push(inj.rehab);
+        level = "alert";
+      } else {
+        injury = { kind: "rtp", badge: inj.badgeRtp, detail };
+        reasons.push(inj.rtp);
+        level = "monitor";
+      }
+    }
 
     // ── Match-day awareness (Gabbett 2017 + di Prampero 2015 — load spikes
     // following matches are expected and should not fire alert; they're an
@@ -629,7 +693,11 @@ function buildAttentionList(
       // coach what's going on without showing them numbers or jargon.
       const ft = comp?.fatigueType ?? null;
       let compactStatus: string;
-      if (col === "red") {
+      if (injury) {
+        compactStatus = injury.kind === "injured" ? inj.injured
+          : injury.kind === "rehab" ? inj.rehab
+          : inj.rtp;
+      } else if (col === "red") {
         compactStatus = cl.recoveryFocus;
       } else if (postMatch && (comp?.concernLevel === "high" || (comp?.playerLoadSpike != null && comp.playerLoadSpike >= 1.6))) {
         compactStatus = cl.postMatchEcho;
@@ -682,6 +750,7 @@ function buildAttentionList(
             descriptionIS: top.descriptionIS,
           };
         })(),
+        injury,
       });
     }
   }
@@ -710,13 +779,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     recentDayTypes = null,
     playerBaselines = null,
     playerCounterfactuals = null,
+    playerInjuries = null,
   } = props;
 
   const t = COPY[lang];
 
   const attention = useMemo(
-    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today),
-    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today],
+    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries),
+    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries],
   );
 
   // ── Post-OFF context ──────────────────────────────────────────────────
@@ -1197,6 +1267,24 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                         <span className="text-sm font-semibold text-slate-900">
                           {item.name}
                         </span>
+                        {/* Injury badge — shown in BOTH modes. An injured
+                            player must be unmistakable; never hidden behind
+                            the Compact/Detailed toggle. */}
+                        {item.injury ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              item.injury.kind === "rtp"
+                                ? "bg-amber-200 text-amber-900"
+                                : "bg-rose-600 text-white"
+                            }`}
+                            title={item.injury.detail || undefined}
+                          >
+                            {item.injury.badge}
+                            {item.injury.detail ? (
+                              <span className="font-medium normal-case opacity-90">· {item.injury.detail}</span>
+                            ) : null}
+                          </span>
+                        ) : null}
                         {/* Numeric chips — only in Detailed mode. Compact mode
                             keeps just the fatigue-type tag (which is plain
                             language, not a number) so non-S&C coaches see
