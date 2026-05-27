@@ -211,10 +211,10 @@ const COPY = {
     // global threshold, that drove the flag.
     chipTooltip: {
       personal: (mean: number, sd: number, z: number) =>
-        `Hans norm ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — í dag ${z.toFixed(1)} SD frá norm`,
-      noBaseline: "Engin persónuleg baseline ennþá — nota global þröskuld (≤2)",
+        `Hans venja: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — í dag ${z.toFixed(1)} SD frá venju. Heimild: Robertson 2017 (persónuleg viðmið > heildarviðmið).`,
+      noBaseline: "Engin persónuleg venja ennþá — nota heildarviðmið (≤2). Mun batna eftir 7+ skráningar (Robertson 2017).",
       chronic: (mean: number) =>
-        `Persónuleg norm hjá honum er ${mean.toFixed(1)}/5 — chronic-low yfir 28 daga`,
+        `Hans venja er ${mean.toFixed(1)}/5 — undir 2,5 yfir 28 daga. Það er ekki dagsmál heldur langtíma viðvörun.`,
     },
     chronicTag: "chronic-low",
     reasons: {
@@ -317,10 +317,10 @@ const COPY = {
     // Tier B — personal-norm tooltip lines.
     chipTooltip: {
       personal: (mean: number, sd: number, z: number) =>
-        `His norm ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — today ${z.toFixed(1)} SD from norm`,
-      noBaseline: "No personal baseline yet — using global threshold (≤2)",
+        `His usual: ${mean.toFixed(1)}/5 (SD ${sd.toFixed(1)}) — today ${z.toFixed(1)} SD from usual. Source: Robertson 2017 (personal norms beat group thresholds).`,
+      noBaseline: "No personal baseline yet — using group threshold (≤2). Will improve after 7+ check-ins (Robertson 2017).",
       chronic: (mean: number) =>
-        `His personal norm is ${mean.toFixed(1)}/5 — chronic-low across 28d`,
+        `His usual is ${mean.toFixed(1)}/5 — below 2.5 across 28d. This is a long-term warning, not a today problem.`,
     },
     chronicTag: "chronic-low",
     reasons: {
@@ -2024,7 +2024,12 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             "mechanical fatigue" instead of "Score 17/25 Comp
                             0.74 PL 1.74×". */}
                         {detailed && scoreChipCls ? (
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${scoreChipCls}`}>
+                          <span
+                            className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${scoreChipCls}`}
+                            title={lang === "IS"
+                              ? "Heildar-líðan í dag (4 sub-skor á 1-5 kvarða: svefn, orka, streita, strengir + heildarmat). Aðferð innblásin af Hooper-Mackinnon (1995) vinnu á huglægu álagsmati."
+                              : "Today's overall wellness score (4 sub-scores on a 1-5 scale: sleep, energy, stress, soreness, plus an overall). Method draws on the Hooper-Mackinnon (1995) tradition of subjective load monitoring."}
+                          >
                             {t.chipScore} {item.score}/25
                           </span>
                         ) : null}
