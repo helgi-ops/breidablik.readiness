@@ -423,6 +423,26 @@ type AttentionItem = {
     badge: string;
     detail: string;
   } | null;
+  // Data confidence — coverage + freshness of the inputs behind this
+  // verdict. Surfaced in both modes so the coach immediately sees whether
+  // the flag rests on full data or on a partial / stale signal set.
+  confidence: {
+    level: "high" | "moderate" | "low";
+    signalCount: number;
+    signalTotal: number;
+    notes: string[]; // localized, ready to render in a tooltip
+  };
+  // ── Plain-language explanation — the prose layer ────────────────────
+  // 1-2 sentences that synthesise drivers + score + load signals + post-
+  // match context into one coach-readable line. The chips above answer
+  // "what" — this answers "why this player needs attention" without
+  // numbers or jargon. Both modes show the same prose; null when no
+  // useful prose can be built (typically injured players, where the
+  // injury badge already carries the story).
+  explanation: {
+    is: string;
+    en: string;
+  } | null;
 };
 
 // Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
@@ -568,6 +588,226 @@ function isPostMatchContext(
     if (dt.includes("MATCH") || dt.includes("GAME")) return true;
   }
   return false;
+}
+
+/**
+ * Score the data behind a verdict — coverage (how many input signals are
+ * present today) plus a freshness note when the row's check-in date isn't
+ * today. Surfaced as a pill so a coach reading the briefing can tell at a
+ * glance whether a RED flag rests on full data or on a partial / stale
+ * signal set. Note text is localized — the caller drops it straight into
+ * the tooltip.
+ */
+function computeAttentionConfidence(
+  row: BriefingRow,
+  comp: PlayerCompositeEntry | undefined,
+  baselines: Record<string, AthleteMetricBaseline> | null,
+  todayIso: string,
+  lang: "IS" | "EN",
+): AttentionItem["confidence"] {
+  const notes: string[] = [];
+  let signalCount = 0;
+  const signalTotal = 5;
+
+  // 1) Wellness check-in — all four sub-scores present.
+  const subs = [row.sleep_quality, row.fatigue_energy, row.stress_mood, row.muscle_soreness];
+  const subsPresent = subs.filter((v) => typeof v === "number").length;
+  if (subsPresent === 4) {
+    signalCount += 1;
+  } else if (subsPresent === 0) {
+    notes.push(lang === "IS" ? "Engin checkin í dag" : "No check-in today");
+  } else {
+    notes.push(lang === "IS"
+      ? `Aðeins ${subsPresent}/4 wellness gildi`
+      : `Only ${subsPresent}/4 wellness values`);
+  }
+
+  // 2) Total daily readiness score present.
+  if (typeof row.total_score === "number") signalCount += 1;
+
+  // 3) Yesterday-comparison Δz.
+  if (typeof row._dz === "number") {
+    signalCount += 1;
+  } else {
+    notes.push(lang === "IS" ? "Engin samanburður við í gær" : "No yesterday comparison");
+  }
+
+  // 4) Load composite (external load engine has run).
+  if (comp && typeof comp.compositeScore === "number") {
+    signalCount += 1;
+  } else {
+    notes.push(lang === "IS" ? "Engin álagsgögn" : "No load data");
+  }
+
+  // 5) Personal wellness baselines (Robertson 2017 personal-norm anchor).
+  const baselineActive = !!baselines && Object.values(baselines).some(
+    (b) => b && b.status !== "insufficient_data",
+  );
+  if (baselineActive) {
+    signalCount += 1;
+  } else {
+    notes.push(lang === "IS"
+      ? "Engin persónuleg baseline ennþá"
+      : "No personal baseline yet");
+  }
+
+  // Freshness — flag if today's verdict is built on an older row's data.
+  if (row.entry_date && row.entry_date !== todayIso) {
+    notes.push(lang === "IS"
+      ? `Síðasta checkin: ${row.entry_date}`
+      : `Last check-in: ${row.entry_date}`);
+  }
+
+  const ratio = signalCount / signalTotal;
+  const level: AttentionItem["confidence"]["level"] =
+    ratio >= 0.8 ? "high" : ratio >= 0.5 ? "moderate" : "low";
+
+  return { level, signalCount, signalTotal, notes };
+}
+
+/**
+ * Compose a 1-2 sentence plain-language explanation for an attention row.
+ *
+ * The chips above the explanation answer "what" (numbers, tags). This
+ * answers "why does this player need attention" in a sentence a non-S&C
+ * coach can read without any decoding. Built deterministically from the
+ * SAME signals already on the item (drivers, score, PL spike, fatigue
+ * type, post-match context, counterfactual) — no LLM, no extra data.
+ *
+ * Returns null for injured players: the injury badge already carries the
+ * whole story, so a second sentence would just be noise.
+ *
+ * The result has two strings per language:
+ *   • shortIS/EN — the lead sentence only (used in Compact mode).
+ *   • fullIS/EN — lead + counterfactual / post-match nuance (Detailed).
+ */
+function composeAttentionExplanation(
+  item: Omit<AttentionItem, "explanation">,
+  postMatch: boolean,
+  isRedToday: boolean,
+): { is: string; en: string } | null {
+  if (item.injury) return null;
+
+  // ── Build sentence-1 phrases from typed signals, in priority order.
+  // Each phrase is a noun phrase that slots cleanly into a list — the
+  // sentence builder joins them with "; " (semicolon) for the lead clause
+  // plus " og " / " and " for subsequent clauses.
+  const phraseIS: string[] = [];
+  const phraseEN: string[] = [];
+
+  // (1) Wellness drivers — pick up to two by largest |z|, fall back to
+  // value when no z (e.g. global-threshold fallback).
+  const wellnessDrivers = item.drivers
+    .filter((d) => d.kind === "sleep" || d.kind === "energy" || d.kind === "stress" || d.kind === "soreness")
+    .slice()
+    .sort((a, b) => {
+      const az = typeof a.z === "number" ? Math.abs(a.z) : 0;
+      const bz = typeof b.z === "number" ? Math.abs(b.z) : 0;
+      if (az !== bz) return bz - az;
+      // Tie-breaker: lower raw value first (more concerning).
+      return a.value - b.value;
+    })
+    .slice(0, 2);
+
+  if (wellnessDrivers.length > 0) {
+    const labelIS = (k: string) =>
+      k === "sleep" ? "svefn" : k === "energy" ? "orka" : k === "stress" ? "streita" : "strengir";
+    const labelEN = (k: string) =>
+      k === "sleep" ? "sleep" : k === "energy" ? "energy" : k === "stress" ? "stress" : "soreness";
+    const partsIS = wellnessDrivers.map((d) => {
+      const normIS = typeof d.baselineMean === "number" ? ` (norm ${d.baselineMean.toFixed(1)})` : "";
+      return `${labelIS(d.kind)} ${d.value}/5${normIS}`;
+    });
+    const partsEN = wellnessDrivers.map((d) => {
+      const normEN = typeof d.baselineMean === "number" ? ` (norm ${d.baselineMean.toFixed(1)})` : "";
+      return `${labelEN(d.kind)} ${d.value}/5${normEN}`;
+    });
+    phraseIS.push(`${partsIS.join(" og ")} er undir hans persónulegri norm`);
+    phraseEN.push(`${partsEN.join(" and ")} below his personal norm`);
+  }
+
+  // (2) Low total score — only when wellness drivers didn't already say it.
+  if (wellnessDrivers.length === 0 && item.score != null && item.score <= 17) {
+    phraseIS.push(`heildar-readiness ${item.score}/25 undir meðaltali`);
+    phraseEN.push(`total readiness ${item.score}/25 below his average`);
+  }
+
+  // (3) PL spike — annotate post-match clearly so the coach knows it's
+  // expected echo rather than an unplanned overreach.
+  if (item.plSpike != null && item.plSpike >= 1.6) {
+    if (postMatch) {
+      phraseIS.push(`PL-spike ${item.plSpike.toFixed(2)}× í gær passar við leikálag`);
+      phraseEN.push(`PL spike ${item.plSpike.toFixed(2)}× yesterday matches match exposure`);
+    } else {
+      phraseIS.push(`PL-spike ${item.plSpike.toFixed(2)}× í gær`);
+      phraseEN.push(`PL spike ${item.plSpike.toFixed(2)}× yesterday`);
+    }
+  } else if (item.composite != null && item.composite >= 0.75 && (item.plSpike == null || item.plSpike < 1.6)) {
+    if (postMatch) {
+      phraseIS.push("composite-álag hátt (eftir leik)");
+      phraseEN.push("composite load high (post-match)");
+    } else {
+      phraseIS.push("composite-álag hátt");
+      phraseEN.push("composite load high");
+    }
+  }
+
+  // (4) Fatigue type — only when the load signal didn't already imply
+  // mechanical/metabolic. We add it to specify the kind of strain.
+  const ft = item.fatigueType;
+  if (ft === "mechanical_fatigue") {
+    phraseIS.push("merki um vélrænt álag (accel/decel)");
+    phraseEN.push("a mechanical-strain signature (accel/decel)");
+  } else if (ft === "metabolic_fatigue") {
+    phraseIS.push("merki um efnaskiptaálag");
+    phraseEN.push("a metabolic-strain signature");
+  } else if (ft === "global_fatigue") {
+    phraseIS.push("merki um heildarþreytu");
+    phraseEN.push("a whole-system fatigue signature");
+  }
+
+  // ── Build lead sentence. If we have nothing typed-specific, fall back
+  // to the compactStatus phrase so the row is never empty of prose.
+  const buildLead = (parts: string[], conj: string, fallback: string): string => {
+    if (parts.length === 0) return capitaliseFirst(fallback) + ".";
+    const first = capitaliseFirst(parts[0]);
+    if (parts.length === 1) return first + ".";
+    // Join the rest with "; " — feels right for stacked clinical phrases.
+    return first + "; " + parts.slice(1).join(conj) + ".";
+  };
+
+  const leadIS = buildLead(phraseIS, " og ", item.compactStatus);
+  const leadEN = buildLead(phraseEN, " and ", item.compactStatus);
+
+  // ── Sentence 2 — the actionable lever, or a "this is expected" tail
+  // for post-match echo with no counterfactual.
+  let tailIS = "";
+  let tailEN = "";
+  if (item.topCounterfactual) {
+    // Counterfactual descriptions already read as full sentences ending
+    // with "→ GREEN" etc.; capitalise & ensure trailing period.
+    tailIS = " " + ensurePeriod(capitaliseFirst(item.topCounterfactual.descriptionIS));
+    tailEN = " " + ensurePeriod(capitaliseFirst(item.topCounterfactual.descriptionEN));
+  } else if (postMatch && !isRedToday) {
+    tailIS = " Þetta er eðlilegt eftir leik — fylgjast með, en engin sérstök aðgerð.";
+    tailEN = " This is expected post-match — monitor, but no extra action.";
+  }
+
+  return {
+    is: leadIS + tailIS,
+    en: leadEN + tailEN,
+  };
+}
+
+function capitaliseFirst(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function ensurePeriod(s: string): string {
+  if (!s) return s;
+  const last = s.charAt(s.length - 1);
+  return /[.!?]/.test(last) ? s : s + ".";
 }
 
 function buildAttentionList(
@@ -721,7 +961,23 @@ function buildAttentionList(
         compactStatus = cl.monitor;
       }
 
-      out.push({
+      const drivers = deriveReadinessDrivers(
+        row,
+        playerBaselines?.[String(row.player_id)] ?? null,
+      );
+      // Pick the highest-impact counterfactual now so we can also feed it
+      // into the explanation builder.
+      const topCounterfactual = (() => {
+        const list = playerCounterfactuals?.[String(row.player_id)];
+        if (!list || list.length === 0) return null;
+        const top = list[0];
+        return {
+          hypotheticalState: top.hypotheticalState,
+          descriptionEN: top.descriptionEN,
+          descriptionIS: top.descriptionIS,
+        };
+      })();
+      const itemForExplanation = {
         playerId: String(row.player_id),
         name: row.full_name,
         level,
@@ -731,26 +987,30 @@ function buildAttentionList(
         composite: comp?.compositeScore ?? null,
         plSpike: comp?.playerLoadSpike ?? null,
         fatigueType: comp?.fatigueType ?? null,
-        drivers: deriveReadinessDrivers(
-          row,
-          playerBaselines?.[String(row.player_id)] ?? null,
-        ),
-        // Counterfactuals are pre-sorted by impact desc — pick the
-        // single highest-impact lever to keep the row compact. Coach
-        // can drill into the player accordion for the full list (up
-        // to 3). Null when engine returned empty (multi-concern day
-        // where no single lever helps).
-        topCounterfactual: (() => {
-          const list = playerCounterfactuals?.[String(row.player_id)];
-          if (!list || list.length === 0) return null;
-          const top = list[0];
-          return {
-            hypotheticalState: top.hypotheticalState,
-            descriptionEN: top.descriptionEN,
-            descriptionIS: top.descriptionIS,
-          };
-        })(),
+        drivers,
+        topCounterfactual,
         injury,
+        confidence: computeAttentionConfidence(
+          row,
+          comp,
+          playerBaselines?.[String(row.player_id)] ?? null,
+          todayIso,
+          lang,
+        ),
+      };
+      const explanation = composeAttentionExplanation(
+        itemForExplanation,
+        postMatch,
+        col === "red",
+      );
+
+      out.push({
+        ...itemForExplanation,
+        // Counterfactual is already pre-computed above (single highest-
+        // impact lever). The explanation builder used it to compose the
+        // prose tail; the UI uses it for the inline "→GREEN" chip.
+        topCounterfactual,
+        explanation,
       });
     }
   }
@@ -1285,6 +1545,32 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             ) : null}
                           </span>
                         ) : null}
+                        {/* Data-confidence pill — shown in BOTH modes. Tells the
+                            coach how many input signals are behind this verdict
+                            and surfaces missing/stale ones in a tooltip. */}
+                        <span
+                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                            item.confidence.level === "high"
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                              : item.confidence.level === "moderate"
+                                ? "border-amber-300 bg-amber-50 text-amber-700"
+                                : "border-slate-300 border-dashed bg-slate-50 text-slate-600"
+                          }`}
+                          title={
+                            item.confidence.notes.length > 0
+                              ? item.confidence.notes.join(" · ")
+                              : lang === "IS"
+                                ? "Öll merki til staðar — há gagnavissa"
+                                : "All signals present — high data confidence"
+                          }
+                          aria-label={
+                            lang === "IS"
+                              ? `Gagnavissa ${item.confidence.signalCount} af ${item.confidence.signalTotal}`
+                              : `Data confidence ${item.confidence.signalCount} of ${item.confidence.signalTotal}`
+                          }
+                        >
+                          {item.confidence.signalCount}/{item.confidence.signalTotal}
+                        </span>
                         {/* Numeric chips — only in Detailed mode. Compact mode
                             keeps just the fatigue-type tag (which is plain
                             language, not a number) so non-S&C coaches see
@@ -1321,6 +1607,19 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           </span>
                         ) : null}
                       </div>
+                      {/* Plain-language explanation — the prose layer.
+                          Sits directly under the chip row so a non-S&C
+                          coach can read WHY the player is flagged in one
+                          sentence, without having to decode chips, z-scores
+                          or fatigue tags. Built deterministically from the
+                          same signals as the chips (no LLM); injured-player
+                          rows skip it because the injury badge already
+                          tells the story. */}
+                      {item.explanation ? (
+                        <p className="mt-1 text-xs leading-relaxed text-slate-700">
+                          {lang === "IS" ? item.explanation.is : item.explanation.en}
+                        </p>
+                      ) : null}
                       {/* Driver chips — orsök layer. Separate row, orange
                           accent so they read as "why" (not as "what to do"
                           which is Decision summary's job).
@@ -1353,11 +1652,16 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           ))}
                         </div>
                       ) : null}
-                      {/* Multi-clause reasons line — Detailed mode only. In
-                          Compact mode the single status badge above carries
-                          the message. */}
+                      {/* Multi-clause reasons line — Detailed mode only.
+                          In Compact mode the single status badge above plus
+                          the prose explanation carry the message.
+                          Now that the prose explanation sits above this
+                          line, the dot-joined reasons act as a diagnostic
+                          backstop — we keep them, but visually muted so
+                          they don't compete with the prose. */}
                       {detailed ? (
-                        <div className="mt-0.5 text-xs text-slate-600">
+                        <div className="mt-0.5 text-[11px] text-slate-400">
+                          <span className="opacity-70 mr-1">{lang === "IS" ? "Merki:" : "Signals:"}</span>
                           {item.reasons.join(" · ")}
                         </div>
                       ) : null}
