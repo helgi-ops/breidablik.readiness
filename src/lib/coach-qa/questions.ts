@@ -141,6 +141,24 @@ Answer in 2-3 sentences. Structure:
 
 If everything is clean, say "nothing specific to watch today — just routine session-end check-in" and stop.`,
   },
+  {
+    id:    "why_flagged",
+    label: "Why is he flagged today?",
+    hint:  "Explains today's verdict — which signal tipped the scale and what that means",
+    data_keys: ["wellness_recent", "recent_load", "decel_status", "active_injuries", "verdict_history"],
+    prompt: `Question: Why is this player flagged (yellow / red) today? Explain the verdict using the actual signals that drove it.
+
+Answer in 2-3 sentences. Structure:
+- Sentence 1: the dominant signal that pushed today's verdict away from green (e.g. "Sleep dropped to 2/5 versus his usual 4.1 — primary driver", or "Player load yesterday was 73% above his rolling average — primary driver", or "Multiple wellness sub-scores under his personal norm — no single dominant driver"). Name the actual signal and the value.
+- Sentence 2: secondary context — what else is contributing or what makes this more / less concerning (e.g. "It's MD+1 so a post-match echo is expected — readings should rebound by MD+2", or "He's been in this range for 3 days, suggesting a persistent issue rather than a one-off").
+- Sentence 3 (only when meaningful): the single lever most likely to flip the verdict back to green tomorrow (e.g. "A normal night's sleep would likely return him to green", or "Skip the high-intensity block today and he should clear by MD-2").
+
+HARD RULES for this question specifically:
+- Use ONLY the actual numbers from the input. Never round drastically or invent a value.
+- Tie every sentence back to a NAMED signal (sleep, soreness, player load, composite, etc.) — don't say "his readings are off" without saying which reading.
+- If the verdict is GREEN, say "no flag today — he's clear" and stop.
+- If the player has an active injury, lead with that ("Flagged because he's in the active injury pipeline — not a readiness issue") and skip the readings analysis.`,
+  },
 ];
 
 export function getQuestion(id: string): Question | undefined {

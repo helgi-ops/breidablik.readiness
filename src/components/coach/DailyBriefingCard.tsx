@@ -21,6 +21,7 @@ import {
   flagAgainstBaseline,
   type AthleteMetricBaseline,
 } from "@/lib/micropulse/baselines";
+import { AttentionRowAskWhy } from "@/components/coach/AttentionRowAskWhy";
 
 // ── Types (loose — we only read fields we care about) ──────────────────────
 
@@ -2092,6 +2093,16 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                         <p className="mt-1 text-xs leading-relaxed text-slate-700">
                           {lang === "IS" ? item.explanation.is : item.explanation.en}
                         </p>
+                      ) : null}
+                      {/* "Ask AI" inline button — explainability principle 5
+                          ("AI explains, rules decide"). The verdict above is
+                          rule-driven; this button generates a narrative
+                          around that verdict using the player's actual
+                          signals via the curated Q&A endpoint. Hidden when
+                          there's no useful question to ask (injured players
+                          and pure OK rows). */}
+                      {!item.injury && item.level !== "ok" ? (
+                        <AttentionRowAskWhy playerId={item.playerId} lang={lang} />
                       ) : null}
                       {/* Load breakdown strip — shows WHAT kind of work
                           spiked behind the composite score. Only spikes
