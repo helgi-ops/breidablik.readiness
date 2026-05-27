@@ -167,8 +167,15 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
 
   // Lazily fetch the AI answer on first expand. Cached for the lifetime
   // of the card so re-toggling doesn't re-hit Anthropic.
+  //
+  // IMPORTANT: deps must NOT include aiLoading / aiAnswer / aiError /
+  // aiEliteRequired. Including them re-fires the effect on every state
+  // transition, which runs cleanup (cancelled = true) before the fetch
+  // completes — leaving the spinner stuck forever. The gate at the top
+  // handles the "fetch once per expand" guarantee.
   React.useEffect(() => {
-    if (!aiExpanded || aiAnswer || aiLoading || aiError || aiEliteRequired) return;
+    if (!aiExpanded) return;
+    if (aiAnswer || aiLoading || aiError || aiEliteRequired) return;
     let cancelled = false;
     (async () => {
       setAiLoading(true);
@@ -202,7 +209,8 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
       }
     })();
     return () => { cancelled = true; };
-  }, [aiExpanded, aiAnswer, aiLoading, aiError, aiEliteRequired, lang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiExpanded]);
 
   // Loading or error — render nothing (silent fail; player has plenty of
   // other context on Today). Logging is via the browser console only.

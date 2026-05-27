@@ -47,8 +47,17 @@ export function AttentionRowAskWhy({
   const [eliteRequired, setEliteRequired] = React.useState(false);
 
   // Fetch once on first expand. Cached for the lifetime of the card.
+  //
+  // IMPORTANT: deps must NOT include the in-flight state we set inside
+  // the effect (loading / answer / error / eliteRequired). Including them
+  // re-fires the effect on every state transition, which runs the cleanup
+  // (cancelled = true) before the fetch completes — leaving the spinner
+  // stuck forever because setLoading(false) is guarded by `if (!cancelled)`.
+  // The gate at the top of the effect handles the "fetch once" guarantee.
   React.useEffect(() => {
-    if (!expanded || answer || loading || error || eliteRequired) return;
+    if (!expanded) return;
+    // Re-entry guards — read current state without retriggering the effect.
+    if (answer || loading || error || eliteRequired) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -82,7 +91,8 @@ export function AttentionRowAskWhy({
       }
     })();
     return () => { cancelled = true; };
-  }, [expanded, playerId, answer, loading, error, eliteRequired, lang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, playerId]);
 
   const buttonLabel = expanded
     ? (lang === "IS" ? "Loka skýringu" : "Hide explanation")
