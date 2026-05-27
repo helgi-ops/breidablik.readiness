@@ -22,6 +22,7 @@ import {
   type AthleteMetricBaseline,
 } from "@/lib/micropulse/baselines";
 import { AttentionRowAskWhy } from "@/components/coach/AttentionRowAskWhy";
+import DecisionTraceModal from "@/components/coach/DecisionTraceModal";
 
 // ── Types (loose — we only read fields we care about) ──────────────────────
 
@@ -1437,6 +1438,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
   // the first 5. Toggled by the "+N more" / "Sýna færri" button below.
   const [showAllAttention, setShowAllAttention] = useState(false);
 
+  // Decision-trace modal — explainability principle #1 in concrete form.
+  // Coach clicks "Show full trace" on any attention row → the modal opens
+  // with the full math: wellness sub-scores summed, personal-norm deltas
+  // per driver, load breakdown, fatigue signature, rule reasons that
+  // fired, counterfactual lever, and baseline maturity. Single modal
+  // rendered once at the card root; opens with the clicked player's id.
+  const [tracePlayerId, setTracePlayerId] = useState<string | null>(null);
+
   // Compact vs Detailed view (added 2026-04-29 after coach feedback that the
   // numeric chips were overwhelming for non-S&C coaches). Compact = name +
   // status dot + plain-language reasons + fatigue tag only. Detailed = adds
@@ -2099,15 +2108,31 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           {lang === "IS" ? item.explanation.is : item.explanation.en}
                         </p>
                       ) : null}
-                      {/* "Ask AI" inline button — explainability principle 5
-                          ("AI explains, rules decide"). The verdict above is
-                          rule-driven; this button generates a narrative
-                          around that verdict using the player's actual
-                          signals via the curated Q&A endpoint. Hidden when
-                          there's no useful question to ask (injured players
-                          and pure OK rows). */}
+                      {/* Row actions — "Ask AI" + "Show full trace".
+                          AskAI (principle 5): AI explains today's verdict
+                          using the player's actual signals. ELITE-gated.
+                          Show full trace (principle 1): opens the decision-
+                          trace modal with all the math behind the verdict —
+                          wellness sub-scores summed, personal-norm deltas,
+                          load breakdown, rule reasons, counterfactual.
+                          Both hidden for injured / OK rows where there's
+                          no decision to explain.
+                          Show-trace is Detailed-mode only — Compact stays
+                          uncluttered for the morning glance. */}
                       {!item.injury && item.level !== "ok" ? (
-                        <AttentionRowAskWhy playerId={item.playerId} lang={lang} />
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <AttentionRowAskWhy playerId={item.playerId} lang={lang} />
+                          {detailed ? (
+                            <button
+                              type="button"
+                              onClick={() => setTracePlayerId(item.playerId)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                            >
+                              <span aria-hidden>🔍</span>
+                              {lang === "IS" ? "Sjá útreikning" : "Show full trace"}
+                            </button>
+                          ) : null}
+                        </div>
                       ) : null}
                       {/* Load breakdown strip — shows WHAT kind of work
                           spiked behind the composite score. Only spikes
@@ -2283,6 +2308,30 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           );
         })()}
       </CardContent>
+
+      {/* Decision-trace modal — rendered once at the card root. Opens
+          whenever tracePlayerId is set (via the "Show full trace" button
+          on an attention row in Detailed mode). Resolves the player's
+          item + raw sub-scores at render time. */}
+      <DecisionTraceModal
+        open={tracePlayerId != null}
+        item={tracePlayerId != null ? attention.find((x) => x.playerId === tracePlayerId) ?? null : null}
+        subscores={tracePlayerId != null
+          ? (() => {
+              const r = rows.find((row) => String(row.player_id) === tracePlayerId);
+              if (!r) return null;
+              return {
+                sleep_quality: r.sleep_quality ?? null,
+                fatigue_energy: r.fatigue_energy ?? null,
+                stress_mood: r.stress_mood ?? null,
+                muscle_soreness: r.muscle_soreness ?? null,
+              };
+            })()
+          : null}
+        date={today}
+        lang={lang}
+        onClose={() => setTracePlayerId(null)}
+      />
     </Card>
   );
 }

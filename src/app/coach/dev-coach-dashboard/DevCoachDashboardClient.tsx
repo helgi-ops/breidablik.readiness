@@ -92,6 +92,7 @@ import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
+import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
@@ -8101,6 +8102,12 @@ export default function CoachPage() {
               Explainability-First principle #6: overrides are an audited
               dialogue, not a black hole. */}
           <OverrideHistoryCard lang={lang} />
+          {/* Weekly story — Friday-afternoon AI synthesis of the week.
+              Opt-in (coach clicks "Generate"); ELITE-gated. Aligns with
+              Explainability-First principle #5: AI explains, rules decide.
+              The deterministic engine produced the per-day verdicts and
+              load deltas; this card narrates them. */}
+          <WeeklyStoryCard lang={lang} />
           {/* Verdict-accuracy / calibration widget moved to the Reporting
               Center — coaches doing their morning briefing don't want
               system-health metrics in the way. See the System health

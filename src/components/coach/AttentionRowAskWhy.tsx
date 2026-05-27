@@ -88,8 +88,10 @@ export function AttentionRowAskWhy({
     ? (lang === "IS" ? "Loka skýringu" : "Hide explanation")
     : (lang === "IS" ? "Spyrja AI" : "Ask AI");
 
+  // No top margin here — parent row-actions wrapper controls vertical
+  // spacing now that we render alongside the "Show full trace" button.
   return (
-    <div className="mt-1.5">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
