@@ -59,6 +59,17 @@ type PlayerCompositeEntry = {
   fatigueType: string | null;
   playerLoadSpike: number | null;
   loadRatio: number | null;
+  // ── Per-source spikes — surface what *kind* of work spiked.
+  // The composite score is a single number; this breakdown lets the coach
+  // see whether "load high" means accel/decel volume, sprint volume, or
+  // mechanical-impact density. All optional — outdoor mode populates HIR
+  // and decel/accel; indoor mode populates FMP.
+  hirSpike?: number | null;
+  decelSpike?: number | null;
+  accelSpike?: number | null;
+  imaTotalSpike?: number | null;
+  fmpDynamicHighSpike?: number | null;
+  mode?: "indoor" | "outdoor" | null;
 };
 
 type ComplianceCounts = { submitted: number; imputed: number; missing: number };
@@ -443,6 +454,20 @@ type AttentionItem = {
     is: string;
     en: string;
   } | null;
+  // ── Load breakdown — composite score is a single number; this carries
+  // the per-source spikes the coach can use to see *what kind of work*
+  // spiked. Only spikes > 1.0× are surfaced (irrelevant ones are dropped).
+  // Empty array when there's no load breakdown to show (e.g. wellness-only
+  // flag with no GPS spike).
+  loadBreakdown: Array<{ label: string; value: number }>;
+  // ── Baseline maturity — how mature the *personal norm* is that the
+  // verdict rests on. n_observations across the wellness baseline window
+  // (typically 28d). Surfaced as a small subtitle on the confidence pill
+  // so the coach can see when a flag rests on a thin baseline.
+  baselineMaturity: {
+    obs: number;
+    windowDays: number;
+  } | null;
 };
 
 // Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
@@ -810,6 +835,175 @@ function ensurePeriod(s: string): string {
   return /[.!?]/.test(last) ? s : s + ".";
 }
 
+/**
+ * Build a 5-second team-pulse headline. The coach should be able to glance
+ * at the top of the briefing card and know — in ONE sentence — what state
+ * the squad is in, who needs attention, and what kind of day it is. Tiles
+ * and chips below are for drill-down; this is the headline answer.
+ *
+ * Designed to never need decoding: noun-phrase verdict ("Squad is fresh
+ * and ready" / "Caution day" / "Risk day" / "Rest day") plus the top
+ * 1-2 names by severity, plus the readiness count.
+ *
+ * Returns level for the colour band wrapper and a single short sentence
+ * for the headline text. MD-day context (e.g. "Day before match") is
+ * appended only when it materially changes how the coach should read the
+ * pulse — otherwise the MD-badge in the card header already shows it.
+ */
+function computeTeamPulse(
+  attention: AttentionItem[],
+  alertCount: number,
+  monitorCount: number,
+  nFull: number,
+  nPlayers: number,
+  isOffDay: boolean,
+  mdLabel: string | null,
+  lang: "IS" | "EN",
+): { level: "fresh" | "caution" | "risk" | "rest"; sentence: string } {
+  const is = lang === "IS";
+
+  // Top 1-2 names by severity (alerts first, then monitors). Used in the
+  // pulse sentence so the coach knows WHO without scanning the attention
+  // list. Pull first names only — keeps the headline scannable.
+  const firstNameOf = (full: string): string => full.split(/\s+/)[0] || full;
+  const namesByPriority = attention
+    .slice()
+    .sort((a, b) => {
+      if (a.level !== b.level) return a.level === "alert" ? -1 : 1;
+      return b.reasons.length - a.reasons.length;
+    })
+    .map((x) => firstNameOf(x.name))
+    .slice(0, 2);
+
+  // Format a name list as "Andri" / "Andri og Höskuldur" / "Andri og 2 til viðbótar".
+  const formatNames = (): string => {
+    const remaining = (alertCount + monitorCount) - namesByPriority.length;
+    if (namesByPriority.length === 0) return "";
+    if (namesByPriority.length === 1) {
+      if (remaining > 0) {
+        return is
+          ? `${namesByPriority[0]} og ${remaining} til viðbótar`
+          : `${namesByPriority[0]} and ${remaining} more`;
+      }
+      return namesByPriority[0];
+    }
+    // 2 names
+    if (remaining > 0) {
+      return is
+        ? `${namesByPriority[0]}, ${namesByPriority[1]} og ${remaining} til viðbótar`
+        : `${namesByPriority[0]}, ${namesByPriority[1]} and ${remaining} more`;
+    }
+    return is
+      ? `${namesByPriority[0]} og ${namesByPriority[1]}`
+      : `${namesByPriority[0]} and ${namesByPriority[1]}`;
+  };
+
+  // ── OFF day — squad isn't training, just monitoring.
+  if (isOffDay) {
+    if (alertCount + monitorCount === 0) {
+      return {
+        level: "rest",
+        sentence: is
+          ? `Frídagur — ekkert flagged í dag, ${nFull}/${nPlayers} skiluðu wellness.`
+          : `Rest day — nothing flagged today, ${nFull}/${nPlayers} completed wellness check-in.`,
+      };
+    }
+    return {
+      level: "rest",
+      sentence: is
+        ? `Frídagur — ${formatNames()} að fylgjast með, restin í lagi.`
+        : `Rest day — watching ${formatNames()}, the rest are fine.`,
+    };
+  }
+
+  // ── Match-day context — leads the sentence with kickoff framing.
+  const md = (mdLabel ?? "").toUpperCase();
+  const isMatchDay = md === "MD" || md === "MD+0" || md === "MD0";
+  if (isMatchDay) {
+    if (alertCount === 0 && monitorCount === 0) {
+      return {
+        level: "fresh",
+        sentence: is
+          ? `Leikdagur — ${nFull}/${nPlayers} klárir í leikinn.`
+          : `Match day — ${nFull}/${nPlayers} cleared for the match.`,
+      };
+    }
+    return {
+      level: alertCount > 0 ? "risk" : "caution",
+      sentence: is
+        ? `Leikdagur — ${formatNames()} ${alertCount > 0 ? "í rauðu" : "í gulu"}, ${nFull}/${nPlayers} klárir.`
+        : `Match day — ${formatNames()} ${alertCount > 0 ? "in red" : "in yellow"}, ${nFull}/${nPlayers} cleared.`,
+    };
+  }
+
+  // ── Training day — three bands by severity.
+  if (alertCount === 0 && monitorCount === 0) {
+    return {
+      level: "fresh",
+      sentence: is
+        ? `Liðið er hresst og tilbúið — ${nFull}/${nPlayers} klárir í fulla æfingu.`
+        : `Squad is fresh and ready — ${nFull}/${nPlayers} cleared for a full session.`,
+    };
+  }
+  if (alertCount === 0) {
+    // Monitor-only — caution day, no real risk
+    return {
+      level: "caution",
+      sentence: is
+        ? `Hóflegt — fylgstu með ${formatNames()}, restin klár (${nFull}/${nPlayers}).`
+        : `Mixed day — watch ${formatNames()}, the rest are ready (${nFull}/${nPlayers}).`,
+    };
+  }
+  // Has at least one alert — risk day
+  return {
+    level: "risk",
+    sentence: is
+      ? `Áhættudagur — ${formatNames()} ${alertCount > 0 ? "í rauðu" : "í gulu"}; ${nFull}/${nPlayers} klárir í fulla æfingu.`
+      : `Risk day — ${formatNames()} ${alertCount > 0 ? "in red" : "in yellow"}; ${nFull}/${nPlayers} cleared for a full session.`,
+  };
+}
+
+/**
+ * Tooltip text for the Compact-mode status badge — surfaces the science
+ * provenance behind each status phrase so the coach can see WHICH research
+ * underpins the label. Increases trust without cluttering the visible UI.
+ */
+function statusSourceHint(item: AttentionItem, lang: "IS" | "EN"): string {
+  const is = lang === "IS";
+  // Walk the same priority order the status-builder uses, so the hint
+  // matches whatever phrase the coach is actually seeing.
+  if (item.injury) {
+    return is
+      ? "Meiðslastaða úr player_injuries / injury_events. Birtist í Decision summary."
+      : "Injury status from player_injuries / injury_events. Surfaced in Decision summary.";
+  }
+  const ft = item.fatigueType;
+  if (item.plSpike != null && item.plSpike >= 1.6) {
+    return is
+      ? "PL-spike ≥ 1,6× á móti 28-d meðaltali. Gabbett 2017 ACWR."
+      : "PL spike ≥ 1.6× vs 28-d mean. Gabbett 2017 ACWR.";
+  }
+  if (ft === "mechanical_fatigue") {
+    return is
+      ? "Vélrænt álagsmerki úr IMA + accel/decel án PL hækkunar. McBurnie 2022."
+      : "Mechanical-strain signal from IMA + accel/decel without matching PL. McBurnie 2022.";
+  }
+  if (ft === "metabolic_fatigue") {
+    return is
+      ? "Efnaskiptaálagsmerki — hátt metabolic score án vélræns merkis. di Prampero 2015."
+      : "Metabolic-strain signal — high metabolic score without mechanical signature. di Prampero 2015.";
+  }
+  if (ft === "global_fatigue") {
+    return is
+      ? "Bæði vélræn og efnaskiptaöll merki hækkuð. Gabbett 2017."
+      : "Both mechanical and metabolic signals elevated. Gabbett 2017.";
+  }
+  // Fall back to a generic explanation for the wellness/composite case.
+  return is
+    ? "Persónulegt z-score á móti 28-d baseline (Robertson 2017). Composite-load (Gabbett 2017, Buchheit 2024)."
+    : "Personal z-score vs 28-d baseline (Robertson 2017). Composite load (Gabbett 2017, Buchheit 2024).";
+}
+
 function buildAttentionList(
   rows: BriefingRow[],
   playerComposites: Record<string, PlayerCompositeEntry>,
@@ -977,6 +1171,50 @@ function buildAttentionList(
           descriptionIS: top.descriptionIS,
         };
       })();
+      // Load breakdown — surface what *kind* of work spiked. Only include
+      // sources where the spike is > 1.05 (avoid noise from at-baseline
+      // values). Limited to 4 entries to keep the strip compact.
+      const loadBreakdown: AttentionItem["loadBreakdown"] = (() => {
+        if (!comp) return [];
+        const candidates: Array<{ label: string; value: number | null | undefined }> = [
+          { label: "PL", value: comp.playerLoadSpike },
+          { label: lang === "IS" ? "Accel" : "Accel", value: comp.accelSpike },
+          { label: lang === "IS" ? "Decel" : "Decel", value: comp.decelSpike },
+          { label: "HIR", value: comp.hirSpike },
+          { label: "IMA", value: comp.imaTotalSpike },
+          { label: "FMP", value: comp.fmpDynamicHighSpike },
+        ];
+        return candidates
+          .filter((c): c is { label: string; value: number } => typeof c.value === "number" && c.value > 1.05)
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 4);
+      })();
+      // Baseline maturity — pull from the strongest wellness baseline the
+      // player has (max n_observations across the four sub-scores). This
+      // tells the coach how mature the personal norm behind today's
+      // verdict actually is — a flag resting on 5 observations is on
+      // thinner ice than one resting on 25.
+      const baselineMaturity: AttentionItem["baselineMaturity"] = (() => {
+        const bls = playerBaselines?.[String(row.player_id)] ?? null;
+        if (!bls) return null;
+        const keys = [
+          "wellness.sleep_quality",
+          "wellness.fatigue_energy",
+          "wellness.stress_mood",
+          "wellness.muscle_soreness",
+        ];
+        let maxObs = 0;
+        let windowDays = 14;
+        for (const k of keys) {
+          const b = bls[k];
+          if (b && typeof b.n_observations === "number" && b.n_observations > maxObs) {
+            maxObs = b.n_observations;
+            if (typeof b.window_days === "number") windowDays = b.window_days;
+          }
+        }
+        if (maxObs === 0) return null;
+        return { obs: maxObs, windowDays };
+      })();
       const itemForExplanation = {
         playerId: String(row.player_id),
         name: row.full_name,
@@ -997,6 +1235,8 @@ function buildAttentionList(
           todayIso,
           lang,
         ),
+        loadBreakdown,
+        baselineMaturity,
       };
       const explanation = composeAttentionExplanation(
         itemForExplanation,
@@ -1188,11 +1428,32 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     );
   }
 
+  // ── Team pulse — the 5-second answer to "what's the squad state?".
+  // One noun-phrase verdict + top 1-2 names by severity + readiness count.
+  // Replaces the older talley-style headline ("Watch 3 players") which
+  // gave numbers without context. The colour band still tracks alert /
+  // monitor severity so a coach scanning at a glance gets the same
+  // traffic-light signal they had before, plus the prose verdict.
+  const teamDayType = (plannedRow?.planned_day_type ?? "").trim().toUpperCase();
+  const isOffToday = teamDayType === "OFF";
+  const pulse = computeTeamPulse(
+    attention,
+    alertCount,
+    monitorCount,
+    nFull,
+    nPlayers,
+    isOffToday,
+    mdLabel,
+    lang,
+  );
+
   const headlineTone =
-    alertCount > 0
+    pulse.level === "risk"
       ? "border-rose-200 bg-rose-50 text-rose-800"
-      : monitorCount > 0
+      : pulse.level === "caution"
       ? "border-amber-200 bg-amber-50 text-amber-800"
+      : pulse.level === "rest"
+      ? "border-slate-200 bg-slate-50 text-slate-700"
       : "border-emerald-200 bg-emerald-50 text-emerald-800";
 
   return (
@@ -1226,28 +1487,40 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Headline */}
-        <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${headlineTone}`}>
-          {t.headlineWatch(watchCount)}
-          {alertCount > 0 ? (
-            <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-              {alertCount} {t.attentionAlert}
-            </span>
-          ) : null}
-          {monitorCount > 0 ? (
-            <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold text-amber-700">
-              {monitorCount} {t.attentionMonitor}
-            </span>
-          ) : null}
-          {/* Post-OFF context badge — neutral grey so it doesn't read as
-              alert or driver. Tells the coach why day-over-day numbers
-              may look unusual today (yesterday had no real session data). */}
-          {consecutiveOffBeforeToday > 0 ? (
-            <span className="ml-2 inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-              {consecutiveOffBeforeToday === 1
-                ? t.afterOffOne
-                : t.afterOffMany(consecutiveOffBeforeToday)}
-            </span>
+        {/* Team pulse — the 5-second read.
+            One prose sentence that captures: today's day-type verdict,
+            the top 1-2 players who need attention BY NAME, and the
+            readiness count. Coach should glance here ONCE and know:
+            "what kind of day is today?" + "who needs me?". Tiles below
+            are drill-down detail; this is the headline answer.
+            The colour band still mirrors severity (rose/amber/emerald/
+            slate) so the traffic-light signal is preserved.
+            Below the sentence: keep the alert/monitor pill counts (now
+            secondary, not primary) and the After-OFF context badge. */}
+        <div className={`rounded-xl border px-4 py-3 ${headlineTone}`}>
+          <div className="text-base font-semibold leading-snug">
+            {pulse.sentence}
+          </div>
+          {(alertCount > 0 || monitorCount > 0 || consecutiveOffBeforeToday > 0) ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              {alertCount > 0 ? (
+                <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold text-rose-700">
+                  {alertCount} {t.attentionAlert}
+                </span>
+              ) : null}
+              {monitorCount > 0 ? (
+                <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                  {monitorCount} {t.attentionMonitor}
+                </span>
+              ) : null}
+              {consecutiveOffBeforeToday > 0 ? (
+                <span className="inline-flex items-center rounded-full border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  {consecutiveOffBeforeToday === 1
+                    ? t.afterOffOne
+                    : t.afterOffMany(consecutiveOffBeforeToday)}
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -1549,20 +1822,35 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             coach how many input signals are behind this verdict
                             and surfaces missing/stale ones in a tooltip. */}
                         <span
-                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
                             item.confidence.level === "high"
                               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                               : item.confidence.level === "moderate"
                                 ? "border-amber-300 bg-amber-50 text-amber-700"
                                 : "border-slate-300 border-dashed bg-slate-50 text-slate-600"
                           }`}
-                          title={
-                            item.confidence.notes.length > 0
-                              ? item.confidence.notes.join(" · ")
-                              : lang === "IS"
+                          title={(() => {
+                            // Tooltip combines today's signal coverage with the
+                            // baseline maturity that the verdict rests on.
+                            // Robertson 2017 — personal norms need 7+ obs to
+                            // settle, 14+ for stability; this lets the coach
+                            // see at a glance whether the flag rests on a
+                            // thin baseline.
+                            const parts: string[] = [];
+                            if (item.confidence.notes.length > 0) {
+                              parts.push(item.confidence.notes.join(" · "));
+                            } else {
+                              parts.push(lang === "IS"
                                 ? "Öll merki til staðar — há gagnavissa"
-                                : "All signals present — high data confidence"
-                          }
+                                : "All signals present — high data confidence");
+                            }
+                            if (item.baselineMaturity) {
+                              parts.push(lang === "IS"
+                                ? `Persónuleg norm: ${item.baselineMaturity.obs} mælingar á ${item.baselineMaturity.windowDays} dögum`
+                                : `Personal norm: ${item.baselineMaturity.obs} obs over ${item.baselineMaturity.windowDays}d`);
+                            }
+                            return parts.join("\n");
+                          })()}
                           aria-label={
                             lang === "IS"
                               ? `Gagnavissa ${item.confidence.signalCount} af ${item.confidence.signalTotal}`
@@ -1570,6 +1858,13 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           }
                         >
                           {item.confidence.signalCount}/{item.confidence.signalTotal}
+                          {/* Baseline maturity — small dot+number after the
+                              coverage ratio. Shown only when baseline is
+                              thin (≤ 10 obs) so well-baselined players
+                              don't get visual clutter. */}
+                          {item.baselineMaturity && item.baselineMaturity.obs <= 10 ? (
+                            <span className="opacity-70">· n={item.baselineMaturity.obs}</span>
+                          ) : null}
                         </span>
                         {/* Numeric chips — only in Detailed mode. Compact mode
                             keeps just the fatigue-type tag (which is plain
@@ -1582,12 +1877,22 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           </span>
                         ) : null}
                         {detailed && compChipCls && item.composite != null ? (
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${compChipCls}`}>
+                          <span
+                            className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${compChipCls}`}
+                            title={lang === "IS"
+                              ? "Composite-álag 0-1: blanda af innra (RPE·ACWR), ytra (GPS-burden) og efnaskipta-skori. Gabbett 2017, Buchheit 2024."
+                              : "Composite load 0-1: blend of internal (RPE·ACWR), external (GPS-burden) and metabolic scores. Gabbett 2017, Buchheit 2024."}
+                          >
                             {t.chipComp} {item.composite.toFixed(2)}
                           </span>
                         ) : null}
                         {detailed && plChipCls && item.plSpike != null ? (
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${plChipCls}`}>
+                          <span
+                            className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${plChipCls}`}
+                            title={lang === "IS"
+                              ? `Player Load í gær á móti 28-daga rúllandi meðaltali hans. ${item.plSpike.toFixed(2)}× = ${item.plSpike >= 1.6 ? "veruleg hækkun" : "hækkun"}. Heimild: Gabbett 2017 ACWR.`
+                              : `Player Load yesterday vs his 28-day rolling mean. ${item.plSpike.toFixed(2)}× = ${item.plSpike >= 1.6 ? "substantial spike" : "elevated"}. Source: Gabbett 2017 ACWR.`}
+                          >
                             {t.chipPl} {item.plSpike.toFixed(2)}×
                           </span>
                         ) : null}
@@ -1595,14 +1900,31 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             single compactStatus badge below already conveys
                             the same info ("Mechanical strain" etc.) */}
                         {detailed && fatigueChipLabel ? (
-                          <span className="rounded-full border border-indigo-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          <span
+                            className="rounded-full border border-indigo-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700"
+                            title={(() => {
+                              if (lang === "IS") {
+                                if (item.fatigueType === "mechanical_fatigue") return "Vélrænt álag: accel/decel og IMA hækkað án samsvarandi PL — bendir á áraun á vöðva/sin. McBurnie 2022.";
+                                if (item.fatigueType === "metabolic_fatigue") return "Efnaskiptaálag: hátt metabolic load án vélræns merkis — bendir á áhrif á orkukerfi. di Prampero 2015.";
+                                return "Heildarþreyta: bæði vélrænt og efnaskiptamerki hækkuð — systemic álag. Gabbett 2017.";
+                              }
+                              if (item.fatigueType === "mechanical_fatigue") return "Mechanical strain: accel/decel + IMA elevated without matching PL — points at muscle/tendon strain. McBurnie 2022.";
+                              if (item.fatigueType === "metabolic_fatigue") return "Metabolic strain: high metabolic load without mechanical signature — points at energy-system stress. di Prampero 2015.";
+                              return "Whole-system fatigue: both mechanical and metabolic signals elevated — systemic strain. Gabbett 2017.";
+                            })()}
+                          >
                             {fatigueChipLabel}
                           </span>
                         ) : null}
                         {/* Compact-only status badge — single short phrase that
-                            replaces the multi-clause reasons line. */}
+                            replaces the multi-clause reasons line. Tooltip
+                            carries the science provenance so the coach can
+                            see WHICH research underpins each status. */}
                         {!detailed ? (
-                          <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                          <span
+                            className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                            title={statusSourceHint(item, lang)}
+                          >
                             {item.compactStatus}
                           </span>
                         ) : null}
@@ -1619,6 +1941,36 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                         <p className="mt-1 text-xs leading-relaxed text-slate-700">
                           {lang === "IS" ? item.explanation.is : item.explanation.en}
                         </p>
+                      ) : null}
+                      {/* Load breakdown strip — shows WHAT kind of work
+                          spiked behind the composite score. Only spikes
+                          >1.05× are listed (sorted descending), capped at
+                          4 entries. Detailed mode only — the brief overview
+                          stays clean. Tooltip hovers explain each metric's
+                          source. */}
+                      {detailed && item.loadBreakdown.length > 0 ? (
+                        <div
+                          className="mt-1 flex flex-wrap items-center gap-1"
+                          title={lang === "IS"
+                            ? "Sundurliðun composite-skors: hvaða álags-merki hækkuðu í gær. Allar tölur eru í gær / 28-daga rúllandi meðaltal."
+                            : "Composite-score breakdown: which load signals spiked yesterday. All ratios are yesterday / 28-day rolling mean."}
+                        >
+                          <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mr-0.5">
+                            {lang === "IS" ? "Sundurliðun" : "Breakdown"}:
+                          </span>
+                          {item.loadBreakdown.map((b, i) => (
+                            <span
+                              key={`${item.playerId}-bd-${i}`}
+                              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                                b.value >= 1.6 ? "border-rose-200 bg-rose-50 text-rose-700"
+                                  : b.value >= 1.3 ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  : "border-slate-200 bg-white text-slate-600"
+                              }`}
+                            >
+                              {b.label} {b.value.toFixed(2)}×
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                       {/* Driver chips — orsök layer. Separate row, orange
                           accent so they read as "why" (not as "what to do"
