@@ -91,6 +91,8 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
+import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
@@ -1883,6 +1885,11 @@ export default function CoachPage() {
 
   // MD context
   const [mdContextToday, setMdContextToday] = useState<string | null>(null);
+  // Microcycle anchors from v_training_day_context_team — used by
+  // PlannedSessionLoadCard to compose an OFF-day paragraph (days since last
+  // match, days to next match).
+  const [daysSincePrevToday, setDaysSincePrevToday] = useState<number | null>(null);
+  const [daysToNextToday, setDaysToNextToday] = useState<number | null>(null);
 
   // Team rollups
   const [teamIntel, setTeamIntel] = useState<TeamIntel | null>(null);
@@ -3342,7 +3349,9 @@ export default function CoachPage() {
         console.warn("stage4_bootstrap_for_date failed (loadToday, continuing):", e?.message ?? e);
       }
 
-      // md_day context for today (per team)
+      // md_day context for today (per team). Also pull days_since_prev /
+      // days_to_next so the Planned-session-load card can build a
+      // microcycle-aware OFF-day paragraph instead of a blank "Day off" line.
       let ctxMd: string | null = null;
       try {
         const { data: auth } = await supabase.auth.getUser();
@@ -3353,20 +3362,28 @@ export default function CoachPage() {
           if (teamId) {
             const { data: ctxRow } = await supabase
               .from("v_training_day_context_team")
-              .select("md_day")
+              .select("md_day, days_since_prev, days_to_next")
               .eq("team_id", teamId)
               .eq("date", entryDate)
               .maybeSingle();
             ctxMd = (ctxRow as any)?.md_day ?? null;
             setMdContextToday(ctxMd);
+            setDaysSincePrevToday(((ctxRow as any)?.days_since_prev as number | null) ?? null);
+            setDaysToNextToday(((ctxRow as any)?.days_to_next as number | null) ?? null);
           } else {
             setMdContextToday(null);
+            setDaysSincePrevToday(null);
+            setDaysToNextToday(null);
           }
         } else {
           setMdContextToday(null);
+          setDaysSincePrevToday(null);
+          setDaysToNextToday(null);
         }
       } catch {
         setMdContextToday(null);
+        setDaysSincePrevToday(null);
+        setDaysToNextToday(null);
       }
 
       console.log("[loadToday] team intel...");
@@ -8002,6 +8019,33 @@ export default function CoachPage() {
             playerCounterfactuals={playerCounterfactualsMap}
             playerInjuries={playerInjuryStatus}
           />
+          {/* Planned session load — Week-setup MD context turned into a
+              coach-facing load target (type / band / sRPE / % of match).
+              On OFF days and match days the muted version was duplicating
+              the green TODAY card's "rest day" / "match day" message, so
+              we suppress it here — the OFF-day microcycle paragraph now
+              lives as the first bullet inside the green TODAY card.
+              On a manual / no-MD week we still show it ("set up the match
+              week") because that prompt is genuinely unique info. */}
+          {(() => {
+            const todayPlannedDayType =
+              (rows[0] as { planned_day_type?: string | null } | undefined)?.planned_day_type ?? null;
+            const dt = String(todayPlannedDayType ?? "").trim().toUpperCase();
+            if (dt === "OFF" || dt === "GAME") return null;
+            return (
+              <PlannedSessionLoadCard
+                lang={lang}
+                mdDay={mdDayToday}
+                dayType={todayPlannedDayType}
+                focus={(rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null}
+                daysSincePrev={daysSincePrevToday}
+                daysToNext={daysToNextToday}
+                redCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "red").length}
+                yellowCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "yellow").length}
+                totalPlayers={rows.length}
+              />
+            );
+          })()}
           {/* Verdict-accuracy / calibration widget moved to the Reporting
               Center — coaches doing their morning briefing don't want
               system-health metrics in the way. See the System health
@@ -8135,6 +8179,20 @@ export default function CoachPage() {
                   // OFF day path — different story entirely
                   if (isOffDay) {
                     const bullets: string[] = [];
+                    // Microcycle context — pulled from the same Week-setup
+                    // signal that drives the Planned Session Load card. On
+                    // OFF days we fold it in here so the coach reads one
+                    // coherent message instead of two cards saying "rest day".
+                    const offPlan = planSessionLoad({
+                      mdDay: mdDayToday,
+                      dayType: teamDayType,
+                      focus: (rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null,
+                      daysSincePrev: daysSincePrevToday,
+                      daysToNext: daysToNextToday,
+                    });
+                    if (offPlan.reason === "off") {
+                      bullets.push(lang === "IS" ? offPlan.rationaleIS : offPlan.rationaleEN);
+                    }
                     if (volCount > 0) {
                       bullets.push(lang === "IS"
                         ? `${volCount} leikmaður er sveiflukenndur — sendu quick check-in í gegnum kerfið.`
