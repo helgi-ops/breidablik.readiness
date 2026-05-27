@@ -1890,6 +1890,15 @@ export default function CoachPage() {
   // match, days to next match).
   const [daysSincePrevToday, setDaysSincePrevToday] = useState<number | null>(null);
   const [daysToNextToday, setDaysToNextToday] = useState<number | null>(null);
+  // Yesterday's readiness snapshot per player. Powers the day-over-day
+  // delta badges in the Daily Briefing attention rows — "fór úr grænu í
+  // gult í dag", "óbreyttur", "betri en í gær". Coaches care about deltas
+  // far more than absolute states; this turns the briefing from a
+  // snapshot into a story.
+  const [yesterdayDeltas, setYesterdayDeltas] = useState<Record<string, {
+    color: "green" | "yellow" | "red" | null;
+    score: number | null;
+  }>>({});
 
   // Team rollups
   const [teamIntel, setTeamIntel] = useState<TeamIntel | null>(null);
@@ -3384,6 +3393,39 @@ export default function CoachPage() {
         setMdContextToday(null);
         setDaysSincePrevToday(null);
         setDaysToNextToday(null);
+      }
+
+      // Yesterday's readiness snapshot for the same team. Used by the
+      // Daily Briefing attention rows to show day-over-day deltas — coaches
+      // care about WHAT CHANGED far more than absolute state. Small payload
+      // (one row per player), fired in parallel with the other context
+      // fetches above.
+      try {
+        const y = new Date(entryDate);
+        y.setDate(y.getDate() - 1);
+        const yesterdayISO = y.toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
+
+        const effectiveTeamIdForYday = teamIdOverride ?? coachTeamId;
+        let yq = supabase
+          .from("v_coach_readiness_today_v8")
+          .select("player_id, final_color, total_score")
+          .eq("entry_date", yesterdayISO);
+        if (effectiveTeamIdForYday) yq = yq.eq("team_id", effectiveTeamIdForYday);
+
+        const { data: yData } = await yq;
+        const yMap: Record<string, { color: "green" | "yellow" | "red" | null; score: number | null }> = {};
+        for (const r of (yData ?? []) as Array<{ player_id?: string; final_color?: string | null; total_score?: number | null }>) {
+          const pid = String(r.player_id ?? "");
+          if (!pid) continue;
+          const c = String(r.final_color ?? "").toLowerCase();
+          yMap[pid] = {
+            color: c === "green" || c === "yellow" || c === "red" ? c : null,
+            score: typeof r.total_score === "number" ? r.total_score : null,
+          };
+        }
+        setYesterdayDeltas(yMap);
+      } catch {
+        setYesterdayDeltas({});
       }
 
       console.log("[loadToday] team intel...");
@@ -8018,6 +8060,7 @@ export default function CoachPage() {
             playerBaselines={playerBaselines}
             playerCounterfactuals={playerCounterfactualsMap}
             playerInjuries={playerInjuryStatus}
+            playerDeltas={yesterdayDeltas}
           />
           {/* Planned session load — Week-setup MD context turned into a
               coach-facing load target (type / band / sRPE / % of match).

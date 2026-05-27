@@ -133,6 +133,16 @@ export type DailyBriefingCardProps = {
     bodyPart?: string | null;
     injuryType?: string | null;
   } | null>;
+  // ── Yesterday's snapshot per player ───────────────────────────────────
+  // Used to render day-over-day delta badges on attention rows ("fór úr
+  // grænu í gult"). Coaches care about CHANGE far more than absolute
+  // state — a player who's been yellow for 3 days needs a different
+  // response than a player who flipped from green to yellow today.
+  // Optional — when absent, no delta is shown (no false impressions).
+  playerDeltas?: Record<string, {
+    color: "green" | "yellow" | "red" | null;
+    score: number | null;
+  }>;
 };
 
 // ── Copy (IS / EN) ─────────────────────────────────────────────────────────
@@ -231,19 +241,21 @@ const COPY = {
       badgeRtp: "RTP",
     },
     // Compact-mode status phrases — single short label per player. Designed
-    // for non-S&C coaches: plain language only. No jargon, no abbreviations,
-    // no foreign-loan sport-science words. A football coach should read
-    // each phrase and immediately know what it means for today's session.
+    // for non-S&C coaches: ACTION-oriented. The badge says what the coach
+    // should consider doing today; the prose line beneath says WHY. This
+    // shortcuts the "OK, but what do I do with that?" gap that pure
+    // descriptive labels leave behind. Phrased as soft recommendations
+    // ("forðastu...", "léttari...") to respect coach autonomy.
     compact: {
-      recoveryFocus:    "Þarf hvíld",
-      postMatchEcho:    "Eðlilegt eftir leik",
-      heavyLoad:        "Þungt æfingaálag",
-      highIntensity:    "Erfiður dagur í gær",
-      belowNormal:      "Undir venjulegu",
-      mechStrain:       "Mikið af snöggum hreyfingum",
-      metabStrain:      "Mikið af háhraða-hlaupum",
-      generalFatigue:   "Almenn þreyta",
-      neuralBias:       "Slöpp viðbrögð",
+      recoveryFocus:    "Þarf hvíld í dag",
+      postMatchEcho:    "Slakari dagur — eftir leik",
+      heavyLoad:        "Léttari æfing — álag síðustu daga",
+      highIntensity:    "Léttari æfing — eftir erfiðan dag",
+      belowNormal:      "Fylgstu vel með í dag",
+      mechStrain:       "Forðastu miklar hröðanir",
+      metabStrain:      "Forðastu mikla háhraða-vinnu",
+      generalFatigue:   "Léttari æfing — þreyttur",
+      neuralBias:       "Forðastu kraftaæfingar",
       protectTissue:    (t: string) => `Vernda ${t.toLowerCase()}`,
       monitor:          "Fylgjast með",
     },
@@ -334,17 +346,18 @@ const COPY = {
       badgeRehab: "REHAB",
       badgeRtp: "RTP",
     },
-    // Compact-mode status phrases — single short label per player.
+    // Compact-mode status phrases — action-oriented soft recommendations.
+    // The badge says what to consider doing today; prose beneath gives why.
     compact: {
-      recoveryFocus:    "Recovery focus",
-      postMatchEcho:    "Post-match echo (expected)",
-      heavyLoad:        "Heavy training load",
-      highIntensity:    "High-intensity day",
-      belowNormal:      "Below normal",
-      mechStrain:       "Mechanical strain",
-      metabStrain:      "Metabolic strain",
-      generalFatigue:   "General fatigue",
-      neuralBias:       "Neural fatigue",
+      recoveryFocus:    "Needs rest today",
+      postMatchEcho:    "Easier day — post-match",
+      heavyLoad:        "Lighter session — high recent load",
+      highIntensity:    "Lighter session — hard day yesterday",
+      belowNormal:      "Watch him today",
+      mechStrain:       "Avoid heavy sprinting",
+      metabStrain:      "Avoid high-speed running",
+      generalFatigue:   "Lighter session — fatigued",
+      neuralBias:       "Avoid power work",
       protectTissue:    (t: string) => `Protect ${t.toLowerCase()}`,
       monitor:          "Monitor",
     },
@@ -469,6 +482,16 @@ type AttentionItem = {
   baselineMaturity: {
     obs: number;
     windowDays: number;
+  } | null;
+  // ── Day-over-day delta — the most actionable single signal for a coach
+  // doing the morning brief. Null when no yesterday data exists; otherwise
+  // carries the verbal change ("Nýtt í dag — var grænn í gær") and a
+  // direction tag for visual styling. Computed once in the item-builder
+  // so the renderer just reads it.
+  delta: {
+    kind: "new" | "worse" | "better" | "same";
+    summaryIS: string;
+    summaryEN: string;
   } | null;
 };
 
@@ -973,6 +996,88 @@ function computeTeamPulse(
  * provenance behind each status phrase so the coach can see WHICH research
  * underpins the label. Increases trust without cluttering the visible UI.
  */
+/**
+ * Compute the day-over-day delta verdict for an attention row. Coaches
+ * read deltas faster than absolute states — "Jón fór úr grænu í gult í
+ * dag" triggers action; "Jón er í gulu" might just be his baseline. This
+ * makes the change part of the row.
+ *
+ * Returns null when there's no yesterday snapshot, or when nothing
+ * actionable changed (avoids visual noise on routine days).
+ */
+function computeDelta(
+  todayColor: "green" | "yellow" | "red" | null,
+  todayScore: number | null,
+  yesterday: { color: "green" | "yellow" | "red" | null; score: number | null } | null,
+): { kind: "new" | "worse" | "better" | "same"; summaryIS: string; summaryEN: string } | null {
+  if (!yesterday) return null;
+  const yColor = yesterday.color;
+  const yScore = yesterday.score;
+
+  const rank = (c: "green" | "yellow" | "red" | null): number =>
+    c === "red" ? 3 : c === "yellow" ? 2 : c === "green" ? 1 : 0;
+
+  // Yesterday-OFF / no yesterday data — say "new today" so the coach
+  // doesn't assume it's a persistent state.
+  if (yColor == null) {
+    return {
+      kind: "new",
+      summaryIS: "Nýtt í dag — engar gögn frá í gær",
+      summaryEN: "New today — no data from yesterday",
+    };
+  }
+
+  const rToday = rank(todayColor);
+  const rYday = rank(yColor);
+
+  const colourWord = (c: "green" | "yellow" | "red" | null, is: boolean): string => {
+    if (c === "green") return is ? "grænu" : "green";
+    if (c === "yellow") return is ? "gulu" : "yellow";
+    if (c === "red") return is ? "rauðu" : "red";
+    return is ? "engu" : "n/a";
+  };
+
+  // (1) Same colour today as yesterday — small delta only if score moved
+  // meaningfully (>= 3 of 25). Otherwise return "same" so we can show
+  // "óbreyttur" if useful.
+  if (todayColor === yColor) {
+    const scoreDelta = (todayScore != null && yScore != null) ? todayScore - yScore : null;
+    if (scoreDelta != null && Math.abs(scoreDelta) >= 3) {
+      const better = scoreDelta > 0;
+      return {
+        kind: better ? "better" : "worse",
+        summaryIS: better
+          ? `Skár en í gær (skor +${scoreDelta})`
+          : `Verri en í gær (skor ${scoreDelta})`,
+        summaryEN: better
+          ? `Better than yesterday (score +${scoreDelta})`
+          : `Worse than yesterday (score ${scoreDelta})`,
+      };
+    }
+    return {
+      kind: "same",
+      summaryIS: `Óbreyttur — var líka í ${colourWord(yColor, true)} í gær`,
+      summaryEN: `Unchanged — also ${colourWord(yColor, false)} yesterday`,
+    };
+  }
+
+  // (2) Different colour — that's the most actionable case.
+  if (rToday > rYday) {
+    // Worse today than yesterday — coach attention trigger.
+    return {
+      kind: "worse",
+      summaryIS: `Verri en í gær — fór úr ${colourWord(yColor, true)} í ${colourWord(todayColor, true)}`,
+      summaryEN: `Worse than yesterday — moved from ${colourWord(yColor, false)} to ${colourWord(todayColor, false)}`,
+    };
+  }
+  // rToday < rYday — improved today.
+  return {
+    kind: "better",
+    summaryIS: `Skár en í gær — fór úr ${colourWord(yColor, true)} í ${colourWord(todayColor, true)}`,
+    summaryEN: `Better than yesterday — moved from ${colourWord(yColor, false)} to ${colourWord(todayColor, false)}`,
+  };
+}
+
 function statusSourceHint(item: AttentionItem, lang: "IS" | "EN"): string {
   const is = lang === "IS";
   // Walk the same priority order the status-builder uses, so the hint
@@ -1019,6 +1124,7 @@ function buildAttentionList(
   recentDayTypes: Record<string, string | null> | null | undefined,
   todayIso: string,
   playerInjuries: DailyBriefingCardProps["playerInjuries"] | null,
+  playerDeltas: DailyBriefingCardProps["playerDeltas"] | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const cl = COPY[lang].compact;
@@ -1222,6 +1328,14 @@ function buildAttentionList(
         if (maxObs === 0) return null;
         return { obs: maxObs, windowDays };
       })();
+      // Day-over-day delta — coaches read change before state. Build from
+      // yesterday's snapshot (passed in via playerDeltas); null when no
+      // yesterday data is available.
+      const delta = computeDelta(
+        (col ?? null) as "green" | "yellow" | "red" | null,
+        row.total_score ?? null,
+        playerDeltas?.[String(row.player_id)] ?? null,
+      );
       const itemForExplanation = {
         playerId: String(row.player_id),
         name: row.full_name,
@@ -1244,6 +1358,7 @@ function buildAttentionList(
         ),
         loadBreakdown,
         baselineMaturity,
+        delta,
       };
       const explanation = composeAttentionExplanation(
         itemForExplanation,
@@ -1287,13 +1402,14 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     playerBaselines = null,
     playerCounterfactuals = null,
     playerInjuries = null,
+    playerDeltas = null,
   } = props;
 
   const t = COPY[lang];
 
   const attention = useMemo(
-    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries),
-    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries],
+    () => buildAttentionList(rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries, playerDeltas),
+    [rows, playerComposites, lang, playerBaselines, playerCounterfactuals, recentDayTypes, today, playerInjuries, playerDeltas],
   );
 
   // ── Post-OFF context ──────────────────────────────────────────────────
@@ -1873,6 +1989,34 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                             </span>
                           ) : null}
                         </span>
+                        {/* Day-over-day delta — the single most actionable
+                            signal for a coach reading the brief. Coloured
+                            by direction so worse (rose) catches the eye
+                            and better (emerald) is reassuring. "Same"
+                            renders muted so the coach knows it's a
+                            persistent state, not a new flag. */}
+                        {item.delta ? (
+                          <span
+                            className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                              item.delta.kind === "worse" || item.delta.kind === "new"
+                                ? "border-rose-300 bg-rose-50 text-rose-700"
+                                : item.delta.kind === "better"
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-500"
+                            }`}
+                            title={lang === "IS" ? item.delta.summaryIS : item.delta.summaryEN}
+                          >
+                            {(() => {
+                              if (item.delta.kind === "worse" || item.delta.kind === "new") {
+                                return lang === "IS" ? "Verri en í gær" : "Worse than yesterday";
+                              }
+                              if (item.delta.kind === "better") {
+                                return lang === "IS" ? "Skár en í gær" : "Better than yesterday";
+                              }
+                              return lang === "IS" ? "Óbreyttur" : "Unchanged";
+                            })()}
+                          </span>
+                        ) : null}
                         {/* Numeric chips — only in Detailed mode. Compact mode
                             keeps just the fatigue-type tag (which is plain
                             language, not a number) so non-S&C coaches see
