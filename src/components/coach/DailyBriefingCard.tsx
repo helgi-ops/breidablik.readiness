@@ -2249,11 +2249,19 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
               <span>
                 {t.rpe} {rpSubmitted}/{rpTotal}
               </span>
+              {/* Missing-count tags. The leading "Vantar/Missing" word
+                  makes the count unambiguous — previously a bare "✗ 25
+                  check-in" rendered as "× 25 check-in" and read like a
+                  multiplication, confusing the coach. */}
               {ci.missing > 0 ? (
-                <span className="ml-2 text-amber-700">✗ {ci.missing} {t.checkin.toLowerCase()}</span>
+                <span className="ml-2 text-amber-700">
+                  {lang === "IS" ? `Vantar ${ci.missing} ${t.checkin.toLowerCase()}` : `${ci.missing} ${t.checkin.toLowerCase()} missing`}
+                </span>
               ) : null}
               {rp.missing > 0 ? (
-                <span className="ml-2 text-amber-700">✗ {rp.missing} {t.rpe.toLowerCase()}</span>
+                <span className="ml-2 text-amber-700">
+                  {lang === "IS" ? `Vantar ${rp.missing} ${t.rpe.toLowerCase()}` : `${rp.missing} ${t.rpe.toLowerCase()} missing`}
+                </span>
               ) : null}
             </div>
           );
