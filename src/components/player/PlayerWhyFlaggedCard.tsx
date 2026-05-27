@@ -113,10 +113,25 @@ function leadSentence(state: DecisionState, lang: "IS" | "EN"): string {
     : "You're in yellow today. Here's what the system saw in your data:";
 }
 
+type AiAnswerResponse = {
+  ok: boolean;
+  answer?: string;
+  answered_at?: string;
+  error?: string;
+};
+
 export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "EN" }) {
   const [payload, setPayload] = React.useState<DecisionPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  // AI Q&A state — only triggered on user click. Coach side has the
+  // same opt-in pattern (AttentionRowAskWhy) to keep Anthropic costs
+  // and latency off the default render path.
+  const [aiExpanded, setAiExpanded] = React.useState(false);
+  const [aiAnswer, setAiAnswer] = React.useState<AiAnswerResponse | null>(null);
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiError, setAiError] = React.useState<string | null>(null);
+  const [aiEliteRequired, setAiEliteRequired] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -149,6 +164,45 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Lazily fetch the AI answer on first expand. Cached for the lifetime
+  // of the card so re-toggling doesn't re-hit Anthropic.
+  React.useEffect(() => {
+    if (!aiExpanded || aiAnswer || aiLoading || aiError || aiEliteRequired) return;
+    let cancelled = false;
+    (async () => {
+      setAiLoading(true);
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) {
+          if (!cancelled) setAiError(lang === "IS" ? "Ekki innskráð(ur)" : "Not signed in");
+          return;
+        }
+        const res = await fetch("/api/player/why-flagged-ai", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: "{}",
+        });
+        if (cancelled) return;
+        if (res.status === 402) { setAiEliteRequired(true); return; }
+        const json = (await res.json()) as AiAnswerResponse;
+        if (!res.ok) {
+          setAiError(json.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        setAiAnswer(json);
+      } catch (e) {
+        if (!cancelled) setAiError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [aiExpanded, aiAnswer, aiLoading, aiError, aiEliteRequired, lang]);
 
   // Loading or error — render nothing (silent fail; player has plenty of
   // other context on Today). Logging is via the browser console only.
@@ -227,6 +281,70 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
           {action}
         </div>
       ) : null}
+
+      {/* AI deeper-dive — opt-in, ELITE-gated. Mirrors the coach side
+          AttentionRowAskWhy. The card already gives a deterministic
+          explanation above; this is for the player who wants the data
+          read back to them in narrative form. */}
+      <div className="mt-3 border-t border-white/60 pt-2.5">
+        <button
+          type="button"
+          onClick={() => setAiExpanded((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+          aria-expanded={aiExpanded}
+        >
+          <span aria-hidden>✨</span>
+          {aiExpanded
+            ? (lang === "IS" ? "Loka AI skýringu" : "Hide AI explanation")
+            : (lang === "IS" ? "Fá AI skýringu" : "Get AI explanation")}
+        </button>
+
+        {aiExpanded ? (
+          <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/70 p-3">
+            <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-violet-700">
+              <span>
+                ✨ {lang === "IS" ? "AI skýring" : "AI explanation"}
+                <span className="ml-1.5 font-normal opacity-70">
+                  · {lang === "IS" ? "byggt á gögnunum þínum í dag" : "from your data today"}
+                </span>
+              </span>
+              {aiAnswer?.answered_at ? (
+                <span className="font-normal opacity-60">
+                  {new Date(aiAnswer.answered_at).toLocaleTimeString(lang === "IS" ? "is-IS" : "en-GB", {
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              ) : null}
+            </div>
+
+            {aiLoading ? (
+              <div className="flex items-center gap-2 text-xs italic text-violet-600">
+                <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-violet-400" />
+                {lang === "IS" ? "Greini gögnin þín…" : "Reading your data…"}
+              </div>
+            ) : null}
+
+            {aiEliteRequired ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                <span className="font-semibold">🔒 ELITE — </span>
+                {lang === "IS"
+                  ? "AI skýringar eru hluti af ELITE pakka liðsins."
+                  : "AI explanations are part of the team's ELITE tier."}
+              </div>
+            ) : null}
+
+            {aiError ? (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+                {lang === "IS" ? "Tókst ekki að ná í skýringu: " : "Couldn't get explanation: "}{aiError}
+              </div>
+            ) : null}
+
+            {aiAnswer?.answer ? (
+              <p className="text-sm leading-relaxed text-slate-800">{aiAnswer.answer}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <p className={`mt-3 text-[10px] leading-snug opacity-60 ${tone.text}`}>
         {lang === "IS"
