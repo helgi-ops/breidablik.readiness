@@ -61,13 +61,15 @@ type WeekFacts = {
   team_name: string;
   week_start_iso: string;
   week_end_iso: string;
-  // Per-day color counts across the week
+  // Per-day color counts + the planned day type + focus, so the AI can
+  // narrate what KIND of week it was (FORCE / NEURAL / GAME-week / OFF-heavy).
   days: Array<{
     date: string;
     full: number;
     modified: number;
     recovery: number;
     day_type: string | null;
+    focus: string | null;
   }>;
   // Players whose 7d z-mean dropped vs prior 21d (declining trajectory)
   declining_players: string[];
@@ -105,37 +107,58 @@ async function gatherWeekFacts(
   const playerIds = players.map((p) => p.id);
   const nameById = new Map(players.map((p) => [p.id, p.full_name ?? "—"]));
 
-  // Per-day verdict counts across the week
+  // Per-day verdict counts across the week.
+  //
+  // NOTE: column on athlete_decision_history is `session_mode` (lowercase
+  // values: 'full'/'modified'/'recovery'/'pending'), NOT `training_action`.
+  // The earlier version of this code used `training_action` which doesn't
+  // exist — Supabase returned empty rows silently and the AI was told the
+  // squad hadn't trained all week. Fixed 2026-05-27.
+  //
+  // The day_type from week_plans is the authoritative source for what kind
+  // of day each was (TRAIN / GAME / OFF), and the focus tells us what KIND
+  // of session was planned (FORCE / NEURAL+VELOCITY / ACTIVATION etc.).
+  // We surface both to the AI so it can write specific narrative.
   const days: WeekFacts["days"] = [];
   if (playerIds.length > 0) {
     const { data: dh } = await supabase
       .from("athlete_decision_history")
-      .select("decision_date, athlete_state, training_action")
+      .select("decision_date, athlete_state, session_mode")
       .in("player_id", playerIds)
       .gte("decision_date", sevenAgoIso)
       .lte("decision_date", todayIso);
     const grouped = new Map<string, { full: number; modified: number; recovery: number }>();
-    for (const r of (dh ?? []) as Array<{ decision_date: string; training_action: string | null }>) {
+    for (const r of (dh ?? []) as Array<{ decision_date: string; session_mode: string | null }>) {
       const day = r.decision_date;
-      const action = String(r.training_action ?? "").toUpperCase();
+      const mode = String(r.session_mode ?? "").toLowerCase();
       const bucket = grouped.get(day) ?? { full: 0, modified: 0, recovery: 0 };
-      if (action === "FULL") bucket.full += 1;
-      else if (action === "MODIFIED" || action === "REDUCED") bucket.modified += 1;
-      else if (action === "RECOVERY" || action === "HOLD") bucket.recovery += 1;
+      if (mode === "full") bucket.full += 1;
+      else if (mode === "modified" || mode === "reduced") bucket.modified += 1;
+      else if (mode === "recovery" || mode === "hold") bucket.recovery += 1;
       grouped.set(day, bucket);
     }
-    // Day-type from week_plans
+    // Day-type + focus from week_plans — authoritative source for what
+    // kind of day each was.
     const { data: wp } = await supabase
-      .from("week_plans").select("date, day_type")
+      .from("week_plans").select("day_date, day_type, focus")
       .eq("team_id", teamId)
-      .gte("date", sevenAgoIso).lte("date", todayIso);
-    const dayTypeByDate = new Map(((wp ?? []) as Array<{ date: string; day_type: string | null }>).map((r) => [r.date, r.day_type]));
+      .gte("day_date", sevenAgoIso).lte("day_date", todayIso);
+    const planByDate = new Map(
+      ((wp ?? []) as Array<{ day_date: string; day_type: string | null; focus: string | null }>)
+        .map((r) => [r.day_date, { day_type: r.day_type, focus: r.focus }])
+    );
     // Walk back 7 days so we always have a 7-row series even when some
     // days have no entries.
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today.getTime() - i * 86_400_000).toISOString().slice(0, 10);
       const counts = grouped.get(d) ?? { full: 0, modified: 0, recovery: 0 };
-      days.push({ date: d, ...counts, day_type: dayTypeByDate.get(d) ?? null });
+      const plan = planByDate.get(d);
+      days.push({
+        date: d,
+        ...counts,
+        day_type: plan?.day_type ?? null,
+        focus: plan?.focus ?? null,
+      });
     }
   }
 
@@ -268,14 +291,15 @@ You will receive a JSON object with weekly team facts: day-by-day verdict counts
 2. Use player names by first name only ("Hákon", not "Hákon Jónsson"). NEVER make up names.
 3. One paragraph, ~80–120 words. Not bullet points.
 4. The paragraph must do three things, in this order:
-   (a) Name the SHAPE of the week — load trajectory, key day-types, dominant verdict pattern.
+   (a) Name the SHAPE of the week — what days were TRAIN / GAME / OFF (from each day's day_type + focus), and the dominant verdict pattern on training days.
    (b) Name the PEOPLE STORIES — who improved, who declined, any active injuries. Be specific.
    (c) Name one CONCRETE THING TO CARRY into next week (a player to watch, a load target, a recovery focus).
-5. Plain coach English — no jargon (no "ACWR", "z-score", "composite", "MD-3").
+5. ALWAYS describe the week's SESSIONS using the days[] array — day_type tells you what TYPE of day each was (TRAIN/GAME/OFF/etc.), focus tells you what KIND of training was planned. NEVER conclude "no sessions" just because verdict counts are zero; an OFF day will naturally have low or zero verdict counts. Count the TRAIN and GAME days from day_type as evidence of what the squad did.
+6. Plain coach English — no jargon (no "ACWR", "z-score", "composite", "MD-3").
    Translate: ACWR → "training load vs his usual", declining z → "trending down", etc.
-6. If override_count_7d > 0, mention briefly only if it's a notable pattern (e.g. "you went tougher on 5 of 7 days" suggests the engine was conservative). Otherwise skip.
-7. ENGLISH ONLY. No Icelandic.
-8. Output JSON only: { "weekly_story": "single paragraph here" }`;
+7. If override_count_7d > 0, mention briefly only if it's a notable pattern (e.g. "you went tougher on 5 of 7 days" suggests the engine was conservative). Otherwise skip.
+8. ENGLISH ONLY. No Icelandic.
+9. Output JSON only: { "weekly_story": "single paragraph here" }`;
 }
 
 async function callClaude(systemPrompt: string, userMessage: string): Promise<{ weekly_story: string }> {
