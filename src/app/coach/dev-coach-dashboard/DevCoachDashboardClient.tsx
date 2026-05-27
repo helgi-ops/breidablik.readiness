@@ -8654,80 +8654,6 @@ export default function CoachPage() {
               })()}
             </CardContent>
           </Card>
-          {/* Planned session load — Week-setup MD context turned into a
-              coach-facing load target (type / band / sRPE / % of match).
-              On OFF days and match days the muted version was duplicating
-              the green TODAY card's "rest day" / "match day" message, so
-              we suppress it here — the OFF-day microcycle paragraph now
-              lives as the first bullet inside the green TODAY card.
-              On a manual / no-MD week we still show it ("set up the match
-              week") because that prompt is genuinely unique info. */}
-          {(() => {
-            const todayPlannedDayType =
-              (rows[0] as { planned_day_type?: string | null } | undefined)?.planned_day_type ?? null;
-            const dt = String(todayPlannedDayType ?? "").trim().toUpperCase();
-            if (dt === "OFF" || dt === "GAME") return null;
-            return (
-              <PlannedSessionLoadCard
-                lang={lang}
-                mdDay={mdDayToday}
-                dayType={todayPlannedDayType}
-                focus={(rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null}
-                daysSincePrev={daysSincePrevToday}
-                daysToNext={daysToNextToday}
-                redCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "red").length}
-                yellowCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "yellow").length}
-                totalPlayers={rows.length}
-              />
-            );
-          })()}
-          {/* Override history — the coach's own audit trail. Silent when
-              there are zero overrides in the last 30 days. Aligns with
-              Explainability-First principle #6: overrides are an audited
-              dialogue, not a black hole. */}
-          <OverrideHistoryCard lang={lang} />
-          {/* Verdict-accuracy / calibration widget moved to the Reporting
-              Center — coaches doing their morning briefing don't want
-              system-health metrics in the way. See the System health
-              section at the bottom of /coach/reporting-center. */}
-
-          {/* Weekly Narrative — strategic 7-day overview between Today
-              Command Center and the per-day briefings. Reads training-load
-              data + verdict history across the squad and emits a one-line
-              story + 2–3 supporting facts + forward-looking recommendation.
-              Self-hides when there's not enough data yet (fresh teams). */}
-          <WeeklyNarrativeCard teamId={coachTeamId} />
-
-          {/* Indoor Briefing — team-level executive summary.
-              Hidden when team training_mode is explicitly set to "outdoor" — the
-              card is meaningless (and confusingly shows "heavy indoor load" for
-              outdoor sessions that the auto-classifier mis-labelled). When
-              outdoor mode is locked in, the coach has already told us indoor
-              context doesn't apply. */}
-          {rows.length > 0 &&
-            trainingMode !== "outdoor" &&
-            (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
-              <TeamIndoorBriefing
-                players={rows.map((r) => {
-                  const indoor = playerIndoorStatus[r.player_id];
-                  const injury = playerInjuryStatus[r.player_id];
-                  return {
-                    player_id: r.player_id,
-                    full_name: r.full_name ?? "—",
-                    composite_score: indoor?.compositeScore ?? null,
-                    composite_band: indoor?.compositeBand ?? null,
-                    acwr_value: indoor?.acwrValue ?? null,
-                    acwr_flag: indoor?.acwrFlag ?? null,
-                    mcburnie_flag: indoor?.mcburnieFlag ?? null,
-                    sessions_7d: indoor?.sessions7d ?? 0,
-                    injury_status: injury?.status ?? null,
-                    injury_body_part: injury?.bodyPart ?? null,
-                    injury_rtp_stage: injury?.rtpStage ?? null,
-                    injury_estimated_return: injury?.estimatedReturn ?? null,
-                  };
-                })}
-              />
-            )}
 
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
@@ -8968,6 +8894,80 @@ export default function CoachPage() {
               };
             }) as any} trainingMode={trainingMode} />
           )}
+
+          {/* Indoor Briefing — team-level executive summary.
+              Hidden when team training_mode is explicitly set to "outdoor" — the
+              card is meaningless (and confusingly shows "heavy indoor load" for
+              outdoor sessions that the auto-classifier mis-labelled). When
+              outdoor mode is locked in, the coach has already told us indoor
+              context doesn't apply. */}
+          {rows.length > 0 &&
+            trainingMode !== "outdoor" &&
+            (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
+              <TeamIndoorBriefing
+                players={rows.map((r) => {
+                  const indoor = playerIndoorStatus[r.player_id];
+                  const injury = playerInjuryStatus[r.player_id];
+                  return {
+                    player_id: r.player_id,
+                    full_name: r.full_name ?? "—",
+                    composite_score: indoor?.compositeScore ?? null,
+                    composite_band: indoor?.compositeBand ?? null,
+                    acwr_value: indoor?.acwrValue ?? null,
+                    acwr_flag: indoor?.acwrFlag ?? null,
+                    mcburnie_flag: indoor?.mcburnieFlag ?? null,
+                    sessions_7d: indoor?.sessions7d ?? 0,
+                    injury_status: injury?.status ?? null,
+                    injury_body_part: injury?.bodyPart ?? null,
+                    injury_rtp_stage: injury?.rtpStage ?? null,
+                    injury_estimated_return: injury?.estimatedReturn ?? null,
+                  };
+                })}
+              />
+            )}
+          {/* Planned session load — Week-setup MD context turned into a
+              coach-facing load target (type / band / sRPE / % of match).
+              On OFF days and match days the muted version was duplicating
+              the green TODAY card's "rest day" / "match day" message, so
+              we suppress it here — the OFF-day microcycle paragraph now
+              lives as the first bullet inside the green TODAY card.
+              On a manual / no-MD week we still show it ("set up the match
+              week") because that prompt is genuinely unique info. */}
+          {(() => {
+            const todayPlannedDayType =
+              (rows[0] as { planned_day_type?: string | null } | undefined)?.planned_day_type ?? null;
+            const dt = String(todayPlannedDayType ?? "").trim().toUpperCase();
+            if (dt === "OFF" || dt === "GAME") return null;
+            return (
+              <PlannedSessionLoadCard
+                lang={lang}
+                mdDay={mdDayToday}
+                dayType={todayPlannedDayType}
+                focus={(rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null}
+                daysSincePrev={daysSincePrevToday}
+                daysToNext={daysToNextToday}
+                redCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "red").length}
+                yellowCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "yellow").length}
+                totalPlayers={rows.length}
+              />
+            );
+          })()}
+          {/* Override history — the coach's own audit trail. Silent when
+              there are zero overrides in the last 30 days. Aligns with
+              Explainability-First principle #6: overrides are an audited
+              dialogue, not a black hole. */}
+          <OverrideHistoryCard lang={lang} />
+          {/* Verdict-accuracy / calibration widget moved to the Reporting
+              Center — coaches doing their morning briefing don't want
+              system-health metrics in the way. See the System health
+              section at the bottom of /coach/reporting-center. */}
+
+          {/* Weekly Narrative — strategic 7-day overview between Today
+              Command Center and the per-day briefings. Reads training-load
+              data + verdict history across the squad and emits a one-line
+              story + 2–3 supporting facts + forward-looking recommendation.
+              Self-hides when there's not enough data yet (fresh teams). */}
+          <WeeklyNarrativeCard teamId={coachTeamId} />
 
           {/* Readiness × Load quadrant — at-a-glance decision support */}
           <ReadinessLoadQuadrant
