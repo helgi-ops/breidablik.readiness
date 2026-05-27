@@ -231,17 +231,19 @@ const COPY = {
       badgeRtp: "RTP",
     },
     // Compact-mode status phrases — single short label per player. Designed
-    // for non-S&C coaches: action-implication first, no jargon, no numbers.
+    // for non-S&C coaches: plain language only. No jargon, no abbreviations,
+    // no foreign-loan sport-science words. A football coach should read
+    // each phrase and immediately know what it means for today's session.
     compact: {
-      recoveryFocus:    "Hvíld",
-      postMatchEcho:    "Eftir leik — eðlilegt",
+      recoveryFocus:    "Þarf hvíld",
+      postMatchEcho:    "Eðlilegt eftir leik",
       heavyLoad:        "Þungt æfingaálag",
-      highIntensity:    "Háákefðar dagur",
+      highIntensity:    "Erfiður dagur í gær",
       belowNormal:      "Undir venjulegu",
-      mechStrain:       "Vélrænt álag",
-      metabStrain:      "Efnaskiptaálag",
+      mechStrain:       "Mikið af snöggum hreyfingum",
+      metabStrain:      "Mikið af háhraða-hlaupum",
       generalFatigue:   "Almenn þreyta",
-      neuralBias:       "Tauga-þreyta",
+      neuralBias:       "Slöpp viðbrögð",
       protectTissue:    (t: string) => `Vernda ${t.toLowerCase()}`,
       monitor:          "Fylgjast með",
     },
@@ -740,55 +742,58 @@ function composeAttentionExplanation(
     const labelEN = (k: string) =>
       k === "sleep" ? "sleep" : k === "energy" ? "energy" : k === "stress" ? "stress" : "soreness";
     const partsIS = wellnessDrivers.map((d) => {
-      const normIS = typeof d.baselineMean === "number" ? ` (norm ${d.baselineMean.toFixed(1)})` : "";
+      const normIS = typeof d.baselineMean === "number" ? ` (venja ${d.baselineMean.toFixed(1)})` : "";
       return `${labelIS(d.kind)} ${d.value}/5${normIS}`;
     });
     const partsEN = wellnessDrivers.map((d) => {
-      const normEN = typeof d.baselineMean === "number" ? ` (norm ${d.baselineMean.toFixed(1)})` : "";
+      const normEN = typeof d.baselineMean === "number" ? ` (usual ${d.baselineMean.toFixed(1)})` : "";
       return `${labelEN(d.kind)} ${d.value}/5${normEN}`;
     });
-    phraseIS.push(`${partsIS.join(" og ")} er undir hans persónulegri norm`);
-    phraseEN.push(`${partsEN.join(" and ")} below his personal norm`);
+    phraseIS.push(`${partsIS.join(" og ")} — undir því sem hann skráir venjulega`);
+    phraseEN.push(`${partsEN.join(" and ")} — below what he usually reports`);
   }
 
   // (2) Low total score — only when wellness drivers didn't already say it.
   if (wellnessDrivers.length === 0 && item.score != null && item.score <= 17) {
-    phraseIS.push(`heildar-readiness ${item.score}/25 undir meðaltali`);
-    phraseEN.push(`total readiness ${item.score}/25 below his average`);
+    phraseIS.push(`heildar-líðan ${item.score}/25 lægri en venjulega`);
+    phraseEN.push(`overall wellness ${item.score}/25 lower than usual`);
   }
 
-  // (3) PL spike — annotate post-match clearly so the coach knows it's
-  // expected echo rather than an unplanned overreach.
+  // (3) PL spike — translate the ratio into "% over usual" so the coach
+  // doesn't have to interpret "1,73×". Annotate post-match clearly so the
+  // coach knows it's expected echo rather than an unplanned overreach.
   if (item.plSpike != null && item.plSpike >= 1.6) {
+    const pct = Math.round((item.plSpike - 1) * 100);
     if (postMatch) {
-      phraseIS.push(`PL-spike ${item.plSpike.toFixed(2)}× í gær passar við leikálag`);
-      phraseEN.push(`PL spike ${item.plSpike.toFixed(2)}× yesterday matches match exposure`);
+      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn)`);
+      phraseEN.push(`yesterday's training load was ${pct}% above usual (matches the game)`);
     } else {
-      phraseIS.push(`PL-spike ${item.plSpike.toFixed(2)}× í gær`);
-      phraseEN.push(`PL spike ${item.plSpike.toFixed(2)}× yesterday`);
+      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu`);
+      phraseEN.push(`yesterday's training load was ${pct}% above usual`);
     }
   } else if (item.composite != null && item.composite >= 0.75 && (item.plSpike == null || item.plSpike < 1.6)) {
     if (postMatch) {
-      phraseIS.push("composite-álag hátt (eftir leik)");
-      phraseEN.push("composite load high (post-match)");
+      phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik)");
+      phraseEN.push("recent days' combined load is high (expected post-match)");
     } else {
-      phraseIS.push("composite-álag hátt");
-      phraseEN.push("composite load high");
+      phraseIS.push("samanlagt álag síðustu daga er hátt");
+      phraseEN.push("recent days' combined load is high");
     }
   }
 
-  // (4) Fatigue type — only when the load signal didn't already imply
-  // mechanical/metabolic. We add it to specify the kind of strain.
+  // (4) Fatigue type — translate into what kind of WORK strained the body,
+  // not the sport-science term for the strain. "Mechanical" means accel/
+  // decel volume; "metabolic" means high-speed running volume.
   const ft = item.fatigueType;
   if (ft === "mechanical_fatigue") {
-    phraseIS.push("merki um vélrænt álag (accel/decel)");
-    phraseEN.push("a mechanical-strain signature (accel/decel)");
+    phraseIS.push("mikið af hröðunum og hemlunum — tekur á vöðva og sinum");
+    phraseEN.push("a lot of accelerations and decelerations — heavy on muscles and tendons");
   } else if (ft === "metabolic_fatigue") {
-    phraseIS.push("merki um efnaskiptaálag");
-    phraseEN.push("a metabolic-strain signature");
+    phraseIS.push("mikið af háhraða-hlaupum — þolfærið tekur á sig");
+    phraseEN.push("a lot of high-speed running — heavy on the engine");
   } else if (ft === "global_fatigue") {
-    phraseIS.push("merki um heildarþreytu");
-    phraseEN.push("a whole-system fatigue signature");
+    phraseIS.push("álag á allt kerfið — bæði vöðvar og þol");
+    phraseEN.push("strain across the whole system — both muscles and engine");
   }
 
   // ── Build lead sentence. If we have nothing typed-specific, fall back
@@ -814,8 +819,8 @@ function composeAttentionExplanation(
     tailIS = " " + ensurePeriod(capitaliseFirst(item.topCounterfactual.descriptionIS));
     tailEN = " " + ensurePeriod(capitaliseFirst(item.topCounterfactual.descriptionEN));
   } else if (postMatch && !isRedToday) {
-    tailIS = " Þetta er eðlilegt eftir leik — fylgjast með, en engin sérstök aðgerð.";
-    tailEN = " This is expected post-match — monitor, but no extra action.";
+    tailIS = " Þetta er eðlilegt eftir leik — fylgjast með honum, en engin sérstök aðgerð.";
+    tailEN = " This is expected after a match — keep an eye on him, but no extra action.";
   }
 
   return {
@@ -904,14 +909,14 @@ function computeTeamPulse(
       return {
         level: "rest",
         sentence: is
-          ? `Frídagur — ekkert flagged í dag, ${nFull}/${nPlayers} skiluðu wellness.`
-          : `Rest day — nothing flagged today, ${nFull}/${nPlayers} completed wellness check-in.`,
+          ? `Frídagur — enginn að athuga í dag. ${nFull}/${nPlayers} skiluðu daglegri líðan.`
+          : `Rest day — no one to watch today. ${nFull}/${nPlayers} completed their daily check-in.`,
       };
     }
     return {
       level: "rest",
       sentence: is
-        ? `Frídagur — ${formatNames()} að fylgjast með, restin í lagi.`
+        ? `Frídagur — ${formatNames()} að fylgjast með, restin er í lagi.`
         : `Rest day — watching ${formatNames()}, the rest are fine.`,
     };
   }
@@ -971,37 +976,38 @@ function computeTeamPulse(
 function statusSourceHint(item: AttentionItem, lang: "IS" | "EN"): string {
   const is = lang === "IS";
   // Walk the same priority order the status-builder uses, so the hint
-  // matches whatever phrase the coach is actually seeing.
+  // matches whatever phrase the coach is actually seeing. Plain language
+  // only — short sentence + research source as a tail attribution.
   if (item.injury) {
     return is
-      ? "Meiðslastaða úr player_injuries / injury_events. Birtist í Decision summary."
-      : "Injury status from player_injuries / injury_events. Surfaced in Decision summary.";
+      ? "Skráð meiðsli — sést líka í Decision summary."
+      : "Logged injury — also shown in Decision summary.";
   }
   const ft = item.fatigueType;
   if (item.plSpike != null && item.plSpike >= 1.6) {
     return is
-      ? "PL-spike ≥ 1,6× á móti 28-d meðaltali. Gabbett 2017 ACWR."
-      : "PL spike ≥ 1.6× vs 28-d mean. Gabbett 2017 ACWR.";
+      ? "Hreyfingaálag í gær var verulega yfir því sem hann gerir venjulega. Heimild: Gabbett 2017."
+      : "His movement load yesterday was clearly above what he usually does. Source: Gabbett 2017.";
   }
   if (ft === "mechanical_fatigue") {
     return is
-      ? "Vélrænt álagsmerki úr IMA + accel/decel án PL hækkunar. McBurnie 2022."
-      : "Mechanical-strain signal from IMA + accel/decel without matching PL. McBurnie 2022.";
+      ? "Mikið af hröðunum og hemlunum í gær — tekur á vöðva og sinum. Heimild: McBurnie 2022."
+      : "Lots of accelerations and decelerations yesterday — heavy on muscles and tendons. Source: McBurnie 2022.";
   }
   if (ft === "metabolic_fatigue") {
     return is
-      ? "Efnaskiptaálagsmerki — hátt metabolic score án vélræns merkis. di Prampero 2015."
-      : "Metabolic-strain signal — high metabolic score without mechanical signature. di Prampero 2015.";
+      ? "Mikið af háhraða-hlaupum í gær — þolfærið tekur á sig. Heimild: di Prampero 2015."
+      : "Lots of high-speed running yesterday — heavy on the engine. Source: di Prampero 2015.";
   }
   if (ft === "global_fatigue") {
     return is
-      ? "Bæði vélræn og efnaskiptaöll merki hækkuð. Gabbett 2017."
-      : "Both mechanical and metabolic signals elevated. Gabbett 2017.";
+      ? "Bæði vöðva- og þolfærisálag — álag á allt kerfið. Heimild: Gabbett 2017."
+      : "Both muscle and engine strain — load on the whole system. Source: Gabbett 2017.";
   }
   // Fall back to a generic explanation for the wellness/composite case.
   return is
-    ? "Persónulegt z-score á móti 28-d baseline (Robertson 2017). Composite-load (Gabbett 2017, Buchheit 2024)."
-    : "Personal z-score vs 28-d baseline (Robertson 2017). Composite load (Gabbett 2017, Buchheit 2024).";
+    ? "Tölurnar í dag eru lægri en það sem hann skráir venjulega. Heimild: Robertson 2017, Buchheit 2024."
+    : "Today's numbers are lower than what he usually reports. Source: Robertson 2017, Buchheit 2024.";
 }
 
 function buildAttentionList(
@@ -1171,18 +1177,19 @@ function buildAttentionList(
           descriptionIS: top.descriptionIS,
         };
       })();
-      // Load breakdown — surface what *kind* of work spiked. Only include
-      // sources where the spike is > 1.05 (avoid noise from at-baseline
-      // values). Limited to 4 entries to keep the strip compact.
+      // Load breakdown — surface what *kind* of work spiked, in plain coach
+      // labels (no HIR / IMA / FMP / PL abbreviations). Only include sources
+      // where the spike is > 1.05 (avoid noise from at-baseline values).
+      // Limited to 4 entries to keep the strip compact.
       const loadBreakdown: AttentionItem["loadBreakdown"] = (() => {
         if (!comp) return [];
         const candidates: Array<{ label: string; value: number | null | undefined }> = [
-          { label: "PL", value: comp.playerLoadSpike },
-          { label: lang === "IS" ? "Accel" : "Accel", value: comp.accelSpike },
-          { label: lang === "IS" ? "Decel" : "Decel", value: comp.decelSpike },
-          { label: "HIR", value: comp.hirSpike },
-          { label: "IMA", value: comp.imaTotalSpike },
-          { label: "FMP", value: comp.fmpDynamicHighSpike },
+          { label: lang === "IS" ? "Heildarhreyfing" : "Total movement", value: comp.playerLoadSpike },
+          { label: lang === "IS" ? "Hröðun" : "Sprints",        value: comp.accelSpike },
+          { label: lang === "IS" ? "Hemlun" : "Decelerations", value: comp.decelSpike },
+          { label: lang === "IS" ? "Háhraði" : "High-speed running", value: comp.hirSpike },
+          { label: lang === "IS" ? "Snöggar hreyfingar" : "Sharp movements", value: comp.imaTotalSpike },
+          { label: lang === "IS" ? "Innanhúshreyfingar" : "Indoor bursts", value: comp.fmpDynamicHighSpike },
         ];
         return candidates
           .filter((c): c is { label: string; value: number } => typeof c.value === "number" && c.value > 1.05)
@@ -1830,40 +1837,40 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                                 : "border-slate-300 border-dashed bg-slate-50 text-slate-600"
                           }`}
                           title={(() => {
-                            // Tooltip combines today's signal coverage with the
-                            // baseline maturity that the verdict rests on.
-                            // Robertson 2017 — personal norms need 7+ obs to
-                            // settle, 14+ for stability; this lets the coach
-                            // see at a glance whether the flag rests on a
-                            // thin baseline.
+                            // Tooltip in plain coach language: how many
+                            // signals we have today + how mature his
+                            // personal baseline is. No "n=", no "obs",
+                            // no jargon.
                             const parts: string[] = [];
                             if (item.confidence.notes.length > 0) {
                               parts.push(item.confidence.notes.join(" · "));
                             } else {
                               parts.push(lang === "IS"
-                                ? "Öll merki til staðar — há gagnavissa"
-                                : "All signals present — high data confidence");
+                                ? "Öll merki til staðar — góð gögn"
+                                : "All signals present — full data");
                             }
                             if (item.baselineMaturity) {
                               parts.push(lang === "IS"
-                                ? `Persónuleg norm: ${item.baselineMaturity.obs} mælingar á ${item.baselineMaturity.windowDays} dögum`
-                                : `Personal norm: ${item.baselineMaturity.obs} obs over ${item.baselineMaturity.windowDays}d`);
+                                ? `Við höfum ${item.baselineMaturity.obs} skráningar frá honum síðustu ${item.baselineMaturity.windowDays} daga`
+                                : `We have ${item.baselineMaturity.obs} entries from him over the last ${item.baselineMaturity.windowDays} days`);
                             }
                             return parts.join("\n");
                           })()}
                           aria-label={
                             lang === "IS"
-                              ? `Gagnavissa ${item.confidence.signalCount} af ${item.confidence.signalTotal}`
-                              : `Data confidence ${item.confidence.signalCount} of ${item.confidence.signalTotal}`
+                              ? `${item.confidence.signalCount} af ${item.confidence.signalTotal} merkjum til staðar`
+                              : `${item.confidence.signalCount} of ${item.confidence.signalTotal} signals present`
                           }
                         >
                           {item.confidence.signalCount}/{item.confidence.signalTotal}
-                          {/* Baseline maturity — small dot+number after the
-                              coverage ratio. Shown only when baseline is
-                              thin (≤ 10 obs) so well-baselined players
-                              don't get visual clutter. */}
+                          {/* Baseline maturity — small "fáar skráningar"
+                              tag when the personal baseline is thin
+                              (≤ 10 entries). Shown so the coach knows
+                              when a verdict rests on partial data. */}
                           {item.baselineMaturity && item.baselineMaturity.obs <= 10 ? (
-                            <span className="opacity-70">· n={item.baselineMaturity.obs}</span>
+                            <span className="opacity-70">
+                              · {lang === "IS" ? "fáar skráningar" : "few entries"}
+                            </span>
                           ) : null}
                         </span>
                         {/* Numeric chips — only in Detailed mode. Compact mode
@@ -1880,8 +1887,8 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           <span
                             className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${compChipCls}`}
                             title={lang === "IS"
-                              ? "Composite-álag 0-1: blanda af innra (RPE·ACWR), ytra (GPS-burden) og efnaskipta-skori. Gabbett 2017, Buchheit 2024."
-                              : "Composite load 0-1: blend of internal (RPE·ACWR), external (GPS-burden) and metabolic scores. Gabbett 2017, Buchheit 2024."}
+                              ? "Heildaræfingaálag síðustu daga (0-1). Yfir 0,75 = töluvert yfir venjulegu álagi. Byggt á rannsóknum Gabbett (2017) og Buchheit (2024)."
+                              : "Combined training load over recent days (0-1). Above 0.75 = clearly above normal load. Based on Gabbett (2017) and Buchheit (2024)."}
                           >
                             {t.chipComp} {item.composite.toFixed(2)}
                           </span>
@@ -1890,27 +1897,27 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           <span
                             className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${plChipCls}`}
                             title={lang === "IS"
-                              ? `Player Load í gær á móti 28-daga rúllandi meðaltali hans. ${item.plSpike.toFixed(2)}× = ${item.plSpike >= 1.6 ? "veruleg hækkun" : "hækkun"}. Heimild: Gabbett 2017 ACWR.`
-                              : `Player Load yesterday vs his 28-day rolling mean. ${item.plSpike.toFixed(2)}× = ${item.plSpike >= 1.6 ? "substantial spike" : "elevated"}. Source: Gabbett 2017 ACWR.`}
+                              ? `Hreyfingaálag í gær á móti því sem hann gerir venjulega (28 daga meðaltal). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= 1.6 ? "yfir venjulegu — veruleg hækkun" : "yfir venjulegu"}.`
+                              : `His movement load yesterday vs what he usually does (28-day average). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= 1.6 ? "above usual — a clear spike" : "above usual"}.`}
                           >
                             {t.chipPl} {item.plSpike.toFixed(2)}×
                           </span>
                         ) : null}
                         {/* Fatigue chip — hidden in Compact mode because the
                             single compactStatus badge below already conveys
-                            the same info ("Mechanical strain" etc.) */}
+                            the same info. */}
                         {detailed && fatigueChipLabel ? (
                           <span
                             className="rounded-full border border-indigo-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700"
                             title={(() => {
                               if (lang === "IS") {
-                                if (item.fatigueType === "mechanical_fatigue") return "Vélrænt álag: accel/decel og IMA hækkað án samsvarandi PL — bendir á áraun á vöðva/sin. McBurnie 2022.";
-                                if (item.fatigueType === "metabolic_fatigue") return "Efnaskiptaálag: hátt metabolic load án vélræns merkis — bendir á áhrif á orkukerfi. di Prampero 2015.";
-                                return "Heildarþreyta: bæði vélrænt og efnaskiptamerki hækkuð — systemic álag. Gabbett 2017.";
+                                if (item.fatigueType === "mechanical_fatigue") return "Mikið af hröðunum og hemlunum í gær — tekur á vöðva og sinum.";
+                                if (item.fatigueType === "metabolic_fatigue") return "Mikið af háhraða-hlaupum í gær — þolfærið tekur á sig.";
+                                return "Bæði vöðva- og þolfærisálag — álag á allt kerfið í gær.";
                               }
-                              if (item.fatigueType === "mechanical_fatigue") return "Mechanical strain: accel/decel + IMA elevated without matching PL — points at muscle/tendon strain. McBurnie 2022.";
-                              if (item.fatigueType === "metabolic_fatigue") return "Metabolic strain: high metabolic load without mechanical signature — points at energy-system stress. di Prampero 2015.";
-                              return "Whole-system fatigue: both mechanical and metabolic signals elevated — systemic strain. Gabbett 2017.";
+                              if (item.fatigueType === "mechanical_fatigue") return "A lot of accelerations and decelerations yesterday — heavy on muscles and tendons.";
+                              if (item.fatigueType === "metabolic_fatigue") return "A lot of high-speed running yesterday — heavy on the engine.";
+                              return "Both muscle and engine strain — load on the whole system yesterday.";
                             })()}
                           >
                             {fatigueChipLabel}
@@ -1952,24 +1959,30 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                         <div
                           className="mt-1 flex flex-wrap items-center gap-1"
                           title={lang === "IS"
-                            ? "Sundurliðun composite-skors: hvaða álags-merki hækkuðu í gær. Allar tölur eru í gær / 28-daga rúllandi meðaltal."
-                            : "Composite-score breakdown: which load signals spiked yesterday. All ratios are yesterday / 28-day rolling mean."}
+                            ? "Hvaða tegund vinnu var meiri en venjulega í gær — hröðun, hemlun, háhraði o.s.frv. Allar tölur eru í gær á móti því sem hann gerir venjulega."
+                            : "Which kind of work was heavier than usual yesterday — sprints, decelerations, high-speed running, etc. Ratios are yesterday vs his usual."}
                         >
                           <span className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mr-0.5">
-                            {lang === "IS" ? "Sundurliðun" : "Breakdown"}:
+                            {lang === "IS" ? "Tegund álags" : "Type of load"}:
                           </span>
-                          {item.loadBreakdown.map((b, i) => (
-                            <span
-                              key={`${item.playerId}-bd-${i}`}
-                              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
-                                b.value >= 1.6 ? "border-rose-200 bg-rose-50 text-rose-700"
-                                  : b.value >= 1.3 ? "border-amber-200 bg-amber-50 text-amber-700"
-                                  : "border-slate-200 bg-white text-slate-600"
-                              }`}
-                            >
-                              {b.label} {b.value.toFixed(2)}×
-                            </span>
-                          ))}
+                          {item.loadBreakdown.map((b, i) => {
+                            const pct = Math.round((b.value - 1) * 100);
+                            return (
+                              <span
+                                key={`${item.playerId}-bd-${i}`}
+                                className={`rounded border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                                  b.value >= 1.6 ? "border-rose-200 bg-rose-50 text-rose-700"
+                                    : b.value >= 1.3 ? "border-amber-200 bg-amber-50 text-amber-700"
+                                    : "border-slate-200 bg-white text-slate-600"
+                                }`}
+                                title={lang === "IS"
+                                  ? `${pct}% yfir því sem hann gerir venjulega`
+                                  : `${pct}% above what he usually does`}
+                              >
+                                {b.label} +{pct}%
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : null}
                       {/* Driver chips — orsök layer. Separate row, orange
