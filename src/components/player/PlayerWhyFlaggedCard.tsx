@@ -113,7 +113,7 @@ function leadSentence(state: DecisionState, lang: "IS" | "EN"): string {
     : "You're in yellow today. Here's what the system saw in your data:";
 }
 
-export default function PlayerWhyFlaggedCard({ lang = "IS" }: { lang?: "IS" | "EN" }) {
+export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "EN" }) {
   const [payload, setPayload] = React.useState<DecisionPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
