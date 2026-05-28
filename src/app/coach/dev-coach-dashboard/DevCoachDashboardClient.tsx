@@ -8963,11 +8963,6 @@ export default function CoachPage() {
               />
             );
           })()}
-          {/* Override history — the coach's own audit trail. Silent when
-              there are zero overrides in the last 30 days. Aligns with
-              Explainability-First principle #6: overrides are an audited
-              dialogue, not a black hole. */}
-          <OverrideHistoryCard lang={lang} />
           {/* Verdict-accuracy / calibration widget moved to the Reporting
               Center — coaches doing their morning briefing don't want
               system-health metrics in the way. See the System health
@@ -9215,6 +9210,14 @@ export default function CoachPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Override history — coach's reflective audit trail.
+              Sits in Squad tab under Team Risk Map (was Today tab); this
+              is a weekly-cadence review tool, not a morning-brief tool.
+              Silent when there are zero overrides in the last 30 days.
+              Aligns with Explainability-First principle #6: overrides are
+              an audited dialogue, not a black hole. */}
+          <OverrideHistoryCard lang={lang} />
 
           {/* Weekly Performance Intelligence */}
           <Card className="shadow-sm">
