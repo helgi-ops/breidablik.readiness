@@ -8628,6 +8628,17 @@ export default function CoachPage() {
                         </div>
                       )}
 
+                      {/* Weekly story — Friday-afternoon AI synthesis of the
+                          last 7 days. Grouped with "Press for deeper analysis"
+                          (which covers today) because both are ELITE AI
+                          narrative outputs and belong in the same
+                          AI-explanation area of Today Command Center.
+                          Daily AI = "what does today's data say"; Weekly
+                          story = "what was the story of the week". */}
+                      <div className="mt-3">
+                        <WeeklyStoryCard lang={lang} />
+                      </div>
+
                       {/* Day-state context row.
                           Default: shows internal state code + reason (useful
                           for the engine-aware coach when verdicts feel off).
@@ -8975,14 +8986,6 @@ export default function CoachPage() {
             lang={lang}
             playerComposites={playerComposites}
           />
-
-          {/* Weekly story — end-of-week retrospective.
-              Friday-afternoon AI synthesis of the last 7 days. Opt-in
-              (coach clicks "Generate"); ELITE-gated. Aligns with
-              Explainability-First principle #5: AI explains, rules
-              decide. Sits at the BOTTOM of the today-tab stack as a
-              reflective summary — not part of the morning brief flow. */}
-          <WeeklyStoryCard lang={lang} />
 
         </div>
       )}
