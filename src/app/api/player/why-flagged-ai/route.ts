@@ -147,14 +147,21 @@ async function fetchDataForWhyFlagged(
   }));
 
   // (5) verdict_history — last 14 days of athlete state for "you've been
-  // yellow for 3 days, not just today" context
+  // yellow for 3 days, not just today" context. Read from the SAME source
+  // the dashboard reads (v_coach_readiness_today_v8 = readiness_entries.color)
+  // so the AI and the coach surface stay in sync. See coach route.ts for
+  // the full rationale on this 2026-05-28 switch.
   const { data: vh } = await supabase
-    .from("athlete_decision_history")
-    .select("decision_date, athlete_state, load_action, neural_status")
+    .from("v_coach_readiness_today_v8")
+    .select("entry_date, final_color, final_flag, total_score")
     .eq("player_id", playerId)
-    .gte("decision_date", fourteenAgoIso)
-    .order("decision_date", { ascending: false });
-  out.verdict_history_14d = vh ?? [];
+    .gte("entry_date", fourteenAgoIso)
+    .order("entry_date", { ascending: false });
+  out.verdict_history_14d = (vh ?? []).map((r: { entry_date: string; final_color: string | null; final_flag: string | null; total_score: number | null }) => ({
+    decision_date: r.entry_date,
+    athlete_state: (r.final_color ?? "").toUpperCase() || null,
+    readiness_score: r.total_score,
+  }));
 
   // Tiny metric-definitions block — anti-confusion footer the validator
   // checks against (HSR vs HMLD trap from the coach endpoint history).

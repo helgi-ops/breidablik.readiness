@@ -96,19 +96,29 @@ async function gatherTeamFacts(
   const playerIds = players.map((p) => p.id);
   const nameById = new Map(players.map((p) => [p.id, p.full_name ?? "—"]));
 
-  // Today's verdict counts
+  // Today's verdict counts.
+  //
+  // Source: v_coach_readiness_today_v8.final_color (the dashboard view).
+  // Two earlier bugs fixed here on 2026-05-28:
+  //  (1) athlete_decision_history does NOT have a `training_action` column
+  //      (it has `session_mode`). Supabase silently returned empty rows,
+  //      so AI was told "no sessions" all week.
+  //  (2) Even with the right column, athlete_decision_history runs a
+  //      trajectory-aware engine whose verdict can disagree with what
+  //      the coach sees on screen. We align to the dashboard's source.
+  // See CLAUDE.md > "Canonical verdict source" for the architecture rule.
   let full_count = 0, reduced_count = 0, recovery_count = 0;
   if (playerIds.length > 0) {
     const { data: dh } = await supabase
-      .from("athlete_decision_history")
-      .select("training_action")
+      .from("v_coach_readiness_today_v8")
+      .select("final_color")
       .in("player_id", playerIds)
-      .eq("decision_date", today);
-    for (const r of (dh ?? []) as Array<{ training_action: string | null }>) {
-      const a = String(r.training_action ?? "").toUpperCase();
-      if (a === "FULL") full_count++;
-      else if (a === "REDUCED" || a === "MODIFIED") reduced_count++;
-      else if (a === "RECOVERY" || a === "HOLD") recovery_count++;
+      .eq("entry_date", today);
+    for (const r of (dh ?? []) as Array<{ final_color: string | null }>) {
+      const c = String(r.final_color ?? "").toLowerCase();
+      if (c === "green") full_count++;
+      else if (c === "yellow") reduced_count++;
+      else if (c === "red") recovery_count++;
     }
   }
 
@@ -169,33 +179,47 @@ async function gatherTeamFacts(
     match_days_7d = dates.size;
   } catch { /* best-effort */ }
 
-  // 7d REDUCED+RECOVERY count
+  // 7d yellow+red count — equivalent to "how many player-days needed
+  // modification or recovery". Source: v_coach_readiness_today_v8 (the
+  // dashboard view). See CLAUDE.md > "Canonical verdict source".
   let reduced_recovery_count_7d = 0;
   try {
     const { data: dh } = await supabase
-      .from("athlete_decision_history")
-      .select("training_action")
+      .from("v_coach_readiness_today_v8")
+      .select("final_color")
       .in("player_id", playerIds)
-      .gte("decision_date", start7).lte("decision_date", today);
-    for (const r of (dh ?? []) as Array<{ training_action: string | null }>) {
-      const a = String(r.training_action ?? "").toUpperCase();
-      if (a === "REDUCED" || a === "MODIFIED" || a === "RECOVERY" || a === "HOLD") reduced_recovery_count_7d++;
+      .gte("entry_date", start7).lte("entry_date", today);
+    for (const r of (dh ?? []) as Array<{ final_color: string | null }>) {
+      const c = String(r.final_color ?? "").toLowerCase();
+      if (c === "yellow" || c === "red") reduced_recovery_count_7d++;
     }
   } catch { /* best-effort */ }
 
-  // Declining players (z 7d mean ≥ 0.5 below prior 21d mean)
+  // Declining players (z 7d mean ≥ 0.5 below prior 21d mean).
+  //
+  // NOTE: previous version selected athlete_decision_history.z_today as
+  // a top-level column — that column DOES NOT EXIST on the table (z lives
+  // inside the input_signals jsonb). The select silently returned empty
+  // rows and this list has always been blank in team-analysis AI prompts.
+  // Re-extract from input_signals to actually populate it.
   const declining_players: string[] = [];
   try {
     const { data: zh } = await supabase
       .from("athlete_decision_history")
-      .select("player_id, z_today, decision_date")
+      .select("player_id, input_signals, decision_date")
       .in("player_id", playerIds)
       .gte("decision_date", start28).lte("decision_date", today);
     const byPlayer = new Map<string, Array<{ d: string; z: number }>>();
-    for (const r of (zh ?? []) as Array<{ player_id: string; z_today: number | null; decision_date: string }>) {
-      if (r.z_today == null || !Number.isFinite(r.z_today)) continue;
+    for (const r of (zh ?? []) as Array<{ player_id: string; input_signals: Record<string, unknown> | null; decision_date: string }>) {
+      // input_signals shape varies — z lives under readinessZ in current
+      // pipeline, but older snapshots may not include it. Tolerate both.
+      const sig = r.input_signals ?? {};
+      const rawZ = (sig as { readinessZ?: unknown; z_today?: unknown }).readinessZ
+        ?? (sig as { readinessZ?: unknown; z_today?: unknown }).z_today;
+      const z = typeof rawZ === "number" && Number.isFinite(rawZ) ? rawZ : null;
+      if (z == null) continue;
       const arr = byPlayer.get(r.player_id) ?? [];
-      arr.push({ d: r.decision_date, z: Number(r.z_today) });
+      arr.push({ d: r.decision_date, z });
       byPlayer.set(r.player_id, arr);
     }
     for (const [pid, arr] of byPlayer) {

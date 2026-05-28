@@ -166,12 +166,18 @@ async function buildSummaryInput(
     // ── Decision history last 10 days (verdict trajectory + streak) ──
     // "3rd RED day in a row" lands very differently than "first RED after
     // 5 GREEN days" — coach trust depends on the AI honoring trajectory.
+    //
+    // Read from v_coach_readiness_today_v8 (= readiness_entries.color),
+    // which is the canonical "verdict the coach saw on the dashboard each
+    // day". Switched from athlete_decision_history 2026-05-28 — see
+    // CLAUDE.md > "Canonical verdict source" for why two engines disagree
+    // on the same day and which one is the user-facing truth.
     supabase
-      .from("athlete_decision_history")
-      .select("decision_date, athlete_state, session_mode, is_coach_override")
+      .from("v_coach_readiness_today_v8")
+      .select("entry_date, final_color, final_flag")
       .eq("player_id", playerId)
-      .gte("decision_date", tenDaysAgoIso)
-      .order("decision_date", { ascending: false }),
+      .gte("entry_date", tenDaysAgoIso)
+      .order("entry_date", { ascending: false }),
     // ── Recent CMJ raw values (only when test is actually fresh) ──
     // The McBurnie payload's `cmj` block carries an internal verdict
     // ("freshness") but no raw measurement. When a test really happened
@@ -266,27 +272,37 @@ async function buildSummaryInput(
     energy:         trendOf(wellnessDaily.map((d) => d.energy)),
   };
 
-  // ── Verdict streak from athlete_decision_history ──
+  // ── Verdict streak from the canonical view ──
   // "3 RED in a row" / "first MODIFIED after 5 GREEN" — trajectory
   // context the verdict alone can't carry. Only the streak is sent;
   // raw history is dropped to keep the prompt focused.
-  type DecisionRow = { decision_date: string; athlete_state: string; session_mode: string | null; is_coach_override: boolean | null };
+  //
+  // Source: v_coach_readiness_today_v8.final_color (was: athlete_decision_history.athlete_state).
+  // The view-based color matches what the coach sees on the dashboard,
+  // which avoids the "AI says RED but screen shows YELLOW" mismatch.
+  // Coach-override count from athlete_decision_history is not currently
+  // surfaced here (the dashboard's own override-history card covers it).
+  type DecisionRow = { entry_date: string; final_color: string | null; final_flag: string | null };
   const decisionRows = (decisionHistory.data ?? []) as DecisionRow[];
   let verdictStreak: { state: string; days_in_state: number; previous_state: string | null; coach_overrides_in_window: number } | null = null;
   if (decisionRows.length > 0) {
-    const currentState = decisionRows[0].athlete_state;
+    const normaliseColor = (c: string | null): string =>
+      (c ?? "").toUpperCase() || "—";
+    const currentState = normaliseColor(decisionRows[0].final_color);
     let daysInState = 0;
     let previousState: string | null = null;
     for (const r of decisionRows) {
-      if (r.athlete_state === currentState) daysInState++;
-      else { previousState = r.athlete_state; break; }
+      const s = normaliseColor(r.final_color);
+      if (s === currentState) daysInState++;
+      else { previousState = s; break; }
     }
-    const coachOverrides = decisionRows.filter((r) => r.is_coach_override === true).length;
     verdictStreak = {
       state: currentState,
       days_in_state: daysInState,
       previous_state: previousState,
-      coach_overrides_in_window: coachOverrides,
+      // Override-count not currently sourced from this view; surface 0 to
+      // keep the prompt shape stable until we wire decision_override_log here.
+      coach_overrides_in_window: 0,
     };
   }
 
@@ -362,7 +378,7 @@ async function buildSummaryInput(
     session_type?: string | null;
   };
   const recentSessRows: SessionRow[] = (recentSessions.data ?? []) as SessionRow[];
-  let postMatchContext: { is_post_match: boolean; match_date: string | null; days_since_match: number | null; today_md_day: string | null; match_minutes_played: number | null; high_match_minutes: boolean } = {
+  const postMatchContext: { is_post_match: boolean; match_date: string | null; days_since_match: number | null; today_md_day: string | null; match_minutes_played: number | null; high_match_minutes: boolean } = {
     is_post_match: false,
     match_date: null,
     days_since_match: null,

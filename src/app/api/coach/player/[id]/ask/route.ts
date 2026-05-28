@@ -291,13 +291,26 @@ async function fetchDataForQuestion(
   }
 
   if (dataKeys.includes("verdict_history")) {
+    // Read from v_coach_readiness_today_v8 (= readiness_entries.color),
+    // which is the SAME source the dashboard reads. Switched from
+    // athlete_decision_history 2026-05-28 after a real-world divergence:
+    // the coach saw YELLOW on screen but AI said RED, because the two
+    // tables run different engines (personal-norm vs trajectory-aware
+    // decision engine). Until the architecture picks one canonical
+    // verdict, AI Q&A aligns with what the coach sees on the dashboard.
     const { data } = await supabase
-      .from("athlete_decision_history")
-      .select("decision_date, athlete_state, load_action, neural_status")
+      .from("v_coach_readiness_today_v8")
+      .select("entry_date, final_color, final_flag, total_score")
       .eq("player_id", playerId)
-      .gte("decision_date", fourteenAgoIso)
-      .order("decision_date", { ascending: false });
-    out.verdict_history_14d = data ?? [];
+      .gte("entry_date", fourteenAgoIso)
+      .order("entry_date", { ascending: false });
+    // Normalize the field names to match the legacy shape so existing
+    // prompt language ("verdict_history_14d[*].athlete_state") still works.
+    out.verdict_history_14d = (data ?? []).map((r: { entry_date: string; final_color: string | null; final_flag: string | null; total_score: number | null }) => ({
+      decision_date: r.entry_date,
+      athlete_state: (r.final_color ?? "").toUpperCase() || null,
+      readiness_score: r.total_score,
+    }));
   }
 
   if (dataKeys.includes("mpe_recovery")) {

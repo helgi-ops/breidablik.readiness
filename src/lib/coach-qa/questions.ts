@@ -157,7 +157,8 @@ HARD RULES for this question specifically:
 - Use ONLY the actual numbers from the input. Never round drastically or invent a value.
 - Tie every sentence back to a NAMED signal (sleep, soreness, player load, composite, etc.) — don't say "his readings are off" without saying which reading.
 - If the verdict is GREEN, say "no flag today — he's clear" and stop.
-- If the player has an active injury, lead with that ("Flagged because he's in the active injury pipeline — not a readiness issue") and skip the readings analysis.`,
+- If the player has an active injury, lead with that ("Flagged because he's in the active injury pipeline — not a readiness issue") and skip the readings analysis.
+- PATTERN CLAIMS — read the sub-scores carefully before claiming a recurring driver. If you say "X has been the driver on the recent red days", first check the wellness_recent_14d entries for those red dates and confirm X was actually dipped vs his usual on EACH of those days. A score of 4/5 on sleep IS his usual; do NOT call that a "dip" or include it in a sleep-driven pattern. The classic failure: confidently writing "sleep was the driver on May 23 and May 18" when sleep was actually 4/5 on both days and the real drivers were energy and soreness. If the historical drivers don't all share the same sub-score, say so plainly ("each red day was driven by different sub-scores — no single recurring sensitivity").`,
   },
 ];
 

@@ -26,6 +26,20 @@ Before shipping any new feature, run the five-question check in the manifesto:
 
 If any answer is "no", the feature is not ready.
 
+## Canonical verdict source
+
+When you need today's verdict color for a player (or any historical day's color), read from **`v_coach_readiness_today_v8.final_color`** (which is sourced from `readiness_entries.color`). This is the column the Daily Briefing dashboard already displays, and aligning every other surface to it is the system's promise that "what the coach sees is what the AI / report / export sees."
+
+Do NOT read `athlete_decision_history.athlete_state` as a verdict color, and do NOT read `stage4_decisions.system_decision` as a verdict color. Those tables exist and have their own purposes:
+
+- **`athlete_decision_history`** — internal trajectory-aware engine output. Used by the sequence-escalation logic (3-day yellow → red), counterfactual computation, and the `input_signals` snapshot. Its `athlete_state` column can DISAGREE with the dashboard color on the same day because it adds trajectory rules the personal-norm engine doesn't. Never surface it as "the verdict" to a coach.
+- **`stage4_decisions.system_decision`** — engine's suggested training action (FULL / REDUCED / RECOVERY). NOT a color. Used by the Decision Summary action table for what to actually plan, separate from the readiness verdict.
+- **`readiness_entries.color`** = `v_coach_readiness_today_v8.final_color` — the personal-norm comparison ("how does today compare to his usual?"). THIS is the canonical color.
+
+If a feature genuinely needs the trajectory-aware verdict (e.g. an alert when sharp drop is detected), surface it as a distinct labelled signal ("trend alert" / "↘ sharp drop") next to the color, never as the color itself. The day-over-day delta badge in the Daily Briefing is the existing surface for that.
+
+This is principle #1 of the manifesto (decision provenance is mandatory) in operational form: one source, one verdict, visible everywhere.
+
 ## Languages
 
 Default UI language is **English**. Icelandic (IS) is the toggle. Both must be coach-readable — no sport-science jargon in either language.
