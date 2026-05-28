@@ -76,8 +76,9 @@ export interface ExplanationLine {
   category: string;
   /** Human-readable explanation */
   text: string;
-  /** Severity: how much this factor contributed */
-  severity: "high" | "moderate" | "low";
+  /** Severity: how much this factor contributed. "positive" = a
+   *  reassuring line on GREEN days (what's working), not a concern. */
+  severity: "high" | "moderate" | "low" | "positive";
 }
 
 // ── Builder ───────────────────────────────────────────────────────────
@@ -86,12 +87,41 @@ export function buildPlayerExplanation(input: PlayerExplanationInput): Explanati
   const { lang, finalFlag, pi, mli, metabolic, gpsSpike, acwr, valdAdjustment, rpeZScore } = input;
   const lines: ExplanationLine[] = [];
 
-  // If GREEN / GREEN_PLUS with no concerns — nothing to explain
+  const is = lang === "IS";
+
+  // GREEN / GREEN_PLUS — surface ONE reassuring positive line so the
+  // player understands WHY they're cleared, not just THAT they are.
+  // Daily explainability (manifesto principle #2) builds long-term trust
+  // — the player learns what the system rewards, not only what it flags.
+  // Uses the aggregate personal index (sten / z) since per-sub-score data
+  // isn't passed to this builder; "overall wellness in your usual range"
+  // is honest and clear.
   if (finalFlag === "GREEN" || finalFlag === "GREEN_PLUS" || finalFlag == null) {
+    const sten = typeof pi?.sten === "number" ? pi.sten : null;
+    const z = typeof pi?.z === "number" ? pi.z : null;
+    const detail = sten != null
+      ? (is ? ` (sten ${sten}/10)` : ` (sten ${sten}/10)`)
+      : z != null
+        ? (is ? ` (z = ${z >= 0 ? "+" : ""}${z.toFixed(1)})` : ` (z = ${z >= 0 ? "+" : ""}${z.toFixed(1)})`)
+        : "";
+    lines.push({
+      category: is ? "Líðan" : "Wellness",
+      text: is
+        ? `Heildarlíðan þín er í þínu venjulega bili${detail} — ekkert dró matið niður í dag. Haltu áfram því sem virkar.`
+        : `Your overall wellness is in your usual range${detail} — nothing pulled today's assessment down. Keep doing what works.`,
+      severity: "positive",
+    });
+    if (finalFlag === "GREEN_PLUS") {
+      lines.push({
+        category: is ? "Toppform" : "Peak",
+        text: is
+          ? "Þú ert yfir þínu venjulega — góður dagur fyrir hágæða vinnu ef planið kallar á það."
+          : "You're above your usual baseline — a good day for high-quality work if the plan calls for it.",
+        severity: "positive",
+      });
+    }
     return lines;
   }
-
-  const is = lang === "IS";
 
   // ── 1. Checkin / z-score deviation ──────────────────────────────────
 

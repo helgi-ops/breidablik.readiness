@@ -4667,8 +4667,6 @@ export default function PlayerClient() {
   const baseMsg = genericMsg?.message || (ui as any).playerMessage;
   const message = coachMsg ? coachMsg : baseMsg;
 
-  const whyText = plan?.why || genericMsg?.why || (ui as any).why;
-
   const exerciseRecommendationContext: ExerciseRecommendationContext = {
     readinessState: flag === "GREEN" || flag === "YELLOW" || flag === "RED" ? flag : null,
     riskState:
@@ -4853,20 +4851,30 @@ export default function PlayerClient() {
 
               <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
 
-              {whyText ? (
-                <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-zinc-700">
-                  <span className="font-semibold text-zinc-900">{t.decision.why}</span> {whyText}
-                </div>
-              ) : null}
+              {/* The vague template "Why" (e.g. "Mild signs of fatigue are
+                  visible in recent measurements") was removed 2026-05-28 —
+                  it duplicated, and was less specific than, the detailed
+                  "Af hverju er ég ekki græn/n?" driver card directly below,
+                  which cites the actual sub-scores. Keeping both showed the
+                  player two "why" sections, one vague one detailed. The
+                  detailed card is the single explanation surface now. */}
             </div>
 
-            {/* "Af hverju?" explanation card — only shows for YELLOW/RED */}
-            {explanationLines.length > 0 && (
-              <div data-player-card="explanation" className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 sm:p-5 shadow-sm">
+            {/* Explanation card — shows on ALL colours now. GREEN gets a
+                reassuring "here's why you're cleared" line; YELLOW/RED get
+                the driver breakdown + counterfactual. The card title and
+                footer adapt to the colour. Player-side explainability
+                mirrors the coach Daily Briefing (manifesto principle #2). */}
+            {explanationLines.length > 0 && (() => {
+              const isGreenExplain = flag === "GREEN" || explanationLines.every((l) => l.severity === "positive");
+              return (
+              <div data-player-card="explanation" className={`rounded-2xl border p-4 sm:p-5 shadow-sm ${isGreenExplain ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">💡</span>
-                  <span className="text-sm font-bold text-amber-900">
-                    {lang === "IS" ? "Af hverju er ég ekki græn/n?" : "Why am I not green?"}
+                  <span className="text-lg">{isGreenExplain ? "✅" : "💡"}</span>
+                  <span className={`text-sm font-bold ${isGreenExplain ? "text-emerald-900" : "text-amber-900"}`}>
+                    {isGreenExplain
+                      ? (lang === "IS" ? "Af hverju er ég grænn?" : "Why am I green?")
+                      : (lang === "IS" ? "Af hverju er ég ekki græn/n?" : "Why am I not green?")}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -4878,6 +4886,8 @@ export default function PlayerClient() {
                           ? "border-red-200 bg-red-50 text-red-900"
                           : line.severity === "moderate"
                           ? "border-amber-200 bg-amber-50 text-amber-900"
+                          : line.severity === "positive"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                           : "border-zinc-200 bg-zinc-50 text-zinc-800"
                       }`}
                     >
@@ -4887,10 +4897,14 @@ export default function PlayerClient() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 text-xs text-amber-700/80">
-                  {lang === "IS"
-                    ? "Þessir þættir drógu niður heildarmat þitt í dag."
-                    : "These factors pulled your overall assessment down today."}
+                <div className={`mt-3 text-xs ${isGreenExplain ? "text-emerald-700/80" : "text-amber-700/80"}`}>
+                  {isGreenExplain
+                    ? (lang === "IS"
+                        ? "Byggt á öllum gögnunum þínum — wellness, æfingaálag og leikminni."
+                        : "Based on all your data — wellness, training load and match minutes.")
+                    : (lang === "IS"
+                        ? "Þessir þættir drógu niður heildarmat þitt í dag."
+                        : "These factors pulled your overall assessment down today.")}
                 </div>
                 {/* "What would help" panel — counterfactual lever the
                     player could focus on. Shown only when the engine
@@ -4926,7 +4940,8 @@ export default function PlayerClient() {
                   </div>
                 ) : null}
               </div>
-            )}
+              );
+            })()}
 
             {/* Metrics */}
             <CardShell data-player-card="metrics">

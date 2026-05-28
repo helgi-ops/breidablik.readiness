@@ -25,7 +25,6 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
-import PlayerWhyFlaggedCard from "@/components/player/PlayerWhyFlaggedCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 
@@ -664,63 +663,6 @@ function WeeklyDigestPortal({ activeTab, lang, hideWellness }: { activeTab: DevP
   if (!mountNode || activeTab !== "today") return null;
 
   return createPortal(<WeeklyDigestCard lang={lang} hideWellness={hideWellness} />, mountNode);
-}
-
-// ── Why-flagged card portal ─────────────────────────────────────────────────
-//
-// Inline "why am I yellow / red?" explanation card on the Today tab.
-// Mounts directly after the AteCommandCard (the colour decision card) so
-// the explanation sits right next to the verdict it explains. Silent on
-// GREEN / GRAY days — the card renders nothing in those states.
-//
-// Built to fix the recurring friction where players score 4/5 or 5/5 on
-// check-in and ask the coach "why am I yellow?". Now the answer lives in
-// their own PWA, scoped to their own data, no coach intervention needed.
-
-function WhyFlaggedPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang: "IS" | "EN" }) {
-  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let attempts = 0;
-
-    const place = () => {
-      if (cancelled) return;
-      attempts += 1;
-
-      // Anchor directly after the AteCommandCard slot so the explanation
-      // sits right next to today's colour. Fall back to header card if
-      // the AteCommandCard hasn't mounted yet.
-      const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
-      if (!anchor?.parentElement) {
-        if (attempts < 25) window.setTimeout(place, 300);
-        return;
-      }
-
-      let slot = document.getElementById("dev-why-flagged-card-slot");
-      if (!slot) {
-        slot = document.createElement("div");
-        slot.id = "dev-why-flagged-card-slot";
-        slot.className = "mt-3";
-      }
-
-      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
-        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
-      }
-
-      setMountNode((prev) => (prev === slot ? prev : slot));
-    };
-
-    place();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!mountNode || activeTab !== "today") return null;
-
-  return createPortal(<PlayerWhyFlaggedCard lang={lang} />, mountNode);
 }
 
 // ── PWA detection ────────────────────────────────────────────────────────────
@@ -1378,10 +1320,12 @@ export default function DevPlayerClient() {
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
       {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />}
-      {/* "Why am I yellow / red?" inline card — silent on GREEN days,
-          shown only when there's something for the player to understand.
-          Lives next to the colour card to anchor the explanation. */}
-      {!hideWellness && <WhyFlaggedPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />}
+      {/* NOTE: the player's "why am I this colour?" explanation lives in
+          PlayerClient's inline decision-explanation card ("Af hverju er ég
+          ekki græn/n?"), not a portal. The earlier PlayerWhyFlaggedCard
+          portal was removed 2026-05-28 — it duplicated that inline card and
+          (being portal-mounted) sometimes failed to appear. One reliable
+          inline explanation surface, mirroring the coach Daily Briefing. */}
       <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} hideWellness={hideWellness} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
