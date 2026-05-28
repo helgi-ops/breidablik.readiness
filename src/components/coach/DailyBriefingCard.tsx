@@ -892,11 +892,33 @@ function computeTeamPulse(
 ): { level: "fresh" | "caution" | "risk" | "rest"; sentence: string } {
   const is = lang === "IS";
 
-  // Top 1-2 names by severity (alerts first, then monitors). Used in the
-  // pulse sentence so the coach knows WHO without scanning the attention
-  // list. Pull first names only — keeps the headline scannable.
+  // ── Injury accounting ───────────────────────────────────────────────
+  // Injured players appear in `attention` with item.injury set. The team
+  // signal (nFull) counts them as "full" because their readiness check
+  // looks fine — but they are NOT training. The pulse must reflect that
+  // so we don't tell the coach "28/28 cleared" when one of those 28 is
+  // actually in the injury pipeline.
+  //
+  // Strategy: subtract injured from BOTH the available pool (denominator)
+  // and the cleared count (numerator clipped to the available pool). The
+  // injured names are surfaced separately so the coach reads "Andri out
+  // (injured); 27/27 cleared" instead of misleading 28/28.
+  const injuredItems = attention.filter((x) => x.injury != null);
+  const injuredCount = injuredItems.length;
+  const availableCount = Math.max(0, nPlayers - injuredCount);
+  const clearedCount = Math.max(0, Math.min(nFull, availableCount));
+
+  // Non-injury flags only — these are the players the coach needs to
+  // think about for today's session. Injury flags are surfaced via the
+  // injury phrase below; they don't need to also appear in "in red" /
+  // "in yellow" counts.
+  const nonInjuryAttention = attention.filter((x) => x.injury == null);
+  const nonInjuryAlertCount = nonInjuryAttention.filter((x) => x.level === "alert").length;
+  const nonInjuryMonitorCount = nonInjuryAttention.filter((x) => x.level === "monitor").length;
+
+  // Top 1-2 names by severity (alerts first, then monitors) — non-injury only.
   const firstNameOf = (full: string): string => full.split(/\s+/)[0] || full;
-  const namesByPriority = attention
+  const namesByPriority = nonInjuryAttention
     .slice()
     .sort((a, b) => {
       if (a.level !== b.level) return a.level === "alert" ? -1 : 1;
@@ -907,7 +929,7 @@ function computeTeamPulse(
 
   // Format a name list as "Andri" / "Andri og Höskuldur" / "Andri og 2 til viðbótar".
   const formatNames = (): string => {
-    const remaining = (alertCount + monitorCount) - namesByPriority.length;
+    const remaining = (nonInjuryAlertCount + nonInjuryMonitorCount) - namesByPriority.length;
     if (namesByPriority.length === 0) return "";
     if (namesByPriority.length === 1) {
       if (remaining > 0) {
@@ -917,7 +939,6 @@ function computeTeamPulse(
       }
       return namesByPriority[0];
     }
-    // 2 names
     if (remaining > 0) {
       return is
         ? `${namesByPriority[0]}, ${namesByPriority[1]} og ${remaining} til viðbótar`
@@ -926,6 +947,25 @@ function computeTeamPulse(
     return is
       ? `${namesByPriority[0]} og ${namesByPriority[1]}`
       : `${namesByPriority[0]} and ${namesByPriority[1]}`;
+  };
+
+  // Format the injury phrase — e.g. "Andri out (injured)" or
+  // "Andri and Höskuldur out (injured)" or "3 out (injured)".
+  // Returns empty string when no one is injured.
+  const formatInjured = (): string => {
+    if (injuredCount === 0) return "";
+    const names = injuredItems.slice(0, 2).map((x) => firstNameOf(x.name));
+    if (injuredCount === 1) {
+      return is ? `${names[0]} ekki á æfingu (meiddur)` : `${names[0]} out (injured)`;
+    }
+    if (injuredCount === 2) {
+      return is
+        ? `${names[0]} og ${names[1]} ekki á æfingu (meiddir)`
+        : `${names[0]} and ${names[1]} out (injured)`;
+    }
+    return is
+      ? `${injuredCount} ekki á æfingu (meiddir)`
+      : `${injuredCount} out (injured)`;
   };
 
   // ── OFF day — squad isn't training, just monitoring.
@@ -941,8 +981,8 @@ function computeTeamPulse(
     return {
       level: "rest",
       sentence: is
-        ? `Frídagur — ${formatNames()} að fylgjast með, restin er í lagi.`
-        : `Rest day — watching ${formatNames()}, the rest are fine.`,
+        ? `Frídagur — ${formatNames() || formatInjured()} að fylgjast með, restin er í lagi.`
+        : `Rest day — watching ${formatNames() || formatInjured()}, the rest are fine.`,
     };
   }
 
@@ -950,46 +990,69 @@ function computeTeamPulse(
   const md = (mdLabel ?? "").toUpperCase();
   const isMatchDay = md === "MD" || md === "MD+0" || md === "MD0";
   if (isMatchDay) {
-    if (alertCount === 0 && monitorCount === 0) {
+    if (nonInjuryAlertCount === 0 && nonInjuryMonitorCount === 0 && injuredCount === 0) {
       return {
         level: "fresh",
         sentence: is
-          ? `Leikdagur — ${nFull}/${nPlayers} klárir í leikinn.`
-          : `Match day — ${nFull}/${nPlayers} cleared for the match.`,
+          ? `Leikdagur — ${clearedCount}/${availableCount} klárir í leikinn.`
+          : `Match day — ${clearedCount}/${availableCount} cleared for the match.`,
       };
     }
+    const lead = formatNames();
+    const inj = formatInjured();
+    const head = lead
+      ? (is ? `${lead} ${nonInjuryAlertCount > 0 ? "í rauðu" : "í gulu"}` : `${lead} ${nonInjuryAlertCount > 0 ? "in red" : "in yellow"}`)
+      : "";
+    const parts = [head, inj].filter(Boolean).join(is ? "; " : "; ");
     return {
-      level: alertCount > 0 ? "risk" : "caution",
+      level: nonInjuryAlertCount > 0 ? "risk" : "caution",
       sentence: is
-        ? `Leikdagur — ${formatNames()} ${alertCount > 0 ? "í rauðu" : "í gulu"}, ${nFull}/${nPlayers} klárir.`
-        : `Match day — ${formatNames()} ${alertCount > 0 ? "in red" : "in yellow"}, ${nFull}/${nPlayers} cleared.`,
+        ? `Leikdagur — ${parts}; ${clearedCount}/${availableCount} klárir.`
+        : `Match day — ${parts}; ${clearedCount}/${availableCount} cleared.`,
     };
   }
 
-  // ── Training day — three bands by severity.
-  if (alertCount === 0 && monitorCount === 0) {
+  // ── Training day — three bands by severity (non-injury flags drive the band).
+  if (nonInjuryAlertCount === 0 && nonInjuryMonitorCount === 0 && injuredCount === 0) {
     return {
       level: "fresh",
       sentence: is
-        ? `Liðið er hresst og tilbúið — ${nFull}/${nPlayers} klárir í fulla æfingu.`
-        : `Squad is fresh and ready — ${nFull}/${nPlayers} cleared for a full session.`,
+        ? `Liðið er hresst og tilbúið — ${clearedCount}/${availableCount} klárir í fulla æfingu.`
+        : `Squad is fresh and ready — ${clearedCount}/${availableCount} cleared for a full session.`,
     };
   }
-  if (alertCount === 0) {
-    // Monitor-only — caution day, no real risk
+
+  // No non-injury flags but there ARE injuries — surface them, don't call
+  // this a "risk day" since the rest of the squad is fine.
+  if (nonInjuryAlertCount === 0 && nonInjuryMonitorCount === 0 && injuredCount > 0) {
     return {
       level: "caution",
       sentence: is
-        ? `Hóflegt — fylgstu með ${formatNames()}, restin klár (${nFull}/${nPlayers}).`
-        : `Mixed day — watch ${formatNames()}, the rest are ready (${nFull}/${nPlayers}).`,
+        ? `${capitaliseFirst(formatInjured())}; ${clearedCount}/${availableCount} klárir í fulla æfingu.`
+        : `${capitaliseFirst(formatInjured())}; ${clearedCount}/${availableCount} cleared for a full session.`,
     };
   }
-  // Has at least one alert — risk day
+
+  if (nonInjuryAlertCount === 0) {
+    // Monitor-only — caution day, no real risk
+    const inj = formatInjured();
+    const tail = inj ? (is ? ` (auk ${inj})` : ` (plus ${inj})`) : "";
+    return {
+      level: "caution",
+      sentence: is
+        ? `Hóflegt — fylgstu með ${formatNames()}${tail}, restin klár (${clearedCount}/${availableCount}).`
+        : `Mixed day — watch ${formatNames()}${tail}, the rest are ready (${clearedCount}/${availableCount}).`,
+    };
+  }
+
+  // Has at least one non-injury alert — risk day
+  const inj = formatInjured();
+  const tail = inj ? (is ? `; ${inj}` : `; ${inj}`) : "";
   return {
     level: "risk",
     sentence: is
-      ? `Áhættudagur — ${formatNames()} ${alertCount > 0 ? "í rauðu" : "í gulu"}; ${nFull}/${nPlayers} klárir í fulla æfingu.`
-      : `Risk day — ${formatNames()} ${alertCount > 0 ? "in red" : "in yellow"}; ${nFull}/${nPlayers} cleared for a full session.`,
+      ? `Áhættudagur — ${formatNames()} í rauðu${tail}; ${clearedCount}/${availableCount} klárir í fulla æfingu.`
+      : `Risk day — ${formatNames()} in red${tail}; ${clearedCount}/${availableCount} cleared for a full session.`,
   };
 }
 
