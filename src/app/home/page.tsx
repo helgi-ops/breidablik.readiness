@@ -15,6 +15,7 @@ type CopyShape = {
   nav: {
     how: string;
     platform: string;
+    explain: string;
     product: string;
     intelligence: string;
     pricing: string;
@@ -33,6 +34,15 @@ type CopyShape = {
     steps: Array<{ t: string; d: string }>;
   };
   platform: {
+    title: string;
+    sub: string;
+    cards: Array<{
+      icon: string;
+      t: string;
+      d: string;
+    }>;
+  };
+  explain: {
     title: string;
     sub: string;
     cards: Array<{
@@ -72,6 +82,7 @@ const COPY: Record<Lang, CopyShape> = {
     nav: {
       how: "How it works",
       platform: "Platform",
+      explain: "Explainability",
       product: "Product",
       intelligence: "Intelligence",
       pricing: "Pricing",
@@ -79,11 +90,11 @@ const COPY: Record<Lang, CopyShape> = {
       cta: "Get started",
     },
     hero: {
-      title: "Know who's ready — before training starts.",
-      sub: "One daily view for coaching, performance, and medical staff. Built on real GPS, FMP, and force plate data from your squad.",
+      title: "Know who's ready — and why.",
+      sub: "One daily view for coaching, performance, and medical staff. Every verdict is explained in plain language and traceable to the data behind it — built on real GPS, FMP, and force-plate signals from your squad.",
       primary: "Start with Free",
       secondary: "Book a demo",
-      trust: "Performance Intelligence Platform",
+      trust: "Explainable Performance Intelligence",
     },
     how: {
       title: "From check-in to training plan — in minutes.",
@@ -142,6 +153,32 @@ const COPY: Record<Lang, CopyShape> = {
         },
       ],
     },
+    explain: {
+      title: "Every verdict explains itself.",
+      sub: "MicroPulse doesn't just flag a player — it shows the coach, and the player, exactly why. In plain language, traceable to the data, with the AI labelled as AI.",
+      cards: [
+        {
+          icon: "💬",
+          t: "Ask the system",
+          d: "One tap on any flagged player gives a plain-language answer — written from that player's own data and citing the signals behind it. For coaches and players alike.",
+        },
+        {
+          icon: "🔍",
+          t: "Decision trace",
+          d: "Tap any number to see exactly how it was computed — the formula, the inputs, the threshold, and the research paper behind it.",
+        },
+        {
+          icon: "📝",
+          t: "Override audit",
+          d: "Every time you override the system, it's logged with your reason. See your own pattern over time — and the system learns from your judgement.",
+        },
+        {
+          icon: "📱",
+          t: "Players see why",
+          d: "Players read why they're green, yellow or red in their own app, in plain language — so they stop asking and start understanding.",
+        },
+      ],
+    },
     product: {
       title: "See MicroPulse in action",
       stats: [
@@ -197,6 +234,7 @@ const COPY: Record<Lang, CopyShape> = {
     nav: {
       how: "Hvernig virkar",
       platform: "Vettvangur",
+      explain: "Útskýringar",
       product: "Vöru",
       intelligence: "Greind",
       pricing: "Verðlagning",
@@ -204,11 +242,11 @@ const COPY: Record<Lang, CopyShape> = {
       cta: "Byrjaðu",
     },
     hero: {
-      title: "Veistu hverjir eru tilbúnir — áður en æfingin byrjar.",
-      sub: "Eitt daglegt yfirlit fyrir þjálfara-, performance- og medical staff. Byggt á raunverulegum GPS, FMP og kraftplatagögnum frá hópnum þínum.",
+      title: "Veistu hverjir eru tilbúnir — og hvers vegna.",
+      sub: "Eitt daglegt yfirlit fyrir þjálfara-, performance- og medical staff. Hver niðurstaða er útskýrð á mannamáli og rekjanleg til gagnanna á bak við hana — byggt á raunverulegum GPS, FMP og kraftplatamerkjum frá hópnum þínum.",
       primary: "Byrjaðu ókeypis",
       secondary: "Bókaðu demo",
-      trust: "Performance Intelligence Platform",
+      trust: "Útskýranleg ákvarðanataka",
     },
     how: {
       title: "Frá check-in yfir í æfingarplan — á nokkrum mínútum.",
@@ -264,6 +302,32 @@ const COPY: Record<Lang, CopyShape> = {
           icon: "🎯",
           t: "Leik-vikunni Ops",
           d: "Vikuuppsetningu, gæðum af gær, sjónvarps birtu, skilaboðum og starfsmanns samhæfingu í einum glugga.",
+        },
+      ],
+    },
+    explain: {
+      title: "Hver niðurstaða útskýrir sig sjálf.",
+      sub: "MicroPulse flaggar ekki bara leikmann — það sýnir þjálfaranum, og leikmanninum, nákvæmlega hvers vegna. Á mannamáli, rekjanlegt til gagnanna, og AI merkt sem AI.",
+      cards: [
+        {
+          icon: "💬",
+          t: "Spyrja kerfið",
+          d: "Eitt snerti á hvaða flaggaðan leikmann sem er gefur svar á mannamáli — skrifað úr hans eigin gögnum og vísar í merkin á bak við. Fyrir bæði þjálfara og leikmenn.",
+        },
+        {
+          icon: "🔍",
+          t: "Útreikningur sýndur",
+          d: "Smelltu á hvaða tölu sem er og sjáðu nákvæmlega hvernig hún var reiknuð — formúluna, gögnin, þröskuldinn og rannsóknina á bak við.",
+        },
+        {
+          icon: "📝",
+          t: "Yfirferðir skráðar",
+          d: "Í hvert sinn sem þú breytir ákvörðun kerfisins er það skráð með ástæðu þinni. Sjáðu þitt eigið mynstur — og kerfið lærir af þínu mati.",
+        },
+        {
+          icon: "📱",
+          t: "Leikmenn sjá af hverju",
+          d: "Leikmenn lesa hvers vegna þeir eru grænir, gulir eða rauðir í sínu eigin appi, á mannamáli — svo þeir hætta að spyrja og byrja að skilja.",
         },
       ],
     },
@@ -388,6 +452,9 @@ export default function HomeLanding() {
               <a href="#platform" className="hover:text-white">
                 {t.nav.platform}
               </a>
+              <a href="#explain" className="hover:text-white">
+                {t.nav.explain}
+              </a>
               <a href="#product" className="hover:text-white">
                 {t.nav.product}
               </a>
@@ -475,6 +542,7 @@ export default function HomeLanding() {
                 {[
                   { href: "#how", label: t.nav.how },
                   { href: "#platform", label: t.nav.platform },
+                  { href: "#explain", label: t.nav.explain },
                   { href: "#product", label: t.nav.product },
                   { href: "#intelligence", label: t.nav.intelligence },
                 ].map((item) => (
@@ -583,6 +651,28 @@ export default function HomeLanding() {
           <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {t.platform.cards.map((card, idx) => (
               <div key={idx} className="rounded-3xl border border-neutral-200 bg-neutral-50 p-8 shadow-sm">
+                <div className="text-4xl">{card.icon}</div>
+                <h3 className="mt-4 font-semibold text-neutral-900">{card.t}</h3>
+                <p className="mt-2 text-sm text-neutral-600">{card.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== EXPLAINABILITY SECTION ===== */}
+      <section id="explain" className="border-t border-neutral-100 bg-neutral-50 py-20 md:py-24">
+        <div className="mx-auto max-w-5xl px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-neutral-900 md:text-4xl">
+              {t.explain.title}
+            </h2>
+            <p className="mt-4 text-lg text-neutral-600">{t.explain.sub}</p>
+          </div>
+
+          <div className="mt-16 grid gap-8 md:grid-cols-2">
+            {t.explain.cards.map((card, idx) => (
+              <div key={idx} className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-sm">
                 <div className="text-4xl">{card.icon}</div>
                 <h3 className="mt-4 font-semibold text-neutral-900">{card.t}</h3>
                 <p className="mt-2 text-sm text-neutral-600">{card.d}</p>
