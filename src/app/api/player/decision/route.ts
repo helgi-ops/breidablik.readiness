@@ -98,6 +98,23 @@ export async function GET(req: NextRequest) {
       date,
     });
 
+    // Canonical color from readiness_entries (the dashboard's source).
+    // Fetched separately because buildOnePlayerDecision returns the
+    // engine's own verdict, which can disagree with the coach-facing
+    // color. The Player PWA's "why am I [color]?" card uses canonical so
+    // it always matches what the coach told the player they are.
+    // See CLAUDE.md > "Canonical verdict source".
+    const { data: canonicalRow } = await sb
+      .from("v_coach_readiness_today_v8")
+      .select("final_color, total_score")
+      .eq("player_id", ctx.playerId)
+      .eq("entry_date", date)
+      .maybeSingle();
+    const canonicalColor = (canonicalRow as { final_color?: string | null } | null)?.final_color
+      ? String((canonicalRow as { final_color: string }).final_color).toUpperCase()
+      : null;
+    const canonicalTotalScore = (canonicalRow as { total_score?: number | null } | null)?.total_score ?? null;
+
     if (!decision) {
       // No coach row for this player today — likely no readiness check-in
       // has been submitted yet. Return an empty-state shape so the client
@@ -108,6 +125,8 @@ export async function GET(req: NextRequest) {
         playerId: ctx.playerId,
         teamId: ctx.teamId,
         decision: null,
+        canonicalColor,
+        canonicalTotalScore,
         note: "No readiness entry for this date yet.",
       });
     }
@@ -118,6 +137,8 @@ export async function GET(req: NextRequest) {
       playerId: ctx.playerId,
       teamId: ctx.teamId,
       decision,
+      canonicalColor,
+      canonicalTotalScore,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

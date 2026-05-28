@@ -55,6 +55,11 @@ type DecisionPayload = {
     };
     counterfactuals?: Counterfactual[];
   } | null;
+  // Canonical verdict color from v_coach_readiness_today_v8 — what the
+  // coach sees on the dashboard. Card uses this (not the engine state)
+  // so the player and the coach are always looking at the same colour.
+  canonicalColor?: "GREEN" | "YELLOW" | "RED" | null;
+  canonicalTotalScore?: number | null;
 };
 
 // ── Plain-language helpers ────────────────────────────────────────────────
@@ -66,15 +71,21 @@ type DecisionPayload = {
  */
 function actionHintFor(
   fatigueType: DecisionPayload["decision"] extends infer D ? D extends null ? null : D extends { fatigueType?: infer F } ? F : null : null,
-  state: DecisionState,
+  color: "GREEN" | "YELLOW" | "RED",
   lang: "IS" | "EN",
 ): string | null {
   const is = lang === "IS";
-  if (state === "RED") {
+  if (color === "GREEN") {
+    return is
+      ? "Haltu áfram því sem þú ert að gera — venjur þínar virka."
+      : "Keep doing what you're doing — your routines are working.";
+  }
+  if (color === "RED") {
     return is
       ? "Hvíldu þig vel í dag og einbeittu þér að svefni og næringu."
       : "Take it easy today — focus on sleep and nutrition.";
   }
+  // YELLOW path — refine by fatigue type when available
   if (fatigueType === "mechanical_fatigue") {
     return is
       ? "Forðastu margar miklar hröðanir og snöggar stefnubreytingar í dag."
@@ -90,7 +101,6 @@ function actionHintFor(
       ? "Léttari æfing í dag og góður svefn í nótt skiptir mestu máli."
       : "Easier session today, and a good night's sleep tonight is the priority.";
   }
-  // YELLOW with no specific fatigue signature
   return is
     ? "Fylgstu með hvernig þú finnur fyrir þér í upphitun og láttu þjálfara vita ef eitthvað er óeðlilegt."
     : "Pay attention to how you feel in the warm-up and flag anything unusual to the coach.";
@@ -99,11 +109,18 @@ function actionHintFor(
 /**
  * Acknowledge-then-explain framing — turns the friction "but I scored
  * 5/5 on check-in!" into a teaching moment. Lead with empathy, then the
- * actual driver from the engine.
+ * actual driver from the engine. Now also handles GREEN — the daily
+ * "here's why you're cleared today" moment that builds long-term
+ * familiarity with what the system rewards.
  */
-function leadSentence(state: DecisionState, lang: "IS" | "EN"): string {
+function leadSentence(color: "GREEN" | "YELLOW" | "RED", lang: "IS" | "EN"): string {
   const is = lang === "IS";
-  if (state === "RED") {
+  if (color === "GREEN") {
+    return is
+      ? "Þú ert grænn í dag. Hér er hvers vegna:"
+      : "You're green today. Here's why:";
+  }
+  if (color === "RED") {
     return is
       ? "Þú ert í rauðu í dag. Hér er ástæðan:"
       : "You're in red today. Here's why:";
@@ -217,31 +234,67 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
   if (loading || error) return null;
 
   const decision = payload?.decision;
-  if (!decision) return null;
-  const state = decision.recommendation.state;
 
-  // Silent on GREEN / GRAY — the card only exists to answer "why".
-  if (state !== "YELLOW" && state !== "RED") return null;
+  // Visibility colour = canonical (what the dashboard shows the coach).
+  // The engine's own recommendation.state can disagree on the same day
+  // (the long-standing 3-engine divergence we fixed at the DB layer for
+  // STORED state but the LIVE compute still emits the engine verdict).
+  // Using canonical guarantees the card always matches the verdict the
+  // coach told the player they are. See CLAUDE.md > "Canonical verdict source".
+  const canonicalColor = payload?.canonicalColor ?? null;
 
-  // Pull top 3 NEGATIVE factors (the ones that pushed the verdict away
-  // from green). Sorted by impact desc by the engine; we re-sort and
-  // filter to be sure.
-  const factors = (decision.recommendation.explanationFactors ?? [])
-    .filter((f) => f.direction === "negative")
-    .slice()
-    .sort((a, b) => Math.abs(b.impactScore) - Math.abs(a.impactScore))
-    .slice(0, 3);
+  // Two ways the card silently bails:
+  //  (1) No readiness check-in for today → no canonical colour → nothing
+  //      to explain. Player should be prompted elsewhere to check in.
+  //  (2) Color is GRAY / unknown — same reason.
+  if (!canonicalColor || (canonicalColor !== "GREEN" && canonicalColor !== "YELLOW" && canonicalColor !== "RED")) {
+    return null;
+  }
 
-  // First useful counterfactual (engine pre-sorts by impact desc).
-  const counterfactual = (decision.counterfactuals ?? []).find((cf) => cf.impact >= 1) ?? null;
+  // Pull NEGATIVE factors (the ones that pushed the verdict away from
+  // green) for YELLOW/RED. On GREEN, pull POSITIVE factors instead so
+  // we can show "your sleep, energy and soreness are all in your usual
+  // range" — daily explainability builds long-term trust.
+  const wantPositive = canonicalColor === "GREEN";
+  const factors = decision
+    ? (decision.recommendation.explanationFactors ?? [])
+        .filter((f) => wantPositive ? f.direction === "positive" : f.direction === "negative")
+        .slice()
+        .sort((a, b) => Math.abs(b.impactScore) - Math.abs(a.impactScore))
+        .slice(0, 3)
+    : [];
 
-  // Tone classes per state — matches the player-side colour language.
+  // Counterfactual only relevant when flagged — on GREEN there's nothing
+  // we'd want to "flip" away from green.
+  const counterfactual = (canonicalColor !== "GREEN" && decision)
+    ? (decision.counterfactuals ?? []).find((cf) => cf.impact >= 1) ?? null
+    : null;
+
+  // Tone classes per canonical colour.
   const tone =
-    state === "RED"
-      ? { border: "border-rose-300", bg: "bg-rose-50", text: "text-rose-900", header: "text-rose-800" }
-      : { border: "border-amber-300", bg: "bg-amber-50", text: "text-amber-900", header: "text-amber-800" };
+    canonicalColor === "RED"
+      ? { border: "border-rose-300",    bg: "bg-rose-50",    text: "text-rose-900",    header: "text-rose-800" }
+    : canonicalColor === "YELLOW"
+      ? { border: "border-amber-300",   bg: "bg-amber-50",   text: "text-amber-900",   header: "text-amber-800" }
+      : { border: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-900", header: "text-emerald-800" };
 
-  const action = actionHintFor(decision.fatigueType ?? null, state, lang);
+  const action = actionHintFor(decision?.fatigueType ?? null, canonicalColor, lang);
+
+  // Empty-state copy varies by colour. On GREEN with no positive
+  // factors (rare — engine usually surfaces "sleep is good" etc.) we
+  // still want a confidence-building line, not a "system found nothing"
+  // one which would read as concerning.
+  const noFactorsLine = (() => {
+    const is = lang === "IS";
+    if (canonicalColor === "GREEN") {
+      return is
+        ? "Wellness-skorin þín eru í eðlilegu þínu bili — kerfið flaggar engu sérstaklega í dag."
+        : "Your wellness scores are within your usual range — the system isn't flagging anything specific today.";
+    }
+    return decision?.recommendation.coachSummary || (is
+      ? "Kerfið fann ekkert sérstakt — talaðu við þjálfara ef þetta kemur þér á óvart."
+      : "The system didn't surface a specific driver — talk to your coach if this surprises you.");
+  })();
 
   return (
     <div className={`rounded-2xl border ${tone.border} ${tone.bg} p-4 shadow-sm`}>
@@ -249,7 +302,7 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
         {lang === "IS" ? "Af hverju þessi litur?" : "Why this colour?"}
       </div>
       <p className={`mt-1.5 text-sm font-semibold ${tone.text}`}>
-        {leadSentence(state, lang)}
+        {leadSentence(canonicalColor, lang)}
       </p>
 
       {factors.length > 0 ? (
@@ -266,9 +319,7 @@ export default function PlayerWhyFlaggedCard({ lang = "EN" }: { lang?: "IS" | "E
         </ul>
       ) : (
         <p className={`mt-2 text-sm ${tone.text}`}>
-          {decision.recommendation.coachSummary || (lang === "IS"
-            ? "Kerfið fann ekkert sérstakt — talaðu við þjálfara ef þetta kemur þér á óvart."
-            : "The system didn't surface a specific driver — talk to your coach if this surprises you.")}
+          {noFactorsLine}
         </p>
       )}
 
