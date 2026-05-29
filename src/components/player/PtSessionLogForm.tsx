@@ -34,6 +34,19 @@ interface Props {
   lang?: Lang;
   /** Override the session_date — defaults to today (local). */
   date?: string;
+  /** When true, and nothing is logged yet for the date, pre-fill the form
+   *  with today's prescribed session (exercise names + set count) pulled from
+   *  /api/client/today. Opt-in so the /player surface is unaffected. */
+  prefillFromPlan?: boolean;
+}
+
+/** Parse a prescription reps string ("5", "8-10", "5 ea leg") into a leading
+ *  integer, or null if there's no clean number to seed. */
+function parseReps(reps: unknown): number | null {
+  if (typeof reps === "number") return Number.isFinite(reps) ? reps : null;
+  if (typeof reps !== "string") return null;
+  const m = reps.match(/\d+/);
+  return m ? Number(m[0]) : null;
 }
 
 const COPY = {
@@ -86,7 +99,7 @@ function todayIso(): string {
 function emptySet(): SetRow { return { weight_kg: null, reps: null, rpe: null }; }
 function emptyExercise(): ExerciseDraft { return { name: "", sets: [emptySet()] }; }
 
-export default function PtSessionLogForm({ lang = "IS", date: dateProp }: Props) {
+export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillFromPlan = false }: Props) {
   const t = COPY[lang];
   const [sessionDate, setSessionDate] = useState<string>(dateProp ?? todayIso());
   const [exercises, setExercises] = useState<ExerciseDraft[]>([emptyExercise()]);
@@ -96,6 +109,37 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp }: Props)
   const [err, setErr] = useState<string | null>(null);
 
   /* ── Load existing rows for this date ─────────────────────────────── */
+
+  /** Pull today's prescribed session and turn each prescribed exercise into a
+   *  draft with the right number of (empty) sets, reps seeded from the plan.
+   *  Returns null if there's nothing prescribed (rest day / no plan). */
+  const buildPrefill = useCallback(async (token: string): Promise<ExerciseDraft[] | null> => {
+    try {
+      const res = await fetch(`/api/client/today`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const blocks = (json?.explosive?.blocks ?? []) as Array<{
+        name: string;
+        rows: Array<{ exercise: string; reps?: unknown; sets?: number | null }>;
+      }>;
+      const drafts: ExerciseDraft[] = [];
+      for (const b of blocks) {
+        for (const r of b.rows ?? []) {
+          if (!r.exercise) continue;
+          const nSets = Math.max(1, Number(r.sets) || 1);
+          const reps = parseReps(r.reps);
+          drafts.push({
+            name: r.exercise,
+            sets: Array.from({ length: nSets }, () => ({ weight_kg: null, reps, rpe: null })),
+          });
+        }
+      }
+      return drafts.length > 0 ? drafts : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const loadExisting = useCallback(async (forDate: string) => {
     setLoading(true);
@@ -114,7 +158,10 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp }: Props)
       }>).filter((r) => r.session_date === forDate);
 
       if (rows.length === 0) {
-        setExercises([emptyExercise()]);
+        // Nothing logged yet — seed from the prescribed plan when asked,
+        // otherwise fall back to a single blank exercise.
+        const prefill = prefillFromPlan ? await buildPrefill(session.access_token) : null;
+        setExercises(prefill ?? [emptyExercise()]);
         return;
       }
       // Group by exercise_name, preserving set_number order.
@@ -132,7 +179,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp }: Props)
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [prefillFromPlan, buildPrefill]);
 
   useEffect(() => { void loadExisting(sessionDate); }, [loadExisting, sessionDate]);
 

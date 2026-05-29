@@ -24,7 +24,7 @@ export default function ClientLogPage() {
             : "Weight × reps × RPE per set. Saved automatically to your trainer."}
         </div>
       </div>
-      <PtSessionLogForm lang={lang === "EN" ? "EN" : "IS"} />
+      <PtSessionLogForm lang={lang === "EN" ? "EN" : "IS"} prefillFromPlan />
     </div>
   );
 }
