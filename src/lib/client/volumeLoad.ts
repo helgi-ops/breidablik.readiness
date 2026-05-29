@@ -17,7 +17,18 @@ export type VolumeLoad = {
   last_week: number;
   delta_pct: number | null;
   window_weeks: number;
+  /** Acute:chronic workload ratio on tonnage (external load), Gabbett-style. */
+  acwr: number | null;
+  acute_daily: number;
+  chronic_daily: number;
+  acwr_status: "low" | "optimal" | "high" | "very_high" | "building";
 };
+
+function dayKey(offsetDaysAgo: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - offsetDaysAgo);
+  return d.toISOString().slice(0, 10);
+}
 
 const WINDOW_WEEKS = 8;
 
@@ -56,6 +67,7 @@ export async function computeVolumeLoad(
   for (let i = WINDOW_WEEKS - 1; i >= 0; i--) weekKeys.push(mondayOffset(i));
   const byWeek = new Map<string, number>(weekKeys.map((w) => [w, 0]));
   const byLift = new Map<string, number>();
+  const byDate = new Map<string, number>();
 
   for (const r of rows) {
     if (r.weight_kg == null || r.reps == null) continue;
@@ -65,6 +77,23 @@ export async function computeVolumeLoad(
     if (byWeek.has(wk)) byWeek.set(wk, (byWeek.get(wk) ?? 0) + vol);
     const lift = canonicalLift(r.exercise_name) ?? r.exercise_name.trim();
     byLift.set(lift, (byLift.get(lift) ?? 0) + vol);
+    byDate.set(r.session_date, (byDate.get(r.session_date) ?? 0) + vol);
+  }
+
+  // ── ACWR on tonnage (external load): acute 7d vs chronic 28d daily mean ──
+  const dayLoad = (offset: number) => byDate.get(dayKey(offset)) ?? 0;
+  let acute = 0, chronic = 0;
+  for (let i = 0; i < 28; i++) { const l = dayLoad(i); chronic += l; if (i < 7) acute += l; }
+  const acuteDaily = acute / 7;
+  const chronicDaily = chronic / 28;
+  const acwr = chronicDaily > 0 ? Math.round((acuteDaily / chronicDaily) * 100) / 100 : null;
+  const daysWithData = byDate.size;
+  let acwr_status: VolumeLoad["acwr_status"] = "building";
+  if (daysWithData >= 6 && acwr != null) {
+    if (acwr < 0.8) acwr_status = "low";
+    else if (acwr <= 1.3) acwr_status = "optimal";
+    else if (acwr <= 1.5) acwr_status = "high";
+    else acwr_status = "very_high";
   }
 
   const weeks = weekKeys.map((w) => ({ week_start: w, total: Math.round(byWeek.get(w) ?? 0) }));
@@ -77,5 +106,8 @@ export async function computeVolumeLoad(
   const lastWeek = weeks[weeks.length - 2]?.total ?? 0;
   const delta_pct = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : null;
 
-  return { weeks, by_lift, this_week: thisWeek, last_week: lastWeek, delta_pct, window_weeks: WINDOW_WEEKS };
+  return {
+    weeks, by_lift, this_week: thisWeek, last_week: lastWeek, delta_pct, window_weeks: WINDOW_WEEKS,
+    acwr, acute_daily: Math.round(acuteDaily), chronic_daily: Math.round(chronicDaily), acwr_status,
+  };
 }

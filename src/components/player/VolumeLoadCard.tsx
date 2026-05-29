@@ -18,11 +18,40 @@ type Volume = {
   last_week: number;
   delta_pct: number | null;
   window_weeks: number;
+  acwr: number | null;
+  acute_daily: number;
+  chronic_daily: number;
+  acwr_status: "low" | "optimal" | "high" | "very_high" | "building";
+};
+
+const ACWR_TONE: Record<string, { bg: string; text: string }> = {
+  low:       { bg: "bg-slate-100",  text: "text-slate-700" },
+  optimal:   { bg: "bg-emerald-100", text: "text-emerald-800" },
+  high:      { bg: "bg-amber-100",  text: "text-amber-800" },
+  very_high: { bg: "bg-red-100",    text: "text-red-800" },
+  building:  { bg: "bg-slate-100",  text: "text-slate-500" },
+};
+
+const ACWR_NOTE: Record<"IS" | "EN", Record<string, string>> = {
+  IS: {
+    low: "Lágt álagshlutfall — magn að minnka.",
+    optimal: "Á kjörbili (0.8–1.3) — álagsaukning örugg.",
+    high: "Hátt — fylgstu með, álag eykst hratt.",
+    very_high: "Mjög hátt (>1.5) — aukin meiðslahætta.",
+    building: "Safna grunnlínu fyrir álagshlutfall.",
+  },
+  EN: {
+    low: "Low ratio — volume is dropping.",
+    optimal: "In the sweet spot (0.8–1.3) — safe progression.",
+    high: "High — watch it, load climbing fast.",
+    very_high: "Very high (>1.5) — elevated injury risk.",
+    building: "Building a baseline for the ratio.",
+  },
 };
 
 const COPY = {
-  IS: { title: "Æfingamagn (tonnage)", sub: "Sett × endurt. × þyngd", thisWeek: "Þessa viku", vsLast: "vs. síðasta", byLift: "Eftir lyftu", none: "Engin skráð sett enn.", kg: "kg" },
-  EN: { title: "Volume load (tonnage)", sub: "Sets × reps × weight", thisWeek: "This week", vsLast: "vs. last", byLift: "By lift", none: "No logged sets yet.", kg: "kg" },
+  IS: { title: "Æfingamagn (tonnage)", sub: "Sett × endurt. × þyngd", thisWeek: "Þessa viku", vsLast: "vs. síðasta", byLift: "Eftir lyftu", none: "Engin skráð sett enn.", kg: "kg", acwr: "Álagshlutfall (tonnage)" },
+  EN: { title: "Volume load (tonnage)", sub: "Sets × reps × weight", thisWeek: "This week", vsLast: "vs. last", byLift: "By lift", none: "No logged sets yet.", kg: "kg", acwr: "Load ratio (tonnage)" },
 } as const;
 
 function fmt(n: number): string { return n.toLocaleString("is-IS"); }
@@ -71,6 +100,15 @@ export default function VolumeLoadCard({ lang = "IS", clientId }: { lang?: Lang;
           )}
         </div>
       </div>
+
+      {v.acwr != null && v.acwr_status !== "building" && (
+        <div className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${ACWR_TONE[v.acwr_status].bg}`}>
+          <span className={`text-[11px] font-semibold ${ACWR_TONE[v.acwr_status].text}`}>
+            {t.acwr}: {v.acwr.toFixed(2)}
+          </span>
+          <span className={`text-[11px] ${ACWR_TONE[v.acwr_status].text}`}>{ACWR_NOTE[lang][v.acwr_status]}</span>
+        </div>
+      )}
 
       {!hasData ? (
         <div className="text-sm text-slate-500">{t.none}</div>
