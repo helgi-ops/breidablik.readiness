@@ -105,6 +105,15 @@ function friendlySupabaseError(e: any) {
   return msg || "Villa kom upp við að vista check-in.";
 }
 
+/** Where to go after check-in. PT clients open this with ?return=/client so
+ *  they land back in the PT shell instead of the football /team surface.
+ *  Only same-origin paths are honoured (guards against open-redirect). */
+function checkinReturnPath(): string {
+  if (typeof window === "undefined") return "/team";
+  const r = new URLSearchParams(window.location.search).get("return");
+  return r && r.startsWith("/") && !r.startsWith("//") ? r : "/team";
+}
+
 export default function PlayerCheckinPage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const router = useRouter();
@@ -121,6 +130,18 @@ export default function PlayerCheckinPage() {
   const [sleepDuration, setSleepDuration] = React.useState<number | null>(null);
   const [stressMood, setStressMood] = React.useState<number | null>(null);
   const [muscleSoreness, setMuscleSoreness] = React.useState<number | null>(null);
+
+  // Wearable auto-detected sleep for last night (if any). When non-null the
+  // sleep-quality + sleep-duration steps pre-fill from it and show a "📱
+  // auto-detected from Polar" hint so the player knows where the value came
+  // from (and can override if it feels wrong). This closes the loop:
+  // wearable_sleep_data rows feed the readiness check-in instead of just
+  // sitting in a table doing nothing.
+  const [wearableSleepHint, setWearableSleepHint] = React.useState<{
+    provider: string;
+    totalMin: number;
+    sleepDate: string;
+  } | null>(null);
 
   const [notes, setNotes] = React.useState("");
 
@@ -216,17 +237,67 @@ export default function PlayerCheckinPage() {
       setPlayerId(playerRow.id);
       setPlayerName(playerRow.full_name ?? null);
 
-      // Fetch today's MD day to detect game days
+      // Fetch today's MD day to detect game days. PT clients must NOT inherit
+      // any team's week setup — their check-in is always the plain readiness
+      // form, never the match-day bypass. So skip this entirely in PT context.
+      const ptClientContext = checkinReturnPath().startsWith("/client");
       const today = todayIsoDateUTC();
-      const { data: microdose } = await supabase
-        .from("v_player_today_microdose_resolved")
-        .select("md_day_resolved, md_day_raw")
+      if (!ptClientContext) {
+        const { data: microdose } = await supabase
+          .from("v_player_today_microdose_resolved")
+          .select("md_day_resolved, md_day_raw")
+          .eq("player_id", playerRow.id)
+          .eq("entry_date", today)
+          .maybeSingle();
+        if (!cancelled) {
+          const mdVal = String((microdose as any)?.md_day_resolved ?? (microdose as any)?.md_day_raw ?? "").trim().toUpperCase();
+          setIsGameDay(mdVal === "MD");
+        }
+      } else if (!cancelled) {
+        setIsGameDay(false);
+      }
+
+      // Look for fresh wearable sleep for last night. wearable_sleep_data
+      // uses sleep_date = wake-up date, so for today's check-in we want the
+      // row dated today (woke up this morning) — if syncing happened
+      // overnight via webhook/cron — or yesterday (the player slept Sat→Sun
+      // and check-in is Sunday morning before next sync). Pick the most
+      // recent within 1 day of today.
+      const { data: wearableSleep } = await supabase
+        .from("wearable_sleep_data")
+        .select("provider, total_sleep_min, sleep_date, provider_score")
         .eq("player_id", playerRow.id)
-        .eq("entry_date", today)
+        .gte("sleep_date", new Date(Date.now() - 36 * 3600 * 1000).toISOString().slice(0, 10))
+        .order("sleep_date", { ascending: false })
+        .limit(1)
         .maybeSingle();
-      if (!cancelled) {
-        const mdVal = String((microdose as any)?.md_day_resolved ?? (microdose as any)?.md_day_raw ?? "").trim().toUpperCase();
-        setIsGameDay(mdVal === "MD");
+
+      if (!cancelled && wearableSleep) {
+        const ws = wearableSleep as {
+          provider: string; total_sleep_min: number | null; sleep_date: string; provider_score: number | null;
+        };
+        if (ws.total_sleep_min && ws.total_sleep_min > 0) {
+          setWearableSleepHint({
+            provider: ws.provider,
+            totalMin: ws.total_sleep_min,
+            sleepDate: ws.sleep_date,
+          });
+          // Pre-fill sleep duration from wearable (player can override).
+          // Map total_sleep_min to the 6-step sleep_duration scale:
+          //   <5h=1, 5-6h=2, 6-6.5h=3, 6.5-7h=4, 7-8h=5, 8h+=6.
+          // Same evidence-based thresholds as our manual slider.
+          const h = ws.total_sleep_min / 60;
+          const durationStep = h < 5 ? 1 : h < 6 ? 2 : h < 6.5 ? 3 : h < 7 ? 4 : h < 8 ? 5 : 6;
+          setSleepDuration(durationStep);
+          // Pre-fill sleep quality from provider's own sleep score when
+          // available (Polar Sleep+ 1-100). Map 1-100 → 1-6: <40=1, 40-55=2,
+          // 55-65=3, 65-75=4, 75-85=5, 85+=6. Conservative mapping.
+          if (typeof ws.provider_score === "number" && ws.provider_score > 0) {
+            const s = ws.provider_score;
+            const qualityStep = s < 40 ? 1 : s < 55 ? 2 : s < 65 ? 3 : s < 75 ? 4 : s < 85 ? 5 : 6;
+            setSleepQuality(qualityStep);
+          }
+        }
       }
 
       setLoading(false);
@@ -366,7 +437,7 @@ export default function PlayerCheckinPage() {
               type="button"
               variant="secondary"
               className="w-1/2 rounded-xl"
-              onClick={() => router.push("/team")}
+              onClick={() => router.push(checkinReturnPath())}
             >
               Sleppa
             </Button>
@@ -427,7 +498,7 @@ export default function PlayerCheckinPage() {
           )}
 
           <CardFooter>
-            <Button className="w-full rounded-xl" onClick={() => (window.location.href = "/team")}>
+            <Button className="w-full rounded-xl" onClick={() => (window.location.href = checkinReturnPath())}>
               Áfram
             </Button>
           </CardFooter>
@@ -512,6 +583,16 @@ export default function PlayerCheckinPage() {
           {step === 2 ? (
             <div className="space-y-2">
               <Label>Sleep quality</Label>
+              {wearableSleepHint && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
+                  <span>📱</span>
+                  <span>
+                    Forfyllt frá {wearableSleepHint.provider === "polar" ? "Polar" : wearableSleepHint.provider} —
+                    {" "}{Math.floor(wearableSleepHint.totalMin / 60)}h {String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.
+                    {" "}Þú getur breytt ef þér finnst þetta ekki passa við hvernig svefn liðar.
+                  </span>
+                </div>
+              )}
               <PillScale
                 ariaLabel="Sleep quality val"
                 value={sleepQuality}
@@ -530,6 +611,15 @@ export default function PlayerCheckinPage() {
           {step === 3 ? (
             <div className="space-y-2">
               <Label>Sleep duration</Label>
+              {wearableSleepHint && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
+                  <span>📱</span>
+                  <span>
+                    Mælt af {wearableSleepHint.provider === "polar" ? "Polar" : wearableSleepHint.provider}:
+                    {" "}{Math.floor(wearableSleepHint.totalMin / 60)}h {String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.
+                  </span>
+                </div>
+              )}
               <PillScale
                 ariaLabel="Sleep duration val"
                 value={sleepDuration}
