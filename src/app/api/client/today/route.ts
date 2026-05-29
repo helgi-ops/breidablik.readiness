@@ -19,7 +19,8 @@ import {
   forecastPR,
 } from "@/lib/trainer/loadIntelligence";
 import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
-import { applySeasonVolume, isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
+import { isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
+import { computeGameTaper } from "@/lib/client/gameTaper";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,20 @@ export async function GET(req: Request) {
     .select("id, name, team_type, club_short_name")
     .eq("id", player.team_id)
     .maybeSingle();
+
+  // ── Next upcoming game → pre-game taper (trainer-entered) ─────────
+  const { data: nextGameRow } = await sb
+    .from("pt_client_games")
+    .select("game_date, label")
+    .eq("player_id", player.id)
+    .gte("game_date", today)
+    .order("game_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const taper = computeGameTaper(
+    (nextGameRow as { game_date?: string } | null)?.game_date ?? null,
+    today,
+  );
 
   // ── Active Explosive Power assignment (admin-managed library) ─────
   // Resolve which phase + which weekday block applies TODAY, based on the
@@ -97,6 +112,9 @@ export async function GET(req: Request) {
      *  explaining the volume/intensity adjustment applied. */
     season_phase?: string | null;
     season_note?: string | null;
+    /** Pre-game taper (trainer-entered game dates). Client localises the text. */
+    is_match_day?: boolean;
+    days_to_game?: number | null;
   } | null = null;
 
   if (epAssign) {
@@ -159,19 +177,23 @@ export async function GET(req: Request) {
       const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
       const programmeName = phaseRow.programme_name ?? null;
 
-      // Season-phase volume modifier (explainable): in-season trims volume for
-      // freshness, off-season adds it, etc. Applied to each exercise's set count.
+      // Combined volume modifier (explainable): season phase (in-season trims
+      // for freshness, off-season builds) × pre-game taper (ease down toward a
+      // game). Applied to each exercise's set count. Match day suppresses gym
+      // blocks entirely (handled below).
       const phase = isSeasonPhase(ep.season_phase) ? ep.season_phase : null;
       const phaseNote = phase ? SEASON_PHASE_SPEC[phase].note.EN : null;
+      const seasonMult = phase ? SEASON_PHASE_SPEC[phase].volume : 1;
+      const volMult = seasonMult * taper.volume;
       const applyPhase = (block: unknown): unknown => {
-        if (!phase || !block || typeof block !== "object") return block;
+        if (volMult === 1 || !block || typeof block !== "object") return block;
         const b = block as { name?: string; rows?: Array<Record<string, unknown>> };
         if (!Array.isArray(b.rows)) return block;
         return {
           ...b,
           rows: b.rows.map((r) => ({
             ...r,
-            sets: typeof r.sets === "number" ? applySeasonVolume(r.sets, phase) : r.sets,
+            sets: typeof r.sets === "number" ? Math.max(1, Math.round(r.sets * volMult)) : r.sets,
           })),
         };
       };
@@ -182,6 +204,8 @@ export async function GET(req: Request) {
         programme_name: programmeName,
         season_phase: phase,
         season_note: phaseNote,
+        is_match_day: taper.is_match_day,
+        days_to_game: taper.days_to_game,
       };
       if (slot.kind === "session") {
         explosive = {
@@ -230,6 +254,13 @@ export async function GET(req: Request) {
           blocks: [],
           ...common,
         };
+      }
+
+      // Match day overrides everything: no gym session, freshness priority.
+      if (explosive && taper.is_match_day) {
+        explosive.rest_day = true;
+        explosive.blocks = [];
+        explosive.next_session_label = null;
       }
     }
   }

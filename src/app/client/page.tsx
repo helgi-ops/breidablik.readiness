@@ -40,6 +40,8 @@ type TodayResp = {
     weeks_per_phase?: number;
     total_phases?: number;
     season_phase?: string | null;
+    is_match_day?: boolean;
+    days_to_game?: number | null;
     blocks: Array<{ name: string; rows: Array<{
       num?: string; exercise: string; reps: string; sets: number;
       velocity?: string | number; pct1rm?: number | null; method?: string;
@@ -164,6 +166,24 @@ export default function ClientTodayPage() {
               <span className="text-[11px] text-slate-500"> · {SEASON_PHASE_SPEC[data.explosive.season_phase].note[lang === "EN" ? "EN" : "IS"]}</span>
             </div>
           )}
+          {/* Pre-game taper banner — auto from trainer-entered game dates. */}
+          {data.explosive.is_match_day ? (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2">
+              <span className="text-[11px] font-semibold text-emerald-900">
+                {lang === "IS" ? "⚽ Leikdagur" : "⚽ Match day"}
+              </span>
+              <span className="text-[11px] text-emerald-800"> · {lang === "IS" ? "haltu þér ferskum — engin lyftingaæfing í dag." : "keep fresh — no gym session today."}</span>
+            </div>
+          ) : (data.explosive.days_to_game === 1 || data.explosive.days_to_game === 2) ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+              <span className="text-[11px] font-semibold text-amber-900">
+                {data.explosive.days_to_game === 1
+                  ? (lang === "IS" ? "Leikur á morgun" : "Game tomorrow")
+                  : (lang === "IS" ? "2 dagar í leik" : "2 days to game")}
+              </span>
+              <span className="text-[11px] text-amber-800"> · {lang === "IS" ? "minna magn til að halda ferskleika." : "reduced volume to stay fresh."}</span>
+            </div>
+          ) : null}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">

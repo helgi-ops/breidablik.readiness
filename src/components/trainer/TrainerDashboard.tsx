@@ -10,6 +10,7 @@ import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
 import LvProfilePanel from "./LvProfilePanel";
 import PtClientSummaryCard from "./PtClientSummaryCard";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
+import PtGamesManager from "./PtGamesManager";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -550,6 +551,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <LoadQuadrant clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <PtGamesManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                     </div>
                   )}
