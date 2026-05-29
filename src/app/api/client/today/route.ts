@@ -21,6 +21,7 @@ import {
 import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
 import { isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
 import { computeGameTaper } from "@/lib/client/gameTaper";
+import { buildOneRmMap, canonicalLift, isStale, targetKg, type LvTest } from "@/lib/client/oneRepMax";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,15 @@ export async function GET(req: Request) {
     today,
   );
 
+  // ── Latest strength tests → 1RM map (closed loop: test → prescribe) ──
+  const { data: lvRows } = await sb
+    .from("lv_profile_tests")
+    .select("exercise_label, est_one_rm, test_date")
+    .eq("client_id", player.id)
+    .order("test_date", { ascending: false })
+    .limit(100);
+  const oneRmMap = buildOneRmMap((lvRows ?? []) as LvTest[]);
+
   // ── Active Explosive Power assignment (admin-managed library) ─────
   // Resolve which phase + which weekday block applies TODAY, based on the
   // assignment start_date. The assignment's stored current_phase is
@@ -115,6 +125,9 @@ export async function GET(req: Request) {
     /** Pre-game taper (trainer-entered game dates). Client localises the text. */
     is_match_day?: boolean;
     days_to_game?: number | null;
+    /** Closed loop: lifts whose strength test is stale (retest) or missing. */
+    retest_due?: string[];
+    needs_test?: string[];
   } | null = null;
 
   if (epAssign) {
@@ -261,6 +274,35 @@ export async function GET(req: Request) {
         explosive.rest_day = true;
         explosive.blocks = [];
         explosive.next_session_label = null;
+      }
+
+      // Closed loop: attach actual target weights from the latest test, and
+      // collect lifts whose test is stale (retest) or missing (needs test).
+      if (explosive && Array.isArray(explosive.blocks)) {
+        const retest = new Set<string>();
+        const needsTest = new Set<string>();
+        explosive.blocks = explosive.blocks.map((blk) => {
+          if (!blk || typeof blk !== "object") return blk;
+          const b = blk as { name?: string; rows?: Array<Record<string, unknown>> };
+          if (!Array.isArray(b.rows)) return blk;
+          return {
+            ...b,
+            rows: b.rows.map((r) => {
+              const ex = String(r.exercise ?? "");
+              const pct = typeof r.pct1rm === "number" ? r.pct1rm : null;
+              const tk = targetKg(ex, pct, oneRmMap);
+              if (tk) {
+                const stale = isStale(tk.testDate, today);
+                if (stale) retest.add(ex);
+                return { ...r, target_kg: tk.kg, target_stale: stale };
+              }
+              if (pct != null && canonicalLift(ex)) needsTest.add(ex);
+              return r;
+            }),
+          };
+        });
+        explosive.retest_due = Array.from(retest);
+        explosive.needs_test = Array.from(needsTest);
       }
     }
   }

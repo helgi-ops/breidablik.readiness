@@ -46,7 +46,10 @@ type TodayResp = {
       num?: string; exercise: string; reps: string; sets: number;
       velocity?: string | number; pct1rm?: number | null; method?: string;
       cluster_rest?: string; set_rest?: string;
+      target_kg?: number | null; target_stale?: boolean;
     }> }>;
+    retest_due?: string[];
+    needs_test?: string[];
   } | null;
   readinessToday: { id: string; total_score: number | null; color: string | null } | null;
   bodyweight: { latest: { log_date: string; weight_kg: number }; delta_kg: number | null } | null;
@@ -244,7 +247,10 @@ export default function ClientTodayPage() {
                 <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-100 pb-1.5 last:border-0">
                   <span className="font-medium text-slate-800 truncate">{r.exercise}</span>
                   <span className="text-xs text-slate-500 tabular-nums shrink-0">
-                    {r.sets}×{r.reps}{r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : ""}
+                    {r.sets}×{r.reps}
+                    {r.target_kg != null
+                      ? <> · <span className="font-semibold text-slate-900">{r.target_kg} kg</span>{r.pct1rm ? ` (${Math.round(r.pct1rm * 100)}%)` : ""}</>
+                      : (r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : "")}
                     {r.velocity ? ` · ${r.velocity} m/s` : ""}
                   </span>
                 </div>
@@ -256,6 +262,26 @@ export default function ClientTodayPage() {
               )}
             </div>
           ))}
+
+          {/* Closed loop — retest / test nudges. Stale tests = retest; lifts
+              with a %1RM but no test yet = test to unlock target weights. */}
+          {(data.explosive.retest_due?.length || data.explosive.needs_test?.length) ? (
+            <Link href="/client/lv-profile" className="block rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 hover:bg-blue-100">
+              {data.explosive.retest_due && data.explosive.retest_due.length > 0 ? (
+                <div className="text-[12px] text-blue-900">
+                  <span className="font-semibold">{lang === "IS" ? "Tími á endurprófi" : "Time to retest"}:</span>{" "}
+                  {data.explosive.retest_due.join(", ")}
+                  <span className="text-blue-700"> — {lang === "IS" ? "uppfærðu 1RM svo þyngdir haldist réttar." : "update your 1RM so target weights stay accurate."}</span>
+                </div>
+              ) : (
+                <div className="text-[12px] text-blue-900">
+                  <span className="font-semibold">{lang === "IS" ? "Taktu styrktarpróf" : "Run a strength test"}:</span>{" "}
+                  {data.explosive.needs_test!.join(", ")}
+                  <span className="text-blue-700"> — {lang === "IS" ? "til að fá raun-þyngdir í stað prósenta." : "to get real target weights instead of percentages."}</span>
+                </div>
+              )}
+            </Link>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
