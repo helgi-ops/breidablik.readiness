@@ -136,7 +136,10 @@ interface SessionTweak {
 
 interface AssignTemplateBody {
   templateId: string;
-  playerId: string;
+  /** The client/player to assign to. The PlanAssigner UI historically sends
+   *  this as `clientId`; we accept either so the assign actually persists. */
+  playerId?: string;
+  clientId?: string;
   startDate: string; // ISO date
   tweaks?: SessionTweak[];
 }
@@ -147,10 +150,13 @@ export async function POST(req: Request) {
     const sb = getAdmin();
 
     const body: AssignTemplateBody = await req.json();
+    // The PlanAssigner UI sends `clientId`; older callers send `playerId`.
+    // Accept either so the assign reliably persists instead of 400-ing.
+    const playerId = body.playerId ?? body.clientId;
 
-    if (!body.templateId || !body.playerId || !body.startDate) {
+    if (!body.templateId || !playerId || !body.startDate) {
       return NextResponse.json(
-        { error: "Missing required fields: templateId, playerId, startDate" },
+        { error: "Missing required fields: templateId, clientId/playerId, startDate" },
         { status: 400 }
       );
     }
@@ -170,7 +176,7 @@ export async function POST(req: Request) {
     const { data: player, error: playerErr } = await sb
       .from("players")
       .select("id, full_name, team_id")
-      .eq("id", body.playerId)
+      .eq("id", playerId)
       .eq("team_id", ctx.teamId)
       .single();
 
@@ -185,7 +191,7 @@ export async function POST(req: Request) {
       .from("individual_training_plans")
       .insert([
         {
-          player_id: body.playerId,
+          player_id: playerId,
           team_id: ctx.teamId,
           created_by: ctx.userId,
           plan_name: template.name,
@@ -206,9 +212,13 @@ export async function POST(req: Request) {
     if (!plan) throw new Error("Failed to create plan");
 
     // Copy structure: weeks → sessions → prescriptions
-    const structure = template.structure as any[];
+    const structure = Array.isArray(template.structure) ? (template.structure as any[]) : [];
     const tweakMap = new Map<number, SessionTweak>();
-    body.tweaks?.forEach((t) => tweakMap.set(t.sessionIndex, t));
+    // Tolerate both shapes: array of SessionTweak (legacy) and the object map
+    // the PlanAssigner UI currently sends.
+    if (Array.isArray(body.tweaks)) {
+      body.tweaks.forEach((t) => tweakMap.set(t.sessionIndex, t));
+    }
 
     for (const week of structure) {
       const weekNumber = week.week || 1;
@@ -280,7 +290,7 @@ export async function POST(req: Request) {
       {
         plan: {
           id: plan.id,
-          playerId: body.playerId,
+          playerId: playerId,
           playerName: player.full_name,
           planName: template.name,
           planType: template.plan_type,

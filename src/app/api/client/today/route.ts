@@ -208,6 +208,105 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Individual training plan (trainer "Assign plan" flow) ─────────
+  // The PT trainer dashboard assigns a saved template via /api/trainer/plans,
+  // which writes to individual_training_plans → _sessions → _prescriptions.
+  // The client home screen historically only read Explosive Power + custom
+  // templates, so assigned plans never surfaced. Bridge: if no Explosive
+  // Power assignment populated `explosive`, resolve TODAY's session from the
+  // active individual plan and map it into the same shape the UI renders.
+  if (!explosive) {
+    const { data: planRow } = await sb
+      .from("individual_training_plans")
+      .select("id, plan_name, start_date, end_date")
+      .eq("player_id", player.id)
+      .eq("status", "active")
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (planRow) {
+      const plan = planRow as { id: string; plan_name: string; start_date: string; end_date: string };
+      // Week number since start (1-based) and ISO weekday (Mon=1 … Sun=7).
+      const msPerDay = 86_400_000;
+      const startMs = new Date(plan.start_date + "T00:00:00Z").getTime();
+      const todayMs = new Date(today + "T00:00:00Z").getTime();
+      const dayOffset = Math.max(0, Math.floor((todayMs - startMs) / msPerDay));
+      const weekNumber = Math.floor(dayOffset / 7) + 1;
+      const isoWeekday = ((new Date(today + "T00:00:00Z").getUTCDay() + 6) % 7) + 1;
+
+      // Total weeks in the plan → drives the "Week X / N" progress bar.
+      const endMs = new Date(plan.end_date + "T00:00:00Z").getTime();
+      const totalWeeks = Math.max(weekNumber, Math.ceil((endMs - startMs) / msPerDay / 7));
+
+      const { data: sessionRow } = await sb
+        .from("individual_training_sessions")
+        .select("id, session_name, session_type, day_of_week, week_number")
+        .eq("plan_id", plan.id)
+        .eq("week_number", weekNumber)
+        .eq("day_of_week", isoWeekday)
+        .order("sort_order", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
+
+      let rows: Array<Record<string, unknown>> = [];
+      if (sessionRow) {
+        const session = sessionRow as { id: string; session_name: string };
+        const { data: rxRows } = await sb
+          .from("individual_training_prescriptions")
+          .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, notes")
+          .eq("session_id", session.id)
+          .order("sort_order", { ascending: true });
+        const rx = ((rxRows ?? []) as Array<{
+          exercise_id: string | null; sets: number | null; reps: string | null;
+          load_type: string | null; load_value: number | null; rest_seconds: number | null;
+          rpe_target: number | null;
+        }>);
+
+        // Resolve exercise names in one round trip.
+        const exIds = Array.from(new Set(rx.map((r) => r.exercise_id).filter(Boolean))) as string[];
+        const nameById = new Map<string, string>();
+        if (exIds.length > 0) {
+          const { data: exRows } = await sb
+            .from("exercise_library")
+            .select("id, name")
+            .in("id", exIds);
+          ((exRows ?? []) as Array<{ id: string; name: string }>).forEach((e) => nameById.set(e.id, e.name));
+        }
+
+        rows = rx.map((r, i) => ({
+          num: String(i + 1),
+          exercise: (r.exercise_id && nameById.get(r.exercise_id)) || "Exercise",
+          reps: r.reps ?? "",
+          sets: r.sets ?? 0,
+          method: r.load_type ?? undefined,
+          set_rest: r.rest_seconds != null ? `${r.rest_seconds} sec` : undefined,
+        }));
+      }
+
+      explosive = {
+        level: "",
+        programme_name: plan.plan_name,
+        phase: weekNumber,
+        phase_name: sessionRow ? (sessionRow as { session_name: string }).session_name : "Hvíldardagur",
+        weeks_label: `Week ${weekNumber}`,
+        week_in_phase: 1,
+        weekday_label: WEEKDAY_IS[isoWeekday - 1] ?? null,
+        rest_day: !sessionRow,
+        next_session_label: null,
+        weeks_per_phase: 1,
+        total_phases: totalWeeks,
+        blocks: sessionRow
+          ? [{ name: (sessionRow as { session_name: string }).session_name, rows }]
+          : [],
+      };
+    }
+  }
+
   // ── Custom template player-override active for today ──────────────
   const { data: overrideRow } = await sb
     .from("custom_template_sets")
