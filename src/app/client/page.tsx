@@ -17,6 +17,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import LoadQuadrant from "@/components/player/LoadQuadrant";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
@@ -241,6 +242,10 @@ export default function ClientTodayPage() {
           </Link>
         </div>
       )}
+
+      {/* Fitness × Fatigue quadrant — where the client sits on chronic vs
+          acute load, in plain language. */}
+      <LoadQuadrant lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Smart insights — Foster + heavy-lift exposure + PR forecast.
           These three are MicroPulse PT's main differentiators vs generic
