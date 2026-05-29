@@ -19,6 +19,7 @@ import {
   forecastPR,
 } from "@/lib/trainer/loadIntelligence";
 import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
+import { applySeasonVolume, isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
   // phase 2 automatically.
   const { data: epAssign } = await sb
     .from("pt_explosive_programme_assignments")
-    .select("id, level, current_phase, programme_key, start_date, status")
+    .select("id, level, current_phase, programme_key, start_date, status, season_phase")
     .eq("client_id", player.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -92,12 +93,17 @@ export async function GET(req: Request) {
      *  for 8-week starter templates vs 12-week Explosive Power. */
     weeks_per_phase?: number;
     total_phases?: number;
+    /** Season block the trainer assigned this for, and the plain-language note
+     *  explaining the volume/intensity adjustment applied. */
+    season_phase?: string | null;
+    season_note?: string | null;
   } | null = null;
 
   if (epAssign) {
     const ep = epAssign as {
       level: string; current_phase: number;
       programme_key: string; start_date: string;
+      season_phase: SeasonPhase | null;
     };
 
     // Pull all phases at once so we don't need to hit the DB again on phase
@@ -152,10 +158,30 @@ export async function GET(req: Request) {
 
       const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
       const programmeName = phaseRow.programme_name ?? null;
+
+      // Season-phase volume modifier (explainable): in-season trims volume for
+      // freshness, off-season adds it, etc. Applied to each exercise's set count.
+      const phase = isSeasonPhase(ep.season_phase) ? ep.season_phase : null;
+      const phaseNote = phase ? SEASON_PHASE_SPEC[phase].note.EN : null;
+      const applyPhase = (block: unknown): unknown => {
+        if (!phase || !block || typeof block !== "object") return block;
+        const b = block as { name?: string; rows?: Array<Record<string, unknown>> };
+        if (!Array.isArray(b.rows)) return block;
+        return {
+          ...b,
+          rows: b.rows.map((r) => ({
+            ...r,
+            sets: typeof r.sets === "number" ? applySeasonVolume(r.sets, phase) : r.sets,
+          })),
+        };
+      };
+
       const common = {
         weeks_per_phase: weeksPerPhase,
         total_phases: totalPhases,
         programme_name: programmeName,
+        season_phase: phase,
+        season_note: phaseNote,
       };
       if (slot.kind === "session") {
         explosive = {
@@ -167,7 +193,7 @@ export async function GET(req: Request) {
           weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
           rest_day: false,
           next_session_label: null,
-          blocks: [blocks[slot.blockIndex]].filter(Boolean),
+          blocks: [blocks[slot.blockIndex]].filter(Boolean).map(applyPhase),
           ...common,
         };
       } else if (slot.kind === "rest") {
@@ -187,7 +213,7 @@ export async function GET(req: Request) {
           weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
           rest_day: true,
           next_session_label: slot.nextSessionLabel,
-          blocks: previewBlock ? [previewBlock] : [],
+          blocks: previewBlock ? [applyPhase(previewBlock)] : [],
           ...common,
         };
       } else {

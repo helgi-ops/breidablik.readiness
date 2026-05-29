@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { SEASON_PHASES, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
 
 type Row = {
   num: string;
@@ -51,6 +52,7 @@ type Assignment = {
   current_phase: number;
   status: string;
   notes: string | null;
+  season_phase: SeasonPhase | null;
 };
 type Client = { id: string; name: string };
 
@@ -113,6 +115,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
   const [assignClientId, setAssignClientId] = useState<string>(clients[0]?.id ?? "");
   const [assignLevel, setAssignLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [assignDate, setAssignDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [assignSeason, setAssignSeason] = useState<SeasonPhase | "">("");
   const [assignBusy, setAssignBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -160,7 +163,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
       const res = await fetch("/api/coach/pt-explosive", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ clientId: assignClientId, level: assignLevel, startDate: assignDate, programmeKey: activeProgramme }),
+        body: JSON.stringify({ clientId: assignClientId, level: assignLevel, startDate: assignDate, programmeKey: activeProgramme, seasonPhase: assignSeason || undefined }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Assign failed");
@@ -343,7 +346,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
         <h3 className="text-sm font-semibold text-slate-900">
           {lang === "IS" ? "Úthluta prógrammi" : "Assign programme"}
         </h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid gap-2 sm:grid-cols-5">
           <select value={assignClientId} onChange={(e) => setAssignClientId(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm">
             {clients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -354,6 +357,11 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
             <option value="intermediate">{lang === "IS" ? "Vanur" : "Intermediate"}</option>
             <option value="advanced">{lang === "IS" ? "Vönduður" : "Advanced"}</option>
           </select>
+          <select value={assignSeason} onChange={(e) => setAssignSeason(e.target.value as SeasonPhase | "")}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+            <option value="">{lang === "IS" ? "Tímabil (valfrjálst)" : "Season (optional)"}</option>
+            {SEASON_PHASES.map((s) => <option key={s} value={s}>{SEASON_PHASE_SPEC[s].label[lang]}</option>)}
+          </select>
           <input type="date" value={assignDate} onChange={(e) => setAssignDate(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm" />
           <button onClick={assign} disabled={assignBusy || !assignClientId}
@@ -361,6 +369,9 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
             {assignBusy ? "…" : (lang === "IS" ? "Úthluta" : "Assign")}
           </button>
         </div>
+        {assignSeason && (
+          <p className="mt-2 text-[11px] text-slate-500">{SEASON_PHASE_SPEC[assignSeason].note[lang]}</p>
+        )}
 
         {assignments.length > 0 ? (
           <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
@@ -370,6 +381,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                   <th className="px-2 py-1.5 text-left">{lang === "IS" ? "Skjólstæðingur" : "Client"}</th>
                   <th className="px-2 py-1.5 text-center">Level</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Byrjar" : "Starts"}</th>
+                  <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Tímabil" : "Season"}</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Fasi" : "Phase"}</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Staða" : "Status"}</th>
                   <th className="px-2 py-1.5"></th>
@@ -381,6 +393,13 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                     <td className="px-2 py-1.5 font-medium">{clientName(a.client_id)}</td>
                     <td className="px-2 py-1.5 text-center capitalize">{a.level}</td>
                     <td className="px-2 py-1.5 text-center tabular-nums">{a.start_date}</td>
+                    <td className="px-2 py-1.5 text-center">
+                      <select value={a.season_phase ?? ""} onChange={(e) => patchAssign(a.id, { seasonPhase: e.target.value || null })}
+                        className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs">
+                        <option value="">—</option>
+                        {SEASON_PHASES.map((s) => <option key={s} value={s}>{SEASON_PHASE_SPEC[s].label[lang]}</option>)}
+                      </select>
+                    </td>
                     <td className="px-2 py-1.5 text-center">
                       <select value={a.current_phase} onChange={(e) => patchAssign(a.id, { currentPhase: Number(e.target.value) })}
                         className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs">

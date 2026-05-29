@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
+import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
@@ -38,6 +39,7 @@ type TodayResp = {
     next_session_label: string | null;
     weeks_per_phase?: number;
     total_phases?: number;
+    season_phase?: string | null;
     blocks: Array<{ name: string; rows: Array<{
       num?: string; exercise: string; reps: string; sets: number;
       velocity?: string | number; pct1rm?: number | null; method?: string;
@@ -113,9 +115,10 @@ export default function ClientTodayPage() {
         )}
       </div>
 
-      {/* Readiness nudge */}
+      {/* Readiness nudge — stays in the PT shell (returns to /client) instead
+          of dropping the client onto the football /team surface. */}
       <Link
-        href="/player"
+        href="/player/checkin?return=/client"
         className={`block rounded-xl border p-3.5 transition-colors ${
           readinessDone
             ? "border-emerald-200 bg-emerald-50"
@@ -149,6 +152,16 @@ export default function ClientTodayPage() {
               <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">
                 {data.explosive.programme_name}
               </span>
+            </div>
+          )}
+          {/* Season-phase banner — shows the trainer's chosen block and the
+              plain-language volume/intensity adjustment (explainability). */}
+          {isSeasonPhase(data.explosive.season_phase) && (
+            <div className="rounded-lg bg-slate-100 px-2.5 py-1.5">
+              <span className="text-[11px] font-semibold text-slate-700">
+                {SEASON_PHASE_SPEC[data.explosive.season_phase].label[lang === "EN" ? "EN" : "IS"]}
+              </span>
+              <span className="text-[11px] text-slate-500"> · {SEASON_PHASE_SPEC[data.explosive.season_phase].note[lang === "EN" ? "EN" : "IS"]}</span>
             </div>
           )}
           <div className="flex items-start justify-between gap-3">
@@ -361,11 +374,8 @@ export default function ClientTodayPage() {
                 {data.bodyweight.latest.weight_kg.toFixed(1)} kg
               </div>
               {data.bodyweight.delta_kg !== null && (
-                <div className={`text-[11px] ${
-                  data.bodyweight.delta_kg > 0 ? "text-amber-700"
-                  : data.bodyweight.delta_kg < 0 ? "text-emerald-700"
-                  : "text-slate-500"
-                }`}>
+                <div className="text-[11px] text-slate-500">
+                  {/* Neutral: mass change isn't good/bad for an athlete. */}
                   {data.bodyweight.delta_kg > 0 ? "+" : ""}{data.bodyweight.delta_kg.toFixed(1)} kg / 7d
                 </div>
               )}
