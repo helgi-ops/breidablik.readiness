@@ -10,6 +10,7 @@ import IsometricProtocolLibrary from "./IsometricProtocolLibrary";
 import LvProfilePanel from "./LvProfilePanel";
 import PtClientSummaryCard from "./PtClientSummaryCard";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
+import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import PtGamesManager from "./PtGamesManager";
 
 /* ── Types ───────────────────────────────────────────── */
@@ -502,9 +503,14 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                     </div>
                   </div>
 
-                  {/* Expanded detail */}
+                  {/* Expanded detail. Stop click-bubbling so interacting with
+                      anything inside (date pickers, selects, buttons) doesn't
+                      hit the row's expand/collapse toggle and close the card. */}
                   {selectedClient?.id === client.id && (
-                    <div className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+                    <div
+                      className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div>
                         <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
                         <span className="font-medium">{client.readiness?.fatigue ?? "—"}/5</span>
@@ -551,6 +557,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <LoadQuadrant clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <VolumeLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <PtGamesManager clientId={client.id} lang={isIS ? "IS" : "EN"} />

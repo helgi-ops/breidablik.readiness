@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LineSpark, { type Point as SparkPoint } from "@/components/client/LineSpark";
+import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -59,6 +60,8 @@ export default function ClientProgressionPage() {
             : "e1RM (Epley estimate) per exercise over time. ★ marks personal records."}
         </div>
       </div>
+
+      <VolumeLoadCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {loading ? (
         <div className="text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>
