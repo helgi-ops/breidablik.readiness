@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { canonicalLift } from "@/lib/client/oneRepMax";
+import { computePersonalRecords } from "@/lib/client/personalRecords";
 
 export const runtime = "nodejs";
 
@@ -160,6 +161,13 @@ export async function GET(req: Request) {
     focus = p?.programme_name ?? p?.phase_name ?? null;
   }
 
+  // ── Most recent personal best (last 7 days) for a celebration ────
+  const { recent_prs } = await computePersonalRecords(sb, player.id);
+  const freshPr = recent_prs.find((p) => p.date >= iso(6)) ?? null;
+  const pr = freshPr
+    ? { exercise: freshPr.exercise, e1rm: freshPr.e1rm, delta_kg: freshPr.delta_kg, date: freshPr.date }
+    : null;
+
   // ── Insight (rule-based, explainable, cites the deciding signal) ──
   const signals: string[] = [];
   let text: string;
@@ -196,5 +204,6 @@ export async function GET(req: Request) {
     confidence: { level, reason },
     insight: { text, signals },
     focus,
+    pr,
   });
 }

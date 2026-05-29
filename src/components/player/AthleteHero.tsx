@@ -25,6 +25,7 @@ type Hero = {
   confidence: { level: "HIGH" | "MODERATE" | "LOW"; reason: string };
   insight: { text: string; signals: string[] };
   focus: string | null;
+  pr: { exercise: string; e1rm: number; delta_kg: number; date: string } | null;
 };
 
 const COPY = {
@@ -34,7 +35,7 @@ const COPY = {
     focus: "Fókus dagsins", insight: "Þjálfaranóta", baselineTitle: "Að kynnast þér",
     baselineSub: "Því meira sem þú skráir, því klárari verður þjálfunin þín.",
     items: ["Daglegt check-in", "Líkamsþyngd", "Æfingar", "Íþróttaæfingar"],
-    based: "Byggt á", noTrend: "—", profileConfidence: "Prófíl-traust",
+    based: "Byggt á", noTrend: "—", profileConfidence: "Prófíl-traust", newPr: "Nýtt met!",
   },
   EN: {
     streak: "day consistency", compliance: "program compliance", sessions: "sessions this month",
@@ -42,7 +43,7 @@ const COPY = {
     focus: "Today's focus", insight: "Coach note", baselineTitle: "Learning about you",
     baselineSub: "The more you log, the smarter your coaching becomes.",
     items: ["Daily check-in", "Body weight", "Workouts", "Sport sessions"],
-    based: "Based on", noTrend: "—", profileConfidence: "Profile confidence",
+    based: "Based on", noTrend: "—", profileConfidence: "Profile confidence", newPr: "New PB!",
   },
 } as const;
 
@@ -87,7 +88,7 @@ export default function AthleteHero({ lang = "IS" }: { lang?: Lang }) {
   // Baseline / empty state — motivating, not empty.
   if (h.baseline) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-zinc-900 to-neutral-800 p-4 text-white">
         <div className="text-base font-semibold">🔥 {t.baselineTitle}</div>
         <div className="text-xs text-white/70 mt-0.5">{t.baselineSub}</div>
 
@@ -120,8 +121,19 @@ export default function AthleteHero({ lang = "IS" }: { lang?: Lang }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      {/* New personal best — celebration. */}
+      {h.pr && (
+        <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2 text-white">
+          <span className="text-base">🏆</span>
+          <span className="text-[13px] font-semibold">{t.newPr}</span>
+          <span className="text-[12px] text-white/90 capitalize truncate">
+            {h.pr.exercise} {h.pr.e1rm} kg (+{h.pr.delta_kg})
+          </span>
+        </div>
+      )}
+
       {/* Streak + confidence band */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-2.5 text-white">
+      <div className="flex items-center justify-between bg-gradient-to-r from-zinc-900 to-neutral-800 px-4 py-2.5 text-white">
         <div className="flex items-baseline gap-1.5">
           <span className="text-lg font-bold tabular-nums">🔥 {h.consistency.checkin_streak}</span>
           <span className="text-[11px] text-white/70">{t.streak}</span>
