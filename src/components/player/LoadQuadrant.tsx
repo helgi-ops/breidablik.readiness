@@ -88,7 +88,7 @@ const ZONE_COLOR: Record<string, string> = {
 
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-export default function LoadQuadrant({ lang = "IS" }: { lang?: Lang }) {
+export default function LoadQuadrant({ lang = "IS", clientId }: { lang?: Lang; clientId?: string }) {
   const t = COPY[lang];
   const [q, setQ] = useState<Quadrant | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -97,13 +97,18 @@ export default function LoadQuadrant({ lang = "IS" }: { lang?: Lang }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
-      const res = await fetch(`/api/client/load-quadrant`, {
+      // Trainer view passes a clientId → use the trainer-scoped endpoint;
+      // otherwise the calling client reads their own.
+      const url = clientId
+        ? `/api/trainer/client/${clientId}/load-quadrant`
+        : `/api/client/load-quadrant`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
       if (json.ok) setQ(json.quadrant as Quadrant);
     } catch { /* soft */ } finally { setLoaded(true); }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => { void load(); }, [load]);
 
