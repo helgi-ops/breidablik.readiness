@@ -18,6 +18,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
+import AthleteHero from "@/components/player/AthleteHero";
+import AICoachCard from "@/components/player/AICoachCard";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -119,6 +121,12 @@ export default function ClientTodayPage() {
           </div>
         )}
       </div>
+
+      {/* Athlete hero — "Am I progressing?" at a glance. */}
+      <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
+
+      {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
+      <AICoachCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Readiness nudge — stays in the PT shell (returns to /client) instead
           of dropping the client onto the football /team surface. */}
@@ -266,18 +274,18 @@ export default function ClientTodayPage() {
           {/* Closed loop — retest / test nudges. Stale tests = retest; lifts
               with a %1RM but no test yet = test to unlock target weights. */}
           {(data.explosive.retest_due?.length || data.explosive.needs_test?.length) ? (
-            <Link href="/client/lv-profile" className="block rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 hover:bg-blue-100">
+            <Link href="/client/lv-profile" className="block rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 hover:bg-emerald-100">
               {data.explosive.retest_due && data.explosive.retest_due.length > 0 ? (
-                <div className="text-[12px] text-blue-900">
+                <div className="text-[12px] text-emerald-900">
                   <span className="font-semibold">{lang === "IS" ? "Tími á endurprófi" : "Time to retest"}:</span>{" "}
                   {data.explosive.retest_due.join(", ")}
-                  <span className="text-blue-700"> — {lang === "IS" ? "uppfærðu 1RM svo þyngdir haldist réttar." : "update your 1RM so target weights stay accurate."}</span>
+                  <span className="text-emerald-700"> — {lang === "IS" ? "uppfærðu 1RM svo þyngdir haldist réttar." : "update your 1RM so target weights stay accurate."}</span>
                 </div>
               ) : (
-                <div className="text-[12px] text-blue-900">
+                <div className="text-[12px] text-emerald-900">
                   <span className="font-semibold">{lang === "IS" ? "Taktu styrktarpróf" : "Run a strength test"}:</span>{" "}
                   {data.explosive.needs_test!.join(", ")}
-                  <span className="text-blue-700"> — {lang === "IS" ? "til að fá raun-þyngdir í stað prósenta." : "to get real target weights instead of percentages."}</span>
+                  <span className="text-emerald-700"> — {lang === "IS" ? "til að fá raun-þyngdir í stað prósenta." : "to get real target weights instead of percentages."}</span>
                 </div>
               )}
             </Link>
@@ -379,23 +387,23 @@ export default function ClientTodayPage() {
             const f = pr.forecast;
             const onTrack = f.eta_days !== null;
             return (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-blue-800">
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-emerald-800">
                     🎯 {lang === "IS" ? "Næsta met" : "Next PR"}
                   </div>
-                  <span className="rounded-full bg-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-900 truncate max-w-[12rem]">
+                  <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 truncate max-w-[12rem]">
                     {pr.exercise_name}
                   </span>
                 </div>
-                <div className="mt-1 text-base font-semibold text-blue-900">
+                <div className="mt-1 text-base font-semibold text-emerald-900">
                   {onTrack
                     ? (lang === "IS"
                         ? `${f.target_kg} kg eftir ~${f.eta_weeks} vikur`
                         : `${f.target_kg} kg in ~${f.eta_weeks} weeks`)
                     : (lang === "IS" ? "Engin upp-leitni núna" : "No upward trend right now")}
                 </div>
-                <div className="text-xs text-blue-700 mt-0.5">
+                <div className="text-xs text-emerald-700 mt-0.5">
                   {lang === "IS" ? "Núv. PR" : "Current PR"} {f.current_pr_kg} kg
                   {onTrack && ` · +${f.weekly_rate_kg.toFixed(1)} kg/${lang === "IS" ? "viku" : "wk"}`}
                 </div>
