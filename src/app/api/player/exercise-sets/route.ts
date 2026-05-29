@@ -55,7 +55,16 @@ export async function POST(req: Request) {
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { sb, playerId, teamId } = a;
 
-  let body: { session_date?: string; exercises?: ExerciseIn[] };
+  let body: {
+    session_date?: string;
+    exercises?: ExerciseIn[];
+    /** Optional Foster session load inputs. When both are present we also
+     *  upsert a session_rpe_entries row so ACWR / monotony / strain pick the
+     *  session up. session_rpe is normally the average of the per-set RPEs
+     *  (computed client-side) but the client can override it. */
+    duration_minutes?: number | null;
+    session_rpe?: number | null;
+  };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const sessionDate = (body.session_date ?? "").slice(0, 10);
@@ -113,7 +122,45 @@ export async function POST(req: Request) {
   const { error: insErr } = await sb.from("pt_exercise_set_logs").insert(rows);
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, saved: rows.length, session_date: sessionDate });
+  // ── Optional Foster session load (sRPE × duration) ────────────────
+  // When the client provides a duration and a session RPE (auto-derived from
+  // the per-set RPEs, or entered manually), upsert ONE session_rpe_entries
+  // row for the day so load/ACWR/monotony see it. session_load is a generated
+  // column (rpe × duration). We replace only this flow's own rows (source =
+  // 'client') so any coach/imputed entries for the day are left intact.
+  let sessionLoadSaved: { rpe: number; duration_minutes: number } | null = null;
+  const durationMin = Number(body.duration_minutes);
+  const sessionRpe = Number(body.session_rpe);
+  const hasDuration = Number.isFinite(durationMin) && durationMin >= 1 && durationMin <= 300;
+  const hasRpe = Number.isFinite(sessionRpe) && sessionRpe >= 0 && sessionRpe <= 10;
+  if (hasDuration && hasRpe) {
+    const { error: delRpeErr } = await sb
+      .from("session_rpe_entries")
+      .delete()
+      .eq("player_id", playerId)
+      .eq("session_date", sessionDate)
+      .eq("source", "client");
+    if (delRpeErr) return NextResponse.json({ error: delRpeErr.message }, { status: 500 });
+
+    const { error: insRpeErr } = await sb.from("session_rpe_entries").insert({
+      player_id: playerId,
+      team_id: teamId,
+      session_date: sessionDate,
+      session_type: "individual",
+      duration_minutes: Math.round(durationMin),
+      rpe: Math.round(sessionRpe * 10) / 10,
+      source: "client",
+    });
+    if (insRpeErr) return NextResponse.json({ error: insRpeErr.message }, { status: 500 });
+    sessionLoadSaved = { rpe: Math.round(sessionRpe * 10) / 10, duration_minutes: Math.round(durationMin) };
+  }
+
+  return NextResponse.json({
+    ok: true,
+    saved: rows.length,
+    session_date: sessionDate,
+    session_load: sessionLoadSaved,
+  });
 }
 
 export async function GET(req: Request) {
@@ -135,7 +182,18 @@ export async function GET(req: Request) {
     .order("exercise_name", { ascending: true })
     .order("set_number", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, sets: data ?? [] });
+
+  // Also return this flow's own Foster session-load rows so the log form can
+  // restore the duration + session RPE when the client re-opens a day.
+  const { data: loadRows } = await sb
+    .from("session_rpe_entries")
+    .select("session_date, duration_minutes, rpe, session_load")
+    .eq("player_id", playerId)
+    .eq("source", "client")
+    .gte("session_date", sinceIso)
+    .order("session_date", { ascending: false });
+
+  return NextResponse.json({ ok: true, sets: data ?? [], session_loads: loadRows ?? [] });
 }
 
 export async function DELETE(req: Request) {

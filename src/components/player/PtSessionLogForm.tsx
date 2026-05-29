@@ -68,6 +68,14 @@ const COPY = {
     examplePlaceholder: "t.d. Bench Press",
     empty: "Bæta við fyrstu æfingunni hér að ofan.",
     error: "Ekki tókst að vista. Reyndu aftur.",
+    sessionLoadTitle: "Álag æfingar (sRPE)",
+    duration: "Lengd (mín)",
+    durationPlaceholder: "t.d. 60",
+    sessionRpe: "Session RPE (1–10)",
+    derivedHint: "Reiknað sjálfkrafa: meðaltal RPE úr settunum þínum. Þú mátt breyta.",
+    manualHint: "Engin RPE skráð á settin — sláðu inn heildar-RPE fyrir æfinguna.",
+    loadAu: "Álag",
+    loadFormula: "RPE × mínútur",
   },
   EN: {
     title: "Log session",
@@ -87,6 +95,14 @@ const COPY = {
     examplePlaceholder: "e.g. Bench Press",
     empty: "Add your first exercise above.",
     error: "Failed to save. Try again.",
+    sessionLoadTitle: "Session load (sRPE)",
+    duration: "Duration (min)",
+    durationPlaceholder: "e.g. 60",
+    sessionRpe: "Session RPE (1–10)",
+    derivedHint: "Auto-calculated: the average RPE across your sets. You can override it.",
+    manualHint: "No per-set RPE logged — enter an overall RPE for the session.",
+    loadAu: "Load",
+    loadFormula: "RPE × minutes",
   },
 } as const;
 
@@ -107,6 +123,21 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Foster session load inputs. Duration is entered by the client; the
+  // session RPE is auto-derived (average of per-set RPEs) but can be overridden.
+  const [durationMin, setDurationMin] = useState<number | null>(null);
+  const [manualRpe, setManualRpe] = useState<number | null>(null);
+
+  // Average of every per-set RPE the client has entered, or null if none.
+  const allRpes = exercises.flatMap((e) => e.sets.map((s) => s.rpe)).filter((r): r is number => r != null);
+  const derivedRpe = allRpes.length > 0
+    ? Math.round((allRpes.reduce((a, b) => a + b, 0) / allRpes.length) * 10) / 10
+    : null;
+  // Effective session RPE: a manual override wins, otherwise the derived avg.
+  const effectiveRpe = manualRpe ?? derivedRpe;
+  const sessionLoad = (effectiveRpe != null && durationMin != null && durationMin > 0)
+    ? Math.round(effectiveRpe * durationMin)
+    : null;
 
   /* ── Load existing rows for this date ─────────────────────────────── */
 
@@ -156,6 +187,14 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
         weight_kg: number | null; reps: number | null; rpe: number | null;
         set_number: number;
       }>).filter((r) => r.session_date === forDate);
+
+      // Restore any saved Foster session-load row for this day (duration +
+      // a manually-overridden RPE) so re-opening keeps the inputs.
+      const loadRow = ((json.session_loads ?? []) as Array<{
+        session_date: string; duration_minutes: number | null; rpe: number | null;
+      }>).find((l) => l.session_date === forDate);
+      setDurationMin(loadRow?.duration_minutes ?? null);
+      setManualRpe(loadRow?.rpe ?? null);
 
       if (rows.length === 0) {
         // Nothing logged yet — seed from the prescribed plan when asked,
@@ -236,7 +275,12 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
           "content-type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ session_date: sessionDate, exercises: cleaned }),
+        body: JSON.stringify({
+          session_date: sessionDate,
+          exercises: cleaned,
+          duration_minutes: durationMin,
+          session_rpe: effectiveRpe,
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -366,6 +410,52 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
           >
             {t.addExercise}
           </button>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+          <div className="text-sm font-semibold text-slate-900">{t.sessionLoadTitle}</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">{t.duration}</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={300}
+                value={durationMin ?? ""}
+                placeholder={t.durationPlaceholder}
+                onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
+                className="w-24 rounded-lg border px-2 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">{t.sessionRpe}</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={10}
+                step={0.5}
+                value={manualRpe ?? derivedRpe ?? ""}
+                onChange={(e) => setManualRpe(e.target.value === "" ? null : Number(e.target.value))}
+                className="w-24 rounded-lg border px-2 py-1 text-sm"
+              />
+            </div>
+            {sessionLoad != null && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">{t.loadAu}</span>
+                <span className="rounded-lg bg-neutral-900 px-3 py-1 text-sm font-semibold text-white">
+                  {sessionLoad} AU
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {derivedRpe != null ? t.derivedHint : t.manualHint}
+            {sessionLoad != null && <> · {effectiveRpe} × {durationMin} {t.loadFormula}</>}
+          </p>
         </div>
       )}
 
