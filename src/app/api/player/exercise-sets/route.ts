@@ -139,7 +139,8 @@ export async function POST(req: Request) {
       .delete()
       .eq("player_id", playerId)
       .eq("session_date", sessionDate)
-      .eq("source", "client");
+      .eq("source", "client")
+      .eq("session_type", "individual");
     if (delRpeErr) return NextResponse.json({ error: delRpeErr.message }, { status: 500 });
 
     const { error: insRpeErr } = await sb.from("session_rpe_entries").insert({
@@ -187,7 +188,7 @@ export async function GET(req: Request) {
   // restore the duration + session RPE when the client re-opens a day.
   const { data: loadRows } = await sb
     .from("session_rpe_entries")
-    .select("session_date, duration_minutes, rpe, session_load")
+    .select("id, session_date, session_type, session_name, duration_minutes, rpe, session_load")
     .eq("player_id", playerId)
     .eq("source", "client")
     .gte("session_date", sinceIso)

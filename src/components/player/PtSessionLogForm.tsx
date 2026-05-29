@@ -191,8 +191,9 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
       // Restore any saved Foster session-load row for this day (duration +
       // a manually-overridden RPE) so re-opening keeps the inputs.
       const loadRow = ((json.session_loads ?? []) as Array<{
-        session_date: string; duration_minutes: number | null; rpe: number | null;
-      }>).find((l) => l.session_date === forDate);
+        session_date: string; session_type: string | null;
+        duration_minutes: number | null; rpe: number | null;
+      }>).find((l) => l.session_date === forDate && (l.session_type ?? "individual") === "individual");
       setDurationMin(loadRow?.duration_minutes ?? null);
       setManualRpe(loadRow?.rpe ?? null);
 
