@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
 import LineSpark from "@/components/client/LineSpark";
+import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -94,6 +95,9 @@ export default function ClientProfilePage() {
         </div>
       </div>
 
+      {/* Daily reminders — opt-in push so the athlete re-engages. */}
+      <EnableRemindersCard />
+
       {/* Quick add */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
         <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
@@ -154,13 +158,10 @@ export default function ClientProfilePage() {
               </div>
               {latest && first && (
                 <>
-                  <div className={`text-xl font-semibold tabular-nums ${
-                    latest.weight_kg - first.weight_kg > 0
-                      ? "text-amber-700"
-                      : latest.weight_kg - first.weight_kg < 0
-                      ? "text-emerald-700"
-                      : "text-slate-700"
-                  }`}>
+                  {/* Neutral — for an athlete, gaining or losing mass isn't
+                      inherently good or bad (power-to-weight, lean mass). No
+                      diet-style good/bad colouring. */}
+                  <div className="text-xl font-semibold tabular-nums text-slate-800">
                     {latest.weight_kg - first.weight_kg > 0 ? "+" : ""}{(latest.weight_kg - first.weight_kg).toFixed(1)}
                   </div>
                   <div className="text-[10px] text-slate-500">kg</div>

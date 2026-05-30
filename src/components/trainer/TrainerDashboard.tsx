@@ -12,6 +12,7 @@ import PtClientSummaryCard from "./PtClientSummaryCard";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import PtGamesManager from "./PtGamesManager";
+import TrainerAttentionList from "./TrainerAttentionList";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -423,6 +424,16 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
               </div>
             </div>
           </div>
+
+          {/* Needs-attention banner — flagged clients, most severe first. */}
+          <TrainerAttentionList
+            teamId={teamId}
+            lang={isIS ? "IS" : "EN"}
+            onSelect={(id) => {
+              const c = clients.find((x) => x.id === id);
+              if (c) setSelectedClient(c);
+            }}
+          />
 
           {/* Client list */}
           {clients.length === 0 ? (
