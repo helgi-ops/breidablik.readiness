@@ -24,14 +24,15 @@ const SEASON_PHASES: {
   id: SeasonPhase;
   label: string;
   sublabel: string;
+  sublabelEN: string;
   icon: string;
   activeClass: string;
   baseClass: string;
 }[] = [
-  { id: "preseason",  label: "Preseason",            sublabel: "Undirbúningur",    icon: "🌱", activeClass: "border-amber-500 bg-amber-100 ring-1 ring-amber-400",   baseClass: "border-amber-200 bg-amber-50" },
-  { id: "inseason",   label: "In-season",             sublabel: "Keppnistímabil",   icon: "⚡", activeClass: "border-emerald-500 bg-emerald-100 ring-1 ring-emerald-400", baseClass: "border-emerald-200 bg-emerald-50" },
-  { id: "playoffs",   label: "Playoffs",              sublabel: "Úrslitakeppni",    icon: "🔥", activeClass: "border-red-500 bg-red-100 ring-1 ring-red-400",         baseClass: "border-red-200 bg-red-50" },
-  { id: "offseason",  label: "Off-season",            sublabel: "Frítímabil",       icon: "🌙", activeClass: "border-slate-500 bg-slate-100 ring-1 ring-slate-400",   baseClass: "border-slate-200 bg-slate-50" },
+  { id: "preseason",  label: "Preseason",            sublabel: "Undirbúningur",    sublabelEN: "Preparation",  icon: "🌱", activeClass: "border-amber-500 bg-amber-100 ring-1 ring-amber-400",   baseClass: "border-amber-200 bg-amber-50" },
+  { id: "inseason",   label: "In-season",             sublabel: "Keppnistímabil",   sublabelEN: "Competition",  icon: "⚡", activeClass: "border-emerald-500 bg-emerald-100 ring-1 ring-emerald-400", baseClass: "border-emerald-200 bg-emerald-50" },
+  { id: "playoffs",   label: "Playoffs",              sublabel: "Úrslitakeppni",    sublabelEN: "Playoffs",     icon: "🔥", activeClass: "border-red-500 bg-red-100 ring-1 ring-red-400",         baseClass: "border-red-200 bg-red-50" },
+  { id: "offseason",  label: "Off-season",            sublabel: "Frítímabil",       sublabelEN: "Off-season",   icon: "🌙", activeClass: "border-slate-500 bg-slate-100 ring-1 ring-slate-400",   baseClass: "border-slate-200 bg-slate-50" },
 ];
 
 type MatchInput = {
@@ -177,8 +178,63 @@ export default function WeekSetupPage() {
   const isDateOnBreak = (dateIso: string) =>
     teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date);
   const [lang] = useLang();
-  const vacationLabel = lang === "IS" ? "Frí" : "Vacation";
-  const vacationBadge = lang === "IS" ? "FRÍ" : "VACATION";
+  const isIS = lang === "IS";
+  const vacationLabel = isIS ? "Frí" : "Vacation";
+  const vacationBadge = isIS ? "FRÍ" : "VACATION";
+  const weekdaysShort = isIS ? WEEKDAYS_SHORT : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const t = isIS ? {
+    subtitle: "Stilltu vikuna. Kerfið sendir leikmönnum réttan æfingadag.",
+    week: "Vika", done: "✓ Lokið", error: "Villa",
+    step1: "Skref 1 — Vikugerð", step1desc: "Veldu vikudagsetningu og hvort það séu leikir í vikunni.",
+    weekTypePill: "Vikugerð", setupPill: "Uppsetning",
+    teamIdHint: "Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.",
+    weekStart: "Vikuupphaf (mánudagur)", season: "Tímabil", weekType: "Vikugerð",
+    noMatch: "Enginn leikur", oneMatch: "1 leikur", twoMatches: "2 leikir",
+    manualTitle: "Leyfa handvirka vikugerð (eins og NO_MATCH)",
+    manualDesc: "Gott í preseason: þú stýrir dag-til-dags áherslum þó það séu 1–2 leikir.",
+    next: "Næsta →", back: "← Til baka",
+    step2: "Skref 2 — Uppsetning",
+    manualCtrl: "Manual vikustýring", autoOrder: "Auto MD röðun",
+    step2manual: "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir).",
+    step2auto: "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun).",
+    match: "Leikur", date: "Dagsetning", kickoff: "Byrjunartími (valfrjáls)", home: "Heimavöllur", away: "Leikavöllur",
+    dailyIntent: "Dagleg áhersla (mán → sun)", reset: "Endurstilla",
+    autoActive: "Auto MD er virkt. Ef þú vilt handvirkt eins og preseason: settu Manual override á ON í Skrefi 1.",
+    intensityHint: "1 = mjög létt · 10 = mjög erfitt",
+    step3: "Skref 3 — Yfirlit & Virkja", step3desc: "Svona mun vikan líta út fyrir leikmenn (þetta er það sem verður sent).",
+    microTitle: "Microcycle yfirferð", microOk: "✓ Í lagi", microNote: "ábending",
+    microDesc: "Sjálfvirk yfirferð á vikuhringnum út frá rannsóknum (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.",
+    microNone: "Vikuhringurinn fylgir helstu microcycle-reglum — engin ábending.",
+    saving: "Vista...", loadingW: "Hleður...", saveWeek: "Vista viku",
+    applying: "Virkjar...", activate: "Virkja → senda leikmönnum",
+    manualWeek: "Manual vika", autoWeek: "Auto MD vika", editSetup: "← Breyta uppsetningu",
+  } : {
+    subtitle: "Set up the week. The system sends each player the right training day.",
+    week: "Week", done: "✓ Done", error: "Error",
+    step1: "Step 1 — Week type", step1desc: "Choose the week's dates and whether there are matches this week.",
+    weekTypePill: "Week type", setupPill: "Setup",
+    teamIdHint: "If this is empty, the coach isn't linked to a team in profiles/coach_teams.",
+    weekStart: "Week start (Monday)", season: "Season", weekType: "Week type",
+    noMatch: "No match", oneMatch: "1 match", twoMatches: "2 matches",
+    manualTitle: "Allow manual week setup (like NO_MATCH)",
+    manualDesc: "Good in preseason: you control day-to-day intent even with 1–2 matches.",
+    next: "Next →", back: "← Back",
+    step2: "Step 2 — Setup",
+    manualCtrl: "Manual week control", autoOrder: "Auto MD ordering",
+    step2manual: "Manual week control: pick the intent per day (works even with 1–2 matches).",
+    step2auto: "Auto MD: enter the match dates (the system handles MD ordering).",
+    match: "Match", date: "Date", kickoff: "Kickoff time (optional)", home: "Home", away: "Away",
+    dailyIntent: "Daily intent (Mon → Sun)", reset: "Reset",
+    autoActive: "Auto MD is active. For manual control like preseason: set Manual override to ON in Step 1.",
+    intensityHint: "1 = very light · 10 = very hard",
+    step3: "Step 3 — Review & Activate", step3desc: "This is how the week will look for players (this is what gets sent).",
+    microTitle: "Microcycle review", microOk: "✓ OK", microNote: "note",
+    microDesc: "Automatic review of the microcycle from research (Buchheit et al. 2024). Suggestions, not blocks.",
+    microNone: "The microcycle follows the main principles — no notes.",
+    saving: "Saving...", loadingW: "Loading...", saveWeek: "Save week",
+    applying: "Activating...", activate: "Activate → send to players",
+    manualWeek: "Manual week", autoWeek: "Auto MD week", editSetup: "← Edit setup",
+  };
 
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -385,7 +441,7 @@ export default function WeekSetupPage() {
 
     const tid = (teamId ?? "").trim();
     if (!tid) {
-      setError("Vantar team_id (coach er ekki tengdur liði).");
+      setError(isIS ? "Vantar team_id (coach er ekki tengdur liði)." : "Missing team_id (coach not linked to a team).");
       setSaving(false);
       return false;
     }
@@ -427,7 +483,7 @@ export default function WeekSetupPage() {
       return false;
     }
 
-    setOk("Vikan var vistuð ✅");
+    setOk(isIS ? "Vikan var vistuð ✅" : "Week saved ✅");
     setSaving(false);
     return true;
   }
@@ -575,8 +631,10 @@ export default function WeekSetupPage() {
           (days[g + 2]?.day_type === "TRAIN" || days[g + 2]?.day_type === "RECOVERY")) {
         checks.push({
           id: "rest-md2", tone: "warn",
-          title: "Hvíldardagur á MD+1",
-          body: "Frídagurinn er daginn eftir leik. Rannsóknir (Buchheit o.fl. 2023, 56 lið-tímabil) tengja frídag á MD+2 við marktækt lægri tíðni álagsmeiðsla — hópurinn mætir ferskari í fyrstu hörðu æfinguna. Íhugaðu að færa frídaginn á MD+2. (Regla 2)",
+          title: isIS ? "Hvíldardagur á MD+1" : "Rest day at MD+1",
+          body: isIS
+            ? "Frídagurinn er daginn eftir leik. Rannsóknir (Buchheit o.fl. 2023, 56 lið-tímabil) tengja frídag á MD+2 við marktækt lægri tíðni álagsmeiðsla — hópurinn mætir ferskari í fyrstu hörðu æfinguna. Íhugaðu að færa frídaginn á MD+2. (Regla 2)"
+            : "The rest day is the day after the match. Research (Buchheit et al. 2023, 56 team-seasons) links a day off at MD+2 with a markedly lower overuse-injury rate — the squad turns up fresher to the first hard session. Consider moving the rest day to MD+2. (Principle 2)",
         });
         break;
       }
@@ -587,8 +645,10 @@ export default function WeekSetupPage() {
     if (!days.some((d) => d.day_type === "OFF")) {
       checks.push({
         id: "no-off", tone: "warn",
-        title: "Enginn frídagur í vikunni",
-        body: "Vikan inniheldur engan frídag. Meiðslatíðni hækkar eftir 5-6 samfellda daga á fótum — rannsóknir mæla með a.m.k. einum frídegi í hverri viku. (Regla 1/2)",
+        title: isIS ? "Enginn frídagur í vikunni" : "No rest day this week",
+        body: isIS
+          ? "Vikan inniheldur engan frídag. Meiðslatíðni hækkar eftir 5-6 samfellda daga á fótum — rannsóknir mæla með a.m.k. einum frídegi í hverri viku. (Regla 1/2)"
+          : "The week has no rest day. Injury rate rises after 5-6 consecutive days on feet — research recommends at least one rest day each week. (Principle 1/2)",
       });
     }
 
@@ -601,8 +661,10 @@ export default function WeekSetupPage() {
       if (md1Hard || md2Hard) {
         checks.push({
           id: "taper", tone: "warn",
-          title: "Þung æfing í niðurtröppun",
-          body: `${md1Hard ? "MD-1" : "MD-2"} er ákefðar-/kraftæfing. Síðustu 1-2 dagar fyrir leik eiga að vera léttir (polish / activation) — þung vinna svo nálægt leik er tengd hærri meiðslaáhættu og lakari leikdags-ferskleika. (Regla 8)`,
+          title: isIS ? "Þung æfing í niðurtröppun" : "Hard session in the taper",
+          body: isIS
+            ? `${md1Hard ? "MD-1" : "MD-2"} er ákefðar-/kraftæfing. Síðustu 1-2 dagar fyrir leik eiga að vera léttir (polish / activation) — þung vinna svo nálægt leik er tengd hærri meiðslaáhættu og lakari leikdags-ferskleika. (Regla 8)`
+            : `${md1Hard ? "MD-1" : "MD-2"} is an intensity/power session. The last 1-2 days before a match should be light (polish / activation) — heavy work this close to a match is linked to higher injury risk and poorer match-day freshness. (Principle 8)`,
         });
         break;
       }
@@ -615,15 +677,17 @@ export default function WeekSetupPage() {
       if (md3 && md3.day_type === "TRAIN" && String(md3.focus ?? "").toUpperCase().includes("FORCE")) {
         checks.push({
           id: "ecc-late", tone: "info",
-          title: "Styrktaráhersla seint eftir leik",
-          body: "Þung kraft-/eccentric-vinna er sett á MD+3. Eccentric æfingar seint eftir leik gefa viðvarandi vöðvaskemmd (hækkað CK) og eymsli — best er að staðsetja þær snemma í vikunni (MD-4). (Regla 7)",
+          title: isIS ? "Styrktaráhersla seint eftir leik" : "Heavy strength late after a match",
+          body: isIS
+            ? "Þung kraft-/eccentric-vinna er sett á MD+3. Eccentric æfingar seint eftir leik gefa viðvarandi vöðvaskemmd (hækkað CK) og eymsli — best er að staðsetja þær snemma í vikunni (MD-4). (Regla 7)"
+            : "Heavy strength / eccentric work is placed at MD+3. Eccentric sessions late after a match cause prolonged muscle damage (elevated CK) and soreness — best placed early in the week (MD-4). (Principle 7)",
         });
         break;
       }
     }
 
     return checks;
-  }, [previewDays]);
+  }, [previewDays, isIS]);
 
   async function handleApplyPlan() {
     setApplying(true);
@@ -632,7 +696,7 @@ export default function WeekSetupPage() {
 
     const tid = (teamId ?? "").trim();
     if (!tid) {
-      setError("Vantar team_id. Sláðu inn Team ID (uuid).");
+      setError(isIS ? "Vantar team_id. Sláðu inn Team ID (uuid)." : "Missing team_id. Enter the Team ID (uuid).");
       setApplying(false);
       return;
     }
@@ -681,7 +745,7 @@ export default function WeekSetupPage() {
       return;
     }
 
-    setOk("Vika var virkjuð ✅ Leikmenn fá nú réttan æfingadag sendan.");
+    setOk(isIS ? "Vika var virkjuð ✅ Leikmenn fá nú réttan æfingadag sendan." : "Week activated ✅ Players now receive the right training day.");
     setApplying(false);
   }
 
@@ -728,16 +792,16 @@ export default function WeekSetupPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Week setup</h1>
-            <p className="text-sm text-muted-foreground">Stilltu vikuna. Kerfið sendir leikmönnum réttan æfingadag.</p>
+            <p className="text-sm text-muted-foreground">{t.subtitle}</p>
           </div>
           <div className="text-right text-xs text-muted-foreground">
             <div>
-              Vika: <span className="font-medium text-foreground">{weekStart}</span> →{" "}
+              {t.week}: <span className="font-medium text-foreground">{weekStart}</span> →{" "}
               <span className="font-medium text-foreground">{weekEnd}</span>
             </div>
             <div className="mt-1 flex justify-end gap-2">
-              <StepPill n={1} label="Vikugerð" active={step === 1} done={step > 1} onClick={() => setStep(1)} />
-              <StepPill n={2} label="Uppsetning" active={step === 2} done={step > 2} onClick={() => setStep(2)} />
+              <StepPill n={1} label={t.weekTypePill} active={step === 1} done={step > 1} onClick={() => setStep(1)} />
+              <StepPill n={2} label={t.setupPill} active={step === 2} done={step > 2} onClick={() => setStep(2)} />
               <StepPill n={3} label="Preview" active={step === 3} done={false} onClick={() => setStep(3)} />
             </div>
           </div>
@@ -751,7 +815,7 @@ export default function WeekSetupPage() {
 
       {error && (
         <Card className="mb-4 border-destructive/40">
-          <CardContent className="pt-5 text-sm text-destructive">Villa: {error}</CardContent>
+          <CardContent className="pt-5 text-sm text-destructive">{t.error}: {error}</CardContent>
         </Card>
       )}
       {ok && (
@@ -768,16 +832,16 @@ export default function WeekSetupPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Skref 1 — Vikugerð</CardTitle>
+              <CardTitle className="text-base">{t.step1}</CardTitle>
               {step !== 1 && (
                 <CardDescription className="mt-0.5">
-                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? "Enginn leikur" : weekType === "ONE_MATCH" ? "1 leikur" : "2 leikir"}
+                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : t.twoMatches}
                   {isManualWeek && weekType !== "NO_MATCH" ? " · Manual" : ""}
                 </CardDescription>
               )}
-              {step === 1 && <CardDescription>Veldu vikudagsetningu og hvort það séu leikir í vikunni.</CardDescription>}
+              {step === 1 && <CardDescription>{t.step1desc}</CardDescription>}
             </div>
-            {step !== 1 && <span className="text-xs text-emerald-600 font-medium">✓ Lokið</span>}
+            {step !== 1 && <span className="text-xs text-emerald-600 font-medium">{t.done}</span>}
           </div>
         </CardHeader>
         {step === 1 && (
@@ -786,12 +850,12 @@ export default function WeekSetupPage() {
             <div className="grid gap-2">
               <Label>Team ID (uuid)</Label>
               <Input placeholder="Paste team_id (uuid) here" value={teamId ?? ""} onChange={(e) => setTeamId(e.target.value)} />
-              <p className="text-xs text-muted-foreground">Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.</p>
+              <p className="text-xs text-muted-foreground">{t.teamIdHint}</p>
             </div>
           )}
 
           <div className="grid gap-2">
-            <Label>Vikuupphaf (mánudagur)</Label>
+            <Label>{t.weekStart}</Label>
             <Input
               type="date"
               value={weekStart}
@@ -805,7 +869,7 @@ export default function WeekSetupPage() {
 
           {/* Season phase */}
           <div className="grid gap-2">
-            <Label>Tímabil</Label>
+            <Label>{t.season}</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {SEASON_PHASES.map((phase) => (
                 <button
@@ -820,7 +884,7 @@ export default function WeekSetupPage() {
                   <span className="text-base leading-none">{phase.icon}</span>
                   <div className="min-w-0">
                     <div className="font-semibold text-xs leading-tight truncate">{phase.label}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug truncate">{phase.sublabel}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug truncate">{isIS ? phase.sublabel : phase.sublabelEN}</div>
                   </div>
                 </button>
               ))}
@@ -828,16 +892,16 @@ export default function WeekSetupPage() {
           </div>
 
           <div className="grid gap-2">
-            <Label>Vikugerð</Label>
+            <Label>{t.weekType}</Label>
             <div className="flex gap-2 flex-wrap">
               <Button type="button" variant={weekType === "NO_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("NO_MATCH")} disabled={loading || saving || applying}>
-                Enginn leikur
+                {t.noMatch}
               </Button>
               <Button type="button" variant={weekType === "ONE_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("ONE_MATCH")} disabled={loading || saving || applying}>
-                1 leikur
+                {t.oneMatch}
               </Button>
               <Button type="button" variant={weekType === "TWO_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("TWO_MATCHES")} disabled={loading || saving || applying}>
-                2 leikir
+                {t.twoMatches}
               </Button>
             </div>
           </div>
@@ -847,8 +911,8 @@ export default function WeekSetupPage() {
             <Label>Preseason / Manual override</Label>
             <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
               <div>
-                <div className="text-sm font-medium">Leyfa handvirka vikugerð (eins og NO_MATCH)</div>
-                <div className="text-xs text-muted-foreground">Gott í preseason: þú stýrir dag-til-dags áherslum þó það séu 1–2 leikir.</div>
+                <div className="text-sm font-medium">{t.manualTitle}</div>
+                <div className="text-xs text-muted-foreground">{t.manualDesc}</div>
               </div>
               <Button
                 type="button"
@@ -867,7 +931,7 @@ export default function WeekSetupPage() {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={loading || saving || applying}>
-              Næsta →
+              {t.next}
             </Button>
           </div>
         </CardContent>
@@ -882,19 +946,19 @@ export default function WeekSetupPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Skref 2 — Uppsetning</CardTitle>
+              <CardTitle className="text-base">{t.step2}</CardTitle>
               {step !== 2 && (
                 <CardDescription className="mt-0.5">
-                  {isManualWeek ? "Manual vikustýring" : "Auto MD röðun"} · Intensity {intensityTarget}/10
+                  {isManualWeek ? t.manualCtrl : t.autoOrder} · Intensity {intensityTarget}/10
                 </CardDescription>
               )}
               {step === 2 && (
                 <CardDescription>
-                  {isManualWeek ? "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir)." : "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun)."}
+                  {isManualWeek ? t.step2manual : t.step2auto}
                 </CardDescription>
               )}
             </div>
-            {step > 2 && <span className="text-xs text-emerald-600 font-medium">✓ Lokið</span>}
+            {step > 2 && <span className="text-xs text-emerald-600 font-medium">{t.done}</span>}
           </div>
         </CardHeader>
         {step === 2 && (
@@ -904,25 +968,25 @@ export default function WeekSetupPage() {
               {visibleMatches.map((m, idx) => (
                 <div key={idx} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center">
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Leikur</Label>
+                    <Label className="text-xs text-muted-foreground">{t.match}</Label>
                     <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`L${idx + 1}`} />
                   </div>
 
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Dagsetning</Label>
+                    <Label className="text-xs text-muted-foreground">{t.date}</Label>
                     <Input type="date" value={m.date} onChange={(e) => setMatch(idx, { date: e.target.value })} />
                   </div>
 
                   <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">Byrjunartími (valfrjáls)</Label>
+                    <Label className="text-xs text-muted-foreground">{t.kickoff}</Label>
                     <Input value={m.kickoff_time ?? ""} onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })} placeholder="19:15" />
                   </div>
 
                   <div className="grid gap-1">
                     <Label className="text-xs text-muted-foreground">H/A</Label>
                     <select className="h-10 rounded-md border bg-background px-3 text-sm" value={m.home_away ?? "H"} onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}>
-                      <option value="H">Heimavöllur</option>
-                      <option value="A">Leikavöllur</option>
+                      <option value="H">{t.home}</option>
+                      <option value="A">{t.away}</option>
                     </select>
                   </div>
                 </div>
@@ -933,9 +997,9 @@ export default function WeekSetupPage() {
           {isManualWeek && (
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Dagleg áhersla (mán → sun)</div>
+                <div className="text-sm font-medium">{t.dailyIntent}</div>
                 <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
-                  Endurstilla
+                  {t.reset}
                 </Button>
               </div>
 
@@ -947,7 +1011,7 @@ export default function WeekSetupPage() {
 
                   return (
                     <div key={date} className={`rounded-xl border p-3 ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                      <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
+                      <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{date.slice(5)}</div>
 
                       {onBreak ? (
@@ -998,7 +1062,7 @@ export default function WeekSetupPage() {
 
           {!isManualWeek && weekType !== "NO_MATCH" && (
             <div className="rounded-xl border p-3 text-sm text-muted-foreground">
-              Auto MD er virkt. Ef þú vilt handvirkt eins og preseason: settu <b>Manual override</b> á ON í Skrefi 1.
+              {t.autoActive}
             </div>
           )}
 
@@ -1008,7 +1072,7 @@ export default function WeekSetupPage() {
             <div className="flex items-end justify-between">
               <div>
                 <div className="text-sm font-medium">Intensity target</div>
-                <div className="text-xs text-muted-foreground">1 = mjög létt · 10 = mjög erfitt</div>
+                <div className="text-xs text-muted-foreground">{t.intensityHint}</div>
               </div>
               <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
             </div>
@@ -1017,10 +1081,10 @@ export default function WeekSetupPage() {
 
           <div className="flex justify-between gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading || saving || applying}>
-              ← Til baka
+
             </Button>
             <Button type="button" variant="outline" onClick={() => setStep(3)} disabled={loading || saving || applying}>
-              Næsta →
+              {t.next}
             </Button>
           </div>
         </CardContent>
@@ -1030,8 +1094,8 @@ export default function WeekSetupPage() {
       {/* STEP 3 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Skref 3 — Yfirlit & Virkja</CardTitle>
-          <CardDescription>Svona mun vikan líta út fyrir leikmenn (þetta er það sem verður sent).</CardDescription>
+          <CardTitle className="text-base">{t.step3}</CardTitle>
+          <CardDescription>{t.step3desc}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2 md:grid-cols-7">
@@ -1040,7 +1104,7 @@ export default function WeekSetupPage() {
               const onBreak = isDateOnBreak(date);
               return (
                 <div key={d.day_index} title={d.notes ?? ""} className={`rounded-xl border p-3 text-center ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                  <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
+                  <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
                   <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
                   <div className="mt-2">
                     {onBreak
@@ -1059,20 +1123,20 @@ export default function WeekSetupPage() {
               (Buchheit et al. 2024, 11 Principles of Microcycle Periodization). */}
           <div className="rounded-xl border p-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Microcycle yfirferð</span>
+              <span className="text-sm font-medium">{t.microTitle}</span>
               {microcycleChecks.length === 0 ? (
-                <Badge variant="secondary" className="text-[10px]">✓ Í lagi</Badge>
+                <Badge variant="secondary" className="text-[10px]">{t.microOk}</Badge>
               ) : (
-                <Badge variant="outline" className="text-[10px]">{microcycleChecks.length} ábending</Badge>
+                <Badge variant="outline" className="text-[10px]">{microcycleChecks.length} {t.microNote}</Badge>
               )}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Sjálfvirk yfirferð á vikuhringnum út frá rannsóknum (Buchheit o.fl. 2024). Ábendingar, ekki hindrun.
+              {t.microDesc}
             </p>
 
             {microcycleChecks.length === 0 ? (
               <p className="mt-2 text-xs text-emerald-600">
-                Vikuhringurinn fylgir helstu microcycle-reglum — engin ábending.
+                {t.microNone}
               </p>
             ) : (
               <div className="mt-2 grid gap-2">
@@ -1099,22 +1163,22 @@ export default function WeekSetupPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void handleSave()} disabled={loading || saving || applying}>
-              {saving ? "Vista..." : loading ? "Hleður..." : "Vista viku"}
+              {saving ? t.saving : loading ? t.loadingW : t.saveWeek}
             </Button>
 
             <Button onClick={() => void handleApplyPlan()} disabled={loading || saving || applying}>
-              {applying ? "Virkjar..." : "Virkja → senda leikmönnum"}
+              {applying ? t.applying : t.activate}
             </Button>
 
             <div className="ml-auto text-xs text-muted-foreground">
-              {isManualWeek ? "Manual vika" : "Auto MD vika"} · system_key:{" "}
+              {isManualWeek ? t.manualWeek : t.autoWeek} · system_key:{" "}
               <span className="font-medium text-foreground">MICRODOSING_PLAYBOOK</span>
             </div>
           </div>
 
           <div className="flex justify-start">
             <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={loading || saving || applying}>
-              ← Breyta uppsetningu
+              {t.editSetup}
             </Button>
           </div>
         </CardContent>
