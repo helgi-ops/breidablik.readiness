@@ -22,6 +22,13 @@ import AthleteHero from "@/components/player/AthleteHero";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
+
+/** Localised weekday name from an ISO index (1=Mon..7=Sun). */
+function weekdayName(iso: number, lang: string): string {
+  const IS = ["Mánudagur", "Þriðjudagur", "Miðvikudagur", "Fimmtudagur", "Föstudagur", "Laugardagur", "Sunnudagur"];
+  const EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  return (lang === "IS" ? IS : EN)[iso - 1] ?? "";
+}
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
@@ -38,6 +45,7 @@ type TodayResp = {
     weeks_label: string;
     week_in_phase: number | null;
     weekday_label: string | null;
+    weekday_index?: number | null;
     rest_day: boolean;
     next_session_label: string | null;
     weeks_per_phase?: number;
@@ -223,7 +231,7 @@ export default function ClientTodayPage() {
                 </span>
                 <span>·</span>
                 <span>Phase {data.explosive.phase} · {data.explosive.phase_name}</span>
-                {data.explosive.weekday_label && (<><span>·</span><span>{data.explosive.weekday_label}</span></>)}
+                {data.explosive.weekday_index != null && (<><span>·</span><span>{weekdayName(data.explosive.weekday_index, lang)}</span></>)}
               </div>
             </div>
             {!data.explosive.rest_day && (

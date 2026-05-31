@@ -21,7 +21,8 @@ import {
 import { resolveProgrammeSlot } from "@/lib/trainer/programmeSchedule";
 import { isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
 import { computeGameTaper } from "@/lib/client/gameTaper";
-import { buildOneRmMap, canonicalLift, isStale, targetKg, type LvTest } from "@/lib/client/oneRepMax";
+import { buildOneRmMap, canonicalLift, isStale, type LvTest } from "@/lib/client/oneRepMax";
+import { computeWorkingOneRm, workingTargetKg, type SetLogRow } from "@/lib/client/workingOneRm";
 
 export const runtime = "nodejs";
 
@@ -81,6 +82,15 @@ export async function GET(req: Request) {
     .order("test_date", { ascending: false })
     .limit(100);
   const oneRmMap = buildOneRmMap((lvRows ?? []) as LvTest[]);
+  // Auto-progression: recent set logs feed the working 1RM (raises target loads
+  // when corroborated logged e1RM beats the tested anchor, within guardrails).
+  const since28 = new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
+  const { data: setLogRows } = await sb
+    .from("pt_exercise_set_logs")
+    .select("session_date, exercise_name, weight_kg, reps")
+    .eq("player_id", player.id)
+    .gte("session_date", since28);
+  const workingMap = computeWorkingOneRm((lvRows ?? []) as LvTest[], (setLogRows ?? []) as SetLogRow[]);
 
   // ── Active Explosive Power assignment (admin-managed library) ─────
   // Resolve which phase + which weekday block applies TODAY, based on the
@@ -108,6 +118,8 @@ export async function GET(req: Request) {
     weeks_label: string;
     week_in_phase: number | null;
     weekday_label: string | null;
+    /** ISO weekday 1=Mon..7=Sun — locale-neutral; the client localises it. */
+    weekday_index: number | null;
     rest_day: boolean;
     next_session_label: string | null;
     /** When kind=session: only the block scheduled for today. When rest:
@@ -228,6 +240,7 @@ export async function GET(req: Request) {
           weeks_label: phaseRow.weeks_label,
           week_in_phase: slot.weekInPhase,
           weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
+          weekday_index: slot.weekdayIso,
           rest_day: false,
           next_session_label: null,
           blocks: [blocks[slot.blockIndex]].filter(Boolean).map(applyPhase),
@@ -248,6 +261,7 @@ export async function GET(req: Request) {
           weeks_label: phaseRow.weeks_label,
           week_in_phase: slot.weekInPhase,
           weekday_label: WEEKDAY_IS[slot.weekdayIso - 1] ?? null,
+          weekday_index: slot.weekdayIso,
           rest_day: true,
           next_session_label: slot.nextSessionLabel,
           blocks: previewBlock ? [applyPhase(previewBlock)] : [],
@@ -262,6 +276,7 @@ export async function GET(req: Request) {
           weeks_label: phaseRow.weeks_label,
           week_in_phase: null,
           weekday_label: null,
+          weekday_index: null,
           rest_day: true,
           next_session_label: null,
           blocks: [],
@@ -276,8 +291,10 @@ export async function GET(req: Request) {
         explosive.next_session_label = null;
       }
 
-      // Closed loop: attach actual target weights from the latest test, and
-      // collect lifts whose test is stale (retest) or missing (needs test).
+      // Closed loop + auto-progression: target weights come from the WORKING
+      // 1RM (tested anchor, auto-raised by corroborated logged performance
+      // within guardrails). Collect retest (outgrew the test, or the test is
+      // stale) and needs-test (a %1RM lift with no working number yet).
       if (explosive && Array.isArray(explosive.blocks)) {
         const retest = new Set<string>();
         const needsTest = new Set<string>();
@@ -290,11 +307,14 @@ export async function GET(req: Request) {
             rows: b.rows.map((r) => {
               const ex = String(r.exercise ?? "");
               const pct = typeof r.pct1rm === "number" ? r.pct1rm : null;
-              const tk = targetKg(ex, pct, oneRmMap);
-              if (tk) {
-                const stale = isStale(tk.testDate, today);
-                if (stale) retest.add(ex);
-                return { ...r, target_kg: tk.kg, target_stale: stale };
+              const wt = workingTargetKg(ex, pct, workingMap);
+              if (wt) {
+                if (wt.needs_retest) retest.add(ex);
+                // Stale tested anchor (old test, no recent push) also nudges.
+                const canon = canonicalLift(ex);
+                const tEntry = canon ? oneRmMap.get(canon) : undefined;
+                if (tEntry && isStale(tEntry.testDate, today)) retest.add(ex);
+                return { ...r, target_kg: wt.kg, target_auto: wt.source === "auto" };
               }
               if (pct != null && canonicalLift(ex)) needsTest.add(ex);
               return r;
@@ -395,6 +415,7 @@ export async function GET(req: Request) {
         weeks_label: `Week ${weekNumber}`,
         week_in_phase: 1,
         weekday_label: WEEKDAY_IS[isoWeekday - 1] ?? null,
+        weekday_index: isoWeekday,
         rest_day: !sessionRow,
         next_session_label: null,
         weeks_per_phase: 1,
