@@ -1452,21 +1452,21 @@ function resolvePickerCategories(structureId?: string | null): ExerciseCategory[
 // the prescription), so it complements — never replaces — the curated cards.
 
 const LIBRARY_FAMILIES: { id: string; label: string }[] = [
-  { id: "squat", label: "Hnébeygja" },
-  { id: "hinge", label: "Mjaðmahjör" },
-  { id: "push", label: "Ýta" },
-  { id: "pull", label: "Toga" },
-  { id: "core", label: "Kjarni" },
-  { id: "carry", label: "Bera" },
+  { id: "squat", label: "Squat" },
+  { id: "hinge", label: "Hinge" },
+  { id: "push", label: "Push" },
+  { id: "pull", label: "Pull" },
+  { id: "core", label: "Core" },
+  { id: "carry", label: "Carry" },
 ];
 
 const LIBRARY_PATTERN_LABELS: Record<string, string> = {
-  hip_hinge: "Mjaðmahjör", hip_dominant: "Mjaðmaráðandi", knee_dominant: "Hnéráðandi",
-  vertical_push: "Lóðrétt ýta", horizontal_push: "Lárétt ýta",
-  vertical_pull: "Lóðrétt toga", horizontal_pull: "Lárétt toga",
-  rotational_diagonal: "Snúningur", anti_rotation: "Mót-snúningur",
-  anti_flexion: "Mót-beygja", anti_extension: "Mót-rétta", anti_lateral_flexion: "Mót-hliðarbeygja",
-  carry: "Burður",
+  hip_hinge: "Hip hinge", hip_dominant: "Hip dominant", knee_dominant: "Knee dominant",
+  vertical_push: "Vertical push", horizontal_push: "Horizontal push",
+  vertical_pull: "Vertical pull", horizontal_pull: "Horizontal pull",
+  rotational_diagonal: "Rotational", anti_rotation: "Anti-rotation",
+  anti_flexion: "Anti-flexion", anti_extension: "Anti-extension", anti_lateral_flexion: "Anti-lateral flexion",
+  carry: "Carry",
 };
 
 type LibraryItem = {
@@ -1539,7 +1539,7 @@ function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
               : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
           }`}
         >
-          Allt
+          All
         </button>
       </div>
 
@@ -1548,25 +1548,25 @@ function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); void load(family, e.target.value); }}
-        placeholder="Leita í safninu…"
+        placeholder="Search library…"
         className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
       />
 
       {/* Results */}
       {loading ? (
-        <div className="py-2 text-center text-[11px] text-muted-foreground">Hleð…</div>
+        <div className="py-2 text-center text-[11px] text-muted-foreground">Loading…</div>
       ) : items.length === 0 ? (
-        <div className="py-2 text-center text-[11px] text-muted-foreground">Engar æfingar</div>
+        <div className="py-2 text-center text-[11px] text-muted-foreground">No exercises</div>
       ) : (
         <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
           {items.map((ex) => (
             <button
               key={ex.id}
               type="button"
-              onClick={() => onSelect(ex.name_is || ex.name)}
+              onClick={() => onSelect(ex.name)}
               className="rounded-lg border border-white bg-white p-2.5 text-left hover:border-indigo-300 hover:shadow-sm transition-all"
             >
-              <div className="text-xs font-semibold text-foreground">{ex.name_is || ex.name}</div>
+              <div className="text-xs font-semibold text-foreground">{ex.name}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
                 {ex.movement_family && (
                   <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-600">
@@ -1580,7 +1580,7 @@ function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
                 )}
                 <span>· {ex.category}</span>
                 {ex.is_bilateral === false && (
-                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600">Einhlið</span>
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600">Uni</span>
                 )}
               </div>
             </button>
