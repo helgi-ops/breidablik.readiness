@@ -71,6 +71,65 @@ function zeroByFamily(): Record<MovementFamily, number> {
   return { squat: 0, hinge: 0, push: 0, pull: 0, core: 0, carry: 0 };
 }
 
+// ── Free-text → movement family ────────────────────────────────────────────
+// For builders (e.g. custom-templates) where exercises are free-text lines, not
+// library FKs. Ordered most-specific → least; first match wins. Covers every
+// curated and library exercise name in the system. Deterministic, no network.
+
+const FAMILY_RULES: Array<[RegExp, MovementFamily]> = [
+  // Specific conflicts resolved first (these names also contain "press"/"curl").
+  [/pallof/i, "core"],
+  [/leg press/i, "squat"],
+  // Hinge / hip-dominant (incl. Olympic pulls) — checked before "pull" so
+  // "Mid-Thigh Pull" / "Clean Pull" don't fall into the pull family.
+  [/(deadlift|romanian|\brdl\b|\bdl\b|leg curl|hip[ -]?thrust|glute bridge|good morning|kettlebell|\bswing\b|nordic|hamstring|back extension|hang[ -]?(power )?clean|power clean|\bclean\b|snatch|mid[ -]?thigh pull|clean pull|snatch pull|hip[ -]?hinge)/i, "hinge"],
+  // Pull
+  [/(pull[ -]?up|pullup|chin[ -]?up|lat[ -]?pull|pulldown|face pull|inverted row|seated (cable )?row|bent[ -]?over row|t[ -]?bar row|\brow\b|biceps curl|\bcurl\b)/i, "pull"],
+  // Push
+  [/(bench|push[ -]?press|overhead|shoulder press|military|\bpress\b|push[ -]?up|pushup|press[ -]?up|\bdip\b|\bthrow\b|med[ -]?ball slam|\bslam\b)/i, "push"],
+  // Knee-dominant (incl. lower-body plyometrics)
+  [/(squat|lunge|step[ -]?up|leg press|leg extension|pistol|split squat|box jump|depth jump|broad jump|hurdle|bound|reactive hop|\bhop\b|\bjump\b|wall sit|knee extension|rfess)/i, "squat"],
+  // Core / anti- / rotation
+  [/(plank|pallof|dead bug|ab wheel|rollout|woodchop|russian twist|leg raise|anti[ -]?rotation|rotational|\bcore\b)/i, "core"],
+  // Loaded carries
+  [/(farmer|suitcase|loaded carry|\bcarry\b)/i, "carry"],
+];
+
+/** A free-text exercise name → its movement family, or null if unrecognised. */
+export function resolveFamilyFromName(name: string): MovementFamily | null {
+  const n = String(name ?? "").toLowerCase();
+  for (const [re, fam] of FAMILY_RULES) if (re.test(n)) return fam;
+  return null;
+}
+
+/** Heuristic: is this a single-leg / single-arm movement? */
+function isUnilateralName(name: string): boolean {
+  return /(\/\s*(side|leg|hlið)|\bsplit\b|bulgarian|single[ -]?leg|single[ -]?arm|pistol|step[ -]?up|\blunge\b|rfess|\/hlið)/i.test(name);
+}
+
+/** Parse one free-text exercise line ("Back Squat · 3–4 sets × 3–5 · …"). */
+export function parseAuditLine(line: string): { name: string; family: MovementFamily | null; sets: number; unilateral: boolean } {
+  const name = String(line ?? "").split("·")[0].trim();
+  const family = resolveFamilyFromName(name);
+  // First number in an "X sets" token; default 1 so the family still registers.
+  const m = String(line ?? "").match(/(\d+)\s*(?:[–-]\s*\d+)?\s*sets?\b/i);
+  const sets = m ? Number(m[1]) : 1;
+  return { name, family, sets: sets > 0 ? sets : 1, unilateral: isUnilateralName(name) };
+}
+
+/** Audit a flat list of free-text exercise lines (custom-templates blocks). */
+export function auditLines(lines: Array<string | null | undefined>): ProgramAudit {
+  const exercises: AuditExercise[] = [];
+  for (const raw of lines ?? []) {
+    const line = String(raw ?? "").trim();
+    if (!line) continue;
+    const { family, sets, unilateral } = parseAuditLine(line);
+    if (!family) continue;
+    exercises.push({ exerciseId: "line", sets, movementFamily: family, isBilateral: unilateral ? false : null });
+  }
+  return auditWeeks([{ sessions: [{ groups: [{ exercises }] }] }]);
+}
+
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }

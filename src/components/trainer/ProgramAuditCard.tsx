@@ -16,6 +16,7 @@ import {
   type AuditWeek,
   type MovementFamily,
   type AuditFlag,
+  type ProgramAudit,
 } from "@/lib/client/programAudit";
 
 type Lang = "IS" | "EN";
@@ -116,14 +117,18 @@ function ratioOff(r: number | null): boolean {
 
 export default function ProgramAuditCard({
   weeks,
+  audit: auditProp,
   lang = "IS",
 }: {
-  weeks: AuditWeek[];
+  /** Structured plan (PlanBuilder). Ignored if `audit` is supplied. */
+  weeks?: AuditWeek[];
+  /** Precomputed audit (e.g. custom-templates, from free-text lines). */
+  audit?: ProgramAudit;
   lang?: Lang;
 }) {
   const t = COPY[lang];
   const [open, setOpen] = useState(false);
-  const audit = useMemo(() => auditWeeks(weeks), [weeks]);
+  const audit = useMemo(() => auditProp ?? auditWeeks(weeks ?? []), [auditProp, weeks]);
 
   if (audit.taggedSets === 0) {
     return (

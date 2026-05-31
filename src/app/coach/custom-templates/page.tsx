@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import ProgramAuditCard from "@/components/trainer/ProgramAuditCard";
+import { auditLines } from "@/lib/client/programAudit";
 
 // ─── Workout structures ───────────────────────────────────────────────────────
 
@@ -3460,6 +3462,14 @@ export default function CustomTemplatesPage() {
                       />
                     ))}
                   </div>
+
+                  {/* Live movement-pattern balance audit for this day's template */}
+                  {currentGreen.structure.some((b) => b.items.some((it) => it.trim())) && (
+                    <ProgramAuditCard
+                      audit={auditLines(currentGreen.structure.flatMap((b) => b.items))}
+                      lang="EN"
+                    />
+                  )}
 
                   {/* Auto-generated preview (with edit option) */}
                   <Separator />
