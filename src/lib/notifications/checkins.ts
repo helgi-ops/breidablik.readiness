@@ -9,6 +9,7 @@ import {
 } from "@/lib/notifications/schedule";
 import { getGpsOnlyTeamIds } from "@/lib/teamMode";
 import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
+import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 
 type ActivePlayerRow = {
   id: string;
@@ -79,10 +80,13 @@ export async function getActivePlayers(
   // "active" for reminders/compliance — they get a real break, no nudges, no
   // missed-check-in penalty.
   const breakDateKey = args?.dateKey || getDateKeyInTimezone(new Date(), getOperationalTimezone());
-  const breakTeams = await getTeamsOnBreak(sb, breakDateKey);
-  const afterBreakFilter = breakTeams.size === 0
-    ? afterGpsFilter
-    : afterGpsFilter.filter((p) => !(p.team_id && breakTeams.has(String(p.team_id))));
+  const [breakTeams, breakPlayers] = await Promise.all([
+    getTeamsOnBreak(sb, breakDateKey),
+    getPlayersOnBreak(sb, breakDateKey),
+  ]);
+  const afterBreakFilter = afterGpsFilter.filter((p) =>
+    !(p.team_id && breakTeams.has(String(p.team_id))) && !breakPlayers.has(String(p.id))
+  );
 
   if (!args?.profile) return afterBreakFilter;
 

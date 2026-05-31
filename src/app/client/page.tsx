@@ -20,6 +20,7 @@ import Link from "next/link";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import AthleteHero from "@/components/player/AthleteHero";
 import AICoachCard from "@/components/player/AICoachCard";
+import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -48,7 +49,7 @@ type TodayResp = {
       num?: string; exercise: string; reps: string; sets: number;
       velocity?: string | number; pct1rm?: number | null; method?: string;
       cluster_rest?: string; set_rest?: string;
-      target_kg?: number | null; target_stale?: boolean;
+      target_kg?: number | null; target_stale?: boolean; target_auto?: boolean;
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
@@ -121,6 +122,9 @@ export default function ClientTodayPage() {
           </div>
         )}
       </div>
+
+      {/* Vacation / return banner (declared per-client breaks). */}
+      <ClientVacationBanner lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Athlete hero — "Am I progressing?" at a glance. */}
       <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
@@ -257,7 +261,7 @@ export default function ClientTodayPage() {
                   <span className="text-xs text-slate-500 tabular-nums shrink-0">
                     {r.sets}×{r.reps}
                     {r.target_kg != null
-                      ? <> · <span className="font-semibold text-slate-900">{r.target_kg} kg</span>{r.pct1rm ? ` (${Math.round(r.pct1rm * 100)}%)` : ""}</>
+                      ? <> · <span className="font-semibold text-slate-900">{r.target_kg} kg</span>{r.pct1rm ? ` (${Math.round(r.pct1rm * 100)}%)` : ""}{r.target_auto ? <span className="ml-1 text-emerald-600" title={lang === "IS" ? "Sjálfvirk framvinda úr skráðum lyftum" : "Auto-progressed from your logged lifts"}>↑</span> : null}</>
                       : (r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : "")}
                     {r.velocity ? ` · ${r.velocity} m/s` : ""}
                   </span>
@@ -270,6 +274,15 @@ export default function ClientTodayPage() {
               )}
             </div>
           ))}
+
+          {/* Auto-progression caption (mobile has no hover for the ↑). */}
+          {data.explosive.blocks.some((b) => b.rows.some((r) => r.target_auto)) && (
+            <div className="text-[10px] text-emerald-700">
+              {lang === "IS"
+                ? "↑ sjálfvirk framvinda — þyngd hækkuð út frá þínum skráðu lyftum."
+                : "↑ auto-progressed — weight raised from your logged lifts."}
+            </div>
+          )}
 
           {/* Closed loop — retest / test nudges. Stale tests = retest; lifts
               with a %1RM but no test yet = test to unlock target weights. */}

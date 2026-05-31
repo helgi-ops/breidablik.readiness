@@ -22,6 +22,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 import { computePersonalRecords } from "@/lib/client/personalRecords";
+import { getClientBreakRanges, dateInRanges } from "@/lib/notifications/clientBreaks";
 
 export const runtime = "nodejs";
 
@@ -58,17 +59,24 @@ export async function GET(req: Request) {
   const checks = ((checkRows ?? []) as Array<{ entry_date: string; total_score: number | null }>);
   const checkDates = new Set(checks.map((c) => c.entry_date));
 
-  // Streak = consecutive days with a check-in, ending today or yesterday
-  // (so it doesn't "break" just because today's check-in isn't in yet).
+  // Declared vacation days — excluded from streak & compliance (no penalty).
+  const breakRanges = await getClientBreakRanges(sb, player.id, iso(59));
+  const isVac = (d: string) => dateInRanges(d, breakRanges);
+
+  // Streak = consecutive check-in days walking back from today; a vacation day
+  // is neutral (neither counts nor breaks), and today-not-done-yet doesn't break.
   let checkinStreak = 0;
-  {
-    const start = checkDates.has(today) ? 0 : (checkDates.has(iso(1)) ? 1 : -1);
-    if (start >= 0) {
-      for (let i = start; i < 90; i++) { if (checkDates.has(iso(i))) checkinStreak++; else break; }
-    }
+  for (let i = 0; i < 120; i++) {
+    const d = iso(i);
+    if (isVac(d)) continue;                       // on vacation — skip
+    if (checkDates.has(d)) { checkinStreak++; continue; }
+    if (i === 0) continue;                         // today still pending
+    break;                                         // a real miss — stop
   }
   const checkins28 = checks.filter((c) => c.entry_date >= iso(27)).length;
-  const compliancePct = Math.round((checkins28 / 28) * 100);
+  let vacDays28 = 0;
+  for (let i = 0; i < 28; i++) { if (isVac(iso(i))) vacDays28++; }
+  const compliancePct = Math.round((checkins28 / Math.max(1, 28 - vacDays28)) * 100);
 
   // ── Logged sessions (workouts) ────────────────────────────────────
   const { data: setRows } = await sb

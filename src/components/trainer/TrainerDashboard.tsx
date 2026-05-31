@@ -12,6 +12,7 @@ import PtClientSummaryCard from "./PtClientSummaryCard";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import PtGamesManager from "./PtGamesManager";
+import ClientBreaksManager from "./ClientBreaksManager";
 import TrainerAttentionList from "./TrainerAttentionList";
 
 /* ── Types ───────────────────────────────────────────── */
@@ -574,6 +575,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <PtGamesManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <ClientBreaksManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                     </div>
                   )}

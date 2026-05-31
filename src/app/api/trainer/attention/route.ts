@@ -20,6 +20,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { computeVolumeLoad } from "@/lib/client/volumeLoad";
 import { RETEST_DAYS } from "@/lib/client/oneRepMax";
+import { getPlayersOnBreak } from "@/lib/notifications/clientBreaks";
 
 export const runtime = "nodejs";
 
@@ -54,7 +55,10 @@ export async function GET(req: Request) {
   const list = ((players ?? []) as Array<{ id: string; full_name: string; user_id: string | null }>).slice(0, 50);
   const today = new Date().toISOString().slice(0, 10);
 
-  const results = await Promise.all(list.map(async (p) => {
+  // Clients on a declared vacation are excluded — no false "missed check-in".
+  const onBreak = await getPlayersOnBreak(sb, today);
+
+  const results = await Promise.all(list.filter((p) => !onBreak.has(p.id)).map(async (p) => {
     const flags: Flag[] = [];
 
     // Readiness today + recent trend (canonical color).
