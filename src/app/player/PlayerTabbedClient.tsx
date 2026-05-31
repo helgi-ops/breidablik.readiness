@@ -25,6 +25,7 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
+import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 
@@ -1310,6 +1311,11 @@ export default function DevPlayerClient() {
           {tabsElement}
         </div>
       ) : null}
+      {activeTab === "today" && (
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3">
+          <PlayerBreakBanner lang={lang as "IS" | "EN"} />
+        </div>
+      )}
       <div
         className="dev-player-tabbed-shell"
         data-player-active-tab={activeTab}

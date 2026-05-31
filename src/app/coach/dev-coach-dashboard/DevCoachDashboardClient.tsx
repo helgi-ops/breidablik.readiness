@@ -91,6 +91,7 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
@@ -8054,6 +8055,8 @@ export default function CoachPage() {
             hasDecision={rows.some((r) => (r as Record<string, unknown>).training_action != null)}
             hasSport={teamSport != null && teamSport.length > 0}
           />
+          {/* Team break / return-to-training banner (declared breaks). */}
+          {coachTeamId && <CoachBreakBanner teamId={coachTeamId} lang={lang === "EN" ? "EN" : "IS"} />}
           {/* Daily briefing — Gabbett (2020) Communicate step */}
           <DailyBriefingCard
             today={today}
