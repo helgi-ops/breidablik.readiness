@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
 import IsoProtocolPickerModal from "./IsoProtocolPickerModal";
+import ProgramAuditCard from "./ProgramAuditCard";
 import {
   type IsoProtocol,
   type IsoExercise,
@@ -47,6 +48,10 @@ export interface Exercise {
   velocityLoss?: number;
   /** VBT: training zone */
   velocityZone?: VelocityZone;
+  /** Movement classification carried from the library pick (for the build-time audit). */
+  movementFamily?: MovementFamily | null;
+  movementPattern?: MovementPattern | null;
+  isBilateral?: boolean | null;
 }
 
 /** A group of exercises that are performed together (superset, contrast, etc.) */
@@ -669,6 +674,9 @@ export default function PlanBuilder({
       ];
     slot.exerciseId = exercise.id;
     slot.name = isIS ? exercise.name_is || exercise.name : exercise.name;
+    slot.movementFamily = exercise.movement_family ?? null;
+    slot.movementPattern = exercise.movement_pattern ?? null;
+    slot.isBilateral = exercise.is_bilateral ?? null;
     setWeeks(newWeeks);
     setSearchTarget(null);
     setSearchQuery("");
@@ -983,6 +991,11 @@ export default function PlanBuilder({
                   {isIS ? "Vika" : "Week"} {week.week}
                 </button>
               ))}
+            </div>
+
+            {/* Build-time movement-pattern balance audit (whole program) */}
+            <div className="mb-4">
+              <ProgramAuditCard weeks={weeks} lang={isIS ? "IS" : "EN"} />
             </div>
 
             {/* Current week sessions */}

@@ -1,0 +1,140 @@
+/**
+ * Build-time Program Auditor — movement-pattern balance.
+ *
+ * Reads a PlanBuilder `weeks` structure and reports how training volume (working
+ * sets) is distributed across the six coach-readable movement families, plus the
+ * push:pull and knee:hip ratios and single-leg coverage. It then raises plain
+ * "balance flags", each with a concrete fix (the counterfactual the manifesto
+ * asks for): "No hinge work → add an RDL / hip thrust".
+ *
+ * This is uniquely possible because every library exercise carries a
+ * movement_family / movement_pattern tag (see exercise_library). Rules decide,
+ * the UI explains — no AI needed here, just the coach's own program audited
+ * against itself before it is ever assigned.
+ *
+ * Volume unit = number of working sets (robust across kg / %1RM / velocity / RPE
+ * load types, which can't be summed into a single tonnage at template time).
+ */
+
+export type MovementFamily = "squat" | "hinge" | "push" | "pull" | "core" | "carry";
+
+export const AUDIT_FAMILIES: MovementFamily[] = ["squat", "hinge", "push", "pull", "core", "carry"];
+
+/** The major families a balanced strength plan is expected to train. */
+const MAJOR_FAMILIES: MovementFamily[] = ["squat", "hinge", "push", "pull"];
+
+export type AuditExercise = {
+  exerciseId?: string;
+  sets?: number;
+  movementFamily?: MovementFamily | string | null;
+  isBilateral?: boolean | null;
+};
+export type AuditGroup = { exercises: AuditExercise[] };
+export type AuditSession = { groups: AuditGroup[] };
+export type AuditWeek = { week?: number; sessions: AuditSession[] };
+
+export type AuditFlagCode =
+  | "missing_family"
+  | "push_heavy"
+  | "pull_heavy"
+  | "knee_heavy"
+  | "no_core"
+  | "low_unilateral";
+
+export type AuditFlag = {
+  code: AuditFlagCode;
+  severity: "warn" | "info";
+  /** Family the flag is about (for missing_family). */
+  family?: MovementFamily;
+  /** Numeric context (ratio or percentage), already rounded. */
+  value?: number;
+};
+
+export type ProgramAudit = {
+  /** Total working sets across all filled slots. */
+  totalSets: number;
+  /** Working sets from exercises that carry a movement family. */
+  taggedSets: number;
+  /** Working sets per movement family. */
+  byFamily: Record<MovementFamily, number>;
+  /** push ÷ pull (sets). null if no pull and no push. Infinity if push but no pull. */
+  pushPullRatio: number | null;
+  /** squat(knee) ÷ hinge(hip). Same null/Infinity rules. */
+  kneeHipRatio: number | null;
+  unilateralSets: number;
+  /** Unilateral share of tagged sets (0–100). */
+  unilateralPct: number;
+  flags: AuditFlag[];
+};
+
+function zeroByFamily(): Record<MovementFamily, number> {
+  return { squat: 0, hinge: 0, push: 0, pull: 0, core: 0, carry: 0 };
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function ratio(a: number, b: number): number | null {
+  if (b > 0) return a / b;
+  return a > 0 ? Infinity : null;
+}
+
+/** Audit a PlanBuilder weeks structure for movement-pattern balance. */
+export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit {
+  const byFamily = zeroByFamily();
+  let totalSets = 0;
+  let taggedSets = 0;
+  let unilateralSets = 0;
+
+  for (const w of weeks ?? []) {
+    for (const s of w.sessions ?? []) {
+      for (const g of s.groups ?? []) {
+        for (const ex of g.exercises ?? []) {
+          if (!ex.exerciseId) continue; // empty slot
+          const sets = Number(ex.sets);
+          const n = Number.isFinite(sets) && sets > 0 ? sets : 0;
+          totalSets += n;
+          const fam = (ex.movementFamily ?? "") as MovementFamily;
+          if (AUDIT_FAMILIES.includes(fam)) {
+            byFamily[fam] += n;
+            taggedSets += n;
+            if (ex.isBilateral === false) unilateralSets += n;
+          }
+        }
+      }
+    }
+  }
+
+  const unilateralPct = taggedSets > 0 ? Math.round((unilateralSets / taggedSets) * 100) : 0;
+  const flags: AuditFlag[] = [];
+
+  // Only audit balance once there is something to balance.
+  if (taggedSets > 0) {
+    for (const fam of MAJOR_FAMILIES) {
+      if (byFamily[fam] === 0) flags.push({ code: "missing_family", severity: "warn", family: fam });
+    }
+    if (byFamily.push > 0 && byFamily.pull > 0) {
+      const r = byFamily.push / byFamily.pull;
+      if (r >= 2) flags.push({ code: "push_heavy", severity: "warn", value: round1(r) });
+      else if (r <= 0.5) flags.push({ code: "pull_heavy", severity: "info", value: round1(1 / r) });
+    }
+    if (byFamily.squat > 0 && byFamily.hinge > 0) {
+      const r = byFamily.squat / byFamily.hinge;
+      if (r >= 2) flags.push({ code: "knee_heavy", severity: "warn", value: round1(r) });
+    }
+    if (byFamily.core === 0) flags.push({ code: "no_core", severity: "info" });
+    if (unilateralPct < 15) flags.push({ code: "low_unilateral", severity: "info", value: unilateralPct });
+  }
+
+  return {
+    totalSets,
+    taggedSets,
+    byFamily,
+    pushPullRatio: ratio(byFamily.push, byFamily.pull),
+    kneeHipRatio: ratio(byFamily.squat, byFamily.hinge),
+    unilateralSets,
+    unilateralPct,
+    flags,
+  };
+}
