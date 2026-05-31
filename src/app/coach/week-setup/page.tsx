@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
@@ -175,6 +176,9 @@ export default function WeekSetupPage() {
   const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
   const isDateOnBreak = (dateIso: string) =>
     teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date);
+  const [lang] = useLang();
+  const vacationLabel = lang === "IS" ? "Frí" : "Vacation";
+  const vacationBadge = lang === "IS" ? "FRÍ" : "VACATION";
 
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -951,10 +955,10 @@ export default function WeekSetupPage() {
                         // this day (no training scheduled, reminders paused).
                         <div className="mt-2 grid gap-1">
                           <div className="flex h-9 w-full items-center justify-center rounded-md border border-emerald-200 bg-white px-2 text-xs font-medium text-emerald-800">
-                            🌴 Frí
+                            🌴 {vacationLabel}
                           </div>
                           <div className="mt-1.5 flex items-center justify-center">
-                            <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">FRÍ</Badge>
+                            <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">{vacationBadge}</Badge>
                           </div>
                         </div>
                       ) : (
@@ -1040,11 +1044,11 @@ export default function WeekSetupPage() {
                   <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
                   <div className="mt-2">
                     {onBreak
-                      ? <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">FRÍ</Badge>
+                      ? <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">{vacationBadge}</Badge>
                       : <Badge variant={dayBadgeVariant(d.day_type)} className="text-[10px]">{d.day_type}</Badge>}
                   </div>
                   <div className="mt-1.5 text-[11px] font-medium leading-snug text-muted-foreground">
-                    {onBreak ? "🌴 Frí" : (d.focus ?? "")}
+                    {onBreak ? `🌴 ${vacationLabel}` : (d.focus ?? "")}
                   </div>
                 </div>
               );
