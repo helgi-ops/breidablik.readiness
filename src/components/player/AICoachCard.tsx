@@ -18,8 +18,8 @@ export default function AICoachCard({ lang = "IS" }: { lang?: Lang }) {
   const [loaded, setLoaded] = useState(false);
 
   const t = lang === "IS"
-    ? { title: "AI þjálfari", badge: "AI", based: "Byggt á", disclaimer: "Sjálfvirk AI-greining á þínum gögnum." }
-    : { title: "AI Coach", badge: "AI", based: "Based on", disclaimer: "Automated AI read of your own data." };
+    ? { title: "Dagleg innsýn", badge: "AI", based: "Byggt á", disclaimer: "Sjálfvirk AI-greining á þínum gögnum." }
+    : { title: "Daily insight", badge: "AI", based: "Based on", disclaimer: "Automated AI read of your own data." };
 
   const load = useCallback(async () => {
     try {
@@ -40,7 +40,7 @@ export default function AICoachCard({ lang = "IS" }: { lang?: Lang }) {
   return (
     <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 bg-gradient-to-r from-zinc-900 to-neutral-800 px-4 py-2 text-white">
-        <span className="text-sm">🤖</span>
+        <span className="text-sm">💡</span>
         <span className="text-[13px] font-semibold">{t.title}</span>
         <span className="ml-auto rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-bold tracking-wide">{t.badge}</span>
       </div>
