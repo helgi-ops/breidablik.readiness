@@ -170,6 +170,11 @@ export default function WeekSetupPage() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [noMatchIntents, setNoMatchIntents] = useState<NoMatchIntent[]>(getDefaultNoMatchIntents());
+  // Declared team breaks (read-only here) — days inside a break are auto-locked
+  // as "Frí" in the daily grid so you can't schedule training on a break day.
+  const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
+  const isDateOnBreak = (dateIso: string) =>
+    teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date);
 
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -322,6 +327,27 @@ export default function WeekSetupPage() {
     };
   }, [weekStart, teamId]);
 
+  // Load declared team breaks for the grid lock.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/coach/team/breaks?team_id=${encodeURIComponent(teamId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        if (alive && json.ok) {
+          setTeamBreaks(((json.breaks ?? []) as Array<{ start_date: string; end_date: string }>)
+            .map((b) => ({ start_date: b.start_date, end_date: b.end_date })));
+        }
+      } catch { /* soft */ }
+    })();
+    return () => { alive = false; };
+  }, [teamId]);
+
   function setMatch(i: number, patch: Partial<MatchInput>) {
     if (patch.date && patch.date.trim()) {
       const matchMonday = isoMondayOfISO(patch.date.trim());
@@ -372,10 +398,15 @@ export default function WeekSetupPage() {
 
     // ✅ ALDREI null í no_match_intents (DB column er NOT NULL)
     // ✅ Vista alltaf, líka á match vikum (til að manual override virki í preseason)
-    const safeNoMatchIntents: NoMatchIntent[] =
+    const baseIntents: NoMatchIntent[] =
       Array.isArray(noMatchIntents) && noMatchIntents.length === 7
         ? noMatchIntents
         : getDefaultNoMatchIntents();
+    // Declared break days are always OFF — the break owns them, so we never
+    // save a training day on a break day even if the picker had a stale value.
+    const safeNoMatchIntents: NoMatchIntent[] = baseIntents.map((intent, i) =>
+      isDateOnBreak(addDays(weekStart, i)) ? "OFF" : intent
+    );
 
     const { error } = await supabase.rpc("save_week_setup", {
       p_team_id: tid,
@@ -908,38 +939,52 @@ export default function WeekSetupPage() {
                 {Array.from({ length: 7 }).map((_, i) => {
                   const date = addDays(weekStart, i);
                   const value = noMatchIntents[i] ?? "OFF";
+                  const onBreak = isDateOnBreak(date);
 
                   return (
-                    <div key={date} className="rounded-xl border p-3">
+                    <div key={date} className={`rounded-xl border p-3 ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
                       <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{date.slice(5)}</div>
 
-                      <div className="mt-2 grid gap-1">
-                        <select
-                          className="h-9 w-full rounded-md border bg-background px-2 text-xs"
-                          value={value}
-                          onChange={(e) => {
-                            const v = e.target.value as NoMatchIntent;
-                            setNoMatchIntents((prev) => {
-                              const next = [...prev];
-                              next[i] = v;
-                              return next;
-                            });
-                          }}
-                        >
-                          {NO_MATCH_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-
-                        <div className="mt-1.5 flex items-center justify-center">
-                          <Badge variant={dayBadgeVariant(intentToDayType(value))} className="text-[10px]">
-                            {intentToDayType(value)}
-                          </Badge>
+                      {onBreak ? (
+                        // Declared break — locked. Not editable; the break owns
+                        // this day (no training scheduled, reminders paused).
+                        <div className="mt-2 grid gap-1">
+                          <div className="flex h-9 w-full items-center justify-center rounded-md border border-emerald-200 bg-white px-2 text-xs font-medium text-emerald-800">
+                            🌴 Frí
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-center">
+                            <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">FRÍ</Badge>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="mt-2 grid gap-1">
+                          <select
+                            className="h-9 w-full rounded-md border bg-background px-2 text-xs"
+                            value={value}
+                            onChange={(e) => {
+                              const v = e.target.value as NoMatchIntent;
+                              setNoMatchIntents((prev) => {
+                                const next = [...prev];
+                                next[i] = v;
+                                return next;
+                              });
+                            }}
+                          >
+                            {NO_MATCH_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+
+                          <div className="mt-1.5 flex items-center justify-center">
+                            <Badge variant={dayBadgeVariant(intentToDayType(value))} className="text-[10px]">
+                              {intentToDayType(value)}
+                            </Badge>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -988,14 +1033,19 @@ export default function WeekSetupPage() {
           <div className="grid gap-2 md:grid-cols-7">
             {previewDays.map((d, i) => {
               const date = addDays(weekStart, i);
+              const onBreak = isDateOnBreak(date);
               return (
-                <div key={d.day_index} title={d.notes ?? ""} className="rounded-xl border p-3 text-center">
+                <div key={d.day_index} title={d.notes ?? ""} className={`rounded-xl border p-3 text-center ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
                   <div className="text-xs font-semibold text-foreground">{WEEKDAYS_SHORT[i]}</div>
                   <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
                   <div className="mt-2">
-                    <Badge variant={dayBadgeVariant(d.day_type)} className="text-[10px]">{d.day_type}</Badge>
+                    {onBreak
+                      ? <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">FRÍ</Badge>
+                      : <Badge variant={dayBadgeVariant(d.day_type)} className="text-[10px]">{d.day_type}</Badge>}
                   </div>
-                  <div className="mt-1.5 text-[11px] font-medium leading-snug text-muted-foreground">{d.focus ?? ""}</div>
+                  <div className="mt-1.5 text-[11px] font-medium leading-snug text-muted-foreground">
+                    {onBreak ? "🌴 Frí" : (d.focus ?? "")}
+                  </div>
                 </div>
               );
             })}
