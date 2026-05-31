@@ -72,6 +72,18 @@ export interface Week {
   sessions: Session[];
 }
 
+/** Science-for-Sport fundamental movement patterns (S&C detail surface). */
+export type MovementPattern =
+  | "hip_hinge" | "hip_dominant" | "knee_dominant"
+  | "vertical_push" | "horizontal_push"
+  | "vertical_pull" | "horizontal_pull"
+  | "rotational_diagonal" | "anti_rotation"
+  | "anti_flexion" | "anti_extension" | "anti_lateral_flexion"
+  | "carry";
+
+/** Coach-readable family roll-up (the browse surface). */
+export type MovementFamily = "squat" | "hinge" | "push" | "pull" | "core" | "carry";
+
 export interface ExerciseLibraryItem {
   id: string;
   name: string;
@@ -80,7 +92,8 @@ export interface ExerciseLibraryItem {
   category: string;
   muscle_groups?: string[];
   equipment?: string;
-  movement_pattern?: "push" | "pull" | "hinge" | "squat" | "carry" | null;
+  movement_pattern?: MovementPattern | null;
+  movement_family?: MovementFamily | null;
   is_bilateral?: boolean;
 }
 
@@ -202,9 +215,32 @@ const METHOD_SLOT_PRESETS: Record<SessionMethod, SlotPreset[]> = {
   ],
 };
 
-const MOVEMENT_PATTERN_LABELS: Record<string, Record<string, string>> = {
-  IS: { push: "Ýta", pull: "Toga", hinge: "Hip hinge", squat: "Squat", carry: "Bera" },
-  EN: { push: "Push", pull: "Pull", hinge: "Hinge", squat: "Squat", carry: "Carry" },
+/** Coach-readable family chips, in browse order. */
+const MOVEMENT_FAMILIES: MovementFamily[] = ["squat", "hinge", "push", "pull", "core", "carry"];
+
+const FAMILY_LABELS: Record<string, Record<MovementFamily, string>> = {
+  IS: { squat: "Hnébeygja", hinge: "Mjaðmahjör", push: "Ýta", pull: "Toga", core: "Kjarni", carry: "Bera" },
+  EN: { squat: "Squat", hinge: "Hinge", push: "Push", pull: "Pull", core: "Core", carry: "Carry" },
+};
+
+/** SFS pattern → short label (the detail sub-label under each result). */
+const PATTERN_LABELS: Record<string, Record<string, string>> = {
+  IS: {
+    hip_hinge: "Mjaðmahjör", hip_dominant: "Mjaðmaráðandi", knee_dominant: "Hnéráðandi",
+    vertical_push: "Lóðrétt ýta", horizontal_push: "Lárétt ýta",
+    vertical_pull: "Lóðrétt toga", horizontal_pull: "Lárétt toga",
+    rotational_diagonal: "Snúningur", anti_rotation: "Mót-snúningur",
+    anti_flexion: "Mót-beygja", anti_extension: "Mót-rétta", anti_lateral_flexion: "Mót-hliðarbeygja",
+    carry: "Burður",
+  },
+  EN: {
+    hip_hinge: "Hip hinge", hip_dominant: "Hip dominant", knee_dominant: "Knee dominant",
+    vertical_push: "Vertical push", horizontal_push: "Horizontal push",
+    vertical_pull: "Vertical pull", horizontal_pull: "Horizontal pull",
+    rotational_diagonal: "Rotational", anti_rotation: "Anti-rotation",
+    anti_flexion: "Anti-flexion", anti_extension: "Anti-extension", anti_lateral_flexion: "Anti-lateral flexion",
+    carry: "Carry",
+  },
 };
 
 const BODY_SPLIT_LABELS: Record<string, Record<BodySplit, string>> = {
@@ -355,6 +391,8 @@ export default function PlanBuilder({
   const [searching, setSearching] = useState(false);
   /** Target: "weekIdx-sessionIdx-groupIdx-slotIdx" */
   const [searchTarget, setSearchTarget] = useState<string | null>(null);
+  /** Active browse family in the open picker (null = all families). */
+  const [pickerFamily, setPickerFamily] = useState<MovementFamily | null>(null);
 
   const [loading, setLoading] = useState(!!templateId);
   const [saving, setSaving] = useState(false);
@@ -463,12 +501,9 @@ export default function PlanBuilder({
     };
   }
 
-  async function searchExercises(query: string, extraParams?: string) {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
+  /** Browse / search the library. Either a family (browse) or a free-text
+   *  query (or both) returns results — no typing required to see exercises. */
+  async function browseExercises(family: MovementFamily | null, query: string) {
     setSearching(true);
     try {
       const {
@@ -476,8 +511,9 @@ export default function PlanBuilder({
       } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      let url = `/api/trainer/exercises?search=${encodeURIComponent(query)}&${qs}`;
-      if (extraParams) url += `&${extraParams}`;
+      let url = `/api/trainer/exercises?${qs}`;
+      if (query.trim()) url += `&search=${encodeURIComponent(query)}`;
+      if (family) url += `&family=${family}`;
 
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -492,6 +528,16 @@ export default function PlanBuilder({
     } finally {
       setSearching(false);
     }
+  }
+
+  /** Open the picker for a slot and pre-browse the suggested family. */
+  function openPicker(targetKey: string, sessionIdx: number, slotIdx: number) {
+    const suggestion = getSlotSuggestion(sessionIdx, slotIdx);
+    const fam = (suggestion.pattern as MovementFamily | undefined) ?? null;
+    setSearchTarget(targetKey);
+    setSearchQuery("");
+    setPickerFamily(fam);
+    void browseExercises(fam, "");
   }
 
   /* ── Session method change ─────────────────────────── */
@@ -1081,11 +1127,12 @@ export default function PlanBuilder({
                                       <div className="relative">
                                         <button
                                           onClick={() => {
-                                            setSearchTarget(
-                                              isSearchOpen ? null : targetKey
-                                            );
-                                            setSearchQuery("");
-                                            setSearchResults([]);
+                                            if (isSearchOpen) {
+                                              setSearchTarget(null);
+                                              setSearchResults([]);
+                                            } else {
+                                              openPicker(targetKey, sessionIdx, slotIdx);
+                                            }
                                           }}
                                           className="w-full text-left px-3 py-2 border border-dashed rounded text-sm text-gray-400 hover:bg-gray-50"
                                         >
@@ -1096,18 +1143,46 @@ export default function PlanBuilder({
 
                                         {isSearchOpen && (() => {
                                           const suggestion = getSlotSuggestion(sessionIdx, slotIdx);
-                                          const suggestionParams = [
-                                            suggestion.pattern ? `pattern=${suggestion.pattern}` : "",
-                                            suggestion.category ? `category=${suggestion.category}` : "",
-                                          ].filter(Boolean).join("&");
-                                          const patternLabels = MOVEMENT_PATTERN_LABELS[isIS ? "IS" : "EN"];
+                                          const suggestedFamily = suggestion.pattern as MovementFamily | undefined;
+                                          const familyLabels = FAMILY_LABELS[isIS ? "IS" : "EN"];
+                                          const patternLabels = PATTERN_LABELS[isIS ? "IS" : "EN"];
 
                                           return (
                                           <div className="absolute top-full left-0 mt-1 w-80 bg-white border rounded-lg shadow-lg z-20 p-2">
-                                            {/* Suggestion hint */}
-                                            {suggestion.pattern && (
+                                            {/* Family browse chips (coach surface) */}
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                              <button
+                                                onClick={() => { setPickerFamily(null); void browseExercises(null, searchQuery); }}
+                                                className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                                                  pickerFamily === null
+                                                    ? "bg-black text-white"
+                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                }`}
+                                              >
+                                                {isIS ? "Allt" : "All"}
+                                              </button>
+                                              {MOVEMENT_FAMILIES.map((fam) => (
+                                                <button
+                                                  key={fam}
+                                                  onClick={() => { setPickerFamily(fam); void browseExercises(fam, searchQuery); }}
+                                                  className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                                                    pickerFamily === fam
+                                                      ? "bg-indigo-600 text-white"
+                                                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                  } ${suggestedFamily === fam && pickerFamily !== fam ? "ring-1 ring-indigo-300" : ""}`}
+                                                >
+                                                  {familyLabels[fam]}
+                                                  {suggestedFamily === fam && (
+                                                    <span className="ml-1 text-[9px] opacity-70">
+                                                      {isIS ? "★" : "★"}
+                                                    </span>
+                                                  )}
+                                                </button>
+                                              ))}
+                                            </div>
+                                            {suggestedFamily && (
                                               <div className="text-[10px] text-indigo-500 mb-1.5 px-1">
-                                                {isIS ? "Ráðlagt" : "Suggested"}: {patternLabels[suggestion.pattern] || suggestion.pattern}
+                                                {isIS ? "Ráðlagt fyrir þetta hólf" : "Suggested for this slot"}: {familyLabels[suggestedFamily]}
                                                 {suggestion.category ? ` · ${suggestion.category}` : ""}
                                               </div>
                                             )}
@@ -1116,7 +1191,7 @@ export default function PlanBuilder({
                                               value={searchQuery}
                                               onChange={(e) => {
                                                 setSearchQuery(e.target.value);
-                                                searchExercises(e.target.value, suggestionParams);
+                                                void browseExercises(pickerFamily, e.target.value);
                                               }}
                                               placeholder={
                                                 ct.plans.searchExercises
@@ -1124,9 +1199,8 @@ export default function PlanBuilder({
                                               className="w-full border rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
                                               autoFocus
                                             />
-                                            {searchQuery &&
-                                              searchResults.length > 0 && (
-                                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                            {searchResults.length > 0 && (
+                                                <div className="max-h-56 overflow-y-auto space-y-1">
                                                   {searchResults.map(
                                                     (result) => (
                                                       <button
@@ -1149,12 +1223,17 @@ export default function PlanBuilder({
                                                             : result.name}
                                                         </div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-0.5">
-                                                          <span>{result.category}</span>
+                                                          {result.movement_family && (
+                                                            <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
+                                                              {familyLabels[result.movement_family]}
+                                                            </span>
+                                                          )}
                                                           {result.movement_pattern && (
-                                                            <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
+                                                            <span className="text-gray-400">
                                                               {patternLabels[result.movement_pattern] || result.movement_pattern}
                                                             </span>
                                                           )}
+                                                          <span>· {result.category}</span>
                                                           <span className={`px-1.5 py-0.5 rounded ${
                                                             result.is_bilateral === false
                                                               ? "bg-amber-50 text-amber-600"
@@ -1170,8 +1249,7 @@ export default function PlanBuilder({
                                                   )}
                                                 </div>
                                               )}
-                                            {searchQuery &&
-                                              searchResults.length === 0 &&
+                                            {searchResults.length === 0 &&
                                               !searching && (
                                                 <div className="text-xs text-gray-500 text-center py-2">
                                                   {isIS

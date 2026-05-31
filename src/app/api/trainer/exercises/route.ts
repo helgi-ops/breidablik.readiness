@@ -85,13 +85,19 @@ export async function GET(req: Request) {
     const search = url.searchParams.get("search");
     const type = url.searchParams.get("type"); // "strength" | "endurance"
     const category = url.searchParams.get("category");
-    const pattern = url.searchParams.get("pattern"); // "push" | "pull" | "hinge" | "squat" | "carry"
+    // Coach-readable family: squat | hinge | push | pull | core | carry
+    const family = url.searchParams.get("family");
+    // Precise Science-for-Sport pattern (e.g. "horizontal_push"); also accepts
+    // a legacy coarse value via the family fallback below.
+    const pattern = url.searchParams.get("pattern");
     const bilateral = url.searchParams.get("bilateral"); // "true" | "false"
+
+    const FAMILIES = ["squat", "hinge", "push", "pull", "core", "carry"];
 
     let query = sb
       .from("exercise_library")
       .select(
-        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, video_url, sport, is_bilateral, movement_pattern, created_at, updated_at"
+        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, video_url, sport, is_bilateral, movement_pattern, movement_family, created_at, updated_at"
       );
 
     // Apply filters
@@ -103,7 +109,13 @@ export async function GET(req: Request) {
       query = query.eq("category", category);
     }
 
-    if (pattern && ["push", "pull", "hinge", "squat", "carry"].includes(pattern)) {
+    // Browse by coach family. Legacy callers may still pass a family value via
+    // the `pattern` param (push/pull/hinge/squat/carry) — treat those as family.
+    const familyFilter = family ?? (pattern && FAMILIES.includes(pattern) ? pattern : null);
+    if (familyFilter && FAMILIES.includes(familyFilter)) {
+      query = query.eq("movement_family", familyFilter);
+    } else if (pattern) {
+      // A precise SFS pattern was requested.
       query = query.eq("movement_pattern", pattern);
     }
 
@@ -119,7 +131,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: exercises, error: err } = await query.order("name");
+    const { data: exercises, error: err } = await query.order("name").limit(200);
 
     if (err) throw new Error(err.message);
 
