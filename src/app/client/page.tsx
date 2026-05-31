@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
+import TrainingLoadCard from "@/components/player/TrainingLoadCard";
 import AthleteHero from "@/components/player/AthleteHero";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
@@ -334,6 +335,9 @@ export default function ClientTodayPage() {
       {/* Fitness × Fatigue quadrant — where the client sits on chronic vs
           acute load, in plain language. */}
       <LoadQuadrant lang={lang === "EN" ? "EN" : "IS"} />
+
+      {/* Training Load Intelligence — strength vs sport vs total + recommendation. */}
+      <TrainingLoadCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Smart insights — Foster + heavy-lift exposure + PR forecast.
           These three are MicroPulse PT's main differentiators vs generic
