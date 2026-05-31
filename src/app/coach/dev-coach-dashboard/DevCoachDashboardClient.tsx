@@ -1871,6 +1871,9 @@ export default function CoachPage() {
   const loadTodayRunning = useRef(false);
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+  // Declared team break covering today (drives the "On break" command-center
+  // state). Null = not on a break today.
+  const [breakToday, setBreakToday] = useState<{ label: string | null; day: number; total: number } | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
@@ -3997,6 +4000,35 @@ export default function CoachPage() {
     loadYesterdayContext(coachTeamId, entryDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachVerified, coachTeamId]);
+
+  // Is the team on a declared break today? Drives the "On break" command-center
+  // state so the coach Today reads coherently instead of "rest day · 28 ready".
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!coachTeamId) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/coach/team/breaks?team_id=${encodeURIComponent(coachTeamId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        if (!alive || !json.ok) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const cur = ((json.breaks ?? []) as Array<{ start_date: string; end_date: string; label: string | null }>)
+          .find((b) => b.start_date <= today && today <= b.end_date) ?? null;
+        if (cur) {
+          const total = Math.round((new Date(cur.end_date).getTime() - new Date(cur.start_date).getTime()) / 86_400_000) + 1;
+          const day = Math.round((new Date(today).getTime() - new Date(cur.start_date).getTime()) / 86_400_000) + 1;
+          setBreakToday({ label: cur.label, day, total });
+        } else {
+          setBreakToday(null);
+        }
+      } catch { /* soft */ }
+    })();
+    return () => { alive = false; };
+  }, [coachTeamId]);
 
   useEffect(() => {
     if (!coachVerified) return;
@@ -8203,6 +8235,25 @@ export default function CoachPage() {
                 const fatigueLabelLower = fatigueDominant.toLowerCase().replace(/_fatigue$/, "");
 
                 const narrative: { headline: string; detail: string; bullets: string[] } = (() => {
+                  // Declared break overrides everything — players are resting.
+                  if (breakToday) {
+                    return {
+                      headline: lang === "IS"
+                        ? `Liðið í fríi${breakToday.label ? ` — ${breakToday.label}` : ""} (dagur ${breakToday.day} af ${breakToday.total}).`
+                        : `Team on break${breakToday.label ? ` — ${breakToday.label}` : ""} (day ${breakToday.day} of ${breakToday.total}).`,
+                      detail: lang === "IS"
+                        ? "Leikmenn fá fullt frí. Áminningar eru í pásu og þessir dagar telja ekki gegn streak eða compliance."
+                        : "Players are getting a full rest. Reminders are paused and these days don't count against streak or compliance.",
+                      bullets: [
+                        lang === "IS"
+                          ? "Engin æfing skipulögð — ekkert að fylgjast með í dag."
+                          : "No session planned — nothing to monitor today.",
+                        lang === "IS"
+                          ? "Kerfið mildar álagið sjálfkrafa fyrstu dagana eftir fríið."
+                          : "The system will ease the load back in over the first days after the break.",
+                      ],
+                    };
+                  }
                   // OFF day path — different story entirely
                   if (isOffDay) {
                     const bullets: string[] = [];
@@ -8365,7 +8416,7 @@ export default function CoachPage() {
                 // Primary tiles — the four counts a head coach reads every
                 // morning to know who can train and how tomorrow looks.
                 // Kept visible by default.
-                const primaryTiles: Array<{ label: string; value: string; sub: string; tone: string; info: string }> = [
+                const primaryTiles: Array<{ label: string; value: string; sub: string; tone: string; info: string }> = breakToday ? [] : [
                   {
                     label: "Ready",
                     value: String(nFull),

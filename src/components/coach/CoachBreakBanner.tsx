@@ -35,26 +35,9 @@ export default function CoachBreakBanner({ teamId, lang }: { teamId: string | nu
   useEffect(() => { void load(); }, [load]);
 
   if (!loaded) return null;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const current = breaks.find((b) => b.start_date <= today && today <= b.end_date) ?? null;
-
-  if (current) {
-    const total = Math.round((new Date(current.end_date).getTime() - new Date(current.start_date).getTime()) / 86_400_000) + 1;
-    const day = Math.round((new Date(today).getTime() - new Date(current.start_date).getTime()) / 86_400_000) + 1;
-    return (
-      <div className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3">
-        <div className="text-sm font-semibold text-emerald-900">
-          🌴 {lang === "EN" ? "Team on break" : "Liðið í fríi"}{current.label ? ` — ${current.label}` : ""}
-        </div>
-        <div className="mt-0.5 text-xs text-emerald-800">
-          {lang === "EN"
-            ? `Day ${day} of ${total} (${current.start_date} → ${current.end_date}). Reminders paused — players get a full rest, and these days don't count against streak or compliance.`
-            : `Dagur ${day} af ${total} (${current.start_date} → ${current.end_date}). Áminningar í pásu — leikmenn fá fullt frí, og þessir dagar telja ekki gegn streak eða compliance.`}
-        </div>
-      </div>
-    );
-  }
+  // The on-break state is owned by the Today Command Center (one coherent
+  // verdict). This banner handles the return-to-training ramp afterwards.
+  void breaks;
 
   if (ret?.in_return) {
     return (
