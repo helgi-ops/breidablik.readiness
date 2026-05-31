@@ -39,7 +39,8 @@ export type AuditFlagCode =
   | "pull_heavy"
   | "knee_heavy"
   | "no_core"
-  | "low_unilateral";
+  | "low_unilateral"
+  | "volume_spike";
 
 export type AuditFlag = {
   code: AuditFlagCode;
@@ -48,7 +49,14 @@ export type AuditFlag = {
   family?: MovementFamily;
   /** Numeric context (ratio or percentage), already rounded. */
   value?: number;
+  /** Week number the flag is about (for volume_spike). */
+  week?: number;
 };
+
+/** Week-over-week set-volume increase (fraction) above which we flag a spike.
+ *  Deterministic, template-level proxy for the Gabbett "don't ramp load too
+ *  fast" guardrail — no athlete data required. */
+export const VOLUME_SPIKE_THRESHOLD = 1.3;
 
 export type ProgramAudit = {
   /** Total working sets across all filled slots. */
@@ -64,6 +72,8 @@ export type ProgramAudit = {
   unilateralSets: number;
   /** Unilateral share of tagged sets (0–100). */
   unilateralPct: number;
+  /** Total working sets per week, in order (load-progression trend). */
+  weeklyVolume: number[];
   flags: AuditFlag[];
 };
 
@@ -145,8 +155,10 @@ export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit 
   let totalSets = 0;
   let taggedSets = 0;
   let unilateralSets = 0;
+  const weeklyVolume: number[] = [];
 
   for (const w of weeks ?? []) {
+    let weekSets = 0;
     for (const s of w.sessions ?? []) {
       for (const g of s.groups ?? []) {
         for (const ex of g.exercises ?? []) {
@@ -154,6 +166,7 @@ export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit 
           const sets = Number(ex.sets);
           const n = Number.isFinite(sets) && sets > 0 ? sets : 0;
           totalSets += n;
+          weekSets += n;
           const fam = (ex.movementFamily ?? "") as MovementFamily;
           if (AUDIT_FAMILIES.includes(fam)) {
             byFamily[fam] += n;
@@ -163,6 +176,7 @@ export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit 
         }
       }
     }
+    weeklyVolume.push(weekSets);
   }
 
   const unilateralPct = taggedSets > 0 ? Math.round((unilateralSets / taggedSets) * 100) : 0;
@@ -186,6 +200,21 @@ export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit 
     if (unilateralPct < 15) flags.push({ code: "low_unilateral", severity: "info", value: unilateralPct });
   }
 
+  // Load-progression guardrail: flag any week that ramps total set-volume too
+  // steeply vs the week before (deterministic Gabbett-style spike check).
+  for (let i = 1; i < weeklyVolume.length; i++) {
+    const prev = weeklyVolume[i - 1];
+    const cur = weeklyVolume[i];
+    if (prev > 0 && cur / prev >= VOLUME_SPIKE_THRESHOLD) {
+      flags.push({
+        code: "volume_spike",
+        severity: "warn",
+        value: Math.round((cur / prev - 1) * 100),
+        week: (weeks?.[i]?.week ?? i + 1),
+      });
+    }
+  }
+
   return {
     totalSets,
     taggedSets,
@@ -194,6 +223,7 @@ export function auditWeeks(weeks: AuditWeek[] | null | undefined): ProgramAudit 
     kneeHipRatio: ratio(byFamily.squat, byFamily.hinge),
     unilateralSets,
     unilateralPct,
+    weeklyVolume,
     flags,
   };
 }

@@ -50,6 +50,8 @@ const COPY = {
     details: "Sýna nánar",
     hide: "Fela",
     classified: (a: number, b: number) => `${a} af ${b} settum flokkuð`,
+    weekly: "Vikulegt álag",
+    weekAbbr: "V",
   },
   EN: {
     title: "Program balance",
@@ -65,6 +67,8 @@ const COPY = {
     details: "Show details",
     hide: "Hide",
     classified: (a: number, b: number) => `${a} of ${b} sets classified`,
+    weekly: "Weekly volume",
+    weekAbbr: "W",
   },
 } as const;
 
@@ -96,6 +100,10 @@ function flagText(flag: AuditFlag, lang: Lang): { msg: string; fix: string } {
       return IS
         ? { msg: `Aðeins ${flag.value}% einlíða vinna`, fix: "Bættu við einlíða æfingu fyrir vinstri/hægri ójafnvægi." }
         : { msg: `Only ${flag.value}% single-leg/arm work`, fix: "Add a unilateral exercise to address left/right asymmetry." };
+    case "volume_spike":
+      return IS
+        ? { msg: `Vika ${flag.week}: álag +${flag.value}% frá síðustu viku`, fix: "Hækkaðu magn hægar (<30%/viku) til að forðast álagstopp." }
+        : { msg: `Week ${flag.week}: volume +${flag.value}% vs the week before`, fix: "Ramp volume more gradually (<30%/week) to avoid a load spike." };
     default:
       return { msg: "", fix: "" };
   }
@@ -189,6 +197,38 @@ export default function ProgramAuditCard({
         <Chip label={t.kneeHip} value={fmtRatio(audit.kneeHipRatio)} off={ratioOff(audit.kneeHipRatio)} />
         <Chip label={t.unilateral} value={`${audit.unilateralPct}%`} off={audit.unilateralPct < 15} />
       </div>
+
+      {/* Weekly load-progression trend (only for multi-week plans) */}
+      {audit.weeklyVolume.length >= 2 && (() => {
+        const maxVol = Math.max(1, ...audit.weeklyVolume);
+        return (
+          <div className="mt-3">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              {t.weekly}
+            </div>
+            <div className="flex items-end gap-1" style={{ height: 44 }}>
+              {audit.weeklyVolume.map((v, i) => {
+                const isSpike = audit.flags.some((f) => f.code === "volume_spike" && f.week === i + 1);
+                return (
+                  <div key={i} className="flex flex-1 flex-col items-center justify-end gap-0.5">
+                    <div
+                      className="w-full rounded-t"
+                      style={{
+                        height: `${Math.max(4, (v / maxVol) * 36)}px`,
+                        backgroundColor: isSpike ? "#f59e0b" : "#cbd5e1",
+                      }}
+                      title={`${v} ${t.sets}`}
+                    />
+                    <span className={`text-[9px] ${isSpike ? "font-semibold text-amber-700" : "text-slate-400"}`}>
+                      {t.weekAbbr}{i + 1}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Flags with fixes (counterfactuals) */}
       {audit.flags.length > 0 && (
