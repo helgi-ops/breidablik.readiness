@@ -30,6 +30,8 @@
  * Summary prompt).
  */
 
+import { estimateOneRm } from "@/lib/client/oneRepMaxFormulas";
+
 // ── 1. Foster monotony + strain ───────────────────────────────────────────
 
 export type SessionLoad = { date: string; load: number };
@@ -113,6 +115,8 @@ export type SetForExposure = {
   date: string;
   weight_kg: number;
   reps: number;
+  /** Logged RPE (1–10) — converted to RIR for the e1RM estimate when present. */
+  rpe?: number | null;
   /** Optional override — if known per exercise (from LV profile). */
   predicted_one_rm_kg?: number | null;
 };
@@ -130,7 +134,6 @@ export type ExposureResult = {
 };
 
 const EXPOSURE_CAP_PER_WEEK = 25;
-const EPLEY_1RM = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
 
 export function computeHeavyLiftingExposure(
   sets: SetForExposure[],
@@ -149,7 +152,7 @@ export function computeHeavyLiftingExposure(
     // set via Epley as a conservative proxy.
     const oneRm = s.predicted_one_rm_kg && s.predicted_one_rm_kg > 0
       ? s.predicted_one_rm_kg
-      : EPLEY_1RM(s.weight_kg, s.reps);
+      : estimateOneRm(s.weight_kg, s.reps, { rpe: s.rpe });
     if (oneRm <= 0) continue;
     const pct = s.weight_kg / oneRm;
     if (pct >= 0.80) heavy += 1;

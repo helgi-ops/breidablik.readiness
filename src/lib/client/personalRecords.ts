@@ -10,6 +10,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { e1rmEvidence } from "@/lib/client/oneRepMaxFormulas";
 
 export type PersonalRecord = {
   exercise: string;
@@ -32,7 +33,6 @@ export type PersonalRecords = {
   recent_prs: RecentPR[];    // PBs within the recent window, newest first
 };
 
-const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
 const RECENT_DAYS = 14;
 
 function isoDaysAgo(n: number): string {
@@ -48,13 +48,13 @@ export async function computePersonalRecords(
   const since = isoDaysAgo(lookbackDays);
   const { data } = await sb
     .from("pt_exercise_set_logs")
-    .select("session_date, exercise_name, weight_kg, reps")
+    .select("session_date, exercise_name, weight_kg, reps, rpe")
     .eq("player_id", playerId)
     .gte("session_date", since)
     .order("session_date", { ascending: true });
 
   const rows = ((data ?? []) as Array<{
-    session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null;
+    session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; rpe: number | null;
   }>).filter((r) => r.weight_kg != null && r.reps != null && Number(r.weight_kg) > 0);
 
   // exercise key → per-session best e1RM and best weight (chronological).
@@ -64,7 +64,7 @@ export async function computePersonalRecords(
   for (const r of rows) {
     const display = r.exercise_name.trim();
     const key = display.toLowerCase();
-    const e = epley(Number(r.weight_kg), Number(r.reps));
+    const e = e1rmEvidence(r.weight_kg, r.reps, r.rpe);
     const w = Number(r.weight_kg);
     if (!byExercise.has(key)) byExercise.set(key, { display, sessions: new Map() });
     const ex = byExercise.get(key)!;

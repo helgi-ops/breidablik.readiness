@@ -20,6 +20,7 @@ import {
   computeFosterMonotonyStrain,
   computeHeavyLiftingExposure,
 } from "@/lib/trainer/loadIntelligence";
+import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
 
 export type SummaryLang = "IS" | "EN";
 export type SummaryWindow = 7 | 14 | 30;
@@ -259,23 +260,23 @@ export async function buildClientSummaryInput(
   // (Epley 1985): e1RM = weight × (1 + reps/30).
   const { data: setData } = await sb
     .from("pt_exercise_set_logs")
-    .select("exercise_name, session_date, weight_kg, reps")
+    .select("exercise_name, session_date, weight_kg, reps, rpe")
     .eq("player_id", clientId)
     .gte("session_date", sinceIso);
   const sets = ((setData ?? []) as unknown) as Array<{
-    exercise_name: string; session_date: string; weight_kg: number | null; reps: number | null;
+    exercise_name: string; session_date: string; weight_kg: number | null; reps: number | null; rpe: number | null;
   }>;
-  // Group: exercise → date → best set (by Epley e1RM, falling back to weight)
-  const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
-  const byExercise = new Map<string, Map<string, { weight: number; reps: number }>>();
+  // Group: exercise → date → best set (by RIR-aware e1RM, falling back to weight)
+  type TopSet = { weight: number; reps: number; rpe: number | null };
+  const byExercise = new Map<string, Map<string, TopSet>>();
   for (const s of sets) {
     if (s.weight_kg == null || s.reps == null) continue;
     if (!byExercise.has(s.exercise_name)) byExercise.set(s.exercise_name, new Map());
     const dayMap = byExercise.get(s.exercise_name)!;
     const existing = dayMap.get(s.session_date);
-    const score = epley(Number(s.weight_kg), Number(s.reps));
-    const existingScore = existing ? epley(existing.weight, existing.reps) : -Infinity;
-    if (score > existingScore) dayMap.set(s.session_date, { weight: Number(s.weight_kg), reps: Number(s.reps) });
+    const score = e1rmFromSet(s.weight_kg, s.reps, s.rpe);
+    const existingScore = existing ? e1rmFromSet(existing.weight, existing.reps, existing.rpe) : -Infinity;
+    if (score > existingScore) dayMap.set(s.session_date, { weight: Number(s.weight_kg), reps: Number(s.reps), rpe: s.rpe });
   }
   const progression: ClientSummaryInput["progression"] = Array.from(byExercise.entries())
     .map(([exercise_name, dayMap]) => {
@@ -284,8 +285,8 @@ export async function buildClientSummaryInput(
       const last = days[days.length - 1]?.[1] ?? null;
       let pctChange: number | null = null;
       if (first && last) {
-        const a = epley(first.weight, first.reps);
-        const b = epley(last.weight, last.reps);
+        const a = e1rmFromSet(first.weight, first.reps, first.rpe);
+        const b = e1rmFromSet(last.weight, last.reps, last.rpe);
         if (a > 0) pctChange = Number((((b - a) / a) * 100).toFixed(1));
       }
       return {

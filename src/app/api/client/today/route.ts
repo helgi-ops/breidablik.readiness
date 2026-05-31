@@ -23,6 +23,7 @@ import { isSeasonPhase, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client
 import { computeGameTaper } from "@/lib/client/gameTaper";
 import { buildOneRmMap, canonicalLift, isStale, type LvTest } from "@/lib/client/oneRepMax";
 import { computeWorkingOneRm, workingTargetKg, type SetLogRow } from "@/lib/client/workingOneRm";
+import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
 
 export const runtime = "nodejs";
 
@@ -87,7 +88,7 @@ export async function GET(req: Request) {
   const since28 = new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
   const { data: setLogRows } = await sb
     .from("pt_exercise_set_logs")
-    .select("session_date, exercise_name, weight_kg, reps")
+    .select("session_date, exercise_name, weight_kg, reps, rpe")
     .eq("player_id", player.id)
     .gte("session_date", since28);
   const workingMap = computeWorkingOneRm((lvRows ?? []) as LvTest[], (setLogRows ?? []) as SetLogRow[]);
@@ -503,20 +504,18 @@ export async function GET(req: Request) {
   // last 60 days, fit linear regression on top-set Epley e1RM.
   const { data: setData60 } = await sb
     .from("pt_exercise_set_logs")
-    .select("exercise_name, session_date, weight_kg, reps")
+    .select("exercise_name, session_date, weight_kg, reps, rpe")
     .eq("player_id", player.id)
     .gte("session_date", since60.toISOString().slice(0, 10));
   const sets60 = ((setData60 ?? []) as Array<{
-    exercise_name: string; session_date: string; weight_kg: number | null; reps: number | null;
+    exercise_name: string; session_date: string; weight_kg: number | null; reps: number | null; rpe: number | null;
   }>).filter((s) => s.weight_kg != null && s.reps != null);
-  const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
   // Group: exercise → date → max e1RM (top set per session)
   const byExercise = new Map<string, Map<string, number>>();
   for (const s of sets60) {
-    const w = Number(s.weight_kg), r = Number(s.reps);
     if (!byExercise.has(s.exercise_name)) byExercise.set(s.exercise_name, new Map());
     const dayMap = byExercise.get(s.exercise_name)!;
-    const e = epley(w, r);
+    const e = e1rmFromSet(s.weight_kg, s.reps, s.rpe);
     if (!dayMap.has(s.session_date) || e > dayMap.get(s.session_date)!) dayMap.set(s.session_date, e);
   }
   let topExerciseName: string | null = null;

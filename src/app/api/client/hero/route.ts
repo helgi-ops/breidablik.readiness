@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { canonicalLift } from "@/lib/client/oneRepMax";
+import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
 import { computePersonalRecords } from "@/lib/client/personalRecords";
 import { getClientBreakRanges, dateInRanges } from "@/lib/notifications/clientBreaks";
 
@@ -35,8 +36,6 @@ function iso(offsetDaysAgo: number): string {
   const d = new Date(); d.setUTCDate(d.getUTCDate() - offsetDaysAgo);
   return d.toISOString().slice(0, 10);
 }
-const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
-
 export async function GET(req: Request) {
   const a = req.headers.get("authorization") || "";
   const token = a.startsWith("Bearer ") ? a.slice(7) : "";
@@ -81,10 +80,10 @@ export async function GET(req: Request) {
   // ── Logged sessions (workouts) ────────────────────────────────────
   const { data: setRows } = await sb
     .from("pt_exercise_set_logs")
-    .select("session_date, exercise_name, weight_kg, reps")
+    .select("session_date, exercise_name, weight_kg, reps, rpe")
     .eq("player_id", player.id)
     .gte("session_date", iso(59));
-  const sets = ((setRows ?? []) as Array<{ session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null }>);
+  const sets = ((setRows ?? []) as Array<{ session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; rpe: number | null }>);
   const sessionDates = new Set(sets.map((s) => s.session_date));
   const monthStart = today.slice(0, 8) + "01";
   const sessionsThisMonth = new Set(sets.filter((s) => s.session_date >= monthStart).map((s) => s.session_date)).size;
@@ -97,7 +96,7 @@ export async function GET(req: Request) {
     if (s.weight_kg == null || s.reps == null) continue;
     const lift = canonicalLift(s.exercise_name);
     if (!lift) continue;
-    const e = epley(Number(s.weight_kg), Number(s.reps));
+    const e = e1rmFromSet(s.weight_kg, s.reps, s.rpe);
     const m = s.session_date >= iso(13) ? recentBest : (s.session_date <= iso(14) ? priorBest : null);
     if (!m) continue;
     if (!m.has(lift) || e > (m.get(lift) ?? 0)) m.set(lift, e);

@@ -18,6 +18,7 @@
  */
 
 import { canonicalLift, buildOneRmMap, type LvTest } from "@/lib/client/oneRepMax";
+import { e1rmEvidence } from "@/lib/client/oneRepMaxFormulas";
 
 export type WorkingEntry = {
   one_rm: number;
@@ -26,9 +27,8 @@ export type WorkingEntry = {
   needs_retest: boolean; // logged performance exceeds the +10% cap
 };
 
-export type SetLogRow = { session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null };
+export type SetLogRow = { session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; rpe?: number | null };
 
-const epley = (w: number, r: number) => w * (1 + Math.max(0, r) / 30);
 const CAP_ABOVE_TESTED = 1.10; // working 1RM may sit at most 10% over the test
 const MIN_SESSIONS = 2;        // corroboration
 
@@ -43,7 +43,7 @@ function loggedReliableMap(setLogs: SetLogRow[], windowDays: number): Map<string
     if (s.weight_kg == null || s.reps == null || s.session_date < cutoffIso) continue;
     const lift = canonicalLift(s.exercise_name);
     if (!lift) continue;
-    const e = epley(Number(s.weight_kg), Number(s.reps));
+    const e = e1rmEvidence(s.weight_kg, s.reps, s.rpe);
     if (!byLift.has(lift)) byLift.set(lift, new Map());
     const days = byLift.get(lift)!;
     if (!days.has(s.session_date) || e > (days.get(s.session_date) ?? 0)) days.set(s.session_date, e);
