@@ -1446,6 +1446,151 @@ function resolvePickerCategories(structureId?: string | null): ExerciseCategory[
 
 // ─── Exercise picker (inline, per item) ───────────────────────────────────────
 
+// ─── Movement-pattern library browse (DB-backed exercise_library) ───────────────
+// Lets the coach reach the full movement-pattern exercise library from the same
+// picker as the curated quick-picks. Inserts the exercise name (the coach adds
+// the prescription), so it complements — never replaces — the curated cards.
+
+const LIBRARY_FAMILIES: { id: string; label: string }[] = [
+  { id: "squat", label: "Hnébeygja" },
+  { id: "hinge", label: "Mjaðmahjör" },
+  { id: "push", label: "Ýta" },
+  { id: "pull", label: "Toga" },
+  { id: "core", label: "Kjarni" },
+  { id: "carry", label: "Bera" },
+];
+
+const LIBRARY_PATTERN_LABELS: Record<string, string> = {
+  hip_hinge: "Mjaðmahjör", hip_dominant: "Mjaðmaráðandi", knee_dominant: "Hnéráðandi",
+  vertical_push: "Lóðrétt ýta", horizontal_push: "Lárétt ýta",
+  vertical_pull: "Lóðrétt toga", horizontal_pull: "Lárétt toga",
+  rotational_diagonal: "Snúningur", anti_rotation: "Mót-snúningur",
+  anti_flexion: "Mót-beygja", anti_extension: "Mót-rétta", anti_lateral_flexion: "Mót-hliðarbeygja",
+  carry: "Burður",
+};
+
+type LibraryItem = {
+  id: string;
+  name: string;
+  name_is?: string | null;
+  category: string;
+  movement_pattern?: string | null;
+  movement_family?: string | null;
+  is_bilateral?: boolean | null;
+};
+
+function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
+  const [family, setFamily] = useState<string | null>("squat");
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async (fam: string | null, q: string) => {
+    setLoading(true);
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session?.access_token) return;
+      const params: string[] = [];
+      if (q.trim()) params.push(`search=${encodeURIComponent(q)}`);
+      if (fam) params.push(`family=${fam}`);
+      const res = await fetch(`/api/trainer/exercises?${params.join("&")}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setItems((json.exercises ?? []) as LibraryItem[]);
+      }
+    } catch {
+      /* soft */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial browse of the default family. Subsequent fetches are triggered
+  // directly by the chip / search handlers (avoids effect-driven refetch loops).
+  useEffect(() => { void load("squat", ""); }, [load]);
+
+  return (
+    <div className="space-y-2">
+      {/* Family chips */}
+      <div className="flex flex-wrap gap-1">
+        {LIBRARY_FAMILIES.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => { setFamily(f.id); void load(f.id, query); }}
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+              family === f.id
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => { setFamily(null); void load(null, query); }}
+          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+            family === null
+              ? "bg-slate-600 text-white border-slate-600"
+              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          Allt
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); void load(family, e.target.value); }}
+        placeholder="Leita í safninu…"
+        className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      />
+
+      {/* Results */}
+      {loading ? (
+        <div className="py-2 text-center text-[11px] text-muted-foreground">Hleð…</div>
+      ) : items.length === 0 ? (
+        <div className="py-2 text-center text-[11px] text-muted-foreground">Engar æfingar</div>
+      ) : (
+        <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
+          {items.map((ex) => (
+            <button
+              key={ex.id}
+              type="button"
+              onClick={() => onSelect(ex.name_is || ex.name)}
+              className="rounded-lg border border-white bg-white p-2.5 text-left hover:border-indigo-300 hover:shadow-sm transition-all"
+            >
+              <div className="text-xs font-semibold text-foreground">{ex.name_is || ex.name}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                {ex.movement_family && (
+                  <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-600">
+                    {LIBRARY_FAMILIES.find((f) => f.id === ex.movement_family)?.label ?? ex.movement_family}
+                  </span>
+                )}
+                {ex.movement_pattern && (
+                  <span className="text-slate-400">
+                    {LIBRARY_PATTERN_LABELS[ex.movement_pattern] ?? ex.movement_pattern}
+                  </span>
+                )}
+                <span>· {ex.category}</span>
+                {ex.is_bilateral === false && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-600">Einhlið</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: string) => void; onClose: () => void; structureId?: string | null }) {
   const categories = resolvePickerCategories(structureId);
   const [activeCat, setActiveCat] = useState(categories[0].id);
@@ -1496,9 +1641,24 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
             ＋ Aðrar æfingar
           </button>
         )}
+        {/* Full movement-pattern library (DB-backed) */}
+        <button
+          type="button"
+          onClick={() => setActiveCat("__library__")}
+          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+            activeCat === "__library__"
+              ? "bg-emerald-600 text-white border-emerald-600"
+              : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+          }`}
+        >
+          📚 Allt safnið
+        </button>
       </div>
 
       {/* Exercise cards */}
+      {activeCat === "__library__" ? (
+        <LibraryBrowse onSelect={onSelect} />
+      ) : (
       <div className="grid gap-1.5 sm:grid-cols-2">
         {(activeCat === "__generic__" ? EXERCISE_CATEGORIES.flatMap((c) => c.exercises) : cat.exercises).map((ex) => (
           <button
@@ -1524,6 +1684,7 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }
