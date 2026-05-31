@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
 
@@ -706,6 +707,11 @@ export default function WeekSetupPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Declared team breaks — suppress reminders + don't penalise rest. */}
+      <div className="mb-5">
+        <TeamBreaksManager teamId={teamId} />
       </div>
 
       {error && (

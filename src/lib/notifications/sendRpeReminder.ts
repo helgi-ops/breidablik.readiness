@@ -6,6 +6,7 @@ import { rpeReminderConfig, type RpeReminderType } from "@/lib/session-rpe/remin
 import type { ReminderProfile } from "@/lib/notifications/schedule";
 import { isSubscriptionGone, sendWebPush, type NativePushSubscription } from "@/lib/push/webPush";
 import { getGpsOnlyTeamIds } from "@/lib/teamMode";
+import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 
 type SubscriptionRow = {
   id: string;
@@ -156,8 +157,14 @@ export async function sendRpeReminderToMissingPlayers(
     teamIds: teamIdsForOffCheck,
   });
 
-  const missing = afterGpsFilter.filter((p) => !(p.team_id && offTeamIds.has(String(p.team_id))));
-  const skippedOffDay = afterGpsFilter.length - missing.length;
+  const afterOffFilter = afterGpsFilter.filter((p) => !(p.team_id && offTeamIds.has(String(p.team_id))));
+  const skippedOffDay = afterGpsFilter.length - afterOffFilter.length;
+
+  // Skip RPE reminders for teams on a declared break (players get a real break).
+  const breakTeams = await getTeamsOnBreak(sb, args.dateKey);
+  const missing = breakTeams.size === 0
+    ? afterOffFilter
+    : afterOffFilter.filter((p) => !(p.team_id && breakTeams.has(String(p.team_id))));
   const skippedGpsOnly = allMissing.length - afterGpsFilter.length;
   void skippedGpsOnly;
 

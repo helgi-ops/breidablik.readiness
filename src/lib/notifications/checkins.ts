@@ -8,6 +8,7 @@ import {
   type ReminderProfile,
 } from "@/lib/notifications/schedule";
 import { getGpsOnlyTeamIds } from "@/lib/teamMode";
+import { getTeamsOnBreak } from "@/lib/notifications/teamBreaks";
 
 type ActivePlayerRow = {
   id: string;
@@ -50,7 +51,7 @@ async function getTeamIdsForProfile(
 
 export async function getActivePlayers(
   sb: SupabaseClient,
-  args?: { profile?: ReminderProfile },
+  args?: { profile?: ReminderProfile; dateKey?: string },
 ): Promise<ActivePlayer[]> {
   const { data, error } = await sb
     .from("players")
@@ -74,10 +75,19 @@ export async function getActivePlayers(
     ? all
     : all.filter((p) => !(p.team_id && gpsOnlyTeams.has(String(p.team_id))));
 
-  if (!args?.profile) return afterGpsFilter;
+  // Declared team breaks: players on a team that is on a break today are not
+  // "active" for reminders/compliance — they get a real break, no nudges, no
+  // missed-check-in penalty.
+  const breakDateKey = args?.dateKey || getDateKeyInTimezone(new Date(), getOperationalTimezone());
+  const breakTeams = await getTeamsOnBreak(sb, breakDateKey);
+  const afterBreakFilter = breakTeams.size === 0
+    ? afterGpsFilter
+    : afterGpsFilter.filter((p) => !(p.team_id && breakTeams.has(String(p.team_id))));
+
+  if (!args?.profile) return afterBreakFilter;
 
   const teamIds = await getTeamIdsForProfile(sb, args.profile);
-  return afterGpsFilter.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
+  return afterBreakFilter.filter((p) => p.team_id && teamIds.has(String(p.team_id)));
 }
 
 export async function getCheckedInPlayerIds(
@@ -104,7 +114,7 @@ export async function getMissingPlayersForToday(
   const timeZone = args?.timeZone || getOperationalTimezone();
   const dateKey = args?.dateKey || getDateKeyInTimezone(new Date(), timeZone);
 
-  const players = await getActivePlayers(sb, { profile: args?.profile });
+  const players = await getActivePlayers(sb, { profile: args?.profile, dateKey });
   const playerIds = players.map((p) => p.id);
   const checkedInSet = await getCheckedInPlayerIds(sb, { dateKey, playerIds });
 
@@ -128,7 +138,7 @@ export async function getCheckinComplianceSummary(
   const timeZone = args?.timeZone || getOperationalTimezone();
   const dateKey = args?.dateKey || getDateKeyInTimezone(new Date(), timeZone);
 
-  const players = await getActivePlayers(sb, { profile: args?.profile });
+  const players = await getActivePlayers(sb, { profile: args?.profile, dateKey });
   const checkedInSet = await getCheckedInPlayerIds(sb, {
     dateKey,
     playerIds: players.map((p) => p.id),
