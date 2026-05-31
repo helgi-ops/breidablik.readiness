@@ -410,9 +410,9 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
   return (
     <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-indigo-900">⚡ Veldu uppbyggingu aðalblokks</div>
+        <div className="text-sm font-semibold text-indigo-900">⚡ Choose main block structure</div>
         <button type="button" onClick={() => { setOpen(false); setSelected(null); setClusterSub(null); }}
-          className="text-xs text-muted-foreground hover:text-foreground">✕ Loka</button>
+          className="text-xs text-muted-foreground hover:text-foreground">✕ Close</button>
       </div>
 
       {/* Main structure cards */}
@@ -1123,15 +1123,15 @@ function fmtExercise(e: ExerciseEntry): string {
   if (e.lineOverride) return e.lineOverride;
   const parts = [
     e.name,
-    `${e.sets} sett × ${e.reps}`,
+    `${e.sets} sets × ${e.reps}`,
     e.intensity,
   ];
   // VBT variables (non-ISO)
-  if (e.velocity)     parts.push(`Hraði ${e.velocity}`);
+  if (e.velocity)     parts.push(`Velocity ${e.velocity}`);
   if (e.velocityLoss) parts.push(`VL ${e.velocityLoss}`);
   // Intent/tempo (ISO only)
   if (e.tempo)        parts.push(`Tempo ${e.tempo}`);
-  parts.push(`${e.rest} hvíld`);
+  parts.push(`${e.rest} rest`);
   if (e.note) parts.push(e.note);
   return parts.join(" · ");
 }
@@ -1139,57 +1139,57 @@ function fmtExercise(e: ExerciseEntry): string {
 const EXERCISE_CATEGORIES: ExerciseCategory[] = [
   {
     id: "lower-strength",
-    label: "Neðri — Styrkt",
+    label: "Lower — Strength",
     icon: "🏋️",
     exercises: [
-      { id: "back-squat",       name: "Back Squat",             sets: "3–4", reps: "3–5 endurtekningar",  intensity: "82–88% 1RM", velocity: "~0.50–0.60 m/s", velocityLoss: "20% VL", rest: "3–4 mín" },
-      { id: "trap-bar-dl",      name: "Trap Bar Deadlift",      sets: "3–4", reps: "3–5 endurtekningar",  intensity: "80–85% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "3–4 mín" },
-      { id: "rdl",              name: "Romanian Deadlift",       sets: "3",   reps: "6–8 endurtekningar",  intensity: "70–75% 1RM", velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "2–3 mín" },
-      { id: "front-squat",      name: "Front Squat",             sets: "3–4", reps: "3–4 endurtekningar",  intensity: "78–83% 1RM", velocity: "~0.50–0.60 m/s", velocityLoss: "20% VL", rest: "3–4 mín" },
+      { id: "back-squat",       name: "Back Squat",             sets: "3–4", reps: "3–5 reps",  intensity: "82–88% 1RM", velocity: "~0.50–0.60 m/s", velocityLoss: "20% VL", rest: "3–4 min" },
+      { id: "trap-bar-dl",      name: "Trap Bar Deadlift",      sets: "3–4", reps: "3–5 reps",  intensity: "80–85% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "3–4 min" },
+      { id: "rdl",              name: "Romanian Deadlift",       sets: "3",   reps: "6–8 reps",  intensity: "70–75% 1RM", velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "2–3 min" },
+      { id: "front-squat",      name: "Front Squat",             sets: "3–4", reps: "3–4 reps",  intensity: "78–83% 1RM", velocity: "~0.50–0.60 m/s", velocityLoss: "20% VL", rest: "3–4 min" },
     ],
   },
   {
     id: "lower-power",
-    label: "Neðri — Kraft",
+    label: "Lower — Power",
     icon: "⚡",
     exercises: [
-      { id: "mid-thigh-pull",   name: "Mid-Thigh Pull",          sets: "4–5", reps: "2–3 endurtekningar",  intensity: "80–90% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "3–4 mín" },
-      { id: "hang-clean",       name: "Hang Clean",              sets: "4–5", reps: "2–3 endurtekningar",  intensity: "72–78% 1RM", velocity: "~1.0–1.3 m/s", velocityLoss: "10% VL", rest: "3–4 mín" },
-      { id: "jump-squat",       name: "Jump Squat",              sets: "4",   reps: "3–5 endurtekningar",  intensity: "30–40% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "2–3 mín" },
-      { id: "trap-bar-jump",    name: "Trap Bar Jump",           sets: "4",   reps: "3–4 endurtekningar",  intensity: "25–35% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "2–3 mín" },
+      { id: "mid-thigh-pull",   name: "Mid-Thigh Pull",          sets: "4–5", reps: "2–3 reps",  intensity: "80–90% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "3–4 min" },
+      { id: "hang-clean",       name: "Hang Clean",              sets: "4–5", reps: "2–3 reps",  intensity: "72–78% 1RM", velocity: "~1.0–1.3 m/s", velocityLoss: "10% VL", rest: "3–4 min" },
+      { id: "jump-squat",       name: "Jump Squat",              sets: "4",   reps: "3–5 reps",  intensity: "30–40% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "2–3 min" },
+      { id: "trap-bar-jump",    name: "Trap Bar Jump",           sets: "4",   reps: "3–4 reps",  intensity: "25–35% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "2–3 min" },
     ],
   },
   {
     id: "plyometric",
-    label: "Sprengifimi",
+    label: "Plyometric",
     icon: "🦘",
     exercises: [
-      { id: "box-jump",         name: "Box Jump",                sets: "4",   reps: "3–5 endurtekningar",  intensity: "Líkamsþyngd", tempo: "Fullur endurheimt",   rest: "2–3 mín" },
-      { id: "depth-jump",       name: "Depth Jump",              sets: "3–4", reps: "4–6 endurtekningar",  intensity: "Líkamsþyngd", tempo: "Lágmarks snertitími", rest: "3–4 mín" },
-      { id: "broad-jump",       name: "Broad Jump",              sets: "3–4", reps: "3–5 endurtekningar",  intensity: "Líkamsþyngd", tempo: "Fullur kraftur",      rest: "2–3 mín" },
-      { id: "reactive-hop",     name: "Reactive Hop",            sets: "3",   reps: "8–10 endurtekningar", intensity: "Líkamsþyngd", tempo: "Stíft hné",          rest: "2 mín" },
+      { id: "box-jump",         name: "Box Jump",                sets: "4",   reps: "3–5 reps",  intensity: "Bodyweight", tempo: "Full recovery",     rest: "2–3 min" },
+      { id: "depth-jump",       name: "Depth Jump",              sets: "3–4", reps: "4–6 reps",  intensity: "Bodyweight", tempo: "Min contact time",  rest: "3–4 min" },
+      { id: "broad-jump",       name: "Broad Jump",              sets: "3–4", reps: "3–5 reps",  intensity: "Bodyweight", tempo: "Full power",        rest: "2–3 min" },
+      { id: "reactive-hop",     name: "Reactive Hop",            sets: "3",   reps: "8–10 reps", intensity: "Bodyweight", tempo: "Stiff knee",        rest: "2 min" },
     ],
   },
   {
     id: "unilateral",
-    label: "Einlíkamshluta",
+    label: "Unilateral",
     icon: "🦵",
     exercises: [
-      { id: "rfess",            name: "RFESS",                   sets: "3",   reps: "6–8/hlið",            intensity: "65–70% 1RM", velocity: "~0.50–0.70 m/s", velocityLoss: "20% VL", rest: "2–3 mín", note: "Afturhlið upphækkað" },
-      { id: "bulgarian-ss",     name: "Bulgarian Split Squat",   sets: "3",   reps: "6–8/hlið",            intensity: "60–65% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 mín" },
-      { id: "single-leg-rdl",   name: "Single Leg RDL",          sets: "3",   reps: "8/hlið",              intensity: "60% 1RM",    velocity: "~0.45–0.60 m/s", velocityLoss: "20% VL", rest: "2 mín" },
-      { id: "step-up",          name: "Step-Up",                 sets: "3",   reps: "6–8/hlið",            intensity: "60% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2 mín" },
+      { id: "rfess",            name: "RFESS",                   sets: "3",   reps: "6–8/side",            intensity: "65–70% 1RM", velocity: "~0.50–0.70 m/s", velocityLoss: "20% VL", rest: "2–3 min", note: "Rear foot elevated" },
+      { id: "bulgarian-ss",     name: "Bulgarian Split Squat",   sets: "3",   reps: "6–8/side",            intensity: "60–65% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 min" },
+      { id: "single-leg-rdl",   name: "Single Leg RDL",          sets: "3",   reps: "8/side",              intensity: "60% 1RM",    velocity: "~0.45–0.60 m/s", velocityLoss: "20% VL", rest: "2 min" },
+      { id: "step-up",          name: "Step-Up",                 sets: "3",   reps: "6–8/side",            intensity: "60% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2 min" },
     ],
   },
   {
     id: "upper",
-    label: "Efri líkamshluti",
+    label: "Upper body",
     icon: "💪",
     exercises: [
-      { id: "bench-press",      name: "Bench Press",             sets: "3–4", reps: "4–6 endurtekningar",  intensity: "78–83% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 mín" },
-      { id: "push-press",       name: "Push Press",              sets: "3–4", reps: "3–5 endurtekningar",  intensity: "72–78% 1RM", velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "2–3 mín" },
-      { id: "weighted-pullup",  name: "Weighted Pull-up",        sets: "3",   reps: "4–6 endurtekningar",  intensity: "RPE 8",      velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 mín" },
-      { id: "db-row",           name: "DB Row",                  sets: "3",   reps: "8/hlið",              intensity: "RPE 7–8",    velocity: "~0.45–0.60 m/s", velocityLoss: "20% VL", rest: "90 sek" },
+      { id: "bench-press",      name: "Bench Press",             sets: "3–4", reps: "4–6 reps",  intensity: "78–83% 1RM", velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 min" },
+      { id: "push-press",       name: "Push Press",              sets: "3–4", reps: "3–5 reps",  intensity: "72–78% 1RM", velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "2–3 min" },
+      { id: "weighted-pullup",  name: "Weighted Pull-up",        sets: "3",   reps: "4–6 reps",  intensity: "RPE 8",      velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "2–3 min" },
+      { id: "db-row",           name: "DB Row",                  sets: "3",   reps: "8/side",              intensity: "RPE 7–8",    velocity: "~0.45–0.60 m/s", velocityLoss: "20% VL", rest: "90 sec" },
     ],
   },
   {
@@ -1197,57 +1197,57 @@ const EXERCISE_CATEGORIES: ExerciseCategory[] = [
     label: "ISO — Performance",
     icon: "🧱",
     exercises: [
-      // ISO Mid-Thigh Pull — 3 útgáfur
+      // ISO Mid-Thigh Pull — 3 variants
       {
         id: "iso-mtp-rfd",
         name: "ISO Mid-Thigh Pull — RFD",
-        sets: "5", reps: "3–5 sek", intensity: "90–100% MVC", tempo: "Sprengifimi (ballistic)", rest: "3 mín",
-        note: "120–140° hnéliður · Sem hraðast mögulegt · +1.2–13.4%/viku RFD",
+        sets: "5", reps: "3–5 sec", intensity: "90–100% MVC", tempo: "Explosive (ballistic)", rest: "3 min",
+        note: "120–140° knee angle · As fast as possible · +1.2–13.4%/week RFD",
       },
       {
         id: "iso-mtp-strength",
-        name: "ISO Mid-Thigh Pull — Styrkt",
-        sets: "3–5", reps: "20–30 sek", intensity: "80–100% MVC", tempo: "Sustained — hámarks", rest: "2 mín",
-        note: "Sport-sértækt horn · +4.3%/viku kraftur",
+        name: "ISO Mid-Thigh Pull — Strength",
+        sets: "3–5", reps: "20–30 sec", intensity: "80–100% MVC", tempo: "Sustained — maximal", rest: "2 min",
+        note: "Sport-specific angle · +4.3%/week strength",
       },
-      // ISO Squat Hold — 3 útgáfur eftir horn
+      // ISO Squat Hold — 3 variants by angle
       {
         id: "iso-squat-rfd",
         name: "ISO Squat Hold — RFD",
-        sets: "5", reps: "3–5 sek", intensity: "90–100% MVC", tempo: "Sprengifimi (ballistic)", rest: "3 mín",
-        note: "Sprengifimi tilgangur — þrýstu sem hraðast",
+        sets: "5", reps: "3–5 sec", intensity: "90–100% MVC", tempo: "Explosive (ballistic)", rest: "3 min",
+        note: "Explosive intent — push as fast as possible",
       },
       {
         id: "iso-squat-short",
-        name: "ISO Squat Hold — Stutt horn (≤70°)",
-        sets: "3–4", reps: "20–30 sek", intensity: "70–100% MVC", tempo: "Sustained — hámarks", rest: "2 mín",
-        note: "≤70° hnébeygja · Horn-sértæk styrkt",
+        name: "ISO Squat Hold — Short angle (≤70°)",
+        sets: "3–4", reps: "20–30 sec", intensity: "70–100% MVC", tempo: "Sustained — maximal", rest: "2 min",
+        note: "≤70° knee flexion · Angle-specific strength",
       },
       {
         id: "iso-squat-long",
-        name: "ISO Squat Hold — Langt horn (>70°)",
-        sets: "3–5", reps: "30–45 sek", intensity: "70–90% MVC", tempo: "Sustained", rest: "60 sek",
-        note: ">70° hnébeygja · +0.86–1.69%/viku vöðvaþroski · Dynamic transfer",
+        name: "ISO Squat Hold — Long angle (>70°)",
+        sets: "3–5", reps: "30–45 sec", intensity: "70–90% MVC", tempo: "Sustained", rest: "60 sec",
+        note: ">70° knee flexion · +0.86–1.69%/week hypertrophy · Dynamic transfer",
       },
-      // ISO Split Squat — 2 útgáfur
+      // ISO Split Squat — 2 variants
       {
         id: "iso-split-strength",
-        name: "ISO Split Squat Hold — Styrkt",
-        sets: "3–4", reps: "20–30 sek", intensity: "80–100% MVC", tempo: "Sustained — hámarks", rest: "2 mín",
-        note: "Sport-sértækt horn · Per hlið",
+        name: "ISO Split Squat Hold — Strength",
+        sets: "3–4", reps: "20–30 sec", intensity: "80–100% MVC", tempo: "Sustained — maximal", rest: "2 min",
+        note: "Sport-specific angle · Per side",
       },
-      // ISO Nordic Hold — 2 útgáfur
+      // ISO Nordic Hold — 2 variants
       {
         id: "iso-nordic-rfd",
-        name: "ISO Nordic Hold — Styrkt",
-        sets: "3", reps: "10–15 sek", intensity: "90–100% MVC", tempo: "Hámarks sustained", rest: "2 mín",
-        note: "Hámarks hamstring samdráttur",
+        name: "ISO Nordic Hold — Strength",
+        sets: "3", reps: "10–15 sec", intensity: "90–100% MVC", tempo: "Maximal sustained", rest: "2 min",
+        note: "Maximal hamstring contraction",
       },
       {
         id: "iso-leg-press-str",
-        name: "ISO Leg Press — Styrkt",
-        sets: "3–5", reps: "20–30 sek", intensity: "80–100% MVC", tempo: "Sustained — hámarks", rest: "2 mín",
-        note: "Langt horn fyrir vöðvaþroski · Stutt horn fyrir horn-sértæka styrkt",
+        name: "ISO Leg Press — Strength",
+        sets: "3–5", reps: "20–30 sec", intensity: "80–100% MVC", tempo: "Sustained — maximal", rest: "2 min",
+        note: "Long angle for hypertrophy · Short angle for angle-specific strength",
       },
     ],
   },
@@ -1260,55 +1260,55 @@ const EXERCISE_CATEGORIES: ExerciseCategory[] = [
       {
         id: "iso-mtp-tendon",
         name: "ISO Mid-Thigh Pull — Tendon",
-        sets: "3–5", reps: "30–45 sek", intensity: "80–90% MVC", tempo: "Sustained", rest: "90 sek",
-        note: ">70% MVC NAUÐSYNLEGT fyrir tendon stiffness · +50.9% stiffness/12 vikur",
+        sets: "3–5", reps: "30–45 sec", intensity: "80–90% MVC", tempo: "Sustained", rest: "90 sec",
+        note: ">70% MVC REQUIRED for tendon stiffness · +50.9% stiffness/12 weeks",
       },
       // ISO Split Squat — Tendon
       {
         id: "iso-split-tendon",
         name: "ISO Split Squat Hold — Tendon",
-        sets: "3–5", reps: "30–45 sek", intensity: "80–90% MVC", tempo: "Sustained", rest: "90 sek",
-        note: "Collagen synthesis · Sport-sértækt horn · Per hlið",
+        sets: "3–5", reps: "30–45 sec", intensity: "80–90% MVC", tempo: "Sustained", rest: "90 sec",
+        note: "Collagen synthesis · Sport-specific angle · Per side",
       },
-      // Wall Sit — 3 útgáfur
+      // Wall Sit — 3 variants
       {
         id: "iso-wallsit-pain",
-        name: "Wall Sit — Verkjalinun",
-        sets: "4–5", reps: "30–45 sek", intensity: "50–60% MVC", tempo: "Submaximal — sustained", rest: "30 sek",
-        note: "Snemmbær endurhæfing · 4–5× á dag · Verkjalínun í sín í fótlegg",
+        name: "Wall Sit — Pain relief",
+        sets: "4–5", reps: "30–45 sec", intensity: "50–60% MVC", tempo: "Submaximal — sustained", rest: "30 sec",
+        note: "Early rehab · 4–5× per day · Leg pain relief",
       },
       {
         id: "iso-wallsit-tendon",
         name: "Wall Sit — Tendon",
-        sets: "3", reps: "30 sek", intensity: "80–90% MVC", tempo: "Sustained — hámarks", rest: "90 sek",
-        note: ">70% MVC nauðsynlegt · Tendon stiffness og collagen",
+        sets: "3", reps: "30 sec", intensity: "80–90% MVC", tempo: "Sustained — maximal", rest: "90 sec",
+        note: ">70% MVC required · Tendon stiffness and collagen",
       },
       {
         id: "iso-wallsit-unilateral",
-        name: "Wall Sit — Einlíkamshluta",
-        sets: "3", reps: "30 sek/hlið", intensity: "80–90% MVC", tempo: "Sustained — hámarks", rest: "2 mín",
-        note: "Basketball-protocol · 90° hnébeygja · Eins og körfuboltamenn",
+        name: "Wall Sit — Unilateral",
+        sets: "3", reps: "30 sec/side", intensity: "80–90% MVC", tempo: "Sustained — maximal", rest: "2 min",
+        note: "Basketball protocol · 90° knee flexion · Like basketball players",
       },
       // ISO Nordic Hold — Tendon
       {
         id: "iso-nordic-tendon",
         name: "ISO Nordic Hold — Tendon",
-        sets: "3", reps: "20–30 sek", intensity: "70–85% MVC", tempo: "Sustained", rest: "90 sek",
+        sets: "3", reps: "20–30 sec", intensity: "70–85% MVC", tempo: "Sustained", rest: "90 sec",
         note: "Hamstring tendon loading · Collagen synthesis",
       },
       // Collagen synthesis protocol (general)
       {
         id: "iso-collagen",
         name: "ISO Hamstring Bridge Hold — Collagen",
-        sets: "3–5", reps: "30–60 sek", intensity: "50–90% MVC", tempo: "Sustained", rest: "60 sek",
-        note: "Langtíma hvíld eykur collagen synthesis · 2–3× á viku",
+        sets: "3–5", reps: "30–60 sec", intensity: "50–90% MVC", tempo: "Sustained", rest: "60 sec",
+        note: "Longer holds increase collagen synthesis · 2–3× per week",
       },
       // Multi-angle protocol
       {
         id: "iso-multiangle",
-        name: "ISO Knee Extension — Margir hornpunktar",
-        sets: "3–4 per horn", reps: "15–30 sek", intensity: "70–100% MVC", tempo: "Sustained — hámarks", rest: "60 sek milli horna",
-        note: "30° · 60° · 90° hnébeygja · Heildarstyrkt tendon á öllum bilum",
+        name: "ISO Knee Extension — Multi-angle",
+        sets: "3–4 per angle", reps: "15–30 sec", intensity: "70–100% MVC", tempo: "Sustained — maximal", rest: "60 sec between angles",
+        note: "30° · 60° · 90° knee flexion · Full tendon strength across all ranges",
       },
     ],
   },
@@ -1323,37 +1323,37 @@ const STRUCTURE_EXERCISE_MAP: Record<string, ExerciseCategory[]> = {
     {
       id: "fc-a1", label: "A1 — Heavy Compound", icon: "🏋️",
       exercises: [
-        { id: "fc-squat",   name: "Back Squat",      sets: "3–4", reps: "3–4 endurtekningar", intensity: "85–90% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A2 · 3–4 mín milli setta" },
-        { id: "fc-fsquat",  name: "Front Squat",     sets: "3–4", reps: "3–4 endurtekningar", intensity: "82–87% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A2" },
-        { id: "fc-tbdl",    name: "Trap Bar DL",     sets: "3–4", reps: "3–4 endurtekningar", intensity: "83–88% 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A2" },
-        { id: "fc-bench1",  name: "Bench Press",     sets: "3–4", reps: "3–4 endurtekningar", intensity: "85–90% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Efri líkamshluti · 10–15 sek → A2" },
+        { id: "fc-squat",   name: "Back Squat",      sets: "3–4", reps: "3–4 reps", intensity: "85–90% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A2 · 3–4 min between sets" },
+        { id: "fc-fsquat",  name: "Front Squat",     sets: "3–4", reps: "3–4 reps", intensity: "82–87% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A2" },
+        { id: "fc-tbdl",    name: "Trap Bar DL",     sets: "3–4", reps: "3–4 reps", intensity: "83–88% 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A2" },
+        { id: "fc-bench1",  name: "Bench Press",     sets: "3–4", reps: "3–4 reps", intensity: "85–90% 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Upper body · 10–15 sec → A2" },
       ],
     },
     {
       id: "fc-a2", label: "A2 — Plyometric", icon: "🦘",
       exercises: [
-        { id: "fc-dj",      name: "Depth Jump",      sets: "3–4", reps: "3 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Lágmarks snertitími", rest: "—", note: "Strax á eftir A1 · 10–15 sek → A3" },
-        { id: "fc-boxj",    name: "Box Jump",        sets: "3–4", reps: "3 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Fullur kraftur upp",   rest: "—", note: "Strax á eftir A1 · 10–15 sek → A3" },
-        { id: "fc-hurdle",  name: "Hurdle Hop",      sets: "3–4", reps: "3 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Stíft hné",            rest: "—", note: "10–15 sek → A3" },
-        { id: "fc-mbslam",  name: "Med Ball Slam",   sets: "3–4", reps: "3 endurtekningar",   intensity: "5–8 kg",      tempo: "Hámarks flýti",       rest: "—", note: "Efri · strax á eftir A1 · 10–15 sek → A3" },
+        { id: "fc-dj",      name: "Depth Jump",      sets: "3–4", reps: "3 reps",   intensity: "Bodyweight", tempo: "Min contact time", rest: "—", note: "Immediately after A1 · 10–15 sec → A3" },
+        { id: "fc-boxj",    name: "Box Jump",        sets: "3–4", reps: "3 reps",   intensity: "Bodyweight", tempo: "Full power up",    rest: "—", note: "Immediately after A1 · 10–15 sec → A3" },
+        { id: "fc-hurdle",  name: "Hurdle Hop",      sets: "3–4", reps: "3 reps",   intensity: "Bodyweight", tempo: "Stiff knee",       rest: "—", note: "10–15 sec → A3" },
+        { id: "fc-mbslam",  name: "Med Ball Slam",   sets: "3–4", reps: "3 reps",   intensity: "5–8 kg",     tempo: "Max speed",        rest: "—", note: "Upper · immediately after A1 · 10–15 sec → A3" },
       ],
     },
     {
       id: "fc-a3", label: "A3 — Weighted Explosive", icon: "⚡",
       exercises: [
-        { id: "fc-jsq",     name: "Jump Squat",      sets: "3–4", reps: "3 endurtekningar",   intensity: "30% 1RM",    velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A4" },
-        { id: "fc-tbj",     name: "Trap Bar Jump",   sets: "3–4", reps: "3 endurtekningar",   intensity: "25–30% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A4" },
-        { id: "fc-dbjsq",   name: "DB Jump Squat",   sets: "3–4", reps: "3 endurtekningar",   intensity: "20–25% 1RM", velocity: "~1.3–1.9 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sek → A4" },
-        { id: "fc-pp3",     name: "Push Press",      sets: "3–4", reps: "3 endurtekningar",   intensity: "40–50% 1RM", velocity: "~0.90–1.10 m/s", velocityLoss: "10% VL", rest: "—", note: "Efri · 10–15 sek → A4" },
+        { id: "fc-jsq",     name: "Jump Squat",      sets: "3–4", reps: "3 reps",   intensity: "30% 1RM",    velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A4" },
+        { id: "fc-tbj",     name: "Trap Bar Jump",   sets: "3–4", reps: "3 reps",   intensity: "25–30% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A4" },
+        { id: "fc-dbjsq",   name: "DB Jump Squat",   sets: "3–4", reps: "3 reps",   intensity: "20–25% 1RM", velocity: "~1.3–1.9 m/s", velocityLoss: "10% VL", rest: "—", note: "10–15 sec → A4" },
+        { id: "fc-pp3",     name: "Push Press",      sets: "3–4", reps: "3 reps",   intensity: "40–50% 1RM", velocity: "~0.90–1.10 m/s", velocityLoss: "10% VL", rest: "—", note: "Upper · 10–15 sec → A4" },
       ],
     },
     {
       id: "fc-a4", label: "A4 — Reactive", icon: "🔄",
       exercises: [
-        { id: "fc-bj",      name: "Broad Jump",      sets: "3–4", reps: "3 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Fullur kraftur",   rest: "3–4 mín", note: "Lokastig · 3–4 mín → næsta sett" },
-        { id: "fc-rhop",    name: "Reactive Hop",    sets: "3–4", reps: "5 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Stíft hné",       rest: "3–4 mín", note: "3–4 mín → næsta sett" },
-        { id: "fc-latb",    name: "Lateral Bound",   sets: "3–4", reps: "3/hlið",             intensity: "Líkamsþyngd", tempo: "Hámarks flýti",   rest: "3–4 mín", note: "3–4 mín → næsta sett" },
-        { id: "fc-mbsc",    name: "MB Scoop Throw",  sets: "3–4", reps: "3 endurtekningar",   intensity: "4–6 kg",      tempo: "Sprengifimi",     rest: "3–4 mín", note: "Efri · 3–4 mín → næsta sett" },
+        { id: "fc-bj",      name: "Broad Jump",      sets: "3–4", reps: "3 reps",   intensity: "Bodyweight", tempo: "Full power", rest: "3–4 min", note: "Final stage · 3–4 min → next set" },
+        { id: "fc-rhop",    name: "Reactive Hop",    sets: "3–4", reps: "5 reps",   intensity: "Bodyweight", tempo: "Stiff knee", rest: "3–4 min", note: "3–4 min → next set" },
+        { id: "fc-latb",    name: "Lateral Bound",   sets: "3–4", reps: "3/side",   intensity: "Bodyweight", tempo: "Max speed",  rest: "3–4 min", note: "3–4 min → next set" },
+        { id: "fc-mbsc",    name: "MB Scoop Throw",  sets: "3–4", reps: "3 reps",   intensity: "4–6 kg",     tempo: "Explosive",  rest: "3–4 min", note: "Upper · 3–4 min → next set" },
       ],
     },
   ],
@@ -1362,31 +1362,31 @@ const STRUCTURE_EXERCISE_MAP: Record<string, ExerciseCategory[]> = {
     {
       id: "ct-a1", label: "A1 — Heavy", icon: "🏋️",
       exercises: [
-        { id: "ct-sq",      name: "Back Squat",      sets: "4", reps: "3–4 endurtekningar", intensity: "85% 1RM",    velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Strax → A2 · 2–3 mín milli para" },
-        { id: "ct-tbdl",    name: "Trap Bar DL",     sets: "4", reps: "3–4 endurtekningar", intensity: "83–85% 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "—", note: "Strax → A2" },
-        { id: "ct-bench",   name: "Bench Press",     sets: "4", reps: "3–4 endurtekningar", intensity: "85% 1RM",    velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Efri · strax → A2" },
-        { id: "ct-pp",      name: "Push Press",      sets: "4", reps: "3–4 endurtekningar", intensity: "80% 1RM",    velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "—", note: "Strax → A2" },
+        { id: "ct-sq",      name: "Back Squat",      sets: "4", reps: "3–4 reps", intensity: "85% 1RM",    velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Immediately → A2 · 2–3 min between pairs" },
+        { id: "ct-tbdl",    name: "Trap Bar DL",     sets: "4", reps: "3–4 reps", intensity: "83–85% 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "—", note: "Immediately → A2" },
+        { id: "ct-bench",   name: "Bench Press",     sets: "4", reps: "3–4 reps", intensity: "85% 1RM",    velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "—", note: "Upper · immediately → A2" },
+        { id: "ct-pp",      name: "Push Press",      sets: "4", reps: "3–4 reps", intensity: "80% 1RM",    velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "—", note: "Immediately → A2" },
       ],
     },
     {
       id: "ct-a2", label: "A2 — Explosive", icon: "⚡",
       exercises: [
-        { id: "ct-boxj",    name: "Box Jump",        sets: "4", reps: "5 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Hámarks flýti",       rest: "2–3 mín", note: "2–3 mín → næsta par" },
-        { id: "ct-dj",      name: "Depth Jump",      sets: "4", reps: "5 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Lágmarks snertitími", rest: "2–3 mín", note: "2–3 mín → næsta par" },
-        { id: "ct-bj",      name: "Broad Jump",      sets: "4", reps: "5 endurtekningar",   intensity: "Líkamsþyngd", tempo: "Fullur kraftur",       rest: "2–3 mín", note: "2–3 mín → næsta par" },
-        { id: "ct-mbslam",  name: "Med Ball Slam",   sets: "4", reps: "5 endurtekningar",   intensity: "5–8 kg",      tempo: "Hámarks flýti",       rest: "2–3 mín", note: "Efri · 2–3 mín → næsta par" },
+        { id: "ct-boxj",    name: "Box Jump",        sets: "4", reps: "5 reps",   intensity: "Bodyweight", tempo: "Max speed",        rest: "2–3 min", note: "2–3 min → next pair" },
+        { id: "ct-dj",      name: "Depth Jump",      sets: "4", reps: "5 reps",   intensity: "Bodyweight", tempo: "Min contact time", rest: "2–3 min", note: "2–3 min → next pair" },
+        { id: "ct-bj",      name: "Broad Jump",      sets: "4", reps: "5 reps",   intensity: "Bodyweight", tempo: "Full power",       rest: "2–3 min", note: "2–3 min → next pair" },
+        { id: "ct-mbslam",  name: "Med Ball Slam",   sets: "4", reps: "5 reps",   intensity: "5–8 kg",     tempo: "Max speed",        rest: "2–3 min", note: "Upper · 2–3 min → next pair" },
       ],
     },
   ],
 
   "potentiation-clusters": [
     {
-      id: "pot-cl", label: "Cluster æfing", icon: "⚡",
+      id: "pot-cl", label: "Cluster exercise", icon: "⚡",
       exercises: [
-        { id: "pot-mtp",    name: "Mid-Thigh Pull",  sets: "4", reps: "(1+1+1) cluster",   intensity: "80–85% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "2–3 mín", note: "15–20 sek intra-set hvíld" },
-        { id: "pot-hclean", name: "Hang Clean",      sets: "4", reps: "(1+1+1) cluster",   intensity: "80–85% 1RM", velocity: "~1.0–1.3 m/s", velocityLoss: "10% VL", rest: "2–3 mín", note: "15–20 sek intra-set hvíld" },
-        { id: "pot-pp",     name: "Push Press",      sets: "4", reps: "(1+1+1) cluster",   intensity: "78–83% 1RM", velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "2–3 mín", note: "15–20 sek intra-set hvíld" },
-        { id: "pot-jsq",    name: "Jump Squat",      sets: "4", reps: "(1+1+1) cluster",   intensity: "40–50% 1RM", velocity: "~1.1–1.6 m/s", velocityLoss: "10% VL", rest: "2–3 mín", note: "15–20 sek intra-set hvíld" },
+        { id: "pot-mtp",    name: "Mid-Thigh Pull",  sets: "4", reps: "(1+1+1) cluster",   intensity: "80–85% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "2–3 min", note: "15–20 sec intra-set rest" },
+        { id: "pot-hclean", name: "Hang Clean",      sets: "4", reps: "(1+1+1) cluster",   intensity: "80–85% 1RM", velocity: "~1.0–1.3 m/s", velocityLoss: "10% VL", rest: "2–3 min", note: "15–20 sec intra-set rest" },
+        { id: "pot-pp",     name: "Push Press",      sets: "4", reps: "(1+1+1) cluster",   intensity: "78–83% 1RM", velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "2–3 min", note: "15–20 sec intra-set rest" },
+        { id: "pot-jsq",    name: "Jump Squat",      sets: "4", reps: "(1+1+1) cluster",   intensity: "40–50% 1RM", velocity: "~1.1–1.6 m/s", velocityLoss: "10% VL", rest: "2–3 min", note: "15–20 sec intra-set rest" },
       ],
     },
   ],
@@ -1394,21 +1394,21 @@ const STRUCTURE_EXERCISE_MAP: Record<string, ExerciseCategory[]> = {
   // All cluster sub-variants (garcia-ramos, moreno, hansen, etc.) share these categories
   "cluster-variations": [
     {
-      id: "cl-str", label: "Styrkt", icon: "🏋️",
+      id: "cl-str", label: "Strength", icon: "🏋️",
       exercises: [
-        { id: "cl-sq",   name: "Back Squat",      sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Back Squat · 85–90%+ 1RM · ~0.45–0.60 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-bp",   name: "Bench Press",     sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Bench Press · 85–90%+ 1RM · ~0.45–0.55 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-dl",   name: "Deadlift",        sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Deadlift · 85–90%+ 1RM · ~0.45–0.60 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-tbdl", name: "Trap Bar DL",     sets: "", reps: "", intensity: "83–88%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Trap Bar Deadlift · 83–88%+ 1RM · ~0.45–0.60 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
+        { id: "cl-sq",   name: "Back Squat",      sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Back Squat · 85–90%+ 1RM · ~0.45–0.60 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-bp",   name: "Bench Press",     sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.55 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Bench Press · 85–90%+ 1RM · ~0.45–0.55 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-dl",   name: "Deadlift",        sets: "", reps: "", intensity: "85–90%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Deadlift · 85–90%+ 1RM · ~0.45–0.60 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-tbdl", name: "Trap Bar DL",     sets: "", reps: "", intensity: "83–88%+ 1RM", velocity: "~0.45–0.60 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Trap Bar Deadlift · 83–88%+ 1RM · ~0.45–0.60 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
       ],
     },
     {
-      id: "cl-pow", label: "Kraft / Speed", icon: "⚡",
+      id: "cl-pow", label: "Power / Speed", icon: "⚡",
       exercises: [
-        { id: "cl-jsq",   name: "Jump Squat",     sets: "", reps: "", intensity: "30–50% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Jump Squat · 30–50% 1RM · ~1.2–1.8 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-bt",    name: "Bench Throw",    sets: "", reps: "", intensity: "30–50% 1RM", velocity: "~1.1–1.6 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Bench Throw · 30–50% 1RM · ~1.1–1.6 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-mtp",   name: "Mid-Thigh Pull", sets: "", reps: "", intensity: "80–90% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Mid-Thigh Pull · 80–90% ISO · ~1.0–1.5 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
-        { id: "cl-expu",  name: "Explosive Push-up", sets: "", reps: "", intensity: "Líkamsþyngd", velocity: "~0.90–1.20 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Explosive Push-up · Líkamsþyngd · ~0.90–1.20 m/s · 10% VL · Nota cluster-uppbyggingu (sett/reps/hvíld)" },
+        { id: "cl-jsq",   name: "Jump Squat",     sets: "", reps: "", intensity: "30–50% 1RM", velocity: "~1.2–1.8 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Jump Squat · 30–50% 1RM · ~1.2–1.8 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-bt",    name: "Bench Throw",    sets: "", reps: "", intensity: "30–50% 1RM", velocity: "~1.1–1.6 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Bench Throw · 30–50% 1RM · ~1.1–1.6 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-mtp",   name: "Mid-Thigh Pull", sets: "", reps: "", intensity: "80–90% ISO", velocity: "~1.0–1.5 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Mid-Thigh Pull · 80–90% ISO · ~1.0–1.5 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
+        { id: "cl-expu",  name: "Explosive Push-up", sets: "", reps: "", intensity: "Bodyweight", velocity: "~0.90–1.20 m/s", velocityLoss: "10% VL", rest: "", lineOverride: "Explosive Push-up · Bodyweight · ~0.90–1.20 m/s · 10% VL · Use cluster structure (sets/reps/rest)" },
       ],
     },
   ],
@@ -1417,19 +1417,19 @@ const STRUCTURE_EXERCISE_MAP: Record<string, ExerciseCategory[]> = {
     {
       id: "ss-lo", label: "Lower body (A1/B1)", icon: "🦵",
       exercises: [
-        { id: "ss-rdl",  name: "Romanian Deadlift",     sets: "3–4", reps: "6–8 endurtekningar", intensity: "75% 1RM",    velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sek → A2/B2", note: "Pöruð við efri" },
-        { id: "ss-bss",  name: "Bulgarian Split Squat", sets: "3–4", reps: "8/hlið",             intensity: "65% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "30 sek → A2/B2", note: "Pöruð við efri" },
-        { id: "ss-lp",   name: "Leg Press",             sets: "3–4", reps: "8–10 endurtekningar", intensity: "70% 1RM",   velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sek → A2/B2", note: "Pöruð við efri" },
-        { id: "ss-su",   name: "Step-Up",               sets: "3–4", reps: "8/hlið",             intensity: "60% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "30 sek → A2/B2", note: "Pöruð við efri" },
+        { id: "ss-rdl",  name: "Romanian Deadlift",     sets: "3–4", reps: "6–8 reps", intensity: "75% 1RM",    velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sec → A2/B2", note: "Paired with upper" },
+        { id: "ss-bss",  name: "Bulgarian Split Squat", sets: "3–4", reps: "8/side",   intensity: "65% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "30 sec → A2/B2", note: "Paired with upper" },
+        { id: "ss-lp",   name: "Leg Press",             sets: "3–4", reps: "8–10 reps", intensity: "70% 1RM",   velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sec → A2/B2", note: "Paired with upper" },
+        { id: "ss-su",   name: "Step-Up",               sets: "3–4", reps: "8/side",   intensity: "60% 1RM",    velocity: "~0.50–0.65 m/s", velocityLoss: "20% VL", rest: "30 sec → A2/B2", note: "Paired with upper" },
       ],
     },
     {
       id: "ss-up", label: "Upper body (A2/B2)", icon: "💪",
       exercises: [
-        { id: "ss-bench", name: "Bench Press",          sets: "3–4", reps: "6–8 endurtekningar", intensity: "75% 1RM",    velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sek → A1/B1", note: "Pöruð við neðri" },
-        { id: "ss-row",   name: "Seated Row",           sets: "3–4", reps: "8 endurtekningar",   intensity: "RPE 7–8",    velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "30 sek → A1/B1", note: "Pöruð við neðri" },
-        { id: "ss-pup",   name: "Weighted Pull-up",     sets: "3–4", reps: "4–6 endurtekningar", intensity: "RPE 8",      velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "30 sek → A1/B1", note: "Pöruð við neðri" },
-        { id: "ss-pp",    name: "Push Press",           sets: "3–4", reps: "4–6 endurtekningar", intensity: "72% 1RM",    velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "30 sek → A1/B1", note: "Pöruð við neðri" },
+        { id: "ss-bench", name: "Bench Press",          sets: "3–4", reps: "6–8 reps", intensity: "75% 1RM",    velocity: "~0.55–0.70 m/s", velocityLoss: "20% VL", rest: "30 sec → A1/B1", note: "Paired with lower" },
+        { id: "ss-row",   name: "Seated Row",           sets: "3–4", reps: "8 reps",   intensity: "RPE 7–8",    velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "30 sec → A1/B1", note: "Paired with lower" },
+        { id: "ss-pup",   name: "Weighted Pull-up",     sets: "3–4", reps: "4–6 reps", intensity: "RPE 8",      velocity: "~0.45–0.65 m/s", velocityLoss: "20% VL", rest: "30 sec → A1/B1", note: "Paired with lower" },
+        { id: "ss-pp",    name: "Push Press",           sets: "3–4", reps: "4–6 reps", intensity: "72% 1RM",    velocity: "~0.80–1.00 m/s", velocityLoss: "10% VL", rest: "30 sec → A1/B1", note: "Paired with lower" },
       ],
     },
   ],
@@ -1601,14 +1601,14 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-indigo-800">
-          📚 Veldu æfingu
+          📚 Choose exercise
           {structureId && (
             <span className="ml-1.5 font-normal text-indigo-500">
-              — {CLUSTER_VARIANT_IDS.has(structureId ?? "") ? "Cluster" : (STRUCTURE_EXERCISE_MAP[structureId ?? ""] ? "sérsniðið" : "almennt")}
+              — {CLUSTER_VARIANT_IDS.has(structureId ?? "") ? "Cluster" : (STRUCTURE_EXERCISE_MAP[structureId ?? ""] ? "custom" : "generic")}
             </span>
           )}
         </span>
-        <button type="button" onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">✕ Loka</button>
+        <button type="button" onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">✕ Close</button>
       </div>
 
       {/* Category tabs */}
@@ -1638,7 +1638,7 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
                 : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
             }`}
           >
-            ＋ Aðrar æfingar
+            ＋ Other exercises
           </button>
         )}
         {/* Full movement-pattern library (DB-backed) */}
@@ -1651,7 +1651,7 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
               : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100"
           }`}
         >
-          📚 Allt safnið
+          📚 Full library
         </button>
       </div>
 
@@ -1670,12 +1670,12 @@ function ExercisePicker({ onSelect, onClose, structureId }: { onSelect: (line: s
             <div className="text-xs font-semibold text-foreground">{ex.name}</div>
             <div className="mt-1 space-y-0.5">
               {[
-                ex.sets ? `📦 ${ex.sets} sett × ${ex.reps}` : null,
+                ex.sets ? `📦 ${ex.sets} sets × ${ex.reps}` : null,
                 `💪 ${ex.intensity}`,
-                ex.velocity     ? `⚡ Hraði: ${ex.velocity}`    : null,
+                ex.velocity     ? `⚡ Velocity: ${ex.velocity}` : null,
                 ex.velocityLoss ? `📉 VL: ${ex.velocityLoss}`   : null,
                 ex.tempo        ? `⏱ Tempo: ${ex.tempo}`        : null,
-                ex.rest         ? `😴 Hvíld: ${ex.rest}`        : null,
+                ex.rest         ? `😴 Rest: ${ex.rest}`         : null,
                 ex.note         ? `📝 ${ex.note}`               : null,
               ].filter((l): l is string => !!l).map((line, i) => (
                 <div key={i} className="text-[10px] text-muted-foreground leading-snug">{line}</div>
@@ -1928,13 +1928,13 @@ function BlockEditor({
               <Input
                 value={item}
                 onChange={(e) => setItem(i, e.target.value)}
-                placeholder="Æfing eða leiðbeiningar..."
+                placeholder="Exercise or instructions..."
                 className="h-8 text-xs"
               />
               {/* Exercise picker toggle */}
               <button
                 type="button"
-                title="Velja æfingu úr lista"
+                title="Choose exercise from list"
                 onClick={() => setPickerOpenIdx(pickerOpenIdx === i ? null : i)}
                 className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-md border text-sm transition-colors ${
                   pickerOpenIdx === i
@@ -1959,7 +1959,7 @@ function BlockEditor({
           </div>
         ))}
         <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 text-xs text-muted-foreground" onClick={addItem}>
-          + Bæta við línu
+          + Add line
         </Button>
       </div>
 
@@ -1970,7 +1970,7 @@ function BlockEditor({
           <Input
             value={block.rest_between_sets ?? ""}
             onChange={(e) => onChange({ ...block, rest_between_sets: e.target.value || undefined })}
-            placeholder="Hvíld milli setta (t.d. 60s)"
+            placeholder="Rest between sets (e.g. 60s)"
             className="h-7 text-[11px] w-44"
           />
         </div>
@@ -1979,7 +1979,7 @@ function BlockEditor({
           <Input
             value={block.rest_between_rounds ?? ""}
             onChange={(e) => onChange({ ...block, rest_between_rounds: e.target.value || undefined })}
-            placeholder="Umferðir / rounds"
+            placeholder="Rounds"
             className="h-7 text-[11px] w-44"
           />
         </div>
@@ -2244,7 +2244,7 @@ function TemplateOverrideEditor({
             </div>
           ))}
           <button type="button" onClick={() => addItem(bi)}
-            className="text-[11px] text-indigo-600 hover:text-indigo-800">+ Bæta við línu</button>
+            className="text-[11px] text-indigo-600 hover:text-indigo-800">+ Add line</button>
         </div>
       ))}
 
