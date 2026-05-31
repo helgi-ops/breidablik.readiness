@@ -40,16 +40,27 @@ export async function GET(req: Request) {
   const lang = new URL(req.url).searchParams.get("lang") === "EN" ? "EN" : "IS";
 
   // ── Gather real signals ───────────────────────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
   const [{ data: checks }, quad, vol, prs] = await Promise.all([
-    sb.from("readiness_entries").select("entry_date, total_score").eq("player_id", playerId)
+    sb.from("readiness_entries").select("entry_date, total_score, color").eq("player_id", playerId)
       .gte("entry_date", iso(13)).order("entry_date", { ascending: false }),
     computeLoadQuadrant(sb, playerId),
     computeVolumeLoad(sb, playerId),
     computePersonalRecords(sb, playerId),
   ]);
 
-  const scores = ((checks ?? []) as Array<{ total_score: number | null }>).map((c) => c.total_score).filter((x): x is number => x != null);
+  const rows = ((checks ?? []) as Array<{ entry_date: string; total_score: number | null; color: string | null }>);
+  const scores = rows.map((c) => c.total_score).filter((x): x is number => x != null);
+  // Canonical readiness colour today — the AI must align with it (so it never
+  // says "push hard" on a YELLOW day where the readiness card says "trim").
+  const todayColor = String(rows.find((r) => r.entry_date === today)?.color ?? "").toUpperCase();
   const signals: string[] = [];
+  if (todayColor === "GREEN" || todayColor === "YELLOW" || todayColor === "RED") {
+    const guide = todayColor === "GREEN" ? "proceed as planned, can push intensity"
+      : todayColor === "YELLOW" ? "trim volume slightly, keep quality, don't push load"
+      : "recovery low — reduce volume ~20%, keep intensity easy";
+    signals.push(`Readiness colour today: ${todayColor} (${guide})`);
+  }
   if (scores.length >= 3) {
     const trend = scores[0] - scores[scores.length - 1];
     signals.push(`Readiness ${trend >= 2 ? "trending up" : trend <= -2 ? "trending down" : "stable"} (latest ${scores[0]}/25)`);
@@ -71,6 +82,7 @@ export async function GET(req: Request) {
     "You are MicroPulse AI Coach, a strength & conditioning assistant for a competitive ATHLETE (not a general-fitness user). " +
     "Given today's data signals, write ONE short, specific, motivating coaching message (max 2 sentences, ~30 words). " +
     "Be concrete and reference the athlete's actual trend. NEVER invent numbers that are not in the signals. " +
+    "CRITICAL: if a 'Readiness colour today' signal is present, your advice MUST agree with it — GREEN you may encourage pushing intensity; YELLOW keep it moderate (trim volume, quality over load, do NOT say 'push hard'); RED ease off and prioritise recovery. Never contradict the readiness colour. " +
     "Frame everything around performance and readiness — never aesthetics, weight loss, or calories. No medical advice. " +
     `Write in ${lang === "IS" ? "Icelandic" : "English"}. Respond ONLY as JSON: {\"insight\": \"...\"}.`;
   const userMessage = `Today's signals:\n- ${signals.join("\n- ")}`;
