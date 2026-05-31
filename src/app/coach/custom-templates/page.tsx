@@ -28,19 +28,19 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "garcia-ramos",
     label: "Garcia-Ramos Cluster",
-    description: "Hraðamiðaður cluster með þremur blokkum og vaxandi hvíldartíma. Tengir velocity og kraftþol.",
+    description: "Velocity-based cluster with three blocks and increasing rest. Bridges velocity and power endurance.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Garcia-Ramos Cluster",
         items: [
-          "Styrkt: 85–90% 1RM · Kraftur: 30–50% 1RM",
-          "Blokk 1: 15 × 1 með 6 sek milli hverrar endurtekningar",
-          "Blokk 2: 15 × 1 með 12 sek milli hverrar endurtekningar",
-          "Blokk 3: 15 × 1 með 12 sek milli hverrar endurtekningar",
-          "1 mín hvíld milli blokkanna",
-          "Styrkt: Back Squat / Bench Press / Deadlift",
-          "Kraftur: Bench Throw / Jump Squat / Power Clean",
+          "Strength: 85–90% 1RM · Power: 30–50% 1RM",
+          "Block 1: 15 × 1 with 6 sec between each rep",
+          "Block 2: 15 × 1 with 12 sec between each rep",
+          "Block 3: 15 × 1 with 12 sec between each rep",
+          "1 min rest between blocks",
+          "Strength: Back Squat / Bench Press / Deadlift",
+          "Power: Bench Throw / Jump Squat / Power Clean",
         ],
       },
     ],
@@ -48,17 +48,17 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "moreno",
     label: "Moreno Cluster",
-    description: "Tveir ólíkir cluster-formatar: langur sett með 30 sek hvíld, eða stuttir tíðir spurtar með 10 sek.",
+    description: "Two different cluster formats: long set with 30 sec rest, or short frequent bursts with 10 sec.",
     clusterVariant: true,
     blocks: [
       {
-        block: "A. Moreno Cluster — Veldu form",
+        block: "A. Moreno Cluster — Choose format",
         items: [
-          "Form A (magn): 4 sett × 5 endurtekningar · 30 sek intra-set hvíld · 1 mín milli setta",
-          "Form B (tíðni): 10 sett × 2 endurtekningar · 10 sek intra-set hvíld · 1 mín milli setta",
-          "Styrkt: 85–90%+ 1RM · Kraftur: 45–65% 1RM",
-          "Styrkt: Squat / Bench Press / Deadlift",
-          "Kraftur: Explosive compound movements",
+          "Form A (volume): 4 sets × 5 reps · 30 sec intra-set rest · 1 min between sets",
+          "Form B (frequency): 10 sets × 2 reps · 10 sec intra-set rest · 1 min between sets",
+          "Strength: 85–90%+ 1RM · Power: 45–65% 1RM",
+          "Strength: Squat / Bench Press / Deadlift",
+          "Power: Explosive compound movements",
         ],
       },
     ],
@@ -66,18 +66,18 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "hansen",
     label: "Hansen Cluster",
-    description: "Singles með 12 sek hvíld eða doubles með 30 sek hvíld. Sterkt taugalífeðlisfræðilegt áreiti.",
+    description: "Singles with 12 sec rest or doubles with 30 sec rest. Strong neurophysiological stimulus.",
     clusterVariant: true,
     blocks: [
       {
-        block: "A. Hansen Cluster — Veldu form",
+        block: "A. Hansen Cluster — Choose format",
         items: [
-          "Form A (Singles): 4 sett × 6 × 1 endurtekning · 12 sek milli hverrar",
-          "Form B (Doubles): 4 sett × 3 × 2 endurtekningar · 30 sek milli para",
-          "Þróun: Doubles → Triples → Quads með sömu hvíld",
-          "Styrkt: 85–90%+ 1RM · Kraftur: 60–75% 1RM",
-          "Styrkt: Back Squat / Bench Press / Deadlift",
-          "Kraftur: Jump Squat / Explosive Push",
+          "Form A (Singles): 4 sets × 6 × 1 rep · 12 sec between each",
+          "Form B (Doubles): 4 sets × 3 × 2 reps · 30 sec between pairs",
+          "Progression: Doubles → Triples → Quads with the same rest",
+          "Strength: 85–90%+ 1RM · Power: 60–75% 1RM",
+          "Strength: Back Squat / Bench Press / Deadlift",
+          "Power: Jump Squat / Explosive Push",
         ],
       },
     ],
@@ -85,18 +85,18 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "iglesias-soler",
     label: "Iglesias-Soler Cluster",
-    description: "Extreme neural: 32 singles með ~18 sek milli hverrar. Hámarks taugavirkjun yfir 10 mínútur.",
+    description: "Extreme neural: 32 singles with ~18 sec between each. Maximal neural activation over 10 minutes.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Iglesias-Soler Cluster",
         items: [
-          "Grunnform: 32 × 1 endurtekning · ~18 sek milli hverrar · ~10 mín samtals",
-          "Breytileiki: 16 × 2 · 11 × 3 · 8 × 4 (allt með 18 sek hvíld)",
-          "Styrkt: 85–90%+ 1RM · Kraftur: 70–85% 1RM",
-          "Aðeins 1 blokk á hverri æfingu",
-          "Styrkt: Heavy compound (Squat / Bench / Deadlift)",
-          "Kraftur: Explosive Squat / Jump / Throw",
+          "Base form: 32 × 1 rep · ~18 sec between each · ~10 min total",
+          "Variation: 16 × 2 · 11 × 3 · 8 × 4 (all with 18 sec rest)",
+          "Strength: 85–90%+ 1RM · Power: 70–85% 1RM",
+          "Only 1 block per session",
+          "Strength: Heavy compound (Squat / Bench / Deadlift)",
+          "Power: Explosive Squat / Jump / Throw",
         ],
       },
     ],
@@ -104,19 +104,19 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "tufano-standard",
     label: "Tufano Cluster (Standard)",
-    description: "Rest-redistribution: 36 singles með 12 sek hvíld. Viðheldur gæðum í hverri líftingu yfir ~8 mín.",
+    description: "Rest-redistribution: 36 singles with 12 sec rest. Maintains quality in every lift over ~8 min.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Tufano Standard Cluster",
         items: [
-          "Grunnform: 36 × 1 · 12 sek milli hverrar · ~8:24 samtals",
-          "Breytileiki A: 18 × 2 · 12 sek hvíld · ~4:48",
-          "Breytileiki B: 12 × 3 · 12 sek hvíld · ~4:48",
-          "Breytileiki C: 18 × 2 · 18 sek hvíld · ~7:21",
-          "Breytileiki D: 12 × 3 · 24 sek hvíld · ~6:00",
-          "Styrkt: 85–90%+ 1RM · Kraftur: 75–85% 1RM",
-          "1 blokk á æfingu · Squat / Bench / Clean",
+          "Base form: 36 × 1 · 12 sec between each · ~8:24 total",
+          "Variation A: 18 × 2 · 12 sec rest · ~4:48",
+          "Variation B: 12 × 3 · 12 sec rest · ~4:48",
+          "Variation C: 18 × 2 · 18 sec rest · ~7:21",
+          "Variation D: 12 × 3 · 24 sec rest · ~6:00",
+          "Strength: 85–90%+ 1RM · Power: 75–85% 1RM",
+          "1 block per session · Squat / Bench / Clean",
         ],
       },
     ],
@@ -124,17 +124,17 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "tufano-cs2",
     label: "Tufano CS2 — Mechanical Stress",
-    description: "3×12 með 15 sek intra-set hvíld @ 80% 1RM. 19% meiri meðalþrýstingur, 26% meiri time-under-tension.",
+    description: "3×12 with 15 sec intra-set rest @ 80% 1RM. 19% more mean force, 26% more time-under-tension.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Tufano CS2 — Mechanical Stress",
         items: [
-          "3 sett × 12 endurtekningar · 80% 1RM · ~15:51 samtals",
-          "15 sek intra-set hvíld milli mini-clustera innan hvers settar",
-          "Markmið: Hámarks meðalþrýstingur og time-under-tension",
-          "Samanborið við venjulegt: +19% meðalþrýstingur · +26% TUT",
-          "Styrkt: Back Squat / Bench Press / Deadlift",
+          "3 sets × 12 reps · 80% 1RM · ~15:51 total",
+          "15 sec intra-set rest between mini-clusters within each set",
+          "Goal: Maximal mean force and time-under-tension",
+          "Compared to regular: +19% mean force · +26% TUT",
+          "Strength: Back Squat / Bench Press / Deadlift",
         ],
       },
     ],
@@ -142,17 +142,17 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "tufano-cs4",
     label: "Tufano CS4 — Hypertrophy + Power",
-    description: "3×12 með 2×30 sek hlé @ 75% 1RM. Jafnvægi milli vöðvaþroskunar og kraftframleiðni.",
+    description: "3×12 with 2×30 sec pause @ 75% 1RM. Balance between hypertrophy and power output.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Tufano CS4 — Hypertrophy + Power",
         items: [
-          "3 sett × 12 endurtekningar · 75% 1RM · ~10:10 samtals",
-          "30 sek hvíld eftir 4. endurtekningu og aftur eftir 8. endurtekningu",
-          "+10% heildarúttaksþyngd · +16% TUT · heldur peak power",
-          "Miðpunktur milli CS2 (þrýstingur) og venjulegra setta",
-          "Styrkt + Kraftur: Squat / Bench / Deadlift",
+          "3 sets × 12 reps · 75% 1RM · ~10:10 total",
+          "30 sec rest after the 4th rep and again after the 8th rep",
+          "+10% total volume load · +16% TUT · maintains peak power",
+          "Midpoint between CS2 (force) and regular sets",
+          "Strength + Power: Squat / Bench / Deadlift",
         ],
       },
     ],
@@ -160,17 +160,17 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "oliver",
     label: "Oliver Cluster — Metabolic Conditioning",
-    description: "4 sett × (5+30sek+5). Viðheldur kraftframleiðni, minnkar mjólkursýru og katabolískt álag.",
+    description: "4 sets × (5+30sec+5). Maintains power output, reduces lactate and catabolic load.",
     clusterVariant: true,
     blocks: [
       {
         block: "A. Oliver Cluster — Metabolic",
         items: [
-          "4 sett × (5 endurtekningar + 30 sek hvíld + 5 endurtekningar)",
-          "90 sek hvíld milli setta · ~10 mín samtals",
-          "Þyngd: Meðalþungur (miðast við gæðahreyfingar)",
-          "30 sek intra-set hvíld viðheldur meðalkrafti í öllum settum",
-          "Lægri mjólkursýra · meiri heildarúttaksþyngd · minna katabólískt álag",
+          "4 sets × (5 reps + 30 sec rest + 5 reps)",
+          "90 sec rest between sets · ~10 min total",
+          "Weight: Moderately heavy (aimed at quality movement)",
+          "30 sec intra-set rest maintains mean force across all sets",
+          "Lower lactate · greater total volume load · less catabolic load",
           "Leg Press / Squat / Compound lower body",
         ],
       },
@@ -184,7 +184,7 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "pc-acceleration",
     label: "Acceleration Focus",
-    description: "Trap Bar Deadlift + Box Jump. Hraðaþróun — fyrstu 3–4 skrefin. 65–80% 1RM.",
+    description: "Trap Bar Deadlift + Box Jump. Acceleration development — the first 3–4 steps. 65–80% 1RM.",
     clusterVariant: true,
     blocks: [
       {
@@ -192,9 +192,9 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
         items: [
           "A1. Trap Bar Deadlift — 1 rep @ 65–80%",
           "A2. Box Jump — 1 rep (max effort)",
-          "15–20 sek hvíld → endurtaka",
+          "15–20 sec rest → repeat",
           "4 reps per cluster (4 × A1+A2)",
-          "2–3 mín hvíld milli clusters",
+          "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
       },
@@ -203,7 +203,7 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "pc-topend-speed",
     label: "Top-End Speed Focus",
-    description: "Trap Bar Deadlift + Hurdle Hop. Liðstífni og top-end hraði. 65–80% 1RM.",
+    description: "Trap Bar Deadlift + Hurdle Hop. Joint stiffness and top-end speed. 65–80% 1RM.",
     clusterVariant: true,
     blocks: [
       {
@@ -211,9 +211,9 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
         items: [
           "A1. Trap Bar Deadlift — 1 rep @ 65–80%",
           "A2. Hurdle Hop — 1 rep (max effort, joint stiffness)",
-          "15–20 sek hvíld → endurtaka",
+          "15–20 sec rest → repeat",
           "4 reps per cluster (4 × A1+A2)",
-          "2–3 mín hvíld milli clusters",
+          "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
       },
@@ -221,8 +221,8 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
   },
   {
     id: "pc-peaking-basic",
-    label: "Peaking — Basic (lið)",
-    description: "Squat Jump + Drop Box Jump. Létt álag (25–30%) fyrir peaking 2–4 vikum fyrir keppni.",
+    label: "Peaking — Basic (joint)",
+    description: "Squat Jump + Drop Box Jump. Light load (25–30%) for peaking 2–4 weeks before competition.",
     clusterVariant: true,
     blocks: [
       {
@@ -230,10 +230,10 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
         items: [
           "A1. Squat Jump — 1 rep @ 25–30%",
           "A2. Drop Box Jump — 1 rep (12–18 inch box, max effort)",
-          "15–20 sek hvíld → endurtaka",
+          "15–20 sec rest → repeat",
           "4 reps per cluster (4 × A1+A2)",
-          "2–3 mín hvíld milli clusters",
-          "1–3 clusters total (peaking = minna magn)",
+          "2–3 min rest between clusters",
+          "1–3 clusters total (peaking = less volume)",
         ],
       },
     ],
@@ -241,7 +241,7 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
   {
     id: "pc-peaking-advanced",
     label: "Peaking — Advanced (triple cluster)",
-    description: "Squat Jump + Drop Box Jump + Band Jump. Þrjár hreyfigæðar í einni blokk — acceleration, mid-range, top-end.",
+    description: "Squat Jump + Drop Box Jump + Band Jump. Three movement qualities in one block — acceleration, mid-range, top-end.",
     clusterVariant: true,
     blocks: [
       {
@@ -250,9 +250,9 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "A1. Squat Jump — 1 rep @ 25–30% (acceleration depth)",
           "A2. Drop Box Jump — 1 rep (mid-range angle, max effort)",
           "A3. Accelerated Band Jump — 1 rep (minimal joint angle, top-end speed)",
-          "15–20 sek hvíld → endurtaka",
+          "15–20 sec rest → repeat",
           "3 reps per cluster (3 × A1+A2+A3)",
-          "2–3 mín hvíld milli clusters",
+          "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
       },
@@ -260,8 +260,8 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
   },
   {
     id: "pc-french-contrast-style",
-    label: "French Contrast Style (4 æfingar)",
-    description: "Trap Bar Deadlift + Drop Box Jump + Squat Jump + Hurdle Hop. Fjórar hreyfigæðar — styrkur, reactive, hraði, stífni.",
+    label: "French Contrast Style (4 exercises)",
+    description: "Trap Bar Deadlift + Drop Box Jump + Squat Jump + Hurdle Hop. Four movement qualities — strength, reactive, speed, stiffness.",
     clusterVariant: true,
     blocks: [
       {
@@ -271,9 +271,9 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "A2. Drop Box Jump — 1 rep (reactive, max effort)",
           "A3. Squat Jump — 1 rep @ 25–30%",
           "A4. Hurdle Hop — 1 rep (joint stiffness, top-end speed)",
-          "15–20 sek hvíld → endurtaka",
+          "15–20 sec rest → repeat",
           "3 reps per cluster (3 × A1+A2+A3+A4)",
-          "3–5 mín hvíld milli clusters",
+          "3–5 min rest between clusters",
           "2–4 clusters total",
         ],
       },
@@ -285,7 +285,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "french-contrast",
     label: "French Contrast",
-    description: "4 æfingar í röð: þungt samsetnt → sprengifimi → þungað springt → hreint springt. Optimal PAP.",
+    description: "4 exercises in sequence: heavy compound → plyometric → weighted explosive → pure plyometric. Optimal PAP.",
     blocks: [
       {
         block: "A. French Contrast",
@@ -294,7 +294,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
           "A2. Plyometric — Depth Jump × 3",
           "A3. Weighted explosive — Jump Squat 30% × 3",
           "A4. Reactive plyometric — Broad Jump × 3",
-          "10–15 sek milli A1–A4 · 3–4 mín hvíld milli setta · 3–4 sett",
+          "10–15 sec between A1–A4 · 3–4 min rest between sets · 3–4 sets",
         ],
       },
     ],
@@ -302,14 +302,14 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "contrast",
     label: "Contrast",
-    description: "Þungt sett fylgt eftir strax af sprengifimi. Nýtir PAP til að auka kraftframleiðni.",
+    description: "Heavy set followed immediately by a plyometric. Uses PAP to boost power output.",
     blocks: [
       {
         block: "A. Contrast",
         items: [
           "A1. Heavy: Back Squat 85% × 3–4",
-          "A2. Explosive: Box Jump × 5 (strax á eftir A1)",
-          "2–3 mín hvíld milli para · 4 sett",
+          "A2. Explosive: Box Jump × 5 (immediately after A1)",
+          "2–3 min rest between pairs · 4 sets",
         ],
       },
     ],
@@ -317,26 +317,26 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "potentiation-clusters",
     label: "Potentiation clusters",
-    description: "5 útgáfur: Acceleration, Top-end speed, Peaking basic/advanced, French Contrast style.",
+    description: "5 variations: Acceleration, Top-end speed, Peaking basic/advanced, French Contrast style.",
     blocks: [], // expanded into POTENTIATION_CLUSTER_VARIATIONS sub-picker
   },
   {
     id: "cluster-variations",
     label: "Cluster variations",
-    description: "8 rannsóknarbyggðar útgáfur: Garcia-Ramos, Moreno, Hansen, Iglesias-Soler, Tufano (3 útgáfur), Oliver.",
+    description: "8 research-based variations: Garcia-Ramos, Moreno, Hansen, Iglesias-Soler, Tufano (3 variations), Oliver.",
     blocks: [], // expanded into CLUSTER_VARIATIONS sub-picker
   },
   {
     id: "regular",
     label: "Regular formation",
-    description: "Staðlað þjálfunarform — ein æfing í senn, bein sett og endurtekningar.",
+    description: "Standard training format — one exercise at a time, straight sets and reps.",
     blocks: [
       {
-        block: "A. Aðalvinna",
+        block: "A. Main block",
         items: [
-          "Æfing 1: Veldu æfingu — 3–5 sett × 4–6 endurtekningar",
-          "Æfing 2: Veldu æfingu — 3 sett × 6–8 endurtekningar",
-          "2–3 mín hvíld milli setta",
+          "Exercise 1: Choose exercise — 3–5 sets × 4–6 reps",
+          "Exercise 2: Choose exercise — 3 sets × 6–8 reps",
+          "2–3 min rest between sets",
         ],
       },
     ],
@@ -344,18 +344,18 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "supersets-lower-upper",
     label: "Lower / Upper body Supersets",
-    description: "Para neðri og efri líkamshluta saman. Sparar tíma og heldur hjartsláttartíðni uppi.",
+    description: "Pair lower and upper body together. Saves time and keeps heart rate up.",
     blocks: [
       {
         block: "A. Lower/Upper Supersets",
         items: [
           "A1 (Lower): Romanian Deadlift 75% × 6–8",
           "A2 (Upper): Bench Press 75% × 6–8",
-          "30 sek hvíld → endurtaka A1",
-          "B1 (Lower): Bulgarian Split Squat × 8/hlið",
+          "30 sec rest → repeat A1",
+          "B1 (Lower): Bulgarian Split Squat × 8/side",
           "B2 (Upper): Seated Row × 8",
-          "30 sek hvíld → endurtaka B1",
-          "3–4 sett á hverri pörun",
+          "30 sec rest → repeat B1",
+          "3–4 sets per pairing",
         ],
       },
     ],
@@ -400,8 +400,8 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
       >
         <span className="text-lg">⚡</span>
         <div>
-          <div className="font-medium">Veldu uppbyggingu aðalblokks</div>
-          <div className="text-xs text-indigo-500">French contrast, Garcia-Ramos, Tufano CS2/CS4, Oliver og fleiri…</div>
+          <div className="font-medium">Choose main block structure</div>
+          <div className="text-xs text-indigo-500">French contrast, Garcia-Ramos, Tufano CS2/CS4, Oliver and more…</div>
         </div>
       </button>
     );
@@ -438,7 +438,7 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
       {hasSubPicker && (
         <div className="mt-1 space-y-1.5">
           <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
-            {selected === "potentiation-clusters" ? "Veldu potentiation cluster útgáfu:" : "Veldu cluster-útgáfu:"}
+            {selected === "potentiation-clusters" ? "Choose potentiation cluster variation:" : "Choose cluster variation:"}
           </div>
           <div className="grid gap-1.5 sm:grid-cols-2">
             {subVariants.map((c) => (
@@ -468,7 +468,7 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
             onClick={handleApply}
             className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
           >
-            Nota „{activeStructure.label}" í aðalblokk →
+            Use “{activeStructure.label}” in main block →
           </button>
         </div>
       )}
@@ -491,7 +491,7 @@ const SEASON_PHASES: {
   {
     id: "preseason",
     label: "Preseason",
-    sublabel: "Undirbúningur — Bygging grunnþols og styrks",
+    sublabel: "Preparation — Building base endurance and strength",
     icon: "🌱",
     color: "border-amber-200 bg-amber-50",
     activeColor: "border-amber-500 bg-amber-100 ring-1 ring-amber-400",
@@ -499,15 +499,15 @@ const SEASON_PHASES: {
   {
     id: "inseason",
     label: "In-season",
-    sublabel: "Keppnistímabil — Viðhald og keppnisgæði",
+    sublabel: "Competition phase — Maintenance and match quality",
     icon: "⚡",
     color: "border-emerald-200 bg-emerald-50",
     activeColor: "border-emerald-500 bg-emerald-100 ring-1 ring-emerald-400",
   },
   {
     id: "playoffs",
-    label: "Playoffs / Úrslitakeppni",
-    sublabel: "Hámarksgæði — Lágmarks þreyta, hámarks úttak",
+    label: "Playoffs",
+    sublabel: "Peak quality — Minimal fatigue, maximal output",
     icon: "🔥",
     color: "border-red-200 bg-red-50",
     activeColor: "border-red-500 bg-red-100 ring-1 ring-red-400",
@@ -515,7 +515,7 @@ const SEASON_PHASES: {
   {
     id: "offseason",
     label: "Off-season",
-    sublabel: "Frítímabil — Endurheimt og grunn-uppbygging",
+    sublabel: "Off period — Recovery and base building",
     icon: "🌙",
     color: "border-slate-200 bg-slate-50",
     activeColor: "border-slate-500 bg-slate-100 ring-1 ring-slate-400",
@@ -537,15 +537,15 @@ const MD_DAYS = [
 ] as const;
 
 const MD_DAY_LABELS: Record<string, string> = {
-  GENERIC: "GENERIC — Almenn þjálfunardagur (MD-5, MD-6 og lengra)",
-  "MD-4":  "MD-4 — Fjórum dögum fyrir leik",
-  "MD-3":  "MD-3 — Þremur dögum fyrir leik",
-  "MD-2":  "MD-2 — Tveimur dögum fyrir leik",
-  "MD-1":  "MD-1 — Dagur fyrir leik",
-  MD:      "MD — Leikdagur",
-  "MD+1":  "MD+1 — Dagur eftir leik",
-  "MD+2":  "MD+2 — Tveimur dögum eftir leik",
-  "MD+3":  "MD+3 — Þremur dögum eftir leik",
+  GENERIC: "GENERIC — General training day (MD-5, MD-6 and beyond)",
+  "MD-4":  "MD-4 — Four days before the match",
+  "MD-3":  "MD-3 — Three days before the match",
+  "MD-2":  "MD-2 — Two days before the match",
+  "MD-1":  "MD-1 — Day before the match",
+  MD:      "MD — Match day",
+  "MD+1":  "MD+1 — Day after the match",
+  "MD+2":  "MD+2 — Two days after the match",
+  "MD+3":  "MD+3 — Three days after the match",
 };
 
 // Weekday picker — used when no games are on the calendar (offseason, and
@@ -564,13 +564,13 @@ const WEEKDAYS = [
 ] as const;
 
 const WEEKDAY_LABELS: Record<string, string> = {
-  "MÁN": "Mánudagur",
-  "ÞRI": "Þriðjudagur",
-  "MIÐ": "Miðvikudagur",
-  "FIM": "Fimmtudagur",
-  "FÖS": "Föstudagur",
-  "LAU": "Laugardagur",
-  "SUN": "Sunnudagur",
+  "MÁN": "Monday",
+  "ÞRI": "Tuesday",
+  "MIÐ": "Wednesday",
+  "FIM": "Thursday",
+  "FÖS": "Friday",
+  "LAU": "Saturday",
+  "SUN": "Sunday",
 };
 
 type Step = 1 | 2 | 3 | 4;
@@ -630,14 +630,14 @@ function parseTrainingText(text: string): TemplateBlock[] {
       if (current) blocks.push(current);
       current = { block: line, items: [] };
     } else {
-      if (!current) current = { block: "A. Blokk", items: [] };
+      if (!current) current = { block: "A. Block", items: [] };
       current.items.push(line);
     }
   }
   if (current) blocks.push(current);
 
   // Fallback: no headers detected — one big block
-  if (blocks.length === 0) return [{ block: "A. Blokk", items: lines }];
+  if (blocks.length === 0) return [{ block: "A. Block", items: lines }];
   return blocks;
 }
 
@@ -736,11 +736,11 @@ function resolveMethodBlocks(match: MethodMatch): TemplateBlock[] {
 // ── VBT zone data ──
 
 const VBT_ZONES: Record<string, { range: string; quality: string }> = {
-  "absolute-strength":  { range: "< 0.5 m/s",        quality: "Hámarksstyrkur / Absolute Strength" },
-  "strength":           { range: "0.5–0.75 m/s",      quality: "Styrkur / Strength" },
-  "strength-speed":     { range: "0.75–1.0 m/s",      quality: "Styrktarhraði / Strength-Speed" },
-  "speed-strength":     { range: "1.0–1.3 m/s",       quality: "Hraðastyrkur / Speed-Strength" },
-  "speed":              { range: "1.3–1.5 m/s",       quality: "Hraði / Speed" },
+  "absolute-strength":  { range: "< 0.5 m/s",        quality: "Absolute Strength" },
+  "strength":           { range: "0.5–0.75 m/s",      quality: "Strength" },
+  "strength-speed":     { range: "0.75–1.0 m/s",      quality: "Strength-Speed" },
+  "speed-strength":     { range: "1.0–1.3 m/s",       quality: "Speed-Strength" },
+  "speed":              { range: "1.3–1.5 m/s",       quality: "Speed" },
   "reactive":           { range: "> 1.5 m/s",         quality: "Reactive / Ballistic" },
 };
 
@@ -764,7 +764,7 @@ function enrichVbtLine(line: string): string {
   );
   if (threshMatch) {
     const vel = parseFloat(threshMatch[1]);
-    return `${line} — Stopp ef hraði fer undir ${vel} m/s (velocity loss cutoff)`;
+    return `${line} — Stop if velocity drops below ${vel} m/s (velocity loss cutoff)`;
   }
 
   // Match standalone "0.8 m/s" or "@0.8m/s" in a line that mentions an exercise
@@ -784,9 +784,9 @@ function enrichVbtLine(line: string): string {
   if (vlossMatch) {
     const pct = parseInt(vlossMatch[1]);
     const intent =
-      pct <= 10 ? "Neural / kraftþróun"
-      : pct <= 20 ? "Strength-speed / gæði"
-      : pct <= 30 ? "Hypertrophy / magn"
+      pct <= 10 ? "Neural / power development"
+      : pct <= 20 ? "Strength-speed / quality"
+      : pct <= 30 ? "Hypertrophy / volume"
       : "Metabolic / lactic";
     if (!line.includes(intent)) {
       return `${line} — ${intent}`;
@@ -931,7 +931,7 @@ function parseSmartWorkoutText(text: string): TemplateBlock[] {
     if (!currentBlock) {
       blockCounter++;
       const letter = String.fromCharCode(64 + blockCounter);
-      currentBlock = { block: `${letter}. Blokk`, items: [] };
+      currentBlock = { block: `${letter}. Block`, items: [] };
     }
 
     // Apply VBT enrichment + exercise formatting
@@ -939,7 +939,7 @@ function parseSmartWorkoutText(text: string): TemplateBlock[] {
   }
 
   if (currentBlock) blocks.push(currentBlock);
-  if (blocks.length === 0) return [{ block: "A. Blokk", items: lines }];
+  if (blocks.length === 0) return [{ block: "A. Block", items: lines }];
   return blocks;
 }
 
@@ -1001,7 +1001,7 @@ async function loadSheetJS(): Promise<{ read: Function; utils: { sheet_to_json: 
     const s = document.createElement("script");
     s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
     s.onload = () => resolve((window as any).XLSX);
-    s.onerror = () => reject(new Error("Tókst ekki að hlaða SheetJS"));
+    s.onerror = () => reject(new Error("Failed to load SheetJS"));
     document.head.appendChild(s);
   });
 }
@@ -1033,7 +1033,7 @@ async function loadMammothJS(): Promise<any> {
     const s = document.createElement("script");
     s.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";
     s.onload = () => resolve((window as any).mammoth);
-    s.onerror = () => reject(new Error("Tókst ekki að hlaða Mammoth"));
+    s.onerror = () => reject(new Error("Failed to load Mammoth"));
     document.head.appendChild(s);
   });
 }
@@ -1059,7 +1059,7 @@ async function loadPdfJS(): Promise<any> {
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       resolve(lib);
     };
-    s.onerror = () => reject(new Error("Tókst ekki að hlaða PDF.js"));
+    s.onerror = () => reject(new Error("Failed to load PDF.js"));
     document.head.appendChild(s);
   });
 }
@@ -1710,18 +1710,18 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
       } else if (ext === "docx") {
         text = await extractDOCXText(file);
       } else if (ext === "doc") {
-        throw new Error("Eldra Word format (.doc) er ekki stutt. Vinsamlegast vistaðu skjalið sem .docx og reyndu aftur.");
+        throw new Error("The older Word format (.doc) is not supported. Please save the document as .docx and try again.");
       } else if (ext === "csv" || ext === "txt") {
         text = await file.text();
       } else {
-        throw new Error("Óstudd skráargerð. Notaðu Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texta (.txt).");
+        throw new Error("Unsupported file type. Use Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) or text (.txt).");
       }
-      if (!text.trim()) throw new Error("Skráin virtist tóm.");
+      if (!text.trim()) throw new Error("The file appeared to be empty.");
       const blocks = parseTrainingText(text);
       setParsedBlocks(blocks);
       setStatus("preview");
     } catch (err: any) {
-      setErrorMsg(err?.message ?? "Óþekkt villa við lestur skráar.");
+      setErrorMsg(err?.message ?? "Unknown error while reading the file.");
       setStatus("error");
     }
   }
@@ -1763,10 +1763,10 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
           onDragOver={(e) => e.preventDefault()}
         >
           <span className="text-2xl">📎</span>
-          <p className="text-sm font-medium text-slate-700">Hlaða upp æfingakerfi</p>
+          <p className="text-sm font-medium text-slate-700">Upload a training programme</p>
           <p className="text-[11px] text-muted-foreground text-center">
-            Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) eða texti (.txt)<br />
-            Smelltu eða dragðu skrá hingað
+            Word (.docx), Excel (.xlsx), CSV (.csv), PDF (.pdf) or text (.txt)<br />
+            Click or drag a file here
           </p>
         </div>
       )}
@@ -1774,7 +1774,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
       {status === "loading" && (
         <div className="flex items-center justify-center gap-2 py-4">
           <span className="animate-spin text-lg">⏳</span>
-          <span className="text-sm text-muted-foreground">Les skrána...</span>
+          <span className="text-sm text-muted-foreground">Reading the file...</span>
         </div>
       )}
 
@@ -1783,7 +1783,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
           <p className="text-sm text-red-600 text-center">⚠️ {errorMsg}</p>
           <div className="flex justify-center">
             <Button size="sm" variant="outline" onClick={() => { setStatus("idle"); fileRef.current?.click(); }}>
-              Reyna aftur
+              Try again
             </Button>
           </div>
         </div>
@@ -1793,14 +1793,14 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-700">
-              📋 Fundust {parsedBlocks.length} blokkir
+              📋 Found {parsedBlocks.length} blocks
             </p>
             <button
               type="button"
               onClick={() => setStatus("idle")}
               className="text-[11px] text-muted-foreground hover:text-foreground"
             >
-              ✕ Hætta við
+              ✕ Cancel
             </button>
           </div>
           {/* Preview list */}
@@ -1809,7 +1809,7 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
               <div key={i} className="rounded-md bg-slate-50 px-2 py-1.5">
                 <p className="text-[11px] font-semibold text-foreground">{b.block}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {b.items.length} {b.items.length === 1 ? "lína" : "línur"}
+                  {b.items.length} {b.items.length === 1 ? "line" : "lines"}
                   {b.items[0] ? ` — ${b.items[0].slice(0, 50)}${b.items[0].length > 50 ? "…" : ""}` : ""}
                 </p>
               </div>
@@ -1817,10 +1817,10 @@ function FileUploadZone({ onApply }: { onApply: (blocks: TemplateBlock[]) => voi
           </div>
           <div className="flex gap-2">
             <Button size="sm" className="flex-1" onClick={applyAndReset}>
-              ✓ Nota þessa blokkir
+              ✓ Use these blocks
             </Button>
             <Button size="sm" variant="outline" onClick={() => { setStatus("idle"); fileRef.current?.click(); }}>
-              Skipta um skrá
+              Choose a different file
             </Button>
           </div>
         </div>
@@ -1893,17 +1893,17 @@ function BlockEditor({
       <div className="flex items-center gap-1.5">
         {/* Block reorder */}
         <div className="flex flex-col gap-0.5 shrink-0">
-          <MoveBtn onClick={onMoveUp ?? (() => {})} disabled={!onMoveUp} title="Færa blokk upp">
+          <MoveBtn onClick={onMoveUp ?? (() => {})} disabled={!onMoveUp} title="Move block up">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
           </MoveBtn>
-          <MoveBtn onClick={onMoveDown ?? (() => {})} disabled={!onMoveDown} title="Færa blokk niður">
+          <MoveBtn onClick={onMoveDown ?? (() => {})} disabled={!onMoveDown} title="Move block down">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
           </MoveBtn>
         </div>
         <Input
           value={block.block}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nafn blokkar (t.d. Upphitun, A. Contrast)"
+          placeholder="Block name (e.g. Warm-up, A. Contrast)"
           className="text-sm font-medium"
         />
         <Button type="button" variant="ghost" size="sm" className="text-destructive shrink-0" onClick={onRemove}>
@@ -1918,10 +1918,10 @@ function BlockEditor({
             <div className="flex gap-1.5 items-center">
               {/* Exercise reorder */}
               <div className="flex flex-col gap-0.5 shrink-0">
-                <MoveBtn onClick={() => moveItem(i, -1)} disabled={i === 0} title="Færa upp">
+                <MoveBtn onClick={() => moveItem(i, -1)} disabled={i === 0} title="Move up">
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
                 </MoveBtn>
-                <MoveBtn onClick={() => moveItem(i, 1)} disabled={i === block.items.length - 1} title="Færa niður">
+                <MoveBtn onClick={() => moveItem(i, 1)} disabled={i === block.items.length - 1} title="Move down">
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </MoveBtn>
               </div>
@@ -2042,7 +2042,7 @@ function TemplatePreview({
             <div className="min-w-0">
               <div className="text-xs font-semibold leading-snug truncate">
                 {template.title}
-                {isOverridden && <span className="ml-1 text-[10px] text-amber-600 font-normal">(breytt)</span>}
+                {isOverridden && <span className="ml-1 text-[10px] text-amber-600 font-normal">(edited)</span>}
               </div>
               {template.description && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{template.description}</div>
@@ -2055,7 +2055,7 @@ function TemplatePreview({
               onClick={onEdit}
               className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-[10px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
             >
-              ✏️ Breyta
+              ✏️ Edit
             </button>
           )}
         </div>
@@ -2155,7 +2155,7 @@ function TemplateOverrideEditor({
 }) {
   const [draft, setDraft] = useState<TemplateRecord>(() => JSON.parse(JSON.stringify(template)));
 
-  const colorLabel = color === "yellow" ? "Gula" : "Rauða";
+  const colorLabel = color === "yellow" ? "Yellow" : "Red";
   const borderColor = color === "yellow" ? "border-yellow-300" : "border-red-300";
   const bgColor = color === "yellow" ? "bg-yellow-50" : "bg-red-50";
 
@@ -2197,22 +2197,22 @@ function TemplateOverrideEditor({
   return (
     <div className={`rounded-xl border-2 ${borderColor} ${bgColor} p-4 space-y-3`}>
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">{colorLabel} útgáfa — breyta</div>
+        <div className="text-sm font-semibold">{colorLabel} version — edit</div>
         <div className="flex gap-2">
           {isOverridden && onReset && (
             <button type="button" onClick={onReset}
               className="text-[11px] text-amber-600 hover:text-amber-800 underline">
-              Endursetja sjálfvirka
+              Reset to auto
             </button>
           )}
           <button type="button" onClick={onCancel}
-            className="text-xs text-muted-foreground hover:text-foreground">✕ Hætta við</button>
+            className="text-xs text-muted-foreground hover:text-foreground">✕ Cancel</button>
         </div>
       </div>
 
       {/* Title */}
       <div>
-        <label className="text-[11px] font-medium text-neutral-500">Titill</label>
+        <label className="text-[11px] font-medium text-neutral-500">Title</label>
         <input
           type="text"
           value={draft.title}
@@ -2254,7 +2254,7 @@ function TemplateOverrideEditor({
           onClick={() => onSave(draft)}
           className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
         >
-          Vista breytingar
+          Save changes
         </button>
       </div>
     </div>
@@ -2335,7 +2335,7 @@ export default function CustomTemplatesPage() {
   const [existingDays, setExistingDays] = useState<string[]>([]);
 
   // Admin detection — Helgi (the site owner) gets the pinned Explosive
-  // Power 12w card at the top of the "Mitt æfingakerfi" list. It's not
+  // Power 12w card at the top of the "My training programmes" list. It's not
   // stored as a custom_template_sets row because it has a different
   // (phase-based) shape; it lives in pt_explosive_programmes and renders
   // through the dedicated ExplosivePowerPanel. Other PTs / coaches never
@@ -2501,15 +2501,15 @@ export default function CustomTemplatesPage() {
         description: "",
         structure: [
           {
-            block: "Upphitun",
+            block: "Warm-up",
             items: [
               "Mini-band glute walk 2×10",
               "Hip bridge 2×8",
-              "Split Squat ISO 5 sek × 2/hlið",
+              "Split Squat ISO 5 sec × 2/side",
             ],
           },
           {
-            block: "B. Aðalvinna",
+            block: "B. Main block",
             items: [""],
           },
         ],
@@ -2535,7 +2535,7 @@ export default function CustomTemplatesPage() {
   function addBlock(day: string) {
     const t = getOrInitGreen(day);
     updateGreen(day, {
-      structure: [...t.structure, { block: "Ný blokk", items: [""] }],
+      structure: [...t.structure, { block: "New block", items: [""] }],
     });
   }
 
@@ -2578,22 +2578,22 @@ export default function CustomTemplatesPage() {
     setSaving(true); setSaveOk(null); setSaveErr(null);
     const supabase = getSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setSaveErr("Ekki innskráður."); setSaving(false); return; }
+    if (!session) { setSaveErr("Not signed in."); setSaving(false); return; }
 
     // Pre-flight validation for player mode
     if (builderMode === "player") {
-      if (!playerBuilderPlayerId)  { setSaveErr("Veldu leikmann.");                setSaving(false); return; }
-      if (!playerBuilderParent)    { setSaveErr("Veldu liðs-template að víkja frá."); setSaving(false); return; }
-      if (!playerBuilderStart)     { setSaveErr("Veldu start-dagsetningu.");       setSaving(false); return; }
-      if (!playerBuilderEnd)       { setSaveErr("Veldu end-dagsetningu.");         setSaving(false); return; }
+      if (!playerBuilderPlayerId)  { setSaveErr("Choose a player.");                setSaving(false); return; }
+      if (!playerBuilderParent)    { setSaveErr("Choose a team template to override."); setSaving(false); return; }
+      if (!playerBuilderStart)     { setSaveErr("Choose a start date.");       setSaving(false); return; }
+      if (!playerBuilderEnd)       { setSaveErr("Choose an end date.");         setSaving(false); return; }
       if (playerBuilderStart > playerBuilderEnd) {
-        setSaveErr("start-dagur verður að vera fyrir end-dag.");
+        setSaveErr("The start date must be before the end date.");
         setSaving(false); return;
       }
     }
 
     const records = buildAllRecords();
-    const playerName = teamPlayers.find((p) => p.id === playerBuilderPlayerId)?.full_name ?? "leikmaður";
+    const playerName = teamPlayers.find((p) => p.id === playerBuilderPlayerId)?.full_name ?? "player";
     const setNameForSave = builderMode === "player"
       ? `${setName} — ${playerName}`
       : setName.trim();
@@ -2625,14 +2625,14 @@ export default function CustomTemplatesPage() {
     });
 
     const json = await res.json();
-    if (!res.ok) { setSaveErr(json.error ?? "Villa við vistun."); setSaving(false); return; }
+    if (!res.ok) { setSaveErr(json.error ?? "Error while saving."); setSaving(false); return; }
 
     const newDays = selectedDays.filter((d) => !existingDays.includes(d));
     const updatedDays = selectedDays.filter((d) => existingDays.includes(d));
     const parts = [];
-    if (newDays.length) parts.push(`${newDays.length} nýr dagur bætt við`);
-    if (updatedDays.length) parts.push(`${updatedDays.length} dagur uppfærður`);
-    setSaveOk(`Vistað ✅ — ${tableName} — ${parts.join(", ") || `${records.length} færslur`}`);
+    if (newDays.length) parts.push(`${newDays.length} new day(s) added`);
+    if (updatedDays.length) parts.push(`${updatedDays.length} day(s) updated`);
+    setSaveOk(`Saved ✅ — ${tableName} — ${parts.join(", ") || `${records.length} records`}`);
     setSaving(false);
     setShowBuilder(false);
     resetBuilder();
@@ -2722,15 +2722,15 @@ export default function CustomTemplatesPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Mitt æfingakerfi</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">My training programmes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Búðu til þitt eigið microdose kerfi. Þú skilgreinir grænu útgáfuna — kerfið sér um gulu og rauðu.
+            Build your own microdose programme. You define the green version — the system handles yellow and red.
           </p>
         </div>
         {!showBuilder && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button onClick={() => { setBuilderMode("team"); setShowBuilder(true); setStep(1); }}>
-              + Búa til nýtt kerfi
+              + Create new programme
             </Button>
             <Button
               variant="outline"
@@ -2748,7 +2748,7 @@ export default function CustomTemplatesPage() {
                 setStep(1);
               }}
             >
-              + Player kerfi
+              + Player programme
             </Button>
           </div>
         )}
@@ -2778,25 +2778,25 @@ export default function CustomTemplatesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-lg">⚡</span>
-                    <div className="font-semibold text-slate-900">Sprengikraftur — 12 vikur</div>
+                    <div className="font-semibold text-slate-900">Explosive Power — 12 weeks</div>
                     <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
-                      Helgi&apos;s kerfi
+                      Helgi&apos;s programme
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-slate-600">
-                    Tvö 12-vikna kerfi: 4-fasa PUSH/PULL og 3–4 daga/viku rannsóknarmiðað. Beginner / Intermediate / Advanced með daglegri græn/gul/rauð aðlögun.
+                    Two 12-week programmes: 4-phase PUSH/PULL and 3–4 days/week research-based. Beginner / Intermediate / Advanced with daily green/yellow/red adjustment.
                   </div>
                   <div className="mt-1 text-[11px] text-slate-500">
-                    Aðeins sýnilegt þér (eigandi síðunnar). Suchomel 2018 · Cormier 2020 · Pareja-Blanco 2017.
+                    Visible only to you (the site owner). Suchomel 2018 · Cormier 2020 · Pareja-Blanco 2017.
                   </div>
                 </div>
-                <div className="shrink-0 text-sm font-medium text-amber-800">Opna →</div>
+                <div className="shrink-0 text-sm font-medium text-amber-800">Open →</div>
               </div>
             </Link>
           )}
 
           {loadingSets ? (
-            <p className="text-sm text-muted-foreground">Hleður...</p>
+            <p className="text-sm text-muted-foreground">Loading...</p>
           ) : sets.length === 0 && playerSets.length === 0 ? (
             // Don't show the "no programmes yet" placeholder when the admin
             // sees their pinned Explosive Power card — that IS a programme
@@ -2804,7 +2804,7 @@ export default function CustomTemplatesPage() {
             isAdmin ? null : (
               <Card>
                 <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-                  Ekkert eigið æfingakerfi til enn. Búðu til þitt fyrsta hér að ofan.
+                  No training programmes yet. Create your first one above.
                 </CardContent>
               </Card>
             )
@@ -2818,7 +2818,7 @@ export default function CustomTemplatesPage() {
                       <span className="text-xs text-muted-foreground">{s.sport}</span>
                       {s.gender && (
                         <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${s.gender === "M" ? "bg-blue-50 text-blue-700" : "bg-rose-50 text-rose-600"}`}>
-                          {s.gender === "M" ? "Karlar" : "Konur"}
+                          {s.gender === "M" ? "Men" : "Women"}
                         </span>
                       )}
                       {s.season_phase && (() => {
@@ -2847,7 +2847,7 @@ export default function CustomTemplatesPage() {
                       className="text-xs"
                       onClick={() => void loadExistingSet(s)}
                     >
-                      ✏️ Breyta
+                      ✏️ Edit
                     </Button>
                   </div>
                 </CardContent>
@@ -2859,17 +2859,17 @@ export default function CustomTemplatesPage() {
           {!loadingSets && (
             <div className="mt-8 space-y-3">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">Einstaklings-kerfi</h2>
+                <h2 className="text-lg font-semibold tracking-tight">Individual programmes</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Override fyrir einstaka leikmenn — t.d. meiðsl eða return-to-play. Liðsplanið er grunnur; player-templatei&eth;
-                  v&iacute;kur fr&aacute; &thorn;eim MD-d&ouml;gum sem &thorn;u skilgreinir &iacute; vali&eth;u tímabili.
+                  Override for individual players — e.g. injury or return-to-play. The team plan is the baseline; the player template
+                  deviates from the MD days you define within the selected period.
                 </p>
               </div>
 
               {playerSets.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-                    Engin einstaklings-kerfi virk. Notaðu &laquo;+ Player kerfi&raquo; hér að ofan til að búa til.
+                    No individual programmes active. Use &laquo;+ Player programme&raquo; above to create one.
                   </CardContent>
                 </Card>
               ) : (
@@ -2888,23 +2888,23 @@ export default function CustomTemplatesPage() {
                             <span className="text-xs text-muted-foreground">{s.sport}</span>
                             {isActive && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                                🟢 Virkt núna
+                                🟢 Active now
                               </span>
                             )}
                             {isPast && (
                               <span className="inline-flex items-center gap-1 rounded-full border bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-                                Liðið
+                                Past
                               </span>
                             )}
                             {!isActive && !isPast && (
                               <span className="inline-flex items-center gap-1 rounded-full border bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                                Framundan
+                                Upcoming
                               </span>
                             )}
                           </div>
                           {s.parent_table_name && (
                             <div className="mt-0.5 text-xs text-muted-foreground">
-                              Yfirskrifar:{" "}
+                              Overrides:{" "}
                               <span className="font-mono">{s.parent_table_name}</span>
                             </div>
                           )}
@@ -2932,7 +2932,7 @@ export default function CustomTemplatesPage() {
                             className="text-xs"
                             onClick={() => void loadExistingSet(s)}
                           >
-                            ✏️ Breyta
+                            ✏️ Edit
                           </Button>
                         </div>
                       </CardContent>
@@ -2952,10 +2952,10 @@ export default function CustomTemplatesPage() {
           {/* Step indicator */}
           <div className="flex items-center gap-2 flex-wrap">
             {([
-              [1, "Nafn & íþrótt"],
-              [2, "Veldu daga"],
-              [3, "Byggðu GREEN"],
-              [4, "Yfirlit & vista"],
+              [1, "Name & sport"],
+              [2, "Choose days"],
+              [3, "Build GREEN"],
+              [4, "Review & save"],
             ] as [Step, string][]).map(([n, label]) => (
               <button
                 key={n}
@@ -2974,7 +2974,7 @@ export default function CustomTemplatesPage() {
               </button>
             ))}
             <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground" onClick={() => { setShowBuilder(false); resetBuilder(); }}>
-              Hætta við
+              Cancel
             </Button>
           </div>
 
@@ -2987,7 +2987,7 @@ export default function CustomTemplatesPage() {
                 {editingSet.season_phase && (
                   <span className="ml-1 text-amber-600">({editingSet.season_phase})</span>
                 )}
-                <span className="ml-2 text-amber-700">— breytingar yfirskrifa núverandi færslur. Þú getur líka bætt við nýjum dögum.</span>
+                <span className="ml-2 text-amber-700">— changes overwrite existing records. You can also add new days.</span>
               </div>
             </div>
           )}
@@ -2997,23 +2997,23 @@ export default function CustomTemplatesPage() {
             <Card className="border-amber-200 bg-amber-50/50">
               <CardHeader>
                 <CardTitle className="text-base">
-                  Einstaklings-kerfi {editingSet ? "— breyta" : "— nýtt"}
+                  Individual programme {editingSet ? "— edit" : "— new"}
                 </CardTitle>
                 <CardDescription>
-                  Veldu leikmann og hvaða liðs-templatei þú víkur frá. Aðeins MD-dagarnir sem þú vistar í
-                  þessu kerfi yfirskrifa liðsplanið — aðrir dagar fylgja liðinu sjálfkrafa.
+                  Choose a player and which team template to override. Only the MD days you save in
+                  this programme override the team plan — other days follow the team automatically.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Leikmaður</Label>
+                  <Label className="text-xs">Player</Label>
                   <select
                     className="h-9 rounded-md border bg-background px-2 text-sm"
                     value={playerBuilderPlayerId}
                     onChange={(e) => setPlayerBuilderPlayerId(e.target.value)}
                     disabled={!!editingSet}
                   >
-                    <option value="">— veldu leikmann —</option>
+                    <option value="">— choose a player —</option>
                     {teamPlayers.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
                     ))}
@@ -3021,13 +3021,13 @@ export default function CustomTemplatesPage() {
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Liðs-template að víkja frá</Label>
+                  <Label className="text-xs">Team template to override</Label>
                   <select
                     className="h-9 rounded-md border bg-background px-2 text-sm"
                     value={playerBuilderParent}
                     onChange={(e) => setPlayerBuilderParent(e.target.value)}
                   >
-                    <option value="">— veldu parent —</option>
+                    <option value="">— choose parent —</option>
                     {sets.map((s) => (
                       <option key={s.id} value={s.table_name}>
                         {s.set_name} {s.season_phase ? `(${s.season_phase})` : ""}
@@ -3037,7 +3037,7 @@ export default function CustomTemplatesPage() {
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Frá og með</Label>
+                  <Label className="text-xs">From</Label>
                   <Input
                     type="date"
                     value={playerBuilderStart}
@@ -3046,7 +3046,7 @@ export default function CustomTemplatesPage() {
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Til og með</Label>
+                  <Label className="text-xs">To</Label>
                   <Input
                     type="date"
                     value={playerBuilderEnd}
@@ -3055,9 +3055,9 @@ export default function CustomTemplatesPage() {
                 </div>
 
                 <div className="grid gap-1.5 sm:col-span-2">
-                  <Label className="text-xs">Skýring (valfrjálst)</Label>
+                  <Label className="text-xs">Note (optional)</Label>
                   <Input
-                    placeholder="t.d. Hamstring rehab — back-to-running W2"
+                    placeholder="e.g. Hamstring rehab — back-to-running W2"
                     value={playerBuilderNote}
                     onChange={(e) => setPlayerBuilderNote(e.target.value)}
                   />
@@ -3065,8 +3065,8 @@ export default function CustomTemplatesPage() {
 
                 {sets.length === 0 && (
                   <div className="sm:col-span-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    Ekkert liðs-template til að víkja frá. Búðu fyrst til a.m.k. eitt liðs-template áður
-                    en þú býrð til player override.
+                    No team template to override. First create at least one team template before
+                    you create a player override.
                   </div>
                 )}
               </CardContent>
@@ -3077,15 +3077,15 @@ export default function CustomTemplatesPage() {
           {step === 1 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Skref 1 — Lið &amp; tímabil</CardTitle>
-                <CardDescription>Veldu lið og tímabil. Dagarnir (MD-4, MD-2 o.s.frv.) eru svo valdir í næsta skrefi.</CardDescription>
+                <CardTitle className="text-base">Step 1 — Team &amp; season</CardTitle>
+                <CardDescription>Choose a team and season. The days (MD-4, MD-2 etc.) are then selected in the next step.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
 
                 {/* Team selector — single team: read-only banner; multiple teams: clickable cards */}
                 {allTeams.length === 0 && (
                   <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground animate-pulse">
-                    Hleður liðsupplýsingar…
+                    Loading team info…
                   </div>
                 )}
 
@@ -3105,14 +3105,14 @@ export default function CustomTemplatesPage() {
                             {teamSport && <span className="capitalize">{teamSport}</span>}
                             {teamGender && (
                               <span className={`font-medium ${teamGender === "M" ? "text-blue-600" : "text-rose-500"}`}>
-                                {teamGender === "M" ? "Karlar" : "Konur"}
+                                {teamGender === "M" ? "Men" : "Women"}
                               </span>
                             )}
                           </div>
                         )}
                       </div>
                       <div className="ml-auto text-[10px] text-muted-foreground">
-                        {isPt ? "Personal trainer" : "Frá prófíl liðs"}
+                        {isPt ? "Personal trainer" : "From team profile"}
                       </div>
                     </div>
                   );
@@ -3121,8 +3121,8 @@ export default function CustomTemplatesPage() {
                 {allTeams.length > 1 && (
                   <div className="grid gap-2">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Veldu lið</p>
-                      <span className="text-xs text-muted-foreground">{allTeams.length} lið í boði</span>
+                      <p className="text-sm font-medium">Choose team</p>
+                      <span className="text-xs text-muted-foreground">{allTeams.length} teams available</span>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {allTeams.map((team) => {
@@ -3151,12 +3151,12 @@ export default function CustomTemplatesPage() {
                                   {team.sport && <span className="capitalize">{team.sport}</span>}
                                   {team.gender && (
                                     <span className={`font-medium ${team.gender === "M" ? "text-blue-600" : "text-rose-500"}`}>
-                                      {team.gender === "M" ? "Karlar" : "Konur"}
+                                      {team.gender === "M" ? "Men" : "Women"}
                                     </span>
                                   )}
                                   {team.isPrimary && (
                                     <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                      Aðallið
+                                      Main team
                                     </span>
                                   )}
                                 </div>
@@ -3164,7 +3164,7 @@ export default function CustomTemplatesPage() {
                               {isPtCard && team.isPrimary && (
                                 <div className="mt-0.5">
                                   <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                    Aðallið
+                                    Main team
                                   </span>
                                 </div>
                               )}
@@ -3181,7 +3181,7 @@ export default function CustomTemplatesPage() {
 
                 {/* Season phase */}
                 <div className="grid gap-2">
-                  <Label>Tímabil <span className="text-muted-foreground font-normal">(valfrjáls)</span></Label>
+                  <Label>Season <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   <div className="grid grid-cols-2 gap-2">
                     {SEASON_PHASES.map((phase) => (
                       <button
@@ -3215,14 +3215,14 @@ export default function CustomTemplatesPage() {
                 {sport && (
                   <div className="rounded-lg bg-muted px-3 py-2 text-xs space-y-0.5">
                     <div>
-                      <span className="text-muted-foreground">Tafla í DB: </span>
+                      <span className="text-muted-foreground">DB table: </span>
                       <span className="font-mono font-medium text-foreground">{tableName}</span>
                     </div>
                   </div>
                 )}
                 <div className="flex justify-end">
                   <Button onClick={() => setStep(2)} disabled={!sport}>
-                    Næsta →
+                    Next →
                   </Button>
                 </div>
               </CardContent>
@@ -3233,14 +3233,14 @@ export default function CustomTemplatesPage() {
           {step === 2 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Skref 2 — Veldu æfingadaga</CardTitle>
+                <CardTitle className="text-base">Step 2 — Choose training days</CardTitle>
                 <CardDescription>
                   {editingSet
-                    ? "Veldu hvaða daga þú vilt breyta. Valdir dagar yfirskrifa núverandi gögn. Þú getur líka bætt við nýjum dögum."
-                    : "Hvaða microdose daga viltu skilgreina í þínu kerfi?"}
+                    ? "Choose which days you want to edit. Selected days overwrite existing data. You can also add new days."
+                    : "Which microdose days do you want to define in your programme?"}
                   {existingDays.length > 0 && (
                     <span className="ml-1 text-amber-600 font-medium">
-                      — {existingDays.length} dagur þegar til.
+                      — {existingDays.length} day(s) already exist.
                     </span>
                   )}
                 </CardDescription>
@@ -3284,7 +3284,7 @@ export default function CustomTemplatesPage() {
                                   ? "text-amber-700 bg-amber-50 border border-amber-200"
                                   : "text-emerald-600 bg-emerald-50 border border-emerald-200"
                               }`}>
-                                {selected ? "✏️ Uppfærist" : "✓ Í gagnagrunni"}
+                                {selected ? "✏️ Will update" : "✓ In database"}
                               </span>
                             )}
                           </button>
@@ -3294,9 +3294,9 @@ export default function CustomTemplatesPage() {
                   );
                 })()}
                 <div className="flex justify-between gap-2">
-                  <Button variant="outline" onClick={() => setStep(1)}>← Til baka</Button>
+                  <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
                   <Button onClick={() => { setCurrentDayIdx(0); setStep(3); }} disabled={selectedDays.length === 0}>
-                    Næsta → Byggja GREEN
+                    Next → Build GREEN
                   </Button>
                 </div>
               </CardContent>
@@ -3338,21 +3338,21 @@ export default function CustomTemplatesPage() {
                         {currentDay} — GREEN
                         {existingDays.includes(currentDay) && (
                           <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                            ✏️ Breyting
+                            ✏️ Editing
                           </span>
                         )}
                       </CardTitle>
                       <CardDescription>
                         {existingDays.includes(currentDay)
-                          ? "Þetta er núverandi GREEN template — breyttu og vistaðu til að uppfæra."
-                          : "Þetta er þjálfunarkerfið þitt. Gul og rauð útgáfa verður búin til sjálfkrafa."}
+                          ? "This is the current GREEN template — edit and save to update."
+                          : "This is your training programme. The yellow and red versions are generated automatically."}
                       </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-4">
                   <div className="grid gap-1.5">
-                    <Label>Titill</Label>
+                    <Label>Title</Label>
                     <Input
                       value={currentGreen.title}
                       onChange={(e) => updateGreen(currentDay, { title: e.target.value })}
@@ -3360,11 +3360,11 @@ export default function CustomTemplatesPage() {
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>Lýsing (valfrjáls)</Label>
+                    <Label>Description (optional)</Label>
                     <Input
                       value={currentGreen.description ?? ""}
                       onChange={(e) => updateGreen(currentDay, { description: e.target.value })}
-                      placeholder="Stutt lýsing á þjálfunarkerfinu..."
+                      placeholder="Short description of the training programme..."
                     />
                   </div>
 
@@ -3379,13 +3379,13 @@ export default function CustomTemplatesPage() {
                     >
                       <div>
                         <div className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
-                          <span>✨</span> Lýstu æfingakerfinu
+                          <span>✨</span> Describe the workout
                         </div>
                         <div className="text-xs text-indigo-600 mt-0.5">
-                          Skrifaðu hvernig æfingin á að vera — kerfið býr til blokkir sjálfkrafa
+                          Write how the workout should look — the system builds the blocks automatically
                         </div>
                       </div>
-                      <span className="text-indigo-400 text-xs">{showDescriptionBox ? "▲ Fela" : "▼ Opna"}</span>
+                      <span className="text-indigo-400 text-xs">{showDescriptionBox ? "▲ Hide" : "▼ Open"}</span>
                     </button>
 
                     {showDescriptionBox && (
@@ -3393,13 +3393,13 @@ export default function CustomTemplatesPage() {
                         <Textarea
                           value={workoutDescription}
                           onChange={(e) => setWorkoutDescription(e.target.value)}
-                          placeholder={`Dæmi:\nFrench Contrast\nBack Squat 85% × 3, Depth Jump × 3\nVelocity target: 0.8 m/s\n\neða frjáls lýsing:\nA. Upphitun\n  Foam roll 5 mín, Hip 90/90 2×8\nB. Styrktarblokk\n  Back Squat 4×6 á 80% — VT: 0.5 m/s\n  RFESS 3×8 — velocity loss 20%\n  60s hvíld milli setta\nC. Potentiation Cluster — Acceleration`}
+                          placeholder={`Example:\nFrench Contrast\nBack Squat 85% × 3, Depth Jump × 3\nVelocity target: 0.8 m/s\n\nor free-form description:\nA. Warm-up\n  Foam roll 5 min, Hip 90/90 2×8\nB. Strength block\n  Back Squat 4×6 @ 80% — VT: 0.5 m/s\n  RFESS 3×8 — velocity loss 20%\n  60s rest between sets\nC. Potentiation Cluster — Acceleration`}
                           rows={8}
                           className="text-sm font-mono bg-white"
                         />
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[11px] text-indigo-500">
-                            VBT · French Contrast · Clusters · Potentiation · Hraðamarkmið · Hvíld
+                            VBT · French Contrast · Clusters · Potentiation · Velocity targets · Rest
                           </p>
                           <Button
                             type="button"
@@ -3414,7 +3414,7 @@ export default function CustomTemplatesPage() {
                             }}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white"
                           >
-                            Búa til blokkir →
+                            Create blocks →
                           </Button>
                         </div>
                       </div>
@@ -3423,7 +3423,7 @@ export default function CustomTemplatesPage() {
 
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                     <span className="flex-1 border-t" />
-                    <span>eða hlaðið inn skjali</span>
+                    <span>or upload a file</span>
                     <span className="flex-1 border-t" />
                   </div>
 
@@ -3434,7 +3434,7 @@ export default function CustomTemplatesPage() {
 
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                     <span className="flex-1 border-t" />
-                    <span>eða veldu uppbyggingu</span>
+                    <span>or choose a structure</span>
                     <span className="flex-1 border-t" />
                   </div>
 
@@ -3443,9 +3443,9 @@ export default function CustomTemplatesPage() {
 
                   <div className="grid gap-2">
                     <div className="flex items-center justify-between">
-                      <Label>Blokkir</Label>
+                      <Label>Blocks</Label>
                       <Button type="button" variant="outline" size="sm" onClick={() => addBlock(currentDay)}>
-                        + Bæta við blokk
+                        + Add block
                       </Button>
                     </div>
                     {currentGreen.structure.map((block, i) => (
@@ -3465,7 +3465,7 @@ export default function CustomTemplatesPage() {
                   <Separator />
                   <div className="grid gap-2">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Sjálfkrafa myndar kerfið:
+                      The system auto-generates:
                     </div>
 
                     {/* Inline editor or preview for YELLOW */}
@@ -3524,15 +3524,15 @@ export default function CustomTemplatesPage() {
                   </div>
 
                   <div className="flex justify-between gap-2">
-                    <Button variant="outline" onClick={() => setStep(2)}>← Til baka</Button>
+                    <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
                     <div className="flex gap-2">
                       {currentDayIdx < selectedDays.length - 1 ? (
                         <Button variant="outline" onClick={() => setCurrentDayIdx((i) => i + 1)}>
-                          Næsti dagur ({selectedDays[currentDayIdx + 1]}) →
+                          Next day ({selectedDays[currentDayIdx + 1]}) →
                         </Button>
                       ) : null}
                       <Button onClick={() => setStep(4)}>
-                        Yfirlit & vista →
+                        Review & save →
                       </Button>
                     </div>
                   </div>
@@ -3545,9 +3545,9 @@ export default function CustomTemplatesPage() {
           {step === 4 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Skref 4 — Yfirlit & vista</CardTitle>
+                <CardTitle className="text-base">Step 4 — Review & save</CardTitle>
                 <CardDescription>
-                  {selectedDays.length} dagur × 3 útgáfur = {selectedDays.length * 3} færslur verða vistaðar í töflu{" "}
+                  {selectedDays.length} day(s) × 3 versions = {selectedDays.length * 3} records will be saved to table{" "}
                   <span className="font-mono font-medium text-foreground">{tableName}</span>
                 </CardDescription>
               </CardHeader>
@@ -3571,13 +3571,13 @@ export default function CustomTemplatesPage() {
                 <Separator />
 
                 {saveErr && (
-                  <p className="text-sm text-destructive">Villa: {saveErr}</p>
+                  <p className="text-sm text-destructive">Error: {saveErr}</p>
                 )}
 
                 <div className="flex justify-between gap-2">
-                  <Button variant="outline" onClick={() => setStep(3)}>← Breyta</Button>
+                  <Button variant="outline" onClick={() => setStep(3)}>← Edit</Button>
                   <Button onClick={handleSave} disabled={saving}>
-                    {saving ? "Vistar..." : `Vista kerfið (${tableName})`}
+                    {saving ? "Saving..." : `Save programme (${tableName})`}
                   </Button>
                 </div>
               </CardContent>
