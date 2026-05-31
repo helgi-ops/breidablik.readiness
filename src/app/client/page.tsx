@@ -20,6 +20,8 @@ import Link from "next/link";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import TrainingLoadCard from "@/components/player/TrainingLoadCard";
 import AthleteHero from "@/components/player/AthleteHero";
+import ReadinessCard from "@/components/player/ReadinessCard";
+import MomentumCard from "@/components/player/MomentumCard";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
@@ -135,8 +137,14 @@ export default function ClientTodayPage() {
       {/* Vacation / return banner (declared per-client breaks). */}
       <ClientVacationBanner lang={lang === "EN" ? "EN" : "IS"} />
 
+      {/* Today's readiness score + recommendation (shows once checked in). */}
+      <ReadinessCard lang={lang === "EN" ? "EN" : "IS"} />
+
       {/* Athlete hero — "Am I progressing?" at a glance. */}
       <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
+
+      {/* Training Momentum — the consistency score to keep up. */}
+      <MomentumCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
       <AICoachCard lang={lang === "EN" ? "EN" : "IS"} />
