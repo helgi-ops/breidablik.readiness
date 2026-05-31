@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import InstallPrompt from "@/components/client/InstallPrompt";
 
 type Tab = {
   href: string;
@@ -89,6 +90,8 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
       <div className="mx-auto w-full max-w-2xl px-3 py-3">
         {children}
       </div>
+
+      <InstallPrompt lang={lang === "EN" ? "EN" : "IS"} />
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-1 py-1.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-2xl grid grid-cols-6">

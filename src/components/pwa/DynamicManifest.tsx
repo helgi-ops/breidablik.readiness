@@ -26,8 +26,12 @@ export default function DynamicManifest() {
 
         const params = new URLSearchParams();
 
-        // Detect if we're on the coach page → use coach-specific manifest
-        if (window.location.pathname.startsWith("/coach")) {
+        // Detect surface so /api/manifest returns the right PWA identity.
+        // /client → PT-client PWA, /coach → coach PWA, anything else falls
+        // through to the default player manifest.
+        if (window.location.pathname.startsWith("/client")) {
+          params.set("role", "client");
+        } else if (window.location.pathname.startsWith("/coach")) {
           params.set("role", "coach");
         }
 

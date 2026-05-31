@@ -126,7 +126,51 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Step 2 — Coach PWA overrides. Must run AFTER ELITE branding so the coach
+  // Step 2 — PT-client PWA overrides. Same pattern as coach: runs after
+  // ELITE branding so club name/logo/theme are preserved if present, but
+  // identity (id, start_url, shortcuts) targets the /client surface that
+  // the PT-client PWA actually uses.
+  if (role === "client") {
+    const baseName = manifest.name;
+    const clientName =
+      baseName === "MicroPulse" ? "MicroPulse PT" : `${baseName} PT`;
+    const clientShort =
+      manifest.short_name === "MicroPulse" ? "MicroPulse" : manifest.short_name;
+
+    manifest = {
+      ...manifest,
+      id: "/client",
+      name: clientName,
+      short_name: clientShort,
+      start_url: "/client",
+      description: "Æfing dagsins, þyngdarskráning, RPE og framvinda — allt á einum stað.",
+      shortcuts: [
+        {
+          name: "Skrá æfingu",
+          short_name: "Skrá",
+          description: "Þyngd, endurt. og RPE per sett",
+          url: "/client/log",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+        {
+          name: "Framvinda",
+          short_name: "Framvinda",
+          description: "e1RM línurit og PR",
+          url: "/client/progression",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+        {
+          name: "LV próf",
+          short_name: "LV",
+          description: "Kraft-/hraðapróf og %RM tafla",
+          url: "/client/lv-profile",
+          icons: manifest.icons.slice(0, 1).map((i) => ({ src: i.src, sizes: "192x192" })),
+        },
+      ],
+    };
+  }
+
+  // Step 3 — Coach PWA overrides. Must run AFTER ELITE branding so the coach
   // identity (id, start_url, shortcuts) wins. Keeps club name/logo/theme.
   if (role === "coach") {
     const baseName = manifest.name;

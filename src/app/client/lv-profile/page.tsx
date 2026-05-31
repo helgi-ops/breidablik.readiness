@@ -112,7 +112,7 @@ export default function ClientLvProfilePage() {
             </div>
             <div className="flex flex-wrap gap-1.5 pt-1">
               {data.test.profile_type && (
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide">
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">
                   {data.test.profile_type}
                 </span>
               )}
