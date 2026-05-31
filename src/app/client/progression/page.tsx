@@ -12,6 +12,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import LineSpark, { type Point as SparkPoint } from "@/components/client/LineSpark";
 import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import PersonalRecordsCard from "@/components/player/PersonalRecordsCard";
+import AthleteHero from "@/components/player/AthleteHero";
+import LoadQuadrant from "@/components/player/LoadQuadrant";
+import TrainingLoadCard from "@/components/player/TrainingLoadCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -62,6 +65,10 @@ export default function ClientProgressionPage() {
         </div>
       </div>
 
+      {/* Progress + load analytics (moved here from Today to keep Today lean). */}
+      <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
+      <LoadQuadrant lang={lang === "EN" ? "EN" : "IS"} />
+      <TrainingLoadCard lang={lang === "EN" ? "EN" : "IS"} />
       <VolumeLoadCard lang={lang === "EN" ? "EN" : "IS"} />
       <PersonalRecordsCard lang={lang === "EN" ? "EN" : "IS"} />
 

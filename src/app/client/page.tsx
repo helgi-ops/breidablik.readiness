@@ -17,9 +17,6 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import LoadQuadrant from "@/components/player/LoadQuadrant";
-import TrainingLoadCard from "@/components/player/TrainingLoadCard";
-import AthleteHero from "@/components/player/AthleteHero";
 import ReadinessCard from "@/components/player/ReadinessCard";
 import MomentumCard from "@/components/player/MomentumCard";
 import AICoachCard from "@/components/player/AICoachCard";
@@ -140,10 +137,8 @@ export default function ClientTodayPage() {
       {/* Today's readiness score + recommendation (shows once checked in). */}
       <ReadinessCard lang={lang === "EN" ? "EN" : "IS"} />
 
-      {/* Athlete hero — "Am I progressing?" at a glance. */}
-      <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Training Momentum — the consistency score to keep up. */}
+      {/* Training Momentum — the consistency score to keep up.
+          (Progress analytics — hero, quadrant, load — live on Progression.) */}
       <MomentumCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Daily AI Coach — labelled AI, cites real signals (lazy, hides if none). */}
@@ -340,12 +335,8 @@ export default function ClientTodayPage() {
         </div>
       )}
 
-      {/* Fitness × Fatigue quadrant — where the client sits on chronic vs
-          acute load, in plain language. */}
-      <LoadQuadrant lang={lang === "EN" ? "EN" : "IS"} />
-
-      {/* Training Load Intelligence — strength vs sport vs total + recommendation. */}
-      <TrainingLoadCard lang={lang === "EN" ? "EN" : "IS"} />
+      {/* Fitness×Fatigue, Training Load and the progress hero moved to the
+          Progression tab to keep Today focused on the day's action. */}
 
       {/* Smart insights — Foster + heavy-lift exposure + PR forecast.
           These three are MicroPulse PT's main differentiators vs generic
