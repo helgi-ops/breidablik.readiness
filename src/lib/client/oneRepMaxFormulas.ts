@@ -43,13 +43,22 @@ export type OneRmOptions = {
   rpe?: number | null;
 };
 
-/** Rep-max formulas lose accuracy the further a set is from failure. We never
- *  extrapolate more than this many reps in reserve. */
-export const RIR_CAP = 4;
+/** Rep-max formulas lose accuracy the further a set is from failure, and beyond
+ *  ~3 reps the extrapolation is guesswork — so we never extrapolate further. */
+export const RIR_CAP = 3;
 
-/** A set must be at least this hard (RPE) to be trusted as 1RM *evidence*
- *  (i.e. allowed to set a PR or push the working 1RM). RIR ≤ 3. */
-export const MAX_EFFORT_MIN_RPE = 7;
+/**
+ * A set must be at least this hard (RPE) to be trusted as 1RM *evidence*
+ * (i.e. allowed to set a PR or push the working 1RM).
+ *
+ * The RIR-based RPE scale *defines* RPE 7 = 3 RIR, but in practice lifters
+ * estimate RIR poorly when far from failure — they routinely under-rate effort,
+ * so a logged RPE 7 can really be 5–8 reps short of failure. Self-reported RIR
+ * is only dependable within ~1–2 reps of failure, so we require RPE ≥ 9 before
+ * treating a set as evidence of a maximum. (Tunable — this single constant is
+ * the knob.)
+ */
+export const MAX_EFFORT_MIN_RPE = 9;
 
 /** True if a set is close enough to failure to estimate a max from.
  *  Unknown RPE is treated as a genuine effort (backward compatible). */
