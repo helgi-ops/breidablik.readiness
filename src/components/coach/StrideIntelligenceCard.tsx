@@ -49,6 +49,8 @@ type StrideTrendRow = {
   strideLengthHsr: number | null;
   codLrAsymmetryPct: number | null;
   gpsImaDecoupling: number | null;
+  imaHsrDistanceM?: number | null;
+  hiCadenceStrideLengthM?: number | null;
 };
 
 type StrideApiResponse = {
@@ -141,6 +143,7 @@ function MetricTile({
   trendValues,
   helper,
   tooltip,
+  digits = 2,
 }: {
   title: string;
   value: number | null;
@@ -149,6 +152,7 @@ function MetricTile({
   trendValues: Array<number | null>;
   helper?: string;
   tooltip?: string;
+  digits?: number;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
@@ -157,12 +161,12 @@ function MetricTile({
         {tooltip ? <InfoIcon tip={tooltip} /> : null}
       </div>
       <div className="mt-1 flex items-baseline gap-1">
-        <span className="text-lg font-semibold text-slate-900">{fmtNum(value, 2)}</span>
+        <span className="text-lg font-semibold text-slate-900">{fmtNum(value, digits)}</span>
         {unit && <span className="text-xs text-slate-500">{unit}</span>}
       </div>
       {baselineMean != null && (
         <div className="text-[10px] text-slate-400">
-          baseline {fmtNum(baselineMean, 2)}
+          baseline {fmtNum(baselineMean, digits)}
         </div>
       )}
       <div className="mt-1.5">
@@ -186,10 +190,12 @@ const STRIDE_TIPS = {
     "Gap between high-speed running distance and high-load stride detection (percentage points). Large gaps (>15 %pt) mean the player is producing effort that doesn't translate into distance — mechanical inefficiency or fatigue under load.",
 } as const;
 
-export default function StrideIntelligenceCard({ playerId }: { playerId: string }) {
+export default function StrideIntelligenceCard({ playerId, date: dateProp }: { playerId: string; date?: string }) {
   const [data, setData] = useState<StrideApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Empty string = today. A coach can pick a historical session date.
+  const [selectedDate, setSelectedDate] = useState<string>(dateProp ?? "");
 
   useEffect(() => {
     if (!playerId) return;
@@ -205,7 +211,8 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           setError("Not signed in");
           return;
         }
-        const res = await fetch(`/api/coach/player/${playerId}/stride-intel?days=14`, {
+        const dateQs = selectedDate ? `&date=${selectedDate}` : "";
+        const res = await fetch(`/api/coach/player/${playerId}/stride-intel?days=14${dateQs}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
@@ -224,7 +231,7 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
     return () => {
       cancelled = true;
     };
-  }, [playerId]);
+  }, [playerId, selectedDate]);
 
   if (loading) {
     return (
@@ -275,9 +282,18 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
                 : "awaiting first session"}
             </div>
           </div>
-          <span className="rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-            rest day
-          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              title="Pick a session date (blank = today)"
+              className="rounded-md border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-600"
+            />
+            <span className="rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+              rest day
+            </span>
+          </div>
         </div>
 
         {!hasAnyTrendData ? (
@@ -348,18 +364,27 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
         <div>
           <div className="text-sm font-medium text-slate-900">Stride Intelligence</div>
           <div className="text-[11px] text-slate-500">
-            IMA Free Running · {data.date} · {m.totalStrides.toLocaleString()} strides today
+            IMA Free Running · {data.date} · {m.totalStrides.toLocaleString()} strides
           </div>
         </div>
-        {t.drivers.length > 0 ? (
-          <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            {t.drivers.length} signal{t.drivers.length === 1 ? "" : "s"}
-          </span>
-        ) : (
-          <span className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
-            normal
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            title="Pick a session date (blank = today)"
+            className="rounded-md border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-600"
+          />
+          {t.drivers.length > 0 ? (
+            <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+              {t.drivers.length} signal{t.drivers.length === 1 ? "" : "s"}
+            </span>
+          ) : (
+            <span className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              normal
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Driver chips */}
@@ -436,6 +461,16 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           helper="HSR share − HiLoad share"
           tooltip={STRIDE_TIPS.decoupling}
         />
+        {m.imaHsrDistanceM != null && (
+          <MetricTile
+            title="High-speed running (IMA)"
+            value={m.imaHsrDistanceM}
+            unit="m"
+            digits={0}
+            trendValues={trend.map((r) => r.imaHsrDistanceM ?? null)}
+            helper="IMA Free Running band 5-8 total distance"
+          />
+        )}
       </div>
 
       <div className="mt-2 text-[10px] text-slate-500">

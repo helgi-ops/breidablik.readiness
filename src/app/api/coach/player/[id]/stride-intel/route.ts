@@ -64,6 +64,10 @@ type TrendRow = {
   strideLengthHsr: number | null;
   codLrAsymmetryPct: number | null;
   gpsImaDecoupling: number | null;
+  /** IMA band 5-8 total distance (m) — high-intensity running dose. */
+  imaHsrDistanceM: number | null;
+  /** band 5-8 distance ÷ band 5-8 strides (m/stride). */
+  hiCadenceStrideLengthM: number | null;
 };
 
 export async function GET(
@@ -95,8 +99,13 @@ export async function GET(
   const url = new URL(req.url);
   const days = Math.max(7, Math.min(28, Number(url.searchParams.get("days") ?? 14)));
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const startIso = new Date(Date.now() - (days - 1) * 86_400_000)
+  // Reference date — defaults to today, but a coach can pass ?date=YYYY-MM-DD
+  // to inspect a historical session (e.g. a past match day).
+  const dateParam = url.searchParams.get("date") || "";
+  const todayIso = /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    ? dateParam
+    : new Date().toISOString().slice(0, 10);
+  const startIso = new Date(new Date(todayIso + "T00:00:00Z").getTime() - (days - 1) * 86_400_000)
     .toISOString()
     .slice(0, 10);
 
@@ -120,7 +129,9 @@ export async function GET(
     .select(
       "date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, " +
         "ima_fr_band4_total_player_load, ima_fr_band5_total_player_load, ima_fr_band6_total_player_load, " +
-        "ima_fr_band7_total_player_load, ima_fr_band8_total_player_load",
+        "ima_fr_band7_total_player_load, ima_fr_band8_total_player_load, " +
+        "ima_fr_band58_total_distance, ima_fr_band5_stride_count, ima_fr_band6_stride_count, " +
+        "ima_fr_band7_stride_count, ima_fr_band8_stride_count",
     )
     .eq("player_id", playerId)
     .eq("source", "catapult")
@@ -138,10 +149,27 @@ export async function GET(
     ima_fr_band6_total_player_load: number | null;
     ima_fr_band7_total_player_load: number | null;
     ima_fr_band8_total_player_load: number | null;
+    ima_fr_band58_total_distance: number | null;
+    ima_fr_band5_stride_count: number | null;
+    ima_fr_band6_stride_count: number | null;
+    ima_fr_band7_stride_count: number | null;
+    ima_fr_band8_stride_count: number | null;
   };
 
   const decouplingByDate = new Map<string, number | null>();
+  const imaHsrByDate = new Map<string, number | null>();
+  const hiCadStrideLenByDate = new Map<string, number | null>();
   for (const r of (dailyRows as unknown as DailyRow[] | null) ?? []) {
+    // IMA high-intensity running distance + domain-consistent stride length.
+    const band58 = Number(r.ima_fr_band58_total_distance ?? 0) || 0;
+    const band58Strides =
+      (Number(r.ima_fr_band5_stride_count ?? 0) || 0) +
+      (Number(r.ima_fr_band6_stride_count ?? 0) || 0) +
+      (Number(r.ima_fr_band7_stride_count ?? 0) || 0) +
+      (Number(r.ima_fr_band8_stride_count ?? 0) || 0);
+    imaHsrByDate.set(r.date, band58 > 0 ? band58 : null);
+    hiCadStrideLenByDate.set(r.date, band58 > 0 && band58Strides > 0 ? band58 / band58Strides : null);
+
     const td = Number(r.total_distance ?? 0);
     const tpl = Number(r.total_player_load ?? 0);
     if (td <= 0 || tpl <= 0) {
@@ -174,6 +202,8 @@ export async function GET(
     strideLengthHsr: r.stride_length_hsr_m,
     codLrAsymmetryPct: r.cod_lr_asym_pct,
     gpsImaDecoupling: decouplingByDate.get(r.date) ?? null,
+    imaHsrDistanceM: imaHsrByDate.get(r.date) ?? null,
+    hiCadenceStrideLengthM: hiCadStrideLenByDate.get(r.date) ?? null,
   }));
 
   // 3. Baselines for context
