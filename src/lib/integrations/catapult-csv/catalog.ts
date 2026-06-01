@@ -74,6 +74,7 @@ export type CatapultMetricKey =
   | "imaFrBand5Strides" | "imaFrBand6Strides" | "imaFrBand7Strides" | "imaFrBand8Strides"
   | "imaFrBand1Rate"    | "imaFrBand2Rate"    | "imaFrBand3Rate"    | "imaFrBand4Rate"
   | "imaFrBand5Rate"    | "imaFrBand6Rate"    | "imaFrBand7Rate"    | "imaFrBand8Rate"
+  | "imaFrBand58Distance" // High-intensity running distance from the stride series (bands 5-8)
 
   // ── IMA Change of Direction Left/Right (Stride Intelligence asymmetry) ──
   | "imaCodLeftHigh"   | "imaCodLeftMedium"   | "imaCodLeftLow"
@@ -260,6 +261,18 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["ima free running band 7 average stride rate", "ima free run band 7 rate", "imafreerunning band 7 average stride rate"] },
   { key: "imaFrBand8Rate", label: "IMA FR Band 8 Stride Rate", unit: "/s",
     aliases: ["ima free running band 8 average stride rate", "ima free run band 8 rate", "imafreerunning band 8 average stride rate"] },
+  // High-intensity running distance from the stride series (cadence bands 5-8).
+  // Domain-consistent with band 5-8 stride counts → enables a true high-cadence
+  // stride length (band58 distance ÷ band 5-8 strides).
+  { key: "imaFrBand58Distance", label: "IMA FR Band 5-8 Total Distance", unit: "m",
+    aliases: [
+      "ima free running band 5-8 total distance",
+      "ima free running band 5 8 total distance",
+      "ima free run band 5-8 distance",
+      "imafreerunning band 5-8 total distance",
+      "ima free running band 5-8 distance",
+      "ima fr band 5-8 total distance",
+    ] },
 
   // ─── IMA Change of Direction L/R splits (Stride Intelligence asymmetry) ───
   // Catapult exports CoD as Left/Right × Low/Medium/High. Sum sides to compute
