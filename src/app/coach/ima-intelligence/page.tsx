@@ -203,6 +203,19 @@ type RunDistRow = {
   band7: number;
   band8: number;
   total: number;
+  acwr: number | null;
+  status: "insufficient" | "low" | "optimal" | "high" | "spike";
+  confident: boolean;
+  z: number | null;
+  dominant_band: 5 | 6 | 7 | 8 | null;
+};
+
+const ACWR_STYLE: Record<RunDistRow["status"], { bg: string; text: string; label: (lang: Lang) => string }> = {
+  spike:        { bg: "#FEE2E2", text: "#B91C1C", label: (l) => (l === "IS" ? "Spike" : "Spike") },
+  high:         { bg: "#FEF3C7", text: "#B45309", label: (l) => (l === "IS" ? "Hátt" : "High") },
+  optimal:      { bg: "#DCFCE7", text: "#15803D", label: (l) => (l === "IS" ? "Í lagi" : "OK") },
+  low:          { bg: "#E0F2FE", text: "#0369A1", label: (l) => (l === "IS" ? "Lágt" : "Low") },
+  insufficient: { bg: "#F1F5F9", text: "#64748B", label: (l) => (l === "IS" ? "Byggist" : "Building") },
 };
 
 function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
@@ -244,10 +257,24 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
   // Shade band columns 5→8 (increasing cadence) for quick visual scan.
   const bandBg = ["bg-sky-50", "bg-indigo-50", "bg-violet-50", "bg-fuchsia-50"];
 
+  const spikes = rows.filter((r) => r.status === "spike");
+  const spikeMsg = lang === "IS"
+    ? `${spikes.length} ${spikes.length === 1 ? "leikmaður" : "leikmenn"} með háákefðar hlaupa-spike (ACWR ≥ 1.5). Dreifðu sprett-álaginu yfir vikuna.`
+    : `${spikes.length} player${spikes.length === 1 ? "" : "s"} in a high-intensity running spike (ACWR ≥ 1.5). Spread the sprint load across the week.`;
+
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
-      <div className="mb-3 text-[11px] text-slate-500">{sub}</div>
+      <div className="mb-3 text-[11px] text-slate-500">
+        {sub} · {lang === "IS" ? "ACWR = bráð (7d) ÷ langvinn (28d)" : "ACWR = acute (7d) ÷ chronic (28d)"}
+      </div>
+
+      {/* Spike summary (the verdict the coach reads first) */}
+      {loaded && spikes.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+          <span>⚠</span><span><b>{spikeMsg}</b></span>
+        </div>
+      )}
 
       {!loaded ? (
         <div className="py-4 text-center text-sm text-slate-500">…</div>
@@ -264,20 +291,35 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
                 <th className="px-2 py-1.5 text-right font-medium">Band 7</th>
                 <th className="px-2 py-1.5 text-right font-medium">Band 8</th>
                 <th className="px-2 py-1.5 text-right font-semibold text-slate-700">{lang === "IS" ? "Samtals" : "Total"}</th>
+                <th className="px-2 py-1.5 text-center font-medium" title="Acute:chronic workload ratio">ACWR</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.player_id} className="border-b border-slate-100">
-                  <td className="px-2 py-1.5 font-medium text-slate-800">{r.full_name}</td>
-                  {[r.band5, r.band6, r.band7, r.band8].map((v, i) => (
-                    <td key={i} className={`px-2 py-1.5 text-right tabular-nums text-slate-600 ${bandBg[i]}`}>
-                      {v > 0 ? m(v) : "·"}
+              {rows.map((r) => {
+                const st = ACWR_STYLE[r.status];
+                return (
+                  <tr key={r.player_id} className={`border-b border-slate-100 ${r.status === "spike" ? "bg-rose-50/40" : ""}`}>
+                    <td className="px-2 py-1.5 font-medium text-slate-800">{r.full_name}</td>
+                    {[r.band5, r.band6, r.band7, r.band8].map((v, i) => (
+                      <td key={i} className={`px-2 py-1.5 text-right tabular-nums text-slate-600 ${bandBg[i]}`}>
+                        {v > 0 ? m(v) : "·"}
+                      </td>
+                    ))}
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-900">{m(r.total)}</td>
+                    <td className="px-2 py-1.5 text-center">
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+                        style={{ backgroundColor: st.bg, color: st.text }}
+                        title={r.confident
+                          ? `${st.label(lang)} · ACWR ${r.acwr ?? "—"}`
+                          : (lang === "IS" ? "Of fá gögn enn fyrir áreiðanlegt hlutfall" : "Not enough history yet for a reliable ratio")}
+                      >
+                        {r.status === "insufficient" || r.acwr == null ? st.label(lang) : r.acwr.toFixed(2)}
+                      </span>
                     </td>
-                  ))}
-                  <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-900">{m(r.total)}</td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
