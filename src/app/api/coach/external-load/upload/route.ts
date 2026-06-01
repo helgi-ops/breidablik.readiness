@@ -167,6 +167,7 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
       "imaFrBand1Strides", "imaFrBand2Strides", "imaFrBand3Strides", "imaFrBand4Strides",
       "imaFrBand5Strides", "imaFrBand6Strides", "imaFrBand7Strides", "imaFrBand8Strides",
       "imaFrBand58Distance",
+      "imaFrBand5Distance", "imaFrBand6Distance", "imaFrBand7Distance", "imaFrBand8Distance",
       "imaCodLeftHigh", "imaCodLeftMedium", "imaCodLeftLow",
       "imaCodRightHigh", "imaCodRightMedium", "imaCodRightLow",
       "hmld", "totalMetabolicEnergy",
@@ -278,7 +279,19 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     ima_fr_band6_stride_count: a.imaFrBand6Strides ?? null,
     ima_fr_band7_stride_count: a.imaFrBand7Strides ?? null,
     ima_fr_band8_stride_count: a.imaFrBand8Strides ?? null,
-    ima_fr_band58_total_distance: a.imaFrBand58Distance ?? null,
+    ima_fr_band5_total_distance: a.imaFrBand5Distance ?? null,
+    ima_fr_band6_total_distance: a.imaFrBand6Distance ?? null,
+    ima_fr_band7_total_distance: a.imaFrBand7Distance ?? null,
+    ima_fr_band8_total_distance: a.imaFrBand8Distance ?? null,
+    // Total = explicit combined column if present, else the sum of the per-band
+    // distances (so the total stays consistent however the report is exported).
+    ima_fr_band58_total_distance:
+      a.imaFrBand58Distance ??
+      (a.imaFrBand5Distance != null || a.imaFrBand6Distance != null ||
+       a.imaFrBand7Distance != null || a.imaFrBand8Distance != null
+        ? (a.imaFrBand5Distance ?? 0) + (a.imaFrBand6Distance ?? 0) +
+          (a.imaFrBand7Distance ?? 0) + (a.imaFrBand8Distance ?? 0)
+        : null),
     ima_fr_band1_avg_stride_rate: m.imaFrBand1Rate ?? null,
     ima_fr_band2_avg_stride_rate: m.imaFrBand2Rate ?? null,
     ima_fr_band3_avg_stride_rate: m.imaFrBand3Rate ?? null,

@@ -461,16 +461,6 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
           helper="HSR share − HiLoad share"
           tooltip={STRIDE_TIPS.decoupling}
         />
-        {m.imaHsrDistanceM != null && (
-          <MetricTile
-            title="High-speed running (IMA)"
-            value={m.imaHsrDistanceM}
-            unit="m"
-            digits={0}
-            trendValues={trend.map((r) => r.imaHsrDistanceM ?? null)}
-            helper="IMA Free Running band 5-8 total distance"
-          />
-        )}
       </div>
 
       <div className="mt-2 text-[10px] text-slate-500">

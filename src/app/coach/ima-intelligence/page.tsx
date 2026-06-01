@@ -184,9 +184,103 @@ export default function ImaIntelligencePage() {
       {!loading && !error && profile && (
         <>
           <SessionProfileCard profile={profile} lang={lang} />
+          <ImaRunDistanceCard date={date} lang={lang} />
           <PerPlayerTable profile={profile} lang={lang} />
           <LegendCard lang={lang} />
         </>
+      )}
+    </div>
+  );
+}
+
+// ── IMA Free Running distance (per band 5-8 + total) ──────────────────────
+
+type RunDistRow = {
+  player_id: string;
+  full_name: string;
+  band5: number;
+  band6: number;
+  band7: number;
+  band8: number;
+  total: number;
+};
+
+function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
+  const [rows, setRows] = React.useState<RunDistRow[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: sess } = await sb.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/coach/team/ima-run-distance?date=${date}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (alive) setRows((json.players ?? []) as RunDistRow[]);
+        }
+      } catch {
+        /* soft */
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [date]);
+
+  const heading = lang === "IS" ? "IMA Free Running vegalengd" : "IMA Free Running distance";
+  const sub = lang === "IS"
+    ? "Háákefðar hlaupavegalengd (m) eftir cadence-bandi 5-8 + samtals"
+    : "High-intensity running distance (m) by cadence band 5-8 + total";
+  const noData = lang === "IS" ? "Engin gögn fyrir þennan dag" : "No data for this day";
+
+  const m = (n: number) => Math.round(n).toLocaleString();
+  // Shade band columns 5→8 (increasing cadence) for quick visual scan.
+  const bandBg = ["bg-sky-50", "bg-indigo-50", "bg-violet-50", "bg-fuchsia-50"];
+
+  return (
+    <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+      <div className="mb-3 text-[11px] text-slate-500">{sub}</div>
+
+      {!loaded ? (
+        <div className="py-4 text-center text-sm text-slate-500">…</div>
+      ) : rows.length === 0 ? (
+        <div className="py-4 text-center text-sm text-slate-500">{noData}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-1.5 text-left font-medium">{lang === "IS" ? "Leikmaður" : "Player"}</th>
+                <th className="px-2 py-1.5 text-right font-medium">Band 5</th>
+                <th className="px-2 py-1.5 text-right font-medium">Band 6</th>
+                <th className="px-2 py-1.5 text-right font-medium">Band 7</th>
+                <th className="px-2 py-1.5 text-right font-medium">Band 8</th>
+                <th className="px-2 py-1.5 text-right font-semibold text-slate-700">{lang === "IS" ? "Samtals" : "Total"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.player_id} className="border-b border-slate-100">
+                  <td className="px-2 py-1.5 font-medium text-slate-800">{r.full_name}</td>
+                  {[r.band5, r.band6, r.band7, r.band8].map((v, i) => (
+                    <td key={i} className={`px-2 py-1.5 text-right tabular-nums text-slate-600 ${bandBg[i]}`}>
+                      {v > 0 ? m(v) : "·"}
+                    </td>
+                  ))}
+                  <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-900">{m(r.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
