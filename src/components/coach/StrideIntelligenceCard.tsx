@@ -33,6 +33,8 @@ type StrideMetrics = {
   highIntensityPlayerLoad: number;
   cadenceWeighted: number | null;
   strideLengthHsr: number | null;
+  imaHsrDistanceM?: number | null;
+  hiCadenceStrideLengthM?: number | null;
   codLeftTotal: number;
   codRightTotal: number;
   codLrAsymmetryPct: number | null;
@@ -401,12 +403,16 @@ export default function StrideIntelligenceCard({ playerId }: { playerId: string 
           tooltip={STRIDE_TIPS.cadence}
         />
         <MetricTile
-          title="Avg stride length"
-          value={m.strideLengthHsr}
+          title={m.hiCadenceStrideLengthM != null ? "Stride length (high-cadence)" : "Avg stride length"}
+          value={m.hiCadenceStrideLengthM ?? m.strideLengthHsr}
           unit="m/stride"
           baselineMean={strideLengthBaseline?.mean}
           trendValues={trend.map((r) => r.strideLengthHsr)}
-          helper="Total distance ÷ total strides (session avg)"
+          helper={
+            m.hiCadenceStrideLengthM != null
+              ? "IMA band 5-8 distance ÷ band 5-8 strides"
+              : "Total distance ÷ total strides (session avg)"
+          }
           tooltip={STRIDE_TIPS.strideLength}
         />
         <MetricTile

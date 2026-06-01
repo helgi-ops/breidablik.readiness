@@ -38,6 +38,9 @@ export type StrideRow = {
   hsrDistance: number | null | undefined;
   /** Velocity Band 6 distance (m) — sprint coverage. */
   sprintDistance?: number | null | undefined;
+  /** IMA Free Running band 5-8 total distance (m) — high-intensity running
+   *  distance from the stride series, domain-consistent with band 5-8 strides. */
+  imaHsrDistance?: number | null | undefined;
   /** Total distance covered (m). */
   totalDistance: number | null | undefined;
 
@@ -54,6 +57,12 @@ export type StrideMetrics = {
   cadenceWeighted: number | null;
   /** HSR meters / high-velocity strides (m/stride). Normal ~1.8–2.2 at sprint speed. */
   strideLengthHsr: number | null;
+  /** IMA band 5-8 running distance (m) — high-intensity running dose. null when absent. */
+  imaHsrDistanceM: number | null;
+  /** True high-cadence stride length = IMA band 5-8 distance ÷ band 5-8 strides
+   *  (m/stride). Domain-consistent (both from the stride series), unlike the
+   *  session-average strideLengthHsr. null when the IMA distance is absent. */
+  hiCadenceStrideLengthM: number | null;
   codLeftTotal: number;
   codRightTotal: number;
   /** |L - R| / ((L + R) / 2) × 100. null when total < MIN_COD_EVENTS. */
@@ -199,12 +208,22 @@ export function computeStrideMetrics(row: StrideRow): StrideMetrics {
     gpsImaDecoupling = hsrShare - hiLoadShare;
   }
 
+  // True high-cadence stride length from the stride series itself: IMA band 5-8
+  // distance ÷ band 5-8 strides. Domain-consistent (both from the same cadence
+  // bands), so it avoids the v1 mistake of mixing GPS HSR distance with stride
+  // counts. null when the IMA band 5-8 distance hasn't been ingested yet.
+  const imaHsr = Number(row.imaHsrDistance ?? 0) || 0;
+  const hiCadenceStrideLengthM =
+    imaHsr > 0 && hiVelocityStrides > 0 ? imaHsr / hiVelocityStrides : null;
+
   return {
     totalStrides,
     hiVelocityStrides,
     highIntensityPlayerLoad,
     cadenceWeighted,
     strideLengthHsr,
+    imaHsrDistanceM: imaHsr > 0 ? imaHsr : null,
+    hiCadenceStrideLengthM,
     codLeftTotal: codL,
     codRightTotal: codR,
     codLrAsymmetryPct,

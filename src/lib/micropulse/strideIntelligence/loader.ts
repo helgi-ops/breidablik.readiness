@@ -36,6 +36,7 @@ type DailyRow = {
   ima_fr_band8_total_player_load: number | null;
   velocity_band5_total_distance: number | null;
   velocity_band6_total_distance: number | null;
+  ima_fr_band58_total_distance: number | null;
   total_distance: number | null;
   ima_cod_left_high: number | null;
   ima_cod_left_medium: number | null;
@@ -68,6 +69,7 @@ function rowToStrideRow(r: DailyRow): StrideRow {
     ],
     hsrDistance: (Number(r.velocity_band5_total_distance ?? 0) || 0) + (Number(r.velocity_band6_total_distance ?? 0) || 0),
     sprintDistance: r.velocity_band6_total_distance,
+    imaHsrDistance: r.ima_fr_band58_total_distance,
     totalDistance: r.total_distance,
     codLeft:
       (Number(r.ima_cod_left_high ?? 0) || 0) +
@@ -132,6 +134,7 @@ export async function loadStrideIntelligence(
         "ima_fr_band8_total_player_load",
         "velocity_band5_total_distance",
         "velocity_band6_total_distance",
+        "ima_fr_band58_total_distance",
         "total_distance",
         "ima_cod_left_high",
         "ima_cod_left_medium",
