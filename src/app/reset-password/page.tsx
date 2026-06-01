@@ -14,33 +14,52 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
-  // Supabase setur access_token í URL fragment (#)
+  // Establish the recovery session, however the user arrived here.
   useEffect(() => {
-    const hash = window.location.hash;
-    if (!hash) return;
+    let active = true;
+    let settled = false;
 
-    const params = new URLSearchParams(hash.replace("#", ""));
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-
-    if (!accessToken || !refreshToken) {
-      setError("Ógildur eða útrunninn hlekkur.");
-      return;
-    }
-
-    // Set session handvirkt
-    supabase.auth
-      .setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      })
-      .then(({ error }) => {
-        if (error) {
-          setError(error.message);
-        } else {
-          setReady(true);
+    async function init() {
+      // Path A — tokens still in the URL hash (landed directly on /reset-password).
+      const hash = window.location.hash;
+      if (hash) {
+        const params = new URLSearchParams(hash.replace("#", ""));
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!active) return;
+          if (error) setError(error.message);
+          else { settled = true; setReady(true); }
+          return;
         }
-      });
+      }
+      // Path B — the recovery session was already established elsewhere (e.g.
+      // Supabase dropped us on the homepage and the global gate routed us here
+      // after the hash was consumed). If a session exists, let them reset.
+      const { data } = await supabase.auth.getSession();
+      if (!active) return;
+      if (data.session) { settled = true; setReady(true); }
+    }
+    void init();
+
+    // Path C — a PASSWORD_RECOVERY event may arrive a moment later.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (active && session && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")) {
+        settled = true;
+        setReady(true);
+      }
+    });
+
+    // Nothing established a session within a moment → the link is invalid/expired.
+    const timer = setTimeout(() => {
+      if (active && !settled) setError((e) => e ?? "Ógildur eða útrunninn hlekkur.");
+    }, 3000);
+
+    return () => { active = false; sub.subscription.unsubscribe(); clearTimeout(timer); };
   }, []);
 
   async function onSubmit(e: React.FormEvent) {

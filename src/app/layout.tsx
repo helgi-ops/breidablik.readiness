@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import RegisterServiceWorker from "@/components/pwa/RegisterServiceWorker";
 import DynamicManifest from "@/components/pwa/DynamicManifest";
+import PasswordRecoveryGate from "@/components/auth/PasswordRecoveryGate";
 
 export const metadata: Metadata = {
   title: "MicroPulse",
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="antialiased">
         <RegisterServiceWorker />
         <DynamicManifest />
+        <PasswordRecoveryGate />
         {children}
       </body>
     </html>
