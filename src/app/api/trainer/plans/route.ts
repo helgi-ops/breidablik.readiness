@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { adaptStructure, clampFreq, type PlanWeekLike } from "@/lib/trainer/sessionFrequency";
 
 /* ── helpers ─────────────────────────────────────────── */
 
@@ -142,6 +143,9 @@ interface AssignTemplateBody {
   clientId?: string;
   startDate: string; // ISO date
   tweaks?: SessionTweak[];
+  /** Optional per-client weekly frequency override (1–6). When omitted, or equal
+   *  to the template's authored frequency, the structure is copied unchanged. */
+  sessionsPerWeek?: number;
 }
 
 export async function POST(req: Request) {
@@ -213,6 +217,20 @@ export async function POST(req: Request) {
 
     // Copy structure: weeks → sessions → prescriptions
     const structure = Array.isArray(template.structure) ? (template.structure as any[]) : [];
+
+    // Per-client weekly-frequency override. The template is authored at a fixed
+    // frequency; if the trainer picked a different one in the assign dialog, adapt
+    // each week's sessions (cycle/truncate + re-spread onto real weekdays) BEFORE
+    // copying. Unchanged frequency → copy the authored structure verbatim.
+    const authoredFreq =
+      Number(template.sessions_per_week) || (structure[0]?.sessions?.length ?? 0);
+    const requestedFreq =
+      typeof body.sessionsPerWeek === "number" ? clampFreq(body.sessionsPerWeek) : null;
+    const effectiveStructure =
+      requestedFreq && requestedFreq !== authoredFreq
+        ? adaptStructure(structure as PlanWeekLike[], requestedFreq)
+        : structure;
+
     const tweakMap = new Map<number, SessionTweak>();
     // Tolerate both shapes: array of SessionTweak (legacy) and the object map
     // the PlanAssigner UI currently sends.
@@ -220,8 +238,9 @@ export async function POST(req: Request) {
       body.tweaks.forEach((t) => tweakMap.set(t.sessionIndex, t));
     }
 
-    for (const week of structure) {
-      const weekNumber = week.week || 1;
+    for (let weekIdx = 0; weekIdx < effectiveStructure.length; weekIdx++) {
+      const week = effectiveStructure[weekIdx];
+      const weekNumber = week.week || weekIdx + 1;
 
       for (const session of week.sessions || []) {
         const { data: newSession, error: sessionErr } = await sb
@@ -252,7 +271,7 @@ export async function POST(req: Request) {
         // Add prescriptions for this session
         for (const exercise of allExercises) {
           if (!exercise.exerciseId) continue; // Skip empty slots
-          const tweak = tweakMap.get(structure.indexOf(week)) || null;
+          const tweak = tweakMap.get(weekIdx) || null;
           const exerciseTweak = tweak?.tweaks.find(
             (t: any) => t.exerciseId === exercise.exerciseId
           );

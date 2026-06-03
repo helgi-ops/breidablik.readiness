@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
 import type { Exercise } from "./PlanBuilder";
+import { previewSchedule, clampFreq, MIN_FREQ, MAX_FREQ } from "@/lib/trainer/sessionFrequency";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -61,6 +62,10 @@ export default function PlanAssigner({
   const [showTweaks, setShowTweaks] = useState(false);
   const [tweaks, setTweaks] = useState<Record<string, number>>({});
   const [template, setTemplate] = useState<WeekData[] | null>(null);
+  // Per-client weekly frequency. `authoredFreq` = the template's designed
+  // frequency; `sessionsPerWeek` is what the trainer picks for THIS client.
+  const [authoredFreq, setAuthoredFreq] = useState<number>(0);
+  const [sessionsPerWeek, setSessionsPerWeek] = useState<number>(0);
 
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
@@ -104,13 +109,22 @@ export default function PlanAssigner({
 
       if (res.ok) {
         const json = await res.json();
+        let weekOneCount = 0;
         if (json.template?.structure) {
           const structure =
             typeof json.template.structure === "string"
               ? JSON.parse(json.template.structure)
               : json.template.structure;
           setTemplate(structure);
+          weekOneCount = Array.isArray(structure)
+            ? structure[0]?.sessions?.length ?? 0
+            : 0;
         }
+        const authored = clampFreq(
+          Number(json.template?.sessions_per_week) || weekOneCount || 3,
+        );
+        setAuthoredFreq(authored);
+        setSessionsPerWeek(authored);
       }
     } catch {
       // silent
@@ -146,6 +160,10 @@ export default function PlanAssigner({
           templateId,
           startDate,
           tweaks: Object.keys(tweaks).length > 0 ? tweaks : undefined,
+          // Only send when the trainer changed it — keeps the authored schedule
+          // verbatim for the default case.
+          sessionsPerWeek:
+            sessionsPerWeek && sessionsPerWeek !== authoredFreq ? sessionsPerWeek : undefined,
         }),
       });
 
@@ -230,6 +248,62 @@ export default function PlanAssigner({
             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
           />
         </div>
+
+        {/* Sessions per week — per-client frequency */}
+        {template && template.length > 0 && authoredFreq > 0 && (() => {
+          const base = (template[0]?.sessions ?? []) as { dayOfWeek?: number; name?: string }[];
+          const changed = sessionsPerWeek !== authoredFreq;
+          const rows = previewSchedule(base, sessionsPerWeek, isIS ? "IS" : "EN", changed);
+          return (
+            <div className="mb-6 pb-6 border-b">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {isIS ? "Æfingar á viku" : "Sessions per week"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: MAX_FREQ - MIN_FREQ + 1 }, (_, i) => MIN_FREQ + i).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setSessionsPerWeek(clampFreq(n))}
+                    className={`w-10 h-10 rounded-lg border text-sm font-medium transition ${
+                      sessionsPerWeek === n
+                        ? "bg-black text-white border-black"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {n}×
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                {changed
+                  ? isIS
+                    ? `Sniðið er hannað fyrir ${authoredFreq}× — því er dreift á ${sessionsPerWeek}× hér að neðan.`
+                    : `Template is designed for ${authoredFreq}× — it’s spread to ${sessionsPerWeek}× below.`
+                  : isIS
+                    ? "Sjálfgefin tíðni sniðsins."
+                    : "Template’s default frequency."}
+              </p>
+
+              {/* Live schedule preview — exactly what the client will receive */}
+              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500 mb-2">
+                  {isIS ? "Vikuáætlun (vika 1)" : "Weekly schedule (week 1)"}
+                </div>
+                <div className="space-y-1">
+                  {rows.map((r, i) => (
+                    <div key={`${r.weekdayNum}-${i}`} className="flex items-center gap-3 text-sm">
+                      <span className="inline-block w-10 shrink-0 font-semibold text-gray-800">
+                        {r.weekday}
+                      </span>
+                      <span className="text-gray-600">{r.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Optional tweaks */}
         {template && template.length > 0 && (
