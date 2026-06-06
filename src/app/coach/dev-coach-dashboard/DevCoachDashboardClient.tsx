@@ -2121,6 +2121,8 @@ export default function CoachPage() {
     player_id: string; full_name: string; missing_checkin: boolean; missing_rpe: boolean;
   }>>([]);
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
+  // Optional past-date selector for the Post-Training report (empty = latest session).
+  const [postReportDate, setPostReportDate] = useState<string>("");
 
   // MLI + Metabolic Load per player (for Decision Summary enrichment)
   const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
@@ -6077,7 +6079,7 @@ export default function CoachPage() {
     }
   }
 
-  async function downloadPostTrainingReport() {
+  async function downloadPostTrainingReport(dateArg?: string) {
     try {
       setPdfPostDownloading(true);
 
@@ -6104,17 +6106,22 @@ export default function CoachPage() {
 
       const playerIds = (playerData as Array<Record<string, unknown>>).map((p) => String(p.id));
 
-      // ── 2. Find most recent session date with GPS data ───────
+      // ── 2. Resolve the session date ──────────────────────────
+      // Default: the most recent session. When a date is chosen in the picker,
+      // use it as the upper bound so the coach can pull a PAST session — we land
+      // on that day's session, or the most recent one before it (so picking a
+      // rest day still yields the last real session rather than an empty report).
+      const boundDate = dateArg && /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : today;
       const { data: latestDateRows } = await supabase
         .from("player_external_load_daily")
         .select("date")
         .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
-        .lte("date", today)
+        .lte("date", boundDate)
         .order("date", { ascending: false })
         .limit(1);
 
-      const sessionDate: string = (latestDateRows?.[0] as any)?.date ?? today;
+      const sessionDate: string = (latestDateRows?.[0] as { date?: string } | undefined)?.date ?? boundDate;
       const chronicStart = addDaysISO(sessionDate, -27);
 
       // Fetch only columns that actually exist in player_external_load_daily
@@ -8328,10 +8335,20 @@ export default function CoachPage() {
                       <FileText className="h-3.5 w-3.5" />
                       {pdfDownloading ? "Generating…" : "Readiness Risk"}
                     </Button>
+                    {/* Optional past-date selector — leave empty for the latest
+                        session, or pick a day to pull an older Post-Training report. */}
+                    <input
+                      type="date"
+                      value={postReportDate}
+                      max={today}
+                      onChange={(e) => setPostReportDate(e.target.value)}
+                      title={lang === "IS" ? "Veldu æfingadag (tómt = nýjasta)" : "Pick a session day (empty = latest)"}
+                      className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                    />
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={downloadPostTrainingReport}
+                      onClick={() => downloadPostTrainingReport(postReportDate || undefined)}
                       disabled={pdfPostDownloading || loading}
                       className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                     >
