@@ -8311,26 +8311,34 @@ export default function CoachPage() {
                     </>
                   ) : null}
                   <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={downloadReadinessRiskReport}
-                    disabled={pdfDownloading || loading}
-                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    {pdfDownloading ? "Generating…" : "Readiness Risk"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={downloadPostTrainingReport}
-                    disabled={pdfPostDownloading || loading}
-                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    {pdfPostDownloading ? "Generating…" : "Post-Training"}
-                  </Button>
+                  {/* Reports group — visually separated from the Catapult/sync
+                      utilities so "generate report" reads as session output,
+                      not data plumbing. */}
+                  <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50/60 px-2 py-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      {lang === "IS" ? "Skýrslur" : "Reports"}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadReadinessRiskReport}
+                      disabled={pdfDownloading || loading}
+                      className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {pdfDownloading ? "Generating…" : "Readiness Risk"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadPostTrainingReport}
+                      disabled={pdfPostDownloading || loading}
+                      className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      {pdfPostDownloading ? "Generating…" : "Post-Training"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardHeader>
