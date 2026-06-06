@@ -390,22 +390,31 @@ export async function GET(req: Request) {
         // Resolve exercise names in one round trip.
         const exIds = Array.from(new Set(rx.map((r) => r.exercise_id).filter(Boolean))) as string[];
         const nameById = new Map<string, string>();
+        const descById = new Map<string, { en: string | null; is: string | null }>();
         if (exIds.length > 0) {
           const { data: exRows } = await sb
             .from("exercise_library")
-            .select("id, name")
+            .select("id, name, description, description_is")
             .in("id", exIds);
-          ((exRows ?? []) as Array<{ id: string; name: string }>).forEach((e) => nameById.set(e.id, e.name));
+          ((exRows ?? []) as Array<{ id: string; name: string; description: string | null; description_is: string | null }>).forEach((e) => {
+            nameById.set(e.id, e.name);
+            descById.set(e.id, { en: e.description, is: e.description_is });
+          });
         }
 
-        rows = rx.map((r, i) => ({
-          num: String(i + 1),
-          exercise: (r.exercise_id && nameById.get(r.exercise_id)) || "Exercise",
-          reps: r.reps ?? "",
-          sets: r.sets ?? 0,
-          method: r.load_type ?? undefined,
-          set_rest: r.rest_seconds != null ? `${r.rest_seconds} sec` : undefined,
-        }));
+        rows = rx.map((r, i) => {
+          const d = r.exercise_id ? descById.get(r.exercise_id) : undefined;
+          return {
+            num: String(i + 1),
+            exercise: (r.exercise_id && nameById.get(r.exercise_id)) || "Exercise",
+            reps: r.reps ?? "",
+            sets: r.sets ?? 0,
+            method: r.load_type ?? undefined,
+            set_rest: r.rest_seconds != null ? `${r.rest_seconds} sec` : undefined,
+            description: d?.en ?? null,
+            description_is: d?.is ?? null,
+          };
+        });
       }
 
       explosive = {

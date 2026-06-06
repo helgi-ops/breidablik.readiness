@@ -97,7 +97,7 @@ export async function GET(req: Request) {
     let query = sb
       .from("exercise_library")
       .select(
-        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, video_url, sport, is_bilateral, movement_pattern, movement_family, created_at, updated_at"
+        "id, name, name_is, exercise_type, category, muscle_groups, equipment, description, description_is, video_url, sport, is_bilateral, movement_pattern, movement_family, created_at, updated_at"
       );
 
     // Apply filters

@@ -6,6 +6,7 @@ import { useLang } from "@/lib/lang";
 import { TRAINER_COPY } from "./trainerCopy";
 import IsoProtocolPickerModal from "./IsoProtocolPickerModal";
 import ProgramAuditCard from "./ProgramAuditCard";
+import ExerciseInfo from "@/components/exercise/ExerciseInfo";
 import {
   type IsoProtocol,
   type IsoExercise,
@@ -52,6 +53,9 @@ export interface Exercise {
   movementFamily?: MovementFamily | null;
   movementPattern?: MovementPattern | null;
   isBilateral?: boolean | null;
+  /** Explanation carried from the library pick — shown via the info icon. */
+  description?: string | null;
+  descriptionIs?: string | null;
 }
 
 /** A group of exercises that are performed together (superset, contrast, etc.) */
@@ -97,6 +101,8 @@ export interface ExerciseLibraryItem {
   category: string;
   muscle_groups?: string[];
   equipment?: string;
+  description?: string | null;
+  description_is?: string | null;
   movement_pattern?: MovementPattern | null;
   movement_family?: MovementFamily | null;
   is_bilateral?: boolean;
@@ -677,6 +683,8 @@ export default function PlanBuilder({
     slot.movementFamily = exercise.movement_family ?? null;
     slot.movementPattern = exercise.movement_pattern ?? null;
     slot.isBilateral = exercise.is_bilateral ?? null;
+    slot.description = exercise.description ?? null;
+    slot.descriptionIs = exercise.description_is ?? null;
     setWeeks(newWeeks);
     setSearchTarget(null);
     setSearchQuery("");
@@ -1216,8 +1224,8 @@ export default function PlanBuilder({
                                                 <div className="max-h-56 overflow-y-auto space-y-1">
                                                   {searchResults.map(
                                                     (result) => (
+                                                      <div key={result.id} className="flex items-start gap-1">
                                                       <button
-                                                        key={result.id}
                                                         onClick={() =>
                                                           setExerciseInSlot(
                                                             currentWeekIndex,
@@ -1227,7 +1235,7 @@ export default function PlanBuilder({
                                                             result
                                                           )
                                                         }
-                                                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-100 rounded"
+                                                        className="flex-1 text-left px-2 py-1.5 text-sm hover:bg-gray-100 rounded"
                                                       >
                                                         <div className="font-medium">
                                                           {isIS
@@ -1258,6 +1266,13 @@ export default function PlanBuilder({
                                                           </span>
                                                         </div>
                                                       </button>
+                                                      <ExerciseInfo
+                                                        name={isIS ? (result.name_is || result.name) : result.name}
+                                                        description={result.description}
+                                                        descriptionIs={result.description_is}
+                                                        className="mt-1.5 shrink-0"
+                                                      />
+                                                      </div>
                                                     )
                                                   )}
                                                 </div>
@@ -1284,8 +1299,13 @@ export default function PlanBuilder({
                                     ) : (
                                       <div>
                                         <div className="flex items-center justify-between mb-1">
-                                          <span className="text-sm font-medium">
+                                          <span className="flex items-center gap-1 text-sm font-medium">
                                             {ex.name}
+                                            <ExerciseInfo
+                                              name={ex.name}
+                                              description={ex.description}
+                                              descriptionIs={ex.descriptionIs}
+                                            />
                                           </span>
                                           <button
                                             onClick={() =>

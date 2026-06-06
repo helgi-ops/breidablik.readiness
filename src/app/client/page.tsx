@@ -21,6 +21,7 @@ import ReadinessCard from "@/components/player/ReadinessCard";
 import MomentumCard from "@/components/player/MomentumCard";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
+import ExerciseInfo from "@/components/exercise/ExerciseInfo";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 
 /** Localised weekday name from an ISO index (1=Mon..7=Sun). */
@@ -58,6 +59,7 @@ type TodayResp = {
       velocity?: string | number; pct1rm?: number | null; method?: string;
       cluster_rest?: string; set_rest?: string;
       target_kg?: number | null; target_stale?: boolean; target_auto?: boolean;
+      description?: string | null; description_is?: string | null;
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
@@ -269,7 +271,10 @@ export default function ClientTodayPage() {
             <div key={b.name} className="space-y-1">
               {b.rows.slice(0, 8).map((r, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-100 pb-1.5 last:border-0">
-                  <span className="font-medium text-slate-800 truncate">{r.exercise}</span>
+                  <span className="flex min-w-0 items-center gap-1 font-medium text-slate-800">
+                    <span className="truncate">{r.exercise}</span>
+                    <ExerciseInfo name={r.exercise} description={r.description} descriptionIs={r.description_is} className="shrink-0" />
+                  </span>
                   <span className="text-xs text-slate-500 tabular-nums shrink-0">
                     {r.sets}×{r.reps}
                     {r.target_kg != null
