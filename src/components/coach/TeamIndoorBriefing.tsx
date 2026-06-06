@@ -21,6 +21,7 @@ import { useLang, type Lang } from "@/lib/lang";
 type Action =
   | "FULL"
   | "MODIFIED"
+  | "UNDERLOADED"
   | "RECOVERY"
   | "NO_DATA"
   | "INJURED"
@@ -54,6 +55,7 @@ function isIllnessRecord(bodyPart: string | null | undefined): boolean {
 const ACTION_COLORS: Record<Action, string> = {
   FULL: "bg-emerald-500 text-white",
   MODIFIED: "bg-amber-500 text-white",
+  UNDERLOADED: "bg-sky-500 text-white",
   RECOVERY: "bg-rose-500 text-white",
   NO_DATA: "bg-slate-300 text-slate-700",
   INJURED: "bg-violet-600 text-white",
@@ -66,6 +68,9 @@ const ACTION_COLORS: Record<Action, string> = {
 const ACTION_LABELS_BILINGUAL: Record<Action, { EN: string; IS: string }> = {
   FULL: { EN: "Ready", IS: "Tilbúinn" },
   MODIFIED: { EN: "Lighter session", IS: "Léttari æfing" },
+  // Indoor load was LOW (light band or undertraining ACWR). The opposite of a
+  // lighter session — this player has headroom to do more, not less.
+  UNDERLOADED: { EN: "Can increase", IS: "Má auka" },
   // Renamed from "Rest" — that wording read as a prescription and conflicted
   // with Decision Summary's overall verdict. This badge signals INDOOR LOAD
   // was heavy / acute, not that the player must rest. Decision Summary owns
@@ -104,6 +109,7 @@ const I18N = {
   // The actual rest-or-train call lives in Decision Summary.
   needsRest: { EN: "with heavy load", IS: "með mikið álag" },
   needsLighter: { EN: "need a lighter session", IS: "þurfa léttari æfingu" },
+  needsMore: { EN: "can increase load", IS: "mega auka álag" },
   inMeidsl: { EN: "in injury/RTP", IS: "í meiðslum/RTP" },
   inSick: { EN: "sick", IS: "veikir" },
   considerLowerIntensity: {
@@ -125,6 +131,7 @@ function tt(key: keyof typeof I18N, lang: Lang): string {
 const ACTION_ICONS: Record<Action, string> = {
   FULL: "✅",
   MODIFIED: "⚠️",
+  UNDERLOADED: "↑",
   RECOVERY: "🛑",
   NO_DATA: "❓",
   INJURED: "🚫",
@@ -157,17 +164,20 @@ function recommendAction(p: IndoorBriefingPlayer): Action {
   if (p.sessions_7d === 0 || (!p.composite_band && !p.acwr_flag && !p.mcburnie_flag)) {
     return "NO_DATA";
   }
-  const compositeFlag: "green" | "yellow" | "red" | null =
-    p.composite_band === "spike" ? "red"
-      : p.composite_band === "heavy" || p.composite_band === "light" ? "yellow"
-      : p.composite_band === "typical" || p.composite_band === "below_average" ? "green"
-      : null;
-  const flags = [compositeFlag, p.acwr_flag, p.mcburnie_flag].filter(
-    (f): f is "green" | "yellow" | "red" => f != null,
-  );
-  if (flags.length === 0) return "NO_DATA";
-  if (flags.includes("red")) return "RECOVERY";
-  if (flags.some((f) => f === "yellow")) return "MODIFIED";
+  // Separate OVERLOAD (too much) from UNDERLOAD (too little). ACWR "red" can mean
+  // either an acute spike (>1.5) or undertraining (<0.5) — only the spike side is
+  // an overload concern; the undertraining side means the player can do more.
+  const acwrOverloadRed = p.acwr_flag === "red" && (p.acwr_value == null || p.acwr_value >= 1);
+  const acwrUnderload = p.acwr_flag === "red" && p.acwr_value != null && p.acwr_value < 1;
+
+  const redOverload = p.composite_band === "spike" || acwrOverloadRed || p.mcburnie_flag === "red";
+  const yellowOverload = p.composite_band === "heavy" || p.acwr_flag === "yellow" || p.mcburnie_flag === "yellow";
+  if (redOverload) return "RECOVERY";
+  if (yellowOverload) return "MODIFIED";
+
+  // No overload flags. Low indoor load (light band or undertraining ACWR) reads
+  // as "can increase", NOT a lighter session.
+  if (p.composite_band === "light" || acwrUnderload) return "UNDERLOADED";
   return "FULL";
 }
 
@@ -222,6 +232,7 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
   const actionsCount: Record<Action, number> = {
     FULL: 0,
     MODIFIED: 0,
+    UNDERLOADED: 0,
     RECOVERY: 0,
     NO_DATA: 0,
     INJURED: 0,
@@ -268,6 +279,10 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
     sentenceParts.push(`${actionsCount.MODIFIED} ${tt("needsLighter", lang)}`);
     if (teamAction === "FULL") teamAction = "MODIFIED";
   }
+  // Underloaded is informational — surface the count but don't tint the team banner.
+  if (actionsCount.UNDERLOADED >= 1) {
+    sentenceParts.push(`${actionsCount.UNDERLOADED} ${tt("needsMore", lang)}`);
+  }
   if (sentenceParts.length > 0) {
     const fullCountWord = lang === "EN" ? "ready" : "tilbúnir";
     teamSentence = `${actionsCount.FULL} ${fullCountWord}, ${sentenceParts.join(", ")}`;
@@ -282,8 +297,9 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
     RTP: 4,
     RECOVERY: 5,
     MODIFIED: 6,
-    FULL: 7,
-    NO_DATA: 8,
+    UNDERLOADED: 7,
+    FULL: 8,
+    NO_DATA: 9,
   };
   concernPlayers.sort((a, b) => {
     const ao = actionOrder[a.action];
