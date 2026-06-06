@@ -395,6 +395,24 @@ type PostTrainingReportData = {
   monitorCount: number;
   /** Biomechanical (IMA / stride) view of the session — null if no IMA data. */
   ima: ImaSessionProfile | null;
+  /** Load explainability — team metrics today vs the recent norm and the
+   *  peak-load (≈ match) day, the player distribution, and per-player spikes. */
+  loadSummary: {
+    pl: LoadMetricSummary;
+    dist: LoadMetricSummary;
+    hsd: LoadMetricSummary;
+    distribution: { total: number; above: number; elevated: number; inLine: number; below: number };
+    teamSpike: boolean;
+    spikePlayers: Array<{ name: string; plPct: number | null; distPct: number | null; acwr: number | null }>;
+  };
+};
+
+type LoadMetricSummary = {
+  today: number | null;
+  avg: number | null;
+  peak: number | null;
+  pctAvg: number | null;
+  pctMatch: number | null;
 };
 
 type Row = {
@@ -1425,6 +1443,65 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
     imaPages.push(imaPlayers.slice(i, i + PLAYERS_PER_PAGE));
   }
 
+  // Load explainability — verdict, colour and an interpretation paragraph.
+  const ls = data.loadSummary;
+  const plPct = ls.pl.pctAvg;
+  const recentColor =
+    plPct == null ? "#6B7280"
+      : plPct <= 110 ? "#059669"
+      : plPct <= 140 ? "#D97706"
+      : "#DC2626";
+  const recentBand =
+    plPct == null ? null
+      : plPct <= 90 ? "below the recent norm"
+      : plPct <= 110 ? "in line with the recent norm"
+      : plPct <= 140 ? "moderately above the recent norm"
+      : "well above the recent norm";
+  const loadVerdict =
+    plPct == null
+      ? "No GPS baseline available to compare today's load."
+      : `Team Player Load today was ${plPct}% of the 4-week average (${recentBand})`
+        + (ls.pl.pctMatch != null ? ` and ${ls.pl.pctMatch}% of a typical match` : "")
+        + ". "
+        + (ls.spikePlayers.length === 0
+          ? "No player exceeded their usual load."
+          : `${ls.spikePlayers.length} player${ls.spikePlayers.length === 1 ? "" : "s"} ran above their usual.`);
+  // Detailed interpretation that walks through every number on the card.
+  const fmtInt = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
+  const loadInterpretation = (() => {
+    if (plPct == null) return "";
+    const parts: string[] = [];
+    parts.push(
+      `Player Load is the total accelerometer-derived mechanical work the squad absorbed today — the sum of every player's load. Today's team total of ${fmtInt(ls.pl.today)} is ${plPct}% of the ${fmtInt(ls.pl.avg)} the squad averages on a training day across the last 4 weeks, i.e. ${recentBand}.`,
+    );
+    if (ls.pl.pctMatch != null) {
+      parts.push(
+        `Measured against a typical match — the squad's single highest-load day in that window (≈ ${fmtInt(ls.pl.peak)}) — today reached ${ls.pl.pctMatch}% of match demand, so the session was ${ls.pl.pctMatch >= 90 ? "essentially match-level" : ls.pl.pctMatch >= 60 ? "a substantial fraction of a game" : "well below match intensity"}.`,
+      );
+    }
+    const dParts: string[] = [];
+    if (ls.dist.pctAvg != null) dParts.push(`total distance ${fmtInt(ls.dist.today)} m (${ls.dist.pctAvg}% of the 4-week average)`);
+    if (ls.hsd.pctAvg != null) dParts.push(`high-speed distance ${fmtInt(ls.hsd.today)} m (${ls.hsd.pctAvg}% of average)`);
+    if (dParts.length) {
+      parts.push(
+        `Breaking that down, the squad covered ${dParts.join(" and ")} — total distance reflects running volume while high-speed distance (the top sprint bands) reflects intensity, so you can see whether today's load came from doing more or from running faster.`,
+      );
+    }
+    if (ls.distribution.total > 0) {
+      parts.push(
+        `Player-by-player against each athlete's own 4-week norm: ${ls.distribution.above} ran ≥30% above their usual, ${ls.distribution.elevated} were mildly elevated, ${ls.distribution.inLine} were in line and ${ls.distribution.below} below — so the team number ${ls.distribution.above > 0 ? "is not uniform; the spikes below are the ones carrying it" : "reflects a broadly even session"}.`,
+      );
+    }
+    parts.push(
+      plPct <= 110
+        ? "Overall this was a routine day — standard recovery applies, and only the individuals flagged below need watching."
+        : plPct <= 140
+        ? "This is a manageable mid-week stimulus, but stack it carefully: avoid a second high day back-to-back and keep an eye on the flagged players."
+        : "This is a clear team-level spike — prioritise recovery (sleep, nutrition, a lighter next session) and review the flagged players before the next hard day to avoid an acute:chronic overshoot.",
+    );
+    return parts.join(" ");
+  })();
+
   return (
     <Document>
       {/* ══ Page 1: Internal Load — RPE ══ */}
@@ -1434,6 +1511,72 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
           <Text style={postStyles.h1}>Post-Training Report</Text>
           <Text style={postStyles.subtitle}>
             {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
+          </Text>
+        </View>
+
+        {/* ── Explainability — session load overview (top of report) ── */}
+        <View style={[postStyles.section, { backgroundColor: "#F8FAFC", border: "1 solid #E2E8F0", borderRadius: 4, padding: 10 }]}>
+          <Text style={postStyles.sectionTitle}>Session Load — Explainability</Text>
+          <Text style={{ fontSize: 11, fontWeight: 700, color: recentColor, lineHeight: 1.4, marginBottom: 4 }}>
+            {loadVerdict}
+          </Text>
+          {loadInterpretation ? (
+            <Text style={{ fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 8 }}>{loadInterpretation}</Text>
+          ) : null}
+
+          {/* Metric breakdown — today vs 4-week average vs typical match */}
+          <View style={postStyles.table}>
+            <View style={postStyles.tHead}>
+              <Text style={[{ width: "34%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Metric</Text>
+              <Text style={[{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Today</Text>
+              <Text style={[{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>4-wk avg</Text>
+              <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of avg</Text>
+              <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of match</Text>
+            </View>
+            {([
+              ["Team Player Load", ls.pl, 0],
+              ["Total Distance (m)", ls.dist, 0],
+              ["High-Speed Distance (m)", ls.hsd, 0],
+            ] as Array<[string, typeof ls.pl, number]>).map(([label, m], i) => {
+              const c = m.pctAvg == null ? "#111827" : m.pctAvg <= 110 ? "#059669" : m.pctAvg <= 140 ? "#D97706" : "#DC2626";
+              return (
+                <View key={label} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
+                  <Text style={{ width: "34%", padding: 4, fontSize: 9, fontWeight: 700 }}>{label}</Text>
+                  <Text style={{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(m.today, 0)}</Text>
+                  <Text style={{ width: "18%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(m.avg, 0)}</Text>
+                  <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: c }]}>{m.pctAvg != null ? `${m.pctAvg}%` : "—"}</Text>
+                  <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{m.pctMatch != null ? `${m.pctMatch}%` : "—"}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Player distribution vs each player's own 4-week norm */}
+          {ls.distribution.total > 0 && (
+            <Text style={{ fontSize: 9, color: "#334155", marginTop: 6 }}>
+              Players vs their own 4-week norm ({ls.distribution.total} with GPS):{" "}
+              <Text style={{ color: "#DC2626", fontWeight: 700 }}>{ls.distribution.above} above (≥130%)</Text> ·{" "}
+              <Text style={{ color: "#D97706" }}>{ls.distribution.elevated} elevated</Text> ·{" "}
+              <Text style={{ color: "#059669" }}>{ls.distribution.inLine} in line</Text> ·{" "}
+              {ls.distribution.below} below
+            </Text>
+          )}
+
+          {/* Spiking players (named) */}
+          {ls.spikePlayers.length > 0 && (
+            <Text style={{ fontSize: 9, color: "#B91C1C", marginTop: 6, lineHeight: 1.4 }}>
+              Spikes (above their usual): {ls.spikePlayers.slice(0, 10).map((p) => {
+                const parts: string[] = [];
+                if (p.plPct != null) parts.push(`+${Math.round(p.plPct)}% PL`);
+                if (p.distPct != null && p.distPct >= 30) parts.push(`+${Math.round(p.distPct)}% dist`);
+                if (p.acwr != null && p.acwr >= 1.5) parts.push(`ACWR ${p.acwr.toFixed(2)}`);
+                return `${p.name}${parts.length ? ` (${parts.join(", ")})` : ""}`;
+              }).join(" · ")}{ls.spikePlayers.length > 10 ? ` +${ls.spikePlayers.length - 10} more` : ""}
+            </Text>
+          )}
+
+          <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 6, lineHeight: 1.4 }}>
+            Baselines use the team total for each metric over the prior 4 weeks (catapult/manual GPS). &quot;4-wk avg&quot; = mean of prior session days; &quot;match&quot; = the highest team-load day in the window (matches are a team&apos;s peak-load days). A player spike = Player Load ≥30% above their own 4-week average, or ACWR ≥ 1.5 (Gabbett 2016 acute:chronic ceiling).
           </Text>
         </View>
 
@@ -6366,6 +6509,53 @@ export default function CoachPage() {
         ? rpeSubmitters.reduce((s, p) => s + (p.sessionLoad ?? 0), 0)
         : null;
 
+      // ── 5a. Load explainability — today vs recent days vs match ───────
+      // For each metric, build the team's daily total across the 28-day window.
+      // The mean of prior days is the recent norm; the peak prior day is a
+      // transparent "≈ a typical match" reference (matches are a team's
+      // highest-load days).
+      const teamMetricSeries = (getVal: (r: LoadRow) => number | null) => {
+        const byDate = new Map<string, number>();
+        for (const r of rows28) {
+          const v = Number(getVal(r) ?? 0);
+          if (Number.isFinite(v) && v > 0) byDate.set(r.date, (byDate.get(r.date) ?? 0) + v);
+        }
+        const today = byDate.get(sessionDate) ?? 0;
+        const prior = Array.from(byDate.entries()).filter(([d, v]) => d < sessionDate && v > 0).map(([, v]) => v);
+        const avg = prior.length ? prior.reduce((s, v) => s + v, 0) / prior.length : null;
+        const peak = prior.length ? Math.max(...prior) : null;
+        return {
+          today: today > 0 ? today : null,
+          avg,
+          peak,
+          pctAvg: avg && avg > 0 ? Math.round((today / avg) * 100) : null,
+          pctMatch: peak && peak > 0 ? Math.round((today / peak) * 100) : null,
+        };
+      };
+      const plSeries = teamMetricSeries((r) => r.total_player_load);
+      const distSeries = teamMetricSeries((r) => r.total_distance);
+      const hsdSeries = teamMetricSeries((r) =>
+        Number(r.velocity_band5_total_distance ?? 0) + Number(r.velocity_band6_total_distance ?? 0));
+
+      // Distribution of players by today's Player Load vs their own 28-day norm.
+      const withPL = reportPlayers.filter((p) => p.totalDistance != null && p.playerLoadPct != null) as Array<{ playerLoadPct: number }>;
+      const distribution = {
+        total: withPL.length,
+        above: withPL.filter((p) => p.playerLoadPct >= 30).length,        // ≥130% of norm
+        elevated: withPL.filter((p) => p.playerLoadPct >= 10 && p.playerLoadPct < 30).length,
+        inLine: withPL.filter((p) => p.playerLoadPct > -10 && p.playerLoadPct < 10).length,
+        below: withPL.filter((p) => p.playerLoadPct <= -10).length,
+      };
+
+      // Per-player spikes: today's Player Load ≥30% above their own 28-day norm,
+      // or ACWR ≥ 1.5 (Gabbett sweet-spot ceiling). Sorted by magnitude.
+      const spikePlayers = reportPlayers
+        .filter((p) => p.totalDistance != null && ((p.acwr != null && p.acwr >= 1.5) || (p.playerLoadPct != null && p.playerLoadPct >= 30)))
+        .map((p) => ({ name: p.name, plPct: p.playerLoadPct, distPct: p.totalDistancePct, acwr: p.acwr }))
+        .sort((a, b) => (b.plPct ?? 0) - (a.plPct ?? 0));
+      const teamSpike = plSeries.pctAvg != null && plSeries.pctAvg >= 140;
+      const loadSummary = { pl: plSeries, dist: distSeries, hsd: hsdSeries, distribution, teamSpike, spikePlayers };
+
       // ── 5b. IMA / stride profile for the same session date ───────
       // Re-uses the exact profile the /coach/ima-intelligence page shows so the
       // report carries the same biomechanical numbers (one source, one truth).
@@ -6400,6 +6590,7 @@ export default function CoachPage() {
         alertCount: reportPlayers.filter((p) => p.attentionFlag === "ALERT").length,
         monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
         ima: imaProfile,
+        loadSummary,
       };
 
       if (reportPlayers.length === 0) {
