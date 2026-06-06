@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { SEASON_PHASES, SEASON_PHASE_SPEC, type SeasonPhase } from "@/lib/client/seasonPhase";
+import ExerciseInfo from "@/components/exercise/ExerciseInfo";
+import { buildExerciseIndex, resolveExercise, type ExerciseIndex } from "@/lib/exercise/matchLibrary";
 
 type Row = {
   num: string;
@@ -118,6 +120,10 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
   const [assignSeason, setAssignSeason] = useState<SeasonPhase | "">("");
   const [assignBusy, setAssignBusy] = useState(false);
 
+  // Exercise glossary index — used to attach bilingual explanations (info icon)
+  // to the free-text exercise names where a confident library match exists.
+  const [exerciseIdx, setExerciseIdx] = useState<ExerciseIndex | null>(null);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -130,6 +136,14 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
       if (!res.ok) throw new Error(j.error ?? "Failed to load");
       setLibrary(j.library);
       setAssignments(j.assignments);
+      // Best-effort glossary load — non-fatal if it fails (icons simply absent).
+      try {
+        const gRes = await fetch("/api/coach/exercise-glossary", { headers: { Authorization: `Bearer ${token}` } });
+        if (gRes.ok) {
+          const gJson = await gRes.json();
+          setExerciseIdx(buildExerciseIndex(gJson.exercises ?? []));
+        }
+      } catch { /* ignore */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -314,7 +328,17 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                             {blk.rows.map((r, i) => (
                               <tr key={i} className="border-t border-slate-100">
                                 <td className="px-2 py-1.5">{r.num}</td>
-                                <td className="px-2 py-1.5 font-medium text-slate-900">{r.exercise}</td>
+                                <td className="px-2 py-1.5 font-medium text-slate-900">
+                                  {(() => {
+                                    const m = exerciseIdx ? resolveExercise(r.exercise, exerciseIdx) : null;
+                                    return (
+                                      <span className="inline-flex items-center gap-1">
+                                        {r.exercise}
+                                        {m && <ExerciseInfo name={r.exercise} description={m.description} descriptionIs={m.description_is} />}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
                                 <td className="px-2 py-1.5 text-center tabular-nums">{r.reps}</td>
                                 <td className="px-2 py-1.5 text-center tabular-nums">{r.sets}</td>
                                 <td className="px-2 py-1.5 text-center">{typeof r.velocity === "number" ? `${r.velocity} m/s` : r.velocity}</td>
