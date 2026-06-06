@@ -111,6 +111,12 @@ const I18N = {
     IS: "íhuga að lækka heildarintensity team-session",
   },
   watchOut: { EN: "watch them today", IS: "passa þeim í dag" },
+  // One-line provenance so this card isn't mistaken for the train-or-rest
+  // verdict. It is a single lens (indoor training LOAD), not the decision.
+  lensNote: {
+    EN: "Indoor training-load lens — who trained heavy or light indoors. The actual train-or-rest verdict lives in Decision Summary.",
+    IS: "Álagslinsa innandyra — hver tók þungt eða létt álag. Sjálfur æfa-eða-hvíla úrskurðurinn er í Decision Summary.",
+  },
 } as const;
 function tt(key: keyof typeof I18N, lang: Lang): string {
   return lang === "IS" ? I18N[key].IS : I18N[key].EN;
@@ -305,6 +311,7 @@ export function TeamIndoorBriefing({ players }: { players: IndoorBriefingPlayer[
             {tt("briefingTitle", lang)}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-slate-900">{teamSentence}</div>
+          <div className="mt-1 text-[11px] leading-snug text-slate-500">{tt("lensNote", lang)}</div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">
