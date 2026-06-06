@@ -71,6 +71,7 @@ import {
   type DailySprintExposure,
 } from "@/lib/micropulse/sprintExposure";
 import ExplainabilityDrawer from "@/components/performanceIntelligence/ExplainabilityDrawer";
+import type { ImaSessionProfile, ImaPlayerDay } from "@/lib/micropulse/imaDayProfile";
 import PerformanceIntelligencePanel from "@/components/performanceIntelligence/PerformanceIntelligencePanel";
 import SessionDraftCard from "@/components/sessionBuilder/SessionDraftCard";
 import SessionDraftDetails from "@/components/sessionBuilder/SessionDraftDetails";
@@ -392,6 +393,8 @@ type PostTrainingReportData = {
   rpeSubmissionCount: number;
   alertCount: number;
   monitorCount: number;
+  /** Biomechanical (IMA / stride) view of the session — null if no IMA data. */
+  ima: ImaSessionProfile | null;
 };
 
 type Row = {
@@ -1412,6 +1415,16 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
   const rpeTablePlayers = data.players.filter((p) => p.rpeSubmitted).sort((a, b) => (b.rpe ?? -1) - (a.rpe ?? -1));
   const interpretText = rpeInterpretation(data.rpeTeamAvg, data.rpeSubmissionCount, data.players.length);
 
+  // IMA / stride page — sorted by sprint-strides desc, paginated like GPS
+  const ima = data.ima;
+  const imaPlayers: ImaPlayerDay[] = ima
+    ? [...ima.per_player].filter((p) => p.total_strides > 0).sort((a, b) => b.sprint_strides - a.sprint_strides)
+    : [];
+  const imaPages: ImaPlayerDay[][] = [];
+  for (let i = 0; i < imaPlayers.length; i += PLAYERS_PER_PAGE) {
+    imaPages.push(imaPlayers.slice(i, i + PLAYERS_PER_PAGE));
+  }
+
   return (
     <Document>
       {/* ══ Page 1: Internal Load — RPE ══ */}
@@ -1651,6 +1664,110 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                 );
               })}
             </View>
+          </View>
+        </Page>
+      ))}
+
+      {/* ══ Page: Biomechanical Load — IMA / Stride ══ */}
+      {ima && imaPages.length > 0 && imaPages.map((pagePlayers, pgIdx) => (
+        <Page key={"pt-ima-" + pgIdx} size="A4" orientation="landscape" style={postStyles.page}>
+          <View style={postStyles.section}>
+            <Text style={postStyles.h1}>
+              Post-Training Report — IMA (Stride){pgIdx > 0 ? " (frh.)" : ""}
+            </Text>
+            <Text style={postStyles.subtitle}>
+              {data.teamName} · {data.sessionDate} · {data.mdDay} · {ima.player_count} players captured · {ima.session_headline}
+            </Text>
+          </View>
+
+          {/* Team summary boxes — only on the first IMA page */}
+          {pgIdx === 0 && (
+            <>
+              <View style={postStyles.section}>
+                <Text style={postStyles.sectionTitle}>Lífaflfræðilegt álag — liðsyfirlit</Text>
+                <View style={postStyles.summaryRow}>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{numFmt2(ima.team_total_strides, 0)}</Text>
+                    <Text style={postStyles.summaryLabel}>Total strides</Text>
+                  </View>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{numFmt2(ima.team_sprint_strides, 0)} ({Math.round(ima.pct_sprint)}%)</Text>
+                    <Text style={postStyles.summaryLabel}>Sprint-strides (b5-8)</Text>
+                  </View>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>
+                      {ima.team_cod_high_left} L / {ima.team_cod_high_right} R{ima.team_cod_asymmetry_pct != null ? ` · ${Math.round(ima.team_cod_asymmetry_pct)}%` : ""}
+                    </Text>
+                    <Text style={postStyles.summaryLabel}>L/R CoD balance (high)</Text>
+                  </View>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{ima.players_high_cod_flagged} / {ima.player_count}</Text>
+                    <Text style={postStyles.summaryLabel}>High-CoD asym. flagged</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={postStyles.section}>
+                <Text style={postStyles.sectionTitle}>Band dreifing (lið)</Text>
+                <View style={postStyles.summaryRow}>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_low)}%</Text>
+                    <Text style={postStyles.summaryLabel}>Low (b1-3)</Text>
+                  </View>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_mid)}%</Text>
+                    <Text style={postStyles.summaryLabel}>Mid (b4-6)</Text>
+                  </View>
+                  <View style={postStyles.summaryBox}>
+                    <Text style={postStyles.summaryVal}>{Math.round(ima.pct_high)}%</Text>
+                    <Text style={postStyles.summaryLabel}>High (b7-8)</Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* Per-player IMA table */}
+          <View style={postStyles.section}>
+            <Text style={postStyles.sectionTitle}>IMA eftir leikmann (raðað eftir sprint-strides b5-8)</Text>
+            <View style={postStyles.table}>
+              <View style={postStyles.tHead}>
+                <Text style={[{ width: "20%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Leikmaður</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Total</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b1-3</Text>
+                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b4-6</Text>
+                <Text style={[{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>b7-8</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Sprint b5-8</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>vs grunnl.</Text>
+                <Text style={[{ width: "12%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD L/R (há)</Text>
+                <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>CoD ósamh.</Text>
+              </View>
+              {pagePlayers.map((p, i) => {
+                const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
+                const vs = p.sprint_vs_baseline_pct;
+                const vsStyle = vs == null ? {} : vs > 150 ? { color: "#DC2626", fontWeight: 700 } : vs > 120 ? { color: "#D97706" } : {};
+                const asym = p.cod_asymmetry_pct;
+                const asymStyle = asym != null && asym > 15 ? { color: "#DC2626", fontWeight: 700 } : {};
+                return (
+                  <View key={p.player_id} style={rowStyle}>
+                    <Text style={{ width: "20%", padding: 4, fontSize: 9 }}>{p.full_name}</Text>
+                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.total_strides, 0)}</Text>
+                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.low_strides, 0)}</Text>
+                    <Text style={{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.mid_strides, 0)}</Text>
+                    <Text style={{ width: "9%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(p.high_strides, 0)}</Text>
+                    <Text style={{ width: "10%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }}>{numFmt2(p.sprint_strides, 0)}</Text>
+                    <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, vsStyle]}>{vs == null ? "—" : `${Math.round(vs)}%`}</Text>
+                    <Text style={{ width: "12%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.cod_left_high} / {p.cod_right_high}</Text>
+                    <Text style={[{ width: "10%", padding: 4, fontSize: 9, textAlign: "right" }, asymStyle]}>{asym == null ? "—" : `${Math.round(asym)}%`}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            {pgIdx === imaPages.length - 1 && (
+              <Text style={{ fontSize: 8, color: "#9CA3AF", marginTop: 6 }}>
+                IMA Free Running: 8-banda stride dreifing (Low b1-3 · Mid b4-6 · High b7-8). Sprint = bönd 5-8 vs persónuleg 14-daga grunnlína. CoD ósamhverfa &gt; 15% á háa intensity = aukin meiðslahætta (Bishop 2020).
+              </Text>
+            )}
           </View>
         </Page>
       ))}
@@ -6242,6 +6359,28 @@ export default function CoachPage() {
         ? rpeSubmitters.reduce((s, p) => s + (p.sessionLoad ?? 0), 0)
         : null;
 
+      // ── 5b. IMA / stride profile for the same session date ───────
+      // Re-uses the exact profile the /coach/ima-intelligence page shows so the
+      // report carries the same biomechanical numbers (one source, one truth).
+      let imaProfile: ImaSessionProfile | null = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const imaRes = await fetch(
+            `/api/coach/team/ima-day-profile?date=${sessionDate}&lang=IS`,
+            { headers: { Authorization: `Bearer ${session.access_token}` } },
+          );
+          if (imaRes.ok) {
+            const imaJson = await imaRes.json();
+            const p = imaJson?.profile as ImaSessionProfile | undefined;
+            // Only attach when there is real captured data
+            if (p && p.player_count > 0 && p.team_total_strides > 0) imaProfile = p;
+          }
+        }
+      } catch (e) {
+        console.warn("IMA profile fetch for report failed:", e);
+      }
+
       const reportData: PostTrainingReportData = {
         teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
         sessionDate,
@@ -6253,6 +6392,7 @@ export default function CoachPage() {
         rpeSubmissionCount: rpeSubmitters.length,
         alertCount: reportPlayers.filter((p) => p.attentionFlag === "ALERT").length,
         monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
+        ima: imaProfile,
       };
 
       if (reportPlayers.length === 0) {
