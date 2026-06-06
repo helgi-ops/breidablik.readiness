@@ -100,6 +100,7 @@ const performanceAnalyticsLinks: SidebarLink[] = [
 // staff actually splits responsibilities.
 const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
+  { href: "/coach/load-plan",          label: { EN: "Today's load target", IS: "Álagsmarkmið dagsins" } },
   { href: "/coach?tab=md",             label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
   { href: "/coach?tab=drills",         label: { EN: "Session builder",     IS: "Session builder" } },
   { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
