@@ -72,6 +72,8 @@ const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
+  // KSÍ Report lives under Admin (it's an outbound export/report, not a
+  // real-time monitoring surface) — see adminLinks below.
   // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
   // shown only when LITE filtering keeps it (Malone 2017 + Buchheit 2014).
   { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
@@ -129,6 +131,7 @@ const teamPlanningLinks: SidebarLink[] = [
 // team side only, not here.
 const ptStrengthLinks: SidebarLink[] = [
   { href: "/coach/starter-templates", label: { EN: "Starter templates",     IS: "Tilbúin kerfi" } },
+  { href: "/coach/plan-builder",      label: { EN: "Plan builder",          IS: "Kerfasmiður" } },
   { href: "/coach/custom-templates",  label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
   // LV Profile renders as a TrainerDashboard tab on PT side, so the
   // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
@@ -168,6 +171,7 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/players",           label: { EN: "Players",           IS: "Leikmenn" }, badgeKey: "pending" },
   { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
   { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
+  { href: "/coach/ksi-report",        label: { EN: "KSÍ Report",        IS: "KSÍ skýrsla" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
   { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
