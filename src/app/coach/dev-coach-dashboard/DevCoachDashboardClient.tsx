@@ -98,6 +98,7 @@ import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { downloadLoadPlanPdf, type LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
@@ -2346,6 +2347,7 @@ export default function CoachPage() {
     player_id: string; full_name: string; missing_checkin: boolean; missing_rpe: boolean;
   }>>([]);
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
+  const [pdfPreDownloading, setPdfPreDownloading] = useState(false);
   // Optional past-date selector for the Post-Training report (empty = latest session).
   const [postReportDate, setPostReportDate] = useState<string>("");
 
@@ -6304,6 +6306,32 @@ export default function CoachPage() {
     }
   }
 
+  // Pre-Session report — same engine as the /coach/load-plan page, downloaded
+  // straight from Today so the coach gets both reports in one place.
+  async function downloadPreSessionReport(dateArg?: string) {
+    try {
+      setPdfPreDownloading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { alert("Not signed in."); return; }
+      const res = await fetch(`/api/coach/load-plan${dateArg ? `?date=${dateArg}` : ""}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`Pre-session report failed: ${j.error ?? res.status}`); return; }
+      const j = await res.json();
+      await downloadLoadPlanPdf(
+        j.plan as LoadPlanForPdf,
+        (j.topAttention ?? []) as Parameters<typeof downloadLoadPlanPdf>[1],
+        (j.readiness ?? null) as Parameters<typeof downloadLoadPlanPdf>[2],
+        false,
+      );
+    } catch (e: unknown) {
+      console.error("pre-session report download failed:", e);
+      alert("Could not generate pre-session PDF report.");
+    } finally {
+      setPdfPreDownloading(false);
+    }
+  }
+
   async function downloadPostTrainingReport(dateArg?: string) {
     try {
       setPdfPostDownloading(true);
@@ -8542,6 +8570,83 @@ export default function CoachPage() {
       ══════════════════════════════════════════ */}
       {dashTab === "today" && (
         <div className="space-y-6">
+          {/* Reports bar — pinned at the very top so both the pre-session and
+              post-training PDFs are one click away, out of the busy command-center
+              header. One shared date picker: empty = today / latest session. */}
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                {lang === "IS" ? "Skýrslur" : "Reports"}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {lang === "IS" ? "· sendanlegar PDF skýrslur fyrir liðið" : "· sendable PDF reports for the squad"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadReadinessRiskReport}
+                disabled={pdfDownloading || loading}
+                title={lang === "IS" ? "Hverjir eru flaggaðir út frá innskráningum dagsins" : "Who is flagged from today's check-ins"}
+                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {pdfDownloading ? "Generating…" : "Readiness Risk"}
+              </Button>
+              <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadPreSessionReport(postReportDate || undefined)}
+                disabled={pdfPreDownloading || loading}
+                title={lang === "IS" ? "Ráðlagt álag FYRIR æfingu — target, RPE, top attention" : "Recommended load BEFORE training — targets, RPE, top attention"}
+                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {pdfPreDownloading ? "Generating…" : "Pre-Session"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadPostTrainingReport(postReportDate || undefined)}
+                disabled={pdfPostDownloading || loading}
+                title={lang === "IS" ? "Hvað liðið gerði EFTIR æfingu — raun vs plan" : "What the squad did AFTER training — actual vs plan"}
+                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {pdfPostDownloading ? "Generating…" : "Post-Training"}
+              </Button>
+              {/* Shared day selector — empty = today / latest session. */}
+              <label className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-500">
+                {lang === "IS" ? "Dagur" : "Day"}
+                <input
+                  type="date"
+                  value={postReportDate}
+                  max={today}
+                  onChange={(e) => setPostReportDate(e.target.value)}
+                  title={lang === "IS" ? "Veldu dag (tómt = í dag / nýjasta)" : "Pick a day (empty = today / latest)"}
+                  className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                />
+              </label>
+            </div>
+            {/* Per-report captions so coaches know what each button produces. */}
+            <p className="mt-2 text-[11px] leading-snug text-slate-500">
+              {lang === "IS" ? (
+                <>
+                  <span className="font-medium text-slate-600">Readiness Risk</span>: hverjir eru flaggaðir út frá innskráningum dagsins ·{" "}
+                  <span className="font-medium text-slate-600">Pre-Session</span>: ráðlagt álag <em>fyrir</em> æfingu (target, RPE, top attention) ·{" "}
+                  <span className="font-medium text-slate-600">Post-Training</span>: hvað liðið gerði <em>eftir</em> æfingu — raun vs plan. Veldu dag eða skildu eftir tómt fyrir í dag / nýjustu æfingu.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-slate-600">Readiness Risk</span>: who&apos;s flagged from today&apos;s check-ins ·{" "}
+                  <span className="font-medium text-slate-600">Pre-Session</span>: the recommended load <em>before</em> training (targets, RPE, top attention) ·{" "}
+                  <span className="font-medium text-slate-600">Post-Training</span>: what the squad actually did <em>after</em> training vs the plan. Pick a day, or leave empty for today / the latest session.
+                </>
+              )}
+            </p>
+          </div>
           {/* Onboarding checklist — only shown to new clubs */}
           <OnboardingChecklist
             teamId={coachTeamId}
@@ -8635,45 +8740,6 @@ export default function CoachPage() {
                       </div>
                     </>
                   ) : null}
-                  <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
-                  {/* Reports group — visually separated from the Catapult/sync
-                      utilities so "generate report" reads as session output,
-                      not data plumbing. */}
-                  <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50/60 px-2 py-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                      {lang === "IS" ? "Skýrslur" : "Reports"}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={downloadReadinessRiskReport}
-                      disabled={pdfDownloading || loading}
-                      className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      {pdfDownloading ? "Generating…" : "Readiness Risk"}
-                    </Button>
-                    {/* Optional past-date selector — leave empty for the latest
-                        session, or pick a day to pull an older Post-Training report. */}
-                    <input
-                      type="date"
-                      value={postReportDate}
-                      max={today}
-                      onChange={(e) => setPostReportDate(e.target.value)}
-                      title={lang === "IS" ? "Veldu æfingadag (tómt = nýjasta)" : "Pick a session day (empty = latest)"}
-                      className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => downloadPostTrainingReport(postReportDate || undefined)}
-                      disabled={pdfPostDownloading || loading}
-                      className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      {pdfPostDownloading ? "Generating…" : "Post-Training"}
-                    </Button>
-                  </div>
                 </div>
               </div>
             </CardHeader>
