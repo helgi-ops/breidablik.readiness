@@ -100,7 +100,13 @@ function isoMondayOfISO(yyyyMmDd: string) {
 function addDays(yyyyMmDd: string, days: number) {
   const d = new Date(yyyyMmDd + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  // Format from LOCAL date parts (not toISOString, which is UTC and shifts the
+  // date back a day in timezones ahead of UTC). Keeps this consistent with
+  // isoMondayOf so the week grid labels the right calendar dates everywhere.
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function diffDays(aYYYYMMDD: string, bYYYYMMDD: string) {

@@ -82,10 +82,14 @@ export type KpiTarget = {
 export type PlayerPlan = {
   player_id: string;
   name: string;
-  /** Per-player target for the headline KPIs (distance, player load, IMA). */
+  /** Per-player target for every KPI. */
   totalDistance: number | null;
   playerLoad: number | null;
-  ima: number | null;
+  hsr: number | null;       // velocity band 5 (high-speed running)
+  sprint: number | null;    // velocity band 6 (sprint)
+  accel: number | null;     // accel band 2-3 efforts
+  decel: number | null;     // decel band 2-3 efforts
+  ima: number | null;       // IMA high-intensity / change-of-direction distance
   /** Acute:chronic for this player (player load). */
   acwr: number | null;
   /** "reduce" when already loaded (ACWR ≥ 1.3) — trim their individual target. */
@@ -97,6 +101,11 @@ export type LoadPlan = {
   sessionDate: string;
   planned: PlannedSessionLoad;       // type, band, sRPE, matchPct, rationale
   applicable: boolean;
+  /** "microcycle" = MD-anchored; "recent_baseline" = last-4-week fallback (no
+   *  Week setup); "unavailable" = match/off day (no training target). */
+  mode: "microcycle" | "recent_baseline" | "unavailable";
+  hasTargets: boolean;
+  baselineNote: string | null;
   /** Team-level per-player KPI targets. */
   targets: KpiTarget[];
   /** Number of match-level days used to build the reference. */
@@ -108,7 +117,36 @@ export type LoadPlan = {
   /** Suggested ± adjustment from squad readiness (e.g. −15% on a heavy-red day). */
   readinessAdjustPct: number;
   readinessNote: string | null;
+  /** Target internal load (session-RPE). Microcycle prescribes it; baseline
+   *  estimates it from the squad's recent RPE submissions. */
+  targetRpe: number | null;
+  targetDurationMin: number | null;
+  targetSrpe: number | null;
+  srpeSource: "microcycle" | "recent" | "none";
+  /** The squad's last few training sessions leading into today (oldest→newest),
+   *  so the coach sees the trajectory the target sits on top of. */
+  recentSessions: Array<{ date: string; totalDistance: number | null; playerLoad: number | null; hsr: number | null; isPeak: boolean }>;
   perPlayer: PlayerPlan[];
+  /** Raw recent training-day baseline per KPI (pre-ACWR, the "usual" reference). */
+  recentAvg: Partial<Record<LoadKpi, number | null>>;
+  /** Targets after the readiness modifier is applied (what to actually prescribe). */
+  adjustedTargets: KpiTarget[];
+  /** How much signal the verdict rests on — drives the confidence statement. */
+  coverage: {
+    trainingDays: number;
+    matchDays: number;
+    distinctDates: number;
+    playersWithHistory: number;
+    totalPlayers: number;
+    windowDays: number;
+  };
+  /** What the squad's recent work has leaned toward (force vs running). */
+  recentLean: {
+    mechIdx: number | null;
+    locoIdx: number | null;
+    lean: "mechanical" | "locomotive" | "balanced" | null;
+    note: string | null;
+  };
 };
 
 export type BuildLoadPlanInput = {
@@ -122,6 +160,9 @@ export type BuildLoadPlanInput = {
   nameById: Map<string, string>;
   /** Today's squad readiness zone counts (optional check-in modifier). */
   readiness?: { green: number; yellow: number; red: number } | null;
+  /** Squad's recent RPE submissions (last ~4 weeks) — used to estimate a
+   *  target session-RPE when there is no microcycle (MD) prescription. */
+  recentRpe?: { avgRpe: number | null; avgDuration: number | null; n: number } | null;
 };
 
 /** Mean of finite, positive numbers (null when empty). */
@@ -171,21 +212,8 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     matchRef[k] = mean(matchDays.map((d) => dateMeans.get(d)?.[k] ?? 0));
   }
 
-  const matchPct = planned.applicable ? planned.matchPct : 0;
-  const emph = EMPHASIS[planned.loadType] ?? {};
-  const targets: KpiTarget[] = LOAD_KPIS.map((k) => {
-    const ref = matchRef[k] ?? null;
-    const e = emph[k] ?? 1;
-    const target = ref != null && planned.applicable ? Math.round(ref * (matchPct / 100) * e) : null;
-    return {
-      kpi: k,
-      target,
-      matchRef: ref != null ? Math.round(ref) : null,
-      pctOfMatch: ref != null && ref > 0 && target != null ? Math.round((target / ref) * 100) : null,
-    };
-  });
-
-  // Team acute:chronic on Player Load (mean-per-player daily series).
+  // Team acute:chronic on Player Load (mean-per-player daily series) — computed
+  // first so it can modulate the recent-baseline targets.
   const teamPlByDate = new Map<string, number>();
   for (const [d, m] of dateMeans) if (m.playerLoad != null) teamPlByDate.set(d, m.playerLoad);
   const acuteFrom = addDays(input.sessionDate, -6);
@@ -193,6 +221,63 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
   const acutePL = mean(Array.from(teamPlByDate.entries()).filter(([d]) => d >= acuteFrom && d <= input.sessionDate).map(([, v]) => v));
   const chronicPL = mean(Array.from(teamPlByDate.entries()).filter(([d]) => d >= chronicFrom && d <= input.sessionDate).map(([, v]) => v));
   const teamAcwr = acutePL != null && chronicPL != null && chronicPL > 0 ? acutePL / chronicPL : null;
+
+  // Recent training-day baseline per KPI (last 28d, EXCLUDING match days) — the
+  // "maintain" reference used when there is no microcycle (MD) context.
+  const trainingDates = Array.from(dateMeans.keys()).filter((d) => d >= chronicFrom && d <= input.sessionDate && !matchDays.includes(d));
+  const trainingAvg: Partial<Record<LoadKpi, number | null>> = {};
+  for (const k of LOAD_KPIS) trainingAvg[k] = mean(trainingDates.map((d) => dateMeans.get(d)?.[k] ?? 0));
+
+  // Targeting mode: microcycle when an MD context exists; otherwise fall back to
+  // a recent-load baseline so the report is useful without Week setup. Match/off
+  // days carry no training target.
+  const mode: "microcycle" | "recent_baseline" | "unavailable" =
+    planned.applicable ? "microcycle" : planned.reason === "no_md" ? "recent_baseline" : "unavailable";
+  const acwrFactor = teamAcwr == null ? 1 : teamAcwr > 1.3 ? 0.85 : teamAcwr < 0.8 ? 1.1 : 1.0;
+
+  const matchPct = planned.applicable ? planned.matchPct : 0;
+  const emph = EMPHASIS[planned.loadType] ?? {};
+  const targets: KpiTarget[] = LOAD_KPIS.map((k) => {
+    const ref = matchRef[k] ?? null;
+    let target: number | null = null;
+    if (mode === "microcycle") {
+      const e = emph[k] ?? 1;
+      target = ref != null ? Math.round(ref * (matchPct / 100) * e) : null;
+    } else if (mode === "recent_baseline") {
+      const base = trainingAvg[k] ?? null;
+      target = base != null ? Math.round(base * acwrFactor) : null;
+    }
+    return {
+      kpi: k,
+      target,
+      matchRef: ref != null ? Math.round(ref) : null,
+      pctOfMatch: ref != null && ref > 0 && target != null ? Math.round((target / ref) * 100) : null,
+    };
+  });
+  const baselineNote = mode === "recent_baseline"
+    ? `No match-week (MD) context set — targets use the last-4-week training baseline${teamAcwr != null ? (acwrFactor === 1 ? ", held at maintenance" : acwrFactor < 1 ? ", trimmed (acute:chronic is high)" : ", nudged up (room to build)") : ""}. Set up Week setup for microcycle-specific (mechanical / locomotive) targeting.`
+    : null;
+
+  // Target internal load (session-RPE). Microcycle prescribes it from the MD
+  // day; otherwise estimate it from the squad's recent RPE submissions so the
+  // pre-session report still states an expected RPE (and the post-session report
+  // can later check planned vs actual internal load).
+  let targetRpe: number | null = null;
+  let targetDurationMin: number | null = null;
+  let targetSrpe: number | null = null;
+  let srpeSource: "microcycle" | "recent" | "none" = "none";
+  if (planned.applicable && planned.sessionLoad > 0) {
+    targetRpe = planned.rpe;
+    targetDurationMin = planned.durationMin;
+    targetSrpe = planned.sessionLoad;
+    srpeSource = "microcycle";
+  } else if (input.recentRpe && input.recentRpe.avgRpe != null && input.recentRpe.n > 0) {
+    const dur = input.recentRpe.avgDuration ?? 70;
+    targetRpe = Math.round(input.recentRpe.avgRpe * 10) / 10;
+    targetDurationMin = Math.round(dur);
+    targetSrpe = Math.round(input.recentRpe.avgRpe * dur);
+    srpeSource = "recent";
+  }
 
   // Readiness modifier (optional check-in input). Heavy yellow/red → trim.
   let readinessAdjustPct = 0;
@@ -208,6 +293,50 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     }
   }
 
+  // Readiness-adjusted targets — what to actually prescribe once the squad's
+  // check-in modifier is applied (the headline targets stay "clean").
+  const adjFactor = 1 + readinessAdjustPct / 100;
+  const adjustedTargets: KpiTarget[] = targets.map((t) => ({
+    ...t,
+    target: t.target != null ? Math.round(t.target * adjFactor) : null,
+    pctOfMatch: t.matchRef != null && t.matchRef > 0 && t.target != null ? Math.round(((t.target * adjFactor) / t.matchRef) * 100) : null,
+  }));
+
+  // What has the squad's recent work leaned toward — force (accel/decel) vs
+  // running (HSR/sprint)? Indexed against the match reference so "1.0" = a
+  // match-like share. Lets the baseline report still say something about TYPE.
+  const ratioTo = (k: LoadKpi): number | null => {
+    const r = matchRef[k]; const b = trainingAvg[k];
+    return r != null && r > 0 && b != null ? b / r : null;
+  };
+  const meanOf = (xs: Array<number | null>): number | null => {
+    const v = xs.filter((x): x is number => x != null);
+    return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+  };
+  const mechIdx = meanOf([ratioTo("accel"), ratioTo("decel")]);
+  const locoIdx = meanOf([ratioTo("hsr"), ratioTo("sprint")]);
+  let lean: "mechanical" | "locomotive" | "balanced" | null = null;
+  let leanNote: string | null = null;
+  if (mechIdx != null && locoIdx != null) {
+    if (mechIdx > locoIdx * 1.15) { lean = "mechanical"; leanNote = "Recent sessions have leaned mechanical (accel/decel-heavy) relative to high-speed running — today is a good day to add some locomotor (speed) work to keep the squad balanced."; }
+    else if (locoIdx > mechIdx * 1.15) { lean = "locomotive"; leanNote = "Recent sessions have leaned locomotive (high-speed running) relative to force work — today is a good day to fold in some mechanical (accel/decel) emphasis."; }
+    else { lean = "balanced"; leanNote = "Recent force (accel/decel) and running (HSR/sprint) load have been balanced relative to match demand — a mixed session keeps that balance."; }
+  }
+  const recentLean = { mechIdx: mechIdx != null ? Math.round(mechIdx * 100) / 100 : null, locoIdx: locoIdx != null ? Math.round(locoIdx * 100) / 100 : null, lean, note: leanNote };
+
+  // Last few sessions LEADING INTO today (before the session date), oldest→newest.
+  const recentSessions = Array.from(dateMeans.entries())
+    .filter(([d]) => d < input.sessionDate)
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .slice(-5)
+    .map(([d, m]) => ({
+      date: d,
+      totalDistance: m.totalDistance != null ? Math.round(m.totalDistance) : null,
+      playerLoad: m.playerLoad != null ? Math.round(m.playerLoad) : null,
+      hsr: m.hsr != null ? Math.round(m.hsr) : null,
+      isPeak: matchDays.includes(d),
+    }));
+
   // Per-player targets + flags (their own match average × matchPct).
   const byPlayer = new Map<string, LoadRow[]>();
   for (const r of input.rows) {
@@ -217,13 +346,24 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
   }
   const perPlayer: PlayerPlan[] = Array.from(byPlayer.entries()).map(([pid, rs]) => {
     const onMatch = rs.filter((r) => matchDays.includes(r.date));
-    const pTD = planned.applicable ? scale(mean(onMatch.map((r) => VAL.totalDistance(r))), matchPct, emph.totalDistance) : null;
-    const pPL = planned.applicable ? scale(mean(onMatch.map((r) => VAL.playerLoad(r))), matchPct, emph.playerLoad) : null;
-    const pIMA = planned.applicable ? scale(mean(onMatch.map((r) => VAL.ima(r))), matchPct, emph.ima) : null;
-    // Player ACWR on player load.
+    const onTraining = rs.filter((r) => r.date >= chronicFrom && !matchDays.includes(r.date));
+    // Player ACWR on player load (drives the per-player baseline factor + flag).
     const acute = mean(rs.filter((r) => r.date >= acuteFrom).map((r) => VAL.playerLoad(r)));
     const chronic = mean(rs.filter((r) => r.date >= chronicFrom).map((r) => VAL.playerLoad(r)));
     const acwr = acute != null && chronic != null && chronic > 0 ? acute / chronic : null;
+    const pAf = acwr == null ? acwrFactor : acwr > 1.3 ? 0.85 : acwr < 0.8 ? 1.1 : 1.0;
+    const ptFor = (get: (r: LoadRow) => number, e?: number): number | null => {
+      if (mode === "microcycle") return scale(mean(onMatch.map(get)), matchPct, e);
+      if (mode === "recent_baseline") { const b = mean(onTraining.map(get)); return b != null ? Math.round(b * pAf) : null; }
+      return null;
+    };
+    const pTD = ptFor((r) => VAL.totalDistance(r), emph.totalDistance);
+    const pPL = ptFor((r) => VAL.playerLoad(r), emph.playerLoad);
+    const pHSR = ptFor((r) => VAL.hsr(r), emph.hsr);
+    const pSprint = ptFor((r) => VAL.sprint(r), emph.sprint);
+    const pAccel = ptFor((r) => VAL.accel(r), emph.accel);
+    const pDecel = ptFor((r) => VAL.decel(r), emph.decel);
+    const pIMA = ptFor((r) => VAL.ima(r), emph.ima);
     let flag: PlayerPlan["flag"] = "ok";
     let flagReason: string | null = null;
     if (acwr != null && acwr >= 1.5) { flag = "reduce"; flagReason = `ACWR ${acwr.toFixed(2)} — already spiking, hold them back`; }
@@ -234,6 +374,10 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
       name: input.nameById.get(pid) ?? pid.slice(0, 6),
       totalDistance: pTD,
       playerLoad: pPL,
+      hsr: pHSR,
+      sprint: pSprint,
+      accel: pAccel,
+      decel: pDecel,
       ima: pIMA,
       acwr: acwr != null ? Math.round(acwr * 100) / 100 : null,
       flag,
@@ -241,10 +385,14 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     };
   }).sort((a, b) => (b.playerLoad ?? 0) - (a.playerLoad ?? 0));
 
+  const hasTargets = targets.some((t) => t.target != null);
   return {
     sessionDate: input.sessionDate,
     planned,
     applicable: planned.applicable,
+    mode,
+    hasTargets,
+    baselineNote,
     targets,
     matchDaysUsed: matchDays.length,
     teamAcwr: teamAcwr != null ? Math.round(teamAcwr * 100) / 100 : null,
@@ -252,7 +400,23 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     chronicPL: chronicPL != null ? Math.round(chronicPL) : null,
     readinessAdjustPct,
     readinessNote,
+    targetRpe,
+    targetDurationMin,
+    targetSrpe,
+    srpeSource,
+    recentSessions,
     perPlayer,
+    recentAvg: trainingAvg,
+    adjustedTargets,
+    coverage: {
+      trainingDays: trainingDates.length,
+      matchDays: matchDays.length,
+      distinctDates: dateMeans.size,
+      playersWithHistory: byPlayer.size,
+      totalPlayers: input.nameById.size,
+      windowDays: 120,
+    },
+    recentLean,
   };
 }
 

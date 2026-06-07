@@ -97,6 +97,7 @@ import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
@@ -405,6 +406,8 @@ type PostTrainingReportData = {
     teamSpike: boolean;
     spikePlayers: Array<{ name: string; plPct: number | null; distPct: number | null; acwr: number | null }>;
   };
+  /** Planned (pre-session recommendation) vs actual session load — team + per player. */
+  plannedVsActual?: PlannedVsActual | null;
 };
 
 type LoadMetricSummary = {
@@ -1579,6 +1582,85 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
             Baselines use the team total for each metric over the prior 4 weeks (catapult/manual GPS). &quot;4-wk avg&quot; = mean of prior session days; &quot;match&quot; = the highest team-load day in the window (matches are a team&apos;s peak-load days). A player spike = Player Load ≥30% above their own 4-week average, or ACWR ≥ 1.5 (Gabbett 2016 acute:chronic ceiling).
           </Text>
         </View>
+
+        {/* ── Planned vs Actual — did the session hit the recommendation? ── */}
+        {data.plannedVsActual && data.plannedVsActual.hasPlan && (() => {
+          const pva = data.plannedVsActual;
+          const pvaColor = (st: PvaStatus) =>
+            st === "on" ? "#059669" : st === "over" || st === "under" ? "#D97706" : st === "well_over" || st === "well_under" ? "#DC2626" : "#94A3B8";
+          return (
+            <View style={[postStyles.section, { backgroundColor: "#F5F3FF", border: "1 solid #DDD6FE", borderRadius: 4, padding: 10 }]} wrap={false}>
+              <Text style={postStyles.sectionTitle}>Planned vs Actual — did we hit the recommendation?</Text>
+              <Text style={{ fontSize: 9, color: "#4C1D95", marginBottom: 2 }}>
+                Plan: {pva.mode === "microcycle" && pva.mdLabel ? `${pva.mdLabel} · ${pva.loadType} · ${pva.matchPct}% of match` : "recent-load baseline (mixed)"}
+                {pva.readinessAdjustPct !== 0 ? ` · readiness-adjusted ${pva.readinessAdjustPct}%` : ""}
+              </Text>
+              <Text style={{ fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 8 }}>{pva.summary}</Text>
+
+              {/* Team-level: planned vs actual per KPI */}
+              <View style={postStyles.table}>
+                <View style={postStyles.tHead}>
+                  <Text style={[{ width: "40%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Metric (per player)</Text>
+                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Planned</Text>
+                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Actual</Text>
+                  <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>% of plan</Text>
+                </View>
+                {pva.team.map((t, i) => (
+                  <View key={t.kpi} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
+                    <Text style={{ width: "40%", padding: 4, fontSize: 9, fontWeight: 700 }}>{PVA_LABEL[t.kpi]}</Text>
+                    <Text style={{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(t.planned, 0)}</Text>
+                    <Text style={{ width: "20%", padding: 4, fontSize: 9, textAlign: "right" }}>{numFmt2(t.actual, 0)}</Text>
+                    <Text style={[{ width: "20%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: pvaColor(t.status) }]}>{t.pctOfPlan != null ? `${t.pctOfPlan}%` : "—"}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 5, lineHeight: 1.4 }}>
+                Planned = the pre-session recommendation for this date (per player), readiness-adjusted. On plan = 85–115% (green); 116–140% or 60–84% = elevated/reduced (amber); &gt;140% or &lt;60% = well off plan (red).
+              </Text>
+            </View>
+          );
+        })()}
+
+        {/* Per-player: planned vs actual adherence */}
+        {data.plannedVsActual && data.plannedVsActual.hasPlan && data.plannedVsActual.players.length > 0 && (() => {
+          const pva = data.plannedVsActual;
+          const pvaColor = (st: PvaStatus) =>
+            st === "on" ? "#059669" : st === "over" || st === "under" ? "#D97706" : st === "well_over" || st === "well_under" ? "#DC2626" : "#94A3B8";
+          const pctCell = (kpi: typeof PVA_KPIS[number], pp: typeof pva.players[number]) => {
+            const c = pp.byKpi[kpi];
+            return <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right", fontWeight: 700 }, { color: pvaColor(c.status) }]}>{c.pctOfPlan != null ? `${c.pctOfPlan}%` : "—"}</Text>;
+          };
+          return (
+            <View style={postStyles.section}>
+              <Text style={postStyles.sectionTitle}>Planned vs Actual — per player (% of plan)</Text>
+              <View style={postStyles.table}>
+                <View style={postStyles.tHead}>
+                  <Text style={[{ width: "22%", padding: 3, fontSize: 8 }, postStyles.hdr]}>Player</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>P.Load</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Dist</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>HSR</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Sprint</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Accel</Text>
+                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>IMA</Text>
+                </View>
+                {pva.players.map((pp, i) => (
+                  <View key={pp.player_id + i} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
+                    <Text style={{ width: "22%", padding: 3, fontSize: 8, fontWeight: 700 }}>{pp.name}</Text>
+                    {pctCell("playerLoad", pp)}
+                    {pctCell("totalDistance", pp)}
+                    {pctCell("hsr", pp)}
+                    {pctCell("sprint", pp)}
+                    {pctCell("accel", pp)}
+                    {pctCell("ima", pp)}
+                  </View>
+                ))}
+              </View>
+              <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 5, lineHeight: 1.4 }}>
+                Each cell = the player&apos;s actual for that metric as a % of their own readiness-adjusted target. Green 85–115% (on plan), amber 60–84% / 116–140%, red &lt;60% / &gt;140%. A dash means no target or no capture for that metric.
+              </Text>
+            </View>
+          );
+        })()}
 
         {/* RPE summary boxes */}
         <View style={postStyles.section}>
@@ -6270,7 +6352,7 @@ export default function CoachPage() {
       // Fetch only columns that actually exist in player_external_load_daily
       const { data: loadRows, error: loadErr } = await supabase
         .from("player_external_load_daily")
-        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel")
+        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_fr_band58_total_distance")
         .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", chronicStart)
@@ -6578,6 +6660,50 @@ export default function CoachPage() {
         console.warn("IMA profile fetch for report failed:", e);
       }
 
+      // ── 5b. Planned vs Actual ────────────────────────────────
+      // Pull the pre-session PLAN for this date and diff it against what was
+      // actually captured, so the report shows where the squad / players ran
+      // hotter or lighter than the system recommended.
+      let plannedVsActual: PlannedVsActual | null = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const planRes = await fetch(`/api/coach/load-plan?date=${sessionDate}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (planRes.ok) {
+            const planJson = await planRes.json();
+            const plan = planJson?.plan ?? null;
+            // Actual session KPIs per player (the session-date rows we already have).
+            const num = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+            const actualById = new Map<string, {
+              totalDistance: number | null; playerLoad: number | null; hsr: number | null;
+              sprint: number | null; accel: number | null; decel: number | null; ima: number | null;
+            }>();
+            for (const r of (loadRows ?? []) as Array<Record<string, unknown>>) {
+              if (String(r.date) !== sessionDate) continue;
+              actualById.set(String(r.player_id), {
+                totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
+                hsr: num(r.velocity_band5_total_distance), sprint: num(r.velocity_band6_total_distance),
+                accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
+                ima: num(r.ima_fr_band58_total_distance),
+              });
+            }
+            // Team-mean actual across the players who trained.
+            const mean = (xs: Array<number | null>) => { const v = xs.filter((x): x is number => x != null && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+            const vals = Array.from(actualById.values());
+            const teamActual = {
+              totalDistance: mean(vals.map((v) => v.totalDistance)), playerLoad: mean(vals.map((v) => v.playerLoad)),
+              hsr: mean(vals.map((v) => v.hsr)), sprint: mean(vals.map((v) => v.sprint)),
+              accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)), ima: mean(vals.map((v) => v.ima)),
+            };
+            plannedVsActual = buildPlannedVsActual(plan, teamActual, actualById);
+          }
+        }
+      } catch (e) {
+        console.warn("Planned-vs-actual fetch for report failed:", e);
+      }
+
       const reportData: PostTrainingReportData = {
         teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
         sessionDate,
@@ -6591,6 +6717,7 @@ export default function CoachPage() {
         monitorCount: reportPlayers.filter((p) => p.attentionFlag === "MONITOR").length,
         ima: imaProfile,
         loadSummary,
+        plannedVsActual,
       };
 
       if (reportPlayers.length === 0) {
