@@ -2,13 +2,26 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LoadPlanCard from "@/components/coach/LoadPlanCard";
+import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
 
 export default function LoadPlanPage() {
   const [date, setDate] = useState<string>("");
   const [restDay, setRestDay] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
+  const effectiveDate = date || today;
+
+  // Restore the saved rest-day choice for the selected date (persists across
+  // navigation and is shared with the Today dashboard download button).
+  useEffect(() => {
+    setRestDay(readRestDayPref(effectiveDate));
+  }, [effectiveDate]);
+
+  const toggleRestDay = (on: boolean) => {
+    setRestDay(on);
+    writeRestDayPref(effectiveDate, on);
+  };
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -30,7 +43,7 @@ export default function LoadPlanPage() {
             className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
           />
           <label className="flex h-9 cursor-pointer select-none items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700">
-            <input type="checkbox" checked={restDay} onChange={(e) => setRestDay(e.target.checked)} className="h-4 w-4 accent-slate-700" />
+            <input type="checkbox" checked={restDay} onChange={(e) => toggleRestDay(e.target.checked)} className="h-4 w-4 accent-slate-700" />
             Rest day
           </label>
         </div>

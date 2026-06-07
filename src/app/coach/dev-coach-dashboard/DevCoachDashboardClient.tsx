@@ -99,6 +99,7 @@ import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { downloadLoadPlanPdf, type LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
+import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
 // VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
@@ -2348,6 +2349,9 @@ export default function CoachPage() {
   }>>([]);
   const [pdfPostDownloading, setPdfPostDownloading] = useState(false);
   const [pdfPreDownloading, setPdfPreDownloading] = useState(false);
+  // Rest-day choice for the Pre-Session report — shared (via localStorage) with
+  // the /coach/load-plan page, keyed by the selected day.
+  const [preRestDay, setPreRestDay] = useState(false);
   // Optional past-date selector for the Post-Training report (empty = latest session).
   const [postReportDate, setPostReportDate] = useState<string>("");
 
@@ -2779,6 +2783,12 @@ export default function CoachPage() {
   }, [ctxIntensity]);
 
   const today = useMemo(() => todayISO(), []);
+
+  // Keep the Pre-Session "Rest day" checkbox in sync with the saved choice for
+  // the selected day (shared with the /coach/load-plan page).
+  useEffect(() => {
+    setPreRestDay(readRestDayPref(postReportDate || today));
+  }, [postReportDate, today]);
 
   // Header MD-day (team display)
   const mdDayToday = useMemo(() => {
@@ -6311,6 +6321,8 @@ export default function CoachPage() {
   async function downloadPreSessionReport(dateArg?: string) {
     try {
       setPdfPreDownloading(true);
+      // Authoritative rest-day flag for the resolved day (shared with the page).
+      const restDay = readRestDayPref(dateArg || today);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) { alert("Not signed in."); return; }
       const res = await fetch(`/api/coach/load-plan${dateArg ? `?date=${dateArg}` : ""}`, {
@@ -6322,7 +6334,7 @@ export default function CoachPage() {
         j.plan as LoadPlanForPdf,
         (j.topAttention ?? []) as Parameters<typeof downloadLoadPlanPdf>[1],
         (j.readiness ?? null) as Parameters<typeof downloadLoadPlanPdf>[2],
-        false,
+        restDay,
       );
     } catch (e: unknown) {
       console.error("pre-session report download failed:", e);
@@ -8628,6 +8640,20 @@ export default function CoachPage() {
                   title={lang === "IS" ? "Veldu dag (tómt = í dag / nýjasta)" : "Pick a day (empty = today / latest)"}
                   className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
                 />
+              </label>
+              {/* Rest-day toggle for the Pre-Session report — persists per day and
+                  syncs with the /coach/load-plan page. */}
+              <label
+                className="flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-600"
+                title={lang === "IS" ? "Merkja daginn sem frídag — Pre-Session skýrslan sýnir þá ekkert target" : "Mark the day as a rest day — the Pre-Session report then shows no targets"}
+              >
+                <input
+                  type="checkbox"
+                  checked={preRestDay}
+                  onChange={(e) => { setPreRestDay(e.target.checked); writeRestDayPref(postReportDate || today, e.target.checked); }}
+                  className="h-3.5 w-3.5 accent-slate-700"
+                />
+                {lang === "IS" ? "Frídagur" : "Rest day"}
               </label>
             </div>
             {/* Per-report captions so coaches know what each button produces. */}
