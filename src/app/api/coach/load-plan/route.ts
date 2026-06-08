@@ -62,32 +62,67 @@ export async function GET(req: NextRequest) {
   for (const p of (players ?? []) as Array<{ id: string; full_name: string | null }>) nameById.set(String(p.id), (p.full_name ?? "—").trim());
   if (playerIds.length === 0) return NextResponse.json({ error: "No players" }, { status: 400 });
 
-  // MD context from Week setup (v_training_day_context joined via week_setups.team_id).
+  // MD context for today.
   let mdDay: string | null = null;
-  let daysSincePrev: number | null = null;
-  let daysToNext: number | null = null;
+  let dayTypeResolved: string | null = null;
+  let focusResolved: string | null = null;
+  const daysSincePrev: number | null = null;
+  const daysToNext: number | null = null;
+
+  // ── PRIMARY source: the coach's manual Week setup (coach_week_setup) — the
+  // SAME source the dashboard's "Planned session load" card reads, so the two
+  // never disagree. no_match_intents[weekdayIndex] → MD day, focus, day type.
   try {
-    const { data: wsIds } = await sb.from("week_setups").select("id").eq("team_id", teamId);
-    const ids = (wsIds ?? []).map((w) => (w as { id: string }).id);
-    if (ids.length > 0) {
-      const { data: ctx } = await sb
-        .from("v_training_day_context")
-        .select("md_day, days_since_prev, days_to_next, week_setup_id")
-        .in("week_setup_id", ids)
-        .eq("date", sessionDate)
-        .limit(1)
-        .maybeSingle();
-      if (ctx) {
-        mdDay = (ctx as { md_day: string | null }).md_day ?? null;
-        daysSincePrev = (ctx as { days_since_prev: number | null }).days_since_prev ?? null;
-        daysToNext = (ctx as { days_to_next: number | null }).days_to_next ?? null;
-      }
+    // Monday of the session week (UTC, intents are Mon→Sun).
+    const sd = new Date(sessionDate + "T00:00:00Z");
+    const dow = sd.getUTCDay(); // 0=Sun..6=Sat
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(sd); monday.setUTCDate(sd.getUTCDate() + mondayOffset);
+    const weekStart = monday.toISOString().slice(0, 10);
+    const idx = dow === 0 ? 6 : dow - 1; // Mon=0..Sun=6
+
+    const { data: cws } = await sb
+      .from("coach_week_setup")
+      .select("no_match_intents")
+      .eq("team_id", teamId)
+      .eq("week_start_date", weekStart)
+      .maybeSingle();
+    const intents = (cws as { no_match_intents: string[] | null } | null)?.no_match_intents;
+    const intent = Array.isArray(intents) && intents.length === 7 ? String(intents[idx] ?? "").toUpperCase() : null;
+    if (intent) {
+      // Canonical Week-setup mapping (matches the Week setup dropdown labels).
+      const MD_OF: Record<string, string> = {
+        FORCE: "MD-4", NEURAL_VELOCITY: "MD-3", VELOCITY: "MD-2", POLISH_CALM: "MD-2", ACTIVATION: "MD-1",
+      };
+      if (intent === "GAME") { dayTypeResolved = "GAME"; mdDay = "MD"; }
+      else if (intent === "OFF" || intent === "RECOVERY") { dayTypeResolved = "OFF"; }
+      else if (MD_OF[intent]) { mdDay = MD_OF[intent]; focusResolved = intent; }
     }
-  } catch { /* no MD context — plan falls back gracefully */ }
-  // Allow explicit overrides from the caller (the dashboard already resolves MD).
+  } catch { /* fall through to legacy / baseline */ }
+
+  // ── FALLBACK: legacy match-relative day context, only if Week setup gave nothing.
+  if (!mdDay && !dayTypeResolved) {
+    try {
+      const { data: wsIds } = await sb.from("week_setups").select("id").eq("team_id", teamId);
+      const ids = (wsIds ?? []).map((w) => (w as { id: string }).id);
+      if (ids.length > 0) {
+        const { data: ctx } = await sb
+          .from("v_training_day_context")
+          .select("md_day, week_setup_id")
+          .in("week_setup_id", ids)
+          .eq("date", sessionDate)
+          .limit(1)
+          .maybeSingle();
+        if (ctx) mdDay = (ctx as { md_day: string | null }).md_day ?? null;
+      }
+    } catch { /* no MD context — plan falls back gracefully */ }
+  }
+
+  // Allow explicit overrides from the caller (e.g. the dashboard passing its
+  // already-resolved MD), otherwise use what we resolved above.
   mdDay = url.searchParams.get("mdDay") ?? mdDay;
-  const dayType = url.searchParams.get("dayType");
-  const focus = url.searchParams.get("focus");
+  const dayType = url.searchParams.get("dayType") ?? dayTypeResolved;
+  const focus = url.searchParams.get("focus") ?? focusResolved;
 
   // GPS over the lookback window (120 days for a robust match reference).
   // NOTE: PostgREST caps a single response at 1000 rows. A full squad over 120
