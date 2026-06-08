@@ -40,6 +40,17 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
   // Per-starter-rec UI state: chosen level + assign progress/result.
   const [starterLevel, setStarterLevel] = useState<Record<string, string>>({});
   const [starterState, setStarterState] = useState<Record<string, "idle" | "saving" | "done" | "error">>({});
+  // Collapsed when goals are already done; remembered per client.
+  const [collapsed, setCollapsed] = useState(false);
+
+  const collapseKey = `mp:goalscollapsed:${clientId}`;
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      if (typeof window !== "undefined") window.localStorage.setItem(collapseKey, next ? "1" : "0");
+      return next;
+    });
+  };
 
   const authHeader = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -53,10 +64,14 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
       const res = await fetch(`/api/trainer/client/${clientId}/goals`, { headers: await authHeader() });
       const j = await res.json();
       if (!res.ok) { setErr(j.error ?? "Failed"); return; }
-      setSelected((j.goals ?? []) as GoalId[]);
+      const loadedGoals = (j.goals ?? []) as GoalId[];
+      setSelected(loadedGoals);
       setNotes(j.notes ?? "");
       setSavedAt(j.updated_at ?? null);
       setDirty(false);
+      // Default collapsed if goals already exist; localStorage overrides.
+      const stored = typeof window !== "undefined" ? window.localStorage.getItem(`mp:goalscollapsed:${clientId}`) : null;
+      setCollapsed(stored != null ? stored === "1" : loadedGoals.length > 0);
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); }
     finally { setLoading(false); }
   }, [clientId, authHeader]);
@@ -102,14 +117,32 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
     return <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-500">{is ? "Hleð markmiðum…" : "Loading goals…"}</div>;
   }
 
+  const goalSummary = selected.filter((g) => g !== "keep_lean").map((id) => GOALS.find((x) => x.id === id)?.label[lang]).filter(Boolean).join(", ");
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="mb-1 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Markmið & æfingakerfi" : "Goals & programme match"}</span>
         {savedAt && !dirty && <span className="text-[10px] text-slate-400">{is ? "vistað" : "saved"}</span>}
         {dirty && <span className="text-[10px] text-amber-600">{is ? "óvistað" : "unsaved"}</span>}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="ml-auto rounded-md border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+        >
+          {collapsed ? (is ? "Sýna ▾" : "Show ▾") : (is ? "Fela ▴" : "Hide ▴")}
+        </button>
       </div>
-      <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
+
+      {collapsed ? (
+        <div className="mt-1 text-[11px] text-slate-500">
+          {selected.length > 0
+            ? <>{is ? "Markmið: " : "Goals: "}<span className="text-slate-700">{goalSummary || (is ? "engin" : "none")}</span></>
+            : (is ? "Engin markmið skráð enn." : "No goals recorded yet.")}
+        </div>
+      ) : (
+      <>
+      <p className="mb-2 mt-1 text-[11px] leading-relaxed text-slate-500">
         {is
           ? "Hakaðu við hvað viðskiptavinurinn vill þjálfa — kerfið mælir með æfingakerfi úr safninu þínu og útskýrir af hverju. Þú velur alltaf sjálf(ur)."
           : "Tick what the client wants to train — the system recommends a programme from your library and explains why. You always choose."}
@@ -243,6 +276,8 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
           </>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
