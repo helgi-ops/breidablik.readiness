@@ -21,6 +21,7 @@ import ReadinessCard from "@/components/player/ReadinessCard";
 import MomentumCard from "@/components/player/MomentumCard";
 import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
+import ClientNudges from "@/components/player/ClientNudges";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
 import { buildSessionBlocks } from "@/lib/client/sessionGrouping";
@@ -75,6 +76,7 @@ type TodayResp = {
     } | null;
   } | null;
   readinessToday: { id: string; total_score: number | null; color: string | null } | null;
+  session_logged_today?: boolean;
   bodyweight: { latest: { log_date: string; weight_kg: number }; delta_kg: number | null } | null;
   intelligence: {
     foster: {
@@ -142,6 +144,13 @@ export default function ClientTodayPage() {
           </div>
         )}
       </div>
+
+      {/* In-app nudges: session-today reminder + start-of-week recap. */}
+      <ClientNudges
+        lang={lang === "EN" ? "EN" : "IS"}
+        hasSessionToday={!!data.explosive && !data.explosive.rest_day && !data.explosive.is_match_day && data.explosive.blocks.length > 0}
+        sessionLoggedToday={!!data.session_logged_today}
+      />
 
       {/* Vacation / return banner (declared per-client breaks). */}
       <ClientVacationBanner lang={lang === "EN" ? "EN" : "IS"} />

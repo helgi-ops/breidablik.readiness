@@ -32,6 +32,12 @@ function thisMonday(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function addDays(iso: string, n: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function GET(req: Request) {
   const a = req.headers.get("authorization") || "";
   const token = a.startsWith("Bearer ") ? a.slice(7) : "";
@@ -61,6 +67,22 @@ export async function GET(req: Request) {
     .order("session_date", { ascending: false });
   const week = (weekRows ?? []) as Array<{ session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; rpe: number | null }>;
   const loggedThisWeek = new Set(week.map((r) => r.session_date)).size;
+
+  // ── Last week recap (for the weekly-summary nudge) ───────────────────
+  const lastMonday = addDays(monday, -7);
+  const { data: lastWeekRows } = await sb
+    .from("pt_exercise_set_logs")
+    .select("session_date, weight_kg, reps")
+    .eq("player_id", playerId)
+    .gte("session_date", lastMonday)
+    .lt("session_date", monday);
+  const lw = (lastWeekRows ?? []) as Array<{ session_date: string; weight_kg: number | null; reps: number | null }>;
+  const lastWeek = {
+    week_start: lastMonday,
+    sessions: new Set(lw.map((r) => r.session_date)).size,
+    tonnage: Math.round(lw.reduce((s, r) => s + (r.weight_kg ?? 0) * (r.reps ?? 0), 0)),
+    prs: prs.recent_prs.filter((p) => p.date >= lastMonday && p.date < monday).length,
+  };
 
   // Most recent logged set overall (heaviest set of the latest session day).
   let lastSet: { exercise: string; weight_kg: number; reps: number; rpe: number | null; session_date: string } | null = null;
@@ -124,5 +146,6 @@ export async function GET(req: Request) {
     last_set: lastSet,
     recent_pr: prs.recent_prs[0] ?? null,
     volume: { this_week: volume.this_week, last_week: volume.last_week, delta_pct: volume.delta_pct },
+    last_week: lastWeek,
   });
 }

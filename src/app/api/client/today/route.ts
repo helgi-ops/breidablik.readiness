@@ -637,6 +637,9 @@ export async function GET(req: Request) {
     explosive,
     customOverride: overrideRow ?? null,
     readinessToday: readinessToday ?? null,
+    // Has the athlete logged any set today? Drives the "you have a session
+    // today" nudge (hidden once they've started logging).
+    session_logged_today: ((setLogRows ?? []) as Array<{ session_date: string }>).some((r) => r.session_date === today),
     bodyweight: latestBw
       ? {
           latest: latestBw,
