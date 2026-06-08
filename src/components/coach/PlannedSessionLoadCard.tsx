@@ -199,6 +199,15 @@ export default function PlannedSessionLoadCard(props: PlannedSessionLoadCardProp
             ? "Viðmið úr microcycle-uppbyggingu (Buchheit o.fl. 2024) — stuðningur við ákvörðun þjálfara, ekki fyrirmæli."
             : "Derived from microcycle structure (Buchheit et al. 2024) — coach decision-support, not a prescription."}
         </p>
+
+        {/* Link to the full Pre-Session report — same microcycle source, expanded
+            into per-KPI GPS targets, per-player targets, readiness and a PDF. */}
+        <a
+          href="/coach/load-plan"
+          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+        >
+          {is ? "Opna fulla æfingaskýrslu (target, per-leikmann, PDF) →" : "Open full Pre-Session report (targets, per-player, PDF) →"}
+        </a>
       </CardContent>
     </Card>
   );
