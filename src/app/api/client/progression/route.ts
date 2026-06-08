@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   }>);
 
   // For each exercise, pick the top set (by e1rm) per session.
-  const byExercise = new Map<string, Map<string, { weight: number; reps: number; e1rm: number }>>();
+  const byExercise = new Map<string, Map<string, { weight: number; reps: number; e1rm: number; rpe: number | null }>>();
   for (const s of sets) {
     if (s.weight_kg == null || s.reps == null) continue;
     if (!byExercise.has(s.exercise_name)) byExercise.set(s.exercise_name, new Map());
@@ -67,14 +67,14 @@ export async function GET(req: Request) {
     const e = e1rmFromSet(s.weight_kg, s.reps, s.rpe);
     const existing = dayMap.get(s.session_date);
     if (!existing || e > existing.e1rm) {
-      dayMap.set(s.session_date, { weight: Number(s.weight_kg), reps: Number(s.reps), e1rm: Number(e.toFixed(2)) });
+      dayMap.set(s.session_date, { weight: Number(s.weight_kg), reps: Number(s.reps), e1rm: Number(e.toFixed(2)), rpe: s.rpe });
     }
   }
 
   const exercises = Array.from(byExercise.entries()).map(([name, dayMap]) => {
     const points = Array.from(dayMap.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, v]) => ({ date, weight_kg: v.weight, reps: v.reps, e1rm: v.e1rm, is_pr: false as boolean }));
+      .map(([date, v]) => ({ date, weight_kg: v.weight, reps: v.reps, e1rm: v.e1rm, rpe: v.rpe, is_pr: false as boolean }));
     // Mark PRs (max-so-far runs).
     let runMax = -Infinity;
     let prE1rm = 0;

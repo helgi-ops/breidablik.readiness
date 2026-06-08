@@ -12,13 +12,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import LineSpark, { type Point as SparkPoint } from "@/components/client/LineSpark";
 import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import PersonalRecordsCard from "@/components/player/PersonalRecordsCard";
+import ProgressionSummaryCard from "@/components/player/ProgressionSummaryCard";
 import AthleteHero from "@/components/player/AthleteHero";
 import LoadQuadrant from "@/components/player/LoadQuadrant";
 import TrainingLoadCard from "@/components/player/TrainingLoadCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
-type Point = { date: string; weight_kg: number; reps: number; e1rm: number; is_pr: boolean };
+type Point = { date: string; weight_kg: number; reps: number; e1rm: number; rpe: number | null; is_pr: boolean };
 type Exercise = { name: string; points: Point[]; pr_e1rm: number | null; sessions: number };
 
 export default function ClientProgressionPage() {
@@ -64,6 +65,9 @@ export default function ClientProgressionPage() {
             : "e1RM (Epley estimate) per exercise over time. ★ marks personal records."}
         </div>
       </div>
+
+      {/* Motivating snapshot: streak, weekly volume, newest PB, last set. */}
+      <ProgressionSummaryCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Progress + load analytics (moved here from Today to keep Today lean). */}
       <AthleteHero lang={lang === "EN" ? "EN" : "IS"} />
@@ -145,6 +149,7 @@ export default function ClientProgressionPage() {
                       <span className="text-slate-600">{p.date}</span>
                       <span className="text-slate-800 font-medium tabular-nums">
                         {p.weight_kg}kg × {p.reps}
+                        {p.rpe != null && <span className="text-slate-400"> @RPE{p.rpe}</span>}
                         <span className="text-slate-500 ml-1.5">→ {p.e1rm.toFixed(1)} kg e1RM</span>
                         {p.is_pr && <span className="ml-1.5 text-amber-700">★</span>}
                       </span>
