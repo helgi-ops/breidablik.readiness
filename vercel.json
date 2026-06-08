@@ -16,6 +16,8 @@
     { "path": "/api/notifications/rpe-autofill", "schedule": "0 23 * * *" },
     { "path": "/api/recovery/auto-trigger", "schedule": "30 19 * * *" },
     { "path": "/api/recovery/auto-trigger", "schedule": "0 22 * * *" },
-    { "path": "/api/illness/auto-clear", "schedule": "15 2 * * *" }
+    { "path": "/api/illness/auto-clear", "schedule": "15 2 * * *" },
+    { "path": "/api/notifications/pt-cron?type=session", "schedule": "0 8 * * *" },
+    { "path": "/api/notifications/pt-cron?type=weekly", "schedule": "0 9 * * 1" }
   ]
 }

@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { enablePushReminders } from "@/lib/push/registerPushToken";
 
 type Summary = {
   last_week: { week_start: string; sessions: number; tonnage: number; prs: number };
@@ -25,11 +26,15 @@ const COPY = {
     sessionTitle: "Þú átt æfingu í dag", sessionSub: "Smelltu til að skrá hana", log: "Skrá",
     recapTitle: "Vikan í síðustu viku", sessions: "æfingar", lifted: "kg lyft", pbs: "PB", dismiss: "Loka",
     nice: "Flott vika! Höldum áfram.", quiet: "Ný vika, nýtt tækifæri 💪",
+    pushTitle: "Fáðu áminningar", pushSub: "Tilkynning þegar þú átt æfingu + vikuleg samantekt.",
+    pushEnable: "Virkja", pushEnabling: "Virkja…", pushErr: "Tókst ekki — prófaðu í stillingum.",
   },
   EN: {
     sessionTitle: "You have a session today", sessionSub: "Tap to log it", log: "Log",
     recapTitle: "Last week", sessions: "sessions", lifted: "kg lifted", pbs: "PB", dismiss: "Dismiss",
     nice: "Strong week — keep it rolling.", quiet: "New week, fresh start 💪",
+    pushTitle: "Get reminders", pushSub: "A nudge when you have a session + a weekly recap.",
+    pushEnable: "Enable", pushEnabling: "Enabling…", pushErr: "Couldn't enable — try from settings.",
   },
 };
 
@@ -39,9 +44,17 @@ export default function ClientNudges({
   const t = COPY[lang];
   const [summary, setSummary] = useState<Summary | null>(null);
   const [recapDismissed, setRecapDismissed] = useState(false);
+  const [pushState, setPushState] = useState<"hidden" | "prompt" | "enabling" | "error">("hidden");
 
   useEffect(() => {
     (async () => {
+      // Offer push opt-in when the browser supports it, permission hasn't been
+      // decided, and the user hasn't dismissed the prompt before.
+      if (typeof window !== "undefined" && "Notification" in window
+        && Notification.permission === "default"
+        && !window.localStorage.getItem("mp:pushprompt:dismissed")) {
+        setPushState("prompt");
+      }
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) return;
@@ -58,6 +71,20 @@ export default function ClientNudges({
     })();
   }, []);
 
+  const enablePush = async () => {
+    setPushState("enabling");
+    try {
+      await enablePushReminders();
+      setPushState("hidden");
+    } catch {
+      setPushState("error");
+    }
+  };
+  const dismissPush = () => {
+    if (typeof window !== "undefined") window.localStorage.setItem("mp:pushprompt:dismissed", "1");
+    setPushState("hidden");
+  };
+
   const dismissRecap = () => {
     const wk = summary?.last_week?.week_start;
     if (wk && typeof window !== "undefined") window.localStorage.setItem(`mp:weeknudge:${wk}`, "1");
@@ -69,11 +96,35 @@ export default function ClientNudges({
   const lw = summary?.last_week;
   const showRecap = !recapDismissed && !!lw && lw.sessions > 0 && dow <= 2;
   const showSession = hasSessionToday && !sessionLoggedToday;
+  const showPush = pushState === "prompt" || pushState === "enabling" || pushState === "error";
 
-  if (!showRecap && !showSession) return null;
+  if (!showRecap && !showSession && !showPush) return null;
 
   return (
     <div className="space-y-2">
+      {showPush && (
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">🔔 {t.pushTitle}</div>
+              <div className="mt-0.5 text-sm text-slate-700">{t.pushSub}</div>
+              {pushState === "error" && <div className="mt-0.5 text-[12px] text-red-600">{t.pushErr}</div>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={enablePush}
+                disabled={pushState === "enabling"}
+                className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+              >
+                {pushState === "enabling" ? t.pushEnabling : t.pushEnable}
+              </button>
+              <button type="button" onClick={dismissPush} className="text-[11px] text-slate-400 hover:text-slate-600">{t.dismiss}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSession && (
         <Link
           href="/client/log"
