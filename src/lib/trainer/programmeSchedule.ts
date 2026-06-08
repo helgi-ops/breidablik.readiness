@@ -19,6 +19,8 @@
  * block to render, or a rest day with the next scheduled session.
  */
 
+import { spreadWeekdays } from "./sessionFrequency";
+
 export type ScheduleSlot =
   | {
       kind: "session";
@@ -62,36 +64,18 @@ function daysBetween(aIso: string, bIso: string): number {
  * For a given programme + number of blocks, return the block index (or
  * null = rest) for each ISO weekday 1..7.
  */
-function weekdaySchedule(programmeKey: ProgrammeKey, nBlocks: number): Array<number | null> {
-  // index by weekday-1 so we can use weekdayIso directly: arr[weekdayIso-1]
+function weekdaySchedule(_programmeKey: ProgrammeKey, nBlocks: number): Array<number | null> {
+  // index by weekday-1 so we can use weekdayIso directly: arr[weekdayIso-1].
+  // Block i is placed on the i-th evenly-spread training day with rest days
+  // in between (shared `spreadWeekdays`): 2→Mon/Thu, 3→Mon/Wed/Fri,
+  // 4→Mon/Tue/Thu/Fri, 5→Mon–Fri. This matches the previous hand-coded
+  // research_3_4day (3/4) and phase_based (2) schedules exactly, while also
+  // supporting any chosen weekly frequency (the per-client sessions/week
+  // override), so the SAME programme can run 2×–5× a week.
   const out: Array<number | null> = [null, null, null, null, null, null, null];
-  if (programmeKey === "research_3_4day") {
-    if (nBlocks === 4) {
-      out[0] = 0; // Mon
-      out[1] = 1; // Tue
-      out[3] = 2; // Thu
-      out[4] = 3; // Fri
-    } else if (nBlocks === 3) {
-      out[0] = 0; // Mon
-      out[2] = 1; // Wed
-      out[4] = 2; // Fri
-    } else {
-      // Fallback: spread blocks Mon..Fri
-      const days = [0, 2, 4, 1, 3];
-      for (let i = 0; i < nBlocks && i < days.length; i++) out[days[i]] = i;
-    }
-  } else if (programmeKey === "phase_based") {
-    // PUSH (Mon) + PULL (Thu) — classic two-session-per-week split.
-    if (nBlocks >= 2) {
-      out[0] = 0;
-      out[3] = 1;
-    } else if (nBlocks === 1) {
-      out[0] = 0;
-    }
-  } else {
-    // Unknown variant — spread Mon..Fri.
-    const days = [0, 2, 4, 1, 3];
-    for (let i = 0; i < nBlocks && i < days.length; i++) out[days[i]] = i;
+  const days = spreadWeekdays(Math.max(1, nBlocks)); // ISO weekdays 1..7
+  for (let i = 0; i < nBlocks && i < days.length; i++) {
+    out[days[i] - 1] = i;
   }
   return out;
 }

@@ -101,7 +101,7 @@ export async function GET(req: Request) {
   // phase 2 automatically.
   const { data: epAssign } = await sb
     .from("pt_explosive_programme_assignments")
-    .select("id, level, current_phase, programme_key, start_date, status, season_phase")
+    .select("id, level, current_phase, programme_key, start_date, status, season_phase, sessions_per_week")
     .eq("client_id", player.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -148,6 +148,7 @@ export async function GET(req: Request) {
       level: string; current_phase: number;
       programme_key: string; start_date: string;
       season_phase: SeasonPhase | null;
+      sessions_per_week: number | null;
     };
 
     // Pull all phases at once so we don't need to hit the DB again on phase
@@ -173,10 +174,21 @@ export async function GET(req: Request) {
       // First derive the date-implied slot (which phase + which block today).
       // Fall back to using whichever phase's blocks come closest.
       const firstPhaseBlocks = phaseRows[0]?.blocks ?? [];
-      const nBlocksGuess = Array.isArray(firstPhaseBlocks) ? firstPhaseBlocks.length : 0;
-      const blockNamesGuess = (Array.isArray(firstPhaseBlocks)
-        ? (firstPhaseBlocks as Array<{ name?: string | null }>).map((b) => b?.name ?? null)
-        : []);
+      const nativeBlocks = Array.isArray(firstPhaseBlocks) ? firstPhaseBlocks.length : 0;
+      // Per-client weekly-frequency override: run the SAME programme at the
+      // chosen sessions/week by cycling/truncating its blocks across the week
+      // (null = the programme's native frequency). E.g. a 2-block PUSH/PULL
+      // programme at 4×/week → PUSH/PULL/PUSH/PULL on Mon/Tue/Thu/Fri.
+      const effectiveFreq = ep.sessions_per_week && ep.sessions_per_week > 0
+        ? Math.min(6, ep.sessions_per_week)
+        : nativeBlocks;
+      const cycleToFreq = <T,>(arr: T[]): T[] =>
+        nativeBlocks === 0 ? [] : Array.from({ length: effectiveFreq }, (_, i) => arr[i % nativeBlocks]);
+      const blockNamesGuess = cycleToFreq(
+        Array.isArray(firstPhaseBlocks)
+          ? (firstPhaseBlocks as Array<{ name?: string | null }>).map((b) => b?.name ?? null)
+          : [],
+      );
 
       const weeksPerPhase = phaseRows[0]?.weeks_per_phase ?? 3;
       const totalPhases = phaseRows.length;
@@ -185,7 +197,7 @@ export async function GET(req: Request) {
         programmeKey: ep.programme_key,
         startDate: ep.start_date,
         today,
-        nBlocks: nBlocksGuess,
+        nBlocks: effectiveFreq,
         blockNames: blockNamesGuess,
         weeksPerPhase,
         totalPhases,
@@ -198,7 +210,13 @@ export async function GET(req: Request) {
         ? slot.phase
         : ep.current_phase;
       const phaseRow = phaseRows.find((p) => p.phase === phaseToShow) ?? phaseRows[0];
-      const blocks = Array.isArray(phaseRow.blocks) ? phaseRow.blocks : [];
+      const rawBlocks = Array.isArray(phaseRow.blocks) ? phaseRow.blocks : [];
+      // Cycle this phase's blocks to the effective weekly frequency so
+      // blocks[slot.blockIndex] (and the rest-day preview) line up with the
+      // override schedule above.
+      const blocks = rawBlocks.length === 0
+        ? []
+        : Array.from({ length: effectiveFreq }, (_, i) => rawBlocks[i % rawBlocks.length]);
 
       const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
       const programmeName = phaseRow.programme_name ?? null;

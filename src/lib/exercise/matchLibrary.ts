@@ -40,11 +40,15 @@ export function normalizeExerciseName(raw: string): string {
     .replace(/\boh press\b/g, "overheadpress")
     .replace(/\bdb\b/g, "")
     .replace(/\bbb\b/g, "");
+  // Strip embedded distances / loads / unit tokens that only describe dosing
+  // ("Sprint acceleration 20m", "Jump Squat 30% BM", "Drop Jump 40cm").
+  s = s.replace(/\b\d+(?:\.\d+)?\s?(?:m|cm|mm|kg|s|yd|yds|reps?)?\b/g, " ");
+  s = s.replace(/\b(?:bm|rm|amrap)\b/g, " ");
   // Drop leading digits left by emoji keycaps ("1️⃣ Heavy Back Squat" → "Heavy …").
   s = s.replace(/^[0-9\s]+/, "");
   // Drop leading load/intent qualifiers ("Heavy Back Squat" → "Back Squat").
-  // These describe how the SAME exercise is loaded, not a different exercise.
-  s = s.replace(/^(?:\s*(heavy|light|explosive|reactive|loaded|max|maximal|deep)\b)+/g, "");
+  // NOTE: never strip "iso"/"isometric" — real ISO holds exist in the library.
+  s = s.replace(/^(?:\s*(heavy|light|explosive|reactive|loaded|max|maximal|deep|weighted|deficit|standing)\b)+/g, "");
   // Collapse to alnum.
   return s.replace(/[^a-z0-9]/g, "");
 }
@@ -55,7 +59,36 @@ const EXTRA_ALIASES: Record<string, string> = {
   nordic: "Nordic Hamstring Curl",
   nordichamstring: "Nordic Hamstring Curl",
   conventionaldeadlift: "Deadlift",
-  countermovementjump: "Squat Jump", // closest library analogue for a CMJ cue
+  cmj: "Countermovement Jump",
+  // Row variants (the "DB"/"Barbell" prefix collapses to a too-generic stem).
+  row: "Dumbbell Row",
+  bentrow: "Bent-Over Row",
+  barbellrow: "Bent-Over Row",
+  barbellbenchpress: "Bench Press",
+  inclinepress: "Incline Bench Press",
+  shoulderpress: "Dumbbell Shoulder Press",
+  legcurl: "Seated Hamstring Curl",
+  boxstepup: "Step-Up",
+  gobletreverselunge: "Reverse Lunge",
+  rotationalmedballthrow: "Medicine Ball Rotational Throw",
+  copenhagenplank: "Copenhagen Adductor",
+  // Clean/pull derivatives that resolve to the generic Clean Pull cue.
+  hangcleanpull: "Clean Pull",
+  midthighcleanpull: "Clean Pull",
+  // Calf-raise + triceps spelling variants.
+  standingcalfraise: "Calf Raise",
+  singlelegcalfraise: "Calf Raise",
+  overheadtricepextension: "Overhead Triceps Extension",
+  // More near-duplicate spellings / variants from the curated programmes.
+  pallof: "Pallof Press",
+  plyometricpushup: "Plyo Push-Up",
+  pogohops: "Pogo Jump",
+  anklehops: "Pogo Jump",
+  hangingkneeraise: "Hanging Leg Raise",
+  splitsquatiso: "ISO Split Squat Hold",
+  hangclean: "Hang Power Clean",
+  gobletsplitsquat: "Bulgarian Split Squat",
+  trapbarcarry: "Farmer's Carry",
 };
 
 export type ExerciseIndex = Map<string, GlossaryEntry>;

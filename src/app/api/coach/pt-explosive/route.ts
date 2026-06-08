@@ -60,10 +60,12 @@ export async function POST(req: Request) {
   const a = await requireCoach(req);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
-  let body: { clientId?: string; level?: string; startDate?: string; notes?: string; programmeKey?: string; seasonPhase?: string };
+  let body: { clientId?: string; level?: string; startDate?: string; notes?: string; programmeKey?: string; seasonPhase?: string; sessionsPerWeek?: number };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
   const seasonPhase = isSeasonPhase(body.seasonPhase) ? body.seasonPhase : null;
+  const sessionsPerWeek = typeof body.sessionsPerWeek === "number" && body.sessionsPerWeek >= 1 && body.sessionsPerWeek <= 6
+    ? Math.round(body.sessionsPerWeek) : null;
   const level = (body.level || "intermediate").toLowerCase();
   if (!["beginner","intermediate","advanced"].includes(level)) {
     return NextResponse.json({ error: "Invalid level" }, { status: 400 });
@@ -90,6 +92,7 @@ export async function POST(req: Request) {
     status: "active",
     notes: body.notes ?? null,
     season_phase: seasonPhase,
+    sessions_per_week: sessionsPerWeek,
   }).select().maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, assignment: data });
@@ -99,7 +102,7 @@ export async function PATCH(req: Request) {
   const a = await requireCoach(req);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
-  let body: { assignmentId?: string; currentPhase?: number; status?: string; level?: string; notes?: string; seasonPhase?: string | null };
+  let body: { assignmentId?: string; currentPhase?: number; status?: string; level?: string; notes?: string; seasonPhase?: string | null; sessionsPerWeek?: number | null };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.assignmentId) return NextResponse.json({ error: "Missing assignmentId" }, { status: 400 });
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -108,6 +111,10 @@ export async function PATCH(req: Request) {
   if (body.level) patch.level = body.level;
   if (body.notes !== undefined) patch.notes = body.notes;
   if (body.seasonPhase !== undefined) patch.season_phase = isSeasonPhase(body.seasonPhase) ? body.seasonPhase : null;
+  if (body.sessionsPerWeek !== undefined) {
+    patch.sessions_per_week = typeof body.sessionsPerWeek === "number" && body.sessionsPerWeek >= 1 && body.sessionsPerWeek <= 6
+      ? Math.round(body.sessionsPerWeek) : null;
+  }
   const { data, error } = await sb.from("pt_explosive_programme_assignments")
     .update(patch).eq("id", body.assignmentId).eq("trainer_id", userId).select().maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -493,12 +493,13 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                     </div>
 
-                    {/* Plan */}
-                    <div className="text-right w-28 flex-shrink-0 hidden md:block">
+                    {/* Plan — show WHICH programme the client is on (name), with the
+                        type as a tooltip, so the trainer sees the actual plan at a glance. */}
+                    <div className="text-right w-44 flex-shrink-0 hidden md:block">
                       <div className="text-xs text-gray-500">{ct.tabs.plans}</div>
-                      <div className="text-sm truncate">
+                      <div className="text-sm truncate" title={client.plan ? `${client.plan.name} · ${planTypeLabel(client.plan.type)}` : undefined}>
                         {client.plan ? (
-                          <span className="font-medium">{planTypeLabel(client.plan.type)}</span>
+                          <span className="font-medium">{client.plan.name}</span>
                         ) : (
                           <span className="text-gray-400">{ct.clients.noPlan}</span>
                         )}
@@ -795,6 +796,37 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                         ? "Lokið"
                         : "Completed"}
                     </span>
+                    {/* Remove (archive) an assignment — e.g. duplicates or plans
+                        assigned by mistake. Archived, not hard-deleted. */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const msg = isIS
+                          ? `Fjarlægja „${assignment.template_name}“ af ${assignment.client_name}? Áætlunin fer í geymslu og hverfur af lista viðskiptavinarins.`
+                          : `Remove "${assignment.template_name}" from ${assignment.client_name}? The plan is archived and disappears from the client's list.`;
+                        if (!window.confirm(msg)) return;
+                        try {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          if (!session?.access_token) return;
+                          const res = await fetch(`/api/trainer/plans/${assignment.id}`, {
+                            method: "DELETE",
+                            headers: { Authorization: `Bearer ${session.access_token}` },
+                          });
+                          if (!res.ok) {
+                            const j = await res.json().catch(() => ({}));
+                            alert((isIS ? "Tókst ekki að fjarlægja: " : "Could not remove: ") + (j.error ?? res.status));
+                            return;
+                          }
+                          fetchAssignments();
+                        } catch {
+                          alert(isIS ? "Villa við að fjarlægja áætlun." : "Error removing the plan.");
+                        }
+                      }}
+                      className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      title={isIS ? "Fjarlægja úthlutun (fer í geymslu)" : "Remove assignment (archived)"}
+                    >
+                      {isIS ? "Fjarlægja" : "Remove"}
+                    </button>
                   </div>
                 ))}
               </div>

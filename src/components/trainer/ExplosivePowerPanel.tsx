@@ -55,6 +55,7 @@ type Assignment = {
   status: string;
   notes: string | null;
   season_phase: SeasonPhase | null;
+  sessions_per_week: number | null;
 };
 type Client = { id: string; name: string };
 
@@ -118,6 +119,8 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
   const [assignLevel, setAssignLevel] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [assignDate, setAssignDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [assignSeason, setAssignSeason] = useState<SeasonPhase | "">("");
+  // "" = run at the programme's native weekly frequency; 2-5 = override.
+  const [assignFreq, setAssignFreq] = useState<string>("");
   const [assignBusy, setAssignBusy] = useState(false);
 
   // Exercise glossary index — used to attach bilingual explanations (info icon)
@@ -177,7 +180,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
       const res = await fetch("/api/coach/pt-explosive", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ clientId: assignClientId, level: assignLevel, startDate: assignDate, programmeKey: activeProgramme, seasonPhase: assignSeason || undefined }),
+        body: JSON.stringify({ clientId: assignClientId, level: assignLevel, startDate: assignDate, programmeKey: activeProgramme, seasonPhase: assignSeason || undefined, sessionsPerWeek: assignFreq ? Number(assignFreq) : undefined }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Assign failed");
@@ -386,6 +389,14 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
             <option value="">{lang === "IS" ? "Tímabil (valfrjálst)" : "Season (optional)"}</option>
             {SEASON_PHASES.map((s) => <option key={s} value={s}>{SEASON_PHASE_SPEC[s].label[lang]}</option>)}
           </select>
+          <select value={assignFreq} onChange={(e) => setAssignFreq(e.target.value)}
+            title={lang === "IS" ? "Æfingar á viku (sjálfgefið = eins og prógrammið er hannað)" : "Sessions per week (default = the programme's native frequency)"}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+            <option value="">{lang === "IS" ? "Tíðni: sjálfgefin" : "Frequency: default"}</option>
+            {[2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>{n}× {lang === "IS" ? "í viku" : "per week"}</option>
+            ))}
+          </select>
           <input type="date" value={assignDate} onChange={(e) => setAssignDate(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm" />
           <button onClick={assign} disabled={assignBusy || !assignClientId}
@@ -406,6 +417,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                   <th className="px-2 py-1.5 text-center">Level</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Byrjar" : "Starts"}</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Tímabil" : "Season"}</th>
+                  <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Tíðni" : "Freq"}</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Fasi" : "Phase"}</th>
                   <th className="px-2 py-1.5 text-center">{lang === "IS" ? "Staða" : "Status"}</th>
                   <th className="px-2 py-1.5"></th>
@@ -422,6 +434,13 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                         className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs">
                         <option value="">—</option>
                         {SEASON_PHASES.map((s) => <option key={s} value={s}>{SEASON_PHASE_SPEC[s].label[lang]}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <select value={a.sessions_per_week ?? ""} onChange={(e) => patchAssign(a.id, { sessionsPerWeek: e.target.value ? Number(e.target.value) : null })}
+                        className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs">
+                        <option value="">{lang === "IS" ? "Sjálfg." : "Default"}</option>
+                        {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}×</option>)}
                       </select>
                     </td>
                     <td className="px-2 py-1.5 text-center">

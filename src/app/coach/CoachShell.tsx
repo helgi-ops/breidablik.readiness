@@ -329,17 +329,22 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 </svg>
               </button>
             </div>
-            <CoachSidebar
-              isAdmin={isAdmin}
-              notesCount={notesCount}
-              pendingCount={pendingCount}
-              currentTab={currentTab}
-              currentTeamId={currentTeamId}
-              catapultDataTier={catapultDataTier}
-              teamType={teamType}
-              onSwitchTeam={handleSwitchTeam}
-              onNavigate={() => setMobileDrawerOpen(false)}
-            />
+            {/* Bounded, shrinkable wrapper so CoachSidebar's h-full resolves to
+                the remaining drawer height — its internal list scrolls and the
+                sticky sign-out footer stays pinned and reachable (PWA fix). */}
+            <div className="min-h-0 flex-1 flex flex-col">
+              <CoachSidebar
+                isAdmin={isAdmin}
+                notesCount={notesCount}
+                pendingCount={pendingCount}
+                currentTab={currentTab}
+                currentTeamId={currentTeamId}
+                catapultDataTier={catapultDataTier}
+                teamType={teamType}
+                onSwitchTeam={handleSwitchTeam}
+                onNavigate={() => setMobileDrawerOpen(false)}
+              />
+            </div>
           </aside>
         </div>
       )}
