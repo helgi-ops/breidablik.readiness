@@ -65,6 +65,14 @@ type TodayResp = {
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
+    readiness?: {
+      applied: boolean;
+      zone: "green" | "yellow" | "red";
+      volume_pct: number;
+      intensity_pct: number;
+      action: "normal" | "deload" | "recovery" | "skip";
+      source: "plan" | "default";
+    } | null;
   } | null;
   readinessToday: { id: string; total_score: number | null; color: string | null } | null;
   bodyweight: { latest: { log_date: string; weight_kg: number }; delta_kg: number | null } | null;
@@ -215,6 +223,53 @@ export default function ClientTodayPage() {
               <span className="text-[11px] text-amber-800"> · {lang === "IS" ? "minna magn til að halda ferskleika." : "reduced volume to stay fresh."}</span>
             </div>
           ) : null}
+
+          {/* Readiness-adapted today — honest: only shown when the session was
+              actually scaled, or a recovery day was prescribed. */}
+          {data.explosive.readiness && !data.explosive.rest_day && !data.explosive.is_match_day && (() => {
+            const rd = data.explosive.readiness!;
+            const volCut = 100 - rd.volume_pct;
+            const intCut = 100 - rd.intensity_pct;
+            if (rd.applied) {
+              const parts: string[] = [];
+              if (volCut > 0) parts.push(`${lang === "IS" ? "−" : "−"}${volCut}% ${lang === "IS" ? "magn" : "volume"}`);
+              if (intCut > 0) parts.push(`−${intCut}% ${lang === "IS" ? "þyngd" : "load"}`);
+              const detail = parts.join(" · ");
+              const amber = rd.zone === "yellow";
+              return (
+                <div className={`rounded-lg border px-2.5 py-1.5 ${amber ? "border-amber-200 bg-amber-50" : "border-rose-200 bg-rose-50"}`}>
+                  <span className={`text-[11px] font-semibold ${amber ? "text-amber-900" : "text-rose-900"}`}>
+                    {lang === "IS" ? "Stillt eftir líðan" : "Adjusted to how you feel"}
+                  </span>
+                  <span className={`text-[11px] ${amber ? "text-amber-800" : "text-rose-800"}`}>
+                    {" "}· {detail} — {lang === "IS" ? "léttari æfing í dag svo þú náir góðum gæðum." : "lighter today so you keep good quality."}
+                  </span>
+                </div>
+              );
+            }
+            if (rd.action === "recovery" || rd.action === "skip") {
+              return (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5">
+                  <span className="text-[11px] font-semibold text-sky-900">
+                    {lang === "IS" ? "Endurheimtardagur" : "Recovery day"}
+                  </span>
+                  <span className="text-[11px] text-sky-800">
+                    {" "}· {lang === "IS" ? "þú ert ekki í toppstandi — slepptu þungu, haltu því léttu og hreyfðu þig rólega." : "you're not at your best — skip the heavy work, keep it light and easy."}
+                  </span>
+                </div>
+              );
+            }
+            if (rd.zone === "green") {
+              return (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
+                  <span className="text-[11px] font-semibold text-emerald-900">{lang === "IS" ? "Þú ert í góðu standi" : "You're good to go"}</span>
+                  <span className="text-[11px] text-emerald-800"> · {lang === "IS" ? "haltu áætlun dagsins." : "proceed as planned."}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">

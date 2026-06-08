@@ -24,6 +24,7 @@ import { computeGameTaper } from "@/lib/client/gameTaper";
 import { buildOneRmMap, canonicalLift, isStale, type LvTest } from "@/lib/client/oneRepMax";
 import { computeWorkingOneRm, workingTargetKg, type SetLogRow } from "@/lib/client/workingOneRm";
 import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
+import { zoneFromColor, computeReadinessAdjustment, scaleSets, scaleLoadKg, DEFAULT_PT_BAND, type ReadinessBand } from "@/lib/client/readinessAdjust";
 
 export const runtime = "nodejs";
 
@@ -141,7 +142,20 @@ export async function GET(req: Request) {
     /** Closed loop: lifts whose strength test is stale (retest) or missing. */
     retest_due?: string[];
     needs_test?: string[];
+    /** Readiness-driven adjustment actually applied to today's numbers. */
+    readiness?: {
+      applied: boolean;
+      zone: "green" | "yellow" | "red";
+      volume_pct: number;
+      intensity_pct: number;
+      action: "normal" | "deload" | "recovery" | "skip";
+      source: "plan" | "default";
+    } | null;
   } | null = null;
+
+  // Readiness band for the active individual plan (real config). Null for the
+  // explosive/starter path, which falls back to DEFAULT_PT_BAND.
+  let planBand: ReadinessBand | null = null;
 
   if (epAssign) {
     const ep = epAssign as {
@@ -356,7 +370,7 @@ export async function GET(req: Request) {
   if (!explosive) {
     const { data: planRow } = await sb
       .from("individual_training_plans")
-      .select("id, plan_name, start_date, end_date")
+      .select("id, plan_name, start_date, end_date, readiness_enabled, deload_volume_pct, deload_intensity_pct, readiness_yellow_action, readiness_red_action")
       .eq("player_id", player.id)
       .eq("status", "active")
       .lte("start_date", today)
@@ -367,6 +381,18 @@ export async function GET(req: Request) {
 
     if (planRow) {
       const plan = planRow as { id: string; plan_name: string; start_date: string; end_date: string };
+      // Readiness band comes from the plan's own config (real columns).
+      const pr = planRow as {
+        readiness_enabled?: boolean | null; deload_volume_pct?: number | null; deload_intensity_pct?: number | null;
+        readiness_yellow_action?: string | null; readiness_red_action?: string | null;
+      };
+      planBand = {
+        enabled: pr.readiness_enabled !== false,
+        deloadVolumePct: pr.deload_volume_pct ?? 70,
+        deloadIntensityPct: pr.deload_intensity_pct ?? 85,
+        yellowAction: (pr.readiness_yellow_action as ReadinessBand["yellowAction"]) ?? "deload",
+        redAction: (pr.readiness_red_action as ReadinessBand["redAction"]) ?? "recovery",
+      };
       // Week number since start (1-based) and ISO weekday (Mon=1 … Sun=7).
       const msPerDay = 86_400_000;
       const startMs = new Date(plan.start_date + "T00:00:00Z").getTime();
@@ -477,6 +503,40 @@ export async function GET(req: Request) {
     .eq("player_id", player.id)
     .eq("entry_date", today)
     .maybeSingle();
+
+  // ── Readiness-adapted today: scale the session to how the athlete feels ──
+  // Honest contract: only apply (and only claim "−X%") when the band genuinely
+  // scales the numbers. Green / no check-in / rest / match days are untouched.
+  if (explosive && Array.isArray(explosive.blocks) && explosive.blocks.length > 0 && !explosive.rest_day && !explosive.is_match_day) {
+    const zone = zoneFromColor((readinessToday as { color?: string | null } | null)?.color ?? null);
+    if (zone) {
+      const band = planBand ?? DEFAULT_PT_BAND;
+      const adj = computeReadinessAdjustment(zone, band);
+      if (adj.applied) {
+        explosive.blocks = explosive.blocks.map((blk) => {
+          const b = blk as { name?: string; rows?: Array<Record<string, unknown>> };
+          if (!Array.isArray(b.rows)) return blk;
+          return {
+            ...b,
+            rows: b.rows.map((r) => {
+              const out: Record<string, unknown> = { ...r };
+              if (typeof r.sets === "number") out.sets = scaleSets(r.sets, adj.volumePct);
+              if (typeof r.target_kg === "number") out.target_kg = scaleLoadKg(r.target_kg, adj.intensityPct);
+              return out;
+            }),
+          };
+        });
+      }
+      explosive.readiness = {
+        applied: adj.applied,
+        zone: adj.zone,
+        volume_pct: adj.volumePct,
+        intensity_pct: adj.intensityPct,
+        action: adj.action,
+        source: planBand ? "plan" : "default",
+      };
+    }
+  }
 
   // ── Latest bodyweight + 7-day prior for delta ─────────────────────
   const { data: bwData } = await sb
