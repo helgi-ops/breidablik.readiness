@@ -77,16 +77,67 @@ const QUALITY_LABEL: Record<Quality, string> = {
   hypertrophy: "muscle mass", conditioning: "conditioning", injury: "robustness",
 };
 
-export type Recommendation = { template: TemplateLite; score: number; family: string; reasons: string[] };
+export type Experience = "beginner" | "intermediate" | "advanced";
+
+/** Training-method demand tier (1 = foundational/safe for everyone … 3 =
+ *  advanced, high neural/technical demand needing a solid base). Drives the
+ *  age/experience appropriateness gate. */
+const FAMILY_TIER: Record<string, number> = {
+  "Preparatory / base": 1,
+  "Hypertrophy": 1,
+  "Conditioning": 1,
+  "General strength": 1,
+  "Jump / plyometric": 2,
+  "Contrast": 2,
+  "Explosive power": 2,
+  "French contrast": 3,
+};
+function familyTier(family: string): number {
+  return FAMILY_TIER[family] ?? 1;
+}
+
+/** The highest method tier appropriate for a client, from age + experience.
+ *  Unknown values don't restrict. <18 caps at intermediate (no max-CNS
+ *  complexes); <16 caps at foundational. Beginner caps at foundational. */
+export function allowedTier(opts?: { age?: number | null; experience?: Experience | null }): number {
+  const expTier = opts?.experience === "beginner" ? 1 : opts?.experience === "intermediate" ? 2 : opts?.experience === "advanced" ? 3 : 3;
+  const age = opts?.age ?? null;
+  const ageCap = age == null ? 3 : age < 16 ? 1 : age < 18 ? 2 : 3;
+  return Math.min(expTier, ageCap);
+}
+
+export type Recommendation = {
+  template: TemplateLite;
+  score: number;
+  family: string;
+  reasons: string[];
+  /** Method demand tier (1–3). */
+  tier: number;
+  /** True when this programme's method is above the client's allowed tier. */
+  blocked: boolean;
+  /** Why it's blocked (bilingual), present only when blocked. */
+  blockReason?: { EN: string; IS: string };
+};
 
 /**
  * Rank the trainer's templates against the selected goals.
+ *
+ * If age/experience are supplied, programmes whose method demand exceeds what's
+ * appropriate (e.g. French Contrast for an under-18 beginner) are flagged
+ * `blocked` with a reason — never silently recommended. Returns blocked recs
+ * too so the UI can explain why they're held back; non-blocked come first.
+ *
  * @returns recommendations sorted best-first (score > 0 only).
  */
-export function recommendProgrammes(goalIds: GoalId[], templates: TemplateLite[]): Recommendation[] {
+export function recommendProgrammes(
+  goalIds: GoalId[],
+  templates: TemplateLite[],
+  opts?: { age?: number | null; experience?: Experience | null },
+): Recommendation[] {
   const active = goalIds.filter((g) => g !== "keep_lean");
   const keepLean = goalIds.includes("keep_lean");
   if (active.length === 0) return [];
+  const maxTier = allowedTier(opts);
 
   const recs = templates.map((t) => {
     const { q, family } = programmeQualities(t);
@@ -109,8 +160,18 @@ export function recommendProgrammes(goalIds: GoalId[], templates: TemplateLite[]
     if (top.length) reasons.push(`Trains ${top.join(", ")} — a strong fit for the selected goals.`);
     if (keepLean && (q.hypertrophy ?? 0) >= 2) reasons.push("Note: leans toward muscle mass — pair with controlled volume to stay lean.");
     if (keepLean && (q.hypertrophy ?? 0) < 2) reasons.push("Power/speed emphasis keeps the athlete lean and fast.");
-    return { template: t, score: Math.round(score * 10) / 10, family, reasons };
-  }).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+    const tier = familyTier(family);
+    const blocked = tier > maxTier;
+    const blockReason = blocked
+      ? {
+          EN: `${family} is an advanced method — needs a solid strength base and training maturity; not suited to this client's age/experience.`,
+          IS: `${family} er háþróuð aðferð — þarf góðan styrkgrunn og reynslu; hentar ekki aldri/reynslu þessa viðskiptavinar.`,
+        }
+      : undefined;
+    return { template: t, score: Math.round(score * 10) / 10, family, reasons, tier, blocked, blockReason };
+  }).filter((r) => r.score > 0)
+    // Allowed programmes first (best score within each), blocked ones after.
+    .sort((a, b) => (a.blocked === b.blocked ? b.score - a.score : a.blocked ? 1 : -1));
 
   return recs;
 }

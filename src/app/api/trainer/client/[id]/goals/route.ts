@@ -53,14 +53,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { data } = await a.sb
     .from("pt_client_goals")
-    .select("goals, notes, updated_at")
+    .select("goals, notes, age, experience, updated_at")
     .eq("client_id", clientId)
     .maybeSingle();
-  const row = (data ?? null) as { goals?: string[]; notes?: string | null; updated_at?: string } | null;
+  const row = (data ?? null) as { goals?: string[]; notes?: string | null; age?: number | null; experience?: string | null; updated_at?: string } | null;
   return NextResponse.json({
     ok: true,
     goals: row?.goals ?? [],
     notes: row?.notes ?? "",
+    age: row?.age ?? null,
+    experience: row?.experience ?? null,
     updated_at: row?.updated_at ?? null,
   });
 }
@@ -70,16 +72,19 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const a = await requireTrainerForClient(req, clientId);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
 
-  let body: { goals?: unknown; notes?: unknown };
+  let body: { goals?: unknown; notes?: unknown; age?: unknown; experience?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
   const goals = Array.isArray(body.goals)
     ? Array.from(new Set(body.goals.filter((g): g is string => typeof g === "string" && ALLOWED.has(g))))
     : [];
   const notes = typeof body.notes === "string" ? body.notes.slice(0, 2000) : null;
+  const age = typeof body.age === "number" && body.age > 0 && body.age < 120 ? Math.round(body.age) : null;
+  const experience = typeof body.experience === "string" && ["beginner", "intermediate", "advanced"].includes(body.experience)
+    ? body.experience : null;
 
   const { error } = await a.sb
     .from("pt_client_goals")
-    .upsert({ client_id: clientId, goals, notes, trainer_id: a.userId, updated_at: new Date().toISOString() }, { onConflict: "client_id" });
+    .upsert({ client_id: clientId, goals, notes, age, experience, trainer_id: a.userId, updated_at: new Date().toISOString() }, { onConflict: "client_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, goals, notes });
+  return NextResponse.json({ ok: true, goals, notes, age, experience });
 }

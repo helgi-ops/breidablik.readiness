@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { GOALS, recommendProgrammes, type GoalId, type TemplateLite } from "@/lib/trainer/goalRecommend";
+import { GOALS, recommendProgrammes, type GoalId, type TemplateLite, type Experience } from "@/lib/trainer/goalRecommend";
 
 type Props = {
   clientId: string;
@@ -32,6 +32,8 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
   const is = lang === "IS";
   const [selected, setSelected] = useState<GoalId[]>([]);
   const [notes, setNotes] = useState("");
+  const [age, setAge] = useState<number | null>(null);
+  const [experience, setExperience] = useState<Experience | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,6 +69,8 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
       const loadedGoals = (j.goals ?? []) as GoalId[];
       setSelected(loadedGoals);
       setNotes(j.notes ?? "");
+      setAge(typeof j.age === "number" ? j.age : null);
+      setExperience((j.experience ?? null) as Experience | null);
       setSavedAt(j.updated_at ?? null);
       setDirty(false);
       // Default collapsed if goals already exist; localStorage overrides.
@@ -88,7 +92,7 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
       const res = await fetch(`/api/trainer/client/${clientId}/goals`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...(await authHeader()) },
-        body: JSON.stringify({ goals: selected, notes }),
+        body: JSON.stringify({ goals: selected, notes, age, experience }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(j.error ?? "Save failed"); return; }
@@ -99,8 +103,10 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
   };
 
   const pool = useMemo(() => [...templates, ...starterCandidates], [templates, starterCandidates]);
-  const recs = useMemo(() => recommendProgrammes(selected, pool), [selected, pool]);
-  const maxScore = recs.length ? recs[0].score : 1;
+  const recs = useMemo(() => recommendProgrammes(selected, pool, { age, experience }), [selected, pool, age, experience]);
+  const allowedRecs = recs.filter((r) => !r.blocked);
+  const blockedRecs = recs.filter((r) => r.blocked);
+  const maxScore = allowedRecs.length ? allowedRecs[0].score : (recs.length ? recs[0].score : 1);
 
   const assignStarter = async (key: string, level: string, recId: string) => {
     if (!onAssignStarter) return;
@@ -179,6 +185,39 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
         className="w-full rounded-md border border-slate-200 p-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
       />
 
+      {/* Age + experience — gate which methods are appropriate. */}
+      <div className="mt-2 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-medium text-slate-500">{is ? "Aldur" : "Age"}</label>
+          <input
+            type="number" min={8} max={99}
+            value={age ?? ""}
+            onChange={(e) => { setAge(e.target.value === "" ? null : Number(e.target.value)); setDirty(true); }}
+            placeholder={is ? "ár" : "yrs"}
+            className="w-20 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-medium text-slate-500">{is ? "Reynsla" : "Experience"}</label>
+          <div className="flex gap-1">
+            {(["beginner", "intermediate", "advanced"] as const).map((lvl) => {
+              const on = experience === lvl;
+              const label = { beginner: is ? "Byrjandi" : "Beginner", intermediate: is ? "Miðlungs" : "Intermediate", advanced: is ? "Lengra" : "Advanced" }[lvl];
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => { setExperience(on ? null : lvl); setDirty(true); }}
+                  className={`rounded-full border px-2 py-1 text-[11px] font-medium transition-colors ${on ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       <div className="mt-2 flex items-center gap-2">
         <button
           type="button"
@@ -200,11 +239,16 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
         ) : (
           <>
             <p className="mb-2 text-[11px] font-medium text-slate-500">{is ? "Mælt með (best efst):" : "Recommended (best first):"}</p>
+            {allowedRecs.length === 0 && (
+              <p className="mb-2 text-[11px] text-amber-700">{is ? "Öll kerfi sem passa eru of þung fyrir aldur/reynslu — byrjaðu á grunnkerfi." : "Every matching programme is too advanced for this age/experience — start with a foundational one."}</p>
+            )}
             <div className="space-y-2">
-              {recs.slice(0, 4).map((r, i) => {
+              {allowedRecs.slice(0, 4).map((r, i) => {
                 const isStarter = r.template.source === "starter";
                 const levels = r.template.levels ?? [];
-                const lvl = starterLevel[r.template.id] ?? levels[0] ?? "beginner";
+                // Default the starter level to the client's experience when offered.
+                const expDefault = experience && levels.includes(experience) ? experience : (levels[0] ?? "beginner");
+                const lvl = starterLevel[r.template.id] ?? expDefault;
                 const st = starterState[r.template.id] ?? "idle";
                 return (
                 <div key={r.template.id} className={`rounded-md border p-2 ${i === 0 ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200"}`}>
@@ -268,10 +312,27 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
                 );
               })}
             </div>
+
+            {/* Held-back programmes: too advanced for the client's age/experience. */}
+            {blockedRecs.length > 0 && (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50/60 p-2">
+                <div className="text-[11px] font-medium text-amber-900">
+                  {is ? "Haldið eftir (of þungt fyrir aldur/reynslu):" : "Held back (too advanced for age/experience):"}
+                </div>
+                <ul className="mt-0.5 space-y-0.5">
+                  {blockedRecs.slice(0, 4).map((r) => (
+                    <li key={r.template.id} className="text-[11px] text-amber-800">
+                      <span className="font-medium">{r.template.name}</span> — {r.blockReason?.[lang]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
               {is
-                ? "Tillagan er reiknuð (engin AI) út frá markmiðunum og eiginleikum kerfanna (styrkur, kraftur, hraði, snerpa). Hún velur úr því sem ER í safninu þínu — ekki ný uppsetning."
-                : "The match is computed (no AI) from the goals and each programme's qualities (strength, power, speed, agility). It picks from what's already in your library — it doesn't invent a new structure."}
+                ? "Tillagan er reiknuð (engin AI) út frá markmiðunum, eiginleikum kerfanna og aldri/reynslu. Hún velur úr því sem ER í safninu þínu — ekki ný uppsetning."
+                : "The match is computed (no AI) from the goals, each programme's qualities and the client's age/experience. It picks from what's already in your library — it doesn't invent a new structure."}
             </p>
           </>
         )}
