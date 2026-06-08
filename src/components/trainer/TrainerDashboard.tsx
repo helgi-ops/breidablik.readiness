@@ -14,6 +14,9 @@ import VolumeLoadCard from "@/components/player/VolumeLoadCard";
 import TrainingLoadCard from "@/components/player/TrainingLoadCard";
 import MomentumCard from "@/components/player/MomentumCard";
 import PtGamesManager from "./PtGamesManager";
+import { downloadPtClientReportPdf, type PtClientReport } from "@/components/trainer/PtClientReportPdf";
+import AutoProgressionCard from "@/components/trainer/AutoProgressionCard";
+import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import ClientBreaksManager from "./ClientBreaksManager";
 import TrainerAttentionList from "./TrainerAttentionList";
 
@@ -157,6 +160,27 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     id: string;
     name: string;
   } | null>(null);
+  const [reportBusyId, setReportBusyId] = useState<string | null>(null);
+
+  // Download a client's 4-week progress report PDF (adherence, readiness, load,
+  // strength PRs & volume) — sendable to the client.
+  const downloadClientReport = async (clientId: string) => {
+    setReportBusyId(clientId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { alert(isIS ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch(`/api/trainer/client/${clientId}/progress-report`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); alert((isIS ? "Tókst ekki: " : "Failed: ") + (j.error ?? res.status)); return; }
+      const data = (await res.json()) as PtClientReport;
+      await downloadPtClientReportPdf(data);
+    } catch {
+      alert(isIS ? "Villa við að búa til skýrslu." : "Error generating report.");
+    } finally {
+      setReportBusyId(null);
+    }
+  };
 
   /* ── Fetch clients ──────────────────────────────────── */
 
@@ -526,6 +550,19 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Sendable progress report */}
+                      <div className="col-span-2 sm:col-span-5">
+                        <button
+                          type="button"
+                          onClick={() => downloadClientReport(client.id)}
+                          disabled={reportBusyId === client.id}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {reportBusyId === client.id
+                            ? (isIS ? "Bý til…" : "Generating…")
+                            : (isIS ? "Hlaða niður framvinduskýrslu (4 vikur, PDF)" : "Download progress report (4 weeks, PDF)")}
+                        </button>
+                      </div>
                       <div>
                         <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
                         <span className="font-medium">{client.readiness?.fatigue ?? "—"}/5</span>
@@ -572,6 +609,20 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <LoadQuadrant clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <ClientGoalsCard
+                          clientId={client.id}
+                          lang={isIS ? "IS" : "EN"}
+                          templates={templates}
+                          onUseProgramme={(id, name) => {
+                            setAssigningTemplate({ id, name });
+                            setShowPlanAssigner(true);
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <AutoProgressionCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <VolumeLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />

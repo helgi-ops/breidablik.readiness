@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { buildSessionBlocks, type SessionBlock } from "@/lib/client/sessionGrouping";
 
 type Lang = "IS" | "EN";
 
@@ -28,6 +29,12 @@ type SetRow = {
 type ExerciseDraft = {
   name: string;
   sets: SetRow[];
+  /** Grouping carried from the prescribed plan so the form can show whether
+   *  this exercise is standalone or part of a superset/triset/giant/contrast
+   *  block. Undefined for exercises the athlete adds manually. */
+  group?: string | null;
+  groupMethod?: string | null;
+  num?: string | null;
 };
 
 interface Props {
@@ -38,6 +45,23 @@ interface Props {
    *  with today's prescribed session (exercise names + set count) pulled from
    *  /api/client/today. Opt-in so the /player surface is unaffected. */
   prefillFromPlan?: boolean;
+}
+
+/** Per-exercise grouping metadata, aligned to the exercises array, so the form
+ *  can render a "Superset / Triset / French contrast" header above the first
+ *  exercise of each performed block. */
+type GroupMeta = { headerBlock: SessionBlock | null; grouped: boolean; tag: string; idxInGroup: number };
+function computeGroupMeta(exercises: ExerciseDraft[]): GroupMeta[] {
+  const blocks = buildSessionBlocks(
+    exercises.map((e) => ({ group: e.group, group_method: e.groupMethod, num: e.num })),
+  );
+  const meta: GroupMeta[] = [];
+  for (const blk of blocks) {
+    blk.rows.forEach((_, j) => {
+      meta.push({ headerBlock: j === 0 ? blk : null, grouped: blk.kind !== "single", tag: blk.tag, idxInGroup: j });
+    });
+  }
+  return meta;
 }
 
 /** Parse a prescription reps string ("5", "8-10", "5 ea leg") into a leading
@@ -152,7 +176,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
       const json = await res.json();
       const blocks = (json?.explosive?.blocks ?? []) as Array<{
         name: string;
-        rows: Array<{ exercise: string; reps?: unknown; sets?: number | null }>;
+        rows: Array<{ exercise: string; reps?: unknown; sets?: number | null; group?: string | null; group_method?: string | null; num?: string | null }>;
       }>;
       const drafts: ExerciseDraft[] = [];
       for (const b of blocks) {
@@ -163,6 +187,9 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
           drafts.push({
             name: r.exercise,
             sets: Array.from({ length: nSets }, () => ({ weight_kg: null, reps, rpe: null })),
+            group: r.group ?? null,
+            groupMethod: r.group_method ?? null,
+            num: r.num ?? null,
           });
         }
       }
@@ -322,9 +349,24 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
           {exercises.length === 0 && (
             <div className="text-sm text-slate-500">{t.empty}</div>
           )}
-          {exercises.map((ex, exIdx) => (
-            <div key={exIdx} className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50">
+          {(() => {
+            const groupMeta = computeGroupMeta(exercises);
+            return exercises.map((ex, exIdx) => {
+            const meta = groupMeta[exIdx];
+            return (
+            <div key={exIdx}>
+              {meta?.grouped && meta.headerBlock && (
+                <div className="mb-1 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">{meta.headerBlock.label[lang]}</span>
+                    <span className="text-[11px] font-medium text-indigo-700">{meta.headerBlock.rows.length} {lang === "IS" ? "æfingar saman" : "exercises together"}</span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{meta.headerBlock.howto[lang]}</p>
+                </div>
+              )}
+            <div className={`rounded-xl border p-3 space-y-2 ${meta?.grouped ? "border-indigo-200 bg-indigo-50/30" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-center gap-2">
+                {meta?.grouped && <span className="shrink-0 text-xs font-semibold text-indigo-400">{meta.tag}{meta.idxInGroup + 1}</span>}
                 <input
                   type="text"
                   value={ex.name}
@@ -402,7 +444,10 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
                 {t.addSet}
               </button>
             </div>
-          ))}
+            </div>
+            );
+            });
+          })()}
 
           <button
             type="button"

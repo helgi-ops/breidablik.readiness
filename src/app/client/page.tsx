@@ -23,6 +23,7 @@ import AICoachCard from "@/components/player/AICoachCard";
 import ClientVacationBanner from "@/components/player/ClientVacationBanner";
 import ExerciseInfo from "@/components/exercise/ExerciseInfo";
 import { isSeasonPhase, SEASON_PHASE_SPEC } from "@/lib/client/seasonPhase";
+import { buildSessionBlocks } from "@/lib/client/sessionGrouping";
 
 /** Localised weekday name from an ISO index (1=Mon..7=Sun). */
 function weekdayName(iso: number, lang: string): string {
@@ -57,6 +58,7 @@ type TodayResp = {
     blocks: Array<{ name: string; rows: Array<{
       num?: string; exercise: string; reps: string; sets: number;
       velocity?: string | number; pct1rm?: number | null; method?: string;
+      group?: string | null; group_method?: string | null;
       cluster_rest?: string; set_rest?: string;
       target_kg?: number | null; target_stale?: boolean; target_auto?: boolean;
       description?: string | null; description_is?: string | null;
@@ -267,30 +269,59 @@ export default function ClientTodayPage() {
           {/* Show prescribed exercises — for both today's session AND rest-day
               preview of next session. UI label above clarifies which it is.
               Block list capped to first 8 rows in either mode. */}
-          {data.explosive.blocks.slice(0, 1).map((b) => (
-            <div key={b.name} className="space-y-1">
-              {b.rows.slice(0, 8).map((r, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-100 pb-1.5 last:border-0">
-                  <span className="flex min-w-0 items-center gap-1 font-medium text-slate-800">
-                    <span className="truncate">{r.exercise}</span>
-                    <ExerciseInfo name={r.exercise} description={r.description} descriptionIs={r.description_is} className="shrink-0" />
-                  </span>
-                  <span className="text-xs text-slate-500 tabular-nums shrink-0">
-                    {r.sets}×{r.reps}
-                    {r.target_kg != null
-                      ? <> · <span className="font-semibold text-slate-900">{r.target_kg} kg</span>{r.pct1rm ? ` (${Math.round(r.pct1rm * 100)}%)` : ""}{r.target_auto ? <span className="ml-1 text-emerald-600" title={lang === "IS" ? "Sjálfvirk framvinda úr skráðum lyftum" : "Auto-progressed from your logged lifts"}>↑</span> : null}</>
-                      : (r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : "")}
-                    {r.velocity ? ` · ${r.velocity} m/s` : ""}
-                  </span>
-                </div>
-              ))}
-              {b.rows.length > 8 && (
-                <div className="text-[11px] text-slate-400 italic">
-                  +{b.rows.length - 8} {lang === "IS" ? "fleiri" : "more"}
-                </div>
-              )}
-            </div>
-          ))}
+          {data.explosive.blocks.slice(0, 1).map((b) => {
+            const groups = buildSessionBlocks(b.rows);
+            let shown = 0;
+            const CAP = 8;
+            return (
+              <div key={b.name} className="space-y-2">
+                {groups.map((g) => {
+                  if (shown >= CAP) return null;
+                  const grouped = g.kind !== "single";
+                  return (
+                    <div key={g.key} className={grouped ? "rounded-lg border border-indigo-100 bg-indigo-50/40 p-2" : ""}>
+                      {grouped && (
+                        <div className="mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">{g.label[lang]}</span>
+                            <span className="text-[11px] font-medium text-indigo-700">{g.rows.length} {lang === "IS" ? "æfingar saman" : "exercises together"}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{g.howto[lang]}</p>
+                        </div>
+                      )}
+                      <div className={grouped ? "space-y-1" : ""}>
+                        {g.rows.map((r, i) => {
+                          if (shown >= CAP) return null;
+                          shown += 1;
+                          return (
+                            <div key={i} className="flex items-baseline justify-between gap-3 text-sm border-b border-slate-100 pb-1.5 last:border-0">
+                              <span className="flex min-w-0 items-center gap-1 font-medium text-slate-800">
+                                {grouped && <span className="shrink-0 text-[11px] font-semibold text-indigo-400">{g.tag}{i + 1}</span>}
+                                <span className="truncate">{r.exercise}</span>
+                                <ExerciseInfo name={r.exercise} description={r.description} descriptionIs={r.description_is} className="shrink-0" />
+                              </span>
+                              <span className="text-xs text-slate-500 tabular-nums shrink-0">
+                                {r.sets}×{r.reps}
+                                {r.target_kg != null
+                                  ? <> · <span className="font-semibold text-slate-900">{r.target_kg} kg</span>{r.pct1rm ? ` (${Math.round(r.pct1rm * 100)}%)` : ""}{r.target_auto ? <span className="ml-1 text-emerald-600" title={lang === "IS" ? "Sjálfvirk framvinda úr skráðum lyftum" : "Auto-progressed from your logged lifts"}>↑</span> : null}</>
+                                  : (r.pct1rm ? ` · ${Math.round(r.pct1rm * 100)}%1RM` : "")}
+                                {r.velocity ? ` · ${r.velocity} m/s` : ""}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {b.rows.length > CAP && (
+                  <div className="text-[11px] text-slate-400 italic">
+                    +{b.rows.length - CAP} {lang === "IS" ? "fleiri" : "more"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {/* Auto-progression caption (mobile has no hover for the ↑). */}
           {data.explosive.blocks.some((b) => b.rows.some((r) => r.target_auto)) && (

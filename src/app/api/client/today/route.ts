@@ -396,13 +396,13 @@ export async function GET(req: Request) {
         const session = sessionRow as { id: string; session_name: string };
         const { data: rxRows } = await sb
           .from("individual_training_prescriptions")
-          .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, notes")
+          .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, notes, group_label, method")
           .eq("session_id", session.id)
           .order("sort_order", { ascending: true });
         const rx = ((rxRows ?? []) as Array<{
           exercise_id: string | null; sets: number | null; reps: string | null;
           load_type: string | null; load_value: number | null; rest_seconds: number | null;
-          rpe_target: number | null;
+          rpe_target: number | null; group_label: string | null; method: string | null;
         }>);
 
         // Resolve exercise names in one round trip.
@@ -428,6 +428,10 @@ export async function GET(req: Request) {
             reps: r.reps ?? "",
             sets: r.sets ?? 0,
             method: r.load_type ?? undefined,
+            // Grouping: authored group label + session method drive the
+            // superset/triset/giant/contrast badge on the client surface.
+            group: r.group_label ?? null,
+            group_method: r.method ?? null,
             set_rest: r.rest_seconds != null ? `${r.rest_seconds} sec` : undefined,
             description: d?.en ?? null,
             description_is: d?.is ?? null,

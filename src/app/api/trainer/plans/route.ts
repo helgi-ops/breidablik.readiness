@@ -135,6 +135,17 @@ interface SessionTweak {
   tweaks: ExerciseTweak[];
 }
 
+/** A prescribed exercise inside an authored template session. Loosely typed
+ *  (the structure JSON is author-shaped) but enough to flow grouping through. */
+type RxExercise = {
+  exerciseId?: string | null;
+  sortOrder?: number;
+  _groupLabel?: string | null;
+  _method?: string | null;
+  [k: string]: unknown;
+};
+type RxGroup = { label?: string | null; exercises?: RxExercise[] };
+
 interface AssignTemplateBody {
   templateId: string;
   /** The client/player to assign to. The PlanAssigner UI historically sends
@@ -263,10 +274,18 @@ export async function POST(req: Request) {
         if (sessionErr) throw new Error(sessionErr.message);
         if (!newSession) throw new Error("Failed to create session");
 
-        // Collect exercises from both new (groups) and old (exercises) format
-        const allExercises: any[] = session.groups
-          ? (session.groups as any[]).flatMap((g: any) => g.exercises || [])
-          : session.exercises || [];
+        // Collect exercises from both new (groups) and old (exercises) format.
+        // Carry the authored group label + session method onto each exercise so
+        // the client surface can show whether it's standalone vs part of a
+        // superset / triset / giant set / contrast / french-contrast block.
+        const sessionMethod: string | null = session.method ?? null;
+        const groups = session.groups as RxGroup[] | undefined;
+        const flatExercises = session.exercises as RxExercise[] | undefined;
+        const allExercises: RxExercise[] = groups
+          ? groups.flatMap((g) =>
+              (g.exercises || []).map((ex) => ({ ...ex, _groupLabel: g.label ?? null, _method: sessionMethod })),
+            )
+          : (flatExercises || []).map((ex) => ({ ...ex, _groupLabel: null, _method: sessionMethod }));
 
         // Add prescriptions for this session
         for (const exercise of allExercises) {
@@ -297,6 +316,8 @@ export async function POST(req: Request) {
                 rest_work_seconds: exercise.restWorkSeconds || null,
                 interval_count: exercise.intervalCount || null,
                 notes: exercise.notes || null,
+                group_label: exercise._groupLabel ?? null,
+                method: exercise._method ?? null,
               },
             ]);
 
