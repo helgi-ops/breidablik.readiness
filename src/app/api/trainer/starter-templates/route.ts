@@ -84,6 +84,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown starter template" }, { status: 400 });
   }
 
+  // One active programme per client: assigning a new one replaces the old.
+  // Clear any prior active assignment across BOTH systems so the client's
+  // /today resolves unambiguously and the trainer doesn't accumulate stragglers.
+  await sb.from("pt_explosive_programme_assignments").delete().eq("client_id", body.clientId).eq("status", "active");
+  await sb.from("individual_training_plans").update({ status: "archived" }).eq("player_id", body.clientId).eq("status", "active");
+
   const { data, error } = await sb.from("pt_explosive_programme_assignments").insert({
     trainer_id: userId,
     client_id: body.clientId,

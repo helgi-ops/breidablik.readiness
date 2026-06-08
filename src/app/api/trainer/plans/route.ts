@@ -226,6 +226,14 @@ export async function POST(req: Request) {
     if (planErr) throw new Error(planErr.message);
     if (!plan) throw new Error("Failed to create plan");
 
+    // One active programme per client: assigning a new plan replaces the old.
+    // Archive the client's other active custom plans and clear any active
+    // starter/explosive assignment so /today resolves to this plan unambiguously.
+    await sb.from("individual_training_plans").update({ status: "archived" })
+      .eq("player_id", playerId).eq("status", "active").neq("id", plan.id);
+    await sb.from("pt_explosive_programme_assignments").delete()
+      .eq("client_id", playerId).eq("status", "active");
+
     // Copy structure: weeks → sessions → prescriptions
     const structure = Array.isArray(template.structure) ? (template.structure as any[]) : [];
 

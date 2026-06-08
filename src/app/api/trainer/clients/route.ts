@@ -118,6 +118,36 @@ export async function GET(req: Request) {
       .in("player_id", playerIds)
       .eq("status", "active");
 
+    // Also fetch active starter/explosive assignments — these are a SEPARATE
+    // system (pt_explosive_programme_assignments) and would otherwise show as
+    // "No plan" in the clients list. Resolve their display name from the
+    // programme library so the trainer sees what each client is actually on.
+    const { data: epAssigns } = await sb
+      .from("pt_explosive_programme_assignments")
+      .select("id, client_id, programme_key, level, status")
+      .in("client_id", playerIds)
+      .eq("status", "active");
+    const epKeys = Array.from(new Set(((epAssigns ?? []) as Array<{ programme_key: string }>).map((a) => a.programme_key)));
+    const epNameByKey = new Map<string, string>();
+    if (epKeys.length > 0) {
+      const { data: progRows } = await sb
+        .from("pt_explosive_programmes")
+        .select("programme_key, programme_name")
+        .in("programme_key", epKeys);
+      ((progRows ?? []) as Array<{ programme_key: string; programme_name: string | null }>).forEach((r) => {
+        if (!epNameByKey.has(r.programme_key)) epNameByKey.set(r.programme_key, r.programme_name ?? r.programme_key);
+      });
+    }
+    const epPlanMap = new Map<string, { id: string; name: string; kind: "starter"; programmeKey: string; level: string | null }>();
+    ((epAssigns ?? []) as Array<{ id: string; client_id: string; programme_key: string; level: string | null }>).forEach((a) => {
+      if (!epPlanMap.has(a.client_id)) {
+        epPlanMap.set(a.client_id, {
+          id: a.id, name: epNameByKey.get(a.programme_key) ?? a.programme_key,
+          kind: "starter", programmeKey: a.programme_key, level: a.level,
+        });
+      }
+    });
+
     // Fetch today's training log (completion status)
     const { data: todayLog } = await sb
       .from("individual_training_log")
@@ -194,13 +224,14 @@ export async function GET(req: Request) {
               chronic28d: m.chronic_load_28d,
             }
           : null,
+        // Unified active programme across both systems. Custom plan takes
+        // precedence if both somehow exist; otherwise the starter/explosive one.
         plan: plan
-          ? {
-              id: plan.id,
-              name: plan.plan_name,
-              type: plan.plan_type,
-            }
-          : null,
+          ? { id: plan.id, name: plan.plan_name, type: plan.plan_type, kind: "custom" as const }
+          : (epPlanMap.get(p.id)
+              ? { id: epPlanMap.get(p.id)!.id, name: epPlanMap.get(p.id)!.name, type: "starter",
+                  kind: "starter" as const, programmeKey: epPlanMap.get(p.id)!.programmeKey, level: epPlanMap.get(p.id)!.level }
+              : null),
         todayCompletion: comp || null,
       };
     });

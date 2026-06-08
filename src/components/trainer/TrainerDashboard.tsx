@@ -45,7 +45,12 @@ interface ClientLoad {
 interface ClientPlan {
   id: string;
   name: string;
-  type: "strength" | "endurance" | "mixed";
+  type: "strength" | "endurance" | "mixed" | "starter";
+  /** Which assignment system the active programme comes from. */
+  kind?: "custom" | "starter";
+  /** Starter only — needed to remove the assignment. */
+  programmeKey?: string;
+  level?: string | null;
 }
 
 interface ClientCompletion {
@@ -166,6 +171,31 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     name: string;
   } | null>(null);
   const [reportBusyId, setReportBusyId] = useState<string | null>(null);
+  const [removingPlanId, setRemovingPlanId] = useState<string | null>(null);
+
+  // Remove a client's active programme — routes to the right system based on
+  // which one it came from (custom individual plan vs starter/explosive).
+  const removeClientProgramme = async (client: Client) => {
+    if (!client.plan) return;
+    if (typeof window !== "undefined" && !window.confirm(
+      isIS ? `Fjarlægja „${client.plan.name}" af ${client.name}?` : `Remove "${client.plan.name}" from ${client.name}?`,
+    )) return;
+    setRemovingPlanId(client.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const auth = { Authorization: `Bearer ${session?.access_token ?? ""}` };
+      const url = client.plan.kind === "starter"
+        ? `/api/trainer/starter-templates?assignmentId=${encodeURIComponent(client.plan.id)}`
+        : `/api/trainer/plans/${client.plan.id}`;
+      const res = await fetch(url, { method: "DELETE", headers: auth });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? "Failed"); }
+      await Promise.all([fetchClients(), fetchAssignments()]);
+    } catch (e) {
+      if (typeof window !== "undefined") window.alert(e instanceof Error ? e.message : "Remove failed");
+    } finally {
+      setRemovingPlanId(null);
+    }
+  };
 
   // Download a client's 4-week progress report PDF (adherence, readiness, load,
   // strength PRs & volume) — sendable to the client.
@@ -613,6 +643,36 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                             ? (isIS ? "Bý til…" : "Generating…")
                             : (isIS ? "Hlaða niður framvinduskýrslu (4 vikur, PDF)" : "Download progress report (4 weeks, PDF)")}
                         </button>
+                      </div>
+
+                      {/* Current programme + remove. Reassign happens via the
+                          Goals card below (or Plan builder). */}
+                      <div className="col-span-2 sm:col-span-5">
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{isIS ? "Æfingakerfi núna" : "Current programme"}</div>
+                            {client.plan ? (
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <span className="font-medium text-slate-800 truncate">{client.plan.name}</span>
+                                <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${client.plan.kind === "starter" ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-600"}`}>
+                                  {client.plan.kind === "starter" ? (isIS ? "Tilbúið" : "Starter") : (isIS ? "Eigið" : "Custom")}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-slate-400">{isIS ? "Ekkert kerfi — veldu hér að neðan" : "No programme — assign below"}</div>
+                            )}
+                          </div>
+                          {client.plan && (
+                            <button
+                              type="button"
+                              onClick={() => removeClientProgramme(client)}
+                              disabled={removingPlanId === client.id}
+                              className="shrink-0 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {removingPlanId === client.id ? (isIS ? "Fjarlægi…" : "Removing…") : (isIS ? "Fjarlægja" : "Remove")}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
