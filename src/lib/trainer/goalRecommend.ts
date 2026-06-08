@@ -46,6 +46,14 @@ export type TemplateLite = {
   plan_type?: string | null;
   sessions_per_week?: number | null;
   duration_weeks?: number | null;
+  /** Which library the candidate comes from. "custom" = the trainer's own
+   *  training_plan_templates (assigned via PlanAssigner); "starter" = a
+   *  ready-made pt_explosive starter programme (assigned by programme_key +
+   *  level). Drives which assign flow the "Use this" CTA uses. */
+  source?: "custom" | "starter";
+  /** Starter only: the programme_key + available levels for direct assign. */
+  programmeKey?: string;
+  levels?: string[];
 };
 
 /** Infer a programme's quality vector from its name/notes keywords. */

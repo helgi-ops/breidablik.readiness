@@ -17,6 +17,7 @@ import PtGamesManager from "./PtGamesManager";
 import { downloadPtClientReportPdf, type PtClientReport } from "@/components/trainer/PtClientReportPdf";
 import AutoProgressionCard from "@/components/trainer/AutoProgressionCard";
 import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
+import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
 import TrainerAttentionList from "./TrainerAttentionList";
 
@@ -141,6 +142,10 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
+  // Starter programmes (pt_explosive category='starter_template'), mapped into
+  // the goal-recommender candidate shape so the Goals card can recommend from
+  // the ready-made library too — not only the trainer's own templates.
+  const [starterCandidates, setStarterCandidates] = useState<TemplateLite[]>([]);
   const [assignments, setAssignments] = useState<PlanAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -233,6 +238,51 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     }
   }, [supabase, qs]);
 
+  // Fetch the ready-made starter programmes and collapse them (one row per
+  // phase × level) into one candidate per programme_key, with the levels it
+  // offers, so the goal recommender can rank them alongside custom templates.
+  const fetchStarterCandidates = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/trainer/starter-templates`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      const lib = (json.library ?? []) as Array<{
+        programme_key: string; programme_name: string | null; level: string | null;
+        short_blurb: string | null; focus: string | null; methods: string[] | null;
+      }>;
+      const byKey = new Map<string, TemplateLite>();
+      for (const row of lib) {
+        if (!row.programme_key) continue;
+        const existing = byKey.get(row.programme_key);
+        const lvl = (row.level || "").toLowerCase();
+        if (existing) {
+          if (lvl && !existing.levels!.includes(lvl)) existing.levels!.push(lvl);
+          continue;
+        }
+        byKey.set(row.programme_key, {
+          id: `starter:${row.programme_key}`,
+          name: row.programme_name || row.programme_key,
+          notes: [row.short_blurb, row.focus, (row.methods || []).join(" ")].filter(Boolean).join(" — ") || null,
+          source: "starter",
+          programmeKey: row.programme_key,
+          levels: lvl ? [lvl] : [],
+        });
+      }
+      // Order levels sensibly for the picker.
+      const order = ["beginner", "intermediate", "advanced"];
+      const out = Array.from(byKey.values()).map((c) => ({
+        ...c,
+        levels: (c.levels || []).sort((a, b) => order.indexOf(a) - order.indexOf(b)),
+      }));
+      setStarterCandidates(out);
+    } catch {
+      // silent — recommender still works on custom templates alone
+    }
+  }, [supabase]);
+
   const fetchAssignments = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -265,8 +315,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     fetchClients();
     fetchInvitations();
     fetchTemplates();
+    fetchStarterCandidates();
     fetchAssignments();
-  }, [fetchClients, fetchInvitations, fetchTemplates, fetchAssignments]);
+  }, [fetchClients, fetchInvitations, fetchTemplates, fetchStarterCandidates, fetchAssignments]);
 
   /* ── Send invitation ────────────────────────────────── */
 
@@ -615,9 +666,21 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                           clientId={client.id}
                           lang={isIS ? "IS" : "EN"}
                           templates={templates}
+                          starterCandidates={starterCandidates}
                           onUseProgramme={(id, name) => {
                             setAssigningTemplate({ id, name });
                             setShowPlanAssigner(true);
+                          }}
+                          onAssignStarter={async (programmeKey, level) => {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            const res = await fetch(`/api/trainer/starter-templates`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+                              body: JSON.stringify({ clientId: client.id, programmeKey, level }),
+                            });
+                            const j = await res.json().catch(() => ({}));
+                            if (!res.ok) throw new Error(j.error ?? "Assign failed");
+                            fetchAssignments();
                           }}
                         />
                       </div>
