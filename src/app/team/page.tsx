@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import WeeklyCalendar from "./WeeklyCalendar";
+import PtClientGuard from "@/components/auth/PtClientGuard";
 import TeamTrainingSection from "@/components/team/TeamTrainingSection";
 import StreakCard from "@/components/player/StreakCard";
 import { useLang } from "@/lib/lang";
@@ -698,6 +699,8 @@ export default function TeamPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        {/* PT clients belong on /client — redirect before any football UI shows. */}
+        <PtClientGuard />
         <div className="text-gray-600">Loading...</div>
       </div>
     );
@@ -743,6 +746,8 @@ export default function TeamPage() {
         } as React.CSSProperties
       }
     >
+      {/* PT clients belong on /client, not the football team surface. */}
+      <PtClientGuard />
       {/* Team Header */}
       <div className="w-full" style={{ backgroundColor: teamData.team?.club_theme_color ?? "#16a34a" }}>
         <div className="max-w-3xl mx-auto px-4 py-6">
