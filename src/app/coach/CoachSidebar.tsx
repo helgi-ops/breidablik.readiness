@@ -101,6 +101,7 @@ const performanceAnalyticsLinks: SidebarLink[] = [
 const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
+  { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
   { href: "/coach/progressive-overload", label: { EN: "Progressive overload", IS: "Stigvaxandi álag" } },
   { href: "/coach?tab=md",             label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
   { href: "/coach?tab=drills",         label: { EN: "Session builder",     IS: "Session builder" } },
