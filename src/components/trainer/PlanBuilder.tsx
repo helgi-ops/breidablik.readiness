@@ -56,6 +56,7 @@ export interface Exercise {
   /** Explanation carried from the library pick — shown via the info icon. */
   description?: string | null;
   descriptionIs?: string | null;
+  videoUrl?: string | null;
 }
 
 /** A group of exercises that are performed together (superset, contrast, etc.) */
@@ -103,6 +104,7 @@ export interface ExerciseLibraryItem {
   equipment?: string;
   description?: string | null;
   description_is?: string | null;
+  video_url?: string | null;
   movement_pattern?: MovementPattern | null;
   movement_family?: MovementFamily | null;
   is_bilateral?: boolean;
@@ -685,6 +687,7 @@ export default function PlanBuilder({
     slot.isBilateral = exercise.is_bilateral ?? null;
     slot.description = exercise.description ?? null;
     slot.descriptionIs = exercise.description_is ?? null;
+    slot.videoUrl = exercise.video_url ?? null;
     setWeeks(newWeeks);
     setSearchTarget(null);
     setSearchQuery("");
@@ -1270,6 +1273,7 @@ export default function PlanBuilder({
                                                         name={isIS ? (result.name_is || result.name) : result.name}
                                                         description={result.description}
                                                         descriptionIs={result.description_is}
+                                                        videoUrl={result.video_url}
                                                         className="mt-1.5 shrink-0"
                                                       />
                                                       </div>
@@ -1305,6 +1309,7 @@ export default function PlanBuilder({
                                               name={ex.name}
                                               description={ex.description}
                                               descriptionIs={ex.descriptionIs}
+                                              videoUrl={ex.videoUrl}
                                             />
                                           </span>
                                           <button

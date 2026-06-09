@@ -434,15 +434,15 @@ export async function GET(req: Request) {
         // Resolve exercise names in one round trip.
         const exIds = Array.from(new Set(rx.map((r) => r.exercise_id).filter(Boolean))) as string[];
         const nameById = new Map<string, string>();
-        const descById = new Map<string, { en: string | null; is: string | null }>();
+        const descById = new Map<string, { en: string | null; is: string | null; video: string | null }>();
         if (exIds.length > 0) {
           const { data: exRows } = await sb
             .from("exercise_library")
-            .select("id, name, description, description_is")
+            .select("id, name, description, description_is, video_url")
             .in("id", exIds);
-          ((exRows ?? []) as Array<{ id: string; name: string; description: string | null; description_is: string | null }>).forEach((e) => {
+          ((exRows ?? []) as Array<{ id: string; name: string; description: string | null; description_is: string | null; video_url: string | null }>).forEach((e) => {
             nameById.set(e.id, e.name);
-            descById.set(e.id, { en: e.description, is: e.description_is });
+            descById.set(e.id, { en: e.description, is: e.description_is, video: e.video_url });
           });
         }
 
@@ -461,6 +461,7 @@ export async function GET(req: Request) {
             set_rest: r.rest_seconds != null ? `${r.rest_seconds} sec` : undefined,
             description: d?.en ?? null,
             description_is: d?.is ?? null,
+            video_url: d?.video ?? null,
           };
         });
       }

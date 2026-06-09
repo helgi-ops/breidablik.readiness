@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("exercise_library")
-    .select("name, name_is, description, description_is");
+    .select("name, name_is, description, description_is, video_url");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ exercises: data ?? [] });

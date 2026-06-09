@@ -62,7 +62,7 @@ type TodayResp = {
       group?: string | null; group_method?: string | null;
       cluster_rest?: string; set_rest?: string;
       target_kg?: number | null; target_stale?: boolean; target_auto?: boolean;
-      description?: string | null; description_is?: string | null;
+      description?: string | null; description_is?: string | null; video_url?: string | null;
     }> }>;
     retest_due?: string[];
     needs_test?: string[];
@@ -362,7 +362,7 @@ export default function ClientTodayPage() {
                               <span className="flex min-w-0 items-center gap-1 font-medium text-slate-800">
                                 {grouped && <span className="shrink-0 text-[11px] font-semibold text-indigo-400">{g.tag}{i + 1}</span>}
                                 <span className="truncate">{r.exercise}</span>
-                                <ExerciseInfo name={r.exercise} description={r.description} descriptionIs={r.description_is} className="shrink-0" />
+                                <ExerciseInfo name={r.exercise} description={r.description} descriptionIs={r.description_is} videoUrl={r.video_url} className="shrink-0" />
                               </span>
                               <span className="text-xs text-slate-500 tabular-nums shrink-0">
                                 {r.sets}×{r.reps}

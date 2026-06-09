@@ -13,15 +13,26 @@ import { useState, useRef, useEffect } from "react";
 import { Info } from "lucide-react";
 import { useLang } from "@/lib/lang";
 
+/** Only allow well-formed http(s) links (e.g. a YouTube demo). */
+function safeHttpUrl(u?: string | null): string | null {
+  if (!u) return null;
+  try {
+    const url = new URL(u);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch { return null; }
+}
+
 export default function ExerciseInfo({
   name,
   description,
   descriptionIs,
+  videoUrl,
   className = "",
 }: {
   name?: string;
   description?: string | null;
   descriptionIs?: string | null;
+  videoUrl?: string | null;
   className?: string;
 }) {
   const [lang] = useLang();
@@ -29,6 +40,7 @@ export default function ExerciseInfo({
   const ref = useRef<HTMLSpanElement>(null);
 
   const text = (lang === "IS" ? descriptionIs : description) || description || descriptionIs || null;
+  const video = safeHttpUrl(videoUrl);
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +58,7 @@ export default function ExerciseInfo({
     };
   }, [open]);
 
-  if (!text) return null;
+  if (!text && !video) return null;
 
   return (
     <span ref={ref} className={`relative inline-flex ${className}`}>
@@ -70,7 +82,18 @@ export default function ExerciseInfo({
           onClick={(e) => e.stopPropagation()}
         >
           {name && <div className="mb-1 text-xs font-semibold text-slate-900">{name}</div>}
-          <div className="text-xs leading-relaxed text-slate-600">{text}</div>
+          {text && <div className="text-xs leading-relaxed text-slate-600">{text}</div>}
+          {video && (
+            <a
+              href={video}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className={`inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 ${text ? "mt-2" : ""}`}
+            >
+              ▶ {lang === "IS" ? "Horfa á myndband" : "Watch video"}
+            </a>
+          )}
         </div>
       )}
     </span>

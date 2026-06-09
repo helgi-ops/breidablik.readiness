@@ -18,6 +18,7 @@ export type GlossaryEntry = {
   name_is: string | null;
   description: string | null;
   description_is: string | null;
+  video_url?: string | null;
 };
 
 /** Normalise a free-text exercise name to a comparable key (or "" if nothing usable). */

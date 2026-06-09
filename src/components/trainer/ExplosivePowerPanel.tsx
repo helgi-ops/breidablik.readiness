@@ -337,7 +337,7 @@ export default function ExplosivePowerPanel({ clients, lang }: Props) {
                                     return (
                                       <span className="inline-flex items-center gap-1">
                                         {r.exercise}
-                                        {m && <ExerciseInfo name={r.exercise} description={m.description} descriptionIs={m.description_is} />}
+                                        {m && <ExerciseInfo name={r.exercise} description={m.description} descriptionIs={m.description_is} videoUrl={m.video_url} />}
                                       </span>
                                     );
                                   })()}
