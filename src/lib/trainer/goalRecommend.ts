@@ -62,6 +62,7 @@ function programmeQualities(t: TemplateLite): { q: Partial<Record<Quality, numbe
   // Order matters: specific method/quality keywords are checked before the
   // generic "base" preparatory fallback so e.g. "Conditioning Base" is read as
   // conditioning, not as a base-strength block.
+  if (s.includes("triphasic")) return { family: "Triphasic", q: { strength: 2, power: 2, speed: 1 } };
   if (s.includes("french")) return { family: "French contrast", q: { power: 3, speed: 2, agility: 2, strength: 1 } };
   if (s.includes("contrast")) return { family: "Contrast", q: { strength: 2, power: 2, agility: 1, speed: 1 } };
   if (s.includes("vertical") || s.includes("jump")) return { family: "Jump / plyometric", q: { power: 3, speed: 1, agility: 1 } };
@@ -87,6 +88,8 @@ const FAMILY_TIER: Record<string, number> = {
   "Hypertrophy": 1,
   "Conditioning": 1,
   "General strength": 1,
+  "Triphasic": 1, // tempo/position based — designed for youth/HS athletes, safe for all
+
   "Jump / plyometric": 2,
   "Contrast": 2,
   "Explosive power": 2,
