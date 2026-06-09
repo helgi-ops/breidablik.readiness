@@ -263,9 +263,25 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
   function addExercise() { setExercises((prev) => [...prev, emptyExercise()]); }
   function removeExercise(idx: number) { setExercises((prev) => prev.filter((_, i) => i !== idx)); }
   function addSet(exIdx: number) {
-    setExercises((prev) => prev.map((e, i) =>
-      i === exIdx ? { ...e, sets: [...e.sets, emptySet()] } : e
-    ));
+    // Copy the last set's weight/reps/RPE so the athlete only edits what
+    // changed — far faster than re-typing the same numbers each set.
+    setExercises((prev) => prev.map((e, i) => {
+      if (i !== exIdx) return e;
+      const last = e.sets[e.sets.length - 1];
+      const next: SetRow = last ? { weight_kg: last.weight_kg, reps: last.reps, rpe: last.rpe } : emptySet();
+      return { ...e, sets: [...e.sets, next] };
+    }));
+  }
+  /** Duplicate one set, inserting the copy right after it. */
+  function copySet(exIdx: number, setIdx: number) {
+    setExercises((prev) => prev.map((e, i) => {
+      if (i !== exIdx) return e;
+      const src = e.sets[setIdx];
+      if (!src) return e;
+      const copy: SetRow = { weight_kg: src.weight_kg, reps: src.reps, rpe: src.rpe };
+      const sets = [...e.sets.slice(0, setIdx + 1), copy, ...e.sets.slice(setIdx + 1)];
+      return { ...e, sets };
+    }));
   }
   function removeSet(exIdx: number, setIdx: number) {
     setExercises((prev) => prev.map((e, i) =>
@@ -423,12 +439,21 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
                           />
                         </td>
                         <td className="py-1.5">
-                          <button
-                            type="button"
-                            onClick={() => removeSet(exIdx, setIdx)}
-                            className="text-slate-400 hover:text-red-600 text-base leading-none"
-                            aria-label="Remove set"
-                          >×</button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => copySet(exIdx, setIdx)}
+                              className="text-slate-400 hover:text-indigo-600 text-sm leading-none"
+                              aria-label={lang === "IS" ? "Afrita sett" : "Copy set"}
+                              title={lang === "IS" ? "Afrita sett" : "Copy set"}
+                            >⧉</button>
+                            <button
+                              type="button"
+                              onClick={() => removeSet(exIdx, setIdx)}
+                              className="text-slate-400 hover:text-red-600 text-base leading-none"
+                              aria-label="Remove set"
+                            >×</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
