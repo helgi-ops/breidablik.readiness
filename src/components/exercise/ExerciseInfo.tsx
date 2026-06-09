@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Info } from "lucide-react";
 import { useLang } from "@/lib/lang";
+import { splitDescription } from "@/lib/exercise/descriptionBullets";
 
 /** Only allow well-formed http(s) links (e.g. a YouTube demo). */
 function safeHttpUrl(u?: string | null): string | null {
@@ -82,7 +83,12 @@ export default function ExerciseInfo({
           onClick={(e) => e.stopPropagation()}
         >
           {name && <div className="mb-1 text-xs font-semibold text-slate-900">{name}</div>}
-          {text && <div className="text-xs leading-relaxed text-slate-600">{text}</div>}
+          {text && (() => {
+            const bullets = splitDescription(text);
+            return bullets.length > 1
+              ? <ul className="list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-slate-600">{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+              : <div className="text-xs leading-relaxed text-slate-600">{text}</div>;
+          })()}
           {video && (
             <a
               href={video}

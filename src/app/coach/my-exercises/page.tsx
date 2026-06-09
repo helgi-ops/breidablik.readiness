@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { splitDescription } from "@/lib/exercise/descriptionBullets";
 
 type Ex = {
   id: string;
@@ -272,8 +273,9 @@ export default function MyExercisesPage() {
 
             {(() => {
               const text = (is ? selected.description_is : selected.description) || selected.description || selected.description_is;
-              return text
-                ? <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">{text}</p>
+              const bullets = splitDescription(text);
+              return bullets.length > 0
+                ? <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-700">{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
                 : <p className="text-sm text-slate-400">{is ? "Engin lýsing skráð." : "No description yet."}</p>;
             })()}
 
