@@ -135,7 +135,7 @@ const ptStrengthLinks: SidebarLink[] = [
   { href: "/coach/starter-templates", label: { EN: "Starter templates",     IS: "Tilbúin kerfi" } },
   { href: "/coach/plan-builder",      label: { EN: "Plan builder",          IS: "Kerfasmiður" } },
   { href: "/coach/custom-templates",  label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
-  { href: "/coach/my-exercises",      label: { EN: "My exercises",          IS: "Mínar æfingar" } },
+  { href: "/coach/my-exercises",      label: { EN: "Exercise library",      IS: "Æfingasafn" } },
   // LV Profile renders as a TrainerDashboard tab on PT side, so the
   // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
   // pattern coach-side uses for dashTab navigation.
