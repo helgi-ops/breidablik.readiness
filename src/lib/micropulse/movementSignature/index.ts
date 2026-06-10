@@ -116,6 +116,19 @@ function splitAcuteBaseline(series: number[]): { acute: number; refMean: number;
   return { acute: mean(acuteVals), refMean, refSd: sd(refVals, refMean), refN: refVals.length };
 }
 
+/**
+ * Recent micro-cycle vs the player's own prior baseline for any metric series
+ * (most-recent-first). Same method as the movement components, reusable for the
+ * Engine (GPS) metrics in the movement-narrative profile. Returns null when
+ * there isn't enough history to stand behind a norm.
+ */
+export function recentVsBaseline(series: number[]): { recent: number; mean: number; sd: number; z: number | null; n: number } | null {
+  const split = splitAcuteBaseline(series);
+  if (!split) return null;
+  const z = split.refSd > 0 ? round((split.acute - split.refMean) / split.refSd, 1) : 0;
+  return { recent: split.acute, mean: split.refMean, sd: split.refSd, z, n: split.refN };
+}
+
 function dayOffsetIso(refIso: string, back: number): string {
   return new Date(Date.parse(refIso + "T00:00:00Z") - back * 86_400_000).toISOString().slice(0, 10);
 }

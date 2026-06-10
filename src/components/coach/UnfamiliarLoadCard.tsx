@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import MovementNarrativeModal from "@/components/coach/MovementNarrativeModal";
 
 type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null };
 type Item = {
@@ -43,6 +44,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [profile, setProfile] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -147,6 +149,9 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                 <button type="button" onClick={() => setOpenSignals((s) => ({ ...s, [it.player_id]: !open }))} className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
                   {open ? (IS(lang) ? "Fela merki" : "Hide signals") : (IS(lang) ? "Sýna merki" : "Show signals")}
                 </button>
+                <button type="button" onClick={() => setProfile({ id: it.player_id, name: it.name })} className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
+                  {IS(lang) ? "Hreyfi-prófíll" : "Movement profile"}
+                </button>
                 {!isDis && (
                   <button type="button" onClick={() => { setDismissing(it.player_id); setReason(""); }} className="text-[11px] font-medium text-slate-500 hover:text-slate-700">
                     {IS(lang) ? "Afgreiða" : "Dismiss"}
@@ -217,6 +222,8 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
           );
         })}
       </div>
+
+      {profile && <MovementNarrativeModal playerId={profile.id} lang={lang} onClose={() => setProfile(null)} />}
     </div>
   );
 }
