@@ -1,3 +1,8 @@
+/** One clock direction's event counts by intensity. */
+export type ImaClockCell = { high: number | null; medium: number | null; low: number | null };
+/** IMA directional grid: keys "1".."12" (clock o'clock direction) → intensity cell. */
+export type ImaClock = Record<string, ImaClockCell>;
+
 export type CatapultAthlete = {
   id: string;
   firstName: string;
@@ -86,6 +91,7 @@ export type CatapultSessionMetric = {
   imaCodRightHigh?: number | null;
   imaCodRightMedium?: number | null;
   imaCodRightLow?: number | null;
+  imaClock?: ImaClock | null;
   imaTotal?: number | null;
   codEvents?: number | null;
   impacts?: number | null;
@@ -210,6 +216,7 @@ export type NormalizedExternalLoad = {
     imaCodRightHigh?: number | null;
     imaCodRightMedium?: number | null;
     imaCodRightLow?: number | null;
+    imaClock?: ImaClock | null;
     imaTotal?: number | null;
     codEvents?: number | null;
     impacts?: number | null;

@@ -1,4 +1,51 @@
-import type { CatapultSessionMetric, NormalizedExternalLoad } from "./types";
+import type { CatapultSessionMetric, NormalizedExternalLoad, ImaClock } from "./types";
+
+/**
+ * Parse the IMA O'Clock (Gen2) directional grid from a flattened record.
+ * Catapult exposes 12 clock directions × 3 intensities, e.g. "IMA 1 O'Clock
+ * High". We normalize each key (lowercase, strip non-alphanumerics) and match
+ * `ima<dir>o?clock<intensity>`, tolerant of spacing / apostrophes / a trailing
+ * "gen2". Pure + deterministic so it can be unit-tested without the pipeline.
+ * Returns null when no clock fields are present (i.e. not enabled in the export).
+ */
+export function parseImaClock(record: Record<string, unknown>): ImaClock | null {
+  if (!record || typeof record !== "object") return null;
+  const clock: ImaClock = {};
+  let found = false;
+  for (const [rawKey, rawVal] of Object.entries(record)) {
+    const k = String(rawKey).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const m = k.match(/ima(\d{1,2})o?clock(high|medium|low)/);
+    if (!m) continue;
+    const dirN = parseInt(m[1], 10);
+    if (!(dirN >= 1 && dirN <= 12)) continue;
+    const v = Number(rawVal);
+    if (!Number.isFinite(v)) continue;
+    const dir = String(dirN);
+    const intensity = m[2] as "high" | "medium" | "low";
+    if (!clock[dir]) clock[dir] = { high: null, medium: null, low: null };
+    clock[dir][intensity] = (clock[dir][intensity] ?? 0) + v;
+    found = true;
+  }
+  return found ? clock : null;
+}
+
+/** Merge two clock grids cell-by-cell (summing), for per-day aggregation. */
+export function mergeImaClock(a: ImaClock | null | undefined, b: ImaClock | null | undefined): ImaClock | null {
+  if (!a) return b ?? null;
+  if (!b) return a ?? null;
+  const out: ImaClock = {};
+  for (const dir of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const ca = a[dir], cb = b[dir];
+    const add = (x: number | null | undefined, y: number | null | undefined) =>
+      x == null && y == null ? null : (x ?? 0) + (y ?? 0);
+    out[dir] = {
+      high: add(ca?.high, cb?.high),
+      medium: add(ca?.medium, cb?.medium),
+      low: add(ca?.low, cb?.low),
+    };
+  }
+  return out;
+}
 
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -924,6 +971,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       imaCodRightHigh: normalizedIma.imaCodRightHigh,
       imaCodRightMedium: normalizedIma.imaCodRightMedium,
       imaCodRightLow: normalizedIma.imaCodRightLow,
+      imaClock: parseImaClock(flattenedRecord),
       imaTotal: normalizedIma.imaTotal,
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,

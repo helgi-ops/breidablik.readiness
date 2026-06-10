@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes, setActiveCatapultConfig } from "./api";
 import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
-import { aggregateCatapultMetrics, normalizeCatapultActivityStats, toNormalizedExternalLoad } from "./normalize";
+import { aggregateCatapultMetrics, normalizeCatapultActivityStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
 
 function dateKey(input?: string | null): string {
@@ -178,6 +178,7 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
     current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
     current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
+    current.externalLoad.imaClock = mergeImaClock(current.externalLoad.imaClock, row.externalLoad.imaClock);
     // Heart Rate: avg HR uses max across sessions as proxy; max HR takes max; zones sum
     current.externalLoad.avgHeartRate = maxNullable(current.externalLoad.avgHeartRate, row.externalLoad.avgHeartRate);
     current.externalLoad.maxHeartRate = maxNullable(current.externalLoad.maxHeartRate, row.externalLoad.maxHeartRate);
@@ -297,6 +298,7 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_total: row.externalLoad.imaTotal ?? null,
     cod_events: row.externalLoad.codEvents ?? null,
     impacts: row.externalLoad.impacts ?? null,
+    ima_clock_gen2: row.externalLoad.imaClock ?? null,
     source: "catapult",
     external_athlete_id: row.externalAthleteId,
     activity_count: row.activityCount ?? 1,
