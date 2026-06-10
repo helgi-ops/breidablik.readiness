@@ -52,8 +52,46 @@ function zChip(z: number | null) {
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${tint}`}>{z > 0 ? "+" : ""}{z} SD</span>;
 }
 
+type DirDrift = { dir: string; label: string; recent: number; usual: number; sd: number; z: number | null; n: number };
+type DirSig = {
+  confident: boolean; calibrating: boolean; baselineDays: number; tvd: number | null; driftScore: number; flagged: boolean;
+  directions: DirDrift[]; drifting: DirDrift[]; usualVector: Record<string, number>; recentVector: Record<string, number>;
+  headline: string | null; counterfactual: string | null;
+};
+type DirResp = { ok: boolean; hasData: boolean; daysWithClock?: number; signature: DirSig | null; error?: string };
+
+// Radial "clock" fingerprint: 12 directions (12=forward/top, 3=right, 6=back, 9=left).
+// Filled polygon = his usual shape; outlined polygon = recent.
+const RADAR_ORDER = ["12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"];
+function ClockRadar({ usual, recent, flagged }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean }) {
+  const cx = 92, cy = 92, R = 70;
+  const all = [...Object.values(usual), ...Object.values(recent)];
+  const maxShare = Math.max(0.0001, ...all);
+  const pt = (d: string, vec: Record<string, number>) => {
+    const idx = Number(d) % 12; // 12 -> 0 (top)
+    const theta = (idx * 30) * Math.PI / 180;
+    const r = ((vec[d] ?? 0) / maxShare) * R;
+    return [cx + r * Math.sin(theta), cy - r * Math.cos(theta)];
+  };
+  const poly = (vec: Record<string, number>) => RADAR_ORDER.map((d) => pt(d, vec).join(",")).join(" ");
+  const recentColor = flagged ? "#e11d48" : "#6366f1";
+  return (
+    <svg width="184" height="184" viewBox="0 0 184 184">
+      {[0.33, 0.66, 1].map((f) => <circle key={f} cx={cx} cy={cy} r={R * f} fill="none" stroke="#e2e8f0" strokeWidth="1" />)}
+      {RADAR_ORDER.map((d) => { const idx = Number(d) % 12; const th = idx * 30 * Math.PI / 180; return <line key={d} x1={cx} y1={cy} x2={cx + R * Math.sin(th)} y2={cy - R * Math.cos(th)} stroke="#eef2f7" strokeWidth="1" />; })}
+      <polygon points={poly(usual)} fill="#6366f1" fillOpacity="0.12" stroke="#94a3b8" strokeWidth="1" />
+      <polygon points={poly(recent)} fill="none" stroke={recentColor} strokeWidth="2" />
+      <text x={cx} y={14} textAnchor="middle" className="fill-slate-400 text-[9px]">F</text>
+      <text x={cx + R + 8} y={cy + 3} textAnchor="middle" className="fill-slate-400 text-[9px]">R</text>
+      <text x={cx} y={cy + R + 14} textAnchor="middle" className="fill-slate-400 text-[9px]">B</text>
+      <text x={cx - R - 8} y={cy + 3} textAnchor="middle" className="fill-slate-400 text-[9px]">L</text>
+    </svg>
+  );
+}
+
 export default function MovementNarrativeModal({ playerId, lang, onClose }: { playerId: string; lang?: string; onClose: () => void }) {
   const [data, setData] = useState<Resp | null>(null);
+  const [dir, setDir] = useState<DirSig | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -62,12 +100,15 @@ export default function MovementNarrativeModal({ playerId, lang, onClose }: { pl
     try {
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(`/api/coach/player/${playerId}/movement-narrative`, {
-        headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
-      });
+      const headers = { Authorization: `Bearer ${session?.access_token ?? ""}` };
+      const [res, dres] = await Promise.all([
+        fetch(`/api/coach/player/${playerId}/movement-narrative`, { headers }),
+        fetch(`/api/coach/player/${playerId}/directional-signature`, { headers }),
+      ]);
       const j = (await res.json()) as Resp;
       if (!res.ok) { setErr(j.error ?? "Failed"); return; }
       setData(j);
+      try { const dj = (await dres.json()) as DirResp; if (dres.ok && dj.hasData) setDir(dj.signature); } catch { /* directional is optional */ }
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); }
     finally { setLoading(false); }
   }, [playerId]);
@@ -142,6 +183,33 @@ export default function MovementNarrativeModal({ playerId, lang, onClose }: { pl
                 <p className="mt-2 text-[12px] text-slate-700"><span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{data.narrative.suggestedAction}</p>
               )}
             </div>
+
+            {/* Directional fingerprint (IMA clock) */}
+            {dir && (
+              <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                <div className="mb-1 flex items-baseline gap-2">
+                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-800">{IS(lang) ? "Hreyfi-fingrafar" : "Movement fingerprint"}</span>
+                  <span className="text-[11px] text-slate-500">{IS(lang) ? "12 áttir (IMA klukka)" : "12 directions (IMA clock)"}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <ClockRadar usual={dir.usualVector} recent={dir.recentVector} flagged={dir.flagged} />
+                  <div className="min-w-[160px] flex-1 text-[12px] text-slate-700">
+                    <p>
+                      {dir.headline
+                        ? dir.headline
+                        : (dir.baselineDays >= 8
+                          ? (IS(lang) ? "Hann hreyfir sig í sömu áttir og venjulega — fingrafarið er stöðugt." : "He's moving in his usual directions — the fingerprint is stable.")
+                          : (IS(lang) ? "Enn að byggja hreyfi-grunnlínuna." : "Still building his movement baseline."))}
+                    </p>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      {IS(lang) ? "Fyllt = venjulega · lína = nýlega · F/R/B/L = fram/hægri/aftur/vinstri." : "Filled = usual · line = recent · F/R/B/L = forward/right/back/left."}
+                      {dir.tvd != null ? ` ${IS(lang) ? "Lögunar-breyting" : "Shape change"} ${Math.round(dir.tvd * 100)}%.` : ""}
+                    </p>
+                    {dir.flagged && dir.counterfactual && <p className="mt-1 text-[10px] text-slate-400">{dir.counterfactual}</p>}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <p className="mt-3 text-[10px] leading-snug text-slate-400">
               {IS(lang)

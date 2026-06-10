@@ -1280,6 +1280,7 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaTotal: metric.imaTotal ?? null,
       codEvents: metric.codEvents ?? null,
       impacts: metric.impacts ?? null,
+      imaClock: metric.imaClock ?? null,
       avgHeartRate: metric.avgHeartRate ?? null,
       maxHeartRate: metric.maxHeartRate ?? null,
       hrZone1TimeS: metric.hrZone1TimeS ?? null,

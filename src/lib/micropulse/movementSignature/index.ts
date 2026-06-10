@@ -47,6 +47,18 @@ export const COMPONENT_LABEL: Record<ComponentKey, string> = {
   decel_share: "Braking share",
 };
 
+// Plain-language descriptions for the coach-facing headline (no jargon, no SD).
+// unit is appended to absolute values; pct components are shown as a percentage.
+const PLAIN: Record<ComponentKey, { label: string; unit: string; pct: boolean }> = {
+  multidirectional: { label: "side-to-side / change-of-direction running", unit: " m", pct: false },
+  explosive: { label: "explosive bursts (hard accelerations + braking)", unit: "", pct: false },
+  multidirectional_share: { label: "share of his running that's side-to-side", unit: "", pct: true },
+  decel_share: { label: "share of his efforts that are hard braking", unit: "", pct: true },
+};
+function plainVal(key: ComponentKey, v: number): string {
+  return PLAIN[key].pct ? `${Math.round(v * 100)}%` : `${Math.round(v).toLocaleString("en-US")}${PLAIN[key].unit}`;
+}
+
 // Share-type components describe the MIX (shape); the others describe VOLUME.
 const SHARE_KEYS: ReadonlySet<ComponentKey> = new Set(["multidirectional_share", "decel_share"]);
 // For volume/share-up components, "unfamiliar" means ABOVE the norm (positive z).
@@ -88,6 +100,7 @@ export type MovementSignature = {
   driftType: DriftType;
   score: number;            // ranking magnitude (0 if no drift)
   headline: string | null;  // plain-language one-liner; null = moving like himself
+  why: string | null;       // plain "why this matters" line
   counterfactual: string | null;
   suggestedAction: string | null;
 };
@@ -253,21 +266,28 @@ export function computeMovementSignature(
   const score = top ? round((top.concerningZ ?? 0) * (confident ? 1 : 0.6), 2) : 0;
 
   let headline: string | null = null;
+  let why: string | null = null;
   let counterfactual: string | null = null;
   let suggestedAction: string | null = null;
   if (top) {
-    const zTxt = `${top.concerningZ}`;
+    const plain = PLAIN[top.key].label;
+    const recentStr = plainVal(top.key, top.today);
+    const usualStr = plainVal(top.key, top.mean);
+    const more = (top.z ?? 0) >= 0;
     if (driftType === "shape") {
-      headline = `Same volume, different movement — ${top.label.toLowerCase()} is ${zTxt} SD from his own norm while total distance is normal.`;
-      suggestedAction = "Keep his total load, but ease role exposure to tight-space / change-of-direction tasks for 1-2 days, or phase the new demand in gradually.";
+      headline = `He's covering his usual distance but moving differently — his ${plain} has ${more ? "risen" : "dropped"} to ${recentStr} this week (he's usually around ${usualStr}).`;
+      why = "Same running volume, but the type of movement changed — a shift like this is easy to miss and means his body is doing something it isn't used to.";
+      suggestedAction = "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.";
     } else if (driftType === "mixed") {
-      headline = `Moving more — and more sharply — than usual: ${top.label.toLowerCase()} ${zTxt} SD above his norm.`;
-      suggestedAction = "Both volume and movement mix are elevated; trim overall exposure and watch the change-of-direction demand.";
+      headline = `He's doing more running AND moving differently than usual — his ${plain} is up to ${recentStr} this week (usually around ${usualStr}).`;
+      why = "Both how much and how he's moving have jumped at once — the body has had less chance to adapt, so it's worth easing off.";
+      suggestedAction = "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.";
     } else {
-      headline = `Moving more sharply than usual — ${top.label.toLowerCase()} is ${zTxt} SD above his own norm.`;
-      suggestedAction = "Consider easing the high-intensity movement demand for 1-2 days so the new exposure is phased in, not spiked.";
+      headline = `He's doing noticeably more ${plain} than he normally does — about ${recentStr} this week vs his usual ${usualStr}.`;
+      why = "A sudden jump in this kind of high-intensity movement (not just total distance) is the main thing that catches players out, so it's worth a look.";
+      suggestedAction = "Consider easing this demand for 1-2 days so the extra exposure is phased in rather than spiked.";
     }
-    counterfactual = `If ${top.label.toLowerCase()} were within ±1 SD of his norm, this would not flag.`;
+    counterfactual = `This only flags because it's well outside his own usual range — if his ${plain} were closer to his typical ${usualStr}, it wouldn't appear here.`;
   }
 
   return {
@@ -282,6 +302,7 @@ export function computeMovementSignature(
     driftType,
     score,
     headline,
+    why,
     counterfactual,
     suggestedAction,
   };

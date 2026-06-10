@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
   type Item = {
     player_id: string; name: string;
     refDate: string; driftType: string; score: number;
-    headline: string | null; counterfactual: string | null; suggestedAction: string | null;
+    headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
     confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
     totalDistanceZ: number | null;
     groupLabel: "role" | "squad"; // is the group norm role-specific or squad-wide?
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
     items.push({
       player_id: pid, name: nameById.get(pid) ?? "Player",
       refDate: sig.date, driftType: sig.driftType, score: sig.score,
-      headline: sig.headline, counterfactual: sig.counterfactual, suggestedAction: sig.suggestedAction,
+      headline: sig.headline, why: sig.why, counterfactual: sig.counterfactual, suggestedAction: sig.suggestedAction,
       confident: sig.confident, calibrating: sig.calibrating, baselineDays: sig.baselineDays, componentsPresent: sig.componentsPresent,
       totalDistanceZ: sig.totalDistanceZ,
       groupLabel: gk === "_squad" ? "squad" : "role",

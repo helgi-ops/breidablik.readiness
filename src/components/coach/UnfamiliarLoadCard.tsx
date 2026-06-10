@@ -19,7 +19,7 @@ type Driver = { key: string; label: string; z: number | null; today: number; mea
 type Item = {
   player_id: string; name: string; refDate: string;
   driftType: "intensity" | "shape" | "mixed" | string; score: number;
-  headline: string | null; counterfactual: string | null; suggestedAction: string | null;
+  headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
   confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
   totalDistanceZ: number | null; groupLabel: "role" | "squad"; drivers: Driver[];
 };
@@ -33,8 +33,8 @@ const DRIFT_TINT: Record<string, string> = {
 };
 const driftWord = (t: string, lang?: string) =>
   IS(lang)
-    ? (t === "shape" ? "breytt mynstur" : t === "mixed" ? "magn + mynstur" : "aukin ákefð")
-    : (t === "shape" ? "movement shape" : t === "mixed" ? "volume + shape" : "intensity");
+    ? (t === "shape" ? "hreyfir sig öðruvísi" : t === "mixed" ? "meira + öðruvísi" : "gerir meira en venjulega")
+    : (t === "shape" ? "moving differently" : t === "mixed" ? "more + differently" : "doing more than usual");
 
 export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date?: string }) {
   const [data, setData] = useState<Resp | null>(null);
@@ -129,15 +129,18 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-900">{it.name}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${DRIFT_TINT[it.driftType] ?? "bg-slate-100 text-slate-600"}`}>{driftWord(it.driftType, lang)}</span>
-                <span className="text-[10px] text-slate-400">
-                  {IS(lang) ? `${it.baselineDays}-daga norm` : `${it.baselineDays}-day norm`}{it.calibrating ? (IS(lang) ? " · að kvarðast" : " · calibrating") : ""}
+                <span className="text-[10px] text-slate-400" title={IS(lang) ? "Borið saman við hans eigin venjulegu hreyfingu yfir þetta marga æfingadaga." : "Compared to his own usual movement over this many training days."}>
+                  {IS(lang) ? `byggt á ${it.baselineDays} æfingadögum` : `based on ${it.baselineDays} training days`}{it.calibrating ? (IS(lang) ? " · enn að læra hans eðlilega" : " · still learning his normal") : ""}
                 </span>
               </div>
 
-              {/* One-sentence verdict */}
+              {/* One-sentence verdict, plain language */}
               {it.headline && <p className="mt-1 text-sm text-slate-800">{it.headline}</p>}
 
-              {/* Counterfactual + action */}
+              {/* Why this matters */}
+              {it.why && <p className="mt-1 text-[12px] leading-snug text-slate-600">{it.why}</p>}
+
+              {/* Counterfactual (when would it NOT flag) */}
               {it.counterfactual && <p className="mt-1 text-[11px] text-slate-500">{it.counterfactual}</p>}
               {it.suggestedAction && (
                 <p className="mt-1.5 text-[12px] text-slate-700">
