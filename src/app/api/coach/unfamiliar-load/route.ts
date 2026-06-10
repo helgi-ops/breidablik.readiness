@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { computeMovementSignature, type MovementDayRow } from "@/lib/micropulse/movementSignature";
+import { computeMovementSignature, componentValue, MOVEMENT_COMPONENTS, type MovementDayRow, type GroupBaseline, type ComponentKey } from "@/lib/micropulse/movementSignature";
 
 export const runtime = "nodejs";
 
@@ -49,9 +49,13 @@ export async function GET(req: NextRequest) {
   const refDate = dateParam && isIso(dateParam) ? dateParam : today;
   const windowStart = addDaysISO(refDate, -34); // 28-day norm + a little slack
 
-  const { data: players } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
+  const { data: players } = await sb.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true);
   const nameById = new Map<string, string>();
-  for (const p of (players ?? []) as Array<{ id: string; full_name: string | null }>) nameById.set(String(p.id), p.full_name ?? "Player");
+  const posById = new Map<string, string | null>();
+  for (const p of (players ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>) {
+    nameById.set(String(p.id), p.full_name ?? "Player");
+    posById.set(String(p.id), (p.position ?? "").trim() || null);
+  }
   const playerIds = Array.from(nameById.keys());
   if (playerIds.length === 0) return NextResponse.json({ ok: true, refDate, items: [], summary: { totalPlayers: 0, drifting: 0, building: 0 } });
 
@@ -78,13 +82,41 @@ export async function GET(req: NextRequest) {
     byPlayer.set(pid, arr);
   }
 
+  // Group baselines (Phase 3): group key = position when set, else the whole
+  // squad ("_squad"). On data with positions filled this gives per-role norms;
+  // with positions empty it degrades to a squad norm — the same code, so it
+  // upgrades automatically. Used as interpretation context, not to flag.
+  const groupKeyOf = (pid: string) => posById.get(pid) || "_squad";
+  const groupAcc = new Map<string, Record<ComponentKey, number[]>>();
+  for (const pid of playerIds) {
+    const pRows = byPlayer.get(pid);
+    if (!pRows) continue;
+    const gk = groupKeyOf(pid);
+    let acc = groupAcc.get(gk);
+    if (!acc) { acc = { multidirectional: [], explosive: [], multidirectional_share: [], decel_share: [] }; groupAcc.set(gk, acc); }
+    for (const r of pRows) for (const k of MOVEMENT_COMPONENTS) { const v = componentValue(k, r); if (v != null && Number.isFinite(v)) acc[k].push(v); }
+  }
+  const meanOf = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;
+  const sdOf = (xs: number[], m: number) => xs.length < 2 ? 0 : Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / xs.length);
+  const groupBaselineCache = new Map<string, GroupBaseline>();
+  const groupBaselineOf = (gk: string): GroupBaseline => {
+    const cached = groupBaselineCache.get(gk);
+    if (cached) return cached;
+    const acc = groupAcc.get(gk);
+    const gb: GroupBaseline = {};
+    if (acc) for (const k of MOVEMENT_COMPONENTS) { const xs = acc[k]; const m = meanOf(xs); gb[k] = { mean: m, sd: sdOf(xs, m), n: xs.length }; }
+    groupBaselineCache.set(gk, gb);
+    return gb;
+  };
+
   type Item = {
     player_id: string; name: string;
     refDate: string; driftType: string; score: number;
     headline: string | null; counterfactual: string | null; suggestedAction: string | null;
     confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
     totalDistanceZ: number | null;
-    drivers: Array<{ key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number }>;
+    groupLabel: "role" | "squad"; // is the group norm role-specific or squad-wide?
+    drivers: Array<{ key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null }>;
   };
 
   const items: Item[] = [];
@@ -93,7 +125,8 @@ export async function GET(req: NextRequest) {
     const pRows = byPlayer.get(pid);
     if (!pRows || pRows.length === 0) continue;
     const refForPlayer = pRows.reduce((mx, r) => (r.date > mx ? r.date : mx), pRows[0].date);
-    const sig = computeMovementSignature(pRows, refForPlayer);
+    const gk = groupKeyOf(pid);
+    const sig = computeMovementSignature(pRows, refForPlayer, { groupBaseline: groupBaselineOf(gk) });
     if (sig.baselineDays < 8) { building += 1; continue; }   // not enough norm yet → don't flag
     if (sig.driftType === "none" || sig.drifting.length === 0) continue; // moving like himself
     items.push({
@@ -102,7 +135,8 @@ export async function GET(req: NextRequest) {
       headline: sig.headline, counterfactual: sig.counterfactual, suggestedAction: sig.suggestedAction,
       confident: sig.confident, calibrating: sig.calibrating, baselineDays: sig.baselineDays, componentsPresent: sig.componentsPresent,
       totalDistanceZ: sig.totalDistanceZ,
-      drivers: sig.drifting.map((c) => ({ key: c.key, label: c.label, z: c.z, today: c.today, mean: c.mean, sd: c.sd, n: c.n })),
+      groupLabel: gk === "_squad" ? "squad" : "role",
+      drivers: sig.drifting.map((c) => ({ key: c.key, label: c.label, z: c.z, today: c.today, mean: c.mean, sd: c.sd, n: c.n, groupZ: c.groupZ, groupMean: c.groupMean, groupSd: c.groupSd })),
     });
   }
   items.sort((a, b) => b.score - a.score);

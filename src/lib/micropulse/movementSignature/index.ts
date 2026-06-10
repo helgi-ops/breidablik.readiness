@@ -56,14 +56,23 @@ const TWO_SIDED: ReadonlySet<ComponentKey> = new Set(["decel_share"]);
 export type ComponentDrift = {
   key: ComponentKey;
   label: string;
-  today: number;        // most-recent training-day value for this component
+  today: number;        // recent micro-cycle value for this component
   mean: number;         // personal baseline mean over the window
   sd: number;           // personal baseline sd
   n: number;            // training days observed for this component
-  z: number | null;     // (today - mean) / sd
+  z: number | null;     // (today - mean) / sd vs HIS OWN norm
   concerningZ: number | null; // signed so that "more unfamiliar" is positive
   flagged: boolean;     // concerningZ >= active/calibrating threshold
+  // Group context (role when positions are set, else the squad): is he also
+  // unusual vs his peers, or is the whole group doing it? Does not change the
+  // personal flag — it's interpretation context (Phase 3).
+  groupMean: number | null;
+  groupSd: number | null;
+  groupZ: number | null;
 };
+
+/** Per-component group baseline (role or squad) passed into the detector. */
+export type GroupBaseline = Partial<Record<ComponentKey, { mean: number; sd: number; n: number }>>;
 
 export type DriftType = "none" | "intensity" | "shape" | "mixed";
 
@@ -87,6 +96,7 @@ const WINDOW_DAYS = 28;
 const MIN_DAYS = 8;       // baseline floor: need >= this many PRIOR training days to flag
 const ACTIVE_DAYS = 14;   // baseline >= this = full sensitivity (±1 SD); 8-13 = calibrating (±1.5 SD)
 const ACUTE_SESSIONS = 3; // "recent" = mean of the last up-to-N training sessions (this micro-cycle)
+const GROUP_MIN = 12;     // min group-day samples before a group norm is shown as context
 
 /**
  * Split a most-recent-first series into the recent micro-cycle (acute) and the
@@ -117,7 +127,7 @@ function sd(xs: number[], m: number): number {
 }
 
 /** Value of a component for one day, or null if the inputs aren't usable. */
-function componentValue(key: ComponentKey, r: MovementDayRow): number | null {
+export function componentValue(key: ComponentKey, r: MovementDayRow): number | null {
   const efforts = (Number(r.accelEfforts) || 0) + (Number(r.decelEfforts) || 0);
   switch (key) {
     case "multidirectional":
@@ -133,6 +143,8 @@ function componentValue(key: ComponentKey, r: MovementDayRow): number | null {
 }
 
 const ALL_KEYS: ComponentKey[] = ["multidirectional", "explosive", "multidirectional_share", "decel_share"];
+/** The four movement components, exported for group-baseline aggregation. */
+export const MOVEMENT_COMPONENTS: readonly ComponentKey[] = ALL_KEYS;
 
 /**
  * @param rows    a player's daily inertial rows (any order; only rows on/before
@@ -140,7 +152,11 @@ const ALL_KEYS: ComponentKey[] = ["multidirectional", "explosive", "multidirecti
  * @param refDateIso the most-recent date with data for this player (resolve per
  *                player as max(date) <= the picked date)
  */
-export function computeMovementSignature(rows: MovementDayRow[], refDateIso: string): MovementSignature {
+export function computeMovementSignature(
+  rows: MovementDayRow[],
+  refDateIso: string,
+  opts?: { groupBaseline?: GroupBaseline },
+): MovementSignature {
   // Index rows by date, keep only the window [refDate-27 .. refDate].
   const byDate = new Map<string, MovementDayRow>();
   for (const r of rows ?? []) {
@@ -168,11 +184,27 @@ export function computeMovementSignature(rows: MovementDayRow[], refDateIso: str
       if (v != null && Number.isFinite(v)) series.push(v);
     }
     if (componentValue(key, presentDays[0]) != null) componentsPresent += 1;
+    const dec = key.endsWith("share") ? 3 : 0;
+    // Recent micro-cycle value (used for both personal and group comparison).
+    const acute = series.length ? mean(series.slice(0, Math.min(ACUTE_SESSIONS, series.length))) : 0;
+
+    // Group (role / squad) context — does NOT change the personal flag.
+    const gb = opts?.groupBaseline?.[key];
+    const groupOk = gb != null && gb.n >= GROUP_MIN && gb.sd > 0;
+    const groupMean = groupOk ? round(gb!.mean, dec) : null;
+    const groupSd = groupOk ? round(gb!.sd, dec) : null;
+    let groupZ: number | null = null;
+    if (groupOk && series.length) {
+      const gz = round((acute - gb!.mean) / gb!.sd, 1);
+      groupZ = TWO_SIDED.has(key) ? Math.abs(gz) : gz;
+    }
+
     const split = splitAcuteBaseline(series);
     if (!split) {
-      // Not enough prior days to stand behind a norm → report but never flag.
+      // Not enough prior days to stand behind a personal norm → report (with
+      // group context) but never flag on personal alone.
       const m = series.length ? mean(series) : 0;
-      components.push({ key, label: COMPONENT_LABEL[key], today: round(series[0] ?? 0, key.endsWith("share") ? 3 : 0), mean: round(m, key.endsWith("share") ? 3 : 0), sd: 0, n: series.length, z: null, concerningZ: null, flagged: false });
+      components.push({ key, label: COMPONENT_LABEL[key], today: round(acute, dec), mean: round(m, dec), sd: 0, n: series.length, z: null, concerningZ: null, flagged: false, groupMean, groupSd, groupZ });
       continue;
     }
     maxDays = Math.max(maxDays, split.refN);
@@ -181,8 +213,7 @@ export function computeMovementSignature(rows: MovementDayRow[], refDateIso: str
     const calibrating = split.refN < ACTIVE_DAYS;
     const threshold = calibrating ? 1.5 : 1.0;
     const flagged = split.refSd > 0 && concerningZ >= threshold;
-    const dec = key.endsWith("share") ? 3 : 0;
-    components.push({ key, label: COMPONENT_LABEL[key], today: round(split.acute, dec), mean: round(split.refMean, dec), sd: round(split.refSd, dec), n: split.refN, z, concerningZ: round(concerningZ, 1), flagged });
+    components.push({ key, label: COMPONENT_LABEL[key], today: round(split.acute, dec), mean: round(split.refMean, dec), sd: round(split.refSd, dec), n: split.refN, z, concerningZ: round(concerningZ, 1), flagged, groupMean, groupSd, groupZ });
   }
 
   // Total-distance z for context (is overall volume itself up?).

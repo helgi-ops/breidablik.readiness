@@ -14,13 +14,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number };
+type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null };
 type Item = {
   player_id: string; name: string; refDate: string;
   driftType: "intensity" | "shape" | "mixed" | string; score: number;
   headline: string | null; counterfactual: string | null; suggestedAction: string | null;
   confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
-  totalDistanceZ: number | null; drivers: Driver[];
+  totalDistanceZ: number | null; groupLabel: "role" | "squad"; drivers: Driver[];
 };
 type Resp = { ok: boolean; refDate: string; items: Item[]; summary: { totalPlayers: number; drifting: number; building: number; dismissed?: number }; error?: string };
 
@@ -159,7 +159,13 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                 <div className="mt-2 overflow-x-auto rounded-md bg-slate-50 p-2">
                   <table className="w-full text-[11px]">
                     <thead className="text-slate-500">
-                      <tr><th className="px-1 py-0.5 text-left">Component</th><th className="px-1 py-0.5 text-right">z (SD)</th><th className="px-1 py-0.5 text-right">recent</th><th className="px-1 py-0.5 text-right">usual</th><th className="px-1 py-0.5 text-right">n</th></tr>
+                      <tr>
+                        <th className="px-1 py-0.5 text-left">Component</th>
+                        <th className="px-1 py-0.5 text-right">{IS(lang) ? "vs hann sjálfur" : "vs himself"}</th>
+                        <th className="px-1 py-0.5 text-right">recent</th>
+                        <th className="px-1 py-0.5 text-right">usual</th>
+                        <th className="px-1 py-0.5 text-right">{IS(lang) ? (it.groupLabel === "role" ? "vs hlutverk" : "vs lið") : `vs ${it.groupLabel}`}</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {it.drivers.map((d) => (
@@ -168,11 +174,17 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                           <td className="px-1 py-0.5 text-right font-semibold tabular-nums text-slate-900">{d.z != null && d.z > 0 ? "+" : ""}{d.z}</td>
                           <td className="px-1 py-0.5 text-right tabular-nums text-slate-600">{d.today}</td>
                           <td className="px-1 py-0.5 text-right tabular-nums text-slate-500">{d.mean}±{d.sd}</td>
-                          <td className="px-1 py-0.5 text-right tabular-nums text-slate-400">{d.n}</td>
+                          <td className="px-1 py-0.5 text-right tabular-nums text-slate-500">{d.groupZ != null ? `${d.groupZ > 0 ? "+" : ""}${d.groupZ}` : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <p className="px-1 pt-1 text-[10px] text-slate-400">
+                    {IS(lang)
+                      ? "„vs hann sjálfur\" = frávik frá hans eigin normi (það sem flaggar). Síðasti dálkur = sama miðað við "
+                      : "“vs himself” = drift from his own norm (what flags). Last column = the same vs his "}
+                    {it.groupLabel === "role" ? (IS(lang) ? "hlutverk." : "role.") : (IS(lang) ? "lið." : "squad.")}
+                  </p>
                   {it.totalDistanceZ != null && (
                     <p className="px-1 pt-1 text-[10px] text-slate-400">
                       {IS(lang) ? "Heildarvegalengd" : "Total distance"} z = {it.totalDistanceZ > 0 ? "+" : ""}{it.totalDistanceZ} SD {IS(lang) ? "(samhengi: er rúmmálið sjálft hátt?)" : "(context: is volume itself up?)"}
