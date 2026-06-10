@@ -1,27 +1,33 @@
 import type { CatapultSessionMetric, NormalizedExternalLoad, ImaClock } from "./types";
 
 /**
- * Parse the IMA O'Clock (Gen2) directional grid from a flattened record.
- * Catapult exposes 12 clock directions × 3 intensities, e.g. "IMA 1 O'Clock
- * High". We normalize each key (lowercase, strip non-alphanumerics) and match
- * `ima<dir>o?clock<intensity>`, tolerant of spacing / apostrophes / a trailing
- * "gen2". Pure + deterministic so it can be unit-tested without the pipeline.
- * Returns null when no clock fields are present (i.e. not enabled in the export).
+ * Parse the IMA directional ("clock") grid from a flattened Catapult record.
+ *
+ * Catapult does NOT return the "IMA N O'Clock High" display-name params for this
+ * org (they come back as zeros). The real directional data is in the raw fields
+ * `ima_band{1,2,3}_direction{1..12}_count`, where the band is the intensity tier
+ * (band1=low, band2=medium, band3=high — the same convention normalize already
+ * uses for CoD) and direction 1..12 is the clock position. We deliberately skip
+ * the `..._old_direction..` legacy fields. Pure + deterministic.
+ * Returns null when no directional fields are present.
  */
+const CLOCK_BAND_INTENSITY: Record<string, "low" | "medium" | "high"> = { "1": "low", "2": "medium", "3": "high" };
 export function parseImaClock(record: Record<string, unknown>): ImaClock | null {
   if (!record || typeof record !== "object") return null;
   const clock: ImaClock = {};
   let found = false;
   for (const [rawKey, rawVal] of Object.entries(record)) {
     const k = String(rawKey).toLowerCase().replace(/[^a-z0-9]/g, "");
-    const m = k.match(/ima(\d{1,2})o?clock(high|medium|low)/);
+    // imaband{1,2,3}direction{1..12}count — note this won't match the legacy
+    // "imaband1olddirection1count" because "direction" must follow the band number.
+    const m = k.match(/^imaband([123])direction(\d{1,2})count$/);
     if (!m) continue;
-    const dirN = parseInt(m[1], 10);
+    const dirN = parseInt(m[2], 10);
     if (!(dirN >= 1 && dirN <= 12)) continue;
     const v = Number(rawVal);
     if (!Number.isFinite(v)) continue;
     const dir = String(dirN);
-    const intensity = m[2] as "high" | "medium" | "low";
+    const intensity = CLOCK_BAND_INTENSITY[m[1]];
     if (!clock[dir]) clock[dir] = { high: null, medium: null, low: null };
     clock[dir][intensity] = (clock[dir][intensity] ?? 0) + v;
     found = true;
