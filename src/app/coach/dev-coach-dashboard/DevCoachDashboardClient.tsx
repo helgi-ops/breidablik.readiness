@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Download, FileText } from "lucide-react";
+import { RefreshCw, Download, FileText, ChevronDown } from "lucide-react";
 import { useLang } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
@@ -90,8 +90,8 @@ import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
-import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
@@ -2233,6 +2233,35 @@ export default function CoachPage() {
   // — coaches typically set this once per season.
   const [trainingMode, setTrainingMode] = useState<"auto" | "indoor" | "outdoor">("auto");
   const [adminConfigSnapshot, setAdminConfigSnapshot] = useState<AdminConfigSnapshot>(createDefaultAdminConfigSnapshot());
+
+  // Effective indoor/outdoor verdict for "auto" mode.
+  //
+  // KEY RULE (coach Helgi, Jun 2026): a session is "indoor" only when it has NO
+  // GPS. The Catapult unit still records FMP / IMA inertial data OUTDOORS, so
+  // FMP-presence is NOT a valid indoor signal — *absence of GPS* is. The old
+  // gate keyed off indoor-data presence, which lit up the Indoor Briefing for a
+  // squad that trains entirely outdoors (every recent Breiðablik session has
+  // GPS). Here we infer the squad's mode from the recent window: any GPS in the
+  // window → outdoor; GPS-less but inertial data present → indoor. Scanning the
+  // whole window (not just today) keeps the verdict stable on rest / OFF days,
+  // where no session — and therefore no GPS — exists for the current date.
+  // A manual "indoor"/"outdoor" override always wins; "auto" defers to the data.
+  const effectiveTrainingMode = useMemo<"indoor" | "outdoor">(() => {
+    if (trainingMode === "indoor" || trainingMode === "outdoor") return trainingMode;
+    let gpsDays = 0;
+    let imaOnlyDays = 0;
+    for (const r of rows) {
+      for (const d of r._catapult_history ?? []) {
+        const hasGps = typeof d.totalDistance === "number" && d.totalDistance > 0;
+        const hasInertial = (d.fmpTotalDurationS ?? 0) > 0 || (d.imaTotal ?? 0) > 0;
+        if (hasGps) gpsDays += 1;
+        else if (hasInertial) imaOnlyDays += 1;
+      }
+    }
+    if (gpsDays > 0) return "outdoor";
+    if (imaOnlyDays > 0) return "indoor";
+    return "outdoor"; // no inertial/GPS data → default outdoor (hide indoor surfaces)
+  }, [trainingMode, rows]);
 
   // MD context
   const [mdContextToday, setMdContextToday] = useState<string | null>(null);
@@ -8583,96 +8612,113 @@ export default function CoachPage() {
       ══════════════════════════════════════════ */}
       {dashTab === "today" && (
         <div className="space-y-6">
-          {/* Reports bar — pinned at the very top so both the pre-session and
-              post-training PDFs are one click away, out of the busy command-center
-              header. One shared date picker: empty = today / latest session. */}
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                {lang === "IS" ? "Skýrslur" : "Reports"}
-              </span>
-              <span className="text-[11px] text-slate-400">
-                {lang === "IS" ? "· sendanlegar PDF skýrslur fyrir liðið" : "· sendable PDF reports for the squad"}
-              </span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={downloadReadinessRiskReport}
-                disabled={pdfDownloading || loading}
-                title={lang === "IS" ? "Hverjir eru flaggaðir út frá innskráningum dagsins" : "Who is flagged from today's check-ins"}
-                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                {pdfDownloading ? "Generating…" : "Readiness Risk"}
-              </Button>
-              <div className="hidden h-6 w-px bg-slate-200 sm:block" aria-hidden />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => downloadPreSessionReport(postReportDate || undefined)}
-                disabled={pdfPreDownloading || loading}
-                title={lang === "IS" ? "Ráðlagt álag FYRIR æfingu — target, RPE, top attention" : "Recommended load BEFORE training — targets, RPE, top attention"}
-                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              >
-                <Download className="h-3.5 w-3.5" />
-                {pdfPreDownloading ? "Generating…" : "Pre-Session"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => downloadPostTrainingReport(postReportDate || undefined)}
-                disabled={pdfPostDownloading || loading}
-                title={lang === "IS" ? "Hvað liðið gerði EFTIR æfingu — raun vs plan" : "What the squad did AFTER training — actual vs plan"}
-                className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              >
-                <Download className="h-3.5 w-3.5" />
-                {pdfPostDownloading ? "Generating…" : "Post-Training"}
-              </Button>
-              {/* Shared day selector — empty = today / latest session. */}
-              <label className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-500">
-                {lang === "IS" ? "Dagur" : "Day"}
-                <input
-                  type="date"
-                  value={postReportDate}
-                  max={today}
-                  onChange={(e) => setPostReportDate(e.target.value)}
-                  title={lang === "IS" ? "Veldu dag (tómt = í dag / nýjasta)" : "Pick a day (empty = today / latest)"}
-                  className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
-                />
-              </label>
-              {/* Rest-day toggle for the Pre-Session report — persists per day and
-                  syncs with the /coach/load-plan page. */}
-              <label
-                className="flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-600"
-                title={lang === "IS" ? "Merkja daginn sem frídag — Pre-Session skýrslan sýnir þá ekkert target" : "Mark the day as a rest day — the Pre-Session report then shows no targets"}
-              >
-                <input
-                  type="checkbox"
-                  checked={preRestDay}
-                  onChange={(e) => { setPreRestDay(e.target.checked); writeRestDayPref(postReportDate || today, e.target.checked); }}
-                  className="h-3.5 w-3.5 accent-slate-700"
-                />
-                {lang === "IS" ? "Frídagur" : "Rest day"}
-              </label>
-            </div>
-            {/* Per-report captions so coaches know what each button produces. */}
-            <p className="mt-2 text-[11px] leading-snug text-slate-500">
-              {lang === "IS" ? (
-                <>
-                  <span className="font-medium text-slate-600">Readiness Risk</span>: hverjir eru flaggaðir út frá innskráningum dagsins ·{" "}
-                  <span className="font-medium text-slate-600">Pre-Session</span>: ráðlagt álag <em>fyrir</em> æfingu (target, RPE, top attention) ·{" "}
-                  <span className="font-medium text-slate-600">Post-Training</span>: hvað liðið gerði <em>eftir</em> æfingu — raun vs plan. Veldu dag eða skildu eftir tómt fyrir í dag / nýjustu æfingu.
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-slate-600">Readiness Risk</span>: who&apos;s flagged from today&apos;s check-ins ·{" "}
-                  <span className="font-medium text-slate-600">Pre-Session</span>: the recommended load <em>before</em> training (targets, RPE, top attention) ·{" "}
-                  <span className="font-medium text-slate-600">Post-Training</span>: what the squad actually did <em>after</em> training vs the plan. Pick a day, or leave empty for today / the latest session.
-                </>
-              )}
-            </p>
+          {/* Reports — collapsed into a single right-aligned "Export" menu so the
+              PDF actions don't eat the most valuable space at the top of Today.
+              They're an action, not information; the popover keeps them one click
+              away with the shared day picker, rest-day toggle and captions. */}
+          <div className="flex justify-end">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {lang === "IS" ? "Sækja skýrslur" : "Export reports"}
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {lang === "IS" ? "Skýrslur" : "Reports"}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {lang === "IS" ? "sendanlegar PDF fyrir liðið" : "sendable PDF for the squad"}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadReadinessRiskReport}
+                    disabled={pdfDownloading || loading}
+                    title={lang === "IS" ? "Hverjir eru flaggaðir út frá innskráningum dagsins" : "Who is flagged from today's check-ins"}
+                    className="w-full justify-start gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    {pdfDownloading ? "Generating…" : "Readiness Risk"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadPreSessionReport(postReportDate || undefined)}
+                    disabled={pdfPreDownloading || loading}
+                    title={lang === "IS" ? "Ráðlagt álag FYRIR æfingu — target, RPE, top attention" : "Recommended load BEFORE training — targets, RPE, top attention"}
+                    className="w-full justify-start gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {pdfPreDownloading ? "Generating…" : "Pre-Session"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadPostTrainingReport(postReportDate || undefined)}
+                    disabled={pdfPostDownloading || loading}
+                    title={lang === "IS" ? "Hvað liðið gerði EFTIR æfingu — raun vs plan" : "What the squad did AFTER training — actual vs plan"}
+                    className="w-full justify-start gap-1.5 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {pdfPostDownloading ? "Generating…" : "Post-Training"}
+                  </Button>
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5">
+                  {/* Shared day selector — empty = today / latest session. */}
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    {lang === "IS" ? "Dagur" : "Day"}
+                    <input
+                      type="date"
+                      value={postReportDate}
+                      max={today}
+                      onChange={(e) => setPostReportDate(e.target.value)}
+                      title={lang === "IS" ? "Veldu dag (tómt = í dag / nýjasta)" : "Pick a day (empty = today / latest)"}
+                      className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                    />
+                  </label>
+                  {/* Rest-day toggle for the Pre-Session report — persists per day and
+                      syncs with the /coach/load-plan page. */}
+                  <label
+                    className="flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-600"
+                    title={lang === "IS" ? "Merkja daginn sem frídag — Pre-Session skýrslan sýnir þá ekkert target" : "Mark the day as a rest day — the Pre-Session report then shows no targets"}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={preRestDay}
+                      onChange={(e) => { setPreRestDay(e.target.checked); writeRestDayPref(postReportDate || today, e.target.checked); }}
+                      className="h-3.5 w-3.5 accent-slate-700"
+                    />
+                    {lang === "IS" ? "Frídagur" : "Rest day"}
+                  </label>
+                </div>
+                {/* Per-report captions so coaches know what each button produces. */}
+                <p className="mt-2.5 text-[11px] leading-snug text-slate-500">
+                  {lang === "IS" ? (
+                    <>
+                      <span className="font-medium text-slate-600">Readiness Risk</span>: hverjir eru flaggaðir út frá innskráningum dagsins ·{" "}
+                      <span className="font-medium text-slate-600">Pre-Session</span>: ráðlagt álag <em>fyrir</em> æfingu (target, RPE, top attention) ·{" "}
+                      <span className="font-medium text-slate-600">Post-Training</span>: hvað liðið gerði <em>eftir</em> æfingu — raun vs plan. Veldu dag eða skildu eftir tómt fyrir í dag / nýjustu æfingu.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-slate-600">Readiness Risk</span>: who&apos;s flagged from today&apos;s check-ins ·{" "}
+                      <span className="font-medium text-slate-600">Pre-Session</span>: the recommended load <em>before</em> training (targets, RPE, top attention) ·{" "}
+                      <span className="font-medium text-slate-600">Post-Training</span>: what the squad actually did <em>after</em> training vs the plan. Pick a day, or leave empty for today / the latest session.
+                    </>
+                  )}
+                </p>
+              </PopoverContent>
+            </Popover>
           </div>
           {/* Onboarding checklist — only shown to new clubs */}
           <OnboardingChecklist
@@ -9018,8 +9064,16 @@ export default function CoachPage() {
                   },
                   {
                     label: "Tomorrow",
-                    value: nextDayRisk,
-                    sub: "Forecast",
+                    // Friendlier capitalisation of the forecast band.
+                    value: nextDayRisk === "—" ? "—" : nextDayRisk.charAt(0) + nextDayRisk.slice(1).toLowerCase(),
+                    // Plain meaning instead of the bare word "Forecast".
+                    sub: /low|safe/i.test(nextDayRisk)
+                      ? "Hard session OK"
+                      : /high|elevat|critical/i.test(nextDayRisk)
+                        ? "Expect more tired players"
+                        : nextDayRisk === "—"
+                          ? "Forecast"
+                          : "Plan a moderate day",
                     tone: "border-slate-200 bg-slate-50 text-slate-800",
                     info: "How the squad is likely to look tomorrow based on today's load and recent trajectory. Low = safe to plan a hard session tomorrow. Elevated = expect more players in the yellow / red bucket.",
                   },
@@ -9539,13 +9593,15 @@ export default function CoachPage() {
           )}
 
           {/* Indoor Briefing — team-level executive summary.
-              Hidden when team training_mode is explicitly set to "outdoor" — the
-              card is meaningless (and confusingly shows "heavy indoor load" for
-              outdoor sessions that the auto-classifier mis-labelled). When
-              outdoor mode is locked in, the coach has already told us indoor
-              context doesn't apply. */}
+              Shown ONLY when the effective mode is indoor, i.e. the squad's
+              recent sessions have no GPS (see effectiveTrainingMode). Previously
+              this keyed off indoor-data *presence*, which lit up for outdoor
+              squads because the Catapult unit records FMP/IMA inertial data
+              outdoors too — confusingly showing "heavy indoor load" for what
+              were really GPS sessions. Now: no GPS → indoor → show; GPS present
+              → outdoor → hide. A manual outdoor/indoor override still wins. */}
           {rows.length > 0 &&
-            trainingMode !== "outdoor" &&
+            effectiveTrainingMode === "indoor" &&
             (Object.keys(playerIndoorStatus).length > 0 || Object.keys(playerInjuryStatus).length > 0) && (
               <TeamIndoorBriefing
                 players={rows.map((r) => {
@@ -9607,12 +9663,13 @@ export default function CoachPage() {
               Self-hides when there's not enough data yet (fresh teams). */}
           <WeeklyNarrativeCard teamId={coachTeamId} />
 
-          {/* Readiness × Load quadrant — at-a-glance decision support */}
-          <ReadinessLoadQuadrant
-            teamId={coachTeamId}
-            lang={lang}
-            playerComposites={playerComposites}
-          />
+          {/* Readiness × Load quadrant intentionally removed from the Today
+              surface. It's a scatter plot with S&C-only axes ("0.5 = normal ·
+              1.0 = very high", baseline lines, dashed-dot fallbacks) — the least
+              5-second-readable block on Today, and it duplicates the dedicated
+              "Quadrant Intelligence" sidebar page. The plain-language Daily
+              Briefing + attention list already carry the head-coach verdict;
+              the scatter view lives on its own page for S&C drill-down. */}
 
         </div>
       )}

@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import MovementNarrativeModal from "@/components/coach/MovementNarrativeModal";
 
 type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null };
@@ -41,6 +42,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [openSignals, setOpenSignals] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,41 +90,52 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
   const items = data.items;
 
   // All-clear: a slim line so the coach knows the check ran, suppressing detail.
+  // Matches the Today house style (Card + uppercase tracking header).
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="font-medium text-slate-800">{IS(lang) ? "Hreyfimynstur" : "Movement check"}</span>
-          <span className="text-slate-500">
-            {IS(lang)
-              ? "allir hreyfa sig innan síns venjulega ramma í dag."
-              : "everyone is moving within their usual envelope today."}
-          </span>
-        </div>
-      </div>
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">
+                {IS(lang) ? "Óvanaleg hreyfing" : "Unfamiliar load"}
+              </CardTitle>
+              <CardDescription className="mt-1 text-sm text-slate-500">
+                {IS(lang) ? "Hreyfir hann sig eins og hann sjálfur?" : "Is he still moving like himself?"}
+              </CardDescription>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+              🟢 {IS(lang) ? "allir innan venju" : "all within range"}
+            </span>
+          </div>
+        </CardHeader>
+      </Card>
     );
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-slate-900">{IS(lang) ? "Óvanaleg hreyfing — hvað á að skoða" : "Unfamiliar load — what to look at"}</h3>
-        <span className="rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">{items.length}</span>
-        <span className="ml-auto text-[11px] text-slate-400">
-          {IS(lang) ? "Hreyfir hann sig eins og hann sjálfur?" : "Is he still moving like himself?"}
-        </span>
-      </div>
-
-      <p className="mb-3 text-[11px] leading-snug text-slate-500">
-        {IS(lang)
-          ? "Frávik frá leikmannsins eigin hreyfinormi (Driver-lag, IMA) — lýsandi hegðunarmerki, ekki meiðslaspá. Aðeins undantekningar birtast."
-          : "Drift from each player's own movement norm (Driver layer, IMA) — a descriptive behaviour signal, not an injury prediction. Only exceptions are shown."}
-      </p>
-
-      <div className="space-y-2">
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <CardTitle className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">
+              {IS(lang) ? "Óvanaleg hreyfing" : "Unfamiliar load"}
+            </CardTitle>
+            <CardDescription className="mt-1 text-sm text-slate-500">
+              {IS(lang)
+                ? "Hverjir hreyfa sig öðruvísi en venjulega (úr GPS/IMA) — lýsandi merki, ekki meiðslaspá."
+                : "Who's moving differently than usual (from GPS/IMA) — a descriptive signal, not an injury prediction."}
+            </CardDescription>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
+            {items.length} {IS(lang) ? "að skoða" : "to look at"}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-0">
         {items.map((it) => {
           const open = !!openSignals[it.player_id];
+          const isExpanded = !!expanded[it.player_id];
           const isDis = dismissing === it.player_id;
           return (
             <div key={it.player_id} className="rounded-lg border border-slate-200 p-3">
@@ -134,21 +147,32 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                 </span>
               </div>
 
-              {/* One-sentence verdict, plain language */}
+              {/* One-sentence verdict, plain language — the only thing shown by
+                  default so the section stays scannable (4 tight rows, not 4
+                  walls of text). Everything else is a click away. */}
               {it.headline && <p className="mt-1 text-sm text-slate-800">{it.headline}</p>}
 
-              {/* Why this matters */}
-              {it.why && <p className="mt-1 text-[12px] leading-snug text-slate-600">{it.why}</p>}
-
-              {/* Counterfactual (when would it NOT flag) */}
-              {it.counterfactual && <p className="mt-1 text-[11px] text-slate-500">{it.counterfactual}</p>}
-              {it.suggestedAction && (
-                <p className="mt-1.5 text-[12px] text-slate-700">
-                  <span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{it.suggestedAction}
-                </p>
+              {/* Why / counterfactual / suggested — collapsed behind "Details"
+                  so the head-coach surface shows the verdict first, the reasoning
+                  on demand (explainability manifesto). */}
+              {isExpanded && (
+                <>
+                  {it.why && <p className="mt-1 text-[12px] leading-snug text-slate-600">{it.why}</p>}
+                  {it.counterfactual && <p className="mt-1 text-[11px] text-slate-500">{it.counterfactual}</p>}
+                  {it.suggestedAction && (
+                    <p className="mt-1.5 text-[12px] text-slate-700">
+                      <span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{it.suggestedAction}
+                    </p>
+                  )}
+                </>
               )}
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                {(it.why || it.counterfactual || it.suggestedAction) && (
+                  <button type="button" onClick={() => setExpanded((s) => ({ ...s, [it.player_id]: !isExpanded }))} className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
+                    {isExpanded ? (IS(lang) ? "Fela skýringu" : "Hide details") : (IS(lang) ? "Skýring" : "Details")}
+                  </button>
+                )}
                 <button type="button" onClick={() => setOpenSignals((s) => ({ ...s, [it.player_id]: !open }))} className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
                   {open ? (IS(lang) ? "Fela merki" : "Hide signals") : (IS(lang) ? "Sýna merki" : "Show signals")}
                 </button>
@@ -224,9 +248,9 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
             </div>
           );
         })}
-      </div>
 
-      {profile && <MovementNarrativeModal playerId={profile.id} lang={lang} onClose={() => setProfile(null)} />}
-    </div>
+        {profile && <MovementNarrativeModal playerId={profile.id} lang={lang} onClose={() => setProfile(null)} />}
+      </CardContent>
+    </Card>
   );
 }

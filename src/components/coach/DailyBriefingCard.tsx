@@ -389,6 +389,18 @@ function formatFocus(row: BriefingRow | undefined, lang: "IS" | "EN"): string {
   return dayType || COPY[lang].noPlanned;
 }
 
+// Plain-language descriptor for the squad's average wellness (avg total_score
+// is on a 1–25 scale that a non-S&C coach can't read at a glance). We keep the
+// number as support but lead with a word: "feeling good", "about normal",
+// "a bit flat", "low / tired". Explainability manifesto: plain by default.
+function pulseWord(avg: number, lang: "IS" | "EN"): string {
+  const ratio = avg / 25;
+  if (ratio >= 0.8) return lang === "IS" ? "líður vel" : "feeling good";
+  if (ratio >= 0.68) return lang === "IS" ? "í venjulegu standi" : "about normal";
+  if (ratio >= 0.56) return lang === "IS" ? "aðeins flöt" : "a bit flat";
+  return lang === "IS" ? "lágt / þreytt" : "low / tired";
+}
+
 type AttentionLevel = "alert" | "monitor" | "ok";
 
 type DriverKind = "sleep" | "energy" | "stress" | "soreness" | "dz" | "total";
@@ -1837,12 +1849,12 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-700">
             {teamPulse.avgScore != null ? (
-              <span>
+              <span title={`${t.avgReadiness}: ${teamPulse.avgScore.toFixed(1)} / 25 (squad average wellness check-in)`}>
                 <span className="text-slate-500">{t.avgReadiness}: </span>
-                <span className="font-semibold tabular-nums text-slate-900">
-                  {teamPulse.avgScore.toFixed(1)}
+                <span className="font-semibold text-slate-900">
+                  {pulseWord(teamPulse.avgScore, lang)}
                 </span>
-                <span className="text-slate-400"> / 25</span>
+                <span className="text-slate-400 tabular-nums"> · {teamPulse.avgScore.toFixed(1)}/25</span>
               </span>
             ) : null}
             <span>

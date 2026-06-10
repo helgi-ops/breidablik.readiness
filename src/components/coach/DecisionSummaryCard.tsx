@@ -1650,7 +1650,8 @@ const PlayerModal: FC<{
 
 type ReadinessItem = {
   label: string;
-  shortLabel: string;
+  shortLabel: string;   // IS short ("Svefn", "Verk", …)
+  shortLabelEn: string; // EN short ("Sleep", "Soreness", …) — shown in EN mode
   value: number;
 };
 
@@ -1713,37 +1714,41 @@ function buildDeltaBadge(dz: number | null | undefined, lang: Lang = "EN"): {
 
 function getReadinessItems(row: DecisionSummaryRow): ReadinessItem[] {
   const items: ReadinessItem[] = [];
-  if (row.sleep_quality != null) items.push({ label: "Sleep quality", shortLabel: "Svefn", value: row.sleep_quality });
-  if (row.muscle_soreness != null) items.push({ label: "Soreness", shortLabel: "Verk", value: row.muscle_soreness });
-  if (row.fatigue_energy != null) items.push({ label: "Energy", shortLabel: "Orka", value: row.fatigue_energy });
-  if (row.stress_mood != null) items.push({ label: "Mood", shortLabel: "Streita", value: row.stress_mood });
+  if (row.sleep_quality != null) items.push({ label: "Sleep quality", shortLabel: "Svefn", shortLabelEn: "Sleep", value: row.sleep_quality });
+  if (row.muscle_soreness != null) items.push({ label: "Soreness", shortLabel: "Verk", shortLabelEn: "Soreness", value: row.muscle_soreness });
+  if (row.fatigue_energy != null) items.push({ label: "Energy", shortLabel: "Orka", shortLabelEn: "Energy", value: row.fatigue_energy });
+  if (row.stress_mood != null) items.push({ label: "Mood", shortLabel: "Streita", shortLabelEn: "Mood", value: row.stress_mood });
   return items;
 }
 
-type LoadItem = { label: string; value: number; unit: string };
+// Each chip carries a plain-language visible `label` plus the raw S&C `code`
+// and a one-line `tip` (hover) so a non-S&C coach reads "High-speed" and can
+// still see it means velocity band 5 on hover. Explainability manifesto: plain
+// by default, jargon a hover away.
+type LoadItem = { label: string; code: string; value: number; unit: string; tip: string };
 
 function getLoadItems(row: DecisionSummaryRow): LoadItem[] {
   const load = row._yesterday_load;
   const items: LoadItem[] = [];
   if (load) {
     if (load.totalDistance != null && load.totalDistance > 0)
-      items.push({ label: "Dist", value: Math.round(load.totalDistance), unit: "m" });
+      items.push({ label: "Distance", code: "Dist", value: Math.round(load.totalDistance), unit: "m", tip: "Total distance covered last session" });
     if (load.playerLoad != null && load.playerLoad > 0)
-      items.push({ label: "PL", value: Math.round(load.playerLoad * 10) / 10, unit: "" });
+      items.push({ label: "Body load", code: "PL", value: Math.round(load.playerLoad * 10) / 10, unit: "", tip: "Player Load — overall mechanical workload measured by the GPS/IMU unit" });
     if (load.velocityBand5TotalDistance != null && load.velocityBand5TotalDistance > 0)
-      items.push({ label: "VB5", value: Math.round(load.velocityBand5TotalDistance), unit: "m" });
+      items.push({ label: "High-speed", code: "VB5", value: Math.round(load.velocityBand5TotalDistance), unit: "m", tip: "High-speed running distance (velocity band 5)" });
     if (load.velocityBand6TotalDistance != null && load.velocityBand6TotalDistance > 0)
-      items.push({ label: "VB6", value: Math.round(load.velocityBand6TotalDistance), unit: "m" });
+      items.push({ label: "Sprint", code: "VB6", value: Math.round(load.velocityBand6TotalDistance), unit: "m", tip: "Sprint distance (velocity band 6)" });
     if (load.accelBand2to3Efforts != null && load.accelBand2to3Efforts > 0)
-      items.push({ label: "Acc", value: Math.round(load.accelBand2to3Efforts), unit: "" });
+      items.push({ label: "Accels", code: "Acc", value: Math.round(load.accelBand2to3Efforts), unit: "", tip: "Hard accelerations (band 2–3 efforts)" });
     if (load.decelBand2to3Efforts != null && load.decelBand2to3Efforts > 0)
-      items.push({ label: "Dec", value: Math.round(load.decelBand2to3Efforts), unit: "" });
+      items.push({ label: "Braking", code: "Dec", value: Math.round(load.decelBand2to3Efforts), unit: "", tip: "Hard decelerations / braking (band 2–3 efforts)" });
   }
   // Composite scores (fetched independently from MLI/Metabolic APIs)
   if (row._yesterday_mli != null)
-    items.push({ label: "MLI", value: Math.round(row._yesterday_mli * 10) / 10, unit: "" });
+    items.push({ label: "Muscle load", code: "MLI", value: Math.round(row._yesterday_mli * 10) / 10, unit: "", tip: "Mechanical Load Index — estimate of muscular strain" });
   if (row._yesterday_metabolic_score != null)
-    items.push({ label: "Metab", value: Math.round(row._yesterday_metabolic_score), unit: "" });
+    items.push({ label: "Metabolic", code: "Metab", value: Math.round(row._yesterday_metabolic_score), unit: "", tip: "Metabolic load score — energy-system demand" });
   return items;
 }
 
@@ -1800,7 +1805,7 @@ const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row,
                 className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${col.bg} ${col.text}`}
                 title={readinessTooltip(item.label, item.value, lang)}
               >
-                <span>{item.shortLabel} {item.value}</span>
+                <span>{lang === "IS" ? item.shortLabel : item.shortLabelEn} {item.value}</span>
                 {desc && <span className="opacity-80 font-medium">· {desc}</span>}
               </span>
             );
@@ -1813,7 +1818,7 @@ const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row,
           <span className="text-[8px] text-slate-400 font-semibold uppercase">Load</span>
           {load.map((item) => {
             // Highlight MLI/Metabolic if high
-            const isComposite = item.label === "MLI" || item.label === "Metab";
+            const isComposite = item.code === "MLI" || item.code === "Metab";
             const isHigh = isComposite && item.value >= 60;
             const isVeryHigh = isComposite && item.value >= 75;
             const pillClass = isVeryHigh
@@ -1823,9 +1828,9 @@ const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row,
               : "bg-slate-100 text-slate-600";
             return (
               <span
-                key={item.label}
+                key={item.code}
                 className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium ${pillClass}`}
-                title={`${item.label}: ${item.value}${item.unit ? ` ${item.unit}` : ""}`}
+                title={`${item.label} (${item.code}) — ${item.tip}`}
               >
                 {item.label} {item.value.toLocaleString("is-IS")}{item.unit ? <span className="text-[8px] opacity-60">{item.unit}</span> : null}
               </span>
@@ -1938,7 +1943,7 @@ const ReadinessLoadDetail: FC<{
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">{loadHeading}</p>
             <div className="flex flex-wrap gap-3">
               {load.map((item) => {
-                const isComposite = item.label === "MLI" || item.label === "Metab";
+                const isComposite = item.code === "MLI" || item.code === "Metab";
                 const isHigh = isComposite && item.value >= 60;
                 const isVeryHigh = isComposite && item.value >= 75;
                 const borderClass = isVeryHigh
@@ -1952,7 +1957,7 @@ const ReadinessLoadDetail: FC<{
                   ? "text-amber-700"
                   : "text-slate-800";
                 return (
-                  <div key={item.label} className={`flex flex-col items-center rounded-lg border px-3 py-2 min-w-[4.5rem] ${borderClass}`}>
+                  <div key={item.code} title={`${item.label} (${item.code}) — ${item.tip}`} className={`flex flex-col items-center rounded-lg border px-3 py-2 min-w-[4.5rem] ${borderClass}`}>
                     <span className="text-[9px] text-slate-400 font-semibold uppercase">{item.label}</span>
                     <span className={`text-lg font-bold tabular-nums ${valueClass}`}>{item.value.toLocaleString("is-IS")}</span>
                     {item.unit && <span className="text-[9px] text-slate-400">{item.unit}</span>}
@@ -2504,11 +2509,13 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           const warn = stenOverrideWarning(displayAction, sten);
           return (
             <>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div
+                className="flex items-center gap-1.5 mt-0.5"
+                title={`${lang === "IS" ? "Líðan vs hans eigin grunnlína" : "Wellness vs his own baseline"} — STEN ${sten} (1–10 personal z-scale, ${band.shortLabel})`}
+              >
                 <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ${band.chipBg} ${band.chipText}`}>
-                  STEN {sten}
+                  {lang === "IS" ? "Líðan" : "Wellness"}: {band.shortLabel}
                 </span>
-                <span className={`text-[10px] font-medium ${band.textColor}`}>{band.shortLabel}</span>
               </div>
               {warn && (
                 <div className={`flex items-start gap-1.5 rounded-md px-2 py-1 text-[10px] font-semibold leading-snug ${

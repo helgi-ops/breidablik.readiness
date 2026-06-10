@@ -74,13 +74,16 @@ function ClockRadar({ usual, recent, flagged }: { usual: Record<string, number>;
     return [cx + r * Math.sin(theta), cy - r * Math.cos(theta)];
   };
   const poly = (vec: Record<string, number>) => RADAR_ORDER.map((d) => pt(d, vec).join(",")).join(" ");
-  const recentColor = flagged ? "#e11d48" : "#6366f1";
+  const recentColor = flagged ? "#e11d48" : "#4f46e5";
   return (
     <svg width="184" height="184" viewBox="0 0 184 184">
       {[0.33, 0.66, 1].map((f) => <circle key={f} cx={cx} cy={cy} r={R * f} fill="none" stroke="#e2e8f0" strokeWidth="1" />)}
       {RADAR_ORDER.map((d) => { const idx = Number(d) % 12; const th = idx * 30 * Math.PI / 180; return <line key={d} x1={cx} y1={cy} x2={cx + R * Math.sin(th)} y2={cy - R * Math.cos(th)} stroke="#eef2f7" strokeWidth="1" />; })}
-      <polygon points={poly(usual)} fill="#6366f1" fillOpacity="0.12" stroke="#94a3b8" strokeWidth="1" />
-      <polygon points={poly(recent)} fill="none" stroke={recentColor} strokeWidth="2" />
+      {/* His usual shape = calm grey backdrop (everyone's looks alike — it's only the reference). */}
+      <polygon points={poly(usual)} fill="#94a3b8" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 2" />
+      {/* This week = the hero line. Faint fill + thick stroke + vertex dots so any deviation from his own usual shape pops immediately. */}
+      <polygon points={poly(recent)} fill={recentColor} fillOpacity={flagged ? 0.1 : 0.06} stroke={recentColor} strokeWidth="2.5" strokeLinejoin="round" />
+      {RADAR_ORDER.map((d) => { const [x, y] = pt(d, recent); return <circle key={`rv${d}`} cx={x} cy={y} r="2.2" fill={recentColor} />; })}
       <text x={cx} y={14} textAnchor="middle" className="fill-slate-400 text-[9px]">F</text>
       <text x={cx + R + 8} y={cy + 3} textAnchor="middle" className="fill-slate-400 text-[9px]">R</text>
       <text x={cx} y={cy + R + 14} textAnchor="middle" className="fill-slate-400 text-[9px]">B</text>
@@ -202,8 +205,8 @@ export default function MovementNarrativeModal({ playerId, lang, onClose }: { pl
                           : (IS(lang) ? "Enn að byggja hreyfi-grunnlínuna." : "Still building his movement baseline."))}
                     </p>
                     <p className="mt-1 text-[10px] text-slate-400">
-                      {IS(lang) ? "Fyllt = venjulega · lína = nýlega · F/R/B/L = fram/hægri/aftur/vinstri." : "Filled = usual · line = recent · F/R/B/L = forward/right/back/left."}
-                      {dir.tvd != null ? ` ${IS(lang) ? "Lögunar-breyting" : "Shape change"} ${Math.round(dir.tvd * 100)}%.` : ""}
+                      {IS(lang) ? "Lituð lína + punktar = þessi vika · grátt = hans venjulega lögun · F/R/B/L = fram/hægri/aftur/vinstri." : "Coloured line + dots = this week · grey = his usual shape · F/R/B/L = forward/right/back/left."}
+                      {dir.tvd != null ? ` ${IS(lang) ? "Hve langt frá hans eigin venju" : "How far from his own usual"}: ${Math.round(dir.tvd * 100)}%.` : ""}
                     </p>
                     {dir.flagged && dir.counterfactual && <p className="mt-1 text-[10px] text-slate-400">{dir.counterfactual}</p>}
                   </div>
