@@ -82,11 +82,20 @@ export async function GET(req: NextRequest) {
     byPlayer.set(pid, arr);
   }
 
-  // Group baselines (Phase 3): group key = position when set, else the whole
-  // squad ("_squad"). On data with positions filled this gives per-role norms;
-  // with positions empty it degrades to a squad norm — the same code, so it
-  // upgrades automatically. Used as interpretation context, not to flag.
-  const groupKeyOf = (pid: string) => posById.get(pid) || "_squad";
+  // Group baselines (Phase 3): bucket granular positions into movement
+  // FAMILIES so role norms have enough samples (8 granular roles × ~3 players
+  // is too thin; ~5-6 families give a workable distribution). Players with no
+  // position fall back to the whole squad ("_squad"). Used as interpretation
+  // context, not to flag.
+  const FAMILY: Record<string, string> = {
+    GK: "GK",
+    CB: "DEF_CENTRAL",
+    LB: "FULLBACK", RB: "FULLBACK",
+    CM: "MID_CENTRAL",
+    AM: "ATT_WIDE", LAM: "ATT_WIDE", RAM: "ATT_WIDE",
+    CF: "FORWARD",
+  };
+  const groupKeyOf = (pid: string) => { const p = posById.get(pid); return (p && FAMILY[p]) || "_squad"; };
   const groupAcc = new Map<string, Record<ComponentKey, number[]>>();
   for (const pid of playerIds) {
     const pRows = byPlayer.get(pid);
