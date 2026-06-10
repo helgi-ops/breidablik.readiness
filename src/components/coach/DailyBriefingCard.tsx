@@ -1669,10 +1669,13 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400 font-semibold">
+            {/* Header matches the Today house style (Command Center / Decision
+                Summary / Unfamiliar Load): big uppercase tracking title, with
+                the date + morning-view line as the subtitle. */}
+            <div className="text-lg font-semibold uppercase tracking-[0.18em] text-slate-900">
               {t.title}
             </div>
-            <div className="mt-0.5 text-lg font-semibold text-slate-900 capitalize">
+            <div className="mt-1 text-sm font-medium capitalize text-slate-600">
               {dateHeader}
             </div>
             <div className="mt-0.5 text-xs text-slate-500">{t.subtitle}</div>
