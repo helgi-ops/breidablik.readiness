@@ -57,6 +57,15 @@ export const CATAPULT_IMA_PARAMETERS = [
   "IMA Impacts Band 8 Count",
 ];
 
+// IMA O'Clock directional grid — 12 clock directions × 3 intensities (36 params).
+// Display names exactly as shown in OpenField (settings/parameters), e.g.
+// "IMA 1 O'Clock High". Requested in a SEPARATE fire-and-forget batch so an
+// unrecognised name can't poison the core IMA request. Powers the directional
+// movement-signature (Unfamiliar Load).
+export const CATAPULT_IMA_CLOCK_PARAMETERS: string[] = Array.from({ length: 12 }, (_, i) => i + 1).flatMap(
+  (n) => [`IMA ${n} O'Clock High`, `IMA ${n} O'Clock Medium`, `IMA ${n} O'Clock Low`],
+);
+
 const CATAPULT_BASE_PARAMETERS = [
   "total_distance",
   "velocity_band5_total_distance",
@@ -798,6 +807,19 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
     // IMA fetch failed — continue with base payload
   }
 
+  // IMA O'Clock directional grid — isolated so an unknown name can't break IMA.
+  try {
+    const clockPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_IMA_CLOCK_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, clockPayload);
+  } catch {
+    // clock fetch failed — continue without directional data
+  }
+
   try {
     const metabolicOnlyPayload = await catapultPost("/api/v6/stats", {
       group_by: ["athlete"],
@@ -952,6 +974,19 @@ export async function fetchActivityStatsDetailed(activityId: string): Promise<{
     mergedPayload = mergeStatsPayloads(mergedPayload, imaOnlyPayload);
   } catch (error) {
     imaOnlyError = error instanceof Error ? error.message : "Unknown IMA-only fetch error";
+  }
+
+  // IMA O'Clock directional grid — isolated fire-and-forget.
+  try {
+    const clockPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+      parameters: CATAPULT_IMA_CLOCK_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, clockPayload);
+  } catch {
+    // clock fetch failed — continue without directional data
   }
 
   try {
@@ -1200,6 +1235,19 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
     mergedPayload = mergeStatsPayloads(mergedPayload, imaPayload);
   } catch {
     // IMA fetch failed — continue without
+  }
+
+  // IMA O'Clock directional grid — isolated fire-and-forget.
+  try {
+    const clockPayload = await catapultPost("/api/v6/stats", {
+      group_by: ["athlete"],
+      filters: baseFilters,
+      parameters: CATAPULT_IMA_CLOCK_PARAMETERS,
+      requested_only: true,
+    });
+    mergedPayload = mergeStatsPayloads(mergedPayload, clockPayload);
+  } catch {
+    // clock fetch failed — continue without directional data
   }
 
   // Metabolic display-name fetch with requested_only:true
