@@ -107,11 +107,61 @@ export async function GET(req: NextRequest) {
   }
   items.sort((a, b) => b.score - a.score);
 
+  // Suppress flags the coach has already dismissed for this player + ref_date.
+  let visible = items;
+  let dismissed = 0;
+  if (items.length) {
+    const { data: dis } = await sb
+      .from("unfamiliar_load_dismissals")
+      .select("player_id, ref_date")
+      .eq("team_id", teamId)
+      .in("player_id", items.map((i) => i.player_id));
+    const set = new Set(((dis ?? []) as Array<{ player_id: string; ref_date: string }>).map((d) => `${d.player_id}|${d.ref_date}`));
+    visible = items.filter((i) => !set.has(`${i.player_id}|${i.refDate}`));
+    dismissed = items.length - visible.length;
+  }
+
   return NextResponse.json({
     ok: true,
     refDate,
-    items,
-    summary: { totalPlayers: playerIds.length, drifting: items.length, building },
+    items: visible,
+    summary: { totalPlayers: playerIds.length, drifting: visible.length, building, dismissed },
     note: "Driver-layer movement-drift vs each player's own norm (Unfamiliar Load). Descriptive behaviour signal, not an injury prediction.",
   });
+}
+
+/**
+ * POST — dismiss a movement-drift flag for a player on a given reference date,
+ * with a reason (audit). Body: { player_id, refDate, reason }.
+ */
+export async function POST(req: NextRequest) {
+  const sb = getSupabase();
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return NextResponse.json({ error: "Missing auth" }, { status: 401 });
+  const { data: userRes } = await sb.auth.getUser(token);
+  if (!userRes?.user) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  const userId = userRes.user.id;
+  const { data: prof } = await sb.from("profiles").select("team_id, role").eq("id", userId).maybeSingle();
+  const role = String(prof?.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ error: "Coach role required" }, { status: 403 });
+  const teamId = prof?.team_id as string | null;
+  if (!teamId) return NextResponse.json({ error: "No team" }, { status: 400 });
+
+  const body = await req.json().catch(() => ({}));
+  const playerId = String(body?.player_id ?? "");
+  const refDate = String(body?.refDate ?? "");
+  const reason = body?.reason != null ? String(body.reason).slice(0, 500) : null;
+  if (!playerId || !isIso(refDate)) return NextResponse.json({ error: "player_id and refDate required" }, { status: 400 });
+
+  // The player must belong to the coach's team.
+  const { data: pl } = await sb.from("players").select("id").eq("id", playerId).eq("team_id", teamId).maybeSingle();
+  if (!pl) return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
+
+  const { error } = await sb
+    .from("unfamiliar_load_dismissals")
+    .upsert({ team_id: teamId, player_id: playerId, ref_date: refDate, reason, dismissed_by: userId }, { onConflict: "player_id,ref_date" });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }

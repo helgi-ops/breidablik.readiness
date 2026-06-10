@@ -92,6 +92,7 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import ReadinessLoadQuadrant from "@/components/coach/ReadinessLoadQuadrant";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
@@ -8701,6 +8702,8 @@ export default function CoachPage() {
             playerInjuries={playerInjuryStatus}
             playerDeltas={yesterdayDeltas}
           />
+          {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
+          <UnfamiliarLoadCard lang={lang} date={today} />
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
