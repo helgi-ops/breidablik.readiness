@@ -192,10 +192,10 @@ export function formatAcwrReason(flag: AcwrDriverFlag): string {
   const a = Math.round(flag.acuteMean);
   const c = Math.round(flag.chronicMean);
   if (flag.severity === "high") {
-    return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — high-risk spike. Reduce HSR exposure today.`;
+    return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — sharp load spike, a bigger jump than recent weeks built up to. Consider lighter HSR today.`;
   }
   if (flag.severity === "concern") {
-    return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — elevated load trajectory. Monitor closely.`;
+    return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — load climbing faster than the 28-day base. Worth a look.`;
   }
-  return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — trending toward overload. Watch.`;
+  return `Player Load ACWR ${r} (7d ${a} vs 28d ${c}) — acute load trending above the recent base. Watch.`;
 }

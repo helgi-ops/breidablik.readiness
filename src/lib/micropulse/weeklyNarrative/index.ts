@@ -155,8 +155,8 @@ export function buildWeeklyNarrative(
   if (acwr != null) {
     if (acwr >= 1.5) {
       facts.push(lang === "IS"
-        ? `Lið-ACWR ${acwr.toFixed(2)} — yfir Hulin 2014 spike-þröskuldi (1.5×), aukin meiðslahætta.`
-        : `Team ACWR ${acwr.toFixed(2)} — above the Hulin 2014 spike threshold (1.5×), elevated injury risk.`);
+        ? `Lið-ACWR ${acwr.toFixed(2)} — yfir Hulin 2014 spike-þröskuldi (1.5×): snöggt álagsstökk, meira en síðustu vikur byggðu upp. (ACWR er álagsstýring, ekki meiðslaspá — Impellizzeri 2020.)`
+        : `Team ACWR ${acwr.toFixed(2)} — above the Hulin 2014 spike threshold (1.5×): a sharp load spike, beyond what recent weeks built up to. (ACWR is a workload-management signal, not an injury predictor — Impellizzeri 2020.)`);
     } else if (acwr < 0.8) {
       facts.push(lang === "IS"
         ? `Lið-ACWR ${acwr.toFixed(2)} — undertraining-zone (Gabbett 2016), ætti að setja meiri stimulation inn.`

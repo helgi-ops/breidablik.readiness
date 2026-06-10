@@ -2295,7 +2295,7 @@ const ReadinessLoadDetail: FC<{
                         ? "border-amber-300 bg-amber-50 text-amber-700"
                         : "border-emerald-200 bg-emerald-50 text-emerald-700"
                     }`}
-                    title="Acute:Chronic Workload Ratio (Gabbett 2017). Sweet spot 0.8-1.3. >1.5 = injury risk elevated."
+                    title="Acute:Chronic Workload Ratio (Gabbett 2017). Sweet spot 0.8-1.3; >1.5 = sharp load spike. A workload-management signal, not an injury predictor (Impellizzeri 2020)."
                   >
                     <span className="text-[9px] font-semibold uppercase opacity-70">{t("acwrLabel", lang)}</span>
                     <span className="text-lg font-bold tabular-nums">{row._indoor_acwr_value.toFixed(2)}</span>
