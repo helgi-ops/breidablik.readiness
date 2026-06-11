@@ -151,6 +151,10 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
   // session RPE is auto-derived (average of per-set RPEs) but can be overridden.
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [manualRpe, setManualRpe] = useState<number | null>(null);
+  // Exercise-name typeahead: the library names the client can pick from, plus
+  // which exercise input currently has focus (so we only show one dropdown).
+  const [exerciseOptions, setExerciseOptions] = useState<{ name: string; name_is: string | null }[]>([]);
+  const [activeAuto, setActiveAuto] = useState<number | null>(null);
 
   // Average of every per-set RPE the client has entered, or null if none.
   const allRpes = exercises.flatMap((e) => e.sets.map((s) => s.rpe)).filter((r): r is number => r != null);
@@ -249,6 +253,38 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
   }, [prefillFromPlan, buildPrefill]);
 
   useEffect(() => { void loadExisting(sessionDate); }, [loadExisting, sessionDate]);
+
+  // Load the exercise-name library once (for the typeahead). Optional — if it
+  // fails the input is still a plain free-text field.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/player/exercises`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const json = await res.json();
+        if (res.ok && Array.isArray(json.exercises)) setExerciseOptions(json.exercises);
+      } catch { /* typeahead is a nicety, not required */ }
+    })();
+  }, []);
+
+  /** Up to 8 library matches for a typed query — names STARTING with the query
+   *  first (e.g. "b" → Back Squat, Bench Press…), then names that merely
+   *  contain it. Matches the English name and the Icelandic alias. */
+  const suggestionsFor = (q: string) => {
+    const query = q.trim().toLowerCase();
+    if (query.length < 1) return [] as typeof exerciseOptions;
+    const starts: typeof exerciseOptions = [];
+    const contains: typeof exerciseOptions = [];
+    for (const o of exerciseOptions) {
+      const en = o.name.toLowerCase();
+      const is = (o.name_is ?? "").toLowerCase();
+      if (en === query || is === query) continue; // already an exact pick
+      if (en.startsWith(query) || is.startsWith(query)) starts.push(o);
+      else if (en.includes(query) || is.includes(query)) contains.push(o);
+    }
+    return [...starts, ...contains].slice(0, 8);
+  };
 
   /* ── Mutators ─────────────────────────────────────────────────────── */
 
@@ -383,13 +419,41 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
             <div className={`rounded-xl border p-3 space-y-2 ${meta?.grouped ? "border-indigo-200 bg-indigo-50/30" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-center gap-2">
                 {meta?.grouped && <span className="shrink-0 text-xs font-semibold text-indigo-400">{meta.tag}{meta.idxInGroup + 1}</span>}
-                <input
-                  type="text"
-                  value={ex.name}
-                  placeholder={t.examplePlaceholder}
-                  onChange={(e) => updateExercise(exIdx, { name: e.target.value })}
-                  className="flex-1 rounded-lg border bg-white px-3 py-1.5 text-sm font-medium"
-                />
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={ex.name}
+                    placeholder={t.examplePlaceholder}
+                    autoComplete="off"
+                    onChange={(e) => { updateExercise(exIdx, { name: e.target.value }); setActiveAuto(exIdx); }}
+                    onFocus={() => setActiveAuto(exIdx)}
+                    onBlur={() => setTimeout(() => setActiveAuto((cur) => (cur === exIdx ? null : cur)), 120)}
+                    className="w-full rounded-lg border bg-white px-3 py-1.5 text-sm font-medium"
+                  />
+                  {activeAuto === exIdx && (() => {
+                    const sugg = suggestionsFor(ex.name);
+                    if (sugg.length === 0) return null;
+                    return (
+                      <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        {sugg.map((o) => (
+                          <li key={o.name}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => { updateExercise(exIdx, { name: o.name }); setActiveAuto(null); }}
+                              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50"
+                            >
+                              <span className="font-medium text-slate-800">{o.name}</span>
+                              {o.name_is && o.name_is.toLowerCase() !== o.name.toLowerCase() && (
+                                <span className="ml-2 text-xs text-slate-400">{o.name_is}</span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                </div>
                 <button
                   type="button"
                   onClick={() => removeExercise(exIdx)}
