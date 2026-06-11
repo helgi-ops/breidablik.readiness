@@ -26,6 +26,7 @@ import { buildPrescriptionDecision, type PrescriptionDecision } from "@/lib/micr
 import { applyCoachRules, type FinalRecommendationDecision } from "@/lib/micropulse/rulesEngine";
 import { buildSessionDraft, type SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
 // Session workflow removed (localStorage-only prototype, not in use)
+import PlayerMovementCard from "@/components/player/PlayerMovementCard";
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
@@ -5106,6 +5107,12 @@ export default function PlayerClient() {
                             </div>
                           ) : null;
                         })()}
+
+                        {/* Player-facing IMA movement (jumps, high-intensity
+                            actions, direction changes, high-speed running) vs
+                            the player's own normal — motivating, not a risk
+                            score. */}
+                        <PlayerMovementCard date={gpsDate} lang={lang === "IS" ? "IS" : "EN"} />
                       </div>
                     ) : (
                       <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-sm text-zinc-600">
