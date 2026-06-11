@@ -79,12 +79,12 @@ export async function GET(req: Request) {
   }
 
   // ── 2. Individual training plan ──────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10);
+  // No start_date filter: the overview is meant to show the WHOLE programme,
+  // including one that hasn't started yet (seeing what's coming is the point).
   const { data: plan } = await sb
     .from("individual_training_plans")
     .select("id, plan_name, start_date, end_date, status")
     .eq("player_id", playerId).eq("status", "active")
-    .lte("start_date", today)
     .order("start_date", { ascending: false }).limit(1).maybeSingle();
 
   if (plan) {

@@ -18,6 +18,7 @@ import { downloadPtClientReportPdf, type PtClientReport } from "@/components/tra
 import AutoProgressionCard from "@/components/trainer/AutoProgressionCard";
 import ClientSessionLogCard from "@/components/trainer/ClientSessionLogCard";
 import PlanVisibilityToggle from "@/components/trainer/PlanVisibilityToggle";
+import RemoveClientButton from "@/components/trainer/RemoveClientButton";
 import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
@@ -769,6 +770,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <ClientBreaksManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <RemoveClientButton clientId={client.id} clientName={client.name} lang={isIS ? "IS" : "EN"} onRemoved={fetchClients} />
                       </div>
                     </div>
                   )}
