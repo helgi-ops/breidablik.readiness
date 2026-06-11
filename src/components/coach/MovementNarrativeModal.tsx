@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import RobustnessDrillsSection from "@/components/coach/RobustnessDrillsSection";
+import FootballDrillsSection from "@/components/coach/FootballDrillsSection";
 
 type Metric = { label: string; recent: number | null; mean: number | null; sd: number | null; z: number | null; n: number; trend: number[] };
 type DriverComp = { key: string; label: string; isShare: boolean; recent: number | null; mean: number | null; sd: number | null; z: number | null; n: number; flagged: boolean; trend: number[] };
@@ -221,6 +223,14 @@ export default function MovementNarrativeModal({ playerId, lang, onClose }: { pl
                 </div>
               </div>
             )}
+
+            {/* Individualised robustness drills — capacity-building keyed to
+                his own load demands + asymmetry (distinct from Unfamiliar Load). */}
+            <RobustnessDrillsSection playerId={playerId} lang={lang} />
+
+            {/* Individualised football drills — on-pitch drills whose measured
+                demand profile matches his needs (gap + dominant). */}
+            <FootballDrillsSection playerId={playerId} lang={lang} />
 
             <p className="mt-3 text-[10px] leading-snug text-slate-400">
               {IS(lang)

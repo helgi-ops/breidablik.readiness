@@ -27,6 +27,7 @@ import { applyCoachRules, type FinalRecommendationDecision } from "@/lib/micropu
 import { buildSessionDraft, type SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
 // Session workflow removed (localStorage-only prototype, not in use)
 import PlayerMovementCard from "@/components/player/PlayerMovementCard";
+import PlayerRobustnessCard from "@/components/player/PlayerRobustnessCard";
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
@@ -5123,6 +5124,8 @@ export default function PlayerClient() {
                 </div>
               </details>
             </CardShell>
+
+            <PlayerRobustnessCard lang={lang === "IS" ? "IS" : "EN"} />
 
             {profile?.player_id ? <ValdStatusCard playerId={profile.player_id} date={today} /> : null}
 
