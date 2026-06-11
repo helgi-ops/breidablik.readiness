@@ -95,6 +95,7 @@ export type CatapultSessionMetric = {
   imaTotal?: number | null;
   codEvents?: number | null;
   impacts?: number | null;
+  jumps?: number | null;
   imaDebug?: {
     interestingKeys: string[];
     matched: {
@@ -104,6 +105,7 @@ export type CatapultSessionMetric = {
       codLeft?: string[];
       codRight?: string[];
       impacts: string[];
+      jumps?: string[];
       playerloadPerMin: string[];
       imaTotal: string[];
       codEvents: string[];
@@ -220,6 +222,7 @@ export type NormalizedExternalLoad = {
     imaTotal?: number | null;
     codEvents?: number | null;
     impacts?: number | null;
+    jumps?: number | null;
     // Football Movement Profile (FMP)
     fmpVeryLowS?: number | null;
     fmpLowIntensityS?: number | null;
@@ -303,6 +306,7 @@ export type CatapultSyncResult = {
       ima_total: number | null;
       cod_events: number | null;
       impacts: number | null;
+      jumps: number | null;
       playerload_per_min: number | null;
     };
   }>;

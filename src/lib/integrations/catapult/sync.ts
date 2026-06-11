@@ -178,6 +178,7 @@ function mergeNormalizedRows(rows: AggregatedRow[]): AggregatedRow[] {
     current.externalLoad.imaTotal = sumNullable(current.externalLoad.imaTotal, row.externalLoad.imaTotal);
     current.externalLoad.codEvents = sumNullable(current.externalLoad.codEvents, row.externalLoad.codEvents);
     current.externalLoad.impacts = sumNullable(current.externalLoad.impacts, row.externalLoad.impacts);
+    current.externalLoad.jumps = sumNullable(current.externalLoad.jumps, row.externalLoad.jumps);
     current.externalLoad.imaClock = mergeImaClock(current.externalLoad.imaClock, row.externalLoad.imaClock);
     // Heart Rate: avg HR uses max across sessions as proxy; max HR takes max; zones sum
     current.externalLoad.avgHeartRate = maxNullable(current.externalLoad.avgHeartRate, row.externalLoad.avgHeartRate);
@@ -298,6 +299,7 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_total: row.externalLoad.imaTotal ?? null,
     cod_events: row.externalLoad.codEvents ?? null,
     impacts: row.externalLoad.impacts ?? null,
+    jumps: row.externalLoad.jumps ?? null,
     ima_clock_gen2: row.externalLoad.imaClock ?? null,
     source: "catapult",
     external_athlete_id: row.externalAthleteId,
@@ -475,6 +477,7 @@ async function _syncCatapultDailyMetricsInner(
           ima_total: metric.imaTotal ?? null,
           cod_events: metric.codEvents ?? null,
           impacts: metric.impacts ?? null,
+          jumps: metric.jumps ?? null,
           playerload_per_min: metric.playerLoadPerMinute ?? null,
         },
       });

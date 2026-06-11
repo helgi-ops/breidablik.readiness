@@ -43,8 +43,11 @@ export async function GET(req: Request) {
   const { userId, sb } = a;
 
   const [{ data: library }, { data: assignments }] = await Promise.all([
+    // Shared system templates (owner_user_id IS NULL) PLUS this trainer's own
+    // private programmes. Another trainer's custom programmes stay hidden.
     sb.from("pt_explosive_programmes")
       .select("*")
+      .or(`owner_user_id.is.null,owner_user_id.eq.${userId}`)
       .order("level", { ascending: true })
       .order("phase", { ascending: true }),
     sb.from("pt_explosive_programme_assignments")
@@ -53,7 +56,8 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false }),
   ]);
 
-  return NextResponse.json({ ok: true, library: library ?? [], assignments: assignments ?? [] });
+  // `me` lets the UI tell which programmes are owned by the current trainer.
+  return NextResponse.json({ ok: true, me: userId, library: library ?? [], assignments: assignments ?? [] });
 }
 
 export async function POST(req: Request) {
@@ -78,7 +82,9 @@ export async function POST(req: Request) {
     .from("pt_explosive_programmes")
     .select("id", { count: "exact", head: true })
     .eq("programme_key", programmeKey)
-    .eq("level", level);
+    .eq("level", level)
+    // Only shared templates or the trainer's own programmes are assignable.
+    .or(`owner_user_id.is.null,owner_user_id.eq.${userId}`);
   if (!count || count === 0) {
     return NextResponse.json({ error: "Unknown programmeKey/level combination" }, { status: 400 });
   }
@@ -102,8 +108,28 @@ export async function PATCH(req: Request) {
   const a = await requireCoach(req);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
   const { userId, sb } = a;
-  let body: { assignmentId?: string; currentPhase?: number; status?: string; level?: string; notes?: string; seasonPhase?: string | null; sessionsPerWeek?: number | null };
+  let body: { assignmentId?: string; currentPhase?: number; status?: string; level?: string; notes?: string; seasonPhase?: string | null; sessionsPerWeek?: number | null; programmeKey?: string; ownership?: "mine" | "shared" };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  // ── Ownership toggle ──────────────────────────────────────────────
+  // Mark a trainer-authored programme as private ("mine") or shared. System
+  // templates (is_system = true) can never be privatised; a trainer can only
+  // claim an unowned programme or release one they already own.
+  if (body.programmeKey && (body.ownership === "mine" || body.ownership === "shared")) {
+    const newOwner = body.ownership === "mine" ? userId : null;
+    const { data, error } = await sb.from("pt_explosive_programmes")
+      .update({ owner_user_id: newOwner })
+      .eq("programme_key", body.programmeKey)
+      .eq("is_system", false)
+      .or(`owner_user_id.is.null,owner_user_id.eq.${userId}`)
+      .select("id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: "Not your programme to change (or a system template)" }, { status: 403 });
+    }
+    return NextResponse.json({ ok: true, programmeKey: body.programmeKey, ownership: body.ownership });
+  }
+
   if (!body.assignmentId) return NextResponse.json({ error: "Missing assignmentId" }, { status: 400 });
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.currentPhase) patch.current_phase = body.currentPhase;

@@ -658,8 +658,22 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     ),
   );
 
+  // Impacts — the real per-band counts are `imaimpacts_band{1-8}_count`
+  // (canonical "imaimpactsband{n}count"). We match those EXACTLY so we don't
+  // also sum the per-band averages (`..._average_count[_session]`) or the
+  // unrelated goalkeeper dive-load impact fields (`diveload*_impact_dive_load`).
+  // The display-name "IMA Impacts Band N Count" shares the same canonical but
+  // always reports 0 here (like the IMA clock display names), so it's harmless.
   const impactEntries = preferCountLike(
-    findMatchingEntries(record, (entry) => entry.canonical.includes("ima") && entry.canonical.includes("impact")),
+    findMatchingEntries(record, (entry) => /^imaimpactsband[1-8]count$/.test(entry.canonical)),
+  );
+
+  // Jumps — per-band IMA jump counts `ima_band{1-8}_jump_count` (Niklas /
+  // Catapult Driver-layer signal). We sum the bands and deliberately EXCLUDE
+  // `total_jumps`, which is already the band sum — matching both would double
+  // the count.
+  const jumpEntries = preferCountLike(
+    findMatchingEntries(record, (entry) => /^imaband[1-8]jumpcount$/.test(entry.canonical)),
   );
 
   const directImaTotal = nullIfZero(extractMetric(record, ["ima_total_efforts", "ima_total", "ima_efforts_total"]));
@@ -675,6 +689,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
   const imaCodLeft = nullIfZero(toInteger(sumEntries(codLeftEntries)));
   const imaCodRight = nullIfZero(toInteger(sumEntries(codRightEntries)));
   const impacts = nullIfZero(toInteger(sumEntries(impactEntries)));
+  const jumps = nullIfZero(toInteger(sumEntries(jumpEntries)));
 
   // Per-intensity CoD splits (Bishop 2020 needs intensity-tier asymmetry).
   // Catapult exposes these as "IMA CoD Left High/Medium/Low" — canonical
@@ -733,6 +748,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
     imaTotal,
     codEvents,
     impacts,
+    jumps,
     playerLoadPerMin,
     durationMinutes: durationMinutes != null && durationMinutes > 0 ? Math.round(durationMinutes) : null,
     debug: {
@@ -744,6 +760,7 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
         codLeft: codLeftEntries.map((entry) => entry.key),
         codRight: codRightEntries.map((entry) => entry.key),
         impacts: impactEntries.map((entry) => entry.key),
+        jumps: jumpEntries.map((entry) => entry.key),
         playerloadPerMin: directPlayerLoadPerMin != null ? ["player_load_per_minute"] : durationMinutes != null ? ["duration_minutes"] : [],
         imaTotal: directImaTotal != null ? ["ima_total_efforts"] : [],
         codEvents: directCodEvents != null ? ["cod_events"] : [],
@@ -981,6 +998,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       imaTotal: normalizedIma.imaTotal,
       codEvents: normalizedIma.codEvents,
       impacts: normalizedIma.impacts,
+      jumps: normalizedIma.jumps,
       imaDebug: normalizedIma.debug,
       // Football Movement Profile (FMP) — inertial sensor, works indoors
       // Exact Catapult display names: "FMP Very Low Duration", "FMP Low Duration",
@@ -1179,6 +1197,7 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.imaTotal = sumNullable(current.imaTotal, metric.imaTotal);
     current.codEvents = sumNullable(current.codEvents, metric.codEvents);
     current.impacts = sumNullable(current.impacts, metric.impacts);
+    current.jumps = sumNullable(current.jumps, metric.jumps);
     if (metric.imaDebug?.interestingKeys?.length) {
       current.imaDebug = metric.imaDebug;
     }
@@ -1280,6 +1299,7 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaTotal: metric.imaTotal ?? null,
       codEvents: metric.codEvents ?? null,
       impacts: metric.impacts ?? null,
+      jumps: metric.jumps ?? null,
       imaClock: metric.imaClock ?? null,
       avgHeartRate: metric.avgHeartRate ?? null,
       maxHeartRate: metric.maxHeartRate ?? null,

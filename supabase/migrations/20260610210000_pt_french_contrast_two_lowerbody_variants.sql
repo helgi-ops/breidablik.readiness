@@ -1,0 +1,5 @@
+-- SUPERSEDED / no-op. The French Contrast lower-body variants were initially
+-- created here in pt_explosive_programmes (Starter templates) by mistake. The
+-- intended home is Plan Builder (training_plan_templates) — see
+-- 20260610230000_pt_contrast_training_two_lowerbody_versions.sql. The rows were
+-- removed; this migration intentionally does nothing.
