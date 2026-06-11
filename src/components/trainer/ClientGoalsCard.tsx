@@ -73,9 +73,10 @@ export default function ClientGoalsCard({ clientId, lang, templates, starterCand
       setExperience((j.experience ?? null) as Experience | null);
       setSavedAt(j.updated_at ?? null);
       setDirty(false);
-      // Default collapsed if goals already exist; localStorage overrides.
+      // Goals live in "hide mode" by default to keep the dashboard clean; the
+      // trainer's own Show/Hide choice (localStorage) always wins.
       const stored = typeof window !== "undefined" ? window.localStorage.getItem(`mp:goalscollapsed:${clientId}`) : null;
-      setCollapsed(stored != null ? stored === "1" : loadedGoals.length > 0);
+      setCollapsed(stored != null ? stored === "1" : true);
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); }
     finally { setLoading(false); }
   }, [clientId, authHeader]);

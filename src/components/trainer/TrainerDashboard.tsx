@@ -16,6 +16,7 @@ import MomentumCard from "@/components/player/MomentumCard";
 import PtGamesManager from "./PtGamesManager";
 import { downloadPtClientReportPdf, type PtClientReport } from "@/components/trainer/PtClientReportPdf";
 import AutoProgressionCard from "@/components/trainer/AutoProgressionCard";
+import ClientSessionLogCard from "@/components/trainer/ClientSessionLogCard";
 import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
@@ -743,6 +744,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                             fetchAssignments();
                           }}
                         />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <ClientSessionLogCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <AutoProgressionCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
