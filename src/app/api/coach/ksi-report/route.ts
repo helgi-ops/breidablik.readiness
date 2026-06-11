@@ -58,6 +58,7 @@ type DayMetrics = {
   ima_acc: number; // inertial accelerations
   ima_dec: number; // inertial decelerations
   cod: number;     // inertial change-of-direction events (L+R, all tiers)
+  jumps: number;   // inertial jump count (Catapult IMA)
 };
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
         "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
         "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
         "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
-        "ima_fr_band7_total_distance, ima_fr_band8_total_distance, players!inner(full_name, team_id)",
+        "ima_fr_band7_total_distance, ima_fr_band8_total_distance, jumps, players!inner(full_name, team_id)",
     )
     .eq("source", "catapult")
     .eq("players.team_id", ctx.teamId)
@@ -125,6 +126,7 @@ export async function GET(req: NextRequest) {
         num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
         num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
       ),
+      jumps: Math.round(num(r.jumps)),
     });
   }
 
@@ -150,6 +152,7 @@ export async function GET(req: NextRequest) {
         ima_acc: sum("ima_acc"),
         ima_dec: sum("ima_dec"),
         cod: sum("cod"),
+        jumps: sum("jumps"),
       },
       days: days.map((d) => ({ ...d, max_vel_kmh: Math.round(d.max_vel_kmh * 10) / 10 })),
     };

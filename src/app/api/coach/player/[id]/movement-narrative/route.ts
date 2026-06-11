@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
+    .select("date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, jumps")
     .eq("player_id", playerId)
     .gte("date", windowStart)
     .lte("date", today)
@@ -97,6 +97,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     sprint: { label: "Sprint distance (m)", ...buildMetric((r) => num(r.velocity_band6_total_distance)) },
   };
 
+  // Jumps — a Driver-layer explosive signal (Catapult IMA jump count per day),
+  // compared to the player's own jumping norm. Only surfaced when he actually
+  // has jump history (n > 0), so it degrades cleanly when the data isn't there.
+  const jm = buildMetric((r) => num(r.jumps));
+  const jumps = jm.n > 0 ? { label: "Jumps (count)", ...jm } : null;
+  const jumpsLine = jumps == null || jumps.z == null
+    ? null
+    : jumps.z >= 1 ? `He's jumping more than his usual (jumps ${jumps.z > 0 ? "+" : ""}${jumps.z} SD) — more explosive/aerial work than normal.`
+    : jumps.z <= -1 ? `He's jumping less than his usual (jumps ${jumps.z} SD) — fewer explosive/aerial actions than normal.`
+    : "His jump count is steady — in line with his usual explosive output.";
+
   // Driver components: reuse componentValue per row; share components keep decimals.
   const driverComponents = MOVEMENT_COMPONENTS.map((key: ComponentKey) => {
     const c = sig.components.find((x) => x.key === key) ?? null;
@@ -135,8 +146,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     calibrating: sig.calibrating,
     driftType: sig.driftType,
     engine,
+    jumps,
     driver: { components: driverComponents, totalDistanceZ: sig.totalDistanceZ },
-    narrative: { engineLine, driverLine, summary, suggestedAction: sig.suggestedAction, counterfactual: sig.counterfactual },
+    narrative: { engineLine, driverLine, jumpsLine, summary, suggestedAction: sig.suggestedAction, counterfactual: sig.counterfactual },
     note: "Engine = GPS capacity/volume; Driver = IMA movement quality. Each metric vs the player's own prior norm. Descriptive, not injury-predictive.",
   });
 }

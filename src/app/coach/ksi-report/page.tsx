@@ -16,7 +16,7 @@ type Day = {
   date: string; duration_min: number; total_distance: number; hsr: number; sprint: number;
   player_load: number; accels: number; decels: number; max_vel_kmh: number;
   ima_hsr: number; band5: number; band6: number; band7: number; band8: number;
-  ima_acc: number; ima_dec: number; cod: number;
+  ima_acc: number; ima_dec: number; cod: number; jumps: number;
 };
 type Agg = Omit<Day, "date" | "duration_min" | "cod"> & { cod: number };
 type Player = { player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[] };
@@ -79,7 +79,7 @@ export default function KsiReportPage() {
     dist: IS ? "Vegalengd (km)" : "Dist (km)", hsr: "HSR (m)", sprint: IS ? "Sprettur (m)" : "Sprint (m)",
     acc: "Acc", dec: "Dec", pl: IS ? "Álag (PL)" : "Load (PL)",
     ima: IS ? "IMA háákefð (m)" : "IMA HSR (m)",
-    imaAcc: "IMA Acc", imaDec: "IMA Dec", cod: "IMA CoD",
+    imaAcc: "IMA Acc", imaDec: "IMA Dec", cod: "IMA CoD", jumps: "IMA Jumps",
     perPlayer: IS ? "Sundurliðun per leikmann" : "Per-player breakdown",
     date: IS ? "Dags." : "Date", min: IS ? "Mín" : "Min", noData: IS ? "Engin GPS/IMA gögn á tímabilinu" : "No GPS/IMA data in this window",
     bands: IS ? "IMA bönd 5·6·7·8 (m)" : "IMA bands 5·6·7·8 (m)",
@@ -192,6 +192,7 @@ export default function KsiReportPage() {
                     <th className="px-2 py-1 text-right font-medium text-emerald-700">{t.imaAcc}</th>
                     <th className="px-2 py-1 text-right font-medium text-emerald-700">{t.imaDec}</th>
                     <th className="px-2 py-1 text-right font-medium text-emerald-700">{t.cod}</th>
+                    <th className="px-2 py-1 text-right font-medium text-emerald-700">{t.jumps}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -209,6 +210,7 @@ export default function KsiReportPage() {
                       <td className="px-2 py-1 text-right tabular-nums text-emerald-700">{p.agg.ima_acc || "·"}</td>
                       <td className="px-2 py-1 text-right tabular-nums text-emerald-700">{p.agg.ima_dec || "·"}</td>
                       <td className="px-2 py-1 text-right tabular-nums text-emerald-700">{p.agg.cod || "·"}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-emerald-700">{p.agg.jumps || "·"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -241,6 +243,7 @@ export default function KsiReportPage() {
                     <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.imaAcc}</th>
                     <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.imaDec}</th>
                     <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.cod}</th>
+                    <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.jumps}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -258,6 +261,7 @@ export default function KsiReportPage() {
                       <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{d.ima_acc || "·"}</td>
                       <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{d.ima_dec || "·"}</td>
                       <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{d.cod || "·"}</td>
+                      <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{d.jumps || "·"}</td>
                     </tr>
                   ))}
                 </tbody>

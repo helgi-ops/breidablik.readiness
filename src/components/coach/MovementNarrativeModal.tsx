@@ -18,8 +18,9 @@ type Resp = {
   ok: boolean; name: string | null; position: string | null; refDate?: string; sessions: number;
   baselineDays?: number; calibrating?: boolean; driftType?: string;
   engine: { totalDistance: Metric; hsr: Metric; sprint: Metric } | null;
+  jumps?: Metric | null;
   driver: { components: DriverComp[]; totalDistanceZ: number | null } | null;
-  narrative: { engineLine: string; driverLine: string; summary: string; suggestedAction: string | null; counterfactual: string | null } | null;
+  narrative: { engineLine: string; driverLine: string; jumpsLine?: string | null; summary: string; suggestedAction: string | null; counterfactual: string | null } | null;
   error?: string;
 };
 
@@ -182,6 +183,13 @@ export default function MovementNarrativeModal({ playerId, lang, onClose }: { pl
               </div>
               <p className="mb-1 text-[12px] text-slate-700">{data.narrative.driverLine}</p>
               {data.driver.components.map((c) => <div key={c.key}>{metricRow(c, c.isShare)}</div>)}
+              {data.jumps && (
+                <div className="mt-2 border-t border-slate-200 pt-2">
+                  <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">{IS(lang) ? "Stökk" : "Jumps"}</div>
+                  {data.narrative?.jumpsLine && <p className="mb-1 text-[12px] text-slate-700">{data.narrative.jumpsLine}</p>}
+                  {metricRow(data.jumps)}
+                </div>
+              )}
               {data.narrative.suggestedAction && (
                 <p className="mt-2 text-[12px] text-slate-700"><span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{data.narrative.suggestedAction}</p>
               )}
