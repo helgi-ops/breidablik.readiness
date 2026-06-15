@@ -93,6 +93,7 @@ import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
+import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
@@ -8732,6 +8733,9 @@ export default function CoachPage() {
           />
           {/* Team break / return-to-training banner (declared breaks). */}
           {coachTeamId && <CoachBreakBanner teamId={coachTeamId} lang={lang === "EN" ? "EN" : "IS"} />}
+          {/* Sharp unfamiliar-load spikes — top-of-brief alert (detail in the
+              Unfamiliar Load card below). */}
+          <UnfamiliarSpikeBanner lang={lang} date={today} />
           {/* Daily briefing — Gabbett (2020) Communicate step */}
           <DailyBriefingCard
             today={today}

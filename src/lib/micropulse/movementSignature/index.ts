@@ -99,6 +99,8 @@ export type MovementSignature = {
   drifting: ComponentDrift[];    // flagged subset, most concerning first
   driftType: DriftType;
   score: number;            // ranking magnitude (0 if no drift)
+  peakZ: number;            // largest concerningZ across drifting components (0 if none)
+  spike: boolean;           // a SHARP unfamiliar jump (peakZ >= SPIKE_Z, confident only)
   headline: string | null;  // plain-language one-liner; null = moving like himself
   why: string | null;       // plain "why this matters" line
   counterfactual: string | null;
@@ -265,6 +267,13 @@ export function computeMovementSignature(
   const top = drifting[0] ?? null;
   const score = top ? round((top.concerningZ ?? 0) * (confident ? 1 : 0.6), 2) : 0;
 
+  // Spike = a SHARP unfamiliar jump, not just a drift over the flag threshold.
+  // ~2 SD beyond his own norm is roughly the top ~2.5% of his distribution.
+  // Require a mature baseline so we never call a spike on thin history.
+  const SPIKE_Z = 2.0;
+  const peakZ = top ? round(top.concerningZ ?? 0, 1) : 0;
+  const spike = confident && peakZ >= SPIKE_Z;
+
   let headline: string | null = null;
   let why: string | null = null;
   let counterfactual: string | null = null;
@@ -301,6 +310,8 @@ export function computeMovementSignature(
     drifting,
     driftType,
     score,
+    peakZ,
+    spike,
     headline,
     why,
     counterfactual,

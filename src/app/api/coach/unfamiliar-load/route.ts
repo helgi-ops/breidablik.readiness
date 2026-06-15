@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
   type Item = {
     player_id: string; name: string;
     refDate: string; driftType: string; score: number;
+    spike: boolean; peakZ: number;
     headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
     confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
     totalDistanceZ: number | null;
@@ -141,6 +142,7 @@ export async function GET(req: NextRequest) {
     items.push({
       player_id: pid, name: nameById.get(pid) ?? "Player",
       refDate: sig.date, driftType: sig.driftType, score: sig.score,
+      spike: sig.spike, peakZ: sig.peakZ,
       headline: sig.headline, why: sig.why, counterfactual: sig.counterfactual, suggestedAction: sig.suggestedAction,
       confident: sig.confident, calibrating: sig.calibrating, baselineDays: sig.baselineDays, componentsPresent: sig.componentsPresent,
       totalDistanceZ: sig.totalDistanceZ,
@@ -168,7 +170,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     refDate,
     items: visible,
-    summary: { totalPlayers: playerIds.length, drifting: visible.length, building, dismissed },
+    summary: { totalPlayers: playerIds.length, drifting: visible.length, spikes: visible.filter((i) => i.spike).length, building, dismissed },
     note: "Driver-layer movement-drift vs each player's own norm (Unfamiliar Load). Descriptive behaviour signal, not an injury prediction.",
   });
 }

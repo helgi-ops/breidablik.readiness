@@ -20,11 +20,12 @@ type Driver = { key: string; label: string; z: number | null; today: number; mea
 type Item = {
   player_id: string; name: string; refDate: string;
   driftType: "intensity" | "shape" | "mixed" | string; score: number;
+  spike?: boolean; peakZ?: number;
   headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
   confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
   totalDistanceZ: number | null; groupLabel: "role" | "squad"; drivers: Driver[];
 };
-type Resp = { ok: boolean; refDate: string; items: Item[]; summary: { totalPlayers: number; drifting: number; building: number; dismissed?: number }; error?: string };
+type Resp = { ok: boolean; refDate: string; items: Item[]; summary: { totalPlayers: number; drifting: number; spikes?: number; building: number; dismissed?: number }; error?: string };
 
 const IS = (lang?: string) => (lang ?? "").toUpperCase() === "IS";
 const DRIFT_TINT: Record<string, string> = {
@@ -127,9 +128,16 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                 : "Who's moving differently than usual (from GPS/IMA) — a descriptive signal, not an injury prediction."}
             </CardDescription>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
-            {items.length} {IS(lang) ? "að skoða" : "to look at"}
-          </span>
+          <div className="flex items-center gap-2">
+            {(data.summary.spikes ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
+                ⚡ {data.summary.spikes} {IS(lang) ? "skörp frávik" : (data.summary.spikes === 1 ? "spike" : "spikes")}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
+              {items.length} {IS(lang) ? "að skoða" : "to look at"}
+            </span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
@@ -138,9 +146,14 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
           const isExpanded = !!expanded[it.player_id];
           const isDis = dismissing === it.player_id;
           return (
-            <div key={it.player_id} className="rounded-lg border border-slate-200 p-3">
+            <div key={it.player_id} className={`rounded-lg border p-3 ${it.spike ? "border-rose-300 bg-rose-50/40 ring-1 ring-rose-200" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-900">{it.name}</span>
+                {it.spike && (
+                  <span className="inline-flex items-center gap-1 rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" title={IS(lang) ? `Skarpt frávik: ${it.peakZ} SD yfir hans venju` : `Sharp spike: ${it.peakZ} SD above his norm`}>
+                    ⚡ {IS(lang) ? "Skarpt" : "Spike"}
+                  </span>
+                )}
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${DRIFT_TINT[it.driftType] ?? "bg-slate-100 text-slate-600"}`}>{driftWord(it.driftType, lang)}</span>
                 <span className="text-[10px] text-slate-400" title={IS(lang) ? "Borið saman við hans eigin venjulegu hreyfingu yfir þetta marga æfingadaga." : "Compared to his own usual movement over this many training days."}>
                   {IS(lang) ? `byggt á ${it.baselineDays} æfingadögum` : `based on ${it.baselineDays} training days`}{it.calibrating ? (IS(lang) ? " · enn að læra hans eðlilega" : " · still learning his normal") : ""}
