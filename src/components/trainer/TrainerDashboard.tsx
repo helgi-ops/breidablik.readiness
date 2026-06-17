@@ -19,6 +19,7 @@ import AutoProgressionCard from "@/components/trainer/AutoProgressionCard";
 import ClientSessionLogCard from "@/components/trainer/ClientSessionLogCard";
 import PlanVisibilityToggle from "@/components/trainer/PlanVisibilityToggle";
 import RemoveClientButton from "@/components/trainer/RemoveClientButton";
+import MoveClientSessionControl from "@/components/trainer/MoveClientSessionControl";
 import ClientGoalsCard from "@/components/trainer/ClientGoalsCard";
 import type { TemplateLite } from "@/lib/trainer/goalRecommend";
 import ClientBreaksManager from "./ClientBreaksManager";
@@ -749,6 +750,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <PlanVisibilityToggle clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <MoveClientSessionControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
                       </div>
                       <div className="col-span-2 sm:col-span-5">
                         <ClientSessionLogCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
