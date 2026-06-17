@@ -37,6 +37,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
+import PtReportsCard from "@/components/player/PtReportsCard";
 
 type TodayResp = {
   ok: true;
@@ -172,6 +173,9 @@ export default function ClientTodayPage() {
       {/* Full programme overview — only renders if the coach turned plan
           visibility on for this client (read-only, no loads). */}
       <ClientProgrammeOverview lang={lang === "EN" ? "EN" : "IS"} />
+
+      {/* Performance reports (VALD etc.) — upload + view own reports. */}
+      <PtReportsCard lang={lang === "EN" ? "EN" : "IS"} />
 
       {/* Readiness nudge — stays in the PT shell (returns to /client) instead
           of dropping the client onto the football /team surface. */}
