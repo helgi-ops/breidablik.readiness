@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await ctx.sb
     .from("pt_client_reports")
-    .select("id, title, source, report_date, file_name, file_size, file_path, extracted_status, created_at")
+    .select("id, title, source, report_date, file_name, file_size, file_path, extracted, extracted_status, created_at")
     .eq("player_id", target.playerId)
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
