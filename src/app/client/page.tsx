@@ -36,6 +36,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
+import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 
 type TodayResp = {
   ok: true;
@@ -52,6 +53,8 @@ type TodayResp = {
     weekday_index?: number | null;
     rest_day: boolean;
     next_session_label: string | null;
+    moved_from?: string | null;
+    moved_to?: string | null;
     weeks_per_phase?: number;
     total_phases?: number;
     season_phase?: string | null;
@@ -320,6 +323,17 @@ export default function ClientTodayPage() {
               </Link>
             )}
           </div>
+
+          {/* Move today's session to another day when life gets in the way. */}
+          {((!data.explosive.rest_day && data.explosive.blocks.length > 0) || data.explosive.moved_to) && (
+            <ClientMoveSessionButton
+              lang={lang === "EN" ? "EN" : "IS"}
+              movedTo={data.explosive.moved_to ?? null}
+              movedFrom={data.explosive.moved_from ?? null}
+              endDate={null}
+              onChanged={() => { void load(); }}
+            />
+          )}
 
           {/* Rest day → encouraging note + next session label */}
           {data.explosive.rest_day && (

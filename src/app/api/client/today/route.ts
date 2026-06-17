@@ -128,6 +128,11 @@ export async function GET(req: Request) {
      *  preview of the NEXT scheduled session (1 block) so client can see
      *  what's coming. UI label distinguishes session-today vs preview. */
     blocks: unknown[];
+    /** Session moves (pt_session_reschedules): moved_from = this session was
+     *  moved IN from that day; moved_to = today's natural session was moved
+     *  AWAY to that day (today then reads as a rest day). */
+    moved_from?: string | null;
+    moved_to?: string | null;
     /** Programme length so the client UI can render "Week 4 / 8" correctly
      *  for 8-week starter templates vs 12-week Explosive Power. */
     weeks_per_phase?: number;
@@ -405,15 +410,44 @@ export async function GET(req: Request) {
       const endMs = new Date(plan.end_date + "T00:00:00Z").getTime();
       const totalWeeks = Math.max(weekNumber, Math.ceil((endMs - startMs) / msPerDay / 7));
 
-      const { data: sessionRow } = await sb
+      // Natural session for today (week + weekday).
+      const { data: naturalSessionRow } = await sb
         .from("individual_training_sessions")
-        .select("id, session_name, session_type, day_of_week, week_number")
+        .select("id, session_name")
         .eq("plan_id", plan.id)
         .eq("week_number", weekNumber)
         .eq("day_of_week", isoWeekday)
         .order("sort_order", { ascending: true })
         .limit(1)
         .maybeSingle();
+
+      // Honour client/coach session moves (pt_session_reschedules): a session
+      // moved TO today overrides the natural one; the natural session moved
+      // AWAY leaves today free (reads as a rest day, with a "moved to" note).
+      let sessionRow = (naturalSessionRow as { id: string; session_name: string } | null) ?? null;
+      let movedFrom: string | null = null;
+      let movedTo: string | null = null;
+      const { data: reschedRows } = await sb
+        .from("pt_session_reschedules")
+        .select("session_id, from_date, to_date")
+        .eq("player_id", player.id)
+        .eq("plan_id", plan.id)
+        .or(`from_date.eq.${today},to_date.eq.${today}`);
+      const resched = (reschedRows ?? []) as Array<{ session_id: string; from_date: string; to_date: string }>;
+      const movedIn = resched.find((r) => r.to_date === today) ?? null;
+      const movedAway = resched.find((r) => r.from_date === today) ?? null;
+      if (movedIn) {
+        const { data: mr } = await sb
+          .from("individual_training_sessions")
+          .select("id, session_name")
+          .eq("id", movedIn.session_id)
+          .maybeSingle();
+        sessionRow = (mr as { id: string; session_name: string } | null) ?? null;
+        movedFrom = movedIn.from_date;
+      } else if (movedAway) {
+        sessionRow = null;
+        movedTo = movedAway.to_date;
+      }
 
       const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
 
@@ -477,6 +511,8 @@ export async function GET(req: Request) {
         weekday_index: isoWeekday,
         rest_day: !sessionRow,
         next_session_label: null,
+        moved_from: movedFrom,
+        moved_to: movedTo,
         weeks_per_phase: 1,
         total_phases: totalWeeks,
         blocks: sessionRow
