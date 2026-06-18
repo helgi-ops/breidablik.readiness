@@ -64,6 +64,7 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
   };
 
   const [working, setWorking] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const extract = async (id: string) => {
     setWorking(id); setErr(null);
@@ -78,7 +79,7 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
   };
 
   const confirm = async (id: string, extracted: Extracted) => {
-    setWorking(id);
+    setWorking(id); setNote(null);
     try {
       const token = await authHeader();
       const res = await fetch(`/api/pt/reports/${id}/extract`, {
@@ -86,7 +87,16 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ extracted }),
       });
-      if (res.ok) load();
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const written = j?.vald?.written ?? 0;
+        if (written > 0) {
+          setNote(is
+            ? `${written} ${written === 1 ? "próf" : "próf"} bætt í VALD-prófíl leikmannsins.`
+            : `${written} test${written === 1 ? "" : "s"} added to the player's VALD profile.`);
+        }
+        load();
+      }
     } catch { /* ignore */ }
     finally { setWorking(null); }
   };
@@ -127,6 +137,7 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
       </div>
 
       {err && <div className="mt-2 rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">{err}</div>}
+      {note && <div className="mt-2 rounded bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">{note}</div>}
 
       <div className="mt-3 space-y-1.5">
         {loading && <div className="text-xs text-slate-400">{is ? "Hleð…" : "Loading…"}</div>}

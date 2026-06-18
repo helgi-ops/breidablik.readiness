@@ -14,6 +14,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { ingestConfirmedReportToVald, type ExtractedReport } from "@/lib/integrations/vald/ingestReport";
+import { buildValdDailySnapshot } from "@/lib/micropulse/vald/snapshot";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -120,10 +122,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const a = await requireCoachForReport(req, id);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
+  const { sb, report } = a;
   const body = await req.json().catch(() => ({}));
   const extracted = body?.extracted;
   if (extracted == null) return NextResponse.json({ error: "extracted required" }, { status: 400 });
-  const { error } = await a.sb.from("pt_client_reports").update({ extracted, extracted_status: "confirmed" }).eq("id", id);
+  const { error } = await sb.from("pt_client_reports").update({ extracted, extracted_status: "confirmed" }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, status: "confirmed" });
+
+  // Confirmation is the coach's trust gate — feed the confirmed numbers into the
+  // canonical VALD tables so they power ValdStatusCard / the daily snapshot /
+  // injury-risk alerts, then rebuild today's snapshot so the change shows now.
+  let valdIngest: Awaited<ReturnType<typeof ingestConfirmedReportToVald>> | null = null;
+  try {
+    const nowIso = new Date().toISOString();
+    valdIngest = await ingestConfirmedReportToVald(
+      sb,
+      { id: report.id, player_id: report.player_id, team_id: report.team_id },
+      extracted as ExtractedReport,
+      nowIso,
+    );
+    if (valdIngest.written > 0 && report.team_id) {
+      await buildValdDailySnapshot(report.team_id, report.player_id, nowIso.slice(0, 10), sb).catch(() => null);
+    }
+  } catch (e) {
+    // Don't fail the confirm if the canonical write hiccups — the confirmed
+    // data is already saved on the report; surface the issue for visibility.
+    valdIngest = { written: 0, skipped: 0, byProduct: { forcedecks: 0, nordbord: 0, forceframe: 0 }, notes: [e instanceof Error ? e.message : "VALD ingest failed"] };
+  }
+
+  return NextResponse.json({ ok: true, status: "confirmed", vald: valdIngest });
 }

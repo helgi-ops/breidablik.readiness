@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { VALD_RUNTIME, VALD_THRESHOLDS } from "@/lib/integrations/vald/config";
 import type { ValdDailySnapshot, ValdFlag, ValdFreshnessStatus } from "./types";
@@ -45,8 +46,8 @@ function scoreAsymmetry(asymmetry: number | null, moderate: number, severe: numb
   return { score: 0.85, flag: "green" };
 }
 
-export async function buildValdDailySnapshot(teamId: string, microplayerId: string, snapshotDate: string): Promise<ValdDailySnapshot> {
-  const sb = getSupabaseServer();
+export async function buildValdDailySnapshot(teamId: string, microplayerId: string, snapshotDate: string, client?: SupabaseClient): Promise<ValdDailySnapshot> {
+  const sb = client ?? getSupabaseServer();
   const baselineStart = new Date(`${snapshotDate}T00:00:00.000Z`);
   baselineStart.setUTCDate(baselineStart.getUTCDate() - VALD_THRESHOLDS.baselineWindowDays);
   const baselineDate = baselineStart.toISOString();
