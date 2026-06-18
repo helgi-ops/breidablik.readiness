@@ -14,6 +14,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { buildBodyweightResolver } from "@/lib/client/volumeLoad";
 
 export const runtime = "nodejs";
 
@@ -50,7 +51,7 @@ async function requireTrainerForClient(req: Request, clientId: string) {
   return { sb } as const;
 }
 
-type SetRow = { exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; rpe: number | null; notes: string | null };
+type SetRow = { exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; rpe: number | null; notes: string | null; is_bodyweight: boolean | null };
 type LoadRow = { session_date: string; duration_minutes: number | null; rpe: number | null; session_load: number | null };
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -66,7 +67,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 
   const { data: setRows, error } = await sb
     .from("pt_exercise_set_logs")
-    .select("session_date, exercise_name, set_number, weight_kg, reps, rpe, notes")
+    .select("session_date, exercise_name, set_number, weight_kg, reps, rpe, notes, is_bodyweight")
     .eq("player_id", clientId)
     .gte("session_date", sinceIso)
     .order("session_date", { ascending: false })
@@ -100,6 +101,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     exMap.set(r.exercise_name, arr);
   }
 
+  // Value bodyweight sets with the client's logged body weight (carried forward),
+  // identical to volume-load, so push-ups/pull-ups aren't 0 tonnage here either.
+  const bodyweightAsOf = await buildBodyweightResolver(sb, clientId);
+
   const sessions = dateOrder.slice(0, limit).map((date) => {
     const exMap = byDate.get(date)!;
     let totalSets = 0;
@@ -111,9 +116,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
         reps: s.reps,
         rpe: s.rpe,
         notes: s.notes,
+        is_bodyweight: s.is_bodyweight === true,
       }));
       totalSets += cleanSets.length;
-      for (const s of cleanSets) if (s.weight_kg != null && s.reps != null) volume += s.weight_kg * s.reps;
+      for (const s of cleanSets) {
+        const w = s.is_bodyweight ? bodyweightAsOf(date) : s.weight_kg;
+        if (w != null && s.reps != null) volume += w * s.reps;
+      }
       return { name, sets: cleanSets };
     });
     const load = loadByDate.get(date) ?? null;

@@ -24,6 +24,35 @@ export type VolumeLoad = {
   acwr_status: "low" | "optimal" | "high" | "very_high" | "building";
 };
 
+/**
+ * Build a "what did this athlete weigh on date X" resolver from their logged
+ * body weights, carrying the latest log forward (and using the earliest known
+ * log for dates before the first entry). Returns null only when the athlete has
+ * never logged a body weight. Shared by volume-load and the trainer session
+ * view so bodyweight (BW) sets are valued identically on both sides.
+ */
+export async function buildBodyweightResolver(
+  sb: SupabaseClient,
+  playerId: string,
+): Promise<(date: string) => number | null> {
+  const { data } = await sb
+    .from("client_body_weight_logs")
+    .select("log_date, weight_kg")
+    .eq("player_id", playerId)
+    .order("log_date", { ascending: true });
+  const logs = ((data ?? []) as Array<{ log_date: string; weight_kg: number | null }>)
+    .filter((b) => b.weight_kg != null);
+  return (date: string): number | null => {
+    if (!logs.length) return null;
+    let val: number | null = null;
+    for (const b of logs) {
+      if (b.log_date <= date) val = Number(b.weight_kg);
+      else break;
+    }
+    return val ?? Number(logs[0].weight_kg);
+  };
+}
+
 function dayKey(offsetDaysAgo: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - offsetDaysAgo);
@@ -54,13 +83,18 @@ export async function computeVolumeLoad(
   const since = mondayOffset(WINDOW_WEEKS - 1); // start of the oldest week shown
   const { data } = await sb
     .from("pt_exercise_set_logs")
-    .select("session_date, exercise_name, weight_kg, reps")
+    .select("session_date, exercise_name, weight_kg, reps, is_bodyweight")
     .eq("player_id", playerId)
     .gte("session_date", since);
 
   const rows = ((data ?? []) as Array<{
-    session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null;
+    session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; is_bodyweight: boolean | null;
   }>);
+
+  // Bodyweight sets carry no external weight — substitute the athlete's logged
+  // body weight (carried forward from the latest log on/before the session
+  // date) so push-ups/pull-ups count toward tonnage instead of being 0.
+  const bodyweightAsOf = await buildBodyweightResolver(sb, playerId);
 
   // Build the week buckets (oldest → newest) so empty weeks still show.
   const weekKeys: string[] = [];
@@ -70,8 +104,9 @@ export async function computeVolumeLoad(
   const byDate = new Map<string, number>();
 
   for (const r of rows) {
-    if (r.weight_kg == null || r.reps == null) continue;
-    const vol = Number(r.weight_kg) * Number(r.reps);
+    const effectiveWeight = r.is_bodyweight ? bodyweightAsOf(r.session_date) : r.weight_kg;
+    if (effectiveWeight == null || r.reps == null) continue;
+    const vol = Number(effectiveWeight) * Number(r.reps);
     if (!Number.isFinite(vol) || vol <= 0) continue;
     const wk = weekStart(r.session_date);
     if (byWeek.has(wk)) byWeek.set(wk, (byWeek.get(wk) ?? 0) + vol);

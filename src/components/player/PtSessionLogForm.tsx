@@ -25,6 +25,9 @@ type SetRow = {
   weight_kg: number | null;
   reps: number | null;
   rpe: number | null;
+  /** Performed at bodyweight (no external load). When true, weight_kg is null
+   *  and tonnage substitutes the athlete's logged body weight. */
+  is_bodyweight: boolean;
 };
 type ExerciseDraft = {
   name: string;
@@ -84,6 +87,9 @@ const COPY = {
     weight: "Kg",
     reps: "Endurt.",
     rpe: "RPE",
+    bw: "BW",
+    bwOn: "Eigin þyngd",
+    bwTitle: "Æfing án lóða — notar skráða líkamsþyngd í álagsútreikning",
     notes: "Athugasemd",
     save: "Vista æfingu",
     saving: "Vista…",
@@ -111,6 +117,9 @@ const COPY = {
     weight: "kg",
     reps: "Reps",
     rpe: "RPE",
+    bw: "BW",
+    bwOn: "Bodyweight",
+    bwTitle: "Performed without weights — uses logged body weight in load calc",
     notes: "Notes",
     save: "Save session",
     saving: "Saving…",
@@ -136,7 +145,7 @@ function todayIso(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function emptySet(): SetRow { return { weight_kg: null, reps: null, rpe: null }; }
+function emptySet(): SetRow { return { weight_kg: null, reps: null, rpe: null, is_bodyweight: false }; }
 function emptyExercise(): ExerciseDraft { return { name: "", sets: [emptySet()] }; }
 
 export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillFromPlan = false }: Props) {
@@ -190,7 +199,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
           const reps = parseReps(r.reps);
           drafts.push({
             name: r.exercise,
-            sets: Array.from({ length: nSets }, () => ({ weight_kg: null, reps, rpe: null })),
+            sets: Array.from({ length: nSets }, () => ({ weight_kg: null, reps, rpe: null, is_bodyweight: false })),
             group: r.group ?? null,
             groupMethod: r.group_method ?? null,
             num: r.num ?? null,
@@ -216,6 +225,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
       const rows = ((json.sets ?? []) as Array<{
         session_date: string; exercise_name: string;
         weight_kg: number | null; reps: number | null; rpe: number | null;
+        is_bodyweight?: boolean | null;
         set_number: number;
       }>).filter((r) => r.session_date === forDate);
 
@@ -240,7 +250,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
       for (const r of rows) {
         if (!grouped.has(r.exercise_name)) grouped.set(r.exercise_name, { name: r.exercise_name, sets: [] });
         grouped.get(r.exercise_name)!.sets.push({
-          weight_kg: r.weight_kg, reps: r.reps, rpe: r.rpe,
+          weight_kg: r.weight_kg, reps: r.reps, rpe: r.rpe, is_bodyweight: r.is_bodyweight === true,
         });
       }
       setExercises(Array.from(grouped.values()));
@@ -304,7 +314,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
     setExercises((prev) => prev.map((e, i) => {
       if (i !== exIdx) return e;
       const last = e.sets[e.sets.length - 1];
-      const next: SetRow = last ? { weight_kg: last.weight_kg, reps: last.reps, rpe: last.rpe } : emptySet();
+      const next: SetRow = last ? { weight_kg: last.weight_kg, reps: last.reps, rpe: last.rpe, is_bodyweight: last.is_bodyweight } : emptySet();
       return { ...e, sets: [...e.sets, next] };
     }));
   }
@@ -314,7 +324,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
       if (i !== exIdx) return e;
       const src = e.sets[setIdx];
       if (!src) return e;
-      const copy: SetRow = { weight_kg: src.weight_kg, reps: src.reps, rpe: src.rpe };
+      const copy: SetRow = { weight_kg: src.weight_kg, reps: src.reps, rpe: src.rpe, is_bodyweight: src.is_bodyweight };
       const sets = [...e.sets.slice(0, setIdx + 1), copy, ...e.sets.slice(setIdx + 1)];
       return { ...e, sets };
     }));
@@ -337,7 +347,7 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
         .map((e) => ({
           name: e.name.trim(),
           sets: e.sets.filter((s) =>
-            s.weight_kg !== null || s.reps !== null || s.rpe !== null
+            s.weight_kg !== null || s.reps !== null || s.rpe !== null || s.is_bodyweight
           ),
         }))
         .filter((e) => e.name && e.sets.length > 0);
@@ -479,12 +489,27 @@ export default function PtSessionLogForm({ lang = "IS", date: dateProp, prefillF
                       <tr key={setIdx} className="border-t border-slate-200">
                         <td className="py-1.5 text-slate-500 tabular-nums">{setIdx + 1}</td>
                         <td className="py-1.5">
-                          <input
-                            type="number" step="0.5" min="0"
-                            value={s.weight_kg ?? ""}
-                            onChange={(e) => updateSet(exIdx, setIdx, { weight_kg: e.target.value === "" ? null : Number(e.target.value) })}
-                            className="w-20 rounded-md border bg-white px-2 py-1"
-                          />
+                          <div className="flex items-center gap-1">
+                            {s.is_bodyweight ? (
+                              <span className="inline-flex w-20 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700">{t.bwOn}</span>
+                            ) : (
+                              <input
+                                type="number" step="0.5" min="0"
+                                value={s.weight_kg ?? ""}
+                                onChange={(e) => updateSet(exIdx, setIdx, { weight_kg: e.target.value === "" ? null : Number(e.target.value) })}
+                                className="w-20 rounded-md border bg-white px-2 py-1"
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => updateSet(exIdx, setIdx, { is_bodyweight: !s.is_bodyweight, weight_kg: null })}
+                              aria-pressed={s.is_bodyweight}
+                              title={t.bwTitle}
+                              className={`shrink-0 rounded px-1.5 py-1 text-[10px] font-semibold leading-none ${s.is_bodyweight ? "bg-indigo-600 text-white" : "border border-slate-300 text-slate-500 hover:bg-slate-100"}`}
+                            >
+                              {t.bw}
+                            </button>
+                          </div>
                         </td>
                         <td className="py-1.5">
                           <input

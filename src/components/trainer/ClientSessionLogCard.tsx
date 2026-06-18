@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-type SetEntry = { set_number: number; weight_kg: number | null; reps: number | null; rpe: number | null; notes: string | null };
+type SetEntry = { set_number: number; weight_kg: number | null; reps: number | null; rpe: number | null; notes: string | null; is_bodyweight?: boolean | null };
 type Exercise = { name: string; sets: SetEntry[] };
 type Session = {
   date: string;
@@ -121,7 +121,7 @@ export default function ClientSessionLogCard({ clientId, lang }: { clientId: str
               {ex.sets.map((st) => (
                 <span key={st.set_number} className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] tabular-nums text-slate-700" title={st.notes ?? undefined}>
                   <span className="text-[9px] text-slate-400">{st.set_number}</span>
-                  <span className="font-medium">{st.weight_kg != null ? `${st.weight_kg}kg` : "—"}</span>
+                  <span className="font-medium">{st.is_bodyweight ? "BW" : st.weight_kg != null ? `${st.weight_kg}kg` : "—"}</span>
                   <span className="text-slate-400">×</span>
                   <span className="font-medium">{st.reps ?? "—"}</span>
                   {st.rpe != null && <span className="text-indigo-600">@{st.rpe}</span>}

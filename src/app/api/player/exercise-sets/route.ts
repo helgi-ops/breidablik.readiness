@@ -43,7 +43,7 @@ async function requirePlayer(req: Request) {
   return { sb, userId, playerId: p.id, teamId: p.team_id } as const;
 }
 
-type SetIn = { weight_kg?: number | null; reps?: number | null; rpe?: number | null; notes?: string | null };
+type SetIn = { weight_kg?: number | null; reps?: number | null; rpe?: number | null; notes?: string | null; is_bodyweight?: boolean | null };
 type ExerciseIn = { name: string; sets: SetIn[] };
 
 function isFiniteNumOrNull(v: unknown): v is number | null {
@@ -81,6 +81,7 @@ export async function POST(req: Request) {
     player_id: string; team_id: string; session_date: string;
     exercise_name: string; set_number: number;
     weight_kg: number | null; reps: number | null; rpe: number | null; notes: string | null;
+    is_bodyweight: boolean;
     source: "client";
   }> = [];
 
@@ -96,11 +97,15 @@ export async function POST(req: Request) {
       if (s.rpe != null && (s.rpe < 1 || s.rpe > 10)) {
         return NextResponse.json({ error: `RPE must be 1-10 (${name} set ${i + 1})` }, { status: 400 });
       }
+      // Bodyweight sets carry no external load — null out weight_kg so tonnage
+      // substitutes the athlete's logged body weight (volumeLoad.ts).
+      const isBodyweight = s.is_bodyweight === true;
       rows.push({
         player_id: playerId, team_id: teamId, session_date: sessionDate,
         exercise_name: name, set_number: i + 1,
-        weight_kg: s.weight_kg ?? null, reps: s.reps ?? null, rpe: s.rpe ?? null,
+        weight_kg: isBodyweight ? null : (s.weight_kg ?? null), reps: s.reps ?? null, rpe: s.rpe ?? null,
         notes: (s.notes ?? "").toString().trim() || null,
+        is_bodyweight: isBodyweight,
         source: "client",
       });
     }
