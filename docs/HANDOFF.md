@@ -100,6 +100,18 @@ Open:
 
 ## 4. Other this-session features (shipped, possible follow-ups)
 
+- **Position comparison + playing style** — `/coach/position-comparison` +
+  `/api/coach/position-comparison` (+ `…/narrative`). Compares per-90 GPS+IMA
+  across position GROUPS (CB/FB/CM/AM/CF; GK has no GPS), each tagged with a
+  rule-based archetype from `src/lib/micropulse/positionStyle.ts`
+  (`classifyStyle` — z-scores per-90 metrics vs the population → axes
+  speed/agility/volume/aerial → archetype + driver metrics). Per-player
+  drill-down (own archetype, ★ standouts) classified vs the squad. Reuses the
+  radar + trend-bar SVGs; optional AI overview ("rules decide, AI explains").
+  Validated on real data: CB→aerial, CM→agility/CoD, FB→engine+speed,
+  AM→speed, CF→engine+aerial — football-sensible and data-driven.
+  Follow-ups: refine the single-metric "volume" axis (CF reads as engine);
+  league/position external norms; AI needs `ANTHROPIC_API_KEY`.
 - **Player game report** (agent-facing) — `/coach/player-game-report` +
   `/api/coach/player-game-report` (data) + `…/narrative` (AI text). Per-match
   GPS + IMA for one player, minutes-normalised to **per-90**, with squad
