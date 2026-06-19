@@ -77,7 +77,7 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
     ),
     jumps: r0(num(r.jumps)),
     ima_hsr: num(r.ima_fr_band58_total_distance),
-    top_speed_kmh: num(r.max_velocity), // already km/h
+    top_speed_kmh: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(), // already km/h; drop >45 GPS glitches
   };
 }
 

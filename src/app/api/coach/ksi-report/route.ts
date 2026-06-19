@@ -62,6 +62,9 @@ type DayMetrics = {
 };
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+// Top speed is km/h. The fastest footballers reach ~36 km/h; values above 45
+// are GPS glitches (e.g. one 132 km/h training spike) — drop them to 0.
+const plausibleKmh = (v: number) => (v > 45 ? 0 : v);
 
 export async function GET(req: NextRequest) {
   const ctx = await authenticate(req);
@@ -114,7 +117,7 @@ export async function GET(req: NextRequest) {
       player_load: num(r.total_player_load),
       accels: Math.round(num(r.accelerations)),
       decels: Math.round(num(r.decelerations)),
-      max_vel_kmh: num(r.max_velocity) * 3.6,
+      max_vel_kmh: plausibleKmh(num(r.max_velocity)), // already km/h — do NOT ×3.6; clamp GPS glitches
       ima_hsr: num(r.ima_fr_band58_total_distance),
       band5: num(r.ima_fr_band5_total_distance),
       band6: num(r.ima_fr_band6_total_distance),

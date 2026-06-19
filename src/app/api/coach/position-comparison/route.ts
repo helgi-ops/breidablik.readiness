@@ -63,7 +63,7 @@ function appearanceProfile(r: Record<string, unknown>, minutes: number): { p90: 
       cod: cod * f,
       jumps: num(r.jumps) * f,
     },
-    top_speed: num(r.max_velocity),
+    top_speed: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(), // km/h; drop >45 GPS glitches
   };
 }
 
