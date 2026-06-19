@@ -100,6 +100,20 @@ Open:
 
 ## 4. Other this-session features (shipped, possible follow-ups)
 
+- **Player game report** (agent-facing) — `/coach/player-game-report` +
+  `/api/coach/player-game-report` (data) + `…/narrative` (AI text). Per-match
+  GPS + IMA for one player, minutes-normalised to **per-90**, with squad
+  benchmarks (team avg + percentile/rank) and an optional AI-written physical
+  profile (Claude, labelled "AI", rephrases only the supplied numbers).
+  Data join: `match_schedule` (opponent/comp/home) × `match_player_minutes`
+  (minutes) × `player_external_load_daily` (catapult) on (player_id, date).
+  Print-to-PDF via `window.print()` (same pattern as KSÍ). Nav under Admin.
+  - **Units fix**: `max_velocity` in `player_external_load_daily` is ALREADY
+    km/h — do NOT ×3.6. The KSÍ report (`api/coach/ksi-report/route.ts:117`)
+    still has the ×3.6 bug (shows ~114 km/h); flagged as a separate task.
+  - Follow-ups: position-based benchmarks (only team-wide now); competition
+    filter (a "TEST" friendly currently shows); AI narrative needs
+    `ANTHROPIC_API_KEY` set (untested live, same gate as VALD extraction).
 - **Bodyweight (BW) sets** in the PT strength log (`PtSessionLogForm`): per-set
   "BW" toggle for exercises done without external load. Stored as
   `pt_exercise_set_logs.is_bodyweight` (migration

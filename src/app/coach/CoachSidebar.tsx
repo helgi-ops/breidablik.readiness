@@ -176,6 +176,7 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
   { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
   { href: "/coach/ksi-report",        label: { EN: "KSÍ Report",        IS: "KSÍ skýrsla" } },
+  { href: "/coach/player-game-report", label: { EN: "Player game report", IS: "Leikgögn leikmanns" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
   { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
