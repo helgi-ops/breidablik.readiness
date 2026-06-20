@@ -799,19 +799,22 @@ function composeAttentionExplanation(
   // (3) PL spike — translate the ratio into "% over usual" so the coach
   // doesn't have to interpret "1,73×". Annotate post-match clearly so the
   // coach knows it's expected echo rather than an unplanned overreach.
+  // Post-match neuromuscular + perceived fatigue persist ~24–72 h, heaviest
+  // MD+1 and rebounding by MD+2/MD+3 (Nédélec 2012 / Silva 2018) — so the
+  // coach-facing post-match clauses carry that citation inline.
   if (item.plSpike != null && item.plSpike >= 1.6) {
     const pct = Math.round((item.plSpike - 1) * 100);
     if (postMatch) {
-      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn)`);
-      phraseEN.push(`yesterday's training load was ${pct}% above usual (matches the game)`);
+      phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn — Nédélec 2012)`);
+      phraseEN.push(`yesterday's training load was ${pct}% above usual (matches the game — Nédélec 2012)`);
     } else {
       phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu`);
       phraseEN.push(`yesterday's training load was ${pct}% above usual`);
     }
   } else if (item.composite != null && item.composite >= 0.75 && (item.plSpike == null || item.plSpike < 1.6)) {
     if (postMatch) {
-      phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik)");
-      phraseEN.push("recent days' combined load is high (expected post-match)");
+      phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik — Nédélec 2012)");
+      phraseEN.push("recent days' combined load is high (expected post-match — Nédélec 2012)");
     } else {
       phraseIS.push("samanlagt álag síðustu daga er hátt");
       phraseEN.push("recent days' combined load is high");

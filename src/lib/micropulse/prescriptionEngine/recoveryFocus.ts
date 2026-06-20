@@ -51,6 +51,10 @@ export function buildRecoveryFocusDecision(input: NormalizedPrescriptionInput): 
   }
 
   if (input.dayType === "md+1" || input.dayType === "matchday") {
+    // Post-match recovery follows a fixed time-course (neuromuscular + muscle-
+    // damage markers depressed ~24–72 h, heaviest MD+1) independent of how the
+    // athlete feels, so MD+1/matchday biases recovery focus (Nédélec 2012 /
+    // Silva 2018).
     tags.push("LOW_INTENSITY_AEROBIC", "MOBILITY");
     push(drivers, "day_context", "Post-match recovery context", 7, "risk", null);
   }

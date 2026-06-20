@@ -150,7 +150,7 @@ If everything is clean, say "nothing specific to watch today — just routine se
 
 Answer in 2-3 sentences. Structure:
 - Sentence 1: the dominant signal that pushed today's verdict away from green (e.g. "Sleep dropped to 2/5 versus his usual 4.1 — primary driver", or "Player load yesterday was 73% above his rolling average — primary driver", or "Multiple wellness sub-scores under his personal norm — no single dominant driver"). Name the actual signal and the value.
-- Sentence 2: secondary context — what else is contributing or what makes this more / less concerning (e.g. "It's MD+1 so a post-match echo is expected — readings should rebound by MD+2", or "He's been in this range for 3 days, suggesting a persistent issue rather than a one-off").
+- Sentence 2: secondary context — what else is contributing or what makes this more / less concerning (e.g. "It's MD+1 so a post-match echo is expected — readings should rebound by MD+2 (Nédélec 2012)", or "He's been in this range for 3 days, suggesting a persistent issue rather than a one-off"). When you attribute a dip to post-match residual fatigue, append the inline tag "(Nédélec 2012)" exactly as shown.
 - Sentence 3 (only when meaningful): the single lever most likely to flip the verdict back to green tomorrow (e.g. "A normal night's sleep would likely return him to green", or "Skip the high-intensity block today and he should clear by MD-2").
 
 HARD RULES for this question specifically:

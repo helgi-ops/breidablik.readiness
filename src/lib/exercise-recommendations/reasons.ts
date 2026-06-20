@@ -18,7 +18,9 @@ export const REASON_CODES = {
   MODERATE_EXPLOSIVE: "moderate_explosive",
 
   // ─── Explosive accessory — Phase 3 ──────────────────────────────────────
-  /** Post-match residual fatigue — down-regulate explosive CNS stimulus */
+  /** Post-match residual fatigue — down-regulate explosive CNS stimulus.
+   *  Neuromuscular output + muscle-damage markers stay depressed ~24–72 h
+   *  post-match regardless of how the athlete feels (Nédélec 2012 / Silva 2018). */
   POST_MATCH_RESIDUAL: "post_match_residual",
   /** Dense match schedule — bias toward lower CNS cost option */
   SCHEDULE_CONGESTION_EXPLOSIVE: "schedule_congestion_explosive",
