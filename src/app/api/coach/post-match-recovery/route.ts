@@ -48,6 +48,15 @@ const normColor = (c: unknown): "green" | "yellow" | "red" | null => {
   const s = String(c ?? "").toLowerCase();
   return s === "green" || s === "yellow" || s === "red" ? s : null;
 };
+const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+// IMA mechanical-load weights. High-intensity decelerations are the primary
+// muscle-damage / fatigue driver post-match, so decel leads the composite
+// (McBurnie 2022; Harper 2019); accel/CoD/jumps add the rest of the eccentric
+// + landing demand. The composite is z-scored across the players who played,
+// so it reads as a RELATIVE high/mid/low mechanical dose for that match.
+const LOAD_W = { decel: 1.0, accel: 0.6, cod: 0.4, jumps: 0.3 };
+const LOAD_W_SUM = LOAD_W.decel + LOAD_W.accel + LOAD_W.cod + LOAD_W.jumps;
 
 export async function GET(req: NextRequest) {
   const ctx = await authenticate(req);
@@ -99,19 +108,103 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── IMA mechanical match-load (the "dose" that predicts the MD+1 echo) ──
+  type RawLoad = { decel: number; accel: number; cod: number; jumps: number };
+  const rawLoad = new Map<string, RawLoad>();
+  if (playerIds.length) {
+    const { data: ld } = await supabase
+      .from("player_external_load_daily")
+      .select("player_id, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+      .eq("source", "catapult").in("player_id", playerIds).eq("date", match.match_date);
+    for (const r of (ld ?? []) as Array<Record<string, unknown>>) {
+      const cod = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
+        num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
+      rawLoad.set(String(r.player_id), { decel: num(r.ima_decel), accel: num(r.ima_accel), cod, jumps: num(r.jumps) });
+    }
+  }
+  // Cohort mean/sd per metric (players with load only) → z-composite tiers.
+  const loadVals = Array.from(rawLoad.values());
+  const stat = (k: keyof RawLoad) => {
+    const xs = loadVals.map((v) => v[k]);
+    const n = xs.length || 1;
+    const mean = xs.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
+    return { mean, sd };
+  };
+  const stats = { decel: stat("decel"), accel: stat("accel"), cod: stat("cod"), jumps: stat("jumps") };
+  const loadScore = (r: RawLoad): number => {
+    const z = (k: keyof RawLoad) => (stats[k].sd > 0 ? (r[k] - stats[k].mean) / stats[k].sd : 0);
+    return (LOAD_W.decel * z("decel") + LOAD_W.accel * z("accel") + LOAD_W.cod * z("cod") + LOAD_W.jumps * z("jumps")) / LOAD_W_SUM;
+  };
+
+  // ── Objective neuromuscular layer: CMJ (ForceDecks) vs pre-match baseline ──
+  // Nédélec's actual recovery marker — quantifies neuromuscular fatigue the
+  // player may not feel. Baseline = median jump height in the 42 d before the
+  // match (≥3 valid tests); per offset day we compare that day's CMJ to it.
+  // RSI-mod is the more fatigue-sensitive metric (Gathercole 2015) and is
+  // surfaced too. Sparse until MD+1 jump-testing is routine → "—" otherwise.
+  type Cmj = { jhPct: number | null; rsiPct: number | null };
+  const cmjByKey = new Map<string, Cmj>();
+  let cmjTestedTotal = 0;
+  if (playerIds.length && offsets.length) {
+    const baseStart = addDays(match.match_date, -42);
+    const { data: fd } = await supabase
+      .from("vald_forcedecks_results")
+      .select("microplayer_id, test_timestamp, jump_height_cm, rsi_mod, is_valid")
+      .eq("team_id", teamId).in("microplayer_id", playerIds)
+      .gte("test_timestamp", `${baseStart}T00:00:00Z`)
+      .lte("test_timestamp", `${offsets[offsets.length - 1].date}T23:59:59Z`).limit(4000);
+    const byPlayer = new Map<string, Array<{ date: string; jh: number | null; rsi: number | null }>>();
+    for (const r of (fd ?? []) as Array<{ microplayer_id: string; test_timestamp: string; jump_height_cm: number | null; rsi_mod: number | null; is_valid: boolean | null }>) {
+      if (r.is_valid === false) continue;
+      const id = String(r.microplayer_id);
+      if (!byPlayer.has(id)) byPlayer.set(id, []);
+      byPlayer.get(id)!.push({ date: String(r.test_timestamp).slice(0, 10), jh: r.jump_height_cm == null ? null : Number(r.jump_height_cm), rsi: r.rsi_mod == null ? null : Number(r.rsi_mod) });
+    }
+    const median = (xs: number[]) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const i = Math.floor(s.length / 2); return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2; };
+    const pct = (test: number | null, base: number | null) => (test != null && base != null && base > 0 ? Math.round(((test - base) / base) * 1000) / 10 : null);
+    for (const [id, tests] of byPlayer.entries()) {
+      const baseRows = tests.filter((t) => t.date >= baseStart && t.date < match.match_date);
+      const baseJhVals = baseRows.map((t) => t.jh).filter((v): v is number => v != null);
+      const baseRsiVals = baseRows.map((t) => t.rsi).filter((v): v is number => v != null);
+      const baseJh = baseJhVals.length >= 3 ? median(baseJhVals) : null;
+      const baseRsi = baseRsiVals.length >= 3 ? median(baseRsiVals) : null;
+      for (const o of offsets) {
+        const day = tests.filter((t) => t.date === o.date);
+        if (!day.length) continue;
+        cmjTestedTotal++;
+        cmjByKey.set(`${id}|${o.key}`, {
+          jhPct: pct(median(day.map((t) => t.jh).filter((v): v is number => v != null)), baseJh),
+          rsiPct: pct(median(day.map((t) => t.rsi).filter((v): v is number => v != null)), baseRsi),
+        });
+      }
+    }
+  }
+
   const md2Date = offsets.find((o) => o.key === "MD+2")?.date ?? null;
   const players = played
     .map((m) => {
       const info = nameById.get(m.player_id) ?? { name: "—", position: null };
       const colors: Record<string, "green" | "yellow" | "red" | null> = {};
       for (const o of offsets) colors[o.key] = colorByKey.get(`${m.player_id}|${o.date}`) ?? null;
+      const cmj: Record<string, Cmj | null> = {};
+      for (const o of offsets) cmj[o.key] = cmjByKey.get(`${m.player_id}|${o.key}`) ?? null;
       const md2 = md2Date ? colorByKey.get(`${m.player_id}|${md2Date}`) ?? null : null;
-      // Rebounded: green by MD+2. Lagging: MD+2 exists and is NOT green.
       const reboundedByMd2 = md2 === "green";
       const lagging = md2 != null && md2 !== "green";
-      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, reboundedByMd2, lagging, md2 };
+      // Mechanical dose: decel-weighted z-composite → high/mid/low tier.
+      const rl = rawLoad.get(m.player_id) ?? null;
+      const score = rl ? Math.round(loadScore(rl) * 100) / 100 : null;
+      const tier: "high" | "mid" | "low" | null = score == null ? null : score >= 0.4 ? "high" : score <= -0.4 ? "low" : "mid";
+      const load = rl ? { decel: Math.round(rl.decel), score, tier } : null;
+      // Cross-tab: heavy echo (high dose, still flagged) vs not-post-match
+      // (low dose, flagged → look elsewhere).
+      const heavyEcho = lagging && tier === "high";
+      const notPostMatch = lagging && tier === "low";
+      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch };
     })
-    .sort((a, b) => Number(b.lagging) - Number(a.lagging) || b.minutes - a.minutes);
+    // Lagging first, then by mechanical dose (the McBurnie driver), then minutes.
+    .sort((a, b) => Number(b.lagging) - Number(a.lagging) || (b.load?.score ?? -Infinity) - (a.load?.score ?? -Infinity) || b.minutes - a.minutes);
 
   // Cohort recovery curve: colour counts per offset day.
   const byOffset: Record<string, { green: number; yellow: number; red: number; none: number }> = {};
@@ -131,6 +224,6 @@ export async function GET(req: NextRequest) {
     matches: matches.map((m) => ({ date: m.match_date, opponent: m.opponent, is_home: m.is_home })),
     offsets,
     players,
-    summary: { played: players.length, by_offset: byOffset, rebounded_by_md2: reboundedByMd2, with_md2: withMd2, lagging: players.filter((p) => p.lagging).length },
+    summary: { played: players.length, by_offset: byOffset, rebounded_by_md2: reboundedByMd2, with_md2: withMd2, lagging: players.filter((p) => p.lagging).length, cmj_tested: cmjTestedTotal },
   });
 }

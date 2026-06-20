@@ -14,9 +14,13 @@ import { useLang } from "@/lib/lang";
 
 type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
+type LoadTier = "high" | "mid" | "low" | null;
+type Cmj = { jhPct: number | null; rsiPct: number | null };
 type Player = {
   id: string; name: string; position: string | null; minutes: number;
-  colors: Record<string, Color>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
+  colors: Record<string, Color>; cmj: Record<string, Cmj | null>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
+  load: { decel: number; score: number | null; tier: LoadTier } | null;
+  heavyEcho: boolean; notPostMatch: boolean;
 };
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
@@ -24,7 +28,7 @@ type Resp = {
   matches: Array<{ date: string; opponent: string | null; is_home: boolean | null }>;
   offsets: Offset[];
   players: Player[];
-  summary: { played: number; by_offset: Record<string, Counts>; rebounded_by_md2: number; with_md2: number; lagging: number } | null;
+  summary: { played: number; by_offset: Record<string, Counts>; rebounded_by_md2: number; with_md2: number; lagging: number; cmj_tested: number } | null;
 };
 
 const CELL: Record<string, string> = {
@@ -32,6 +36,9 @@ const CELL: Record<string, string> = {
 };
 const BAR: Record<string, string> = {
   green: "bg-emerald-500", yellow: "bg-amber-400", red: "bg-red-500", none: "bg-slate-200",
+};
+const TIER: Record<string, string> = {
+  high: "bg-orange-100 text-orange-700", mid: "bg-slate-100 text-slate-600", low: "bg-slate-50 text-slate-400",
 };
 
 export default function PostMatchRecoveryPage() {
@@ -72,14 +79,22 @@ export default function PostMatchRecoveryPage() {
     lagging: IS ? "hanga flaggaðir á MD+2" : "still flagged at MD+2",
     curve: IS ? "Endurheimtarkúrfa liðsins" : "Squad recovery curve",
     player: IS ? "Leikmaður" : "Player", min: IS ? "Mín" : "Min",
+    load: IS ? "IMA-álag" : "IMA load",
+    loadHint: IS ? "Decel-vegið vélrænt álag úr leiknum (z vs liðið) — McBurnie 2022" : "Decel-weighted mechanical match load (z vs squad) — McBurnie 2022",
+    heavyEcho: IS ? "þungt bergmál" : "heavy echo",
+    notPM: IS ? "ekki post-match?" : "not post-match?",
     home: "H", away: IS ? "Ú" : "A",
     none: IS ? "engin skráning" : "no check-in",
     legend: IS ? "Grænn / Gulur / Rauður = canonical readiness þann dag" : "Green / Yellow / Red = canonical readiness that day",
     note: IS
-      ? "Eftir leik er taugavöðva- og upplifuð þreyta þyngst á MD+1 og á að ná sér fyrir MD+2/MD+3 (Nédélec 2012). Leikmaður sem hangir flaggaður á MD+2 — eða spilaði fáar mínútur — er líklega með annað en post-match bergmál."
-      : "Post-match neuromuscular + perceived fatigue is heaviest at MD+1 and should rebound by MD+2/MD+3 (Nédélec 2012). A player still flagged at MD+2 — or one who played few minutes — likely has something other than a post-match echo.",
+      ? "Eftir leik er taugavöðva- og upplifuð þreyta þyngst á MD+1 og á að ná sér fyrir MD+2/MD+3 (Nédélec 2012). IMA-álagið er skammturinn — háákefðar hemlanir spá best fyrir um vöðvaskemmd (McBurnie 2022). Hátt IMA-álag + enn flaggaður á MD+2 = raunverulegt þungt bergmál; lágt álag + flaggaður = líklega annað en post-match."
+      : "Post-match neuromuscular + perceived fatigue is heaviest at MD+1 and should rebound by MD+2/MD+3 (Nédélec 2012). IMA load is the \"dose\": high-intensity decelerations best predict muscle damage (McBurnie 2022). High IMA load + still flagged at MD+2 = a genuine heavy echo; low load + flagged = likely something other than post-match.",
     print: "PDF",
     noData: IS ? "Engin leikgögn." : "No match data.",
+    cmjHave: IS ? "objektíf CMJ-mæling skráð á endurheimtardögum" : "objective CMJ measurements logged on recovery days",
+    cmjNone: IS
+      ? "Engin CMJ-mæling á MD+1–MD+N. Litur er upplifunar-proxy; CMJ (stökkhæð / RSI-mod vs baseline) er objektíva taugavöðva-mælingin (Nédélec 2012). Bættu ~30 sek ForceDecks-stökki á MD+1 við til að kveikja á þessu laginu."
+      : "No CMJ logged on MD+1–MD+N. Colour is a perceptual proxy; CMJ (jump height / RSI-mod vs baseline) is the objective neuromuscular marker (Nédélec 2012). Add a ~30 s ForceDecks jump on MD+1 to light up this layer.",
   };
 
   const match = data?.match;
@@ -164,6 +179,7 @@ export default function PostMatchRecoveryPage() {
                   <tr className="text-[10px] uppercase tracking-wide text-slate-400">
                     <th className="px-1 py-1 text-left font-medium">{t.player}</th>
                     <th className="px-1 py-1 text-right font-medium">{t.min}</th>
+                    <th className="px-1 py-1 text-center font-medium" title={t.loadHint}>{t.load}</th>
                     {offsets.map((o) => <th key={o.key} className="px-1 py-1 text-center font-medium">{o.key}</th>)}
                   </tr>
                 </thead>
@@ -172,16 +188,33 @@ export default function PostMatchRecoveryPage() {
                     <tr key={p.id} className={`border-t border-slate-100 ${p.lagging ? "bg-red-50/40" : ""}`}>
                       <td className="px-1 py-1.5">
                         <span className="font-medium text-slate-800">{p.name}</span>
-                        {p.lagging && <span className="ml-1 text-red-500" title={t.lagging}>⚠</span>}
+                        {p.heavyEcho
+                          ? <span className="ml-1 rounded bg-red-100 px-1 py-0.5 text-[9px] font-semibold text-red-700" title={t.lagging}>⚠ {t.heavyEcho}</span>
+                          : p.notPostMatch
+                            ? <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-700">{t.notPM}</span>
+                            : p.lagging ? <span className="ml-1 text-red-500" title={t.lagging}>⚠</span> : null}
                         <span className="ml-1 text-[10px] text-slate-400">{p.position}</span>
                       </td>
                       <td className="px-1 py-1.5 text-right tabular-nums text-slate-500">{p.minutes}</td>
+                      <td className="px-1 py-1.5 text-center">
+                        {p.load
+                          ? <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${TIER[p.load.tier ?? "mid"]}`} title={`decel ${p.load.decel} · z ${p.load.score}`}>{p.load.decel}</span>
+                          : <span className="text-[10px] text-slate-300">—</span>}
+                      </td>
                       {offsets.map((o) => {
                         const c = p.colors[o.key] ?? "none";
+                        const cmj = p.cmj?.[o.key] ?? null;
+                        const pctVal = cmj ? (cmj.rsiPct ?? cmj.jhPct) : null;
                         return (
                           <td key={o.key} className="px-1 py-1.5">
-                            <div className="mx-auto flex items-center justify-center">
+                            <div className="mx-auto flex flex-col items-center justify-center gap-0.5">
                               <span className={`inline-block h-4 w-4 rounded-full ${CELL[c]}`} title={c === "none" ? t.none : `${o.key}: ${c}`} />
+                              {cmj ? (
+                                <span className={`text-[9px] font-semibold tabular-nums ${cmjTone(pctVal)}`}
+                                  title={`CMJ vs baseline — ${cmj.jhPct != null ? `hæð ${fmtPct(cmj.jhPct)}` : ""}${cmj.rsiPct != null ? ` · RSI ${fmtPct(cmj.rsiPct)}` : ""}`}>
+                                  {fmtPct(pctVal)}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                         );
@@ -193,11 +226,17 @@ export default function PostMatchRecoveryPage() {
             </div>
           </div>
 
+          {/* Objective neuromuscular layer status (CMJ) */}
+          <div className={`pmr-sec rounded-lg border p-3 text-[12px] leading-relaxed ${summary.cmj_tested > 0 ? "border-emerald-100 bg-emerald-50/40 text-slate-700" : "border-amber-100 bg-amber-50/50 text-slate-700"}`}>
+            <span className="font-semibold">CMJ {summary.cmj_tested > 0 ? "✓" : "⚠"} </span>
+            {summary.cmj_tested > 0 ? `${summary.cmj_tested} ${t.cmjHave}` : t.cmjNone}
+          </div>
+
           <div className="pmr-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
             {t.note}
           </div>
           <div className="border-t border-slate-200 pt-2 text-[9px] text-slate-400">
-            MicroPulse · {IS ? "Litur = canonical readiness (readiness_entries.color)" : "Colour = canonical readiness (readiness_entries.color)"} · Nédélec 2012
+            MicroPulse · {IS ? "Litur = canonical readiness (readiness_entries.color) · IMA-álag = decel-vegið z vs liðið" : "Colour = canonical readiness (readiness_entries.color) · IMA load = decel-weighted z vs squad"} · Nédélec 2012 · McBurnie 2022 · Gathercole 2015
           </div>
         </div>
       )}
@@ -206,4 +245,15 @@ export default function PostMatchRecoveryPage() {
       )}
     </div>
   );
+}
+
+function fmtPct(v: number | null): string {
+  if (v == null) return "·";
+  return `${v > 0 ? "+" : ""}${v}%`;
+}
+function cmjTone(v: number | null): string {
+  if (v == null) return "text-slate-400";
+  if (v <= -10) return "text-red-600";
+  if (v <= -5) return "text-amber-600";
+  return "text-emerald-600";
 }
