@@ -15,7 +15,7 @@ import { ProfileRadar, MatchTrendBars, type RadarMetric } from "@/components/coa
 
 type MetricKey = "distance" | "hsr" | "sprint" | "top_speed" | "accel" | "decel" | "cod" | "jumps";
 type Tag = { key: string; en: string; is: string };
-type Style = { primary: Tag; secondary: Tag | null; drivers: Array<{ metric: MetricKey; z: number; en: string; is: string }> };
+type Style = { primary: Tag; secondary: Tag | null; drivers: Array<{ metric: MetricKey; z: number; en: string; is: string }>; axisScores: Record<string, number> };
 type Member = {
   id: string; name: string; position: string | null; appearances: number;
   profile: Record<MetricKey, number>; style: Style; standout: boolean;
@@ -82,6 +82,20 @@ export default function PositionComparisonPage() {
     return { bars, avg: data.squadAvg[m], unit: META[m].unit };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, groups, metric, IS]);
+
+  // Movement-DNA fingerprint per position: a softmax over the SAME four style-
+  // axis scores the archetype is built from (style.axisScores), normalised to
+  // 100% so it reads as one stacked bar per position (same visual as the
+  // recovery curve). Using the archetype's own axes guarantees the largest
+  // slice always matches the position's playing-style tag.
+  const dna = useMemo(() => {
+    return groups.map((g) => {
+      const scores = STYLE_AXES.map((ax) => ({ ...ax, z: g.style.axisScores?.[ax.key] ?? 0 }));
+      const exps = scores.map((s) => Math.exp(s.z));
+      const sum = exps.reduce((a, b) => a + b, 0) || 1;
+      return { key: g.key, shares: scores.map((s, i) => ({ ...s, pct: (exps[i] / sum) * 100 })) };
+    });
+  }, [groups]);
 
   async function generateNarrative() {
     if (!data) return;
@@ -164,6 +178,38 @@ export default function PositionComparisonPage() {
             </div>
           )}
 
+          {/* Movement DNA by position — one stacked bar per position */}
+          {dna.length > 0 && (
+            <div className="pc-section rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Hreyfi-DNA eftir stöðu" : "Movement DNA by position"}</div>
+              <div className="space-y-1.5">
+                {dna.map((row) => (
+                  <div key={row.key} className="flex items-center gap-2">
+                    <div className="w-10 shrink-0 text-[11px] font-semibold tabular-nums text-slate-600">{row.key}</div>
+                    <div className="flex h-5 flex-1 overflow-hidden rounded">
+                      {row.shares.map((s) => s.pct > 0 ? (
+                        <div key={s.key} className="flex items-center justify-center text-[9px] font-semibold text-white"
+                          style={{ width: `${s.pct}%`, background: s.color }}
+                          title={`${IS ? s.is : s.en}: ${Math.round(s.pct)}%`}>
+                          {s.pct >= 12 ? `${Math.round(s.pct)}%` : ""}
+                        </div>
+                      ) : null)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {STYLE_AXES.map((ax) => (
+                  <span key={ax.key} className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: ax.color }} />
+                    {IS ? ax.is : ax.en}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hlutfallslegt vægi hreyfi-ása (úr percentile vs liðið) — stærsta sneið = leikstíll stöðunnar." : "Relative emphasis of movement axes (from squad percentiles) — the largest slice = the position's playing style."}</div>
+            </div>
+          )}
+
           {/* Position cards */}
           <div className="grid gap-4 md:grid-cols-2">
             {groups.map((g) => {
@@ -217,6 +263,13 @@ export default function PositionComparisonPage() {
     </div>
   );
 }
+
+const STYLE_AXES: Array<{ key: string; en: string; is: string; color: string }> = [
+  { key: "speed", en: "Speed", is: "Hraði", color: "#0ea5e9" },
+  { key: "agility", en: "Agility", is: "Snerpa", color: "#8b5cf6" },
+  { key: "volume", en: "Engine", is: "Vél", color: "#10b981" },
+  { key: "aerial", en: "Aerial", is: "Loftógn", color: "#f59e0b" },
+];
 
 function chipTone(key: string): string {
   switch (key) {
