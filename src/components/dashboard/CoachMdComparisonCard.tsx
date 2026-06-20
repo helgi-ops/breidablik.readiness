@@ -13,7 +13,7 @@ type Lang = "IS" | "EN";
 const COPY = {
   IS: {
     title: "MD Samanburður",
-    subtitle: "Borin saman æfing dagsins við söguleg meðaltöl fyrir sama MD dag",
+    subtitle: "Æfing dagsins vs YKKAR sögulega meðaltal fyrir sama MD-dag (vs ykkar venja — ekki leik-krafa; sjá „Train like you Play“ fyrir vs leik-kröfu).",
     noData: "Engin Catapult gögn fundust fyrir þennan dag.",
     noDataSub: "Samstilltu Catapult gögn eða veldu dag með skráðum gögnum.",
     loading: "Hleð MD samanburði...",
@@ -54,7 +54,7 @@ const COPY = {
   },
   EN: {
     title: "MD Comparison",
-    subtitle: "Comparing today's session against historical averages for the same MD day",
+    subtitle: "Today's session vs your OWN historical average for the same MD-day (vs your norm — not match demand; see “Train like you Play” for vs match demand).",
     noData: "No Catapult data found for this date.",
     noDataSub: "Sync Catapult data or select a date with recorded sessions.",
     loading: "Loading MD comparison...",

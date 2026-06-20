@@ -160,7 +160,7 @@ export default function TrainLikeYouPlayPage() {
           {microcycle.length > 0 && (
             <div className="tlp-sec rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Vikuskipulag eftir MD-degi" : "Weekly periodization by MD-day"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Vikuskipulag eftir MD-degi (% af leik-kröfu)" : "Weekly periodization by MD-day (% of match demand)"}</div>
                 <select value={microKey} onChange={(e) => setMicroMetric(e.target.value as MetricKey)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
                   {metricKeys.map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}</option>)}
                 </select>
@@ -242,7 +242,7 @@ export default function TrainLikeYouPlayPage() {
               : "Built on the Catapult Football Movement Profile (IMU) — it captures dynamic, multi-directional movement (not just straight-line GPS speed) and works indoors. Training should prepare for the match movement profile (Gabbett 2016); below ~50% of match demand in the high-intensity categories = elevated risk (Malone 2018, Duhig 2016). FMP carries its own session duration, so per-90 intensity is computable even when GPS duration is missing."}
           </div>
           <div className="text-[9px] text-slate-400">
-            MicroPulse · {IS ? `FMP/IMA per-90 · topp-3 æfingar vs ${baseline === "own" ? "eigin leik-kröfu" : "stöðu-kröfu (stöðu-meðaltal)"} · hópað eftir stöðu` : `FMP/IMA per-90 · top-3 training vs ${baseline === "own" ? "own match demand" : "position demand (group average)"} · grouped by position`} · Catapult FMP · Gabbett 2016 · Malone 2018 · Duhig 2016
+            MicroPulse · {IS ? `FMP/IMA per-90 · topp-3 æfingar vs ${baseline === "own" ? "eigin leik-kröfu" : "stöðu-kröfu (stöðu-meðaltal)"} · hópað eftir stöðu · leik-krafa = per-90 yfir leiki ≥20 mín (athugið: Pre-session/Progressive overload nota ≥75 mín heila leiki)` : `FMP/IMA per-90 · top-3 training vs ${baseline === "own" ? "own match demand" : "position demand (group average)"} · grouped by position · match demand = per-90 over appearances ≥20 min (note: Pre-session/Progressive overload use ≥75-min full games)`} · Catapult FMP · Gabbett 2016 · Malone 2018 · Duhig 2016
           </div>
         </div>
       )}
