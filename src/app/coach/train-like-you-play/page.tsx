@@ -8,22 +8,30 @@ export const dynamic = "force-dynamic";
  * sees who isn't trained for what matches require (Gabbett 2016; Malone 2018).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { POSITION_GROUPS } from "@/lib/micropulse/positionStyle";
 
 type MetricKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
   | "ima_accel" | "ima_decel" | "ima_cod" | "ima_jumps";
 type Mode = "fmp" | "ima";
-type Cell = { match: number | null; train: number | null; pct: number | null; flag: "under" | "gap" | "ok" | "none" };
-type Player = { id: string; name: string; position: string | null; match_appearances: number; train_sessions: number; metrics: Record<MetricKey, Cell>; gaps: number };
+type Baseline = "own" | "position";
+type Flag = "under" | "gap" | "ok" | "none";
+type Cell = { match: number | null; train: number | null; pct: number | null; flag: Flag };
+type Player = { id: string; name: string; position: string | null; group: string; match_appearances: number; train_sessions: number; metrics: Record<MetricKey, Cell>; gaps: number };
 type Micro = { md_day: string; sessions: number; metrics: Record<MetricKey, number | null> };
-type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[] };
+type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[]; groupDemand: Record<string, Record<MetricKey, number | null>> };
 
 const FLAG: Record<string, string> = {
   under: "bg-red-100 text-red-700", gap: "bg-amber-100 text-amber-700", ok: "bg-emerald-100 text-emerald-700", none: "bg-slate-100 text-slate-400",
 };
+function flagOf(kind: string | undefined, pct: number | null): Flag {
+  if (pct == null) return "none";
+  if (kind === "max") return pct < 70 ? "under" : pct < 85 ? "gap" : "ok";
+  return pct < 50 ? "under" : pct < 80 ? "gap" : "ok";
+}
 
 export default function TrainLikeYouPlayPage() {
   const [lang] = useLang();
@@ -65,13 +73,31 @@ export default function TrainLikeYouPlayPage() {
     ima_jumps: { en: "IMA Jumps", is: "IMA stökk" },
   };
   const [mode, setMode] = useState<Mode>("fmp");
+  const [baseline, setBaseline] = useState<Baseline>("own");
   const metricKeys = useMemo<MetricKey[]>(() => data?.modes?.[mode] ?? [], [data, mode]);
   const microcycle = useMemo(() => data?.microcycle ?? [], [data]);
-  // Gaps are mode-specific (count of under-trained metrics in the shown set).
+  // Demand baseline = each player's OWN match demand, or his POSITION group's
+  // average match demand (position-specific standard). Gaps are mode-specific.
   const players = useMemo(() => {
-    const ps = (data?.players ?? []).map((p) => ({ ...p, modeGaps: metricKeys.filter((k) => p.metrics[k]?.flag === "under").length }));
+    const gd = data?.groupDemand ?? {};
+    const kindMap = new Map((data?.metrics ?? []).map((m) => [m.key, m.kind]));
+    const ps = (data?.players ?? []).map((p) => {
+      const display = {} as Record<MetricKey, { train: number | null; demand: number | null; pct: number | null; flag: Flag }>;
+      for (const k of (data?.metrics ?? []).map((m) => m.key)) {
+        const cell = p.metrics[k];
+        const demand = baseline === "own" ? (cell?.match ?? null) : (gd[p.group]?.[k] ?? null);
+        const pct = cell?.train != null && demand != null && demand > 0 ? Math.round((cell.train / demand) * 100) : null;
+        display[k] = { train: cell?.train ?? null, demand, pct, flag: flagOf(kindMap.get(k), pct) };
+      }
+      const modeGaps = metricKeys.filter((k) => display[k].flag === "under").length;
+      return { ...p, display, modeGaps };
+    });
     return ps.sort((a, b) => b.modeGaps - a.modeGaps || a.name.localeCompare(b.name, "is"));
-  }, [data, metricKeys]);
+  }, [data, metricKeys, baseline]);
+  // Group players by position for rendering (ties to Position Comparison).
+  const grouped = useMemo(() => POSITION_GROUPS
+    .map((g) => ({ ...g, members: players.filter((p) => p.group === g.key) }))
+    .filter((g) => g.members.length > 0), [players]);
   const totalGaps = useMemo(() => players.reduce((s, p) => s + p.modeGaps, 0), [players]);
   const playersWithGaps = useMemo(() => players.filter((p) => p.modeGaps > 0).length, [players]);
   const [microMetric, setMicroMetric] = useState<MetricKey>("fmp_dyn_high");
@@ -93,6 +119,13 @@ export default function TrainLikeYouPlayPage() {
               <div className="mt-0.5 flex rounded-md border border-slate-300 p-0.5 text-xs">
                 <button type="button" onClick={() => setMode("fmp")} className={`rounded px-2 py-1 ${mode === "fmp" ? "bg-slate-900 text-white" : "text-slate-600"}`}>FMP</button>
                 <button type="button" onClick={() => setMode("ima")} className={`rounded px-2 py-1 ${mode === "ima" ? "bg-slate-900 text-white" : "text-slate-600"}`}>IMA</button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-slate-500">{IS ? "Borið við" : "Compared to"}</label>
+              <div className="mt-0.5 flex rounded-md border border-slate-300 p-0.5 text-xs">
+                <button type="button" onClick={() => setBaseline("own")} className={`rounded px-2 py-1 ${baseline === "own" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Eigin leik" : "Own match"}</button>
+                <button type="button" onClick={() => setBaseline("position")} className={`rounded px-2 py-1 ${baseline === "position" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{IS ? "Stöðu-norm" : "Position"}</button>
               </div>
             </div>
             <div>
@@ -165,24 +198,33 @@ export default function TrainLikeYouPlayPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {players.map((p) => (
-                    <tr key={p.id} className={`border-t border-slate-100 ${p.modeGaps > 0 ? "bg-red-50/30" : ""}`}>
-                      <td className="px-2 py-1.5">
-                        <span className="font-medium text-slate-800">{p.name}</span>
-                        <span className="ml-1 text-[10px] text-slate-400">{p.position}</span>
-                      </td>
-                      {metricKeys.map((m) => {
-                        const c = p.metrics[m];
-                        return (
-                          <td key={m} className="px-2 py-1.5 text-center">
-                            <span className={`inline-block min-w-[42px] rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${FLAG[c?.flag ?? "none"]}`}
-                              title={c?.pct != null ? `${IS ? "þjálfun" : "train"} ${c.train} · ${IS ? "leikur" : "match"} ${c.match}` : (IS ? "engin gögn" : "no data")}>
-                              {c?.pct != null ? `${c.pct}%` : "—"}
-                            </span>
+                  {grouped.map((g) => (
+                    <Fragment key={g.key}>
+                      <tr className="border-t border-slate-200 bg-slate-50">
+                        <td colSpan={metricKeys.length + 1} className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          {IS ? g.is : g.en} <span className="font-normal text-slate-400">({g.members.length})</span>
+                        </td>
+                      </tr>
+                      {g.members.map((p) => (
+                        <tr key={p.id} className={`border-t border-slate-100 ${p.modeGaps > 0 ? "bg-red-50/30" : ""}`}>
+                          <td className="px-2 py-1.5">
+                            <span className="font-medium text-slate-800">{p.name}</span>
+                            <span className="ml-1 text-[10px] text-slate-400">{p.position}</span>
                           </td>
-                        );
-                      })}
-                    </tr>
+                          {metricKeys.map((m) => {
+                            const c = p.display[m];
+                            return (
+                              <td key={m} className="px-2 py-1.5 text-center">
+                                <span className={`inline-block min-w-[42px] rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${FLAG[c?.flag ?? "none"]}`}
+                                  title={c?.pct != null ? `${IS ? "þjálfun" : "train"} ${c.train} · ${baseline === "own" ? (IS ? "leikur" : "match") : (IS ? "stöðu-krafa" : "position demand")} ${c.demand}` : (IS ? "engin gögn" : "no data")}>
+                                  {c?.pct != null ? `${c.pct}%` : "—"}
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -200,7 +242,7 @@ export default function TrainLikeYouPlayPage() {
               : "Built on the Catapult Football Movement Profile (IMU) — it captures dynamic, multi-directional movement (not just straight-line GPS speed) and works indoors. Training should prepare for the match movement profile (Gabbett 2016); below ~50% of match demand in the high-intensity categories = elevated risk (Malone 2018, Duhig 2016). FMP carries its own session duration, so per-90 intensity is computable even when GPS duration is missing."}
           </div>
           <div className="text-[9px] text-slate-400">
-            MicroPulse · {IS ? "FMP/IMA per-90 (FMP session-lengd) · topp-3 æfingar vs leik-krafa · hámarkshraði = besta æfing vs leik-hámark" : "FMP/IMA per-90 (FMP session length) · top-3 training vs match demand · top speed = best training vs match max"} · Catapult FMP · Gabbett 2016 · Malone 2018 · Duhig 2016
+            MicroPulse · {IS ? `FMP/IMA per-90 · topp-3 æfingar vs ${baseline === "own" ? "eigin leik-kröfu" : "stöðu-kröfu (stöðu-meðaltal)"} · hópað eftir stöðu` : `FMP/IMA per-90 · top-3 training vs ${baseline === "own" ? "own match demand" : "position demand (group average)"} · grouped by position`} · Catapult FMP · Gabbett 2016 · Malone 2018 · Duhig 2016
           </div>
         </div>
       )}

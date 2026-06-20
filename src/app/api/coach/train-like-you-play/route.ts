@@ -21,6 +21,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { positionGroup } from "@/lib/micropulse/positionStyle";
 
 export const runtime = "nodejs";
 
@@ -196,7 +197,7 @@ export async function GET(req: NextRequest) {
       metrics[m.key] = { match: matchVal == null ? null : Math.round(matchVal * 10) / 10, train: trainVal == null ? null : Math.round(trainVal * 10) / 10, pct, flag };
     }
     matchDemandByPlayer.set(p.id, Object.fromEntries(METRICS.map((m) => [m.key, metrics[m.key].match])));
-    return { id: p.id, name: (p.full_name ?? "—").trim(), position: p.position, match_appearances: matchRows.length, train_sessions: trainRows.length, metrics, gaps };
+    return { id: p.id, name: (p.full_name ?? "—").trim(), position: p.position, group: positionGroup(p.position), match_appearances: matchRows.length, train_sessions: trainRows.length, metrics, gaps };
   })
     .filter((p) => p.match_appearances > 0)
     .sort((a, b) => b.gaps - a.gaps || a.name.localeCompare(b.name, "is"));
@@ -230,5 +231,20 @@ export async function GET(req: NextRequest) {
     return { md_day: l, sessions: b.sessions, metrics };
   });
 
-  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, microcycle });
+  // Position-group match demand: the average match per-90 of the group's
+  // players per metric — the position-specific standard to train toward
+  // (ties this to the Position Comparison profiles).
+  const groupDemand: Record<string, Record<string, number | null>> = {};
+  const groupMembers = new Map<string, string[]>();
+  for (const p of out) { if (!groupMembers.has(p.group)) groupMembers.set(p.group, []); groupMembers.get(p.group)!.push(p.id); }
+  for (const [g, ids] of groupMembers.entries()) {
+    const dem: Record<string, number | null> = {};
+    for (const m of METRICS) {
+      const vals = ids.map((id) => matchDemandByPlayer.get(id)?.[m.key]).filter((v): v is number => v != null && v > 0);
+      dem[m.key] = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+    }
+    groupDemand[g] = dem;
+  }
+
+  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, microcycle, groupDemand });
 }
