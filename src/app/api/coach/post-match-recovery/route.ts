@@ -150,8 +150,11 @@ export async function GET(req: NextRequest) {
     const baseStart = addDays(match.match_date, -42);
     const { data: fd } = await supabase
       .from("vald_forcedecks_results")
+      // CMJ only — must compare like with like. ABCMJ (Abalakov, arm-swing) sits
+      // ~2 cm higher and IMTP carries no jump height, so mixing them would
+      // pollute the baseline / Δ with test-type differences, not real fatigue.
       .select("microplayer_id, test_timestamp, jump_height_cm, rsi_mod, is_valid")
-      .eq("team_id", teamId).in("microplayer_id", playerIds)
+      .eq("team_id", teamId).eq("test_type", "CMJ").in("microplayer_id", playerIds)
       .gte("test_timestamp", `${baseStart}T00:00:00Z`)
       .lte("test_timestamp", `${offsets[offsets.length - 1].date}T23:59:59Z`).limit(4000);
     const byPlayer = new Map<string, Array<{ date: string; jh: number | null; rsi: number | null }>>();
