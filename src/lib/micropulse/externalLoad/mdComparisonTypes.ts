@@ -23,6 +23,11 @@ export const MD_COMPARISON_METRICS = [
   "decelB23",
   "maxVelocity",
   "sprintDistance",
+  "imaAccel",
+  "imaDecel",
+  "imaCod",
+  "jumps",
+  "fmpDynamicHigh",
 ] as const;
 
 export type MdMetricKey = (typeof MD_COMPARISON_METRICS)[number];
@@ -39,6 +44,11 @@ export const MD_METRIC_LABELS: Record<MdMetricKey, { en: string; is: string; uni
   decelB23:           { en: "Decel B2-3",          is: "Hægðun B2-3",          unit: "#" },
   maxVelocity:        { en: "Max Velocity",        is: "Hámarkshraði",         unit: "km/h" },
   sprintDistance:     { en: "Sprint Dist",         is: "Sprettvegl.",          unit: "m" },
+  imaAccel:           { en: "IMA Accel",           is: "IMA hröðun",            unit: "#" },
+  imaDecel:           { en: "IMA Decel",           is: "IMA hemlun",            unit: "#" },
+  imaCod:             { en: "IMA CoD",             is: "IMA stefnubr.",         unit: "#" },
+  jumps:              { en: "Jumps",               is: "Stökk",                 unit: "#" },
+  fmpDynamicHigh:     { en: "Dynamic High",        is: "Dýnamísk há",           unit: "s" },
 };
 
 export type MdMetricScore = {

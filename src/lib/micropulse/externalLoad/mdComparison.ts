@@ -94,6 +94,22 @@ type RawLoadRow = {
   max_velocity: number | null;
   max_vel: number | null;
   sprint_distance: number | null;
+  ima_accel: number | null;
+  ima_decel: number | null;
+  jumps: number | null;
+  fmp_dynamic_high_s: number | null;
+  ima_cod_left_high: number | null;
+  ima_cod_left_medium: number | null;
+  ima_cod_left_low: number | null;
+  ima_cod_right_high: number | null;
+  ima_cod_right_medium: number | null;
+  ima_cod_right_low: number | null;
+};
+
+const codSum = (r: RawLoadRow): number | null => {
+  const v = (r.ima_cod_left_high ?? 0) + (r.ima_cod_left_medium ?? 0) + (r.ima_cod_left_low ?? 0) +
+    (r.ima_cod_right_high ?? 0) + (r.ima_cod_right_medium ?? 0) + (r.ima_cod_right_low ?? 0);
+  return v > 0 ? v : null;
 };
 
 function extractMetric(row: RawLoadRow, key: MdMetricKey): number | null {
@@ -109,6 +125,11 @@ function extractMetric(row: RawLoadRow, key: MdMetricKey): number | null {
     case "decelB23":            return row.decel_b2_3_tot_effs_gen2;
     case "maxVelocity":         return row.max_velocity ?? row.max_vel;
     case "sprintDistance":      return row.sprint_distance;
+    case "imaAccel":            return row.ima_accel;
+    case "imaDecel":            return row.ima_decel;
+    case "imaCod":              return codSum(row);
+    case "jumps":               return row.jumps;
+    case "fmpDynamicHigh":      return row.fmp_dynamic_high_s;
   }
 }
 
@@ -145,6 +166,9 @@ const SELECT_COLS = [
   "velocity_band5_total_distance", "velocity_band6_total_distance",
   "accel_b2_3_tot_effs_gen2", "decel_b2_3_tot_effs_gen2",
   "max_velocity", "max_vel", "sprint_distance",
+  "ima_accel", "ima_decel", "jumps", "fmp_dynamic_high_s",
+  "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
+  "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
 ].join(", ");
 
 export async function computeMdComparison(args: {
@@ -261,6 +285,13 @@ export async function computeMdComparison(args: {
       decelB23: 0.13,
       maxVelocity: 0.06,
       sprintDistance: 0.04,
+      // IMA / FMP (inertial — indoor-relevant). Decel + dynamic-high lead,
+      // mirroring the mechanical-load emphasis (McBurnie 2022).
+      imaDecel: 0.10,
+      imaAccel: 0.06,
+      imaCod: 0.08,
+      jumps: 0.04,
+      fmpDynamicHigh: 0.10,
     };
     let wSum = 0, wTotal = 0;
     for (const m of metrics) {
