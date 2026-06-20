@@ -74,6 +74,7 @@ const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
   { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
+  { href: "/coach/train-like-you-play", label: { EN: "Train like you Play",              IS: "Train like you Play" } },
   // KSÍ Report lives under Admin (it's an outbound export/report, not a
   // real-time monitoring surface) — see adminLinks below.
   // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
