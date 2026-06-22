@@ -103,7 +103,11 @@ import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { downloadLoadPlanPdf, type LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
 import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
-// VerdictAccuracyCard moved to ReportingCenterPage (system-health metric, not a daily briefing concern).
+// VerdictAccuracyCard: full breakdown lives in ReportingCenterPage; also shown
+// on the Squad tab next to OverrideHistoryCard as the weekly trust-review pair
+// ("how the engine is doing" + "where you disagreed"). NOT on the Today tab —
+// it's a review tool, not a morning-brief concern.
+import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 // TeamMetabolicSummary moved to /coach/load-intelligence (was on the GPS Data tab).
@@ -9919,6 +9923,12 @@ export default function CoachPage() {
               Aligns with Explainability-First principle #6: overrides are
               an audited dialogue, not a black hole. */}
           <OverrideHistoryCard lang={lang} />
+
+          {/* Verdict accuracy — the other half of the trust-review pair: is the
+              engine actually predictive for this squad? Self-hides under 30
+              scoreable verdicts. Works for Lite (verdict-history based, no GPS
+              signal needed). */}
+          <VerdictAccuracyCard lang={lang === "IS" ? "IS" : "EN"} />
 
           {/* Weekly Performance Intelligence */}
           <Card className="shadow-sm">

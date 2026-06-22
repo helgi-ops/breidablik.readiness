@@ -177,7 +177,7 @@ const adminLinks: SidebarLink[] = [
   // visibility.
   { href: "/coach/players",           label: { EN: "Players",           IS: "Leikmenn" }, badgeKey: "pending" },
   { href: "/coach/settings",          label: { EN: "Settings",          IS: "Stillingar" } },
-  { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Reporting center" } },
+  { href: "/coach/reporting-center",  label: { EN: "Reporting center",  IS: "Skýrslumiðstöð" } },
   { href: "/coach/ksi-report",        label: { EN: "KSÍ Report",        IS: "KSÍ skýrsla" } },
   { href: "/coach/player-game-report", label: { EN: "Player game report", IS: "Leikgögn leikmanns" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
