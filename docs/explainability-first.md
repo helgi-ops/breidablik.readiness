@@ -51,11 +51,11 @@ The default surface is the head-coach surface. The drill-down is the S&C / sport
 | 3. Counterfactuals | ✓ | Top counterfactual rendered on attention rows |
 | 4. Confidence quantified | ✓ | Confidence pill (N/5), baseline maturity, "few entries" subtitle |
 | 5. AI explains, rules decide | ⚠️ | Architecture aligned (ELITE AI button is labelled, opt-in, cites data); no rules-vs-AI policy document yet |
-| 6. Override audit | ❌ | No DB-level audit trail for coach overrides; can't surface "you disagreed N times" stats |
+| 6. Override audit | 🟡 | **Built, not stale-❌ anymore.** `decision_override_log` table + `trg_log_decision_override` trigger on `stage4_decisions` capture every dashboard override (direction lighter/tougher/lateral, reason, who). Surfaced by `OverrideHistoryCard` ("your overrides") and `VerdictAccuracyCard` + `/api/team/calibration` (outcome proof: GREEN safety / YELLOW-RED precision / injury-within-7d). **Remaining:** runs on seed data only (one demo team), the learning step (override pattern → recalibration prompt) isn't closed, and ~25 overrides from secondary write paths used `final_source='COACH'/null` so never logged. |
 | 7. Scientific provenance | ⚠️ | Paper citations in tooltips for major signals; coverage incomplete across the engine |
 | 8. Two audiences, one app | ✓ | Compact / Detailed toggle on Daily Briefing; "Show team metrics" on Command Center |
 
-**Self-assessment: ~65% complete.** The remaining 35% is infrastructure (audit-trail tables, citation coverage, decision-trace tracking) — not single-file UI changes.
+**Self-assessment: ~80% complete.** The override-audit + calibration infrastructure that the 2026 roadmap below scoped as unbuilt now exists (see #6). The remaining work is: closing the *learning* loop (turn logged override patterns into a coach-approved recalibration prompt — the engine does not yet adjust to systematic disagreement), proving it on live (non-seed) data, citation coverage (#7), and a rules-vs-AI policy doc (#5) — not new audit tables.
 
 ### Sweep across the analysis surfaces (June 2026)
 
@@ -86,7 +86,7 @@ analysis surface, not just the briefing. **#7 (citation coverage)** advanced —
 new driver tooltip carries its paper — but is still ⚠️ until the older engine
 tooltips are swept. **#5 (rules-vs-AI)** is reinforced in practice (every verdict is
 labelled "Rules decide — not AI"), though the formal policy doc is still pending.
-**#6 (override audit)** is unchanged — still the main infrastructure gap.
+**#6 (override audit)** is now built (capture trigger + `decision_override_log` + `OverrideHistoryCard` + `VerdictAccuracyCard`/calibration); the open gap is no longer the audit trail but the *learning loop* — turning logged override patterns into a coach-approved recalibration prompt — plus proving it on live data.
 
 ---
 
@@ -126,7 +126,7 @@ If any answer is "no", the feature is not ready.
 
 The 35% gap is concrete infrastructure, prioritised by impact-per-effort:
 
-1. **Decision audit trail (DB + UI).** New table `decision_overrides`: timestamp, player_id, system_verdict, coach_verdict, reason. Surface "your override history" view; surface "where the engine is consistently overridden" for sport scientists. ~1-2 days.
+1. ~~**Decision audit trail (DB + UI).**~~ **DONE** — shipped as `decision_override_log` + `trg_log_decision_override` (capture), `OverrideHistoryCard` (coach "your override history"), `VerdictAccuracyCard` + `/api/team/calibration` (S&C "where the engine is consistently overridden", with injury-within-7d outcome scoring). The successor task is the **learning loop**: when overrides are systematically one-directional (the seed shows lighter 55× vs tougher 6× ≈ 9:1), surface a coach-approved "the engine looks too aggressive for your squad — recalibrate?" prompt. The system must propose, the coach decides (rules decide, AI explains). ~2-3 days, plus live data to drive it.
 
 2. **AI Q&A on attention rows.** Button on each flagged player: "Why is he flagged?" Opens an AI dialogue with that player's actual signals scoped in. Cites every claim back to its source signal. Follows the "AI explains, rules decide" rule. ~1 day.
 
