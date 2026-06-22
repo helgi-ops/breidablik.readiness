@@ -303,6 +303,10 @@ const METABOLIC_AVG_POWER_KEYS = [
   "metabolic_power",
   "metabolicPower",
   "meta_power_avg",
+  // gen2-model metabolic power value — the key NAME carries the generation, so
+  // it's a power VALUE here (the generation is then inferred from the key name
+  // below), not an explicit gen-indicator string field.
+  "gen2_metabolic_power",
 ];
 
 const METABOLIC_PEAK_POWER_KEYS = [
@@ -396,7 +400,6 @@ const TIME_ABOVE_HML_KEYS = [
 const METABOLIC_GEN_KEYS = [
   "metabolic_power_gen",
   "metabolic_power_version",
-  "gen2_metabolic_power",
   "metabolic_power_model",
 ];
 

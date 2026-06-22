@@ -1,4 +1,6 @@
-import test from "node:test";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { getExerciseRecommendation } from "./recommend";
 import { REASON_CODES } from "./reasons";

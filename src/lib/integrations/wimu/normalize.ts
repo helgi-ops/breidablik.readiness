@@ -108,8 +108,9 @@ export function parseDurationMinutes(value: string | undefined | null): number |
     return h * 60 + m;
   }
 
-  // Plain number with optional " min" suffix
-  return parseNumber(s.replace(/\s*min(utes?|útur)?\s*$/i, ""));
+  // Plain number with optional minutes suffix. Accept the Icelandic "mínútur"
+  // / "mín." (accented í) as well as English "min"/"minutes" and a trailing dot.
+  return parseNumber(s.replace(/\s*m[ií]n(?:utes?|útur)?\.?\s*$/i, ""));
 }
 
 /**
