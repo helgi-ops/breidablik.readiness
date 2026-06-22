@@ -15,6 +15,7 @@ import {
   STYLE_METRICS, type StyleMetricKey, type StyleProfile,
   positionGroup, POSITION_GROUPS, buildPopulationStats, classifyStyle,
 } from "@/lib/micropulse/positionStyle";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
 
@@ -80,6 +81,12 @@ export async function GET(req: NextRequest) {
   const ctx = await authenticate(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   const { supabase, teamId } = ctx;
+
+  // Position Comparison is an ELITE feature (position-level analytics). The
+  // position EDITOR and TLYP stay free; only this analytics surface is gated.
+  if (!(await isEliteTeam(supabase, teamId))) {
+    return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
+  }
 
   const season = Number(new URL(req.url).searchParams.get("season")) || new Date().getUTCFullYear();
   const from = `${season}-01-01`, to = `${season}-12-31`;

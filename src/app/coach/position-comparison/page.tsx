@@ -40,6 +40,7 @@ export default function PositionComparisonPage() {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [eliteRequired, setEliteRequired] = useState(false);
   const [metric, setMetric] = useState<MetricKey>("sprint");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<string | null>(null);
@@ -52,12 +53,13 @@ export default function PositionComparisonPage() {
   }, []);
 
   const load = useCallback(async (yr: number) => {
-    setLoading(true); setErr(null);
+    setLoading(true); setErr(null); setEliteRequired(false);
     try {
       const t = await token();
       if (!t) { setErr(IS ? "Ekki innskráð(ur)" : "Not signed in"); return; }
       const res = await fetch(`/api/coach/position-comparison?season=${yr}`, { headers: { Authorization: `Bearer ${t}` } });
       const json = await res.json();
+      if (res.status === 402 || json?.error === "ELITE_REQUIRED") { setEliteRequired(true); setData(null); return; }
       if (!res.ok) { setErr(json.error ?? "Failed"); setData(null); return; }
       setData(json as Resp); setNarrative(null);
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); }
@@ -255,6 +257,19 @@ export default function PositionComparisonPage() {
       </div>
 
       {err && <div className="pc-noprint mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+      {eliteRequired && (
+        <div className="pc-noprint rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="font-semibold">🔒 {IS ? "ELITE eiginleiki" : "ELITE feature"}</div>
+          <p className="mt-1 text-amber-800">
+            {IS
+              ? "Stöðu-samanburður (greining eftir leikstöðu) er hluti af ELITE áskrift. Stöður leikmanna má samt setja frítt á Leikmanna-síðunni."
+              : "Position Comparison (position-level analysis) is part of the ELITE subscription. You can still set player positions for free on the Players page."}
+          </p>
+          <a href="/pricing" className="mt-2 inline-block font-semibold underline hover:text-amber-700">
+            {IS ? "Sjá pakka →" : "See plans →"}
+          </a>
+        </div>
+      )}
       {loading && <div className="pc-noprint mb-4 text-sm text-slate-500">…</div>}
 
       {data && groups.length > 0 && (
