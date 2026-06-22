@@ -4957,7 +4957,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
           .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -10162,6 +10162,9 @@ export default function CoachPage() {
 
       {dashTab === "gps" && isAtLeastPro && (() => {
         const isBasketball = teamSport === "basketball";
+        // Core/Lite football clubs have no B2-3 split — show Sprint Efforts + HML
+        // (signals they DO carry) in those two column slots instead.
+        const isLiteGps = !isBasketball && catapultDataTier === "lite";
 
         const GPS_METRICS: Array<{
           key: string;
@@ -10177,6 +10180,19 @@ export default function CoachPage() {
           { key: "imaDecel",            label: "IMA Decelerations",    shortLabel: "IMA Decels",  aliases: ["imaDecel", "ima_decel"],                                         digits: 0 },
           { key: "totalDistance",       label: "Total Distance (m)",   shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                               digits: 0 },
           { key: "maxVel",              label: "Max Velocity (km/h)",  shortLabel: "Max Vel",     aliases: ["maxVel", "max_vel", "max_velocity"],                             digits: 1 },
+        ] : catapultDataTier === "lite" ? [
+          // Core/Lite Catapult plans don't expose Vel-band distances or the B2-3
+          // split — show the columns these clubs actually have (HSR/sprint dist,
+          // sprint efforts, HML, combined efforts, Player Load, PL/min, max vel).
+          { key: "totalDistance",       label: "Total Distance (m)",          shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                              digits: 0 },
+          { key: "highSpeedDistance",   label: "HSR Distance (m)",            shortLabel: "HSR Dist",    aliases: ["highSpeedDistance", "high_speed_distance"],                                     digits: 0 },
+          { key: "sprintDistance",      label: "Sprint Distance (m)",         shortLabel: "Sprint Dist", aliases: ["sprintDistance", "sprint_distance"],                                            digits: 0 },
+          { key: "sprintEfforts",       label: "Sprint Efforts (#)",          shortLabel: "Sprint Eff",  aliases: ["velocity_band6_total_efforts_gen2", "velocityBand6TotalEffortsGen2"],            digits: 0 },
+          { key: "hmld",                label: "High Metabolic Load Dist (m)",shortLabel: "HML",         aliases: ["high_metabolic_load_distance_m", "highMetabolicLoadDistanceM"],                 digits: 0 },
+          { key: "accelDecelEfforts",   label: "Accel+Decel Efforts (#)",     shortLabel: "Efforts",     aliases: ["accel_decel_efforts", "accelDecelEfforts"],                                     digits: 0 },
+          { key: "totalPlayerLoad",     label: "Player Load",                 shortLabel: "Player Load", aliases: ["totalPlayerLoad", "total_player_load"],                                         digits: 0 },
+          { key: "playerLoadPerMinute", label: "Player Load / min",           shortLabel: "PL/min",      aliases: ["playerLoadPerMinute", "player_load_per_minute"],                                digits: 2 },
+          { key: "maxVel",              label: "Max Velocity (km/h)",         shortLabel: "Max Vel",     aliases: ["maxVel", "max_vel", "max_velocity"],                                            digits: 1 },
         ] : [
           { key: "totalDistance",              label: "Total Distance (m)",            shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                                    digits: 0 },
           { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",           shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                         digits: 0 },
@@ -10245,11 +10261,15 @@ export default function CoachPage() {
             position: p.position,
             // Football fields
             totalDist:  getVal(row, ["total_distance", "totalDistance"]),
-            hsDist:     vb5 + vb6,
+            // HSR: Pro velocity-band distance; Core/Lite fall back to high_speed_distance.
+            hsDist:     (vb5 + vb6) || (getVal(row, ["high_speed_distance"]) ?? 0),
             accelB23:   getVal(row, ["accel_b2_3_tot_effs_gen2", "accelBand2to3Efforts", "accelB23TotEffsGen2"]),
             decelB23:   getVal(row, ["decel_b2_3_tot_effs_gen2", "decelBand2to3Efforts", "decelB23TotEffsGen2"]),
             totAccels:  getVal(row, ["tot_as", "totalAccelerations", "totAs"]),
             totDecels:  getVal(row, ["tot_ds", "totalDecelerations", "totDs"]),
+            // Core/Lite signals (shown in place of the B2-3 split for Lite teams).
+            sprintEff:  getVal(row, ["velocity_band6_total_efforts_gen2", "velocityBand6TotalEffortsGen2"]),
+            hml:        getVal(row, ["high_metabolic_load_distance_m", "highMetabolicLoadDistanceM"]),
             // Basketball fields
             playerLoad:       getVal(row, ["total_player_load", "totalPlayerLoad"]),
             playerLoadPerMin: getVal(row, ["player_load_per_minute", "playerLoadPerMinute"]),
@@ -10266,6 +10286,7 @@ export default function CoachPage() {
           totalDist: number | null; hsDist: number;
           accelB23: number | null; decelB23: number | null;
           totAccels: number | null; totDecels: number | null;
+          sprintEff: number | null; hml: number | null;
           // basketball
           playerLoad: number | null; playerLoadPerMin: number | null;
           imaCod: number | null; imaAccel: number | null; imaDecel: number | null;
@@ -10415,9 +10436,13 @@ export default function CoachPage() {
                         { label: "IMA Accelerations",value: fmtN(tAvgImaAccel,   0), unit: "avg" },
                       ] : [
                         { label: lang === "EN" ? "Total Distance" : "Heildarvegalengd", value: fmtN(tAvgDist),    unit: "m avg" },
-                        { label: lang === "EN" ? "High-speed Dist" : "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: "m avg (VB5+VB6)" },
-                        { label: "Accel B2-3",       value: fmtN(tAvgAccB),    unit: lang === "EN" ? "count avg" : "efni avg" },
-                        { label: "Decel B2-3",       value: fmtN(tAvgDecB),    unit: lang === "EN" ? "count avg" : "efni avg" },
+                        { label: lang === "EN" ? "High-speed Dist" : "Háhraðavegalengd", value: fmtN(tAvgHs),      unit: isLiteGps ? "m avg" : "m avg (VB5+VB6)" },
+                        isLiteGps
+                          ? { label: "Sprint Efforts", value: fmtN(squadAvgToday(todayPlayerRows.map(r => r.sprintEff))), unit: lang === "EN" ? "count avg" : "fjöldi avg" }
+                          : { label: "Accel B2-3",     value: fmtN(tAvgAccB),    unit: lang === "EN" ? "count avg" : "efni avg" },
+                        isLiteGps
+                          ? { label: "HML", value: fmtN(squadAvgToday(todayPlayerRows.map(r => r.hml))), unit: "m avg" }
+                          : { label: "Decel B2-3",     value: fmtN(tAvgDecB),    unit: lang === "EN" ? "count avg" : "efni avg" },
                       ]).map(({ label, value, unit }) => (
                         <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
@@ -10447,8 +10472,8 @@ export default function CoachPage() {
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">HS Dist (m)</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Accels (#)</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Decels (#)</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Acc B2-3</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Dec B2-3</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{isLiteGps ? "Sprint Eff" : "Acc B2-3"}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{isLiteGps ? "HML (m)" : "Dec B2-3"}</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
                             </>}
@@ -10472,8 +10497,8 @@ export default function CoachPage() {
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgHs)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totAccels)))}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.totDecels)))}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgAccB)}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgDecB)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(isLiteGps ? squadAvgToday(todayPlayerRows.map(r => r.sprintEff)) : tAvgAccB)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(isLiteGps ? squadAvgToday(todayPlayerRows.map(r => r.hml)) : tAvgDecB)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
                             </>}
@@ -10498,8 +10523,8 @@ export default function CoachPage() {
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.hsDist > 0 ? p.hsDist : null)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totAccels)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.totDecels)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.accelB23)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.decelB23)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(isLiteGps ? p.sprintEff : p.accelB23)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(isLiteGps ? p.hml : p.decelB23)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
                               </>}
