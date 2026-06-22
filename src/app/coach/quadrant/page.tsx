@@ -170,7 +170,7 @@ export default function CoachQuadrantPage() {
       const playerIds = (roster as Array<{ id: string }>).map((r) => String(r.id));
       const { data: loadData } = await sb
         .from("player_external_load_daily")
-        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod")
+        .select("player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod")
         .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", startDate)

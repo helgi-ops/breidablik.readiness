@@ -57,7 +57,9 @@ const FOOTBALL_METRICS_LITE: Metric[] = [
   { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",    shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                   digits: 0 },
   { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)",    shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                   digits: 0 },
   { key: "sprintEfforts",              label: "Sprint Efforts (#)",     shortLabel: "Sprint Eff",  aliases: ["velocity_band6_total_efforts_gen2", "velocityBand6TotalEffortsGen2", "sprintEfforts"],            digits: 0 },
-  { key: "maxVelocity",                label: "Max Velocity (km/h)",    shortLabel: "Max Vel",     aliases: ["maxVelocity", "max_velocity", "max_vel"],                                                       digits: 1 },
+  // Player Load — the classic acute:chronic workload metric (Gabbett); a far
+  // better fit for the 7d/28d/ACWR view than a peak like max velocity.
+  { key: "totalPlayerLoad",            label: "Player Load",            shortLabel: "Player Load", aliases: ["totalPlayerLoad", "total_player_load"],                                                         digits: 0 },
 ];
 
 const BASKETBALL_METRICS: Metric[] = [
@@ -141,14 +143,22 @@ export default function SquadLoadTable({
    *  preserves backwards-compatible behavior for unaware callers. */
   catapultDataTier?: "full" | "lite";
 }) {
-  const metrics = sport === "basketball"
+  const allMetrics = sport === "basketball"
     ? BASKETBALL_METRICS
     : (catapultDataTier === "lite" ? FOOTBALL_METRICS_LITE : FOOTBALL_METRICS_FULL);
-  const rows = players.map((p) => ({
+  const allRows = players.map((p) => ({
     name: p.name,
     position: p.position,
-    snapshots: metrics.map((m) => computeSnapshot(p.history, date, m.aliases, m.digits)),
+    snapshots: allMetrics.map((m) => computeSnapshot(p.history, date, m.aliases, m.digits)),
   }));
+  // Capability-aware: drop columns the club has no data for anywhere (every
+  // player reads "—"), so Lite/Core teams don't see a wall of empty columns —
+  // they just see the metrics they actually have. Falls back to the full set
+  // only if literally nothing has data (so the table still renders its shape).
+  const keep = allMetrics.map((_, i) => allRows.some((r) => r.snapshots[i].a7 !== "—" || r.snapshots[i].c28 !== "—"));
+  const anyKept = keep.some(Boolean);
+  const metrics = anyKept ? allMetrics.filter((_, i) => keep[i]) : allMetrics;
+  const rows = anyKept ? allRows.map((r) => ({ ...r, snapshots: r.snapshots.filter((_, i) => keep[i]) })) : allRows;
   const noData = rows.length === 0;
 
   return (
