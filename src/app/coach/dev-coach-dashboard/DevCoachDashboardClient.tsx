@@ -91,6 +91,7 @@ import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
@@ -8762,6 +8763,10 @@ export default function CoachPage() {
             playerInjuries={playerInjuryStatus}
             playerDeltas={yesterdayDeltas}
           />
+          {/* Calibration context beside the verdict — when a colour is over-sensitive
+              for this squad AND present today. Rule-derived, cites the 30-day recovery
+              rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
+          <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
           {/* Load verdict (strip) — the load axis next to the readiness briefing;
               one plain line, links to /coach/load-intelligence. Rules decide, not AI. */}
           <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
