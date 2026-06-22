@@ -47,6 +47,7 @@ type CalibrationResponse = {
   totalScoreableVerdicts: number;
   sampleSizeAdequate: boolean;
   headline?: { tone: "good" | "caution" | "building"; en: string; is: string };
+  injuryDataAvailable?: boolean;
 };
 
 // Copy lookup — keeps strings together for translation review
@@ -64,6 +65,7 @@ const COPY = {
     methodologyTitle: "Hvernig er þetta reiknað",
     methodologyBody:
       "Hver úrskurður borinn saman við ástand næsta dags og meiðsli innan 7 daga. Grænn = öruggt (engin escalation/meiðsli). Gulur/Rauður = áhyggjur staðfestar (hélt áfram, versnaði, eða leiddi til meiðsla).",
+    escalationOnly: "Byggt á næsta-dags þróun eingöngu — engin meiðslagögn skráð fyrir liðið þitt.",
   },
   EN: {
     title: "Verdict accuracy",
@@ -78,6 +80,7 @@ const COPY = {
     methodologyTitle: "How this is computed",
     methodologyBody:
       "Each verdict compared with next-day state and 7-day forward injuries. Green = safe (no escalation/injury). Yellow/Red = concern validated (persisted, escalated, or led to injury).",
+    escalationOnly: "Based on next-day trajectory only — no injury data logged for your team.",
   },
 } as const;
 
@@ -213,6 +216,15 @@ export default function VerdictAccuracyCard({ lang }: { lang: "IS" | "EN" }) {
             }`}
           >
             {lang === "IS" ? data.headline.is : data.headline.en}
+          </div>
+        ) : null}
+
+        {/* Provenance caveat — disclose when the accuracy is escalation-only
+            (no injuries logged), so the coach doesn't read the % as
+            injury-validated. Common for Core/Lite clubs. */}
+        {data.injuryDataAvailable === false ? (
+          <div className="mb-3 -mt-1 text-[10px] leading-snug text-slate-400">
+            {t.escalationOnly}
           </div>
         ) : null}
 

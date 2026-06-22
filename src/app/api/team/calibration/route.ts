@@ -136,6 +136,13 @@ export type CalibrationResponse = {
    * It never changes the engine — it points the coach + S&C at the question.
    */
   headline: CalibrationHeadline;
+  /**
+   * False when no injuries were logged for the team in the window — then the
+   * accuracy is based on next-day trajectory ONLY (escalation/recovery), not
+   * injury-validated. Common for Core/Lite clubs without injury tracking. The
+   * UI discloses this so a coach doesn't over-read the percentages.
+   */
+  injuryDataAvailable: boolean;
 };
 
 export type CalibrationHeadline = {
@@ -297,6 +304,8 @@ export async function GET(req: Request) {
       totalScoreableVerdicts: totalScoreable,
       sampleSizeAdequate: totalScoreable >= SAMPLE_SIZE_THRESHOLD,
       headline: computeHeadline(greenStats, yellowStats, redStats, totalScoreable >= SAMPLE_SIZE_THRESHOLD),
+      injuryDataAvailable:
+        (greenStats.injuredWithin7d + yellowStats.injuredWithin7d + redStats.injuredWithin7d) > 0,
     };
 
     return NextResponse.json(response);
