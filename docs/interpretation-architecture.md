@@ -73,7 +73,7 @@ cards. Everything else (resolver, verdict, UI) reads from it.
 ```
 type MetricDef = {
   key: string;                 // db column, e.g. "decel_b2_3_tot_effs_gen2"
-  dimension: "volume"|"intensity"|"braking"|"sprint"|"internal";
+  dimension: "volume"|"intensity"|"braking"|"sprint"|"metabolic"|"internal";
   preferenceRank: number;      // lower = preferred when multiple present
   plain: { EN: string; IS: string };
   tooltip: { EN: string; IS: string };
