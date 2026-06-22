@@ -17,6 +17,7 @@ import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@
 type P90 = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
   accel: number; decel: number; ima_acc: number; ima_dec: number; cod: number; jumps: number; ima_hsr: number;
+  efforts: number; hml: number;
 };
 type Raw = P90 & { top_speed_kmh: number };
 type Match = {
@@ -32,6 +33,7 @@ type Report = {
     qualifying_matches: number; per90_avg: P90; best_top_speed_kmh: number;
   };
   benchmarks: Record<string, Bench>;
+  availableKeys?: string[];
   matches: Match[];
   roster: Array<{ id: string; full_name: string; position: string | null }>;
 };
@@ -102,6 +104,10 @@ export default function PlayerGameReportPage() {
     if (!report) return null;
     const shortOpp = (m: Match) =>
       (m.opponent ?? m.date.slice(5)).replace(/\s*\([^)]*\)\s*$/, "").split(" ")[0].slice(0, 7);
+    // Drop-empty per team: only metrics the squad actually carries. Core/Lite
+    // teams drop the empty IMA columns (cod) and surface efforts/HML instead;
+    // Pro teams keep their IMA columns and drop efforts.
+    const avail = report.availableKeys ? new Set(report.availableKeys) : null;
     const radarCfg: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
       { key: "total_distance", label: IS ? "Vegal." : "Dist", fmt: n0 },
       { key: "hsr", label: "HSR", fmt: n0 },
@@ -110,8 +116,11 @@ export default function PlayerGameReportPage() {
       { key: "accel", label: "Acc", fmt: f1 },
       { key: "decel", label: "Dec", fmt: f1 },
       { key: "cod", label: "CoD", fmt: f1 },
+      { key: "efforts", label: IS ? "Átök" : "Efforts", fmt: f1 },
+      { key: "hml", label: "HML", fmt: n0 },
     ];
     const radar: RadarMetric[] = radarCfg
+      .filter((c) => !avail || avail.has(c.key))
       .map((c) => {
         const b = report.benchmarks[c.key];
         return b ? { label: c.label, percentile: b.percentile, valueLabel: c.fmt(b.player) } : null;
@@ -171,7 +180,10 @@ export default function PlayerGameReportPage() {
     home: IS ? "H" : "H", away: IS ? "Ú" : "A", generated: IS ? "Útbúin" : "Generated",
   };
 
-  // Metric config for the benchmark cards (headline per-90 metrics).
+  // Metric config for the benchmark cards (headline per-90 metrics). Drop-empty
+  // per team via availableKeys: Core/Lite teams drop the empty IMA cards (CoD,
+  // jumps) and gain Hard efforts + HML; Pro teams keep their IMA cards.
+  const benchAvail = report?.availableKeys ? new Set(report.availableKeys) : null;
   const benchCards: Array<{ key: string; label: string; unit: string; fmt: (v: number | null | undefined) => string }> = [
     { key: "total_distance", label: IS ? "Vegalengd" : "Distance", unit: "m", fmt: n0 },
     { key: "hsr", label: IS ? "Háhraðahlaup" : "High-speed running", unit: "m", fmt: n0 },
@@ -181,7 +193,23 @@ export default function PlayerGameReportPage() {
     { key: "decel", label: IS ? "Hraðaminnkun" : "Decelerations", unit: "", fmt: f1 },
     { key: "cod", label: IS ? "Stefnubreytingar" : "Change of direction", unit: "", fmt: f1 },
     { key: "jumps", label: IS ? "Stökk" : "Jumps", unit: "", fmt: f1 },
-  ];
+    { key: "efforts", label: IS ? "Hörð átök (acc+dec)" : "Hard efforts (acc+dec)", unit: "", fmt: f1 },
+    { key: "hml", label: IS ? "Háorkuvegalengd (HML)" : "High metabolic load (HML)", unit: "m", fmt: n0 },
+  ].filter((c) => !benchAvail || benchAvail.has(c.key));
+
+  // Variable per-match table columns — same drop-empty rule, so a Lite team's
+  // table shows efforts/HML where a Pro team's shows the IMA split.
+  const matchCols = ([
+    { key: "accel",   label: t.acc,    fmt: f1 },
+    { key: "decel",   label: t.dec,    fmt: f1 },
+    { key: "ima_acc", label: t.imaAcc, cls: "text-emerald-700", fmt: f1 },
+    { key: "ima_dec", label: t.imaDec, cls: "text-emerald-700", fmt: f1 },
+    { key: "cod",     label: t.cod,    cls: "text-emerald-700", fmt: f1 },
+    { key: "jumps",   label: t.jumps,  cls: "text-emerald-700", fmt: f1 },
+    { key: "efforts", label: IS ? "Átök" : "Eff", fmt: f1 },
+    { key: "hml",     label: "HML",    fmt: n0 },
+  ] as Array<{ key: keyof P90; label: string; cls?: string; fmt: (v: number | null | undefined) => string }>)
+    .filter((c) => !benchAvail || benchAvail.has(c.key));
 
   function topPctLabel(b: Bench): { text: string; tone: string } {
     if (!b) return { text: "·", tone: "bg-slate-100 text-slate-500" };
@@ -351,12 +379,9 @@ export default function PlayerGameReportPage() {
                         <th className="px-1.5 py-1 text-right font-medium">{t.hsr}</th>
                         <th className="px-1.5 py-1 text-right font-medium">{t.sprint}</th>
                         <th className="px-1.5 py-1 text-right font-medium">{t.topSpeed}</th>
-                        <th className="px-1.5 py-1 text-right font-medium">{t.acc}</th>
-                        <th className="px-1.5 py-1 text-right font-medium">{t.dec}</th>
-                        <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.imaAcc}</th>
-                        <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.imaDec}</th>
-                        <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.cod}</th>
-                        <th className="px-1.5 py-1 text-right font-medium text-emerald-700">{t.jumps}</th>
+                        {matchCols.map((c) => (
+                          <th key={c.key} className={`px-1.5 py-1 text-right font-medium ${c.cls ?? ""}`}>{c.label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -368,19 +393,16 @@ export default function PlayerGameReportPage() {
                             <td className="px-1.5 py-0.5 font-medium text-slate-800">{formatMatchLabel(m.opponent, m.is_home, { home: t.home, away: t.away })}</td>
                             <td className="px-1.5 py-0.5 text-right tabular-nums text-slate-500">{m.minutes || "·"}</td>
                             {!m.has_gps ? (
-                              <td colSpan={10} className="px-1.5 py-0.5 text-center text-[10px] italic text-slate-400">{IS ? "engin GPS" : "no GPS"}</td>
+                              <td colSpan={4 + matchCols.length} className="px-1.5 py-0.5 text-center text-[10px] italic text-slate-400">{IS ? "engin GPS" : "no GPS"}</td>
                             ) : (
                               <>
                                 <td className="px-1.5 py-0.5 text-right tabular-nums">{per90 ? n0(d?.total_distance) : km1(m.raw?.total_distance)}</td>
                                 <td className="px-1.5 py-0.5 text-right tabular-nums">{n0(d?.hsr)}</td>
                                 <td className="px-1.5 py-0.5 text-right tabular-nums">{n0(d?.sprint)}</td>
                                 <td className="px-1.5 py-0.5 text-right tabular-nums font-semibold">{f1(m.raw?.top_speed_kmh)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums">{f1(d?.accel)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums">{f1(d?.decel)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{f1(d?.ima_acc)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{f1(d?.ima_dec)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{f1(d?.cod)}</td>
-                                <td className="px-1.5 py-0.5 text-right tabular-nums text-emerald-700">{f1(d?.jumps)}</td>
+                                {matchCols.map((c) => (
+                                  <td key={c.key} className={`px-1.5 py-0.5 text-right tabular-nums ${c.cls ?? ""}`}>{c.fmt(d?.[c.key])}</td>
+                                ))}
                               </>
                             )}
                           </tr>

@@ -49,9 +49,15 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 
 // The cumulative per-match metrics we normalise to per-90. Top speed is a peak,
 // handled separately (never divided by minutes).
+// `efforts` (combined Gen2 accel+decel) and `hml` (high metabolic load distance)
+// are the Core/Lite intensity + metabolic signals — populated where the IMA /
+// B2-3 columns are not. Every metric is drop-empty filtered per team downstream
+// (see availableKeys), so Pro teams never see `efforts` and Lite teams never see
+// the empty IMA columns.
 const P90_KEYS = [
   "total_distance", "hsr", "sprint", "player_load",
   "accel", "decel", "ima_acc", "ima_dec", "cod", "jumps", "ima_hsr",
+  "efforts", "hml",
 ] as const;
 type P90Key = (typeof P90_KEYS)[number];
 
@@ -59,6 +65,7 @@ type MatchMetrics = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
   accel: number; decel: number; ima_acc: number; ima_dec: number;
   cod: number; jumps: number; ima_hsr: number; top_speed_kmh: number;
+  efforts: number; hml: number;
 };
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
@@ -78,6 +85,8 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
     jumps: r0(num(r.jumps)),
     ima_hsr: num(r.ima_fr_band58_total_distance),
     top_speed_kmh: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(), // already km/h; drop >45 GPS glitches
+    efforts: r0(num(r.accel_decel_efforts)),
+    hml: num(r.high_metabolic_load_distance_m),
   };
 }
 
@@ -95,6 +104,8 @@ function per90(metrics: MatchMetrics, minutes: number): Record<P90Key, number> {
     cod: r1(metrics.cod * f),
     jumps: r1(metrics.jumps * f),
     ima_hsr: r0(metrics.ima_hsr * f),
+    efforts: r1(metrics.efforts * f),
+    hml: r0(metrics.hml * f),
   };
 }
 
@@ -116,7 +127,7 @@ const LOAD_COLUMNS =
   "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band58_total_distance, jumps";
+  "ima_fr_band58_total_distance, jumps, accel_decel_efforts, high_metabolic_load_distance_m";
 
 export async function GET(req: NextRequest) {
   const ctx = await authenticate(req);
@@ -261,6 +272,12 @@ export async function GET(req: NextRequest) {
   for (const k of P90_KEYS) benchmarks[k] = benchmark(k, acc && acc.n > 0 ? acc.sums[k] / acc.n : null);
   benchmarks.top_speed_kmh = benchmark("top_speed_kmh", bestTopSpeed || null);
 
+  // Capability-aware drop-empty: a metric is "available" only if some player in
+  // the squad sample carries a non-zero value for it. Pro teams surface the IMA
+  // columns (and not `efforts`); Core/Lite teams surface `efforts`/`hml` (and
+  // not the empty IMA columns). The frontend renders only these keys.
+  const availableKeys = benchKeys.filter((k) => (sampleByMetric.get(k) ?? []).some((s) => s.value > 0));
+
   return NextResponse.json({
     player: { id: target.id, full_name: (target.full_name ?? "—").trim(), position: target.position, age: ageFrom(target.date_of_birth) },
     season: { year: season, from, to },
@@ -273,6 +290,7 @@ export async function GET(req: NextRequest) {
       best_top_speed_kmh: r1(bestTopSpeed),
     },
     benchmarks,
+    availableKeys,
     matches,
     // Lightweight roster for the player picker (so the page can switch players).
     roster: players
