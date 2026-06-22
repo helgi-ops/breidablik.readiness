@@ -264,6 +264,7 @@ type ExternalLoadDailyRow = {
   hir_dist?: number | null;
   max_vel?: number | null;
   accel_b2_3_tot_effs_gen2?: number | null;
+  accel_decel_efforts?: number | null;
   tot_as?: number | null;
   decel_b2_3_tot_effs_gen2?: number | null;
   tot_ds?: number | null;
@@ -3603,7 +3604,7 @@ export default function CoachPage() {
 
       const { data, error } = await supabase
         .from("player_external_load_daily")
-        .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
+        .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, accel_decel_efforts, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
         .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", startDate)
@@ -3634,6 +3635,7 @@ export default function CoachPage() {
           hir_dist: toMaybeFinite(row.hir_dist),
           max_vel: toMaybeFinite(row.max_vel),
           accel_b2_3_tot_effs_gen2: toMaybeFinite(row.accel_b2_3_tot_effs_gen2),
+          accel_decel_efforts: toMaybeFinite(row.accel_decel_efforts),
           tot_as: toMaybeFinite(row.tot_as),
           decel_b2_3_tot_effs_gen2: toMaybeFinite(row.decel_b2_3_tot_effs_gen2),
           tot_ds: toMaybeFinite(row.tot_ds),
@@ -6750,14 +6752,16 @@ export default function CoachPage() {
             const num = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) ? n : null; };
             const actualById = new Map<string, {
               totalDistance: number | null; playerLoad: number | null; hsr: number | null;
-              sprint: number | null; accel: number | null; decel: number | null; ima: number | null;
+              sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
             }>();
             for (const r of (loadRows ?? []) as Array<Record<string, unknown>>) {
               if (String(r.date) !== sessionDate) continue;
               actualById.set(String(r.player_id), {
                 totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
-                hsr: num(r.velocity_band5_total_distance), sprint: num(r.velocity_band6_total_distance),
+                hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
+                sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
                 accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
+                efforts: num(r.accel_decel_efforts),
                 ima: num(r.ima_fr_band58_total_distance),
               });
             }
@@ -6767,7 +6771,8 @@ export default function CoachPage() {
             const teamActual = {
               totalDistance: mean(vals.map((v) => v.totalDistance)), playerLoad: mean(vals.map((v) => v.playerLoad)),
               hsr: mean(vals.map((v) => v.hsr)), sprint: mean(vals.map((v) => v.sprint)),
-              accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)), ima: mean(vals.map((v) => v.ima)),
+              accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)),
+              efforts: mean(vals.map((v) => v.efforts)), ima: mean(vals.map((v) => v.ima)),
             };
             plannedVsActual = buildPlannedVsActual(plan, teamActual, actualById);
           }

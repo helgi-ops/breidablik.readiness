@@ -33,6 +33,7 @@ const WEEKLY_RATE: Record<LoadKpi, number> = {
   playerLoad: 0.08,
   accel: 0.07,
   decel: 0.07,
+  efforts: 0.07,
   ima: 0.06,
   hsr: 0.05,
   sprint: 0.04,
@@ -43,10 +44,12 @@ const ACWR_CEILING = 1.3; // Gabbett sweet-spot upper bound.
 const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   totalDistance: (r) => num(r.total_distance),
   playerLoad: (r) => num(r.total_player_load),
-  hsr: (r) => num(r.velocity_band5_total_distance),
-  sprint: (r) => num(r.velocity_band6_total_distance),
+  // HSR/Sprint fall back to the Lite columns (same concept, lower-tier export).
+  hsr: (r) => num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
+  sprint: (r) => num(r.velocity_band6_total_distance) || num(r.sprint_distance),
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
+  efforts: (r) => num(r.accel_decel_efforts),
   ima: (r) => num(r.ima_fr_band58_total_distance),
 };
 function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }

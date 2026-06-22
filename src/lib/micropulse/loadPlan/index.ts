@@ -24,9 +24,13 @@
 import { planSessionLoad, type PlannedSessionLoad, type SessionLoadType } from "@/lib/micropulse/plannedSessionLoad";
 
 export type LoadKpi =
-  | "totalDistance" | "playerLoad" | "hsr" | "sprint" | "accel" | "decel" | "ima";
+  | "totalDistance" | "playerLoad" | "hsr" | "sprint" | "accel" | "decel" | "ima"
+  // Core/Lite have only the combined Gen2 effort count (no accel/decel split, no
+  // IMA) — `efforts` carries the braking dimension for them. availableKpis hides
+  // whichever the club lacks, so each tier shows only the metrics it has.
+  | "efforts";
 
-export const LOAD_KPIS: LoadKpi[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "ima"];
+export const LOAD_KPIS: LoadKpi[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"];
 
 export const KPI_LABEL: Record<LoadKpi, string> = {
   totalDistance: "Total distance (m)",
@@ -35,6 +39,7 @@ export const KPI_LABEL: Record<LoadKpi, string> = {
   sprint: "Sprint distance (m)",
   accel: "Accelerations (B2-3)",
   decel: "Decelerations (B2-3)",
+  efforts: "Hard efforts (accel+decel)",
   ima: "IMA high-intensity (m)",
 };
 
@@ -48,15 +53,22 @@ export type LoadRow = {
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
   ima_fr_band58_total_distance: number | null;
+  // Lite/Core fallbacks (these are the columns lower-tier exports actually carry).
+  high_speed_distance: number | null;
+  sprint_distance: number | null;
+  accel_decel_efforts: number | null;
 };
 
 const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   totalDistance: (r) => num(r.total_distance),
   playerLoad: (r) => num(r.total_player_load),
-  hsr: (r) => num(r.velocity_band5_total_distance),
-  sprint: (r) => num(r.velocity_band6_total_distance),
+  // HSR/Sprint: prefer the Full velocity-band distance, fall back to the Lite
+  // high_speed_distance / sprint_distance (same concept, lower-tier column).
+  hsr: (r) => num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
+  sprint: (r) => num(r.velocity_band6_total_distance) || num(r.sprint_distance),
   accel: (r) => num(r.accel_b2_3_tot_effs_gen2),
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
+  efforts: (r) => num(r.accel_decel_efforts),
   ima: (r) => num(r.ima_fr_band58_total_distance),
 };
 
@@ -67,8 +79,8 @@ function num(v: unknown): number {
 
 /** KPI emphasis by session type — re-weights the per-KPI target. */
 const EMPHASIS: Record<SessionLoadType, Partial<Record<LoadKpi, number>>> = {
-  mechanical: { accel: 1.15, decel: 1.15, hsr: 0.85, sprint: 0.8 },
-  locomotive: { hsr: 1.15, sprint: 1.2, ima: 1.1, accel: 0.9, decel: 0.9 },
+  mechanical: { accel: 1.15, decel: 1.15, efforts: 1.15, hsr: 0.85, sprint: 0.8 },
+  locomotive: { hsr: 1.15, sprint: 1.2, ima: 1.1, accel: 0.9, decel: 0.9, efforts: 0.9 },
   mixed: {},
 };
 
@@ -89,6 +101,7 @@ export type PlayerPlan = {
   sprint: number | null;    // velocity band 6 (sprint)
   accel: number | null;     // accel band 2-3 efforts
   decel: number | null;     // decel band 2-3 efforts
+  efforts: number | null;   // combined accel+decel efforts (Lite/Core)
   ima: number | null;       // IMA high-intensity / change-of-direction distance
   /** Acute:chronic for this player (player load). */
   acwr: number | null;
@@ -108,6 +121,8 @@ export type LoadPlan = {
   baselineNote: string | null;
   /** Team-level per-player KPI targets. */
   targets: KpiTarget[];
+  /** KPIs the club has data for (capability-aware) — surfaces iterate this. */
+  availableKpis: LoadKpi[];
   /** Number of match-level days used to build the reference. */
   matchDaysUsed: number;
   /** Team acute:chronic on player load (Gabbett sweet-spot 0.8–1.3). */
@@ -227,6 +242,14 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
   const trainingDates = Array.from(dateMeans.keys()).filter((d) => d >= chronicFrom && d <= input.sessionDate && !matchDays.includes(d));
   const trainingAvg: Partial<Record<LoadKpi, number | null>> = {};
   for (const k of LOAD_KPIS) trainingAvg[k] = mean(trainingDates.map((d) => dateMeans.get(d)?.[k] ?? 0));
+
+  // Capability-aware: which KPIs the club actually has data for (any non-zero,
+  // match or training). Lite/Core get {distance, PL, hsr, sprint, efforts}; Full
+  // get {…, accel, decel, ima}. Surfaces filter by this so neither tier sees a
+  // column of zeros for metrics its Catapult plan doesn't expose.
+  const availableKpis: LoadKpi[] = LOAD_KPIS.filter(
+    (k) => (matchRef[k] ?? 0) > 0 || (trainingAvg[k] ?? 0) > 0,
+  );
 
   // Targeting mode: microcycle when an MD context exists; otherwise fall back to
   // a recent-load baseline so the report is useful without Week setup. Match/off
@@ -363,6 +386,7 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     const pSprint = ptFor((r) => VAL.sprint(r), emph.sprint);
     const pAccel = ptFor((r) => VAL.accel(r), emph.accel);
     const pDecel = ptFor((r) => VAL.decel(r), emph.decel);
+    const pEfforts = ptFor((r) => VAL.efforts(r), emph.efforts);
     const pIMA = ptFor((r) => VAL.ima(r), emph.ima);
     let flag: PlayerPlan["flag"] = "ok";
     let flagReason: string | null = null;
@@ -378,6 +402,7 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
       sprint: pSprint,
       accel: pAccel,
       decel: pDecel,
+      efforts: pEfforts,
       ima: pIMA,
       acwr: acwr != null ? Math.round(acwr * 100) / 100 : null,
       flag,
@@ -394,6 +419,7 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     hasTargets,
     baselineNote,
     targets,
+    availableKpis,
     matchDaysUsed: matchDays.length,
     teamAcwr: teamAcwr != null ? Math.round(teamAcwr * 100) / 100 : null,
     acutePL: acutePL != null ? Math.round(acutePL) : null,

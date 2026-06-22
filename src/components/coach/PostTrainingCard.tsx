@@ -48,8 +48,6 @@ const STATUS_WORD: Record<PvaStatus, string> = {
 };
 const pctTxt = (k: KpiCompare) => (k.pctOfPlan == null ? "—" : `${k.pctOfPlan}%`);
 
-const HEAD_KPIS = ["totalDistance", "playerLoad", "hsr", "ima"] as const;
-
 export default function PostTrainingCard({ date }: { date?: string }) {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +88,13 @@ export default function PostTrainingCard({ date }: { date?: string }) {
 
   const pva = data.plannedVsActual;
   const teamBy = (k: string) => pva?.team.find((t) => t.kpi === k) ?? null;
+  // Capability-aware: only the KPIs the club has data for (Lite/Core lacks the
+  // accel/decel split + IMA but has the combined "efforts").
+  const avail = new Set(pva?.availableKpis ?? PVA_KPIS);
+  // The ~4 headline metrics, in preference order, filtered to what's available
+  // (Full → …ima; Lite → …efforts). Used for both the headline tiles + per-player.
+  const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint"] as const)
+    .filter((k) => avail.has(k)).slice(0, 4);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -191,7 +196,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
 
           {/* Headline KPIs: planned → actual with adherence tint */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {HEAD_KPIS.map((k) => {
+            {headKpis.map((k) => {
               const t = teamBy(k);
               const st = t?.status ?? "na";
               return (
@@ -208,7 +213,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
           {/* All 7 KPIs — team planned vs actual */}
           <details className="mt-3 rounded-lg border border-slate-200" open>
             <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-slate-700">
-              All 7 metrics — team plan vs actual
+              All metrics — team plan vs actual
             </summary>
             <div className="overflow-x-auto px-1 pb-2">
               <table className="w-full text-xs">
@@ -222,7 +227,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {PVA_KPIS.map((k) => {
+                  {PVA_KPIS.filter((k) => avail.has(k)).map((k) => {
                     const t = teamBy(k);
                     const st = t?.status ?? "na";
                     return (
@@ -258,10 +263,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
                 <thead className="bg-slate-100 text-slate-600">
                   <tr>
                     <th className="px-2 py-1 text-left">Player</th>
-                    <th className="px-2 py-1 text-right">Dist (m)</th>
-                    <th className="px-2 py-1 text-right">Player Load</th>
-                    <th className="px-2 py-1 text-right">HSR (m)</th>
-                    <th className="px-2 py-1 text-right">IMA (m)</th>
+                    {headKpis.map((k) => <th key={k} className="px-2 py-1 text-right">{PVA_LABEL[k]}</th>)}
                     <th className="px-2 py-1 text-right">PL % plan</th>
                     <th className="px-2 py-1 text-left">Status</th>
                   </tr>
@@ -280,10 +282,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
                     return (
                       <tr key={pp.player_id} className="border-t border-slate-100">
                         <td className="whitespace-nowrap px-2 py-1 font-medium text-slate-800">{pp.name}</td>
-                        {cell("totalDistance")}
-                        {cell("playerLoad")}
-                        {cell("hsr")}
-                        {cell("ima")}
+                        {headKpis.map(cell)}
                         <td className="px-2 py-1 text-right tabular-nums text-slate-700">{pp.pctOfPlan != null ? `${pp.pctOfPlan}%` : "—"}</td>
                         <td className="whitespace-nowrap px-2 py-1">
                           <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TINT[pp.status]}`}>{STATUS_WORD[pp.status]}</span>

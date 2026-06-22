@@ -64,15 +64,18 @@ export async function GET(req: NextRequest) {
   // Actual KPIs per player for that session date.
   const { data: gpsRows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance")
+    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts")
     .in("player_id", playerIds)
     .eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
   for (const r of (gpsRows ?? []) as Array<Record<string, unknown>>) {
     actualById.set(String(r.player_id), {
       totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
-      hsr: num(r.velocity_band5_total_distance), sprint: num(r.velocity_band6_total_distance),
+      // HSR/Sprint fall back to the Lite columns; efforts = combined Gen2 count (Lite/Core).
+      hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
+      sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
+      efforts: num(r.accel_decel_efforts),
       ima: num(r.ima_fr_band58_total_distance),
     });
   }
@@ -81,7 +84,8 @@ export async function GET(req: NextRequest) {
   const teamActual: ActualKpis = {
     totalDistance: mean(vals.map((v) => v.totalDistance)), playerLoad: mean(vals.map((v) => v.playerLoad)),
     hsr: mean(vals.map((v) => v.hsr)), sprint: mean(vals.map((v) => v.sprint)),
-    accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)), ima: mean(vals.map((v) => v.ima)),
+    accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)),
+    efforts: mean(vals.map((v) => v.efforts)), ima: mean(vals.map((v) => v.ima)),
   };
 
   // Planned side — reuse the load-plan endpoint for the same session date.

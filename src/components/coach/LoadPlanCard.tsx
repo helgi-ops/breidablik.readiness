@@ -36,6 +36,7 @@ type Plan = {
   hasTargets: boolean;
   baselineNote: string | null;
   targets: KpiTarget[];
+  availableKpis?: string[];
   matchDaysUsed: number;
   teamAcwr: number | null; acutePL: number | null; chronicPL: number | null;
   readinessAdjustPct: number; readinessNote: string | null;
@@ -52,7 +53,7 @@ type AttentionPlayer = { player_id: string; name: string; color: string; score: 
 
 const KPI_LABEL: Record<string, string> = {
   totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed dist (m)",
-  sprint: "Sprint dist (m)", accel: "Accelerations", decel: "Decelerations", ima: "High-intensity efforts (m)",
+  sprint: "Sprint dist (m)", accel: "Accelerations", decel: "Decelerations", efforts: "Hard efforts", ima: "High-intensity efforts (m)",
 };
 // Optional jargon tooltip per KPI — the abbreviation + paper citation stays reachable
 // on hover so the primary label can read plainly (explainability-first §jargon).
@@ -65,7 +66,7 @@ const TYPE_TINT: Record<string, string> = {
   locomotive: "bg-sky-100 text-sky-800",
   mixed: "bg-violet-100 text-violet-800",
 };
-const KPI_ALL: string[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "ima"];
+const KPI_ALL: string[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"];
 const KPI_MEANING: Record<string, string> = {
   totalDistance: "Overall running volume — the size of the session.",
   playerLoad: "Total mechanical work (accelerometer) — the best single 'how hard' number.",
@@ -122,7 +123,11 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
   const p = plan.planned;
   const acwrColor = plan.teamAcwr == null ? "text-slate-700" : plan.teamAcwr > 1.3 ? "text-red-600" : plan.teamAcwr < 0.8 ? "text-amber-600" : "text-emerald-600";
   const targetBy = (k: string) => plan.targets.find((t) => t.kpi === k);
-  const head = ["totalDistance", "hsr", "playerLoad", "ima"];
+  // Capability-aware: only show KPIs the club has data for (Lite/Core lacks the
+  // accel/decel split + IMA, but has the combined "efforts"). Falls back to all.
+  const avail = new Set(plan.availableKpis ?? KPI_ALL);
+  const shownKpis = KPI_ALL.filter((k) => avail.has(k));
+  const head = ["totalDistance", "hsr", "playerLoad", "efforts", "ima", "sprint"].filter((k) => avail.has(k)).slice(0, 4);
 
   // Detailed deterministic explanation — the SAME text the PDF renders.
   const narrative = buildLoadPlanNarrative(plan, readiness?.checkedIn ?? null);
@@ -282,7 +287,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
           {plan.readinessAdjustPct !== 0 && (
             <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
               <span className="font-semibold">After the {plan.readinessAdjustPct}% readiness trim — prescribe today:</span>{" "}
-              {["totalDistance", "hsr", "playerLoad", "ima"].map((k, i) => {
+              {head.map((k, i) => {
                 const a = plan.adjustedTargets.find((t) => t.kpi === k);
                 return <span key={k}>{i > 0 ? " · " : ""}<span title={KPI_TOOLTIP[k]}>{KPI_LABEL[k]}</span> <strong>{fmt(a?.target ?? null)}</strong></span>;
               })}
@@ -327,7 +332,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
                   </tr>
                 </thead>
                 <tbody>
-                  {KPI_ALL.map((k) => {
+                  {shownKpis.map((k) => {
                     const t = targetBy(k);
                     const recent = plan.recentAvg?.[k] ?? null;
                     return (

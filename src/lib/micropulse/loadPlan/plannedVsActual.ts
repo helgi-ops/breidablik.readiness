@@ -10,16 +10,17 @@
  * (rules decide), this only diffs them against what was captured.
  */
 
-export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "ima"] as const;
+export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"] as const;
 export type PvaKpi = (typeof PVA_KPIS)[number];
 
 export const PVA_LABEL: Record<PvaKpi, string> = {
   totalDistance: "Total distance (m)",
   playerLoad: "Player Load",
-  hsr: "HSR VB5 (m)",
-  sprint: "Sprint VB6 (m)",
+  hsr: "HSR (m)",
+  sprint: "Sprint (m)",
   accel: "Accel B2-3",
   decel: "Decel B2-3",
+  efforts: "Hard efforts",
   ima: "IMA COD (m)",
 };
 
@@ -52,18 +53,20 @@ export type PlannedVsActual = {
   team: KpiCompare[];
   players: PlayerCompare[];
   summary: string;
+  /** KPIs that have planned-or-actual data (capability-aware) — card filters by this. */
+  availableKpis: PvaKpi[];
 };
 
 export type ActualKpis = {
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
-  sprint: number | null; accel: number | null; decel: number | null; ima: number | null;
+  sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
 };
 
 type PlanTarget = { kpi: string; target: number | null };
 type PlanPlayer = {
   player_id: string; name: string;
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
-  sprint: number | null; accel: number | null; decel: number | null; ima: number | null;
+  sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
 };
 export type PlanForCompare = {
   hasTargets: boolean;
@@ -104,7 +107,7 @@ export function buildPlannedVsActual(
 ): PlannedVsActual {
   const empty: PlannedVsActual = {
     hasPlan: false, mode: "unavailable", mdLabel: null, loadType: "mixed", matchPct: 0,
-    readinessAdjustPct: 0, team: [], players: [], summary: "No pre-session plan was available for this date, so there is nothing to compare against.",
+    readinessAdjustPct: 0, team: [], players: [], availableKpis: [], summary: "No pre-session plan was available for this date, so there is nothing to compare against.",
   };
   if (!plan || !plan.hasTargets) return empty;
 
@@ -116,10 +119,13 @@ export function buildPlannedVsActual(
   const team: KpiCompare[] = PVA_KPIS.map((k) =>
     compare(k, teamPlannedBy.get(k) ?? null, teamActual[k]),
   );
+  // Capability-aware: only KPIs with planned-or-actual data (Lite lacks the
+  // accel/decel split + IMA but has the combined "efforts").
+  const availableKpis = team.filter((c) => c.planned != null || c.actual != null).map((c) => c.kpi);
 
   // Per-player planned = that player's KPI target × the squad readiness factor.
   const players: PlayerCompare[] = plan.perPlayer.map((pp) => {
-    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, ima: null };
+    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, efforts: null, ima: null };
     const byKpi = {} as Record<PvaKpi, KpiCompare>;
     for (const k of PVA_KPIS) {
       const plannedRaw = pp[k];
@@ -152,6 +158,7 @@ export function buildPlannedVsActual(
     readinessAdjustPct: plan.readinessAdjustPct,
     team,
     players,
+    availableKpis,
     summary,
   };
 }
