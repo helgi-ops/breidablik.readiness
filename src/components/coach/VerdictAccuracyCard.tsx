@@ -46,6 +46,7 @@ type CalibrationResponse = {
   };
   totalScoreableVerdicts: number;
   sampleSizeAdequate: boolean;
+  headline?: { tone: "good" | "caution" | "building"; en: string; is: string };
 };
 
 // Copy lookup — keeps strings together for translation review
@@ -197,6 +198,24 @@ export default function VerdictAccuracyCard({ lang }: { lang: "IS" | "EN" }) {
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
+        {/* Plain-language verdict — the coach reads this first; the tiles
+            below are the drill-down. Explainability-first: the system says
+            where it is right and where it may be mis-tuned for THIS squad,
+            and points at the question rather than silently changing itself. */}
+        {data.headline ? (
+          <div
+            className={`mb-3 rounded-lg border px-3 py-2 text-xs font-medium leading-snug ${
+              data.headline.tone === "good"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : data.headline.tone === "caution"
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-slate-200 bg-slate-50 text-slate-600"
+            }`}
+          >
+            {lang === "IS" ? data.headline.is : data.headline.en}
+          </div>
+        ) : null}
+
         {/* Compact 3-column accuracy strip */}
         <div className="grid grid-cols-3 gap-2">
           {states.map((state) => {

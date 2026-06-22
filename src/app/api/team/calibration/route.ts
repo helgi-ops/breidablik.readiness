@@ -127,7 +127,73 @@ export type CalibrationResponse = {
    * proportion estimates with ~10% margin of error.
    */
   sampleSizeAdequate: boolean;
+  /**
+   * Synthesised, coach-facing one-sentence READ of the per-state stats —
+   * the plain-language verdict the coach sees first ("the engine is well
+   * calibrated for your squad" / "RED looks over-sensitive"). This is the
+   * first, read-only half of the learning loop: the system tells the coach
+   * plainly where it is right and where it may be mis-tuned for THIS squad.
+   * It never changes the engine — it points the coach + S&C at the question.
+   */
+  headline: CalibrationHeadline;
 };
+
+export type CalibrationHeadline = {
+  /** good = trust signal; caution = a pattern worth reviewing; building = not enough data yet. */
+  tone: "good" | "caution" | "building";
+  en: string;
+  is: string;
+};
+
+/**
+ * Turn the three per-state stats into ONE plain-language verdict. Order of
+ * precedence: (1) not enough data → "building"; (2) RED looks over-sensitive
+ * (most RED verdicts recovered the next day on a usable sample) → caution,
+ * with the honest caveat that the coach's own modification may be what drove
+ * the recovery; (3) otherwise lead with GREEN safety as the headline trust
+ * signal. Deterministic — rules decide, this only narrates.
+ */
+function computeHeadline(
+  g: CalibrationStateStats,
+  y: CalibrationStateStats,
+  r: CalibrationStateStats,
+  adequate: boolean,
+): CalibrationHeadline {
+  if (!adequate) {
+    return {
+      tone: "building",
+      en: "Calibration is still building — not enough scoreable verdicts in the last 30 days to judge the engine for your squad yet.",
+      is: "Kvörðun er enn að byggjast upp — ekki nógu margir metanlegir úrskurðir síðustu 30 daga til að meta vélina fyrir hópinn þinn.",
+    };
+  }
+
+  const redScoreable = r.total - r.unknownCount;
+  const redRecoveredPct = redScoreable > 0 ? Math.round((100 * r.recoveredNextDay) / redScoreable) : null;
+  // RED over-sensitivity needs a usable RED sample of its own (≥10) — the
+  // overall sample being adequate isn't enough to trust a RED-only rate.
+  if (redScoreable >= 10 && redRecoveredPct != null && redRecoveredPct >= 60) {
+    return {
+      tone: "caution",
+      en: `Your RED verdicts recovered the next day ${redRecoveredPct}% of the time — either your modifications are working, or the engine is flagging RED early for your squad. Worth reviewing with your S&C.`,
+      is: `RED-úrskurðir þínir náðu sér daginn eftir í ${redRecoveredPct}% tilfella — annaðhvort eru aðgerðir þínar að virka, eða vélin flaggar RED snemma fyrir hópinn þinn. Þess virði að skoða með álagsstjóranum.`,
+    };
+  }
+
+  const greenSafe = g.accuracyPct;
+  if (greenSafe != null && greenSafe >= 85) {
+    return {
+      tone: "good",
+      en: `The engine looks well-calibrated for your squad: ${greenSafe}% of GREEN verdicts stayed safe — no escalation or injury within 7 days.`,
+      is: `Vélin virðist vel kvörðuð fyrir hópinn þinn: ${greenSafe}% af GREEN-úrskurðum héldust öruggir — engin escalation eða meiðsli innan 7 daga.`,
+    };
+  }
+
+  return {
+    tone: "caution",
+    en: `GREEN verdicts stayed safe ${greenSafe ?? 0}% of the time — review the misses with your S&C to see whether thresholds need tuning for your squad.`,
+    is: `GREEN-úrskurðir héldust öruggir í ${greenSafe ?? 0}% tilfella — skoðaðu frávikin með álagsstjóranum til að meta hvort stilla þurfi þröskulda fyrir hópinn þinn.`,
+  };
+}
 
 function computeStats(row: SummaryRow | null, state: "GREEN" | "YELLOW" | "RED"): CalibrationStateStats {
   const total = row?.total_verdicts ?? 0;
@@ -230,6 +296,7 @@ export async function GET(req: Request) {
       },
       totalScoreableVerdicts: totalScoreable,
       sampleSizeAdequate: totalScoreable >= SAMPLE_SIZE_THRESHOLD,
+      headline: computeHeadline(greenStats, yellowStats, redStats, totalScoreable >= SAMPLE_SIZE_THRESHOLD),
     };
 
     return NextResponse.json(response);
