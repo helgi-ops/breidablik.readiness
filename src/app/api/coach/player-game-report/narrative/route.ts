@@ -36,11 +36,12 @@ async function requireCoach(req: NextRequest) {
   return { ok: true } as const;
 }
 
-const SYSTEM = `You write a short physical-performance profile of a football player for the player's AGENT, from GPS and inertial (IMA) match data.
+const SYSTEM = `You write a short physical-performance profile of a football player for the player's AGENT, from GPS and match-load data.
 
 Hard rules:
 - Use ONLY the numbers given in the user message. Never invent or estimate values.
-- Reference the actual metrics by their plain meaning (distance covered, high-speed running, sprinting, accelerations/decelerations, change of direction, top speed). No raw jargon ("band 5-8", "IMA", "ACWR").
+- Describe ONLY the metrics actually present in the data (see metric_guide) — different clubs capture different signals, so do not mention a metric that is absent (e.g. change of direction or jumps may not be provided).
+- Reference metrics by their plain meaning (distance covered, high-speed running, sprinting, accelerations/decelerations, hard efforts, high metabolic load, change of direction, top speed). No raw jargon ("band 5-8", "IMA", "ACWR").
 - Per-90 means "per 90 minutes" — comparable across matches. Percentile/rank is within this player's own squad.
 - Be factual and positive but not hyperbolic. No medical or injury claims. No transfer-value or recruitment advice.
 - 90-140 words, 2 short paragraphs. Plain language a non-specialist agent reads in 20 seconds.
@@ -58,6 +59,33 @@ export async function POST(req: NextRequest) {
   const player = body?.player ?? {};
   const summary = body?.summary ?? {};
   const benchmarks = body?.benchmarks ?? {};
+  // Which metrics this club actually captures (drop-empty, from the report). When
+  // absent we keep every metric for back-compat. `top_speed_kmh` is always kept —
+  // it's a peak, reported separately from the per-90 averages.
+  const availableKeys: string[] | null = Array.isArray(body?.availableKeys) ? body.availableKeys : null;
+  const isAvail = (k: string) => k === "top_speed_kmh" || !availableKeys || availableKeys.includes(k);
+
+  const METRIC_GUIDE: Record<string, string> = {
+    total_distance: "metres covered per 90",
+    hsr: "high-speed running metres per 90",
+    sprint: "sprinting metres per 90",
+    player_load: "overall mechanical workload per 90",
+    accel: "accelerations per 90",
+    decel: "decelerations per 90",
+    ima_acc: "explosive accelerations per 90",
+    ima_dec: "explosive decelerations per 90",
+    cod: "change-of-direction actions per 90",
+    jumps: "jumps per 90",
+    ima_hsr: "high-intensity running metres per 90",
+    efforts: "hard accelerations and decelerations combined, per 90",
+    hml: "high metabolic load distance (intense running) per 90",
+    top_speed_kmh: "peak sprint speed (km/h)",
+  };
+
+  // Keep only the metrics the club captures — so the AI never describes a
+  // flat-zero column a Core/Lite team doesn't measure.
+  const pick = (obj: Record<string, unknown> | null | undefined) =>
+    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k)));
 
   const facts = {
     player: { name: player.full_name, position: player.position ?? "unknown", age: player.age ?? "unknown" },
@@ -65,19 +93,10 @@ export async function POST(req: NextRequest) {
     matches_played: summary.matches_played,
     matches_with_gps: summary.matches_with_gps,
     total_minutes: summary.total_minutes,
-    per_90_averages: summary.per90_avg,
+    per_90_averages: pick(summary.per90_avg),
     best_top_speed_kmh: summary.best_top_speed_kmh,
-    squad_benchmarks: benchmarks, // each: {player, team_avg, percentile, rank, n}
-    metric_guide: {
-      total_distance: "metres covered per 90",
-      hsr: "high-speed running metres per 90",
-      sprint: "sprinting metres per 90",
-      accel: "accelerations per 90",
-      decel: "decelerations per 90",
-      cod: "change-of-direction actions per 90",
-      jumps: "jumps per 90",
-      top_speed_kmh: "peak sprint speed (km/h)",
-    },
+    squad_benchmarks: pick(benchmarks), // each: {player, team_avg, percentile, rank, n}
+    metric_guide: Object.fromEntries(Object.entries(METRIC_GUIDE).filter(([k]) => isAvail(k))),
   };
 
   const userMsg = `Write the profile in ${lang}. Data (JSON):\n${JSON.stringify(facts)}`;

@@ -149,6 +149,7 @@ export default function PlayerGameReportPage() {
           player: { ...report.player, season: report.season.year },
           summary: report.summary,
           benchmarks: report.benchmarks,
+          availableKeys: report.availableKeys,
         }),
       });
       const json = await res.json();
@@ -160,7 +161,7 @@ export default function PlayerGameReportPage() {
 
   const t = {
     title: IS ? "Leikgögn leikmanns" : "Player game report",
-    intro: IS ? "Líkamleg frammistaða per leik (GPS + IMA), stillt á per-90." : "Physical performance per match (GPS + IMA), normalised to per-90.",
+    intro: IS ? "Líkamleg frammistaða per leik, stillt á per-90." : "Physical performance per match, normalised to per-90.",
     player: IS ? "Leikmaður" : "Player", season: IS ? "Tímabil" : "Season",
     print: IS ? "Prenta / Vista PDF" : "Print / Save PDF",
     per90: IS ? "Per 90 mín" : "Per 90 min", totals: IS ? "Heildartölur" : "Totals",
