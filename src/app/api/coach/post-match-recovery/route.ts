@@ -109,17 +109,17 @@ export async function GET(req: NextRequest) {
   }
 
   // ── IMA mechanical match-load (the "dose" that predicts the MD+1 echo) ──
-  type RawLoad = { decel: number; accel: number; cod: number; jumps: number };
+  type RawLoad = { decel: number; accel: number; cod: number; jumps: number; efforts: number };
   const rawLoad = new Map<string, RawLoad>();
   if (playerIds.length) {
     const { data: ld } = await supabase
       .from("player_external_load_daily")
-      .select("player_id, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+      .select("player_id, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts")
       .eq("source", "catapult").in("player_id", playerIds).eq("date", match.match_date);
     for (const r of (ld ?? []) as Array<Record<string, unknown>>) {
       const cod = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
         num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
-      rawLoad.set(String(r.player_id), { decel: num(r.ima_decel), accel: num(r.ima_accel), cod, jumps: num(r.jumps) });
+      rawLoad.set(String(r.player_id), { decel: num(r.ima_decel), accel: num(r.ima_accel), cod, jumps: num(r.jumps), efforts: num(r.accel_decel_efforts) });
     }
   }
   // Cohort mean/sd per metric (players with load only) → z-composite tiers.
@@ -131,9 +131,14 @@ export async function GET(req: NextRequest) {
     const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
     return { mean, sd };
   };
-  const stats = { decel: stat("decel"), accel: stat("accel"), cod: stat("cod"), jumps: stat("jumps") };
+  const stats = { decel: stat("decel"), accel: stat("accel"), cod: stat("cod"), jumps: stat("jumps"), efforts: stat("efforts") };
+  // Capability-aware dose: Pro clubs have the IMA accel/decel/CoD/jumps composite;
+  // Core/Lite (no IMA) fall back to the combined Gen2 accel+decel effort count as
+  // the braking dose. Same "relative high/mid/low echo" read, different signal.
+  const hasIma = loadVals.some((v) => v.decel > 0 || v.accel > 0 || v.cod > 0 || v.jumps > 0);
   const loadScore = (r: RawLoad): number => {
     const z = (k: keyof RawLoad) => (stats[k].sd > 0 ? (r[k] - stats[k].mean) / stats[k].sd : 0);
+    if (!hasIma) return z("efforts");
     return (LOAD_W.decel * z("decel") + LOAD_W.accel * z("accel") + LOAD_W.cod * z("cod") + LOAD_W.jumps * z("jumps")) / LOAD_W_SUM;
   };
 

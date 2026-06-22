@@ -201,6 +201,11 @@ export default function TeamMetabolicSummary({
   const summary = payload?.summary;
   const rows = payload?.rows ?? [];
   const missingPlayers = payload?.missingPlayers ?? [];
+  // The metabolic composite needs di Prampero metabolic power + time-above-HML —
+  // signals Core/Lite Catapult plans don't expose (they carry HML distance only,
+  // which is surfaced in Squad Load instead). If no player has valid metabolic
+  // data, self-hide rather than show an empty composite for lower-tier clubs.
+  if (payload && rows.length > 0 && !rows.some((r) => r.metabolic_data_valid)) return null;
 
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>

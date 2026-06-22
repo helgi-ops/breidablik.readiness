@@ -60,6 +60,9 @@ const FOOTBALL_METRICS_LITE: Metric[] = [
   // Player Load — the classic acute:chronic workload metric (Gabbett); a far
   // better fit for the 7d/28d/ACWR view than a peak like max velocity.
   { key: "totalPlayerLoad",            label: "Player Load",            shortLabel: "Player Load", aliases: ["totalPlayerLoad", "total_player_load"],                                                         digits: 0 },
+  // High Metabolic Load Distance — the high-intensity-running signal Core/Lite
+  // plans DO expose (di Prampero-derived); the Lite stand-in for metabolic power.
+  { key: "hmld",                       label: "High Metabolic Load Dist (m)", shortLabel: "HML",   aliases: ["high_metabolic_load_distance_m", "highMetabolicLoadDistanceM", "hmld"],                          digits: 0 },
 ];
 
 const BASKETBALL_METRICS: Metric[] = [

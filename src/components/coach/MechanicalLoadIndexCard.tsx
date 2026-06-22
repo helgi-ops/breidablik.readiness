@@ -130,6 +130,10 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
 
   const rows = data?.rows ?? [];
   const anyCss = rows.some((r) => r.css != null);
+  // MLI is computed from accel/decel B2-3 efforts — columns Core/Lite Catapult
+  // plans don't expose. If no player has an MLI, self-hide rather than show a
+  // card of "—" for lower-tier clubs (the load-verdict + GPS surfaces cover them).
+  if (data && !rows.some((r) => r.mli != null)) return null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
