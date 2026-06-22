@@ -182,7 +182,14 @@ export default function GpsLoadIntelligence({
     r.residualDecelBand === "CAUTION" || r.residualDecelBand === "HIGH"
   ).length;
 
-  if (!rows.length) return null;
+  // Every metric here (decel burden, A:D, HID%, residual decel) is McBurnie
+  // B2-3 / decel-derived — columns Core/Lite Catapult plans don't expose. If no
+  // player has ANY of them there's nothing to show, so self-hide rather than
+  // render a card full of "—" for lower-tier clubs.
+  const hasAnySignal = rows.some(
+    (r) => r.decelBurden != null || r.accelDecelRatio != null || r.hidPct != null || r.residualDecel != null,
+  );
+  if (!rows.length || !hasAnySignal) return null;
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
