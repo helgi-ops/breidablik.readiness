@@ -13,7 +13,7 @@
  */
 
 import type { LoadVerdictBand } from "../loadVerdict";
-import { DIMENSION_LABELS, getMetric, type Dimension } from "./registry";
+import { DIMENSION_LABELS, DIMENSIONS, getMetric, type Dimension } from "./registry";
 import type { MetricBand } from "./interpretMetric";
 
 export type DimensionSignal = {
@@ -28,9 +28,9 @@ export type SynthInput = {
   subject?: { name?: string };
   dimensions: DimensionSignal[];
   acwr?: { ratio: number | null } | null;
-  /** Baseline maturity (training days) and 5-dimension coverage feed confidence. */
+  /** Baseline maturity (training days) and dimension coverage feed confidence. */
   baselineDays?: number;
-  dimensionsCovered?: number; // of 5
+  dimensionsCovered?: number; // of DIMENSIONS.length
 };
 
 export type VerdictDriver = {
@@ -128,7 +128,7 @@ export function synthesizeVerdict(input: SynthInput): SynthVerdict {
   }
 
   const covered = input.dimensionsCovered ?? dims.length;
-  const coverage = covered / 5;
+  const coverage = covered / DIMENSIONS.length;
   const baselineDays = input.baselineDays ?? 0;
   const level: "high" | "moderate" | "low" =
     coverage >= 0.66 && baselineDays >= 19 ? "high"

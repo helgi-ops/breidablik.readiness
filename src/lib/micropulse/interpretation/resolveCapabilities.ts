@@ -23,7 +23,7 @@ export type CapabilityResult = {
   dimensions: Record<Dimension, string | null>;
   /** Coverage (0..1) of the chosen metric per dimension (0 when none). */
   coverageByDimension: Record<Dimension, number>;
-  /** How many of the 5 dimensions resolved — feeds confidence (n/5). */
+  /** How many of the interpretation dimensions resolved — feeds confidence (n/total). */
   dimensionsCovered: number;
 };
 

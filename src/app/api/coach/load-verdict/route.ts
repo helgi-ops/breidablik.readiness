@@ -18,6 +18,7 @@ import { computePlayerLoadAcwr, type DailyLoad } from "@/lib/micropulse/playerLo
 import { computeFosterMetrics } from "@/lib/micropulse/foster";
 import { computeLoadVerdict, type LoadVerdictInput, type LoadVerdict } from "@/lib/micropulse/loadVerdict";
 import { resolveCapabilities } from "@/lib/micropulse/interpretation/resolveCapabilities";
+import { DIMENSIONS } from "@/lib/micropulse/interpretation/registry";
 
 export const runtime = "nodejs";
 
@@ -166,8 +167,8 @@ export async function GET(req: NextRequest) {
         level: confLevel,
         coverage: avgCoverage,            // legacy signal coverage (kept for compatibility)
         baselineDays: minBaseline,
-        dimensionsCovered: dimsCovered,   // n of 5 interpretation dimensions
-        dimensionsTotal: 5,
+        dimensionsCovered: dimsCovered,   // n of the interpretation dimensions
+        dimensionsTotal: DIMENSIONS.length,
         dimensions: caps.dimensions,      // best metric chosen per dimension (drill-down)
       },
     },

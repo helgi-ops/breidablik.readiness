@@ -7,8 +7,8 @@
  * efforts) vs Breiðablik (Pro: braking = IMA decel). One engine, no tier branch.
  *
  * Coverage fixtures are the real 2026 numbers read from the DB (22 Jun 2026):
- *   Breiðablik  ima_decel 96% · decel_b2_3 88% · accel_decel 0%  · vb6 51% · HR 0%
- *   Þór         ima_decel 0%  · decel_b2_3 0%  · accel_decel 87% · vb6 53% · HR 0%
+ *   Breiðablik  ima_decel 96% · decel_b2_3 88% · accel_decel 0%  · vb6 51% · HML 99% · HR 0%
+ *   Þór         ima_decel 0%  · decel_b2_3 0%  · accel_decel 87% · vb6 53% · HML 84% · HR 0%
  *
  * Run with:  npx vitest src/lib/micropulse/__tests__/interpretation.test.ts
  */
@@ -25,6 +25,7 @@ const BREIDABLIK = {
   ima_decel: 0.96, decel_b2_3_tot_effs_gen2: 0.88, accel_decel_efforts: 0.0,
   velocity_band6_total_efforts_gen2: 0.51, velocity_band5_total_efforts_gen2: 0.81,
   high_speed_distance: 0.82, sprint_distance: 0.60,
+  high_metabolic_load_distance_m: 0.99,
   avg_heart_rate: 0.0,
 };
 const THOR = {
@@ -33,6 +34,7 @@ const THOR = {
   ima_decel: 0.0, decel_b2_3_tot_effs_gen2: 0.0, accel_decel_efforts: 0.87,
   velocity_band6_total_efforts_gen2: 0.53, velocity_band5_total_efforts_gen2: 0.81,
   high_speed_distance: 0.82, sprint_distance: 0.60,
+  high_metabolic_load_distance_m: 0.84,
   avg_heart_rate: 0.0,
 };
 
@@ -63,20 +65,24 @@ describe("resolveCapabilities — Þór (Core) vs Breiðablik (Pro)", () => {
     expect(proMetrics.some((k) => k.startsWith("ima_"))).toBe(true);
   });
 
-  it("volume / intensity / sprint resolve identically; both omit internal (no HR belts)", () => {
-    for (const d of ["volume", "intensity", "sprint"]) {
+  it("volume / intensity / sprint / metabolic resolve identically; both omit internal (no HR belts)", () => {
+    for (const d of ["volume", "intensity", "sprint", "metabolic"]) {
       expect(core.dimensions[d]).toBe(pro.dimensions[d]);
     }
     expect(pro.dimensions.volume).toBe("total_player_load");
     expect(pro.dimensions.intensity).toBe("player_load_per_minute");
     expect(pro.dimensions.sprint).toBe("velocity_band6_total_efforts_gen2");
+    // Metabolic load (HML) is a first-class dimension both tiers cover from GPS —
+    // no IMA required, so Core gets it too.
+    expect(pro.dimensions.metabolic).toBe("high_metabolic_load_distance_m");
+    expect(core.dimensions.metabolic).toBe("high_metabolic_load_distance_m");
     expect(pro.dimensions.internal).toBeNull();
     expect(core.dimensions.internal).toBeNull();
   });
 
-  it("both cover 4 of 5 dimensions today (internal missing until HR belts)", () => {
-    expect(pro.dimensionsCovered).toBe(4);
-    expect(core.dimensionsCovered).toBe(4);
+  it("both cover 5 of 6 dimensions today (internal missing until HR belts)", () => {
+    expect(pro.dimensionsCovered).toBe(5);
+    expect(core.dimensionsCovered).toBe(5);
   });
 });
 
@@ -96,16 +102,16 @@ describe("resolveCapabilities — preference, threshold, self-upgrade", () => {
   it("self-upgrades: Core club adds HR belts → internal dimension lights up, no config", () => {
     const upgraded = resolveFromCoverage({ ...THOR, avg_heart_rate: 0.8 });
     expect(upgraded.dimensions.internal).toBe("avg_heart_rate");
-    expect(upgraded.dimensionsCovered).toBe(5);
+    expect(upgraded.dimensionsCovered).toBe(6); // volume+intensity+braking+sprint+metabolic+internal
   });
 
   it("a contested metric never wins over a clean one in its dimension", () => {
-    // metabolic_power (contested, rank 9) sits in 'intensity' behind PL/min (rank 1).
+    // metabolic_power (contested, rank 9) sits in 'metabolic' behind HML (rank 1).
     expect(getMetric("metabolic_power")?.contested).toBe(true);
-    expect(resolveFromCoverage({ metabolic_power: 1.0, player_load_per_minute: 1.0 }).dimensions.intensity)
-      .toBe("player_load_per_minute");
-    // ...but if PL/min is absent, the contested signal is better than nothing.
-    expect(resolveFromCoverage({ metabolic_power: 1.0 }).dimensions.intensity).toBe("metabolic_power");
+    expect(resolveFromCoverage({ metabolic_power: 1.0, high_metabolic_load_distance_m: 1.0 }).dimensions.metabolic)
+      .toBe("high_metabolic_load_distance_m");
+    // ...but if HML is absent, the contested signal is better than nothing.
+    expect(resolveFromCoverage({ metabolic_power: 1.0 }).dimensions.metabolic).toBe("metabolic_power");
   });
 });
 

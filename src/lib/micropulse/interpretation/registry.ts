@@ -16,9 +16,9 @@
  * faked, when missing).
  */
 
-export type Dimension = "volume" | "intensity" | "braking" | "sprint" | "internal";
+export type Dimension = "volume" | "intensity" | "braking" | "sprint" | "metabolic" | "internal";
 
-export const DIMENSIONS: Dimension[] = ["volume", "intensity", "braking", "sprint", "internal"];
+export const DIMENSIONS: Dimension[] = ["volume", "intensity", "braking", "sprint", "metabolic", "internal"];
 
 /**
  * Coach-facing label per dimension — deliberately INDEPENDENT of the underlying
@@ -31,6 +31,7 @@ export const DIMENSION_LABELS: Record<Dimension, { EN: string; IS: string }> = {
   intensity: { EN: "Work rate", IS: "Ákefð" },
   braking: { EN: "Braking load", IS: "Hemlunarálag" },
   sprint: { EN: "Sprint exposure", IS: "Sprett-útsetning" },
+  metabolic: { EN: "Metabolic load", IS: "Efnaskiptaálag" },
   internal: { EN: "Internal load", IS: "Innra álag" },
 };
 
@@ -66,12 +67,6 @@ export const REGISTRY: MetricDef[] = [
     key: "player_load_per_minute", dimension: "intensity", preferenceRank: 1, unit: "AU/min",
     plain: { EN: "Work rate", IS: "Ákefð" },
     tooltip: { EN: "Player Load per minute — how hard the work was, not just how much.", IS: "Player Load á mínútu — hversu ákaft, ekki bara hversu mikið." },
-  },
-  // Contested: di Prampero metabolic power — directional only, never flips a band.
-  {
-    key: "metabolic_power", dimension: "intensity", preferenceRank: 9, contested: true, unit: "W/kg",
-    plain: { EN: "Metabolic power", IS: "Efnaskiptaafl" },
-    tooltip: { EN: "di Prampero metabolic power — contested in football; directional only (di Prampero 2015).", IS: "di Prampero efnaskiptaafl — umdeilt í fótbolta; aðeins til viðmiðunar (di Prampero 2015)." },
   },
 
   // ── Braking / hard efforts ────────────────────────────────────────────────
@@ -111,6 +106,24 @@ export const REGISTRY: MetricDef[] = [
     key: "sprint_distance", dimension: "sprint", preferenceRank: 4, unit: "m",
     plain: { EN: "Sprint distance", IS: "Spretthlaup" },
     tooltip: { EN: "Distance covered sprinting — coarsest sprint signal (Lengjudeild fallback).", IS: "Vegalengd á spretti — grófasta sprett-merkið (Lengjudeild varaleið)." },
+  },
+
+  // ── Metabolic load ──────────────────────────────────────────────────────
+  // High Metabolic Load Distance — di Prampero-derived distance run at high
+  // metabolic power (combines speed + accel/decel energy cost). A first-class
+  // signal on Core/Lite plans (no IMA), so it earns its own coach-readable
+  // dimension rather than hiding inside volume or intensity. di Prampero 2015,
+  // Osgnach 2010.
+  {
+    key: "high_metabolic_load_distance_m", dimension: "metabolic", preferenceRank: 1, unit: "m",
+    plain: { EN: "High metabolic load", IS: "Háorkuálag" },
+    tooltip: { EN: "High Metabolic Load Distance — metres run at high metabolic power (speed + accel/decel cost); di Prampero 2015.", IS: "Háorku-vegalengd — metrar hlaupnir á háu efnaskiptaafli (hraði + hröðunar/hemlunar-kostnaður); di Prampero 2015." },
+  },
+  // Contested: di Prampero metabolic power — directional only, never flips a band.
+  {
+    key: "metabolic_power", dimension: "metabolic", preferenceRank: 9, contested: true, unit: "W/kg",
+    plain: { EN: "Metabolic power", IS: "Efnaskiptaafl" },
+    tooltip: { EN: "di Prampero metabolic power — contested in football; directional only (di Prampero 2015).", IS: "di Prampero efnaskiptaafl — umdeilt í fótbolta; aðeins til viðmiðunar (di Prampero 2015)." },
   },
 
   // ── Internal load ─────────────────────────────────────────────────────────
