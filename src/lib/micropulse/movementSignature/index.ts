@@ -32,6 +32,9 @@ export type MovementDayRow = {
   imaDistance: number;   // IMA band 5-8 total distance, m
   accelEfforts: number;  // accel B2-3 effort count
   decelEfforts: number;  // decel B2-3 effort count
+  /** Combined Gen2 accel+decel effort count — the Lite/Core fallback for the
+   *  "explosive" component when the B2-3 split is absent. Pro keeps the split. */
+  accelDecelEfforts?: number;
 };
 
 export type ComponentKey =
@@ -160,8 +163,12 @@ export function componentValue(key: ComponentKey, r: MovementDayRow): number | n
   switch (key) {
     case "multidirectional":
       return Number(r.imaDistance) > 0 ? Number(r.imaDistance) : null;
-    case "explosive":
-      return efforts > 0 ? efforts : null;
+    case "explosive": {
+      // Pro: B2-3 accel+decel efforts. Core/Lite (no split): fall back to the
+      // combined Gen2 effort count so the explosive spike still fires for them.
+      const e = efforts > 0 ? efforts : (Number(r.accelDecelEfforts) || 0);
+      return e > 0 ? e : null;
+    }
     case "multidirectional_share":
       return Number(r.totalDistance) > 0 && Number(r.imaDistance) >= 0
         ? Number(r.imaDistance) / Number(r.totalDistance) : null;

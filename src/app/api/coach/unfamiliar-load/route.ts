@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   // Daily inertial rows in the window for the squad.
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
+    .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts")
     .in("player_id", playerIds)
     .gte("date", windowStart)
     .lte("date", refDate);
@@ -78,6 +78,7 @@ export async function GET(req: NextRequest) {
       imaDistance: num(r.ima_fr_band58_total_distance),
       accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
       decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
+      accelDecelEfforts: num(r.accel_decel_efforts),
     });
     byPlayer.set(pid, arr);
   }
