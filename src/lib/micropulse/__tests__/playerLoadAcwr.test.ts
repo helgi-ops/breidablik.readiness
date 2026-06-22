@@ -179,6 +179,8 @@ describe("formatAcwrReason", () => {
     expect(r).toContain("2.10");
     expect(r).toContain("840");
     expect(r).toContain("400");
-    expect(r).toContain("high-risk");
+    // High severity is conveyed in plain language (explainability-first), not the
+    // jargon "high-risk" — the reason string was rewritten for coach-readability.
+    expect(r).toContain("sharp load spike");
   });
 });

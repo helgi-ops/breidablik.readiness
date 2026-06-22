@@ -53,26 +53,37 @@ const MIN_TRAIN_SEC = 1200; // 20 min — a real session
 
 type MetricKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
-  | "ima_accel" | "ima_decel" | "ima_cod" | "ima_jumps";
-// Superset of metrics computed once; the two MODES below pick which to display.
-const METRICS: Array<{ key: MetricKey; kind: "per90" | "max" }> = [
+  | "ima_accel" | "ima_decel" | "ima_cod" | "ima_jumps"
+  | "decel_eff" | "sprint_eff" | "hsr_dist"
+  | "player_load" | "pl_per_min";
+// kind: per90 = cumulative, normalised to /90; max = a peak (top speed);
+// rate = already per-minute (PL/min) — compared raw, never re-divided by time.
+type MetricKind = "per90" | "max" | "rate";
+// Superset of metrics computed once; the MODES below pick which to display.
+const METRICS: Array<{ key: MetricKey; kind: MetricKind }> = [
   { key: "top_speed", kind: "max" },
   { key: "fmp_run_high", kind: "per90" }, { key: "fmp_dyn_high", kind: "per90" }, { key: "fmp_dyn_med", kind: "per90" },
   { key: "ima_accel", kind: "per90" }, { key: "ima_decel", kind: "per90" }, { key: "ima_cod", kind: "per90" }, { key: "ima_jumps", kind: "per90" },
+  // Core / Lite (no FMP, no IMA): GPS + Gen2 effort signals every Catapult tier has.
+  { key: "decel_eff", kind: "per90" }, { key: "sprint_eff", kind: "per90" }, { key: "hsr_dist", kind: "per90" },
+  // Volume + work-rate (every tier): Player Load per-90, and PL/min as a rate.
+  { key: "player_load", kind: "per90" }, { key: "pl_per_min", kind: "rate" },
 ];
-// FMP = Catapult's movement-profile categories (time-in-zone). IMA = the raw
-// inertial event counts (not bundled into FMP) — accel/decel, change-of-
-// direction, jumps. (IMA band-3 high-intensity counts are ~0 on match files
-// here, so they have no match demand to compare against — excluded.)
-const MODES: Record<"fmp" | "ima", MetricKey[]> = {
-  fmp: ["top_speed", "fmp_run_high", "fmp_dyn_high", "fmp_dyn_med", "ima_decel", "ima_cod"],
+// FMP = Catapult's movement-profile categories (time-in-zone). IMA = raw inertial
+// event counts. CORE = the GPS/Gen2-effort signals available on every tier (no
+// FMP/IMA needed) — for Lengjudeild/Core clubs. The page picks whichever mode the
+// club actually has data for.
+const MODES: Record<"fmp" | "ima" | "core", MetricKey[]> = {
+  fmp: ["top_speed", "fmp_run_high", "fmp_dyn_high", "fmp_dyn_med", "ima_decel", "ima_cod", "player_load", "pl_per_min"],
   ima: ["ima_accel", "ima_decel", "ima_cod", "ima_jumps"],
+  core: ["top_speed", "hsr_dist", "sprint_eff", "decel_eff", "player_load", "pl_per_min"],
 };
 
 const LOAD_COLS =
   "player_id, date, max_velocity, fmp_total_duration_s, fmp_running_high_s, fmp_dynamic_high_s, fmp_dynamic_medium_s, " +
   "ima_accel, ima_decel, jumps, " +
-  "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low";
+  "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
+  "accel_decel_efforts, velocity_band6_total_efforts_gen2, high_speed_distance, total_player_load, player_load_per_minute";
 
 function rawMetric(r: Record<string, unknown>, key: MetricKey): number {
   switch (key) {
@@ -85,7 +96,23 @@ function rawMetric(r: Record<string, unknown>, key: MetricKey): number {
     case "ima_jumps": return num(r.jumps);
     case "ima_cod": return num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
       num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
+    case "decel_eff": return num(r.accel_decel_efforts);
+    case "sprint_eff": return num(r.velocity_band6_total_efforts_gen2);
+    case "hsr_dist": return num(r.high_speed_distance);
+    case "player_load": return num(r.total_player_load);
+    case "pl_per_min": return num(r.player_load_per_minute);
   }
+}
+
+// Training-session duration (seconds). Pro clubs carry FMP total duration; Core
+// clubs don't, so derive it from total Player Load ÷ Player Load/min — PL/min is
+// *defined* as Player Load per minute, so the quotient is the session minutes.
+// Lets TLYP normalise training per-90 without FMP. (Matches use real minutes.)
+function trainDurationSec(r: Record<string, unknown>): number {
+  const fmp = num(r.fmp_total_duration_s);
+  if (fmp >= MIN_TRAIN_SEC) return fmp;
+  const tpl = num(r.total_player_load), plpm = num(r.player_load_per_minute);
+  return tpl > 0 && plpm > 0 ? (tpl / plpm) * 60 : 0;
 }
 
 async function fetchAllLoad(sb: SupabaseClient, playerIds: string[], from: string, to: string): Promise<Array<Record<string, unknown>>> {
@@ -112,7 +139,7 @@ function topNMean(xs: number[], n: number): number | null {
 // Under-exposure thresholds. <50% of match demand = Malone risk zone; top speed
 // rarely exceeds match max, so reaching ≥85% of match max in training is healthy
 // sprint exposure. Comparing best-training to match demand, so no overload end.
-function flagFor(kind: "per90" | "max", pct: number | null): "under" | "gap" | "ok" | "none" {
+function flagFor(kind: MetricKind, pct: number | null): "under" | "gap" | "ok" | "none" {
   if (pct == null) return "none";
   if (kind === "max") return pct < 70 ? "under" : pct < 85 ? "gap" : "ok";
   return pct < 50 ? "under" : pct < 80 ? "gap" : "ok";
@@ -173,8 +200,9 @@ export async function GET(req: NextRequest) {
   const out = players.map((p) => {
     const rows = byPlayer.get(p.id) ?? [];
     const matchRows = rows.filter((r) => matchMinByKey.has(`${p.id}|${String(r.date)}`));
-    // Training = non-match catapult days with a real FMP session length.
-    const trainRows = rows.filter((r) => !matchDates.has(String(r.date)) && num(r.fmp_total_duration_s) >= MIN_TRAIN_SEC);
+    // Training = non-match catapult days with a real session length (FMP duration
+    // for Pro, or Player-Load-derived duration for Core/Lite — see trainDurationSec).
+    const trainRows = rows.filter((r) => !matchDates.has(String(r.date)) && trainDurationSec(r) >= MIN_TRAIN_SEC);
 
     const metrics: Record<string, { match: number | null; train: number | null; pct: number | null; flag: string }> = {};
     let gaps = 0;
@@ -185,9 +213,15 @@ export async function GET(req: NextRequest) {
         const tv = trainRows.map((r) => rawMetric(r, m.key)).filter((v) => v > 0);
         matchVal = mv.length ? Math.max(...mv) : null;
         trainVal = tv.length ? Math.max(...tv) : null;
+      } else if (m.kind === "rate") {
+        // Already per-minute (PL/min) — compare raw, no per-90 scaling.
+        const mv = matchRows.map((r) => rawMetric(r, m.key)).filter((v) => v > 0);
+        const tv = trainRows.map((r) => rawMetric(r, m.key)).filter((v) => v > 0);
+        matchVal = mean(mv);
+        trainVal = topNMean(tv, 3);
       } else {
         const mv = matchRows.map((r) => { const min = matchMinByKey.get(`${p.id}|${String(r.date)}`) ?? 0; return min > 0 ? rawMetric(r, m.key) / min * 90 : null; }).filter((v): v is number => v != null && v > 0);
-        const tv = trainRows.map((r) => { const min = num(r.fmp_total_duration_s) / 60; return min > 0 ? rawMetric(r, m.key) / min * 90 : null; }).filter((v): v is number => v != null && v > 0);
+        const tv = trainRows.map((r) => { const min = trainDurationSec(r) / 60; return min > 0 ? rawMetric(r, m.key) / min * 90 : null; }).filter((v): v is number => v != null && v > 0);
         matchVal = mean(mv);
         trainVal = topNMean(tv, 3);
       }
@@ -207,7 +241,7 @@ export async function GET(req: NextRequest) {
   const micro = new Map<string, { sessions: number; sums: Record<string, number>; counts: Record<string, number> }>();
   for (const r of load) {
     const date = String(r.date);
-    if (matchDates.has(date) || num(r.fmp_total_duration_s) < MIN_TRAIN_SEC) continue;
+    if (matchDates.has(date) || trainDurationSec(r) < MIN_TRAIN_SEC) continue;
     const label = mdDayLabel(date, matchesAsc);
     if (!label) continue;
     const demand = matchDemandByPlayer.get(String(r.player_id));
@@ -218,7 +252,7 @@ export async function GET(req: NextRequest) {
     for (const m of METRICS) {
       const dem = demand[m.key];
       if (dem == null || dem <= 0) continue;
-      const val = m.kind === "max" ? rawMetric(r, m.key) : rawMetric(r, m.key) / (num(r.fmp_total_duration_s) / 60) * 90;
+      const val = m.kind === "max" || m.kind === "rate" ? rawMetric(r, m.key) : rawMetric(r, m.key) / (trainDurationSec(r) / 60) * 90;
       if (!(val > 0)) continue;
       b.sums[m.key] = (b.sums[m.key] ?? 0) + (val / dem) * 100;
       b.counts[m.key] = (b.counts[m.key] ?? 0) + 1;

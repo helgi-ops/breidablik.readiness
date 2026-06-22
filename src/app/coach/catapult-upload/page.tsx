@@ -47,6 +47,7 @@ type CommitResult = {
   athletesUnmapped: number;
   dateRange: { start: string; end: string; days: number } | null;
   unmappedColumns: string[];
+  matchMinutesUpserted: number;
 };
 
 /** Damerau-Levenshtein-style normalised similarity 0..1 */
@@ -96,6 +97,10 @@ export default function CatapultUploadPage() {
   // exporting a Sunday match on Monday morning ends up with all rows
   // stamped Monday. Coach can correct that here in one step.
   const [dateOverride, setDateOverride] = useState<string | null>(null);
+  // When set, the commit also creates match_player_minutes (minutes from the CSV)
+  // so TLYP / post-match surfaces see the day as a match — Core/Lite match ingest.
+  const [isMatch, setIsMatch] = useState(false);
+  const [matchMinutes, setMatchMinutes] = useState(90);
 
   const [committing, setCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState<{ done: number; total: number } | null>(null);
@@ -256,6 +261,7 @@ export default function CatapultUploadPage() {
     let totalParsed = 0;
     let totalAthletes = 0;
     let totalUnmapped = 0;
+    let totalMatchMinutes = 0;
     let earliestStart: string | null = null;
     let latestEnd: string | null = null;
     const allUnmappedColumns = new Set<string>();
@@ -277,6 +283,8 @@ export default function CatapultUploadPage() {
             csv: f.csv,
             athleteMap: manualMap,
             dateOverride: dateOverride,
+            isMatch: isMatch,
+            matchMinutes: matchMinutes,
           }),
         });
         const json = await res.json();
@@ -288,6 +296,7 @@ export default function CatapultUploadPage() {
         }
         totalCommitted += json.rowsCommitted ?? 0;
         totalParsed += json.rowsParsed ?? 0;
+        totalMatchMinutes += json.matchMinutesUpserted ?? 0;
         totalAthletes = Math.max(totalAthletes, json.athletesTotal ?? 0);
         totalUnmapped = Math.max(totalUnmapped, json.athletesUnmapped ?? 0);
         if (json.dateRange) {
@@ -315,6 +324,7 @@ export default function CatapultUploadPage() {
       athletesUnmapped: totalUnmapped,
       dateRange,
       unmappedColumns: Array.from(allUnmappedColumns),
+      matchMinutesUpserted: totalMatchMinutes,
     });
     setCommitting(false);
     setCommitProgress(null);
@@ -599,6 +609,23 @@ export default function CatapultUploadPage() {
                   </div>
                 )}
               </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={isMatch} onChange={(e) => setIsMatch(e.target.checked)} className="h-3.5 w-3.5" />
+                  <span className="font-medium">Þetta er leikur</span>
+                </label>
+                {isMatch && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <label className="text-[10px] text-muted-foreground">Leik-lengd (mín)</label>
+                    <input
+                      type="number" min={1} max={130} value={matchMinutes}
+                      onChange={(e) => setMatchMinutes(Math.max(1, Math.min(130, Number(e.target.value) || 90)))}
+                      className="h-6 w-16 rounded-md border bg-background px-1.5 text-xs"
+                    />
+                    <span className="text-[10px] text-amber-700">→ leik-mínútur fyrir alla sem spiluðu (lagaðu skiptingar á Leik-mínútur síðunni).</span>
+                  </div>
+                )}
+              </div>
               <div>
                 <div className="text-muted-foreground text-xs">Athlete-day raðir</div>
                 <div>{aggregated.aggregatedRows}</div>
@@ -770,6 +797,13 @@ export default function CatapultUploadPage() {
             {result.athletesUnmapped > 0 && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-700">
                 {result.athletesUnmapped} leikmenn voru ekki vistaðir (engin mapping). Þú getur uploadað aftur og mappað þá.
+              </div>
+            )}
+            {isMatch && (
+              <div className={`rounded-md border p-2 text-xs ${result.matchMinutesUpserted > 0 ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-700"}`}>
+                {result.matchMinutesUpserted > 0
+                  ? `Leikur skráður: ${result.matchMinutesUpserted} leikmenn skráðir á ${matchMinutes} mín. TLYP og endurheimt sjá nú leikinn. Lagaðu skiptingar á Leik-mínútur síðunni.`
+                  : "Merkt sem leikur, en enginn leikmaður náði álags-þröskuldi (Player Load ≥ 150). Athugaðu CSV-ið eða skráðu mínútur handvirkt."}
               </div>
             )}
             <div className="pt-2">

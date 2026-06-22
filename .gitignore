@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# FUSE filesystem artifacts (e.g. from sshfs/network mounts) — never source
+.fuse_hidden*
+
 # dependencies
 /node_modules
 /.pnp

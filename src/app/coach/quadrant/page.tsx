@@ -22,6 +22,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantChart";
 import SquadLoadTable, { type SquadLoadPlayer } from "@/components/coach/SquadLoadTable";
+import VerdictBanner from "@/components/coach/VerdictBanner";
 import { useLang, type Lang } from "@/lib/lang";
 
 type Window = 7 | 14 | 28;
@@ -376,10 +377,127 @@ export default function CoachQuadrantPage() {
     return { risk, decoupled, peak, low };
   }, [points]);
 
+  // ── Plain-language verdict inputs (rules, not AI; principle #1) ──────────
+  // Recompute the injury-risk + under-stimulated players (with names) so the
+  // banner can call them out by name. Same median split as `counts` above —
+  // top-right quadrant = high external load + high internal cost.
+  const verdict = React.useMemo(() => {
+    if (points.length === 0) {
+      return { riskPlayers: [] as QuadrantPoint[], lowCount: 0, anyAcwr: false };
+    }
+    const xs = points.map(p => p.externalLoad).sort((a, b) => a - b);
+    const ys = points.map(p => p.internalCost).sort((a, b) => a - b);
+    const xMed = xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
+    const yMed = ys.length % 2 ? ys[(ys.length - 1) / 2] : (ys[ys.length / 2 - 1] + ys[ys.length / 2]) / 2;
+    const riskPlayers: QuadrantPoint[] = [];
+    let lowCount = 0;
+    let anyAcwr = false;
+    for (const p of points) {
+      if (p.acwr != null) anyAcwr = true;
+      const hi_x = p.externalLoad >= xMed;
+      const hi_y = p.internalCost >= yMed;
+      if (hi_x && hi_y) riskPlayers.push(p);
+      else if (!hi_x && !hi_y) lowCount++;
+    }
+    // Within the injury-risk zone, surface the highest acute:chronic ratio first
+    // (the player whose recent work most outpaces their baseline).
+    riskPlayers.sort((a, b) => (b.acwr ?? 0) - (a.acwr ?? 0));
+    return { riskPlayers, lowCount, anyAcwr };
+  }, [points]);
+
+  // First name only for compact, readable driver chips / sentence.
+  const firstName = (full: string) => full.trim().split(/\s+/)[0] || full;
+
+  // Build the one-sentence verdict + tone + confidence + drivers.
+  // Tone is driven by the injury-risk count (top-right quadrant).
+  const banner = React.useMemo(() => {
+    const IS = lang === "IS";
+    const risk = verdict.riskPlayers;
+    const riskN = risk.length;
+    const lowN = verdict.lowCount;
+    const total = points.length;
+
+    // Confidence: thin rosters or no ACWR baseline → low; otherwise scale by
+    // how many players actually have an acute:chronic baseline.
+    const acwrCoverage = points.filter(p => p.acwr != null).length;
+    const confLevel: "high" | "moderate" | "low" =
+      total < 4 ? "low" : acwrCoverage >= Math.ceil(total * 0.6) ? "high" : "moderate";
+    const confNote = IS
+      ? `${total} leikmenn · ${acwrCoverage} með ${windowDays}d/28d grunnlínu`
+      : `${total} players · ${acwrCoverage} with ${windowDays}d/28d baseline`;
+
+    const tone: "good" | "watch" | "concern" =
+      riskN >= 3 ? "concern" : riskN >= 1 ? "watch" : "good";
+
+    const riskNames = risk.map(p => firstName(p.name)).filter(Boolean);
+    const namesList = riskNames.length > 0
+      ? riskNames.slice(0, 4).join(", ") + (riskNames.length > 4 ? (IS ? " o.fl." : ", others") : "")
+      : "";
+
+    // One plain sentence — no raw jargon in the headline.
+    let sentence: { EN: string; IS: string };
+    if (riskN === 0 && lowN === 0) {
+      sentence = {
+        EN: "Everyone sits in a balanced zone right now — no one is overloaded or coasting.",
+        IS: "Allir eru í jafnvægi núna — enginn í ofálagi eða að slóra.",
+      };
+    } else if (riskN === 0) {
+      sentence = {
+        EN: `No one is in the injury-risk zone${lowN > 0 ? `; ${lowN} look under-stimulated and could take more` : ""}.`,
+        IS: `Enginn er í meiðslahættu-svæðinu${lowN > 0 ? `; ${lowN} virðast undirálagðir og þola meira` : ""}.`,
+      };
+    } else {
+      const playerWord = riskN === 1 ? (IS ? "leikmaður er" : "player sits") : (IS ? "leikmenn eru" : "players sit");
+      sentence = {
+        EN: `${riskN} ${riskN === 1 ? "player sits" : "players sit"} in the injury-risk zone — working hard and paying a high internal cost${namesList ? ` (${namesList})` : ""}${lowN > 0 ? `; ${lowN} look under-stimulated` : ""}.`,
+        IS: `${riskN} ${playerWord} í meiðslahættu-svæðinu — vinna mikið og borga háan innri kostnað${namesList ? ` (${namesList})` : ""}${lowN > 0 ? `; ${lowN} virðast undirálagðir` : ""}.`,
+      };
+    }
+
+    const subtitle = {
+      EN: "Each player is placed by how much they run (external load) against how hard it feels (internal cost). Top-right = lots of both, the zone to watch.",
+      IS: "Hver leikmaður er staðsettur eftir því hve mikið hann hleypur (ytra álag) á móti því hve erfitt það er (innri kostnaður). Efst-hægri = mikið af báðu, svæðið til að fylgjast með.",
+    };
+
+    // Drivers = the named injury-risk players. Jargon (ACWR) + Gabbett 2017
+    // citation lives in each chip's tooltip, never the visible sentence.
+    const drivers = risk.slice(0, 6).map(p => {
+      const acwrTxt = p.acwr != null ? p.acwr.toFixed(2) : "—";
+      return {
+        label: firstName(p.name),
+        detail: (IS ? "ofálag" : "high load") as string,
+        tone: "concern" as const,
+        tip: {
+          EN: `High external load + high internal cost. Acute:chronic workload ratio (ACWR) ${acwrTxt} — above ~1.3 means recent work is outpacing the player's 28-day baseline (Gabbett 2017).`,
+          IS: `Hátt ytra álag + hár innri kostnaður. Bráða:krónísk álagshlutfall (ACWR) ${acwrTxt} — yfir ~1.3 þýðir að nýlegt álag fer fram úr 28-daga grunnlínu leikmanns (Gabbett 2017).`,
+        },
+      };
+    });
+
+    return { tone, sentence, subtitle, drivers, confidence: { level: confLevel, note: confNote } };
+  }, [verdict, points, lang, windowDays]);
+
   const isLite = catapultDataTier !== "full";
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      {/* ── Plain-language verdict banner (explainability-first) ──────────
+          Rules, not AI: tone + sentence + named injury-risk players come from
+          the same median-split quadrant logic the count grid + scatter use
+          below. Jargon (ACWR + Gabbett 2017) lives in driver tooltips. Gated
+          exactly like the chart content: loaded, no error, non-empty. */}
+      {!loading && !error && points.length > 0 && (
+        <VerdictBanner
+          lang={lang === "IS" ? "IS" : "EN"}
+          kicker={{ EN: "Quadrant Intelligence", IS: "Quadrant Intelligence" }}
+          tone={banner.tone}
+          sentence={banner.sentence}
+          subtitle={banner.subtitle}
+          confidence={banner.confidence}
+          drivers={banner.drivers}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

@@ -37,14 +37,28 @@ function makeRow(
   };
 }
 
-/** 30 valid rows before a target date, steady baseline. */
+/**
+ * Valid rows before a target date with REAL day-to-day variance.
+ * A zero-variance baseline yields null z-scores by design (computeZScore returns
+ * null when std === 0), so the rows must wobble for the score to be computable.
+ * The wobble nets to ~0 over each 4-day cycle, so the means stay at the base
+ * values (14 / 35 / 1200 / 420) — only the spread changes.
+ */
 function makeHistoricalRows(targetDate: string, count = 30): MetabolicLoadSourceRow[] {
   const rows: MetabolicLoadSourceRow[] = [];
   for (let i = count; i >= 1; i--) {
     const d = new Date(`${targetDate}T00:00:00.000Z`);
     d.setUTCDate(d.getUTCDate() - i);
     const date = d.toISOString().slice(0, 10);
-    rows.push(makeRow(date));
+    const off = (i % 4) - 1.5; // -1.5, -0.5, 0.5, 1.5 → mean 0 over each cycle
+    rows.push(
+      makeRow(date, {
+        metabolic_power: 14 + off,
+        metabolic_power_peak: 35 + off * 2,
+        high_metabolic_load_distance_m: 1200 + off * 40,
+        time_above_hml_threshold_s: 420 + off * 12,
+      }),
+    );
   }
   return rows;
 }

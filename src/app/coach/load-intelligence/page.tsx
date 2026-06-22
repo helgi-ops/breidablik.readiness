@@ -24,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
@@ -171,25 +172,29 @@ export default function LoadIntelligencePage() {
         </div>
       )}
 
-      {!loading && !error && players.length > 0 && (
-        <GpsLoadIntelligence
-          players={players}
-          date={today}
-          lang={lang === "EN" ? "EN" : "IS"}
-        />
+      {/* ── Explainability layer: one plain-language verdict on top ── */}
+      {!loading && !error && teamId && players.length > 0 && (
+        <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} />
       )}
 
-      {!loading && !error && teamId && (
-        <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
+      {/* ── The five dense S&C cards — unchanged, collapsed by default ── */}
+      {!loading && !error && teamId && players.length > 0 && (
+        <details className="rounded-xl border border-slate-200 bg-white">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-700">
+            {lang === "EN" ? "Show S&C details" : "Sýna S&C smáatriði"}
+            <span className="ml-1.5 text-xs font-normal text-slate-400">
+              {lang === "EN" ? "(GPS signals · MLI · metabolic · monotony · MD HSR)" : "(GPS-merki · MLI · efnaskipti · einhæfni · MD HSR)"}
+            </span>
+          </summary>
+          <div className="space-y-6 border-t border-slate-100 p-4">
+            <GpsLoadIntelligence players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
+            {teamId && <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
+            {teamId && <MdHsrComparisonCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
+            {teamId && <MechanicalLoadIndexCard teamId={teamId} />}
+            {teamId && <TeamMetabolicSummary teamId={teamId} />}
+          </div>
+        </details>
       )}
-
-      {!loading && !error && teamId && (
-        <MdHsrComparisonCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
-      )}
-
-      {!loading && !error && teamId && <MechanicalLoadIndexCard teamId={teamId} />}
-
-      {!loading && !error && teamId && <TeamMetabolicSummary teamId={teamId} />}
     </div>
   );
 }

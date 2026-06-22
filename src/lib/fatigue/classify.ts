@@ -247,6 +247,15 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
   // ── Match-minutes scoring (MD+1/MD+2 aware) ────────────────────────────────
   // When actual minutes_played are available, scale systemic fatigue by how much
   // the player participated AND by recovery day offset (MD+1 heavier, MD+2 lighter).
+  //
+  // Evidence: post-match recovery follows a time-course independent of how the
+  // player subjectively feels — neuromuscular function (CMJ, sprint), muscle-
+  // damage markers (CK) and perceived fatigue stay elevated for up to ~72 h,
+  // heaviest in the first 24–48 h and rebounding by MD+2/MD+3. The graduated
+  // MD+1 > MD+2 weighting (scaled by minutes played) encodes that curve.
+  //   Refs: Nédélec M et al. Recovery in Soccer, Part I & II. Sports Med
+  //         2012;42(12):997 / 2013;43(1):9.  Silva JR et al. Acute and Residual
+  //         Soccer Match-Related Fatigue: a systematic review. Sports Med 2018.
   const mins = input.matchMinutesPlayed;
   const md = input.mdDay?.toUpperCase?.() ?? "";
   const isMdPlus1 = md === "MD+1";

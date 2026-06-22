@@ -17,6 +17,11 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import VerdictBanner, {
+  type VerdictTone,
+  type VerdictDriver,
+  type ConfidenceLevel,
+} from "@/components/coach/VerdictBanner";
 import {
   buildSquadAssessmentProfiles,
   type PlayerAssessmentProfile,
@@ -27,6 +32,122 @@ import {
   type AssessmentRecommendation,
   type FocusArea,
 } from "@/lib/micropulse/physicalAssessment/recommend";
+
+// ─── Squad-level verdict (rules, not AI) ─────────────────────────────────────
+// Derived entirely from the per-player profiles the page already computes.
+// Strongest/weakest area = the metric most often ranking top-quartile /
+// bottom-quartile of the player's own age band. "Flagged focus area" = a
+// player the recommendation engine gives at least one focus area.
+
+type SquadVerdict = {
+  tone: VerdictTone;
+  sentence: { EN: string; IS: string };
+  subtitle: { EN: string; IS: string };
+  confidence: { level: ConfidenceLevel; note: { EN: string; IS: string } };
+  drivers: VerdictDriver[];
+};
+
+/** Tally which metric names lead the squad's strengths and weak links. */
+function topByCount(pairs: Map<string, number>): { name: string; count: number } | null {
+  let best: { name: string; count: number } | null = null;
+  for (const [name, count] of pairs) {
+    if (best == null || count > best.count) best = { name, count };
+  }
+  return best;
+}
+
+function firstNames(profiles: PlayerAssessmentProfile[]): string {
+  return profiles.map((p) => p.name.split(/\s+/)[0]).join(", ");
+}
+
+function buildSquadVerdict(profiles: PlayerAssessmentProfile[]): SquadVerdict {
+  const total = profiles.length;
+
+  // Count age-band strengths / weak links across the squad, by metric name.
+  const strengthCounts = new Map<string, number>();
+  const weakCounts = new Map<string, number>();
+  let anyRanked = false;
+  for (const p of profiles) {
+    if (p.summary.strengths.length > 0 || p.summary.weakLinks.length > 0) anyRanked = true;
+    for (const name of p.summary.strengths) strengthCounts.set(name, (strengthCounts.get(name) ?? 0) + 1);
+    for (const name of p.summary.weakLinks) weakCounts.set(name, (weakCounts.get(name) ?? 0) + 1);
+  }
+
+  // Players with at least one flagged focus area, most-flagged first.
+  const flagged = profiles
+    .map((p) => ({ p, n: buildAssessmentRecommendation(p).focusAreas.length }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n);
+  const flaggedCount = flagged.length;
+
+  const strongest = topByCount(strengthCounts);
+  const weakest = topByCount(weakCounts);
+
+  // Tone: lots of weak links → watch; clean sheet with rankings → good; thin → neutral.
+  let tone: VerdictTone;
+  if (!anyRanked) tone = "neutral";
+  else if (total > 0 && flaggedCount / total >= 0.5) tone = "watch";
+  else if (flaggedCount > 0) tone = "watch";
+  else tone = "good";
+
+  // Confidence from how many players could actually be ranked against an age band.
+  const level: ConfidenceLevel = !anyRanked ? "low" : total >= 6 ? "high" : "moderate";
+  const confNote = {
+    EN: `${total} player${total === 1 ? "" : "s"} assessed`,
+    IS: `${total} leikm${total === 1 ? "aður" : "enn"} mældir`,
+  };
+
+  // Drivers — players carrying the most focus areas (named exceptions).
+  const drivers: VerdictDriver[] = flagged.slice(0, 4).map(({ p, n }) => ({
+    label: p.name.split(/\s+/)[0],
+    detail: {
+      EN: `${n} focus area${n === 1 ? "" : "s"}`,
+      IS: `${n} áhersl${n === 1 ? "a" : "ur"}`,
+    },
+    tone: "watch",
+    tip: {
+      EN: `${n} training focus area${n === 1 ? "" : "s"} flagged from weak links (bottom quartile of the age band) or metrics that regressed since the last test. Cohort percentile within ±1.5 yr age band (Robertson 2017, athlete-monitoring framework).`,
+      IS: `${n} þjálfunaráhersl${n === 1 ? "a" : "ur"} flöggu${n === 1 ? "ð" : "ðar"} út frá veikum hlekkjum (neðsti fjórðungur aldursflokks) eða þáttum sem versnuðu frá síðustu mælingu. Hundraðsröðun innan ±1,5 árs aldursflokks (Robertson 2017).`,
+    },
+  }));
+
+  // Sentence + subtitle.
+  let sentence: { EN: string; IS: string };
+  if (!anyRanked) {
+    sentence = {
+      EN: total === 0
+        ? "Not enough data yet to read the squad's physical profile."
+        : "Not enough players in each age band yet to rank strengths and weak areas — read each player's change-since-last-test below.",
+      IS: total === 0
+        ? "Ekki næg gögn enn til að lesa líkamsprófíl hópsins."
+        : "Ekki nógu margir í hverjum aldursflokki enn til að raða styrkleikum og veikum sviðum — skoðið breytingu hvers leikmanns frá síðustu mælingu að neðan.",
+    };
+  } else {
+    const strongName = strongest?.name ?? "—";
+    const weakName = weakest?.name ?? "—";
+    const names = firstNames(flagged.slice(0, 4).map((x) => x.p));
+    const moreEN = flaggedCount > 4 ? ` +${flaggedCount - 4} more` : "";
+    const moreIS = flaggedCount > 4 ? ` +${flaggedCount - 4} til viðbótar` : "";
+    if (flaggedCount === 0) {
+      sentence = {
+        EN: `Squad is strongest in ${strongName} and weakest in ${weakName}; no player has a flagged focus area.`,
+        IS: `Hópurinn er sterkastur í ${strongName} og veikastur í ${weakName}; enginn leikmaður með flaggaða áherslu.`,
+      };
+    } else {
+      sentence = {
+        EN: `Squad is strongest in ${strongName} and weakest in ${weakName}; ${flaggedCount} player${flaggedCount === 1 ? " has" : "s have"} a flagged focus area — ${names}${moreEN}.`,
+        IS: `Hópurinn er sterkastur í ${strongName} og veikastur í ${weakName}; ${flaggedCount} leikm${flaggedCount === 1 ? "aður er" : "enn eru"} með flaggaða áherslu — ${names}${moreIS}.`,
+      };
+    }
+  }
+
+  const subtitle = {
+    EN: "Each metric is compared against the player's own age band (within 1.5 years), so younger and older players are judged fairly. A focus area is flagged where a player sits in the bottom of the band or has slipped since the last test.",
+    IS: "Hver mæling er borin saman við aldursflokk leikmannsins (innan 1,5 árs), svo yngri og eldri leikmenn eru metnir sanngjarnt. Áhersla er flögguð þegar leikmaður situr neðst í flokknum eða hefur versnað frá síðustu mælingu.",
+  };
+
+  return { tone, sentence, subtitle, confidence: { level, note: confNote }, drivers };
+}
 
 const CATEGORY_LABEL: Record<string, { EN: string; IS: string }> = {
   speed: { EN: "Speed", IS: "Hraði" },
@@ -40,6 +161,8 @@ export default function CoachAssessmentProfilePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [profiles, setProfiles] = React.useState<PlayerAssessmentProfile[]>([]);
+
+  const verdict = React.useMemo(() => buildSquadVerdict(profiles), [profiles]);
 
   React.useEffect(() => { void load(); }, []);
 
@@ -88,6 +211,20 @@ export default function CoachAssessmentProfilePage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-4">
+      {/* Plain-language squad verdict — explainability-first headline (rules, not AI).
+          Gated identically to the per-player list (loaded + non-empty). */}
+      {!loading && !error && profiles.length > 0 && (
+        <VerdictBanner
+          lang={lang}
+          kicker={lang === "IS" ? "Mælingaprófíll" : "Assessment Profile"}
+          tone={verdict.tone}
+          sentence={verdict.sentence}
+          subtitle={verdict.subtitle}
+          confidence={verdict.confidence}
+          drivers={verdict.drivers}
+        />
+      )}
+
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {lang === "IS" ? "Mælingaprófíll" : "Assessment Profile"}

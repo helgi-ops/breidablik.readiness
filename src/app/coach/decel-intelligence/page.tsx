@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 // PlayerSummaryCard + PlayerAskCard intentionally NOT imported here — see
 // the comment in the expanded-row body. Both live in the Decision Summary
 // modal only to keep the per-player overall AI features in one place.
@@ -116,6 +118,7 @@ function toSten(z: number): number {
 }
 
 export default function CoachDecelIntelligencePage() {
+  const [lang] = useLang();
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -296,8 +299,149 @@ export default function CoachDecelIntelligencePage() {
     return "b2_3";
   }, [rows]);
 
+  // ── Plain-language verdict (RULES, not LLM) ───────────────────────────────
+  // Deterministic synthesis of the red/yellow counts + named exceptions, drawn
+  // entirely from data already on the page (counts + rows). Jargon (decel:sprint
+  // coupling, A:D, IMA, McBurnie citation) lives in driver tooltips / subtitle —
+  // never the headline sentence. See docs/explainability-first.md.
+  const verdict = React.useMemo(() => {
+    const IS = lang === "IS";
+    // How many players actually have a McBurnie status to read? (coverage)
+    const withData = rows.filter((r) => (r.status?.overall_flag ?? "unknown") !== "unknown").length;
+    const total = rows.length;
+
+    // Honest "no data" path — nothing to read yet.
+    if (total === 0 || withData === 0) {
+      return {
+        tone: "neutral" as VerdictTone,
+        sentence: {
+          EN: "Not enough braking-load data yet to assess the squad.",
+          IS: "Ekki nóg hemlunarálags-gögn enn til að meta hópinn.",
+        },
+        subtitle: {
+          EN: "Deceleration / braking load — the cost of hard slow-downs and cuts. Once Catapult sessions sync, each player gets a verdict here.",
+          IS: "Hemlunarálag — kostnaðurinn af hörðum hraðaminnkunum og stefnubreytingum. Þegar Catapult-æfingar samstillast fær hver leikmaður niðurstöðu hér.",
+        },
+        confidence: { level: "low" as const, note: { EN: "no players with data yet", IS: "engir leikmenn með gögn enn" } },
+        drivers: [] as VerdictDriver[],
+      };
+    }
+
+    const firstName = (full: string) => full.split(" ")[0];
+
+    // Per-flag tooltip text — this is where the jargon + paper citation live.
+    const tipFor = (r: Row): { EN: string; IS: string } => {
+      const s = r.status;
+      const bits: string[] = [];
+      const bitsIs: string[] = [];
+      if (s?.sprint_coupling?.flag === "red" || s?.sprint_coupling?.flag === "yellow") {
+        bits.push("decel:sprint coupling below the player's own norm");
+        bitsIs.push("decel:sprint coupling undir eigin viðmiði");
+      }
+      if (s?.accel_coupling?.flag === "red" || s?.accel_coupling?.flag === "yellow") {
+        bits.push("decel:accel (A:D) coupling out of the 0.8–1.2 balance band");
+        bitsIs.push("decel:accel (A:D) coupling utan 0.8–1.2 jafnvægisbils");
+      }
+      if (s?.overload?.flag === "red" || s?.overload?.flag === "yellow") {
+        bits.push("28-day cumulative deceleration overload vs personal baseline");
+        bitsIs.push("28-daga uppsafnað hemlunar-yfirálag m.v. eigin grunnlínu");
+      }
+      if (s?.concentration?.flag === "red" || s?.concentration?.flag === "yellow") {
+        bits.push("braking volume concentrated in a single peak day");
+        bitsIs.push("hemlunarmagn þjappað á einn topp-dag");
+      }
+      if (r.cutting?.cuts_flag === "red" || r.cutting?.cuts_flag === "yellow") {
+        bits.push("sharp change-of-direction cut load above the player's norm");
+        bitsIs.push("skarpt stefnubreytinga-álag yfir eigin viðmiði");
+      }
+      const detail = bits.length > 0 ? bits.join("; ") : "high-intensity braking load (band 2-3 decelerations)";
+      const detailIs = bitsIs.length > 0 ? bitsIs.join("; ") : "háákefðar hemlunarálag (band 2-3 hraðaminnkanir)";
+      return {
+        EN: `${detail}. Eccentric deceleration framework — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine.`,
+        IS: `${detailIs}. Sérvitra (eccentric) hraðaminnkunar-rammi — McBurnie, Harper, Jones & Dos'Santos 2022, Sports Medicine.`,
+      };
+    };
+
+    // Named exceptions = red first, then yellow. rows already come red→yellow→green sorted.
+    const reds = rows.filter((r) => r.status?.overall_flag === "red");
+    const yellows = rows.filter((r) => r.status?.overall_flag === "yellow");
+    const redNames = reds.map((r) => firstName(r.full_name));
+    const yellowNames = yellows.map((r) => firstName(r.full_name));
+    const drivers: VerdictDriver[] = [
+      ...reds.map((r): VerdictDriver => ({ label: firstName(r.full_name), detail: { EN: "lighter session", IS: "léttari æfing" }, tip: tipFor(r), tone: "concern" })),
+      ...yellows.map((r): VerdictDriver => ({ label: firstName(r.full_name), detail: { EN: "keep an eye", IS: "fylgjast með" }, tip: tipFor(r), tone: "watch" })),
+    ].slice(0, 8);
+
+    const fmt = (names: string[]) => {
+      if (names.length === 0) return "";
+      if (names.length === 1) return names[0];
+      if (names.length === 2) return `${names[0]} ${IS ? "og" : "and"} ${names[1]}`;
+      return `${names.slice(0, -1).join(", ")} ${IS ? "og" : "and"} ${names[names.length - 1]}`;
+    };
+
+    let tone: VerdictTone;
+    let sentence: { EN: string; IS: string };
+    if (counts.red > 0) {
+      tone = "concern";
+      const n = counts.red;
+      sentence = {
+        EN: `${n} player${n === 1 ? "" : "s"} carrying high braking load and should get a lighter session — ${fmt(redNames)}; the rest are fine.`,
+        IS: `${n} leikm${n === 1 ? "aður" : "enn"} með hátt hemlunarálag og ætti að fá léttari æfingu — ${fmt(redNames)}; aðrir eru í lagi.`,
+      };
+    } else if (counts.yellow > 0) {
+      tone = "watch";
+      const n = counts.yellow;
+      sentence = {
+        EN: `No one in the danger zone, but ${n} player${n === 1 ? "" : "s"} to keep an eye on — ${fmt(yellowNames)}; everyone else looks well-managed.`,
+        IS: `Enginn í hættu, en ${n} leikm${n === 1 ? "aður" : "enn"} til að fylgjast með — ${fmt(yellowNames)}; aðrir líta vel út.`,
+      };
+    } else {
+      tone = "good";
+      sentence = {
+        EN: `Braking load is well-managed across the squad — no one needs a lighter session today.`,
+        IS: `Hemlunarálag er vel stýrt í hópnum — enginn þarf léttari æfingu í dag.`,
+      };
+    }
+
+    // Confidence from coverage: how many of the squad have readable data.
+    const coverage = total > 0 ? withData / total : 0;
+    const level: "high" | "moderate" | "low" =
+      withData < 4 ? "low" : coverage >= 0.75 ? "high" : coverage >= 0.5 ? "moderate" : "low";
+
+    return {
+      tone,
+      sentence,
+      subtitle: {
+        EN: "Deceleration / braking load — the cost of hard slow-downs and cuts. High braking load without enough sprint work raises knee and quad injury risk.",
+        IS: "Hemlunarálag — kostnaðurinn af hörðum hraðaminnkunum og stefnubreytingum. Hátt hemlunarálag án nægrar sprett-vinnu eykur hættu á hné- og lærvöðva-meiðslum.",
+      },
+      confidence: {
+        level,
+        note: {
+          EN: `${withData}/${total} players with data`,
+          IS: `${withData}/${total} leikmenn með gögn`,
+        },
+      },
+      drivers,
+    };
+  }, [rows, counts, lang]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      {/* Explainability-first verdict — one plain sentence above all the dense
+          S&C content. RULES decide (see the `verdict` useMemo); this only renders.
+          Gated the same way the player list is: loaded + non-empty roster. */}
+      {!loading && !error && rows.length > 0 && (
+        <VerdictBanner
+          lang={lang}
+          kicker={{ EN: "Decel Intelligence", IS: "Decel Intelligence" }}
+          tone={verdict.tone}
+          sentence={verdict.sentence}
+          subtitle={verdict.subtitle}
+          confidence={verdict.confidence}
+          drivers={verdict.drivers}
+        />
+      )}
       <LiteTierBanner
         feature="Decel Intelligence"
         reasonIs="McBurnie engine þarf B2-3 acceleration/deceleration efforts úr Catapult — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."

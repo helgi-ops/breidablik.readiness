@@ -163,6 +163,109 @@ Referenced in coach comms ("pre-training report = intended load; post-training =
 actual load"). **Confirm current status in code** before announcing widely —
 verify the surfaces exist and read from the canonical sources.
 
+## 7. Post-match recovery — citation provenance (IN PROGRESS 2026-06-20)
+
+Goal: every signal carries a paper citation (manifesto principle #1). The
+post-match recovery logic was implemented but did NOT carry an inline citation
+the way the movement-signature / decel modules do. Closing that gap.
+
+Done (eslint clean, comments-only — no behaviour change, not yet committed):
+- `src/lib/fatigue/classify.ts` — JSDoc above the "Match-minutes scoring
+  (MD+1/MD+2 aware)" block (~line 247) now explains the recovery time-course and
+  cites Nédélec.
+- `src/lib/exercise-recommendations/recommend.ts` — comment at the
+  `postMatchResidualFlag` branch (~line 135) explains why CNS load is
+  down-regulated even on a GREEN day, with the same citation.
+- Citation: Nédélec M et al. "Recovery in Soccer" Part I & II, Sports Med
+  2012;42(12):997 / 2013;43(1):9; Silva JR et al. Sports Med 2018.
+
+Open — close the loop:
+- Add the SAME citation to `src/lib/coach-qa/questions.ts` where the reasoning
+  already says "It's MD+1 so a post-match echo is expected — readings should
+  rebound by MD+2" (~line 153). Use a short inline ref so the generated coach
+  answer can cite it, matching the existing `(Gabbett 2017)` / `(McBurnie 2022)`
+  inline-tag convention.
+- Then grep for other post-match / MD+1 / MD+2 / `gameTaper` recovery surfaces
+  that present the signal to a coach/athlete WITHOUT a citation; list them
+  before editing so the scope is a deliberate choice, not a sweep.
+- Note: `gameTaper.ts` is the PRE-match taper (load down D-2/D-1/D-0); the 60-min
+  match-recovery rule in `sprintExposure/loader.ts` already cites
+  "Carling 2018 / Nédélec 2012" — reuse that style.
+
+## 8. Coach surface declutter (NEXT — see decluttering-memo.md)
+
+The coach surface has grown to **47 pages, 64 components, ~50 nav destinations,
+19 cards on the daily dashboard** — too much for the real staffing (one part-time
+analyst who is also an assistant coach). Full prioritized plan in
+**`docs/decluttering-memo.md`**. Summary of order:
+
+1. **Tier 1 — kill now (low risk): ✅ DONE 2026-06-20.** Deleted 4 verified-dead
+   coach components (0 imports by path, no dynamic/lazy refs, no barrel
+   re-export): the 2 memo-named `CoDAsymmetryCard.tsx` (dup of kept `CodAsymCard`)
+   + `SessionRpeComplianceCard.tsx` (kept `SessionRpeMonitoringCard`), **plus 2
+   the sweep found**: `CheckinReminderStatusCard.tsx` and the 907-line
+   `ReadinessLoadQuadrant.tsx`. 64→60 coach components, ~1,540 lines removed.
+   `tsc` clean (no dangling imports). Removed the 3 `.fuse_hidden*` artifacts and
+   added `.fuse_hidden*` to `.gitignore`. (Note: the sweep first MISSED
+   `CoDAsymmetryCard` because kept `CodAsymCard.tsx` exports a function literally
+   named `CoDAsymmetryCard` — verify by import-path, not by name.)
+   **Extended app-wide 2026-06-20:** swept ALL `src/components` (234 files) →
+   deleted 13 more verified-dead, all last-touched 2026-04-06/07 (abandoned April
+   scaffold, not WIP): `ClientHome`, `MicrodoseTemplateCard`,
+   `player/{IndividualTrainingView(539L), MuscleGroupSelector(549L), PlansPanel}`,
+   `micropulse/MetabolicLoadCard`, `micropulse/coach/CoachCommandCenter`, and the
+   6 orphaned `reporting/*` sub-components (the live one is
+   `reporting/ReportingCenterPage`, which doesn't use them). ~2,135 lines. `tsc`
+   clean. Kept (false positives from path-test, imported with `.tsx` ext):
+   `sessionDelivery/PlayerSessionStatusCard`, `player/PlayerWhyFlaggedCard`.
+   Total Tier 1: **17 components / ~3,675 lines removed**, components 234→221.
+2. **Tier 3 — dashboard collapse (biggest UX win):** Today shows ~3 cards by
+   default (spike/exception alert + `DailyBriefingCard` triage list + today's
+   planned session); everything else moves behind a "Show S&C detail" toggle or
+   onto the relevant Intelligence page.
+3. **Tier 2 — merges:** one weekly card (WeeklyStory vs WeeklyNarrative — both
+   currently mounted), one planning flow (templates/starter/custom/plan-builder/
+   session-workflow/my-exercises → tabs), five Intelligence pages → one tabbed page.
+4. **Role-gate sales/ops** (`leads`, `org-reporting`, `reporting-center`,
+   `automation-center`) out of the coach app.
+
+Principle: **re-parent and hide, never delete data or engine logic** — this is an
+information-architecture pass, consistent with CLAUDE.md's "head-coach surface by
+default, S&C surface on drill-down."
+
+## 9. Load Intelligence — explainability layer (✅ DONE + sweep, June 2026)
+
+**Status: shipped, plus extended into a full sweep across all coach analysis
+surfaces. Not yet git-committed (user does commits).** See the "Sweep across the
+analysis surfaces (June 2026)" section in `docs/explainability-first.md` for the
+canonical record. In short:
+- `loadVerdict` lib + `/api/coach/load-verdict` + `LoadVerdictCard` shipped on
+  `/coach/load-intelligence` (5 S&C cards collapsed behind "Show S&C details");
+  compact strip added to the daily dashboard under the readiness briefing.
+- A June audit scored all 12 analysis pages; the laggards (Decel/IMA/HSR
+  Intelligence, Quadrant, Position Comparison, Train like you Play, Progressive
+  Overload, Assessment Profile, pre/post-session reports, post-match recovery) were
+  brought to verdict-on-top compliance via the shared **`VerdictBanner`**
+  (`src/components/coach/VerdictBanner.tsx`) — deterministic per-page synthesis,
+  confidence chip, cited driver tooltips, dense content preserved below.
+- **`trainingPrescriptions`** + **`TlypTrainingFocus`** added the "how to train
+  them" actionable layer to Train like you Play (position focus + per-player
+  exceptions, each a paper-cited fixed lookup — rules, not AI).
+- Dashboard Tier 2 merge: the two weekly cards (`WeeklyNarrativeCard` rules +
+  `WeeklyStoryCard` AI) co-located into one weekly surface.
+
+Original spec follows (kept for reference):
+
+Apply explainability-first to `/coach/load-intelligence`: replace the five-card
+S&C data wall with one plain-language **load verdict** on top + the existing cards
+as drill-down. Full spec in **`docs/load-intelligence-explainability.md`**. Core:
+a deterministic `loadVerdict` lib that SYNTHESIZES existing signals
+(`playerLoadAcwr`, `externalLoad`/`compositeLoad`, `mechanicalLoad`, `foster`,
+`metabolicLoad`, `movementSignature` spike) into band + drivers + confidence —
+does NOT recompute load. Integrity guardrail: weight contested metrics (di Prampero
+metabolic power) LOW; never launder a weak signal into a clean verdict; degrade
+confidence on low Catapult-tier coverage. Re-parent and synthesize, never delete.
+
 ## 6. Known repo hygiene
 
 - `src/app/coach/week-setup/.fuse_hidden*` are FUSE artifacts — do NOT commit

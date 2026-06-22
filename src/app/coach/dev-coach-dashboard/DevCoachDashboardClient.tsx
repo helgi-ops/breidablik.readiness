@@ -94,6 +94,7 @@ import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
+import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
@@ -8752,6 +8753,9 @@ export default function CoachPage() {
             playerInjuries={playerInjuryStatus}
             playerDeltas={yesterdayDeltas}
           />
+          {/* Load verdict (strip) — the load axis next to the readiness briefing;
+              one plain line, links to /coach/load-intelligence. Rules decide, not AI. */}
+          <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
           {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
           <UnfamiliarLoadCard lang={lang} date={today} />
           {/* Today Command Center */}
@@ -9318,17 +9322,6 @@ export default function CoachPage() {
                         </div>
                       )}
 
-                      {/* Weekly story — Friday-afternoon AI synthesis of the
-                          last 7 days. Grouped with "Press for deeper analysis"
-                          (which covers today) because both are ELITE AI
-                          narrative outputs and belong in the same
-                          AI-explanation area of Today Command Center.
-                          Daily AI = "what does today's data say"; Weekly
-                          story = "what was the story of the week". */}
-                      <div className="mt-3">
-                        <WeeklyStoryCard lang={lang} />
-                      </div>
-
                       {/* Day-state context row.
                           Default: shows internal state code + reason (useful
                           for the engine-aware coach when verdicts feel off).
@@ -9660,12 +9653,22 @@ export default function CoachPage() {
               system-health metrics in the way. See the System health
               section at the bottom of /coach/reporting-center. */}
 
-          {/* Weekly Narrative — strategic 7-day overview between Today
-              Command Center and the per-day briefings. Reads training-load
-              data + verdict history across the squad and emits a one-line
-              story + 2–3 supporting facts + forward-looking recommendation.
-              Self-hides when there's not enough data yet (fresh teams). */}
-          <WeeklyNarrativeCard teamId={coachTeamId} />
+          {/* Weekly surface (Tier 2 IA merge) — ONE weekly read, the rules→AI
+              explainability stack:
+                • WeeklyNarrativeCard (top) = deterministic 7-day overview —
+                  one-line story + 2–3 facts + recommendation. Always-on, free.
+                  Self-hides on fresh teams with no data.
+                • WeeklyStoryCard (below) = optional AI prose synthesis of the
+                  same 7 days (Claude Haiku, opt-in, ELITE), clearly labelled AI.
+              Previously these were two separate dashboard cards 340 lines apart
+              (WeeklyStory was nested in Today Command Center) — the coach met two
+              weekly summaries. Manifesto: rules are the default surface, AI is
+              the labelled drill-down OF THE SAME SUBJECT — so they belong here as
+              one stacked unit. No data/logic removed; only the mount moved. */}
+          <div className="space-y-3">
+            <WeeklyNarrativeCard teamId={coachTeamId} />
+            <WeeklyStoryCard lang={lang} />
+          </div>
 
           {/* Readiness × Load quadrant intentionally removed from the Today
               surface. It's a scatter plot with S&C-only axes ("0.5 = normal ·

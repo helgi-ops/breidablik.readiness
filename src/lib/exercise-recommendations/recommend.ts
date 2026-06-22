@@ -135,6 +135,11 @@ export function getExerciseRecommendation(input: ExerciseRecommendationInput): E
     } else if (input.postMatchResidualFlag) {
       // Phase 3: Post-match residual — down-regulate explosive CNS demand
       // Applies even when wellness shows GREEN; post-match fatigue is structural.
+      // Neuromuscular output (CMJ, sprint) and muscle-damage markers (CK) stay
+      // depressed/elevated up to ~72 h post-match regardless of how the athlete
+      // feels, so we protect the CNS in that window even on a GREEN day.
+      //   Refs: Nédélec M et al. Recovery in Soccer, Part I & II. Sports Med
+      //         2012;42(12):997 / 2013;43(1):9.
       recommendedExerciseId = "ISO_MID_THIGH_PULL";
       reasonCode = REASON_CODES.POST_MATCH_RESIDUAL;
       coachText =

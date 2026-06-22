@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
 import {
   PVA_KPIS, PVA_LABEL,
   type PlannedVsActual, type PvaStatus, type KpiCompare,
@@ -54,6 +55,8 @@ export default function PostTrainingCard({ date }: { date?: string }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showPlayers, setShowPlayers] = useState(true);
+  const [lang] = useLang();
+  const L = (s: { EN: string; IS: string }) => (lang === "IS" ? s.IS : s.EN);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -105,14 +108,74 @@ export default function PostTrainingCard({ date }: { date?: string }) {
         </div>
       )}
 
-      {/* Session RPE (internal load) */}
+      {/* Confidence — how much of the squad this read actually saw (principle #4: every verdict shows its confidence) */}
+      {(() => {
+        const squad = pva?.players.length ?? data.playersCaptured ?? 0;
+        const captured = data.playersCaptured ?? 0;
+        const cov = squad > 0 ? captured / squad : 0;
+        const rpeLogged = !!(data.rpe && data.rpe.rpe != null);
+        const rpeN = data.rpe?.n ?? 0;
+        const level: "high" | "moderate" | "low" =
+          cov >= 0.8 && rpeLogged ? "high" : cov >= 0.5 ? "moderate" : "low";
+        const levelLabel = { high: { EN: "high", IS: "há" }, moderate: { EN: "moderate", IS: "miðlungs" }, low: { EN: "low", IS: "lág" } }[level];
+        const tone =
+          level === "high" ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+          : level === "moderate" ? "bg-amber-100 text-amber-800 border-amber-200"
+          : "bg-slate-100 text-slate-600 border-slate-200";
+        const covTxt = squad > 0 ? `${captured}/${squad} ${L({ EN: "GPS captured", IS: "með GPS" })}` : L({ EN: "no squad list", IS: "enginn hóplisti" });
+        const rpeTxt = rpeLogged
+          ? `${L({ EN: "effort logged", IS: "áreynsla skráð" })} (${rpeN})`
+          : L({ EN: "no effort logged", IS: "engin áreynsla skráð" });
+        const thin = cov < 0.5 || !rpeLogged;
+        return (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone}`}
+              title={L({
+                EN: "Confidence reflects how much of the squad this read saw: GPS coverage (players captured vs squad) and whether effort (session-RPE) was logged. Thin coverage → read with caution.",
+                IS: "Vissa endurspeglar hve stóran hluta hópsins þessi lestur sá: GPS-þekju (leikmenn með gögn af hópi) og hvort áreynsla (session-RPE) var skráð. Þunn þekja → lesið með varúð.",
+              })}
+            >
+              {L({ EN: "Confidence", IS: "Vissa" })}: {L(levelLabel)} · {covTxt} · {rpeTxt}
+            </span>
+            {thin && (
+              <span className="text-[11px] text-slate-400">
+                {L({ EN: "thin coverage — read with caution", IS: "þunn þekja — lesið með varúð" })}
+              </span>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* How hard it felt — internal load (session-RPE behind a tooltip, not the primary label) */}
       {data.rpe && data.rpe.rpe != null && (
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-          <span>Session RPE: <strong className="text-slate-900">{data.rpe.rpe}</strong>/10</span>
-          {data.rpe.sessionLoad != null && <><span className="text-slate-300">·</span><span>sRPE load <strong className="text-slate-900">{fmt(data.rpe.sessionLoad)}</strong> AU</span></>}
+          <span
+            className="cursor-help"
+            title={L({
+              EN: "How hard the session felt — session-RPE: each player's rating of perceived exertion on a 0–10 scale (Foster 2001).",
+              IS: "Hve erfið æfingin var — session-RPE: hver leikmaður gefur upplifaða áreynslu á kvarða 0–10 (Foster 2001).",
+            })}
+          >
+            {L({ EN: "How hard it felt", IS: "Hve erfitt það var" })}: <strong className="text-slate-900">{data.rpe.rpe}</strong>/10
+          </span>
+          {data.rpe.sessionLoad != null && (
+            <>
+              <span className="text-slate-300">·</span>
+              <span
+                className="cursor-help"
+                title={L({
+                  EN: "Internal load — session-RPE load (sRPE): effort rating × session minutes, in arbitrary units (AU). Foster 2001.",
+                  IS: "Innra álag — session-RPE álag (sRPE): áreynslueinkunn × mínútur, í handahófseiningum (AU). Foster 2001.",
+                })}
+              >
+                {L({ EN: "Internal load", IS: "Innra álag" })} <strong className="text-slate-900">{fmt(data.rpe.sessionLoad)}</strong> AU
+              </span>
+            </>
+          )}
           {data.rpe.durationMin != null && <><span className="text-slate-300">·</span><span>{fmt(data.rpe.durationMin)} min</span></>}
           <span className="text-slate-300">·</span>
-          <span className="text-slate-400">{data.rpe.n} response{data.rpe.n === 1 ? "" : "s"}</span>
+          <span className="text-slate-400">{data.rpe.n} {data.rpe.n === 1 ? L({ EN: "response", IS: "svar" }) : L({ EN: "responses", IS: "svör" })}</span>
         </div>
       )}
 

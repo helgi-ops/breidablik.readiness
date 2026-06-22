@@ -22,6 +22,7 @@ import {
 // Checkbox
 import { Checkbox } from "@/components/ui/checkbox";
 import TeamInviteLinks from "@/components/coach/TeamInviteLinks";
+import { POSITION_OPTIONS } from "@/lib/micropulse/positionStyle";
 
 // ── Copy ──────────────────────────────────────────────────────────────────────
 
@@ -168,7 +169,7 @@ export default function CoachPlayersPage() {
   const [bulkUnit, setBulkUnit]   = useState<string | null>(null);
 
   // inline edits draft
-  const [draft, setDraft] = useState<Record<string, { sport?: string | null; unit?: string | null }>>({});
+  const [draft, setDraft] = useState<Record<string, { sport?: string | null; unit?: string | null; position?: string | null }>>({});
 
   const teamId = profile?.team_id ?? null;
   const canEdit = useMemo(() => {
@@ -232,10 +233,10 @@ export default function CoachPlayersPage() {
     setPendingPlayers(pending);
 
     const sel: Record<string, boolean> = {};
-    const dr: Record<string, { sport?: string | null; unit?: string | null }> = {};
+    const dr: Record<string, { sport?: string | null; unit?: string | null; position?: string | null }> = {};
     for (const p of active) {
       sel[p.id] = false;
-      dr[p.id]  = { sport: p.sport ?? null, unit: p.unit ?? null };
+      dr[p.id]  = { sport: p.sport ?? null, unit: p.unit ?? null, position: p.position ?? null };
     }
     setSelected(sel);
     setDraft(dr);
@@ -332,19 +333,24 @@ export default function CoachPlayersPage() {
     setDraft((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), unit } }));
   }
 
+  function setRowPosition(id: string, position: string | null) {
+    setDraft((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), position } }));
+  }
+
   async function saveChanges() {
     if (!canEdit || !teamId) return;
 
     setSaving(true);
     try {
-      const updates: { id: string; sport: string | null; unit: string | null }[] = [];
+      const updates: { id: string; sport: string | null; unit: string | null; position: string | null }[] = [];
 
       for (const p of players) {
         const d = draft[p.id] ?? {};
         const sport = norm(d.sport);
         const unit  = norm(d.unit);
-        if (sport !== norm(p.sport) || unit !== norm(p.unit)) {
-          updates.push({ id: p.id, sport, unit });
+        const position = norm(d.position);
+        if (sport !== norm(p.sport) || unit !== norm(p.unit) || position !== norm(p.position)) {
+          updates.push({ id: p.id, sport, unit, position });
         }
       }
 
@@ -354,7 +360,7 @@ export default function CoachPlayersPage() {
         updates.map((u) =>
           supabase
             .from("players")
-            .update({ sport: u.sport, unit: u.unit })
+            .update({ sport: u.sport, unit: u.unit, position: u.position })
             .eq("id", u.id)
             .eq("team_id", teamId)
             .select("id")
@@ -533,6 +539,7 @@ export default function CoachPlayersPage() {
                   const d    = draft[p.id] ?? {};
                   const sport = norm(d.sport);
                   const unit  = norm(d.unit);
+                  const position = norm(d.position);
 
                   return (
                     <div
@@ -555,6 +562,21 @@ export default function CoachPlayersPage() {
                       </div>
 
                       <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                        <Select
+                          value={position ?? ""}
+                          onValueChange={(v) => setRowPosition(p.id, v || null)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="Staða" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {POSITION_OPTIONS.map((o) => (
+                              <SelectItem key={o.code} value={o.code}>{o.code} · {o.is}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
                         <Select
                           value={sport ?? ""}
                           onValueChange={(v) => setRowSport(p.id, v || null)}

@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
+import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriver } from "@/components/coach/VerdictBanner";
 
 type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
@@ -102,9 +104,113 @@ export default function PostMatchRecoveryPage() {
   const players = data?.players ?? [];
   const summary = data?.summary;
 
+  // ── Deterministic verdict (rules, no LLM) — the one-sentence read the coach
+  // sees BEFORE the controls. Computed from the recovery summary already fetched.
+  const verdict = (() => {
+    if (!match || !summary || players.length === 0) return null;
+
+    const rebounded = summary.rebounded_by_md2;
+    const withMd2 = summary.with_md2;
+    const lagging = players.filter((p) => p.lagging);
+    const laggingNames = lagging.map((p) => p.name);
+
+    // tone: everyone (with a MD+2 read) rebounded → good; a meaningful share
+    // still flagged → watch, large share → concern.
+    const laggingShare = withMd2 > 0 ? lagging.length / withMd2 : 0;
+    const tone: VerdictTone =
+      lagging.length === 0 ? "good" : laggingShare >= 0.34 ? "concern" : "watch";
+
+    // sentence — plain language only: "two days after the match", no IMA/CMJ/MD+2.
+    const namesEN = laggingNames.join(", ");
+    const namesIS = laggingNames.join(", ");
+    let sentenceEN: string;
+    let sentenceIS: string;
+    if (lagging.length === 0) {
+      sentenceEN = `All ${withMd2} of ${withMd2} players with a read had fully rebounded by two days after the match.`;
+      sentenceIS = `Allir ${withMd2} af ${withMd2} leikmönnum með skráningu höfðu náð sér að fullu tveimur dögum eftir leik.`;
+    } else {
+      sentenceEN =
+        `${rebounded} of ${withMd2} players had fully rebounded by two days after the match; ` +
+        `${lagging.length} ${lagging.length === 1 ? "is" : "are"} still carrying match fatigue — ${namesEN}.`;
+      sentenceIS =
+        `${rebounded} af ${withMd2} leikmönnum höfðu náð sér að fullu tveimur dögum eftir leik; ` +
+        `${lagging.length} ${lagging.length === 1 ? "ber" : "bera"} enn þreytu úr leiknum — ${namesIS}.`;
+    }
+
+    // confidence — reuse coverage already computed (players with a MD+2 read,
+    // and how many have an objective jump measurement). Thin → low.
+    const cmjTested = summary.cmj_tested;
+    const md2Coverage = summary.played > 0 ? withMd2 / summary.played : 0;
+    const level: ConfidenceLevel =
+      withMd2 === 0 ? "low" : cmjTested > 0 && md2Coverage >= 0.7 ? "high" : md2Coverage >= 0.5 ? "moderate" : "low";
+    const noteEN =
+      `${withMd2}/${summary.played} with a two-day read` +
+      (cmjTested > 0 ? `, ${cmjTested} with an objective jump test` : `, no objective jump test logged`);
+    const noteIS =
+      `${withMd2}/${summary.played} með tveggja-daga skráningu` +
+      (cmjTested > 0 ? `, ${cmjTested} með objektífa stökkmælingu` : `, engin objektíf stökkmæling skráð`);
+
+    // drivers — the still-flagged players, with the mechanical-load / jump detail
+    // and the paper citations in each tooltip.
+    const drivers: VerdictDriver[] = lagging.map((p) => {
+      const md2Cmj = p.cmj?.["MD+2"] ?? null;
+      const cmjVal = md2Cmj ? (md2Cmj.rsiPct ?? md2Cmj.jhPct) : null;
+      const tipEN =
+        (p.load
+          ? `Match mechanical load ${p.load.decel} braking events (${p.load.tier ?? "mid"})`
+          : `No match mechanical-load data`) +
+        (cmjVal != null ? ` · jump ${fmtPct(cmjVal)} vs baseline` : ``) +
+        ` · McBurnie 2022 · Nédélec 2012`;
+      const tipIS =
+        (p.load
+          ? `Vélrænt leikálag ${p.load.decel} hemlanir (${p.load.tier ?? "mid"})`
+          : `Engin vélræn leikálagsgögn`) +
+        (cmjVal != null ? ` · stökk ${fmtPct(cmjVal)} vs grunnlína` : ``) +
+        ` · McBurnie 2022 · Nédélec 2012`;
+      return {
+        label: p.name,
+        detail: p.heavyEcho
+          ? { EN: "heavy echo", IS: "þungt bergmál" }
+          : p.notPostMatch
+            ? { EN: "likely not post-match", IS: "líklega ekki úr leik" }
+            : { EN: "still flagged", IS: "enn flaggaður" },
+        tip: { EN: tipEN, IS: tipIS },
+        tone: p.heavyEcho ? "concern" : ("watch" as VerdictTone),
+      };
+    });
+
+    return {
+      tone,
+      sentence: { EN: sentenceEN, IS: sentenceIS },
+      subtitle: {
+        EN: "Recovery after a match — fatigue peaks the day after and should clear within two to three days (Nédélec 2012).",
+        IS: "Endurheimt eftir leik — þreyta er mest daginn eftir og á að hverfa á tveimur til þremur dögum (Nédélec 2012).",
+      },
+      confidence: { level, note: { EN: noteEN, IS: noteIS } },
+      drivers,
+    };
+  })();
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <style>{`@media print {@page{size:A4 portrait;margin:12mm} body *{visibility:hidden} #pmr,#pmr *{visibility:visible} #pmr{position:absolute;left:0;top:0;width:100%} .pmr-noprint{display:none!important} .pmr-sec{break-inside:avoid}}`}</style>
+
+      {/* Explainability-first verdict — the plain-language read the coach sees
+          BEFORE the date selector / controls (docs/explainability-first.md).
+          Gated identically to the results: a match selected + players loaded. */}
+      {verdict && (
+        <div className="mb-4">
+          <VerdictBanner
+            lang={lang}
+            kicker={t.title}
+            tone={verdict.tone}
+            sentence={verdict.sentence}
+            subtitle={verdict.subtitle}
+            confidence={verdict.confidence}
+            drivers={verdict.drivers}
+          />
+        </div>
+      )}
 
       <div className="pmr-noprint mb-5 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -117,7 +223,7 @@ export default function PostMatchRecoveryPage() {
               <label className="block text-[11px] uppercase tracking-wide text-slate-500">{t.match}</label>
               <select value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="mt-0.5 rounded-md border border-slate-300 px-2 py-1.5 text-sm">
                 {(data?.matches ?? []).map((m) => (
-                  <option key={m.date} value={m.date}>{m.date} · {m.opponent ?? "—"}{m.is_home == null ? "" : m.is_home ? ` (${t.home})` : ` (${t.away})`}</option>
+                  <option key={m.date} value={m.date}>{m.date} · {formatMatchLabel(m.opponent, m.is_home, { home: t.home, away: t.away })}</option>
                 ))}
               </select>
             </div>
@@ -135,7 +241,7 @@ export default function PostMatchRecoveryPage() {
           {/* Header */}
           <div className="pmr-sec flex items-end justify-between border-b border-slate-200 pb-3">
             <div>
-              <div className="text-lg font-bold text-slate-900">{match.opponent ?? "—"}{match.is_home == null ? "" : match.is_home ? ` (${t.home})` : ` (${t.away})`}</div>
+              <div className="text-lg font-bold text-slate-900">{formatMatchLabel(match.opponent, match.is_home, { home: t.home, away: t.away })}</div>
               <div className="text-xs text-slate-500">{match.date} · {match.days_ago} {IS ? "dögum síðan" : "days ago"} · {summary.played} {IS ? "léku" : "played"}</div>
             </div>
             <div className="text-right">

@@ -13,10 +13,10 @@
  *   aerial  — jumps                                         → aerial presence
  */
 
-export type StyleMetricKey = "distance" | "hsr" | "sprint" | "top_speed" | "accel" | "decel" | "cod" | "jumps";
+export type StyleMetricKey = "distance" | "hsr" | "sprint" | "top_speed" | "accel" | "decel" | "cod" | "efforts" | "jumps" | "player_load" | "pl_per_min";
 export type StyleProfile = Record<StyleMetricKey, number>;
 
-export const STYLE_METRICS: StyleMetricKey[] = ["distance", "hsr", "sprint", "top_speed", "accel", "decel", "cod", "jumps"];
+export const STYLE_METRICS: StyleMetricKey[] = ["distance", "hsr", "sprint", "top_speed", "accel", "decel", "cod", "efforts", "jumps", "player_load", "pl_per_min"];
 
 export const METRIC_LABEL: Record<StyleMetricKey, { en: string; is: string }> = {
   distance: { en: "distance/90", is: "vegalengd/90" },
@@ -26,7 +26,10 @@ export const METRIC_LABEL: Record<StyleMetricKey, { en: string; is: string }> = 
   accel: { en: "accelerations/90", is: "hröðun/90" },
   decel: { en: "decelerations/90", is: "hraðaminnkun/90" },
   cod: { en: "change-of-direction/90", is: "stefnubreytingar/90" },
+  efforts: { en: "hard accel/decel efforts/90", is: "ákafa-átök (hröðun/hemlun)/90" },
   jumps: { en: "jumps/90", is: "stökk/90" },
+  player_load: { en: "Player Load/90", is: "Player Load/90" },
+  pl_per_min: { en: "Player Load/min", is: "Player Load/mín" },
 };
 
 /** Raw position code → broad outfield group. Unknown codes fall back to "OTHER". */
@@ -37,7 +40,29 @@ const GROUP_OF: Record<string, string> = {
   CM: "CM", DM: "CM", CDM: "CM", RCM: "CM", LCM: "CM",
   AM: "AM", CAM: "AM", RAM: "AM", LAM: "AM", RM: "AM", LM: "AM", RW: "AM", LW: "AM", RWG: "AM", LWG: "AM",
   CF: "CF", ST: "CF", SS: "CF", RF: "CF", LF: "CF",
+  // Legacy coarse codes (old player picker used GK/DF/MF/FW) → best-fit group so
+  // older data still breaks down by position instead of falling into "Other".
+  DF: "CB", MF: "CM", FW: "CF",
 };
+
+/**
+ * Selectable position codes for the player editor + add-player form. Every code
+ * maps cleanly through GROUP_OF above, so setting any of them makes the player
+ * show up under the right group in Position Comparison / TLYP. Finer than the
+ * 6 groups (e.g. RB vs LB) but still groups correctly.
+ */
+export const POSITION_OPTIONS: Array<{ code: string; en: string; is: string }> = [
+  { code: "GK", en: "Goalkeeper", is: "Markvörður" },
+  { code: "CB", en: "Centre back", is: "Miðvörður" },
+  { code: "RB", en: "Right back", is: "Hægri bakvörður" },
+  { code: "LB", en: "Left back", is: "Vinstri bakvörður" },
+  { code: "DM", en: "Defensive mid", is: "Varnarmiðja" },
+  { code: "CM", en: "Central mid", is: "Miðjumaður" },
+  { code: "AM", en: "Attacking mid", is: "Sóknarmiðja" },
+  { code: "RW", en: "Right wing", is: "Hægri kantur" },
+  { code: "LW", en: "Left wing", is: "Vinstri kantur" },
+  { code: "CF", en: "Forward", is: "Framherji" },
+];
 
 export const POSITION_GROUPS: Array<{ key: string; en: string; is: string }> = [
   { key: "GK", en: "Goalkeepers", is: "Markverðir" },
@@ -54,9 +79,13 @@ export function positionGroup(raw: string | null | undefined): string {
   return GROUP_OF[code] ?? (code ? "OTHER" : "OTHER");
 }
 
+// "agility" carries the busy / repeat-effort dimension. Pro S7 reads it from IMA
+// accel/decel/CoD; Core (no IMA) reads it from the Gen2 `efforts` count. Both feed
+// the same axis — the scoring below divides by the LIVE (non-zero-variance)
+// members, so whichever metrics a club actually has carry the axis, undiluted.
 const AXES: Record<string, StyleMetricKey[]> = {
   speed: ["sprint", "top_speed", "hsr"],
-  agility: ["accel", "decel", "cod"],
+  agility: ["accel", "decel", "cod", "efforts"],
   volume: ["distance"],
   aerial: ["jumps"],
 };
@@ -107,7 +136,11 @@ export function classifyStyle(profile: StyleProfile, pop: PopulationStats): Styl
   }
   const axisScores: Record<string, number> = {};
   for (const [axis, members] of Object.entries(AXES)) {
-    axisScores[axis] = members.reduce((s, m) => s + z[m], 0) / members.length;
+    // Divide by the metrics that actually discriminate (population sd > 0), so a
+    // dead metric on this tier (e.g. IMA CoD for a Core club, or `efforts` for a
+    // Pro club) neither pollutes nor dilutes the axis. Capability-driven.
+    const liveCount = members.filter((m) => pop[m].sd > 0).length || 1;
+    axisScores[axis] = members.reduce((s, m) => s + z[m], 0) / liveCount;
   }
   const ranked = Object.entries(axisScores).sort((a, b) => b[1] - a[1]);
   const [topAxis, topScore] = ranked[0];

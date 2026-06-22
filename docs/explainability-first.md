@@ -57,6 +57,37 @@ The default surface is the head-coach surface. The drill-down is the S&C / sport
 
 **Self-assessment: ~65% complete.** The remaining 35% is infrastructure (audit-trail tables, citation coverage, decision-trace tracking) — not single-file UI changes.
 
+### Sweep across the analysis surfaces (June 2026)
+
+The May assessment above was scoped to the Daily Briefing / Command Center. A June
+2026 audit scored the **12 coach analysis pages** against principles 1–4 and 7 and
+found the verdict-on-top treatment lived almost entirely on Daily Briefing + Indoor
+Load — the rest (Load/Decel/IMA/HSR Intelligence, Quadrant, Position Comparison,
+Train like you Play, Progressive Overload, Assessment Profile, the pre/post-session
+reports) opened with a chart, table or jargon-titled KPI grid. They were brought to
+compliance:
+
+- **`VerdictBanner`** (`src/components/coach/VerdictBanner.tsx`) — the shared
+  header now on every analysis page: one plain-language verdict in a traffic-light
+  tone → confidence chip → named-driver chips, jargon + paper citation in tooltips.
+  Each page computes its inputs deterministically (rules, no LLM) from data it
+  already had; the dense S&C content is preserved unchanged below.
+- **`loadVerdict`** (`src/lib/micropulse/loadVerdict`, `/api/coach/load-verdict`,
+  `LoadVerdictCard`) — the synthesis layer for Load Intelligence, also a compact
+  strip on the daily dashboard.
+- **`trainingPrescriptions`** (`src/lib/micropulse/trainingPrescriptions.ts` +
+  `TlypTrainingFocus`) — closes principle #3 on Train like you Play: each exposure
+  gap maps to a concrete, paper-cited training method (position focus + per-player
+  exceptions). Rules decide; the prescription is a fixed lookup.
+
+Net effect on the principles: **#1 (provenance)**, **#2 (plain language)**,
+**#3 (counterfactual/actionable)** and **#4 (confidence)** now hold on every coach
+analysis surface, not just the briefing. **#7 (citation coverage)** advanced — every
+new driver tooltip carries its paper — but is still ⚠️ until the older engine
+tooltips are swept. **#5 (rules-vs-AI)** is reinforced in practice (every verdict is
+labelled "Rules decide — not AI"), though the formal policy doc is still pending.
+**#6 (override audit)** is unchanged — still the main infrastructure gap.
+
 ---
 
 ## What this means in practice

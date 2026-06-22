@@ -45,7 +45,8 @@ const MIN_QUALIFY_MINUTES = 20;
 const MIN_APPEARANCES = 2;
 const LOAD_COLUMNS =
   "player_id, date, total_distance, high_speed_distance, sprint_distance, " +
-  "accelerations, decelerations, max_velocity, " +
+  "accelerations, decelerations, accel_decel_efforts, max_velocity, " +
+  "total_player_load, player_load_per_minute, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, jumps";
 
@@ -61,7 +62,15 @@ function appearanceProfile(r: Record<string, unknown>, minutes: number): { p90: 
       accel: num(r.accelerations) * f,
       decel: num(r.decelerations) * f,
       cod: cod * f,
+      // Core/Lite substitute for the IMA agility signals: the Gen2 combined
+      // accel+decel effort count. Pro clubs leave this 0 (they use accel/decel/cod).
+      efforts: num(r.accel_decel_efforts) * f,
       jumps: num(r.jumps) * f,
+      // Player Load: per-90 (a volume signal, like distance). PL/min is ALREADY a
+      // rate — store it raw (not per-90); the per-player mean across appearances
+      // then gives the average work-rate. Display/compare only; not an archetype axis.
+      player_load: num(r.total_player_load) * f,
+      pl_per_min: num(r.player_load_per_minute),
     },
     top_speed: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(), // km/h; drop >45 GPS glitches
   };
@@ -159,5 +168,10 @@ export async function GET(req: NextRequest) {
     })
     .sort((a, b) => POSITION_GROUPS.findIndex((x) => x.key === a.key) - POSITION_GROUPS.findIndex((x) => x.key === b.key));
 
-  return NextResponse.json({ season, squadAvg, groups, metrics: STYLE_METRICS });
+  // Only surface the axes this club actually has data for (capability-driven):
+  // a metric with no non-zero value across the squad is omitted, so Core clubs
+  // see hsr/sprint/top_speed/efforts instead of dead IMA accel/decel/CoD/jumps bars.
+  const liveMetrics = STYLE_METRICS.filter((m) => squadValues[m].some((v) => v > 0));
+
+  return NextResponse.json({ season, squadAvg, groups, metrics: liveMetrics });
 }

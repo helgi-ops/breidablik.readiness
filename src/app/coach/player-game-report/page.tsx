@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 
 type P90 = {
@@ -361,12 +362,10 @@ export default function PlayerGameReportPage() {
                     <tbody>
                       {matches.map((m) => {
                         const d = per90 ? m.p90 : m.raw;
-                        const opp = m.opponent ?? "—";
-                        const ha = m.is_home == null ? "" : m.is_home ? ` (${t.home})` : ` (${t.away})`;
                         return (
                           <tr key={m.date} className="border-b border-slate-100">
                             <td className="px-1.5 py-0.5 text-slate-600">{m.date}</td>
-                            <td className="px-1.5 py-0.5 font-medium text-slate-800">{opp}{ha}</td>
+                            <td className="px-1.5 py-0.5 font-medium text-slate-800">{formatMatchLabel(m.opponent, m.is_home, { home: t.home, away: t.away })}</td>
                             <td className="px-1.5 py-0.5 text-right tabular-nums text-slate-500">{m.minutes || "·"}</td>
                             {!m.has_gps ? (
                               <td colSpan={10} className="px-1.5 py-0.5 text-center text-[10px] italic text-slate-400">{IS ? "engin GPS" : "no GPS"}</td>

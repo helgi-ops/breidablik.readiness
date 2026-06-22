@@ -12,8 +12,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { ProfileRadar, MatchTrendBars, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import VerdictBanner, { type VerdictTone, type VerdictDriver } from "@/components/coach/VerdictBanner";
 
-type MetricKey = "distance" | "hsr" | "sprint" | "top_speed" | "accel" | "decel" | "cod" | "jumps";
+type MetricKey = "distance" | "hsr" | "sprint" | "top_speed" | "accel" | "decel" | "cod" | "efforts" | "jumps" | "player_load" | "pl_per_min";
+// Metrics that are NOT per-90 (a max or a rate) — used to suppress the "/90" suffix.
+const NOT_PER90 = new Set<MetricKey>(["top_speed", "pl_per_min"]);
 type Tag = { key: string; en: string; is: string };
 type Style = { primary: Tag; secondary: Tag | null; drivers: Array<{ metric: MetricKey; z: number; en: string; is: string }>; axisScores: Record<string, number> };
 type Member = {
@@ -70,7 +73,10 @@ export default function PositionComparisonPage() {
     accel: { en: "Accelerations", is: "Hröðun", unit: "", fmt: f1 },
     decel: { en: "Decelerations", is: "Hraðaminnkun", unit: "", fmt: f1 },
     cod: { en: "Change of direction", is: "Stefnubreytingar", unit: "", fmt: f1 },
+    efforts: { en: "Hard efforts", is: "Ákafa-átök", unit: "", fmt: f1 },
     jumps: { en: "Jumps", is: "Stökk", unit: "", fmt: f1 },
+    player_load: { en: "Player Load", is: "Player Load", unit: "AU", fmt: n0 },
+    pl_per_min: { en: "Work rate", is: "Ákefð", unit: "AU/min", fmt: f1 },
   };
   const radarKeys: MetricKey[] = ["distance", "hsr", "sprint", "top_speed", "accel", "decel", "cod"];
   const groups = useMemo(() => data?.groups ?? [], [data]);
@@ -96,6 +102,111 @@ export default function PositionComparisonPage() {
       return { key: g.key, shares: scores.map((s, i) => ({ ...s, pct: (exps[i] / sum) * 100 })) };
     });
   }, [groups]);
+
+  // ── Verdict (rules, not AI): summarise the 1–2 biggest position contrasts ──
+  // For every comparable metric we find the leading position and how far it sits
+  // above the next-best (relative spread). The axes with the widest spread become
+  // the headline; the lead positions become named drivers with the metric jargon
+  // (CoD, HSR, Acc, Dec) + paper citations parked in each driver's tooltip.
+  const verdict = useMemo(() => {
+    if (!data || groups.length < 1) return null;
+
+    // Plain-language phrasing per metric for the headline sentence (no jargon),
+    // plus the jargon term + citation that lives only in the driver tooltip.
+    const PHRASE: Partial<Record<MetricKey, { en: string; is: string; jargonEn: string; jargonIs: string; cite: string }>> = {
+      sprint: { en: "cover the most sprint distance", is: "hlaupa flesta spretti", jargonEn: "Sprint distance (HSR/sprint, Malone 2017)", jargonIs: "Sprettir (HSR/sprettir, Malone 2017)", cite: "Malone 2017" },
+      hsr: { en: "cover the most high-speed distance", is: "hlaupa mest á háhraða", jargonEn: "High-speed running (HSR, Buchheit 2014)", jargonIs: "Háhraðahlaup (HSR, Buchheit 2014)", cite: "Buchheit 2014" },
+      decel: { en: "absorb the most braking load", is: "taka mesta hemlunarálagið", jargonEn: "Decelerations (Dec / braking, McBurnie 2022)", jargonIs: "Hraðaminnkun (Dec / hemlun, McBurnie 2022)", cite: "McBurnie 2022" },
+      accel: { en: "do the most accelerating", is: "hraða sér oftast upp", jargonEn: "Accelerations (Acc, McBurnie 2022)", jargonIs: "Hröðun (Acc, McBurnie 2022)", cite: "McBurnie 2022" },
+      cod: { en: "change direction the most", is: "breyta oftast um stefnu", jargonEn: "Change of direction (CoD, McBurnie 2022)", jargonIs: "Stefnubreytingar (CoD, McBurnie 2022)", cite: "McBurnie 2022" },
+      efforts: { en: "rack up the most hard accel/decel efforts", is: "safna flestum ákafa-átökum (hröðun/hemlun)", jargonEn: "Accel & decel efforts (Gen2, McBurnie 2022)", jargonIs: "Hröðunar/hemlunar-átök (Gen2, McBurnie 2022)", cite: "McBurnie 2022" },
+      player_load: { en: "carry the most Player Load", is: "bera mesta Player Load", jargonEn: "Player Load (total mechanical work)", jargonIs: "Player Load (heildar vélræn vinna)", cite: "" },
+      pl_per_min: { en: "work at the highest intensity", is: "vinna á mestri ákefð", jargonEn: "Player Load per minute (work rate)", jargonIs: "Player Load á mínútu (ákefð)", cite: "" },
+      top_speed: { en: "hit the highest top speed", is: "ná mestum hámarkshraða", jargonEn: "Top speed (km/h, Buchheit 2014)", jargonIs: "Hámarkshraði (km/klst, Buchheit 2014)", cite: "Buchheit 2014" },
+      distance: { en: "cover the most total distance", is: "hlaupa lengstu heildarvegalengd", jargonEn: "Total distance (running volume)", jargonIs: "Heildarvegalengd (hlaupamagn)", cite: "" },
+      jumps: { en: "jump the most", is: "stökkva oftast", jargonEn: "Jumps (IMA aerial events)", jargonIs: "Stökk (IMA loftatburðir)", cite: "" },
+    };
+
+    // Per metric: leading group, runner-up, and relative spread (lead vs next).
+    type Axis = { metric: MetricKey; leadKey: string; leadVal: number; spread: number };
+    const axes: Axis[] = data.metrics
+      .map((m) => {
+        const ranked = groups
+          .map((g) => ({ key: g.key, v: g.profile[m] }))
+          .filter((r) => Number.isFinite(r.v))
+          .sort((a, b) => b.v - a.v);
+        if (ranked.length < 2 || !PHRASE[m]) return null;
+        const lead = ranked[0];
+        const next = ranked[1];
+        const spread = next.v > 0 ? (lead.v - next.v) / next.v : 0;
+        return { metric: m, leadKey: lead.key, leadVal: lead.v, spread } as Axis;
+      })
+      .filter((a): a is Axis => a != null && a.spread > 0)
+      .sort((a, b) => b.spread - a.spread);
+
+    const tx = (en: string, is: string) => (IS ? is : en);
+
+    // Confidence: how many positions, how many matches behind them.
+    const totalMatches = groups.reduce((s, g) => s + g.appearances, 0);
+    const thin = groups.length < 2 || totalMatches < 6;
+    const level: "high" | "moderate" | "low" = thin ? "low" : totalMatches >= 20 && groups.length >= 3 ? "high" : "moderate";
+    const note = tx(
+      `${groups.length} positions · ${totalMatches} match-appearances`,
+      `${groups.length} stöður · ${totalMatches} leikir`,
+    );
+
+    if (axes.length === 0) {
+      return {
+        tone: "neutral" as VerdictTone,
+        sentence: tx(
+          "Positions look broadly similar this season — no axis separates them clearly yet.",
+          "Stöðurnar líta út fyrir að vera svipaðar á tímabilinu — enginn ás aðgreinir þær skýrt enn.",
+        ),
+        subtitle: tx(
+          "Each bar below is a position's per-match average; the dashed line is the squad average.",
+          "Hver súla að neðan er meðaltal stöðu á leik; strikalínan er liðsmeðaltalið.",
+        ),
+        confidence: { level, note },
+        drivers: [] as VerdictDriver[],
+      };
+    }
+
+    const top = axes.slice(0, 2);
+    const groupLabel = (key: string) => {
+      const g = groups.find((x) => x.key === key);
+      return g ? (IS ? g.label_is : g.label_en) : key;
+    };
+
+    // Headline: "X <do the most Y>; Z <do the most W>." — two biggest contrasts.
+    const parts = top.map((a) => {
+      const p = PHRASE[a.metric]!;
+      return `${groupLabel(a.leadKey)} ${tx(p.en, p.is)}`;
+    });
+    const sentence = parts.join(IS ? "; " : "; ") + ".";
+
+    const drivers: VerdictDriver[] = top.map((a) => {
+      const p = PHRASE[a.metric]!;
+      const pct = Math.round(a.spread * 100);
+      return {
+        label: groupLabel(a.leadKey),
+        detail: { EN: META[a.metric].en, IS: META[a.metric].is },
+        tip: {
+          EN: `${p.jargonEn} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : "/90"}, ~${pct}% above the next position.`,
+          IS: `${p.jargonIs} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : "/90"}, ~${pct}% yfir næstu stöðu.`,
+        },
+        tone: "neutral",
+      };
+    });
+
+    const tone: VerdictTone = thin ? "neutral" : "good";
+    const subtitle = tx(
+      "Pick a metric below to compare positions; each bar is a per-match average and the dashed line is the squad average.",
+      "Veldu mæligildi að neðan til að bera saman stöður; hver súla er meðaltal á leik og strikalínan er liðsmeðaltalið.",
+    );
+
+    return { tone, sentence, subtitle, confidence: { level, note }, drivers };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, groups, IS]);
 
   async function generateNarrative() {
     if (!data) return;
@@ -148,6 +259,20 @@ export default function PositionComparisonPage() {
 
       {data && groups.length > 0 && (
         <div id="pc-report" className="space-y-5">
+          {/* Plain-language verdict (rules, not AI) — the explainability-first
+              header. All existing charts/cards stay unchanged below. */}
+          {verdict && (
+            <VerdictBanner
+              lang={lang}
+              kicker={IS ? "Stöðu-samanburður" : "Position comparison"}
+              tone={verdict.tone}
+              sentence={verdict.sentence}
+              subtitle={verdict.subtitle}
+              confidence={verdict.confidence}
+              drivers={verdict.drivers}
+            />
+          )}
+
           {/* AI overview */}
           <div className="pc-section rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -168,11 +293,11 @@ export default function PositionComparisonPage() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Samanburður eftir stöðu" : "Comparison by position"}</div>
                 <select value={metric} onChange={(e) => setMetric(e.target.value as MetricKey)} className="pc-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
-                  {(data.metrics).map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}{META[m].unit ? ` (${META[m].unit})` : ""} /90</option>)}
+                  {(data.metrics).map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}{META[m].unit ? ` (${META[m].unit})` : ""}{NOT_PER90.has(m) ? "" : " /90"}</option>)}
                 </select>
               </div>
               <div className="mx-auto max-w-md">
-                <MatchTrendBars title={`${IS ? META[metric].is : META[metric].en}${metric === "top_speed" ? "" : " /90"}${META[metric].unit ? ` (${META[metric].unit})` : ""}`} unit={META[metric].unit} bars={compareBars.bars} avg={compareBars.avg} />
+                <MatchTrendBars title={`${IS ? META[metric].is : META[metric].en}${NOT_PER90.has(metric) ? "" : " /90"}${META[metric].unit ? ` (${META[metric].unit})` : ""}`} unit={META[metric].unit} bars={compareBars.bars} avg={compareBars.avg} />
               </div>
               <div className="mt-1 text-center text-[10px] text-slate-400">{IS ? "Strikalína = liðsmeðaltal" : "Dashed line = squad average"}</div>
             </div>

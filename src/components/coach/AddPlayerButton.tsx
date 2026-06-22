@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { POSITION_OPTIONS } from "@/lib/micropulse/positionStyle";
 
 type Lang = "IS" | "EN";
 
@@ -49,7 +50,7 @@ const COPY = {
   },
 } as const;
 
-type Position = "" | "GK" | "DF" | "MF" | "FW";
+type Position = string; // position code from POSITION_OPTIONS (or "" = unset)
 
 interface Props {
   teamId: string | null;
@@ -161,10 +162,9 @@ export default function AddPlayerButton({ teamId, lang = "IS", onPlayerAdded }: 
                   className="rounded-xl border px-3 py-2"
                 >
                   <option value="">{t.positions[""]}</option>
-                  <option value="GK">{t.positions.GK}</option>
-                  <option value="DF">{t.positions.DF}</option>
-                  <option value="MF">{t.positions.MF}</option>
-                  <option value="FW">{t.positions.FW}</option>
+                  {POSITION_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>{o.code} · {lang === "IS" ? o.is : o.en}</option>
+                  ))}
                 </select>
               </label>
 

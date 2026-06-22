@@ -32,6 +32,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useLang } from "@/lib/lang";
+import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
 
 type Flag = "green" | "yellow" | "red" | "insufficient";
 
@@ -194,6 +195,137 @@ type RawRow = {
   max_vel: number | null;
 };
 
+// ── Verdict computation (RULES, not AI) ─────────────────────────────────
+// Turns the per-player snapshot table into one plain-language headline.
+// Jargon (ACWR, %MaxV, HSR) stays out of the sentence and lives in the
+// driver tooltips with their paper citations.
+
+type Verdict = {
+  tone: VerdictTone;
+  sentence: { EN: string; IS: string };
+  subtitle: { EN: string; IS: string };
+  confidence: { level: ConfidenceLevel; note: { EN: string; IS: string } };
+  drivers: VerdictDriver[];
+};
+
+/** Short plain-language reason a player is flagged, for the driver chip detail. */
+function driverDetail(r: PlayerHsrSnapshot): { EN: string; IS: string } {
+  const en = r.hsr_flag === "red" || r.hsr_flag === "yellow"
+    ? (r.hsr_acwr != null && r.hsr_acwr > 1.3 ? "load ramping up fast" : "load dropped off")
+    : r.sprint_flag === "red" || r.sprint_flag === "yellow"
+    ? "sprinting ramping up fast"
+    : "rarely hitting top speed";
+  const is = r.hsr_flag === "red" || r.hsr_flag === "yellow"
+    ? (r.hsr_acwr != null && r.hsr_acwr > 1.3 ? "álag eykst hratt" : "álag dottið niður")
+    : r.sprint_flag === "red" || r.sprint_flag === "yellow"
+    ? "sprett-álag eykst hratt"
+    : "nær sjaldan topphraða";
+  return { EN: en, IS: is };
+}
+
+/** The jargon + citation that belongs in each driver's tooltip. */
+function driverTip(r: PlayerHsrSnapshot): { EN: string; IS: string } {
+  const parts: string[] = [];
+  if (r.hsr_acwr != null) parts.push(`HSR ACWR ${r.hsr_acwr.toFixed(2)}`);
+  if (r.sprint_acwr != null) parts.push(`Sprint ACWR ${r.sprint_acwr.toFixed(2)}`);
+  if (r.pct_max_v != null) parts.push(`%MaxV ${r.pct_max_v.toFixed(0)}% · ${r.high_max_v_sessions_28d} sessions ≥95%`);
+  const metrics = parts.join(" · ");
+  return {
+    EN: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2014).`,
+    IS: `${metrics} — acute:chronic workload ratio + max-velocity exposure (Malone 2017, Buchheit 2014).`,
+  };
+}
+
+function computeVerdict(rows: PlayerHsrSnapshot[]): Verdict {
+  const reds = rows.filter((r) => r.overall_flag === "red");
+  const yellows = rows.filter((r) => r.overall_flag === "yellow");
+  const flagged = [...reds, ...yellows];
+
+  // Confidence: signal coverage = how many players have a usable 28d baseline.
+  const withBaseline = rows.filter((r) => r.days_28d >= 7).length;
+  const coverage = rows.length > 0 ? withBaseline / rows.length : 0;
+  const level: ConfidenceLevel = coverage >= 0.75 ? "high" : coverage >= 0.4 ? "moderate" : "low";
+  const confidence = {
+    level,
+    note: {
+      EN: `${withBaseline}/${rows.length} players have a 4-week baseline`,
+      IS: `${withBaseline}/${rows.length} leikmenn með 4-vikna grunnlínu`,
+    },
+  };
+
+  // Genuinely thin: nobody has enough history to compare against.
+  if (withBaseline === 0) {
+    return {
+      tone: "neutral",
+      sentence: {
+        EN: "Not enough running history yet to judge anyone's high-speed-running load.",
+        IS: "Ekki nóg hlaupasaga enn til að meta há-hraða álag neins leikmanns.",
+      },
+      subtitle: {
+        EN: "High-speed running — distance covered above the high-speed threshold. Each player needs about four weeks of sessions before today's load can be compared to their normal range.",
+        IS: "Há-hraða hlaup — vegalengd hlaupin yfir há-hraða viðmiði. Hver leikmaður þarf um fjórar vikur af sessions áður en hægt er að bera dagsins álag saman við venjulegt svið.",
+      },
+      confidence: { level: "low", note: confidence.note },
+      drivers: [],
+    };
+  }
+
+  const names = (list: PlayerHsrSnapshot[]) =>
+    list.map((r) => r.name.split(" ")[0] || r.name).filter(Boolean);
+
+  const drivers: VerdictDriver[] = flagged.slice(0, 6).map((r) => ({
+    label: r.name.split(" ")[0] || r.name,
+    detail: driverDetail(r),
+    tip: driverTip(r),
+    tone: r.overall_flag === "red" ? "concern" : "watch",
+  }));
+
+  const subtitle = {
+    EN: "High-speed running — distance covered above the high-speed threshold. “Elevated load” means today's running is far above (or far below) the player's normal four-week pattern, or they rarely reach top speed.",
+    IS: "Há-hraða hlaup — vegalengd hlaupin yfir há-hraða viðmiði. „Hækkað álag“ þýðir að hlaup dagsins er langt yfir (eða langt undir) venjulegu fjögurra-vikna mynstri leikmanns, eða þeir ná sjaldan topphraða.",
+  };
+
+  if (reds.length > 0) {
+    const redNames = names(reds);
+    const others = yellows.length;
+    return {
+      tone: "concern",
+      sentence: {
+        EN: `${reds.length} player${reds.length === 1 ? "" : "s"} carrying elevated high-speed-running load — ${redNames.join(", ")}${others > 0 ? `; ${others} more to keep an eye on` : "; the rest are in their normal range"}.`,
+        IS: `${reds.length} leikm${reds.length === 1 ? "aður" : "enn"} með hækkað há-hraða álag — ${redNames.join(", ")}${others > 0 ? `; ${others} til viðbótar að fylgjast með` : "; hinir eru á sínu venjulega sviði"}.`,
+      },
+      subtitle,
+      confidence,
+      drivers,
+    };
+  }
+
+  if (yellows.length > 0) {
+    const yNames = names(yellows);
+    return {
+      tone: "watch",
+      sentence: {
+        EN: `${yellows.length} player${yellows.length === 1 ? "" : "s"} to keep an eye on for high-speed-running load — ${yNames.join(", ")}; the rest are in their normal range.`,
+        IS: `${yellows.length} leikm${yellows.length === 1 ? "ann" : "enn"} að fylgjast með vegna há-hraða álags — ${yNames.join(", ")}; hinir eru á sínu venjulega sviði.`,
+      },
+      subtitle,
+      confidence,
+      drivers,
+    };
+  }
+
+  return {
+    tone: "good",
+    sentence: {
+      EN: "Everyone's high-speed-running load is in their normal range — no one is ramping up too fast or under-exposed to top speed.",
+      IS: "Há-hraða álag allra er á sínu venjulega sviði — enginn eykur of hratt eða er undir-exposed fyrir topphraða.",
+    },
+    subtitle,
+    confidence,
+    drivers: [],
+  };
+}
+
 export default function HsrIntelligencePage() {
   const [lang] = useLang();
   const supabase = React.useMemo(() => getSupabaseClient(), []);
@@ -352,8 +484,26 @@ export default function HsrIntelligencePage() {
     return () => { alive = false; };
   }, [supabase, today, win28Start, win7Start, lang]);
 
+  // Plain-language verdict (RULES, not AI) — computed from the same rows the
+  // table below renders. Gated identically to the table.
+  const verdict = React.useMemo(() => computeVerdict(rows), [rows]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      {/* Plain-language verdict banner — explainability-first headline.
+          Gated identically to the table (loaded + non-empty). */}
+      {!loading && !error && rows.length > 0 && (
+        <VerdictBanner
+          lang={lang}
+          kicker={lang === "EN" ? "High-speed running" : "Há-hraða hlaup"}
+          tone={verdict.tone}
+          sentence={verdict.sentence}
+          subtitle={verdict.subtitle}
+          confidence={verdict.confidence}
+          drivers={verdict.drivers}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

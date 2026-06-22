@@ -28,6 +28,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 
 const I18N = {
@@ -109,6 +110,116 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ── Verdict (rules, not AI) ────────────────────────────────────────────────
+// Plain-language headline computed deterministically from the per-player day
+// already loaded in `profile`. The buried insight on this page is an acute
+// movement spike vs a player's own training norm — surface it at the top.
+// Spike threshold matches the existing rose row colouring (>= 150% of the
+// 14-day training-only baseline of high-cadence "sprint" strides).
+type ImaVerdict = {
+  tone: "good" | "watch" | "concern" | "neutral";
+  sentence: { EN: string; IS: string };
+  subtitle: { EN: string; IS: string };
+  confidence: { level: "high" | "moderate" | "low"; note: { EN: string; IS: string } };
+  drivers: VerdictDriver[];
+};
+
+const SUBTITLE_IMA = {
+  EN: "IMA = inertial movement — accel/decel and change-of-direction efforts measured by the pod, works indoors. This compares today's high-effort running to each player's own usual day.",
+  IS: "IMA = hröðunar-hreyfing — hröðun/hemlun og stefnubreytingar mældar af pod, virkar innandyra. Þetta ber hástreitu-hlaup dagsins saman við venjulegan dag hvers leikmanns.",
+} as const;
+
+function computeImaVerdict(profile: ImaSessionProfile): ImaVerdict {
+  const withData = profile.per_player.filter((p) => p.total_strides > 0);
+  const withBaseline = withData.filter((p) => p.sprint_vs_baseline_pct != null);
+
+  // Genuinely no usable data → honest neutral / low confidence.
+  if (withData.length === 0 || profile.session_type === "no_data") {
+    return {
+      tone: "neutral",
+      sentence: {
+        EN: "Not enough movement data captured today to judge load.",
+        IS: "Ekki næg hreyfigögn í dag til að meta álag.",
+      },
+      subtitle: SUBTITLE_IMA,
+      confidence: {
+        level: "low",
+        note: { EN: "no players captured with pods", IS: "engir leikmenn með pod" },
+      },
+      drivers: [],
+    };
+  }
+
+  const spikes = withBaseline.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150);
+
+  // Confidence from coverage (players captured) + baseline maturity.
+  const thinBaseline = withBaseline.every((p) => p.sprint_baseline_days <= 1);
+  const coverage = withBaseline.length;
+  const level: "high" | "moderate" | "low" =
+    coverage === 0 || thinBaseline ? "low" : coverage >= 6 ? "high" : "moderate";
+  const confNote = {
+    EN:
+      coverage === 0
+        ? "no personal baselines yet"
+        : thinBaseline
+          ? `${coverage} compared, baselines still building`
+          : `${coverage} players compared to their own norm`,
+    IS:
+      coverage === 0
+        ? "engar persónulegar grunnlínur enn"
+        : thinBaseline
+          ? `${coverage} bornir saman, grunnlínur enn að byggjast`
+          : `${coverage} leikmenn bornir saman við eigin venju`,
+  };
+
+  // Driver tooltips carry the jargon + paper citation (Hulin 2014 / Gabbett 2017
+  // ACWR; Buchheit 2014 individual baselines).
+  const drivers: VerdictDriver[] = spikes
+    .slice()
+    .sort((a, b) => (b.sprint_vs_baseline_pct ?? 0) - (a.sprint_vs_baseline_pct ?? 0))
+    .map((p) => ({
+      label: p.full_name,
+      detail: {
+        EN: `${Math.round(p.sprint_vs_baseline_pct ?? 0)}% of usual`,
+        IS: `${Math.round(p.sprint_vs_baseline_pct ?? 0)}% af venju`,
+      },
+      tone: "concern" as const,
+      tip: {
+        EN: `High-cadence (sprint, bands 5-8) running ${Math.round(
+          p.sprint_vs_baseline_pct ?? 0,
+        )}% of his 14-day training-only baseline — an acute:chronic spike. Spread sprint exposure across the week (Hulin 2014; Gabbett 2017; per-player norms Buchheit 2014).`,
+        IS: `Háákefðar (sprint, bönd 5-8) hlaup ${Math.round(
+          p.sprint_vs_baseline_pct ?? 0,
+        )}% af 14-daga æfinga-grunnlínu — bráð:langvinn spike. Dreifðu sprett-álagi yfir vikuna (Hulin 2014; Gabbett 2017; persónulegar norm Buchheit 2014).`,
+      },
+    }));
+
+  if (spikes.length === 0) {
+    return {
+      tone: "good",
+      sentence: {
+        EN: "Every player's high-effort running today was within their own normal range.",
+        IS: "Hástreitu-hlaup allra leikmanna í dag var innan þeirra eigin venju.",
+      },
+      subtitle: SUBTITLE_IMA,
+      confidence: { level, note: confNote },
+      drivers: [],
+    };
+  }
+
+  const names = spikes.map((p) => p.full_name).join(", ");
+  return {
+    tone: "concern",
+    sentence: {
+      EN: `${spikes.length} player${spikes.length === 1 ? "" : "s"} ran well above their own usual today — ${names}; everyone else was within range.`,
+      IS: `${spikes.length} leikm${spikes.length === 1 ? "aður" : "enn"} hlupu langt yfir sína venju í dag — ${names}; aðrir voru innan marka.`,
+    },
+    subtitle: SUBTITLE_IMA,
+    confidence: { level, note: confNote },
+    drivers,
+  };
+}
+
 export default function ImaIntelligencePage() {
   const [lang] = useLang();
   const [date, setDate] = React.useState(todayIso());
@@ -183,6 +294,22 @@ export default function ImaIntelligencePage() {
 
       {!loading && !error && profile && (
         <>
+          {(() => {
+            const v = computeImaVerdict(profile);
+            return (
+              <div className="mb-6">
+                <VerdictBanner
+                  lang={lang}
+                  tone={v.tone}
+                  sentence={v.sentence}
+                  subtitle={v.subtitle}
+                  confidence={v.confidence}
+                  drivers={v.drivers}
+                  kicker={{ EN: "Movement intelligence", IS: "Hreyfigreining" }}
+                />
+              </div>
+            );
+          })()}
           <SessionProfileCard profile={profile} lang={lang} />
           <ImaRunDistanceCard date={date} lang={lang} />
           <PerPlayerTable profile={profile} lang={lang} />

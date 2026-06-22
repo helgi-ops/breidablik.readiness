@@ -313,7 +313,12 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     metabolic_power: m.metabolicPower ?? null,
     metabolic_energy_kj: a.totalMetabolicEnergy ?? null,
 
+    // Top speed: write BOTH columns. Coach surfaces (player-game-report,
+    // position-comparison, load-verdict…) read `max_velocity`; the CSV path
+    // historically only wrote `max_vel`, so Core/Lite teams showed 0% top speed
+    // even though it was captured. Both are km/h; read-sites clamp >45 glitches.
     max_vel: m.maxVelocity ?? null,
+    max_velocity: m.maxVelocity ?? null,
     avg_heart_rate: m.avgHeartRate ?? null,
     max_heart_rate: m.maxHeartRate ?? null,
 
@@ -360,6 +365,14 @@ type CommitBody = {
    *  the actual session date). The coach picks the real session date on
    *  the upload UI and we apply it to every aggregated row before upsert. */
   dateOverride?: string | null;
+  /** When true, this upload IS a match: also create match_player_minutes rows
+   *  (minutes derived from the CSV) so TLYP / post-match surfaces recognise the
+   *  day as a match. Lets Core/Lite clubs (no API match feed) land a full match
+   *  from one CSV — no separate minutes entry. */
+  isMatch?: boolean;
+  /** Match length in minutes for the appearances created when isMatch is true
+   *  (the CSV has no reliable playing time). Defaults to 90. */
+  matchMinutes?: number;
 };
 
 export async function POST(req: NextRequest) {
@@ -511,6 +524,39 @@ export async function POST(req: NextRequest) {
     committed = dbRows.length;
   }
 
+  // ── Optional: this upload IS a match → populate match_player_minutes so TLYP
+  // and the post-match surfaces recognise it. The OpenField match CSV carries NO
+  // reliable playing time (its "Duration" is pod-on time — warmup→cooldown, often
+  // hours), so we use a coach-supplied match length (default 90) for every player
+  // who actually took part. Participation is inferred from match-day load
+  // (Player Load ≥ MATCH_MIN_LOAD) so a pod-off / DNP / unused keeper doesn't get
+  // a phantom 90-minute appearance. Subs are fine-tuned on the match-minutes page.
+  // Conflict on (player_id, match_date) so a re-upload updates, never duplicates.
+  const MATCH_MIN_LOAD = 150; // Player Load floor to count as "played" (real players ≫ this; pod-off ≈ 17–55)
+  let matchMinutesUpserted = 0;
+  if (body.phase === "commit" && body.isMatch) {
+    const minutes = typeof body.matchMinutes === "number" && body.matchMinutes > 0 ? Math.round(body.matchMinutes) : 90;
+    const minutesRows = aggregated
+      .map((b) => {
+        const key = b.athleteId ?? b.athleteName ?? "";
+        const playerId = finalResolved.get(key);
+        const matchDate = overrideDate ?? b.date;
+        const tpl = b.accum.playerLoad ?? 0;
+        if (!playerId || !matchDate || tpl < MATCH_MIN_LOAD) return null;
+        return { player_id: playerId, team_id: auth.teamId, match_date: matchDate, minutes_played: minutes, is_dnp: false };
+      })
+      .filter((x): x is { player_id: string; team_id: string; match_date: string; minutes_played: number; is_dnp: boolean } => x !== null);
+    if (minutesRows.length > 0) {
+      const { error: mmErr } = await supabase
+        .from("match_player_minutes")
+        .upsert(minutesRows as never, { onConflict: "player_id,match_date" });
+      if (mmErr) {
+        return NextResponse.json({ ok: false, error: `Match minutes: ${mmErr.message}` }, { status: 500 });
+      }
+      matchMinutesUpserted = minutesRows.length;
+    }
+  }
+
   // Audit row
   const unmappedCount = resolution.filter((r) => !r.playerId).length;
   const unmappedColumns = Array.from(parsed.unmatched.values());
@@ -534,6 +580,7 @@ export async function POST(req: NextRequest) {
     rowsCommitted: committed,
     rowsParsed:    aggregated.length,
     athletesTotal: resolution.length,
+    matchMinutesUpserted,
     athletesUnmapped: unmappedCount,
     dateRange,
     unmappedColumns,
