@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   // Daily inertial rows in the window for the squad.
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts")
+    .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
     .in("player_id", playerIds)
     .gte("date", windowStart)
     .lte("date", refDate);
@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
       accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
       decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
       accelDecelEfforts: num(r.accel_decel_efforts),
+      highSpeedDistance: r.high_speed_distance == null ? null : num(r.high_speed_distance),
+      highMetabolicLoadDistance: r.high_metabolic_load_distance_m == null ? null : num(r.high_metabolic_load_distance_m),
     });
     byPlayer.set(pid, arr);
   }
@@ -103,7 +105,7 @@ export async function GET(req: NextRequest) {
     if (!pRows) continue;
     const gk = groupKeyOf(pid);
     let acc = groupAcc.get(gk);
-    if (!acc) { acc = { multidirectional: [], explosive: [], multidirectional_share: [], decel_share: [] }; groupAcc.set(gk, acc); }
+    if (!acc) { acc = { multidirectional: [], explosive: [], multidirectional_share: [], decel_share: [], high_speed_share: [], metabolic_share: [] }; groupAcc.set(gk, acc); }
     for (const r of pRows) for (const k of MOVEMENT_COMPONENTS) { const v = componentValue(k, r); if (v != null && Number.isFinite(v)) acc[k].push(v); }
   }
   const meanOf = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;

@@ -35,19 +35,31 @@ export type MovementDayRow = {
   /** Combined Gen2 accel+decel effort count — the Lite/Core fallback for the
    *  "explosive" component when the B2-3 split is absent. Pro keeps the split. */
   accelDecelEfforts?: number;
+  /** GPS high-speed-running distance, m — drives the Lite/Core "high_speed_share"
+   *  shape component (active only when IMA multidirectional is absent). */
+  highSpeedDistance?: number | null;
+  /** High metabolic load distance, m — drives the Lite/Core "metabolic_share"
+   *  shape component (active only when IMA multidirectional is absent). */
+  highMetabolicLoadDistance?: number | null;
 };
 
 export type ComponentKey =
   | "multidirectional"
   | "explosive"
   | "multidirectional_share"
-  | "decel_share";
+  | "decel_share"
+  // Core/Lite shape components — capability-aware fallbacks that only activate
+  // when the IMA multidirectional signal is absent (so Pro is unchanged).
+  | "high_speed_share"
+  | "metabolic_share";
 
 export const COMPONENT_LABEL: Record<ComponentKey, string> = {
   multidirectional: "Multidirectional running",
   explosive: "Explosive efforts",
   multidirectional_share: "Multidirectional share of work",
   decel_share: "Braking share",
+  high_speed_share: "High-speed share of work",
+  metabolic_share: "Metabolic-load share of work",
 };
 
 // Plain-language descriptions for the coach-facing headline (no jargon, no SD).
@@ -57,13 +69,15 @@ const PLAIN: Record<ComponentKey, { label: string; unit: string; pct: boolean }>
   explosive: { label: "explosive bursts (hard accelerations + braking)", unit: "", pct: false },
   multidirectional_share: { label: "share of his running that's side-to-side", unit: "", pct: true },
   decel_share: { label: "share of his efforts that are hard braking", unit: "", pct: true },
+  high_speed_share: { label: "share of his running that's high-speed", unit: "", pct: true },
+  metabolic_share: { label: "share of his running at high metabolic load", unit: "", pct: true },
 };
 function plainVal(key: ComponentKey, v: number): string {
   return PLAIN[key].pct ? `${Math.round(v * 100)}%` : `${Math.round(v).toLocaleString("en-US")}${PLAIN[key].unit}`;
 }
 
 // Share-type components describe the MIX (shape); the others describe VOLUME.
-const SHARE_KEYS: ReadonlySet<ComponentKey> = new Set(["multidirectional_share", "decel_share"]);
+const SHARE_KEYS: ReadonlySet<ComponentKey> = new Set(["multidirectional_share", "decel_share", "high_speed_share", "metabolic_share"]);
 // For volume/share-up components, "unfamiliar" means ABOVE the norm (positive z).
 // decel_share is treated two-sided (a braking-pattern shift either way is "shape").
 const TWO_SIDED: ReadonlySet<ComponentKey> = new Set(["decel_share"]);
@@ -170,14 +184,28 @@ export function componentValue(key: ComponentKey, r: MovementDayRow): number | n
       return e > 0 ? e : null;
     }
     case "multidirectional_share":
-      return Number(r.totalDistance) > 0 && Number(r.imaDistance) >= 0
+      // Pro only: needs real IMA distance. Returns null (not a constant 0) when
+      // IMA is absent, so Core/Lite uses the high_speed/metabolic shares instead.
+      return Number(r.totalDistance) > 0 && Number(r.imaDistance) > 0
         ? Number(r.imaDistance) / Number(r.totalDistance) : null;
     case "decel_share":
       return efforts > 0 ? (Number(r.decelEfforts) || 0) / efforts : null;
+    case "high_speed_share": {
+      // Core/Lite movement-shape signal. Suppressed when IMA multidirectional is
+      // present (Pro) so Pro's component set is unchanged.
+      if (Number(r.imaDistance) > 0) return null;
+      const total = Number(r.totalDistance);
+      return total > 0 && r.highSpeedDistance != null ? Number(r.highSpeedDistance) / total : null;
+    }
+    case "metabolic_share": {
+      if (Number(r.imaDistance) > 0) return null;
+      const total = Number(r.totalDistance);
+      return total > 0 && r.highMetabolicLoadDistance != null ? Number(r.highMetabolicLoadDistance) / total : null;
+    }
   }
 }
 
-const ALL_KEYS: ComponentKey[] = ["multidirectional", "explosive", "multidirectional_share", "decel_share"];
+const ALL_KEYS: ComponentKey[] = ["multidirectional", "explosive", "multidirectional_share", "decel_share", "high_speed_share", "metabolic_share"];
 /** The four movement components, exported for group-baseline aggregation. */
 export const MOVEMENT_COMPONENTS: readonly ComponentKey[] = ALL_KEYS;
 
