@@ -21,6 +21,16 @@ type Watch = {
   player_id: string; name: string; position: string | null;
   status: "monitor" | "incomplete" | "escalate" | "on_track" | "recovered" | "building" | "na";
   z: number | null; belowBy: number | null; mdOffset: number | null; confident: boolean;
+  driver: { field: string; z: number } | null;
+};
+
+// Which wellness sub-field is driving the watch → tells the coach the lever.
+const FIELD_LABEL: Record<string, { IS: string; EN: string }> = {
+  muscle_soreness: { IS: "harðsperrur", EN: "soreness" },
+  fatigue_energy:  { IS: "orka", EN: "energy" },
+  sleep_quality:   { IS: "svefngæði", EN: "sleep quality" },
+  sleep_duration:  { IS: "svefnlengd", EN: "sleep duration" },
+  stress_mood:     { IS: "skap", EN: "mood" },
 };
 type Payload = {
   match: { date: string; opponent: string | null; days_ago: number } | null;
@@ -106,6 +116,9 @@ export default function RecoveryWatchBanner({ lang = "EN" }: { lang?: "IS" | "EN
                 </span>
               </div>
               <div className="mt-0.5 tabular-nums opacity-90">
+                {w.driver && FIELD_LABEL[w.driver.field]
+                  ? <span className="font-semibold">{IS ? FIELD_LABEL[w.driver.field].IS : FIELD_LABEL[w.driver.field].EN} ↓ </span>
+                  : null}
                 {IS ? "líðan" : "readiness"} z {w.z ?? "—"} · MD+{w.mdOffset ?? "?"}
                 {!w.confident && <span className="ml-1 opacity-70">· {IS ? "grunnlína að kvarðast" : "baseline calibrating"}</span>}
               </div>

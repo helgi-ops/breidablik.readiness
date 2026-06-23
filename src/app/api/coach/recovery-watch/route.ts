@@ -67,6 +67,32 @@ function buildBaseline(playerId: string, scores: number[], today: string): Athle
   };
 }
 
+// The granular wellness fields (all 1-5, lower = worse). Used to name WHICH
+// signal is driving a watch ("soreness ↓"), so the action is actionable.
+const DRIVER_FIELDS = ["muscle_soreness", "fatigue_energy", "sleep_quality", "sleep_duration", "stress_mood"] as const;
+type DriverField = (typeof DRIVER_FIELDS)[number];
+
+function dominantDriver(
+  rows: Array<Record<DriverField, number | null> & { entry_date: string }>,
+  matchDate: string,
+  latest: Record<DriverField, number | null>,
+): { field: DriverField; z: number } | null {
+  let worst: { field: DriverField; z: number; concerning: number } | null = null;
+  for (const f of DRIVER_FIELDS) {
+    const pre = rows.filter((r) => r.entry_date < matchDate && r[f] != null).map((r) => r[f] as number);
+    if (pre.length < 5) continue; // need some baseline for this field
+    const mean = pre.reduce((s, x) => s + x, 0) / pre.length;
+    const sd = pre.length < 2 ? 0 : Math.sqrt(pre.reduce((s, x) => s + (x - mean) ** 2, 0) / (pre.length - 1));
+    if (sd === 0) continue;
+    const todayVal = latest[f];
+    if (todayVal == null) continue;
+    const z = (todayVal - mean) / sd;        // lower_is_worse → negative z = worse
+    const concerning = -z;
+    if (!worst || concerning > worst.concerning) worst = { field: f, z: Math.round(z * 100) / 100, concerning };
+  }
+  return worst && worst.concerning >= 0.5 ? { field: worst.field, z: worst.z } : null;
+}
+
 // Severity for sorting the open watches (worst first).
 const SEVERITY: Record<RecoveryWatchStatus, number> = {
   escalate: 4, incomplete: 3, monitor: 2, on_track: 1, recovered: 0, building: 0, na: 0,
@@ -109,10 +135,15 @@ export async function GET(req: NextRequest) {
   // Readiness check-ins: pre-match window (baseline) + post-match (the reading).
   const windowStart = addDays(match.match_date, -BASELINE_WINDOW_DAYS);
   const { data: re } = await supabase
-    .from("readiness_entries").select("player_id, entry_date, total_score, is_imputed")
+    .from("readiness_entries")
+    .select("player_id, entry_date, total_score, is_imputed, muscle_soreness, fatigue_energy, sleep_quality, sleep_duration, stress_mood")
     .eq("team_id", teamId).in("player_id", playerIds)
     .gte("entry_date", windowStart).lte("entry_date", today);
-  type Row = { player_id: string; entry_date: string; total_score: number | null; is_imputed: boolean | null };
+  type Row = {
+    player_id: string; entry_date: string; total_score: number | null; is_imputed: boolean | null;
+    muscle_soreness: number | null; fatigue_energy: number | null; sleep_quality: number | null;
+    sleep_duration: number | null; stress_mood: number | null;
+  };
   const byPlayer = new Map<string, Row[]>();
   for (const r of (re ?? []) as Row[]) {
     if (r.total_score == null || r.is_imputed) continue; // real check-ins only
@@ -140,6 +171,7 @@ export async function GET(req: NextRequest) {
     evaluated.push({
       player_id: pid, name: info.name, position: info.position,
       minutes: minutesById.get(pid) ?? 0, check_in_date: latest.entry_date,
+      driver: dominantDriver(rows, match.match_date, latest),
       ...result,
     });
   }
