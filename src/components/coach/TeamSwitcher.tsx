@@ -60,7 +60,8 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
       const { data: teamRows, error: teamErr } = await supabase
         .from("teams")
         .select("id, name, sport, team_type, gender")
-        .in("id", teamIds);
+        .in("id", teamIds)
+        .order("name", { ascending: true });
 
       if (teamErr || !teamRows) return;
 
