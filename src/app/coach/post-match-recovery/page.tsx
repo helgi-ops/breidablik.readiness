@@ -280,6 +280,11 @@ export default function PostMatchRecoveryPage() {
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t.player}</div>
               {summary.lagging > 0 && <div className="text-[11px] font-medium text-red-600">{summary.lagging} {t.lagging}</div>}
             </div>
+            <p className="mb-2 text-[11px] leading-snug text-slate-500">
+              {IS
+                ? "Litaði punkturinn = readiness-dómur dagsins (huglæg líðan — svefn/harðsperrur/orka — vs hans eigin norm). Prósentan undir = CMJ, objektíf taugavöðva-mæling vs grunnlína. Þau MEGA stangast á: leikmaður getur skráð sig grænan en samt verið með stökk niðri — huglæg líðan jafnar sig á undan taugavöðvakerfinu (Gathercole 2015). Misræmið er merkið. Smelltu á nafn fyrir útskýringu."
+                : "The coloured dot = that day's readiness verdict (subjective wellness — sleep/soreness/energy — vs his own norm). The % below it = CMJ, an objective neuromuscular test vs baseline. They CAN disagree: a player can self-report green yet have a depressed jump — subjective feel recovers before the neuromuscular system does (Gathercole 2015). The gap is the signal. Click a name for the explanation."}
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead>
