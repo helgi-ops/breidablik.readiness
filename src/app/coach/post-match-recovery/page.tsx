@@ -450,14 +450,13 @@ function playerExplanation(p: Player, IS: boolean): string {
     : `The day after (MD+1) he was ${colorWord(md1, false)}; by MD+2 he's ${colorWord(p.md2 ?? "none", false)}.`);
 
   const cmj = p.cmj?.["MD+2"] ?? null;
-  if (cmj && (cmj.rsiPct != null || cmj.jhPct != null)) {
-    const useRsi = cmj.rsiPct != null;
-    const v = (useRsi ? cmj.rsiPct : cmj.jhPct) as number;
-    const metric = useRsi ? "RSI-mod" : (IS ? "stökkhæð" : "jump height");
-    const down = v <= -5;
+  const cmjVal = cmj && (cmj.rsiPct != null || cmj.jhPct != null) ? (cmj.rsiPct ?? cmj.jhPct) as number : null;
+  const cmjDown = cmjVal != null && cmjVal <= -5;
+  if (cmjVal != null) {
+    const metric = cmj!.rsiPct != null ? "RSI-mod" : (IS ? "stökkhæð" : "jump height");
     parts.push(IS
-      ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(v)} vs hans grunnlína — ${down ? "raunveruleg taugavöðva-þreyta sem upplifuð líðan getur falið" : "innan eðlilegra marka"} (Gathercole 2015).`
-      : `Objective CMJ (${metric}) is ${fmtPct(v)} vs his baseline — ${down ? "genuine neuromuscular fatigue that subjective wellness can miss" : "within normal range"} (Gathercole 2015).`);
+      ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(cmjVal)} vs hans grunnlína — ${cmjDown ? "raunveruleg taugavöðva-þreyta sem upplifuð líðan getur falið" : "innan eðlilegra marka"} (Gathercole 2015).`
+      : `Objective CMJ (${metric}) is ${fmtPct(cmjVal)} vs his baseline — ${cmjDown ? "genuine neuromuscular fatigue that subjective wellness can miss" : "within normal range"} (Gathercole 2015).`);
   }
 
   if (p.heavyEcho) {
@@ -468,14 +467,20 @@ function playerExplanation(p: Player, IS: boolean): string {
     parts.push(IS
       ? `Lágt álag en samt flaggaður = líklega EKKI post-match. Skoðaðu svefn, veikindi eða annað álag.`
       : `Low load but still flagged = likely NOT post-match. Check sleep, illness or other stressors.`);
+  } else if (p.reboundedByMd2 && cmjDown) {
+    // False green: subjective colour recovered, but the objective jump is down —
+    // the case where CMJ earns its keep.
+    parts.push(IS
+      ? `Liturinn segir endurheimt, EN stökkið er niðri ${fmtPct(cmjVal)} — objektíva prófið greip þreytu sem líðanin missti. Treystu CMJ: íhugaðu að létta þrátt fyrir græna litinn.`
+      : `The colour says recovered, BUT the jump is down ${fmtPct(cmjVal)} — the objective test caught fatigue the wellness score missed. Trust the CMJ: consider easing despite the green.`);
   } else if (p.reboundedByMd2) {
     parts.push(IS
-      ? `Náði sér á áætlun fyrir MD+2 (Nédélec 2012) — fullt plan í lagi.`
-      : `Recovered on schedule by MD+2 (Nédélec 2012) — a full session is fine.`);
+      ? `Náði sér á áætlun fyrir MD+2 (Nédélec 2012)${cmjVal != null ? ", og stökkið staðfestir það" : ""} — fullt plan í lagi.`
+      : `Recovered on schedule by MD+2 (Nédélec 2012)${cmjVal != null ? ", and the jump confirms it" : ""} — a full session is fine.`);
   } else if (p.lagging) {
     parts.push(IS
-      ? `Enn flaggaður á MD+2 með miðlungs álag — fylgstu með áður en þú hleður á hann.`
-      : `Still flagged at MD+2 with moderate load — monitor before loading him.`);
+      ? `Enn flaggaður á MD+2 með miðlungs álag${cmjDown ? " — og stökkið staðfestir þreytuna" : ""}. Fylgstu með áður en þú hleður á hann.`
+      : `Still flagged at MD+2 with moderate load${cmjDown ? " — and the jump confirms the fatigue" : ""}. Monitor before loading him.`);
   }
   return parts.join(" ");
 }
