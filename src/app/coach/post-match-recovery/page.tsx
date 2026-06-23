@@ -353,10 +353,17 @@ export default function PostMatchRecoveryPage() {
                             <div className="mx-auto flex flex-col items-center justify-center gap-0.5">
                               <span className={`inline-block h-4 w-4 rounded-full ${CELL[c]} ${ringGreen ? "ring-2 ring-red-500 ring-offset-1" : ""}`}
                                 title={ringGreen ? (IS ? "Grænt — en CMJ er niðri, sjá viðvörun við nafn" : "Green — but CMJ is down, see the warning by the name") : (c === "none" ? t.none : `${o.key}: ${c}`)} />
-                              {cmj ? (
+                              {cmj && pctVal != null ? (
                                 <span className={`tabular-nums ${pDown ? "text-[11px] font-bold" : "text-[9px] font-semibold"} ${cmjTone(pctVal)}`}
                                   title={`CMJ vs baseline — ${cmj.jhPct != null ? `hæð ${fmtPct(cmj.jhPct)}` : ""}${cmj.rsiPct != null ? ` · RSI ${fmtPct(cmj.rsiPct)}` : ""}`}>
                                   {pDown ? "⚠ " : ""}{fmtPct(pctVal)}
+                                </span>
+                              ) : cmj ? (
+                                // Tested on this day, but no usable baseline yet → say so
+                                // rather than render a cryptic "·" (distinct from not-tested).
+                                <span className="text-[8px] font-medium text-slate-400"
+                                  title={IS ? "Stökk var tekið, en engin grunnlína (þarf ≥3 gild CMJ-próf síðustu 42 daga FYRIR leik)" : "Jumped, but no baseline yet (needs ≥3 valid CMJ tests in the 42 days BEFORE the match)"}>
+                                  {IS ? "engin grunnl." : "no base"}
                                 </span>
                               ) : null}
                             </div>
@@ -485,6 +492,11 @@ function playerExplanation(p: Player, IS: boolean): string {
     parts.push(IS
       ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(cmjVal)} vs hans grunnlína — ${cmjDown ? "raunveruleg taugavöðva-þreyta sem upplifuð líðan getur falið" : "innan eðlilegra marka"} (Gathercole 2015).`
       : `Objective CMJ (${metric}) is ${fmtPct(cmjVal)} vs his baseline — ${cmjDown ? "genuine neuromuscular fatigue that subjective wellness can miss" : "within normal range"} (Gathercole 2015).`);
+  } else if (cmj) {
+    // Tested on the recovery day but no usable personal baseline → honest gap.
+    parts.push(IS
+      ? `Hann TÓK CMJ-stökk á MD+2, en það er engin grunnlína til að bera það við (þarf ≥3 gild próf síðustu 42 daga FYRIR leik — hans síðasta var of gamalt). Prósentan birtist um leið og hann hefur prófað reglulega.`
+      : `He DID jump (CMJ) on MD+2, but there's no baseline to compare it against (needs ≥3 valid tests in the 42 days BEFORE the match — his last one was too old). The % appears once he's tested regularly.`);
   }
 
   if (p.heavyEcho) {
