@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * by MD+2 (Nédélec 2012) and who is lagging. Visual, print-friendly.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
@@ -50,6 +50,7 @@ export default function PostMatchRecoveryPage() {
   const [matchDate, setMatchDate] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const token = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -291,9 +292,19 @@ export default function PostMatchRecoveryPage() {
                 </thead>
                 <tbody>
                   {players.map((p) => (
-                    <tr key={p.id} className={`border-t border-slate-100 ${p.lagging ? "bg-red-50/40" : ""}`}>
+                    <Fragment key={p.id}>
+                    <tr className={`border-t border-slate-100 ${p.lagging ? "bg-red-50/40" : ""}`}>
                       <td className="px-1 py-1.5">
-                        <span className="font-medium text-slate-800">{p.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                          className="text-left font-medium text-slate-800 hover:text-indigo-700"
+                          aria-expanded={expandedId === p.id}
+                          title={IS ? "Sjá útskýringu" : "See explanation"}
+                        >
+                          <span className={`mr-1 inline-block text-[9px] text-slate-400 transition-transform ${expandedId === p.id ? "rotate-90" : ""}`}>▸</span>
+                          {p.name}
+                        </button>
                         {p.heavyEcho
                           ? <span className="ml-1 rounded bg-red-100 px-1 py-0.5 text-[9px] font-semibold text-red-700" title={t.lagging}>⚠ {t.heavyEcho}</span>
                           : p.notPostMatch
@@ -326,6 +337,14 @@ export default function PostMatchRecoveryPage() {
                         );
                       })}
                     </tr>
+                    {expandedId === p.id && (
+                      <tr className="border-t border-slate-100 bg-slate-50/70">
+                        <td colSpan={3 + offsets.length} className="px-3 py-2 text-[11px] leading-relaxed text-slate-700">
+                          {playerExplanation(p, IS)}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -403,4 +422,60 @@ function cmjTone(v: number | null): string {
   if (v <= -10) return "text-red-600";
   if (v <= -5) return "text-amber-600";
   return "text-emerald-600";
+}
+
+function colorWord(c: string, IS: boolean): string {
+  if (c === "green") return IS ? "grænn" : "green";
+  if (c === "yellow") return IS ? "gulur" : "yellow";
+  if (c === "red") return IS ? "rauður" : "red";
+  return IS ? "engin gögn" : "no data";
+}
+
+// Per-player plain-language "why": synthesises the match dose, the MD+1→MD+2
+// trajectory, the objective CMJ read, and the resulting interpretation + action.
+// Deterministic from the row's own fields — the data decides, this narrates.
+function playerExplanation(p: Player, IS: boolean): string {
+  const parts: string[] = [];
+  const tier = p.load?.tier ?? null;
+  const tierWord = tier === "high" ? (IS ? "hátt" : "high") : tier === "low" ? (IS ? "lágt" : "low") : (IS ? "miðlungs" : "moderate");
+  parts.push(tier
+    ? (IS
+        ? `Spilaði ${p.minutes} mín með ${tierWord} vélrænt álag í leik (decel-vegið vs liðið — háákefðar hemlanir spá best fyrir um vöðvaskemmd, McBurnie 2022).`
+        : `Played ${p.minutes} min with ${tierWord} mechanical match load (decel-weighted vs the squad — high-intensity decelerations best predict muscle damage, McBurnie 2022).`)
+    : (IS ? `Spilaði ${p.minutes} mín.` : `Played ${p.minutes} min.`));
+
+  const md1 = p.colors["MD+1"] ?? "none";
+  parts.push(IS
+    ? `Daginn eftir (MD+1) var hann ${colorWord(md1, true)}; á MD+2 er hann ${colorWord(p.md2 ?? "none", true)}.`
+    : `The day after (MD+1) he was ${colorWord(md1, false)}; by MD+2 he's ${colorWord(p.md2 ?? "none", false)}.`);
+
+  const cmj = p.cmj?.["MD+2"] ?? null;
+  if (cmj && (cmj.rsiPct != null || cmj.jhPct != null)) {
+    const useRsi = cmj.rsiPct != null;
+    const v = (useRsi ? cmj.rsiPct : cmj.jhPct) as number;
+    const metric = useRsi ? "RSI-mod" : (IS ? "stökkhæð" : "jump height");
+    const down = v <= -5;
+    parts.push(IS
+      ? `Objektíf CMJ-mæling (${metric}) er ${fmtPct(v)} vs hans grunnlína — ${down ? "raunveruleg taugavöðva-þreyta sem upplifuð líðan getur falið" : "innan eðlilegra marka"} (Gathercole 2015).`
+      : `Objective CMJ (${metric}) is ${fmtPct(v)} vs his baseline — ${down ? "genuine neuromuscular fatigue that subjective wellness can miss" : "within normal range"} (Gathercole 2015).`);
+  }
+
+  if (p.heavyEcho) {
+    parts.push(IS
+      ? `Hátt álag + enn flaggaður á MD+2 = raunverulegt þungt bergmál eftir leik. Léttu planið eða lengdu endurheimt.`
+      : `High load + still flagged at MD+2 = a genuine heavy post-match echo. Ease his plan or extend recovery.`);
+  } else if (p.notPostMatch) {
+    parts.push(IS
+      ? `Lágt álag en samt flaggaður = líklega EKKI post-match. Skoðaðu svefn, veikindi eða annað álag.`
+      : `Low load but still flagged = likely NOT post-match. Check sleep, illness or other stressors.`);
+  } else if (p.reboundedByMd2) {
+    parts.push(IS
+      ? `Náði sér á áætlun fyrir MD+2 (Nédélec 2012) — fullt plan í lagi.`
+      : `Recovered on schedule by MD+2 (Nédélec 2012) — a full session is fine.`);
+  } else if (p.lagging) {
+    parts.push(IS
+      ? `Enn flaggaður á MD+2 með miðlungs álag — fylgstu með áður en þú hleður á hann.`
+      : `Still flagged at MD+2 with moderate load — monitor before loading him.`);
+  }
+  return parts.join(" ");
 }
