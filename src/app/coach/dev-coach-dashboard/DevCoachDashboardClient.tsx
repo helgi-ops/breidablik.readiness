@@ -95,6 +95,7 @@ import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
+import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
@@ -8747,6 +8748,9 @@ export default function CoachPage() {
           {/* Sharp unfamiliar-load spikes — top-of-brief alert (detail in the
               Unfamiliar Load card below). */}
           <UnfamiliarSpikeBanner lang={lang} date={today} />
+          {/* Post-match recovery watch — players still below baseline for their
+              MD-day (recoveryWatch lib). Self-hides when nothing needs attention. */}
+          <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
           {/* Daily briefing — Gabbett (2020) Communicate step */}
           <DailyBriefingCard
             today={today}

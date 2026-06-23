@@ -13,6 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriver } from "@/components/coach/VerdictBanner";
+import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 
 type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
@@ -212,6 +213,12 @@ export default function PostMatchRecoveryPage() {
           />
         </div>
       )}
+
+      {/* Recovery watch — day-aware open watches (recoveryWatch lib). Self-fetches
+          the team's most recent match; self-hides when nothing needs attention. */}
+      <div className="pmr-noprint mb-4">
+        <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
+      </div>
 
       <div className="pmr-noprint mb-5 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
