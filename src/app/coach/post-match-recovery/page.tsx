@@ -338,6 +338,47 @@ export default function PostMatchRecoveryPage() {
             {summary.cmj_tested > 0 ? `${summary.cmj_tested} ${t.cmjHave}` : t.cmjNone}
           </div>
 
+          {/* Detailed CMJ explainability — builds coach/athlete trust. Plain
+              one-line verdict always visible; the science behind it is one click
+              away (explainability-first: rules/measurement decide, this explains). */}
+          <details className="pmr-sec group rounded-lg border border-slate-200 bg-white p-3 text-[12px] leading-relaxed text-slate-700">
+            <summary className="cursor-pointer list-none font-semibold text-slate-800 marker:content-none">
+              <span className="mr-1 inline-block transition-transform group-open:rotate-90">▸</span>
+              {IS ? "Hvernig á að lesa CMJ-prófið — og af hverju má treysta því" : "How to read the CMJ test — and why you can trust it"}
+            </summary>
+            <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+              <p><span className="font-semibold text-slate-800">{IS ? "Hvað það mælir. " : "What it measures. "}</span>
+                {IS
+                  ? "Counter-movement jump (CMJ) á kraftplötu (ForceDecks): leikmaður dýfir sér og stekkur hámark. Platan mælir kraftinn sem fæturnir framleiða — objektíf mæling á taugavöðva-getu sem upplifuð líðan getur falið. Leikmaður getur sagst „fínn“ en samt verið með skerta sprengikraft. Gull-staðall á vettvangi (Claudino 2017, Gathercole 2015)."
+                  : "Counter-movement jump (CMJ) on a force plate (ForceDecks): the player dips and jumps maximally; the plate measures the force the legs produce — an objective read on neuromuscular capacity that subjective wellness can hide. A player can report \"fine\" yet have blunted explosive output. The field gold-standard (Claudino 2017, Gathercole 2015)."}</p>
+              <p><span className="font-semibold text-slate-800">{IS ? "Af hverju MD+2 (frí á MD+1). " : "Why MD+2 (rest on MD+1). "}</span>
+                {IS
+                  ? "Taugavöðva-þreyta er mest daginn eftir leik (MD+1) og á að hreinsast á MD+2–MD+3 (Nédélec 2012). Þar sem MD+1 var frídagur spyr MD+2-prófið beint: náðu fæturnir sér eftir hvíldardag? Ef stökkið er enn niðri þá er það raunverulegt merki um að hann er ekki búinn að jafna sig — ekki bara harðsperrur leikdagsins."
+                  : "Neuromuscular fatigue peaks the day after a match (MD+1) and should clear by MD+2–MD+3 (Nédélec 2012). Because MD+1 was a rest day, the MD+2 test asks directly: did the legs rebound after a day off? If the jump is still down, that's a genuine \"not recovered\" signal — not just match-day soreness."}</p>
+              <p><span className="font-semibold text-slate-800">{IS ? "Borið saman við HANS eigin grunnlínu. " : "Compared to HIS own baseline. "}</span>
+                {IS
+                  ? "Prósentan er vs miðgildi hans eigin CMJ síðustu 42 daga (≥3 gildar mælingar fyrir leik) — persónuleg norm, ekki liðsmeðaltal. „−6%“ þýðir niður vs hans venja, ekki vs aðra. Þannig er stór en stöðugur stökkvari ekki refsað og lítill en þreyttur ekki falinn."
+                  : "The % is vs the median of his own CMJ over the last 42 days (≥3 valid pre-match tests) — a personal norm, not a squad average. \"−6%\" means down vs HIS usual, not vs others. So a big but consistent jumper isn't penalised and a smaller but fatigued one isn't hidden."}</p>
+              <p><span className="font-semibold text-slate-800">{IS ? "Tvær tölur: hæð og RSI-mod. " : "Two numbers: height and RSI-mod. "}</span>
+                {IS
+                  ? "Stökkhæð er aðal-útkoman. RSI-mod (hæð ÷ snertitími) er næmari á þreytu og dettur FYRR — þreyttur leikmaður heldur hæðinni með því að eyða lengri tíma á jörðinni, svo RSI-mod afhjúpar þreytuna áður en hæðin gerir það (Gathercole 2015). Horfðu á RSI-mod fyrst."
+                  : "Jump height is the headline output. RSI-mod (height ÷ contraction time) is more fatigue-sensitive and drops EARLIER — a tired player preserves height by spending longer on the ground, so RSI-mod exposes fatigue before height does (Gathercole 2015). Watch RSI-mod first."}</p>
+              <p><span className="font-semibold text-slate-800">{IS ? "Hvernig á að lesa prósentuna. " : "How to read the %. "}</span>
+                <span className="text-emerald-700 font-medium">{IS ? "innan ±5% = endurheimt (grænt)" : "within ±5% = recovered (green)"}</span>{" · "}
+                <span className="text-amber-700 font-medium">{IS ? "−5% til −10% = fylgjast með (gult)" : "−5% to −10% = monitor (amber)"}</span>{" · "}
+                <span className="text-red-700 font-medium">{IS ? "≤ −10% = skýr taugavöðva-þreyta (rautt)" : "≤ −10% = clear neuromuscular fatigue (red)"}</span>{". "}
+                {IS ? "Rautt → minnka/breyta plani; grænt → fullt plan í lagi." : "Red → reduce/modify the plan; green → full session OK."}</p>
+              <p><span className="font-semibold text-slate-800">{IS ? "Hvenær það birtist EKKI (heiðarleiki). " : "When it stays \"—\" (honesty). "}</span>
+                {IS
+                  ? "Aðeins gildar mælingar (is_valid) teljast, og grunnlínan þarf ≥3 próf — annars sýnum við „—“ frekar en að giska. Aðeins hreint CMJ er notað (ekki Abalakov-armsveifla né IMTP), því blöndun myndi skekkja samanburðinn."
+                  : "Only valid tests (is_valid) count, and the baseline needs ≥3 tests — otherwise we show \"—\" rather than guess. Only clean CMJ is used (not Abalakov arm-swing or IMTP), because mixing test types would bias the comparison."}</p>
+              <p className="text-[11px] text-slate-500">
+                {IS
+                  ? "Mælingin ákveður — þetta er talna-samanburður við hans eigin sögu, ekki skoðun. Þú getur brugðist við henni eða hnekkt. Heimildir: Nédélec 2012 (endurheimtartímalína), Gathercole 2015 (RSI-mod næmni), Claudino 2017 (CMJ-vöktun), McBurnie 2022 (vélrænn skammtur)."
+                  : "The measurement decides — this is a number vs his own history, not an opinion. You can act on it or override it. Sources: Nédélec 2012 (recovery timeline), Gathercole 2015 (RSI-mod sensitivity), Claudino 2017 (CMJ monitoring), McBurnie 2022 (mechanical dose)."}</p>
+            </div>
+          </details>
+
           <div className="pmr-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
             {t.note}
           </div>
