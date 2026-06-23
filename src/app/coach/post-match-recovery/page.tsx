@@ -296,9 +296,16 @@ export default function PostMatchRecoveryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {players.map((p) => (
+                  {players.map((p) => {
+                    const md2cmj = p.cmj?.["MD+2"] ?? null;
+                    const md2CmjVal = md2cmj && (md2cmj.rsiPct != null || md2cmj.jhPct != null) ? ((md2cmj.rsiPct ?? md2cmj.jhPct) as number) : null;
+                    const cmjDown = md2CmjVal != null && md2CmjVal <= -5;
+                    // False green: subjective colour says recovered but the objective jump is
+                    // down — the dangerous case a rushing coach would miss. Flag it loudly.
+                    const falseGreen = cmjDown && p.md2 === "green";
+                    return (
                     <Fragment key={p.id}>
-                    <tr className={`border-t border-slate-100 ${p.lagging ? "bg-red-50/40" : ""}`}>
+                    <tr className={`border-t border-slate-100 ${falseGreen ? "bg-amber-100/70" : p.lagging ? "bg-red-50/40" : cmjDown ? "bg-amber-50/50" : ""}`}>
                       <td className="px-1 py-1.5">
                         <button
                           type="button"
@@ -315,6 +322,18 @@ export default function PostMatchRecoveryPage() {
                           : p.notPostMatch
                             ? <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-700">{t.notPM}</span>
                             : p.lagging ? <span className="ml-1 text-red-500" title={t.lagging}>⚠</span> : null}
+                        {/* CMJ-down badge — loud for the false-green case so it can't be
+                            missed at a glance; amber (confirming) when the colour already flags. */}
+                        {cmjDown ? (
+                          <span
+                            className={`ml-1 rounded px-1 py-0.5 text-[9px] font-bold ${falseGreen ? "bg-red-600 text-white" : "bg-amber-100 text-amber-800"}`}
+                            title={IS
+                              ? `Objektíf CMJ ${fmtPct(md2CmjVal)} vs grunnlína${falseGreen ? " — þrátt fyrir grænan lit (huglæg líðan missti þreytuna)" : ""}`
+                              : `Objective CMJ ${fmtPct(md2CmjVal)} vs baseline${falseGreen ? " — despite the green colour (subjective wellness missed the fatigue)" : ""}`}
+                          >
+                            ⚠ {IS ? "Stökk" : "Jump"} {fmtPct(md2CmjVal)}
+                          </span>
+                        ) : null}
                         <span className="ml-1 text-[10px] text-slate-400">{p.position}</span>
                       </td>
                       <td className="px-1 py-1.5 text-right tabular-nums text-slate-500">{p.minutes}</td>
@@ -327,14 +346,17 @@ export default function PostMatchRecoveryPage() {
                         const c = p.colors[o.key] ?? "none";
                         const cmj = p.cmj?.[o.key] ?? null;
                         const pctVal = cmj ? (cmj.rsiPct ?? cmj.jhPct) : null;
+                        const pDown = pctVal != null && pctVal <= -5;
+                        const ringGreen = o.key === "MD+2" && falseGreen;
                         return (
                           <td key={o.key} className="px-1 py-1.5">
                             <div className="mx-auto flex flex-col items-center justify-center gap-0.5">
-                              <span className={`inline-block h-4 w-4 rounded-full ${CELL[c]}`} title={c === "none" ? t.none : `${o.key}: ${c}`} />
+                              <span className={`inline-block h-4 w-4 rounded-full ${CELL[c]} ${ringGreen ? "ring-2 ring-red-500 ring-offset-1" : ""}`}
+                                title={ringGreen ? (IS ? "Grænt — en CMJ er niðri, sjá viðvörun við nafn" : "Green — but CMJ is down, see the warning by the name") : (c === "none" ? t.none : `${o.key}: ${c}`)} />
                               {cmj ? (
-                                <span className={`text-[9px] font-semibold tabular-nums ${cmjTone(pctVal)}`}
+                                <span className={`tabular-nums ${pDown ? "text-[11px] font-bold" : "text-[9px] font-semibold"} ${cmjTone(pctVal)}`}
                                   title={`CMJ vs baseline — ${cmj.jhPct != null ? `hæð ${fmtPct(cmj.jhPct)}` : ""}${cmj.rsiPct != null ? ` · RSI ${fmtPct(cmj.rsiPct)}` : ""}`}>
-                                  {fmtPct(pctVal)}
+                                  {pDown ? "⚠ " : ""}{fmtPct(pctVal)}
                                 </span>
                               ) : null}
                             </div>
@@ -350,7 +372,8 @@ export default function PostMatchRecoveryPage() {
                       </tr>
                     )}
                     </Fragment>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
