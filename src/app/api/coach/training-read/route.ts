@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     byPlayer.get(id)!.push({ ...(r as Record<string, number | null>), date: String(r.date) } as LRow);
   }
 
-  const reads: PlayerTrainingRead[] = [];
+  const reads: Array<PlayerTrainingRead & { name: string }> = [];
   for (const p of players) {
     const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     const gameModel: GameModel = (p.position && byPosModel && GAME_MODELS.includes(byPosModel[p.position] as GameModel))
       ? (byPosModel[p.position] as GameModel) : teamModel;
 
-    reads.push(computeTrainingRead({ playerId: p.id, position: p.position, firstName: (p.full_name ?? "—").trim().split(" ")[0], gameModel, signals }));
+    reads.push({ name: (p.full_name ?? "—").trim(), ...computeTrainingRead({ playerId: p.id, position: p.position, firstName: (p.full_name ?? "—").trim().split(" ")[0], gameModel, signals }) });
   }
 
   return NextResponse.json({
@@ -146,4 +146,21 @@ export async function GET(req: NextRequest) {
     reads,
     note: "Development-emphasis read (rules decide qualities; phrasing is fixed cited templates). A distinct labelled signal, not the readiness colour.",
   });
+}
+
+/** POST — coach sets the team game model. Body: { game_model }. */
+export async function POST(req: NextRequest) {
+  const ctx = await authenticate(req);
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+  const { supabase, teamId } = ctx;
+  const body = await req.json().catch(() => ({}));
+  const model = String(body?.game_model ?? "");
+  if (!GAME_MODELS.includes(model as GameModel)) {
+    return NextResponse.json({ error: "Invalid game_model" }, { status: 400 });
+  }
+  const { error } = await supabase
+    .from("team_settings")
+    .upsert({ team_id: teamId, game_model: model }, { onConflict: "team_id" });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, gameModel: model });
 }

@@ -14,6 +14,7 @@ import { useLang } from "@/lib/lang";
 import { POSITION_GROUPS } from "@/lib/micropulse/positionStyle";
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 import TlypTrainingFocus, { type FocusGroup } from "@/components/coach/TlypTrainingFocus";
+import TrainingReadPanel from "@/components/coach/TrainingReadPanel";
 
 type MetricKey =
   | "top_speed" | "fmp_run_high" | "fmp_dyn_high" | "fmp_dyn_med"
@@ -281,6 +282,12 @@ export default function TrainLikeYouPlayPage() {
 
       {err && <div className="tlp-noprint mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       {loading && <div className="tlp-noprint mb-4 text-sm text-slate-500">…</div>}
+
+      {/* "How to develop him" — per-player development emphasis (game model × how
+          he moves). Self-fetches; capability-driven; a distinct labelled signal. */}
+      <div className="tlp-noprint mb-4">
+        <TrainingReadPanel lang={lang === "EN" ? "EN" : "IS"} />
+      </div>
 
       {data && players.length > 0 && (
         <div id="tlp" className="space-y-4">
