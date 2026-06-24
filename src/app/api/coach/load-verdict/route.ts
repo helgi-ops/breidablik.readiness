@@ -19,6 +19,7 @@ import { computeFosterMetrics } from "@/lib/micropulse/foster";
 import { computeLoadVerdict, type LoadVerdictInput, type LoadVerdict } from "@/lib/micropulse/loadVerdict";
 import { resolveCapabilities } from "@/lib/micropulse/interpretation/resolveCapabilities";
 import { DIMENSIONS } from "@/lib/micropulse/interpretation/registry";
+import { computeIntensityVerdict, type IntensityVerdict } from "@/lib/micropulse/intensityVerdict";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,7 @@ function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
 }
 
-type Row = { date: string; pl: number | null; decel: number | null; hsr: number | null; dist: number | null; metabolic: number | null };
+type Row = { date: string; pl: number | null; decel: number | null; hsr: number | null; dist: number | null; metabolic: number | null; plPerMin: number | null; hml: number | null };
 
 /** Recent-peak (last 7d) vs 28-day baseline z. null when baseline too thin. */
 function spikeZ(rows: Row[], pick: (r: Row) => number | null, date: string): { value: number | null; z: number | null } {
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
   const [playersRes, loadRes, caps] = await Promise.all([
     supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true),
     supabase.from("player_external_load_daily")
-      .select("player_id, date, total_player_load, decelerations, high_speed_distance, total_distance, metabolic_power")
+      .select("player_id, date, total_player_load, decelerations, high_speed_distance, total_distance, metabolic_power, player_load_per_minute, high_metabolic_load_distance_m")
       .eq("source", "catapult").eq("team_id", teamId).gte("date", from).lte("date", date).limit(5000),
     // Capability-driven confidence: which of the 5 interpretation dimensions this
     // club's signals actually support over the window (data, not tier). Same engine
@@ -101,10 +102,10 @@ export async function GET(req: NextRequest) {
   for (const r of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
     const id = String(r.player_id);
     if (!byPlayer.has(id)) byPlayer.set(id, []);
-    byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power) });
+    byPlayer.get(id)!.push({ date: String(r.date), pl: num(r.total_player_load), decel: num(r.decelerations), hsr: num(r.high_speed_distance), dist: num(r.total_distance), metabolic: num(r.metabolic_power), plPerMin: num(r.player_load_per_minute), hml: num(r.high_metabolic_load_distance_m) });
   }
 
-  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict }> = [];
+  const perPlayer: Array<{ player_id: string; name: string; verdict: LoadVerdict; intensity: IntensityVerdict }> = [];
   for (const p of players) {
     const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
@@ -124,7 +125,21 @@ export async function GET(req: NextRequest) {
       braking, hsr, hid, metabolic,
       monotony: { monotony: thisMono, strain: null, rising: thisMono != null && lastMono != null && thisMono > lastMono },
     };
-    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input) });
+    // Capability-driven intensity verdict: work rate vs his OWN usual day. Primary
+    // PL/min, corroborated by HML + HSR (di Prampero metabolic_power excluded). The
+    // baseline is the window's prior session-days; confidence degrades when fewer
+    // signals are present (Core covers fewer than Pro). Reuses flagAgainstBaseline.
+    const todayRow = rows.find((r) => r.date === date) ?? null;
+    const histRows = rows.filter((r) => r.date < date);
+    const series = (pick: (r: Row) => number | null) => histRows.map(pick).filter((x): x is number => x != null && Number.isFinite(x));
+    const intensity = computeIntensityVerdict({
+      playerId: p.id,
+      firstName: (p.full_name ?? "—").trim().split(" ")[0],
+      today: { pl_per_min: todayRow?.plPerMin ?? null, hml: todayRow?.hml ?? null, hsr: todayRow?.hsr ?? null },
+      history: { pl_per_min: series((r) => r.plPerMin), hml: series((r) => r.hml), hsr: series((r) => r.hsr) },
+    });
+
+    perPlayer.push({ player_id: p.id, name: (p.full_name ?? "—").trim(), verdict: computeLoadVerdict(input), intensity });
   }
 
   // ── Team verdict: squad-level band + named per-player exceptions ──
@@ -157,6 +172,36 @@ export async function GET(req: NextRequest) {
   const confLevel = dimCoverage >= 0.66 && minBaseline >= 19 ? "high"
     : dimCoverage >= 0.5 && minBaseline >= 8 ? "moderate" : "low";
 
+  // ── Team intensity tile: squad work-rate vs each player's own usual day ──
+  const intensityEvaluated = perPlayer.filter((p) => p.intensity.available);
+  const intensityHot = intensityEvaluated
+    .filter((p) => p.intensity.band === "spiking" || p.intensity.band === "elevated")
+    .sort((a, b) => (b.intensity.z ?? 0) - (a.intensity.z ?? 0));
+  const intensityCoverage = intensityEvaluated.length
+    ? Math.round((intensityEvaluated.reduce((s, p) => s + p.intensity.coverage, 0) / intensityEvaluated.length) * 100) / 100
+    : 0;
+  const intensityAllConfident = intensityEvaluated.length > 0 && intensityEvaluated.every((p) => p.intensity.confident);
+  const intensityConf = intensityEvaluated.length === 0 ? "low"
+    : intensityAllConfident && intensityCoverage >= 0.66 ? "high"
+      : intensityCoverage >= 0.34 ? "moderate" : "low";
+  const hotNames = intensityHot.slice(0, 3).map((p) => p.name.split(" ")[0]);
+  const teamIntensity = {
+    evaluated: intensityEvaluated.length,
+    hot: intensityHot.length,
+    coverage: intensityCoverage,
+    confidence: intensityConf,
+    names: hotNames,
+    sentence: intensityHot.length
+      ? {
+          EN: `${intensityHot.length} player${intensityHot.length > 1 ? "s" : ""} above their usual work rate today${hotNames.length ? ` — ${hotNames.join(", ")}` : ""}.`,
+          IS: `${intensityHot.length} leikm. yfir venjulegri ákefð í dag${hotNames.length ? ` — ${hotNames.join(", ")}` : ""}.`,
+        }
+      : {
+          EN: intensityEvaluated.length ? "Squad work rate is in the usual range today." : "No work-rate reading today.",
+          IS: intensityEvaluated.length ? "Ákefð liðsins er innan venju í dag." : "Engin ákefðar-mæling í dag.",
+        },
+  };
+
   return NextResponse.json({
     date,
     team: {
@@ -171,6 +216,7 @@ export async function GET(req: NextRequest) {
         dimensionsTotal: DIMENSIONS.length,
         dimensions: caps.dimensions,      // best metric chosen per dimension (drill-down)
       },
+      intensity: teamIntensity,           // work-rate-vs-own-usual tile (Task B)
     },
     exceptions,
     players: perPlayer.sort((a, b) => SEVERITY[b.verdict.band] - SEVERITY[a.verdict.band] || a.name.localeCompare(b.name, "is")),

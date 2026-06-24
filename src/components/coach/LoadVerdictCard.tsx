@@ -19,7 +19,11 @@ type Band = "SUSTAINABLE" | "BUILDING" | "SPIKING" | "UNDER";
 type Verdict = { band: Band; sentence: Lang2; drivers: Driver[]; confidence: { level: string; coverage: number; baselineDays: number } };
 type Resp = {
   date: string;
-  team: { band: Band; sentence: Lang2; counts: Record<Band, number>; confidence: { level: string; coverage: number; baselineDays: number; dimensionsCovered?: number; dimensionsTotal?: number } };
+  team: {
+    band: Band; sentence: Lang2; counts: Record<Band, number>;
+    confidence: { level: string; coverage: number; baselineDays: number; dimensionsCovered?: number; dimensionsTotal?: number };
+    intensity?: { evaluated: number; hot: number; coverage: number; confidence: string; names: string[]; sentence: Lang2 };
+  };
   exceptions: Array<{ player_id: string; name: string; verdict: Verdict }>;
   players: Array<{ player_id: string; name: string; verdict: Verdict }>;
 };
@@ -116,6 +120,26 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
           : ` · ${Math.round(t.confidence.coverage * 6)}/6 ${IS ? "merki" : "signals"}`}
         {" "}· {t.confidence.baselineDays}-{IS ? "daga grunnlína" : "day baseline"}
       </div>
+
+      {/* Intensity dimension (Task B) — work rate vs each player's OWN usual day.
+          A distinct labelled load signal, never the readiness colour. Jargon
+          (PL/min, HML) lives in the tooltip; confidence degrades with coverage. */}
+      {t.intensity && t.intensity.evaluated > 0 && (
+        <div
+          className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2"
+          title={IS
+            ? "Ákefð = Player Load á mínútu (vinnuhraði), studd af háorku-hlaupi (HML) og háhraðahlaupi — borið saman við venjulegan dag hvers leikmanns. Reglur ákveða, ekki AI; breytir ekki readiness-litnum."
+            : "Work rate = Player Load per minute, corroborated by high-metabolic (HML) and high-speed running — vs each player's own usual day. Rules decide, not AI; does not change the readiness colour."}
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600">{IS ? "Ákefð (vinnuhraði)" : "Work rate"}</span>
+            <span className="text-[10px] text-slate-500">
+              {IS ? "vissa" : "confidence"}: {t.intensity.confidence} · {Math.round(t.intensity.coverage * 3)}/3 {IS ? "merki" : "signals"}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[12px] leading-snug text-slate-800">{tx(t.intensity.sentence)}</p>
+        </div>
+      )}
 
       {/* Glanceable component tiles */}
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
