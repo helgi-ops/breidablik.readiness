@@ -67,15 +67,36 @@ const lrAsym = (r: LRow) => {
   return l + rg > 0 ? (Math.abs(l - rg) / (l + rg)) * 100 : null;
 };
 
+// Sum IMA band columns; null only when ALL are missing (a real 0 — e.g. a centre-
+// back with no top-speed strides that session — is kept, it's the whole point).
+function bandSum(r: LRow, cols: string[]): number | null {
+  if (!cols.some((c) => r[c] != null)) return null;
+  return cols.reduce((s, c) => s + (num(r[c]) ?? 0), 0);
+}
+
 function accessorsFor(hasIMA: boolean): Array<[Quality, (r: LRow) => number | null, boolean]> {
-  // [quality, accessor, rich]
+  // [quality, accessor, isIMA]. IMA is the primary signal where it genuinely reads
+  // movement better AND is well-populated: hard accel/decel (band2/3) — plus CoD +
+  // L/R asymmetry, added separately. Sprint/top-speed/hamstring stay on GPS high-
+  // speed-running: the IMA stride bands are too sparse here to norm as a profile,
+  // and HSR-share tracks the sprint DISTANCE a coach actually reasons about.
+  if (hasIMA) {
+    return [
+      ["max_velocity", hsrShare, false],
+      ["repeated_sprint", (r) => num(r.velocity_band6_total_efforts_gen2), false],
+      ["acceleration", (r) => bandSum(r, ["ima_band2_accel_count", "ima_band3_accel_count"]), true],
+      ["deceleration", (r) => bandSum(r, ["ima_band2_decel_count", "ima_band3_decel_count"]), true],
+      ["hamstring_resilience", (r) => num(r.high_speed_distance), false],
+      ["aerobic_density", (r) => num(r.player_load_per_minute), false],
+    ];
+  }
   return [
-    ["max_velocity", hsrShare, hasIMA],
-    ["repeated_sprint", (r) => num(r.velocity_band6_total_efforts_gen2), hasIMA],
-    ["acceleration", (r) => (hasIMA ? num(r.ima_accel) : num(r.max_acceleration)), hasIMA],
-    ["deceleration", (r) => (hasIMA ? num(r.ima_decel) : num(r.max_deceleration)), hasIMA],
-    ["hamstring_resilience", (r) => num(r.high_speed_distance), hasIMA],
-    ["aerobic_density", (r) => num(r.player_load_per_minute), hasIMA],
+    ["max_velocity", hsrShare, false],
+    ["repeated_sprint", (r) => num(r.velocity_band6_total_efforts_gen2), false],
+    ["acceleration", (r) => num(r.max_acceleration), false],
+    ["deceleration", (r) => num(r.max_deceleration), false],
+    ["hamstring_resilience", (r) => num(r.high_speed_distance), false],
+    ["aerobic_density", (r) => num(r.player_load_per_minute), false],
   ];
 }
 
@@ -89,6 +110,11 @@ const SELECT = [
   "player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_efforts_gen2",
   "max_acceleration, max_deceleration, max_velocity, player_load_per_minute, high_metabolic_load_distance_m",
   "ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low",
+  // High-intensity IMA accel/decel bands (band2/3 = hard efforts) — the primary
+  // signal on Pro for HOW he accelerates and brakes, which GPS distance can't see.
+  // (The IMA force-running stride bands are too sparse here to norm reliably, so
+  // sprint/top-speed stays on GPS high-speed-running — see accessorsFor.)
+  "ima_band2_accel_count, ima_band3_accel_count, ima_band2_decel_count, ima_band3_decel_count",
 ].join(", ");
 
 export async function GET(req: NextRequest) {

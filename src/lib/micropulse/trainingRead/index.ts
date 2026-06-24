@@ -6,7 +6,7 @@
  * Deterministic + capability-driven. Rules (this engine + the fixed catalogue)
  * decide WHICH qualities; the endpoint supplies each quality's SQUAD-norm z (his
  * typical value vs the team's distribution, via flagAgainstBaseline) and whether
- * the signal is "rich" (Pro IMA) or a "proxy" (Lite GPS). The signed z ranks: a
+ * the signal is IMA-fidelity (hard accel/decel, CoD) or GPS. The signed z ranks: a
  * quality he does a lot of for his role rises; one he barely does (a centre-back's
  * sprinting) drops below the floor. Branches on signals PRESENT, never tier name:
  * a quality whose signal is absent because the tier can't see it (CoD, L/R
@@ -35,7 +35,7 @@ export type QualitySignal = {
   z: number | null;
   /** Training sessions behind his own typical value (maturity gate). */
   baselineDays: number;
-  /** True = Pro-rich signal (e.g. IMA); false = Lite GPS proxy → lower confidence. */
+  /** True = IMA-fidelity movement signal (hard accel/decel, CoD); false = GPS. */
   rich: boolean;
 };
 
@@ -100,7 +100,6 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
   const candidates: Candidate[] = [];
   const notAssessable: NotAssessable[] = [];
   let assessable = 0;
-  let richCount = 0;
   let minBaseline = Infinity;
 
   for (const q of QUALITY_KEYS) {
@@ -116,7 +115,6 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
       continue;
     }
     assessable += 1;
-    if (sig!.rich) richCount += 1;
     minBaseline = Math.min(minBaseline, sig!.baselineDays);
     const d = demand[q] ?? (input.gameModel === "balanced" ? 0.5 : 0.3);
     // SIGNED z (vs his role/squad norm): high-for-his-role raises the score; a
@@ -137,8 +135,8 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
       IS: def.why.IS.replace("{model}", modelLabel.IS.toLowerCase()),
     };
     const evidence = {
-      EN: `${def.signalPlain.EN} high vs his squad norm (z ${fmtZ(z)}, ${sig.baselineDays} sessions${sig.rich ? "" : ", GPS proxy"}).`,
-      IS: `${def.signalPlain.IS} hátt vs liðs-venju (z ${fmtZ(z)}, ${sig.baselineDays} æfingar${sig.rich ? "" : ", GPS-nálgun"}).`,
+      EN: `${def.signalPlain.EN} high vs his squad norm (z ${fmtZ(z)}, ${sig.baselineDays} sessions, ${sig.rich ? "IMA" : "GPS"}).`,
+      IS: `${def.signalPlain.IS} hátt vs liðs-venju (z ${fmtZ(z)}, ${sig.baselineDays} æfingar, ${sig.rich ? "IMA" : "GPS"}).`,
     };
     return {
       quality: q, plain: def.plain, headline: def.headline, why, evidence,
@@ -149,11 +147,11 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
 
   const coverage = Math.round((assessable / QUALITY_KEYS.length) * 100) / 100;
   const baselineDays = minBaseline === Infinity ? 0 : minBaseline;
-  // Rich fraction: GPS-proxy-only reads (Lite) can't reach "high" even with good
-  // coverage — the evidence is coarser, so confidence stays honestly capped.
-  const richFraction = assessable ? richCount / assessable : 0;
+  // "High" overall requires near-full catalogue coverage — which in practice means
+  // the IMA-only qualities (CoD, L/R asymmetry) are assessable. A GPS-only (Lite)
+  // read is missing those two, so it honestly caps at "moderate".
   const level: ConfidenceLevel =
-    coverage >= 0.66 && baselineDays >= ACTIVE_DAYS && richFraction >= 0.5 ? "high"
+    coverage >= 0.85 && baselineDays >= ACTIVE_DAYS ? "high"
       : coverage >= 0.4 && baselineDays >= MIN_DAYS ? "moderate"
         : "low";
 
