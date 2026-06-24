@@ -105,4 +105,22 @@ describe("trainingRead — ranking, gating, explainability", () => {
     const r = computeTrainingRead(PRO);
     for (const e of r.emphases) expect(QUALITY_KEYS).toContain(e.quality);
   });
+
+  it("a quality the player is LOW in vs squad (negative z) drops out, not surfaced", () => {
+    // Centre-back: low sprint/HSR for the team (z -1.6), high decel for his role.
+    const cb = computeTrainingRead({
+      playerId: "cb", position: "CB", gameModel: "balanced",
+      signals: {
+        max_velocity: S(-1.6, true), repeated_sprint: S(-1.4, true), hamstring_resilience: S(-1.5, true),
+        deceleration: S(1.3, true), aerobic_density: S(0.9, true), acceleration: S(0.2, true),
+      },
+    });
+    const keys = cb.emphases.map((e) => e.quality);
+    // He runs the least sprint → no "protect the hamstrings (sprint)" / max-velocity emphasis
+    expect(keys).not.toContain("max_velocity");
+    expect(keys).not.toContain("hamstring_resilience");
+    expect(keys).not.toContain("repeated_sprint");
+    // His actual high-for-role qualities surface instead
+    expect(keys).toContain("deceleration");
+  });
 });

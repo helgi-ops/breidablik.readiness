@@ -4,9 +4,11 @@
  * Spec: docs/train-like-you-play-individual.md.
  *
  * Deterministic + capability-driven. Rules (this engine + the fixed catalogue)
- * decide WHICH qualities; the endpoint supplies each quality's own-baseline z
- * (via flagAgainstBaseline, ≥8 training days) and whether the signal is "rich"
- * (Pro IMA) or a "proxy" (Lite GPS). Branches on signals PRESENT, never tier name:
+ * decide WHICH qualities; the endpoint supplies each quality's SQUAD-norm z (his
+ * typical value vs the team's distribution, via flagAgainstBaseline) and whether
+ * the signal is "rich" (Pro IMA) or a "proxy" (Lite GPS). The signed z ranks: a
+ * quality he does a lot of for his role rises; one he barely does (a centre-back's
+ * sprinting) drops below the floor. Branches on signals PRESENT, never tier name:
  * a quality whose signal is absent because the tier can't see it (CoD, L/R
  * asymmetry → IMA-only) goes to notAssessable with an honest "what unlocks it"
  * note, never guessed. Confidence DEGRADES as fewer qualities are assessable.
@@ -29,9 +31,9 @@ export type ConfidenceLevel = "high" | "moderate" | "low";
 
 /** Per-quality signal read, computed upstream by the endpoint. */
 export type QualitySignal = {
-  /** Signed z vs his own baseline (positive = elevated exposure in this quality). */
+  /** Signed z of his typical value vs the SQUAD norm (positive = high for the team). */
   z: number | null;
-  /** Training days behind the baseline. */
+  /** Training sessions behind his own typical value (maturity gate). */
   baselineDays: number;
   /** True = Pro-rich signal (e.g. IMA); false = Lite GPS proxy → lower confidence. */
   rich: boolean;
@@ -117,8 +119,11 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
     if (sig!.rich) richCount += 1;
     minBaseline = Math.min(minBaseline, sig!.baselineDays);
     const d = demand[q] ?? (input.gameModel === "balanced" ? 0.5 : 0.3);
-    const exposure = Math.max(0, sig!.z ?? 0);
-    candidates.push({ q, sig: sig!, score: d * (1 + exposure / 2) });
+    // SIGNED z (vs his role/squad norm): high-for-his-role raises the score; a
+    // quality he barely does for his position (e.g. a centre-back's sprinting)
+    // drops below the floor instead of surfacing as an emphasis.
+    const z = sig!.z ?? 0;
+    candidates.push({ q, sig: sig!, score: Math.max(0, d * (1 + z / 2)) });
   }
 
   candidates.sort((a, b) => b.score - a.score);
@@ -132,8 +137,8 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
       IS: def.why.IS.replace("{model}", modelLabel.IS.toLowerCase()),
     };
     const evidence = {
-      EN: `${def.signalPlain.EN} elevated (z ${fmtZ(z)}, ${sig.baselineDays}-day baseline${sig.rich ? "" : ", GPS proxy"}).`,
-      IS: `${def.signalPlain.IS} hækkað (z ${fmtZ(z)}, ${sig.baselineDays}-daga grunnlína${sig.rich ? "" : ", GPS-nálgun"}).`,
+      EN: `${def.signalPlain.EN} high vs his squad norm (z ${fmtZ(z)}, ${sig.baselineDays} sessions${sig.rich ? "" : ", GPS proxy"}).`,
+      IS: `${def.signalPlain.IS} hátt vs liðs-venju (z ${fmtZ(z)}, ${sig.baselineDays} æfingar${sig.rich ? "" : ", GPS-nálgun"}).`,
     };
     return {
       quality: q, plain: def.plain, headline: def.headline, why, evidence,

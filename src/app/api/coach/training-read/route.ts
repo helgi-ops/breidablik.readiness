@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { flagAgainstBaseline, type AthleteMetricBaseline, type BaselineStatus } from "@/lib/micropulse/baselines";
 import { computeTrainingRead, MIN_DAYS, type QualitySignal, type PlayerTrainingRead } from "@/lib/micropulse/trainingRead";
-import { GAME_MODELS, type GameModel, type Quality } from "@/lib/micropulse/trainingRead/catalogue";
+import { GAME_MODELS, QUALITY_KEYS, type GameModel, type Quality } from "@/lib/micropulse/trainingRead/catalogue";
 
 export const runtime = "nodejs";
 
@@ -54,17 +54,35 @@ function buildBaseline(metricKey: string, values: number[]): AthleteMetricBaseli
 
 type LRow = Record<string, number | null> & { date: string };
 
-/** Own-baseline z for a metric: latest training-day value vs the prior window. */
-function signalFor(rows: LRow[], pick: (r: LRow) => number | null, rich: boolean): QualitySignal | undefined {
-  if (!rows.length) return undefined;
-  const latest = rows[rows.length - 1];
-  const todayVal = pick(latest);
-  if (todayVal == null) return undefined;
-  const baseVals = rows.slice(0, -1).map(pick).filter((x): x is number => x != null && Number.isFinite(x));
-  if (baseVals.length < MIN_DAYS) return undefined;
-  const baseline = buildBaseline("external.training_read", baseVals);
-  const { z } = flagAgainstBaseline(todayVal, baseline, "external.training_read");
-  return { z, baselineDays: baseVals.length, rich };
+const MIN_PEERS = 4; // squad-norm needs enough teammates to z-score against
+
+// Metric accessors (his typical exposure in each quality). codSum/lrAsym are
+// IMA-only; accel/decel pick IMA counts on Pro, max_accel/decel on Lite.
+const codSum = (r: LRow) => (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0)
+  + (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
+const hsrShare = (r: LRow) => { const t = num(r.total_distance); const h = num(r.high_speed_distance); return t != null && t > 0 && h != null ? (h / t) * 100 : null; };
+const lrAsym = (r: LRow) => {
+  const l = (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0);
+  const rg = (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
+  return l + rg > 0 ? (Math.abs(l - rg) / (l + rg)) * 100 : null;
+};
+
+function accessorsFor(hasIMA: boolean): Array<[Quality, (r: LRow) => number | null, boolean]> {
+  // [quality, accessor, rich]
+  return [
+    ["max_velocity", hsrShare, hasIMA],
+    ["repeated_sprint", (r) => num(r.velocity_band6_total_efforts_gen2), hasIMA],
+    ["acceleration", (r) => (hasIMA ? num(r.ima_accel) : num(r.max_acceleration)), hasIMA],
+    ["deceleration", (r) => (hasIMA ? num(r.ima_decel) : num(r.max_deceleration)), hasIMA],
+    ["hamstring_resilience", (r) => num(r.high_speed_distance), hasIMA],
+    ["aerobic_density", (r) => num(r.player_load_per_minute), hasIMA],
+  ];
+}
+
+/** His typical value for a metric over the window (mean of populated sessions). */
+function typicalValue(rows: LRow[], pick: (r: LRow) => number | null): { mean: number; days: number } | null {
+  const vals = rows.map(pick).filter((x): x is number => x != null && Number.isFinite(x));
+  return vals.length ? { mean: mean(vals), days: vals.length } : null;
 }
 
 const SELECT = [
@@ -101,43 +119,51 @@ export async function GET(req: NextRequest) {
     byPlayer.get(id)!.push({ ...(r as Record<string, number | null>), date: String(r.date) } as LRow);
   }
 
-  const reads: Array<PlayerTrainingRead & { name: string }> = [];
+  // Pass 1 — each player's TYPICAL value per quality + capability (IMA?). We read
+  // his profile vs the SQUAD, not vs his own recent trend: a centre-back who runs
+  // the least sprint metres on the team should read LOW in sprint, not "elevated"
+  // just because today edged his own low average.
+  type Agg = {
+    p: { id: string; full_name: string | null; position: string | null };
+    q: Map<Quality, { mean: number; days: number; rich: boolean }>;
+  };
+  const aggs: Agg[] = [];
   for (const p of players) {
     const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) continue;
-
-    // Capability detection (per player, NOT tier name): does his data carry IMA?
-    const codSum = (r: LRow) => (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0)
-      + (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
     const hasIMA = rows.some((r) => (num(r.ima_accel) ?? 0) > 0 || (num(r.ima_decel) ?? 0) > 0 || codSum(r) > 0);
     const hasCod = rows.some((r) => codSum(r) > 0);
-
-    const hsrShare = (r: LRow) => { const t = num(r.total_distance); const h = num(r.high_speed_distance); return t != null && t > 0 && h != null ? (h / t) * 100 : null; };
-    const lrAsym = (r: LRow) => {
-      const l = (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0);
-      const rg = (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
-      return l + rg > 0 ? (Math.abs(l - rg) / (l + rg)) * 100 : null;
-    };
-
-    const signals: Partial<Record<Quality, QualitySignal>> = {};
-    const set = (q: Quality, s: QualitySignal | undefined) => { if (s) signals[q] = s; };
-    set("max_velocity", signalFor(rows, hsrShare, hasIMA));
-    set("repeated_sprint", signalFor(rows, (r) => num(r.velocity_band6_total_efforts_gen2), hasIMA));
-    // Accel/decel: Pro encodes these as IMA counts (max_acceleration is 0 on S7);
-    // Lite has no IMA but carries max_acceleration/max_deceleration (~100% on Core).
-    set("acceleration", signalFor(rows, (r) => (hasIMA ? num(r.ima_accel) : num(r.max_acceleration)), hasIMA));
-    set("deceleration", signalFor(rows, (r) => (hasIMA ? num(r.ima_decel) : num(r.max_deceleration)), hasIMA));
-    set("hamstring_resilience", signalFor(rows, (r) => num(r.high_speed_distance), hasIMA));
-    set("aerobic_density", signalFor(rows, (r) => num(r.player_load_per_minute), hasIMA));
-    // IMA-only qualities: present only when his data actually carries CoD (Pro).
-    if (hasCod) {
-      set("change_of_direction", signalFor(rows, codSum, true));
-      set("lr_asymmetry", signalFor(rows, lrAsym, true));
+    const q = new Map<Quality, { mean: number; days: number; rich: boolean }>();
+    for (const [quality, pick, rich] of accessorsFor(hasIMA)) {
+      const t = typicalValue(rows, pick);
+      if (t) q.set(quality, { ...t, rich });
     }
+    if (hasCod) {
+      const c = typicalValue(rows, codSum); if (c) q.set("change_of_direction", { ...c, rich: true });
+      const as = typicalValue(rows, lrAsym); if (as) q.set("lr_asymmetry", { ...as, rich: true });
+    }
+    aggs.push({ p, q });
+  }
 
+  // Pass 2 — squad-norm baseline per quality (distribution of the player typicals).
+  const squad = new Map<Quality, AthleteMetricBaseline>();
+  for (const quality of QUALITY_KEYS) {
+    const means = aggs.map((a) => a.q.get(quality)?.mean).filter((x): x is number => x != null && Number.isFinite(x));
+    if (means.length >= MIN_PEERS) squad.set(quality, buildBaseline("external.training_read", means));
+  }
+
+  // Pass 3 — z each player's typical vs the squad, then the deterministic read.
+  const reads: Array<PlayerTrainingRead & { name: string }> = [];
+  for (const { p, q } of aggs) {
+    const signals: Partial<Record<Quality, QualitySignal>> = {};
+    for (const [quality, v] of q) {
+      const base = squad.get(quality);
+      if (!base || v.days < MIN_DAYS) continue; // need a squad norm + his own mature window
+      const { z } = flagAgainstBaseline(v.mean, base, "external.training_read");
+      signals[quality] = { z, baselineDays: v.days, rich: v.rich };
+    }
     const gameModel: GameModel = (p.position && byPosModel && GAME_MODELS.includes(byPosModel[p.position] as GameModel))
       ? (byPosModel[p.position] as GameModel) : teamModel;
-
     reads.push({ name: (p.full_name ?? "—").trim(), ...computeTrainingRead({ playerId: p.id, position: p.position, firstName: (p.full_name ?? "—").trim().split(" ")[0], gameModel, signals }) });
   }
 
