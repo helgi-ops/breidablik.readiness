@@ -17,7 +17,6 @@ import { createClient } from "@supabase/supabase-js";
 import { flagAgainstBaseline, type AthleteMetricBaseline, type BaselineStatus } from "@/lib/micropulse/baselines";
 import { computeTrainingRead, MIN_DAYS, type QualitySignal, type PlayerTrainingRead } from "@/lib/micropulse/trainingRead";
 import { GAME_MODELS, QUALITY_KEYS, type GameModel, type Quality } from "@/lib/micropulse/trainingRead/catalogue";
-import { positionGroup } from "@/lib/micropulse/positionStyle";
 
 export const runtime = "nodejs";
 
@@ -172,32 +171,25 @@ export async function GET(req: NextRequest) {
     aggs.push({ p, q });
   }
 
-  // Pass 2 — ROLE-norm: a per-quality baseline from a set of players. "Normalize to
-  // role and context, not absolute load" (Virtanen): we read each player against his
-  // position group, falling back to the whole squad when the group is too thin to
-  // norm against (so the read degrades gracefully instead of going noisy on 2 peers).
-  const baselinesFor = (members: Agg[]) => {
-    const m = new Map<Quality, AthleteMetricBaseline>();
-    for (const quality of QUALITY_KEYS) {
-      const means = members.map((a) => a.q.get(quality)?.mean).filter((x): x is number => x != null && Number.isFinite(x));
-      if (means.length >= MIN_PEERS) m.set(quality, buildBaseline("external.training_read", means));
-    }
-    return m;
-  };
-  const squad = baselinesFor(aggs);
-  const groupNorm = new Map<string, Map<Quality, AthleteMetricBaseline>>();
-  for (const g of new Set(aggs.map((a) => positionGroup(a.p.position)))) {
-    groupNorm.set(g, baselinesFor(aggs.filter((a) => positionGroup(a.p.position) === g)));
+  // Pass 2 — squad-norm baseline per quality. We z-score each player against the
+  // whole squad (not his position peers) ON PURPOSE: that surfaces his movement
+  // SIGNATURE — a centre-back reads high-decel / low-sprint, a winger high-sprint —
+  // which is the role context a coach develops against ("train like you play").
+  // Normalising against same-position peers instead would strip that signature and
+  // leave most players blank.
+  const squad = new Map<Quality, AthleteMetricBaseline>();
+  for (const quality of QUALITY_KEYS) {
+    const means = aggs.map((a) => a.q.get(quality)?.mean).filter((x): x is number => x != null && Number.isFinite(x));
+    if (means.length >= MIN_PEERS) squad.set(quality, buildBaseline("external.training_read", means));
   }
 
-  // Pass 3 — z each player's typical vs his ROLE norm (squad fallback), then read.
+  // Pass 3 — z each player's typical vs the squad, then the deterministic read.
   const reads: Array<PlayerTrainingRead & { name: string }> = [];
   for (const { p, q } of aggs) {
-    const gnorm = groupNorm.get(positionGroup(p.position));
     const signals: Partial<Record<Quality, QualitySignal>> = {};
     for (const [quality, v] of q) {
-      const base = gnorm?.get(quality) ?? squad.get(quality); // role norm, else squad
-      if (!base || v.days < MIN_DAYS) continue; // need a norm + his own mature window
+      const base = squad.get(quality);
+      if (!base || v.days < MIN_DAYS) continue; // need a squad norm + his own mature window
       const { z } = flagAgainstBaseline(v.mean, base, "external.training_read");
       signals[quality] = { z, baselineDays: v.days, rich: v.rich };
     }

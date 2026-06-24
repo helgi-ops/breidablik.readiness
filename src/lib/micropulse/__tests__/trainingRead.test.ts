@@ -106,15 +106,17 @@ describe("trainingRead — ranking, gating, explainability", () => {
     for (const e of r.emphases) expect(QUALITY_KEYS).toContain(e.quality);
   });
 
-  it("an AVERAGE-for-role quality (z near 0) does not surface — only distinctive ones do", () => {
+  it("a typical player still gets his top few (his signature), led by his strongest", () => {
+    // Average-ish profile: every player should get actionable guidance, not a blank.
     const r = computeTrainingRead({
       playerId: "avg", position: "CM", gameModel: "balanced",
       signals: {
         acceleration: S(0.05, true), deceleration: S(-0.1, true), aerobic_density: S(0.02, true),
-        max_velocity: S(0.9, false), // the one quality he's genuinely high in for his role
+        max_velocity: S(0.9, false), repeated_sprint: S(0.3, false),
       },
     });
-    expect(r.emphases.map((e) => e.quality)).toEqual(["max_velocity"]);
+    expect(r.emphases.length).toBeGreaterThan(0);
+    expect(r.emphases[0].quality).toBe("max_velocity"); // his most-distinctive leads
   });
 
   it("a quality the player is LOW in vs squad (negative z) drops out, not surfaced", () => {
