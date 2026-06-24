@@ -1,0 +1,149 @@
+/**
+ * /api/coach/training-read?player_id=…   (spec: docs/train-like-you-play-individual.md)
+ *
+ * GET — "How to train this player": per-player ranked development emphases from the
+ * team game model × how the player actually moves. Coach/staff only.
+ *
+ * The endpoint does the DATA work (fetch the window, build each quality's own
+ * baseline, z via flagAgainstBaseline, detect IMA-presence for rich/proxy); the
+ * deterministic trainingRead engine + fixed cited catalogue decide WHICH qualities.
+ * Capability-driven: IMA-only qualities (change-of-direction, L/R asymmetry) are
+ * simply absent on GPS-only clubs → the engine lists them under notAssessable.
+ * A distinct labelled development signal — never the canonical readiness colour.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { flagAgainstBaseline, type AthleteMetricBaseline, type BaselineStatus } from "@/lib/micropulse/baselines";
+import { computeTrainingRead, MIN_DAYS, type QualitySignal, type PlayerTrainingRead } from "@/lib/micropulse/trainingRead";
+import { GAME_MODELS, type GameModel, type Quality } from "@/lib/micropulse/trainingRead/catalogue";
+
+export const runtime = "nodejs";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function authenticate(req: NextRequest) {
+  const supabase = getSupabase();
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return { error: "Missing auth", status: 401 } as const;
+  const { data: userRes } = await supabase.auth.getUser(token);
+  if (!userRes?.user) return { error: "Invalid token", status: 401 } as const;
+  const { data: prof } = await supabase.from("profiles").select("team_id, role").eq("id", userRes.user.id).maybeSingle();
+  const role = String(prof?.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return { error: "Coach role required", status: 403 } as const;
+  const teamId = prof?.team_id as string | null;
+  if (!teamId) return { error: "Coach not linked to team", status: 400 } as const;
+  return { teamId, supabase } as const;
+}
+
+const num = (v: unknown): number | null => (Number.isFinite(Number(v)) ? Number(v) : null);
+function addDays(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function mean(xs: number[]) { return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0; }
+function sd(xs: number[], m: number) { return xs.length < 2 ? 0 : Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1)); }
+
+function buildBaseline(metricKey: string, values: number[]): AthleteMetricBaseline {
+  const n = values.length, m = mean(values);
+  const status: BaselineStatus = n < MIN_DAYS ? "insufficient_data" : n < 14 ? "calibrating" : "active";
+  return { player_id: "", metric_key: metricKey, n_observations: n, mean: m, sd: sd(values, m), cv: m ? sd(values, m) / m : null, median: null, window_days: 35, status, computed_at: "" };
+}
+
+type LRow = Record<string, number | null> & { date: string };
+
+/** Own-baseline z for a metric: latest training-day value vs the prior window. */
+function signalFor(rows: LRow[], pick: (r: LRow) => number | null, rich: boolean): QualitySignal | undefined {
+  if (!rows.length) return undefined;
+  const latest = rows[rows.length - 1];
+  const todayVal = pick(latest);
+  if (todayVal == null) return undefined;
+  const baseVals = rows.slice(0, -1).map(pick).filter((x): x is number => x != null && Number.isFinite(x));
+  if (baseVals.length < MIN_DAYS) return undefined;
+  const baseline = buildBaseline("external.training_read", baseVals);
+  const { z } = flagAgainstBaseline(todayVal, baseline, "external.training_read");
+  return { z, baselineDays: baseVals.length, rich };
+}
+
+const SELECT = [
+  "player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_efforts_gen2",
+  "max_acceleration, max_deceleration, max_velocity, player_load_per_minute, high_metabolic_load_distance_m",
+  "ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low",
+].join(", ");
+
+export async function GET(req: NextRequest) {
+  const ctx = await authenticate(req);
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+  const { supabase, teamId } = ctx;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const from = addDays(today, -35);
+  const onlyPlayer = req.nextUrl.searchParams.get("player_id");
+
+  const [settingsRes, playersRes, loadRes] = await Promise.all([
+    supabase.from("team_settings").select("game_model, game_model_by_position").eq("team_id", teamId).maybeSingle(),
+    supabase.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true),
+    supabase.from("player_external_load_daily").select(SELECT).eq("team_id", teamId).gte("date", from).lte("date", today).limit(8000),
+  ]);
+
+  const teamModel: GameModel = GAME_MODELS.includes(settingsRes.data?.game_model as GameModel) ? (settingsRes.data!.game_model as GameModel) : "balanced";
+  const byPosModel = (settingsRes.data?.game_model_by_position ?? null) as Record<string, string> | null;
+
+  let players = (playersRes.data ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>;
+  if (onlyPlayer) players = players.filter((p) => p.id === onlyPlayer);
+
+  const byPlayer = new Map<string, LRow[]>();
+  for (const r of (loadRes.data ?? []) as unknown as Array<Record<string, unknown>>) {
+    const id = String(r.player_id);
+    if (!byPlayer.has(id)) byPlayer.set(id, []);
+    byPlayer.get(id)!.push({ ...(r as Record<string, number | null>), date: String(r.date) } as LRow);
+  }
+
+  const reads: PlayerTrainingRead[] = [];
+  for (const p of players) {
+    const rows = (byPlayer.get(p.id) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+    if (!rows.length) continue;
+
+    // Capability detection (per player, NOT tier name): does his data carry IMA?
+    const codSum = (r: LRow) => (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0)
+      + (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
+    const hasIMA = rows.some((r) => (num(r.ima_accel) ?? 0) > 0 || (num(r.ima_decel) ?? 0) > 0 || codSum(r) > 0);
+    const hasCod = rows.some((r) => codSum(r) > 0);
+
+    const hsrShare = (r: LRow) => { const t = num(r.total_distance); const h = num(r.high_speed_distance); return t != null && t > 0 && h != null ? (h / t) * 100 : null; };
+    const lrAsym = (r: LRow) => {
+      const l = (num(r.ima_cod_left_high) ?? 0) + (num(r.ima_cod_left_medium) ?? 0) + (num(r.ima_cod_left_low) ?? 0);
+      const rg = (num(r.ima_cod_right_high) ?? 0) + (num(r.ima_cod_right_medium) ?? 0) + (num(r.ima_cod_right_low) ?? 0);
+      return l + rg > 0 ? (Math.abs(l - rg) / (l + rg)) * 100 : null;
+    };
+
+    const signals: Partial<Record<Quality, QualitySignal>> = {};
+    const set = (q: Quality, s: QualitySignal | undefined) => { if (s) signals[q] = s; };
+    set("max_velocity", signalFor(rows, hsrShare, hasIMA));
+    set("repeated_sprint", signalFor(rows, (r) => num(r.velocity_band6_total_efforts_gen2), hasIMA));
+    // Accel/decel: Pro encodes these as IMA counts (max_acceleration is 0 on S7);
+    // Lite has no IMA but carries max_acceleration/max_deceleration (~100% on Core).
+    set("acceleration", signalFor(rows, (r) => (hasIMA ? num(r.ima_accel) : num(r.max_acceleration)), hasIMA));
+    set("deceleration", signalFor(rows, (r) => (hasIMA ? num(r.ima_decel) : num(r.max_deceleration)), hasIMA));
+    set("hamstring_resilience", signalFor(rows, (r) => num(r.high_speed_distance), hasIMA));
+    set("aerobic_density", signalFor(rows, (r) => num(r.player_load_per_minute), hasIMA));
+    // IMA-only qualities: present only when his data actually carries CoD (Pro).
+    if (hasCod) {
+      set("change_of_direction", signalFor(rows, codSum, true));
+      set("lr_asymmetry", signalFor(rows, lrAsym, true));
+    }
+
+    const gameModel: GameModel = (p.position && byPosModel && GAME_MODELS.includes(byPosModel[p.position] as GameModel))
+      ? (byPosModel[p.position] as GameModel) : teamModel;
+
+    reads.push(computeTrainingRead({ playerId: p.id, position: p.position, firstName: (p.full_name ?? "—").trim().split(" ")[0], gameModel, signals }));
+  }
+
+  return NextResponse.json({
+    gameModel: teamModel,
+    reads,
+    note: "Development-emphasis read (rules decide qualities; phrasing is fixed cited templates). A distinct labelled signal, not the readiness colour.",
+  });
+}
