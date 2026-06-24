@@ -106,6 +106,17 @@ describe("trainingRead — ranking, gating, explainability", () => {
     for (const e of r.emphases) expect(QUALITY_KEYS).toContain(e.quality);
   });
 
+  it("an AVERAGE-for-role quality (z near 0) does not surface — only distinctive ones do", () => {
+    const r = computeTrainingRead({
+      playerId: "avg", position: "CM", gameModel: "balanced",
+      signals: {
+        acceleration: S(0.05, true), deceleration: S(-0.1, true), aerobic_density: S(0.02, true),
+        max_velocity: S(0.9, false), // the one quality he's genuinely high in for his role
+      },
+    });
+    expect(r.emphases.map((e) => e.quality)).toEqual(["max_velocity"]);
+  });
+
   it("a quality the player is LOW in vs squad (negative z) drops out, not surfaced", () => {
     // Centre-back: low sprint/HSR for the team (z -1.6), high decel for his role.
     const cb = computeTrainingRead({

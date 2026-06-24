@@ -4,11 +4,12 @@
  * Spec: docs/train-like-you-play-individual.md.
  *
  * Deterministic + capability-driven. Rules (this engine + the fixed catalogue)
- * decide WHICH qualities; the endpoint supplies each quality's SQUAD-norm z (his
- * typical value vs the team's distribution, via flagAgainstBaseline) and whether
- * the signal is IMA-fidelity (hard accel/decel, CoD) or GPS. The signed z ranks: a
- * quality he does a lot of for his role rises; one he barely does (a centre-back's
- * sprinting) drops below the floor. Branches on signals PRESENT, never tier name:
+ * decide WHICH qualities; the endpoint supplies each quality's ROLE-norm z (his
+ * typical value vs his position group, squad fallback, via flagAgainstBaseline) and
+ * whether the signal is IMA-fidelity (hard accel/decel, CoD) or GPS. Only qualities
+ * he's genuinely HIGH in for his role surface (Z_FLOOR); the signed z then ranks
+ * them. A quality he barely does for his role (a centre-back's sprinting) never
+ * surfaces. Branches on signals PRESENT, never tier name:
  * a quality whose signal is absent because the tier can't see it (CoD, L/R
  * asymmetry → IMA-only) goes to notAssessable with an honest "what unlocks it"
  * note, never guessed. Confidence DEGRADES as fewer qualities are assessable.
@@ -26,6 +27,7 @@ import {
 export const MIN_DAYS = 8; // mature-baseline floor (mirrors movementSignature / intensityVerdict)
 const ACTIVE_DAYS = 14;
 const SCORE_FLOOR = 0.3;   // below this, a quality isn't worth surfacing as an emphasis
+const Z_FLOOR = 0.25;      // a quality must be genuinely HIGH for his role to surface
 
 export type ConfidenceLevel = "high" | "moderate" | "low";
 
@@ -117,11 +119,11 @@ export function computeTrainingRead(input: TrainingReadInput): PlayerTrainingRea
     assessable += 1;
     minBaseline = Math.min(minBaseline, sig!.baselineDays);
     const d = demand[q] ?? (input.gameModel === "balanced" ? 0.5 : 0.3);
-    // SIGNED z (vs his role/squad norm): high-for-his-role raises the score; a
-    // quality he barely does for his position (e.g. a centre-back's sprinting)
-    // drops below the floor instead of surfacing as an emphasis.
+    // Only surface qualities he's genuinely HIGH in FOR HIS ROLE. An average-for-
+    // role quality (z≈0) isn't a development priority either way; one he barely does
+    // (a centre-back's sprinting) is well below. The signed z then ranks the rest.
     const z = sig!.z ?? 0;
-    candidates.push({ q, sig: sig!, score: Math.max(0, d * (1 + z / 2)) });
+    if (z >= Z_FLOOR) candidates.push({ q, sig: sig!, score: d * (1 + z / 2) });
   }
 
   candidates.sort((a, b) => b.score - a.score);
