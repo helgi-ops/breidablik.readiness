@@ -89,12 +89,16 @@ export default function RedirectInner() {
       if (next) {
         if (isCoachLike && next.startsWith("/coach")) return router.replace(next);
         if (isCoachLike && next.startsWith("/team")) return router.replace(next);
+        if (role === "exec" && next.startsWith("/exec")) return router.replace(next);
         if (isPtClient && next.startsWith("/client")) return router.replace(next);
         if (role === "player" && !isPtClient && (next.startsWith("/player") || next.startsWith("/team")))
           return router.replace(next);
       }
 
       if (isCoachLike) return router.replace("/coach");
+
+      // EXEC (management/GM) — read-only club status surface.
+      if (role === "exec") return router.replace("/exec");
 
       if (isPtClient) return router.replace("/client");
 
@@ -105,7 +109,7 @@ export default function RedirectInner() {
         return router.replace(done ? "/team" : "/player/checkin");
       }
 
-      setError("Óþekkt role í profiles. Á að vera coach eða player.");
+      setError("Óþekkt role í profiles. Á að vera coach, player eða stjórnandi.");
     }
 
     go();
