@@ -76,18 +76,21 @@ export async function GET(req: NextRequest) {
 
   const [teamsRes, playersRes, viewRes, loadRes, injRes] = await Promise.all([
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
-    supabase.from("players").select("team_id").in("team_id", teamIds).eq("is_active", true),
+    supabase.from("players").select("id, team_id, full_name").in("team_id", teamIds).eq("is_active", true),
     supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
     supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).gte("date", loadFrom).lte("date", today).limit(20000),
-    // Injuries — counts only. We never select body_part / injury_type / notes;
-    // status + dates are aggregated server-side and only totals are returned.
-    supabase.from("player_injuries").select("team_id, status, injury_date, actual_return_date").in("team_id", teamIds),
+    // Injuries — availability level. We select player_id (to name who's OUT) +
+    // status/dates, but NEVER body_part / injury_type / severity / notes — that
+    // medical detail stays with the staff. Only names + counts leave the endpoint.
+    supabase.from("player_injuries").select("team_id, player_id, status, injury_date, actual_return_date").in("team_id", teamIds),
   ]);
 
   const teamsMeta = (teamsRes.data ?? []) as Array<{ id: string; name: string | null; gender: string | null; team_type: string | null; club_short_name: string | null }>;
   const squadByTeam = new Map<string, number>();
-  for (const p of (playersRes.data ?? []) as Array<{ team_id: string }>) {
+  const nameById = new Map<string, string>();
+  for (const p of (playersRes.data ?? []) as Array<{ id: string; team_id: string; full_name: string | null }>) {
     squadByTeam.set(p.team_id, (squadByTeam.get(p.team_id) ?? 0) + 1);
+    nameById.set(String(p.id), (p.full_name ?? "—").trim());
   }
   const rows = (viewRes.data ?? []) as unknown as ViewRow[];
 
@@ -139,18 +142,24 @@ export async function GET(req: NextRequest) {
     return loadTrajectory(acc.aN ? acc.aSum / acc.aN : null, acc.cN ? acc.cSum / acc.cN : null, acc.days.size);
   };
 
-  // Injury burden — aggregate counts per team (currently out, new + returned in 14d).
+  // Injury burden per team: distinct players currently OUT (+ their names, at
+  // availability level), plus new/returned cases in the last 14 days.
   const injFrom = addDaysISO(today, -14);
-  const injByTeam = new Map<string, InjurySummary>();
-  for (const r of (injRes.data ?? []) as Array<{ team_id: string; status: string | null; injury_date: string | null; actual_return_date: string | null }>) {
+  type InjAcc = { out: Set<string>; newRecent: number; returnedRecent: number };
+  const injByTeam = new Map<string, InjAcc>();
+  for (const r of (injRes.data ?? []) as Array<{ team_id: string; player_id: string | null; status: string | null; injury_date: string | null; actual_return_date: string | null }>) {
     const tid = String(r.team_id);
-    const acc = injByTeam.get(tid) ?? { out: 0, newRecent: 0, returnedRecent: 0 };
-    if (String(r.status ?? "").toLowerCase() === "injured") acc.out += 1;
+    const acc = injByTeam.get(tid) ?? { out: new Set<string>(), newRecent: 0, returnedRecent: 0 };
+    if (String(r.status ?? "").toLowerCase() === "injured" && r.player_id) acc.out.add(String(r.player_id));
     if (r.injury_date && String(r.injury_date) >= injFrom) acc.newRecent += 1;
     if (r.actual_return_date && String(r.actual_return_date) >= injFrom) acc.returnedRecent += 1;
     injByTeam.set(tid, acc);
   }
-  const teamInjury = (tid: string): InjurySummary => injByTeam.get(tid) ?? { out: 0, newRecent: 0, returnedRecent: 0 };
+  const outNamesOf = (ids: Iterable<string>) => [...ids].map((id) => nameById.get(id) ?? "").filter(Boolean).sort();
+  const teamInjurySummary = (tid: string): InjurySummary => {
+    const acc = injByTeam.get(tid);
+    return { out: acc?.out.size ?? 0, newRecent: acc?.newRecent ?? 0, returnedRecent: acc?.returnedRecent ?? 0 };
+  };
 
   const teams = teamsMeta.map((t) => {
     const today_ = todayByTeam.get(t.id) ?? { ...emptyAvail(), withRead: 0 };
@@ -172,7 +181,7 @@ export async function GET(req: NextRequest) {
       briefing,
       watch,
       load: teamLoad(t.id),
-      injury: { ...injuryNarrative(teamInjury(t.id)), ...teamInjury(t.id) },
+      injury: { ...injuryNarrative(teamInjurySummary(t.id)), ...teamInjurySummary(t.id), outNames: outNamesOf(injByTeam.get(t.id)?.out ?? []) },
       trend,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -204,10 +213,11 @@ export async function GET(req: NextRequest) {
   for (const acc of loadByTeam.values()) { raSum += acc.aSum; raN += acc.aN; rcSum += acc.cSum; rcN += acc.cN; for (const d of acc.days) rDays.add(d); }
   const rollLoad = loadTrajectory(raN ? raSum / raN : null, rcN ? rcSum / rcN : null, rDays.size);
 
-  // Roll-up injury — sum the per-team aggregate counts across the club.
-  const rollInjSumm: InjurySummary = { out: 0, newRecent: 0, returnedRecent: 0 };
-  for (const s of injByTeam.values()) { rollInjSumm.out += s.out; rollInjSumm.newRecent += s.newRecent; rollInjSumm.returnedRecent += s.returnedRecent; }
-  const rollInjury = { ...injuryNarrative(rollInjSumm), ...rollInjSumm };
+  // Roll-up injury — union of distinct out-players across the club + summed cases.
+  const rollOut = new Set<string>(); let rollNew = 0, rollRet = 0;
+  for (const acc of injByTeam.values()) { for (const id of acc.out) rollOut.add(id); rollNew += acc.newRecent; rollRet += acc.returnedRecent; }
+  const rollInjSumm: InjurySummary = { out: rollOut.size, newRecent: rollNew, returnedRecent: rollRet };
+  const rollInjury = { ...injuryNarrative(rollInjSumm), ...rollInjSumm, outNames: outNamesOf(rollOut) };
 
   return NextResponse.json({
     date: today,
