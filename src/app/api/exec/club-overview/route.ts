@@ -19,6 +19,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import {
+  availabilityVerdict as verdict, buildBriefing, confidenceFor, loadTrajectory,
+  type Avail,
+} from "@/lib/micropulse/execBriefing";
 
 export const runtime = "nodejs";
 
@@ -56,103 +60,7 @@ function classify(finalFlag: unknown, finalColor: unknown): Bucket {
   return "gray";
 }
 
-type Avail = { cleared: number; managed: number; unavailable: number; total: number };
 const emptyAvail = (): Avail => ({ cleared: 0, managed: 0, unavailable: 0, total: 0 });
-
-type Bi = { EN: string; IS: string };
-
-type ConfidenceLevel = "high" | "moderate" | "low";
-function confidenceFor(withRead: number, squad: number): { level: ConfidenceLevel; coverage: number } {
-  const coverage = squad > 0 ? Math.round((withRead / squad) * 100) / 100 : 0;
-  const level: ConfidenceLevel = coverage >= 0.8 ? "high" : coverage >= 0.5 ? "moderate" : "low";
-  return { level, coverage };
-}
-
-const COVERAGE_GATE = 0.5; // below this, too few readings to call squad availability
-
-function verdict(a: Avail, adh: { withRead: number; squad: number; pct: number | null }): { EN: string; IS: string } {
-  const { withRead, squad, pct } = adh;
-  if (withRead === 0) {
-    return { EN: "No readings in yet today — check-ins still coming.", IS: "Engir lestrar komnir í dag — innskráningar enn að berast." };
-  }
-  // Coverage gate: don't claim a squad-wide verdict off a handful of players —
-  // lead with the data gap so "strong" never appears on 2-of-23 coverage.
-  const coverage = squad > 0 ? withRead / squad : 1;
-  if (coverage < COVERAGE_GATE) {
-    return {
-      EN: `Only ${withRead} of ${squad} players have a reading today (${pct}%) — too few to judge availability yet.`,
-      IS: `Aðeins ${withRead} af ${squad} leikmönnum með lestur í dag (${pct}%) — of fáir til að meta mönnun.`,
-    };
-  }
-  const clearedPct = a.total ? a.cleared / a.total : 0;
-  const wordEN = clearedPct >= 0.8 ? "strong" : clearedPct >= 0.6 ? "solid" : clearedPct >= 0.4 ? "mixed" : "stretched";
-  const wordIS = clearedPct >= 0.8 ? "sterk" : clearedPct >= 0.6 ? "góð" : clearedPct >= 0.4 ? "blönduð" : "tæp";
-  const flagged = a.managed + a.unavailable;
-  const tailEN = flagged === 0 ? "all assessed players cleared" : `${a.managed} managed${a.unavailable ? `, ${a.unavailable} unavailable` : ""}`;
-  const tailIS = flagged === 0 ? "allir metnir klárir" : `${a.managed} í stýringu${a.unavailable ? `, ${a.unavailable} ófáanleg` : ""}`;
-  return {
-    EN: `Squad availability ${wordEN}; ${tailEN}. ${pct}% checked in.`,
-    IS: `Mönnun liðs ${wordIS}; ${tailIS}. ${pct}% innskráð.`,
-  };
-}
-
-/** Plain-language trend phrase from the weekly cleared% series (or null). */
-function trendPhrase(trend: Array<{ clearedPct: number | null }>): Bi | null {
-  const pts = trend.map((t) => t.clearedPct).filter((x): x is number => x != null);
-  if (pts.length < 3) return null;
-  const recent = pts.slice(-2);
-  const prior = pts.slice(-4, -2);
-  if (!prior.length) return null;
-  const ra = recent.reduce((a, b) => a + b, 0) / recent.length;
-  const pa = prior.reduce((a, b) => a + b, 0) / prior.length;
-  const lvl = Math.round(ra), d = ra - pa;
-  if (d > 8) return { EN: `improved to about ${lvl}% cleared recently`, IS: `batnað í um ${lvl}% klára nýlega` };
-  if (d < -8) return { EN: `slipped to about ${lvl}% cleared recently`, IS: `lækkað í um ${lvl}% klára nýlega` };
-  return { EN: `held steady around ${lvl}% cleared`, IS: `haldist stöðug í um ${lvl}% klárum` };
-}
-
-/**
- * A short plain-language briefing for a GM/board reader: what the numbers mean and
- * what to watch — not jargon, not a chart. Deterministic (rules, not AI).
- */
-function buildBriefing(a: Avail, adh: { withRead: number; squad: number; pct: number | null }, trend: Array<{ clearedPct: number | null }>): { briefing: Bi; watch: Bi } {
-  const { withRead, squad, pct } = adh;
-  const tw = trendPhrase(trend);
-  const flagged = a.managed + a.unavailable;
-
-  if (withRead === 0) {
-    return {
-      briefing: { EN: "No players have a reading yet today. Check-ins and GPS uploads usually arrive through the day, so this will fill in.", IS: "Enginn leikmaður er með lestur enn í dag. Innskráningar og GPS berast yfirleitt yfir daginn, svo þetta fyllist inn." },
-      watch: { EN: "", IS: "" },
-    };
-  }
-
-  const coverage = squad > 0 ? withRead / squad : 1;
-  if (coverage < COVERAGE_GATE) {
-    return {
-      briefing: {
-        EN: `Only ${withRead} of ${squad} players have checked in or produced data today, so this is a small sample — not a squad-wide picture. Of those, ${a.cleared} ${a.cleared === 1 ? "is" : "are"} cleared${flagged ? ` and ${flagged} flagged` : ""}. The first thing to move is participation: until more of the squad is logging data, the availability picture${tw ? " and its trend" : ""} can't be relied on.`,
-        IS: `Aðeins ${withRead} af ${squad} leikmönnum hafa skráð sig eða skilað gögnum í dag, svo þetta er lítið úrtak — ekki heildarmynd. Af þeim ${a.cleared === 1 ? "er" : "eru"} ${a.cleared} klár${a.cleared === 1 ? "" : "ir"}${flagged ? ` og ${flagged} flögguð` : ""}. Fyrsta skrefið er þátttaka: þar til fleiri skrá gögn er ekki hægt að treysta mönnunar-myndinni${tw ? " eða þróun hennar" : ""}.`,
-      },
-      watch: {
-        EN: `Watch adherence — at ${pct}% today, the system isn't being used enough to give a reliable read. Worth raising with the staff.`,
-        IS: `Fylgstu með aðsókn — í ${pct}% í dag er kerfið ekki nógu mikið notað til að gefa áreiðanlega mynd. Vert að ræða við þjálfarateymið.`,
-      },
-    };
-  }
-
-  const sampleEN = coverage >= 0.8 ? "a full picture of the squad" : "a fair sample of the squad";
-  const sampleIS = coverage >= 0.8 ? "heildarmynd af hópnum" : "sæmilegt úrtak af hópnum";
-  return {
-    briefing: {
-      EN: `${withRead} of ${squad} players have a reading today (${pct}%), ${sampleEN}. ${a.cleared} ${a.cleared === 1 ? "is" : "are"} cleared${flagged ? `, with ${flagged} being managed by the staff` : " — nobody flagged"}.${tw ? ` Over recent weeks availability has ${tw.EN}.` : ""}`,
-      IS: `${withRead} af ${squad} leikmönnum eru með lestur í dag (${pct}%), ${sampleIS}. ${a.cleared} ${a.cleared === 1 ? "er" : "eru"} klár${a.cleared === 1 ? "" : "ir"}${flagged ? `, og ${flagged} í stýringu hjá þjálfurum` : " — enginn flaggaður"}.${tw ? ` Síðustu vikur hefur mönnun ${tw.IS}.` : ""}`,
-    },
-    watch: flagged > 0
-      ? { EN: `The ${flagged} flagged player${flagged > 1 ? "s are" : " is"} being managed — normal load management, not an alarm.`, IS: `${flagged} flaggaðir leikmenn eru í stýringu — eðlileg álags-stýring, ekki viðvörun.` }
-      : { EN: "Nothing flagged today — the squad looks well managed.", IS: "Ekkert flaggað í dag — hópurinn lítur vel út." },
-  };
-}
 
 type ViewRow = { team_id: string; entry_date: string; final_color: unknown; final_flag: unknown };
 
@@ -163,11 +71,14 @@ export async function GET(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
   const trendFrom = addDaysISO(today, -42); // ~6 weeks
+  const loadFrom = addDaysISO(today, -28); // acute/chronic window for load trajectory
+  const acuteFrom = addDaysISO(today, -7);
 
-  const [teamsRes, playersRes, viewRes] = await Promise.all([
+  const [teamsRes, playersRes, viewRes, loadRes] = await Promise.all([
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
     supabase.from("players").select("team_id").in("team_id", teamIds).eq("is_active", true),
     supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
+    supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).gte("date", loadFrom).lte("date", today).limit(20000),
   ]);
 
   const teamsMeta = (teamsRes.data ?? []) as Array<{ id: string; name: string | null; gender: string | null; team_type: string | null; club_short_name: string | null }>;
@@ -206,6 +117,25 @@ export async function GET(req: NextRequest) {
     }));
   }
 
+  // Load trajectory accumulator: mean session load (per player-day) acute (7d) vs
+  // chronic (28d). Participation-independent, tier-fair (player_load on Lite + Pro).
+  type LoadAcc = { aSum: number; aN: number; cSum: number; cN: number; days: Set<string> };
+  const loadByTeam = new Map<string, LoadAcc>();
+  for (const r of (loadRes.data ?? []) as Array<{ team_id: string; date: string; player_load: number | null }>) {
+    const pl = Number(r.player_load);
+    if (!Number.isFinite(pl) || pl <= 0) continue;
+    const tid = String(r.team_id), date = String(r.date);
+    const acc = loadByTeam.get(tid) ?? { aSum: 0, aN: 0, cSum: 0, cN: 0, days: new Set<string>() };
+    acc.cSum += pl; acc.cN += 1; acc.days.add(date);
+    if (date >= acuteFrom) { acc.aSum += pl; acc.aN += 1; }
+    loadByTeam.set(tid, acc);
+  }
+  const teamLoad = (tid: string) => {
+    const acc = loadByTeam.get(tid);
+    if (!acc) return loadTrajectory(null, null, 0);
+    return loadTrajectory(acc.aN ? acc.aSum / acc.aN : null, acc.cN ? acc.cSum / acc.cN : null, acc.days.size);
+  };
+
   const teams = teamsMeta.map((t) => {
     const today_ = todayByTeam.get(t.id) ?? { ...emptyAvail(), withRead: 0 };
     const squad = squadByTeam.get(t.id) ?? today_.withRead;
@@ -225,6 +155,7 @@ export async function GET(req: NextRequest) {
       verdict: verdict(avail, adherence),
       briefing,
       watch,
+      load: teamLoad(t.id),
       trend,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -251,6 +182,11 @@ export async function GET(req: NextRequest) {
   const rollTrend = buildTrend(rollTrendAcc);
   const rollBrief = buildBriefing(rollAvail, rollAdherence, rollTrend);
 
+  // Roll-up load — pool every team's player-day rows so the mean isn't skewed by team size.
+  let raSum = 0, raN = 0, rcSum = 0, rcN = 0; const rDays = new Set<string>();
+  for (const acc of loadByTeam.values()) { raSum += acc.aSum; raN += acc.aN; rcSum += acc.cSum; rcN += acc.cN; for (const d of acc.days) rDays.add(d); }
+  const rollLoad = loadTrajectory(raN ? raSum / raN : null, rcN ? rcSum / rcN : null, rDays.size);
+
   return NextResponse.json({
     date: today,
     club: {
@@ -264,6 +200,7 @@ export async function GET(req: NextRequest) {
       verdict: verdict(rollAvail, rollAdherence),
       briefing: rollBrief.briefing,
       watch: rollBrief.watch,
+      load: rollLoad,
       trend: rollTrend,
     },
     teams,

@@ -18,7 +18,8 @@ type Bi = { EN: string; IS: string };
 type Trend = { weekStart: string; total: number; clearedPct: number | null };
 type Conf = { level: "high" | "moderate" | "low"; coverage: number };
 type Adherence = { withRead: number; squad: number; pct: number | null };
-type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; trend: Trend[] };
+type Load = { band: "building" | "sustained" | "easing" | "na"; ratio: number | null; label: Bi; briefing: Bi };
+type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; load: Load; trend: Trend[] };
 type TeamTile = Tile & { teamId: string; name: string; gender: string | null; teamType: string | null };
 type Resp = {
   date: string;
@@ -31,6 +32,12 @@ const CONF_TONE: Record<string, string> = {
   high: "bg-emerald-100 text-emerald-700",
   moderate: "bg-amber-100 text-amber-700",
   low: "bg-slate-200 text-slate-600",
+};
+const LOAD_TONE: Record<string, string> = {
+  building: "bg-amber-100 text-amber-700",
+  sustained: "bg-emerald-100 text-emerald-700",
+  easing: "bg-sky-100 text-sky-700",
+  na: "bg-slate-100 text-slate-500",
 };
 const CONF_LABEL: Record<string, Bi> = {
   high: { EN: "high confidence", IS: "mikil vissa" },
@@ -159,6 +166,15 @@ export default function ExecClubStatusPage() {
             <span><span className="font-semibold">{is ? "Fylgjast með: " : "Watch: "}</span>{watch}</span>
           </div>
         ) : null}
+
+        {/* Training load — second narrative dimension. */}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Æfingaálag" : "Training load"}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${LOAD_TONE[tile.load.band]}`}>{tx(tile.load.label)}</span>
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">{tx(tile.load.briefing)}</p>
+        </div>
 
         {/* Supporting numbers — the detail behind the words. */}
         <div className="mt-4 border-t border-slate-100 pt-3">
