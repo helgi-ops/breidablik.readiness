@@ -1,28 +1,38 @@
 "use client";
 
 /**
- * PlayerMovementCard — a PLAYER-facing, motivating view of their own IMA
- * movement for a day: jumps, high-intensity actions, direction changes (cuts),
- * and high-speed running — each vs the player's OWN recent normal. Plain
- * language, personal-norm framing. Deliberately NOT the coach/S&C signals
- * (no L/R asymmetry, no movement-drift, no clock fingerprint).
+ * PlayerMovementCard — a PLAYER-facing, motivating view of their own movement
+ * for a day, each vs the player's OWN recent normal. Capability-driven: IMA clubs
+ * see jumps / high-intensity actions / direction changes / IMA run; GPS-only (Lite)
+ * clubs see high-speed running / sprint distance / efforts / top speed — the data
+ * they genuinely receive, instead of an empty card. Plain language, personal-norm
+ * framing. Deliberately NOT the coach/S&C signals (no asymmetry, no drift).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Metric = { key: string; unit: string; today: number | null; usual: number | null; pct: number | null; tone: "up" | "steady" | "down" | "na"; baselineDays: number };
-type Resp = { ok: boolean; date: string; hasData: boolean; metrics: Metric[]; error?: string };
+type Resp = { ok: boolean; date: string; hasData: boolean; source?: "ima" | "gps"; metrics: Metric[]; error?: string };
 
 const LABEL: Record<string, { en: string; is: string }> = {
+  // IMA (Pro)
   jumps: { en: "Jumps", is: "Stökk" },
   high_intensity: { en: "High-intensity actions", is: "Háákefðar hreyfingar" },
   cuts: { en: "Direction changes", is: "Stefnubreytingar" },
   ima_run: { en: "High-speed running", is: "Háhraðahlaup" },
+  // GPS (Lite)
+  hsr: { en: "High-speed running", is: "Háhraðahlaup" },
+  sprint: { en: "Sprint distance", is: "Sprettvegalengd" },
+  efforts: { en: "High-intensity actions", is: "Háákefðar hreyfingar" },
+  top_speed: { en: "Top speed", is: "Hámarkshraði" },
 };
 
-const fmt = (v: number | null, unit: string) =>
-  v == null ? "—" : unit === "m" ? `${v.toLocaleString("en-US")} m` : v.toLocaleString("en-US");
+const fmt = (v: number | null, unit: string) => {
+  if (v == null) return "—";
+  const n = v.toLocaleString("en-US");
+  return unit ? `${n} ${unit}` : n;
+};
 
 export default function PlayerMovementCard({ date, lang }: { date: string; lang: "IS" | "EN" }) {
   const is = lang === "IS";

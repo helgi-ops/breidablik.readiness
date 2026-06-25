@@ -1,12 +1,14 @@
 /**
  * /api/player/movement?date=YYYY-MM-DD
  *
- * GET — a PLAYER-facing, motivating view of their own IMA movement for a day:
- * jumps, high-intensity actions (accel+decel efforts), change-of-direction
- * volume (cuts), and high-cadence running distance — each compared to the
- * player's OWN recent normal (28-day mean of training days). Plain language,
- * personal-norm framing; deliberately NOT the coach/S&C signals (no L/R
- * asymmetry, no movement-drift / unfamiliar-load, no clock fingerprint).
+ * GET — a PLAYER-facing, motivating view of their own movement for a day, each
+ * compared to the player's OWN recent normal (28-day mean of training days).
+ * Capability-driven, branching on the signals his data actually carries:
+ *   - IMA clubs (Pro S7): jumps, high-intensity actions, direction changes, IMA run.
+ *   - GPS-only clubs (Lite): high-speed running, sprint distance, high-intensity
+ *     efforts, top speed — the data he genuinely gets, instead of an empty card.
+ * Plain language, personal-norm framing; deliberately NOT the coach/S&C signals
+ * (no L/R asymmetry, no movement-drift / unfamiliar-load, no clock fingerprint).
  *
  * Self-scoped: a player only ever sees their own row.
  */
@@ -25,13 +27,30 @@ function addDaysISO(iso: string, n: number) {
 
 type Row = Record<string, unknown> & { date: string };
 
-// The four player-friendly IMA signals, each derived from a row.
-const METRICS = [
-  { key: "jumps", unit: "", value: (r: Row) => num(r.jumps) },
-  { key: "high_intensity", unit: "", value: (r: Row) => num(r.accel_b2_3_tot_effs_gen2) + num(r.decel_b2_3_tot_effs_gen2) },
-  { key: "cuts", unit: "", value: (r: Row) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low) },
-  { key: "ima_run", unit: "m", value: (r: Row) => num(r.ima_fr_band58_total_distance) },
-] as const;
+type MetricDef = { key: string; unit: string; value: (r: Row) => number };
+
+const codSum = (r: Row) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low)
+  + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
+
+// IMA signals (Pro S7) — the richest movement read.
+const IMA_METRICS: MetricDef[] = [
+  { key: "jumps", unit: "", value: (r) => num(r.jumps) },
+  { key: "high_intensity", unit: "", value: (r) => num(r.accel_b2_3_tot_effs_gen2) + num(r.decel_b2_3_tot_effs_gen2) },
+  { key: "cuts", unit: "", value: (r) => codSum(r) },
+  { key: "ima_run", unit: "m", value: (r) => num(r.ima_fr_band58_total_distance) },
+];
+
+// GPS signals (Lite / GPS-only) — the data the player genuinely receives.
+const GPS_METRICS: MetricDef[] = [
+  { key: "hsr", unit: "m", value: (r) => num(r.high_speed_distance) },
+  { key: "sprint", unit: "m", value: (r) => num(r.sprint_distance) },
+  { key: "efforts", unit: "", value: (r) => num(r.accel_decel_efforts) },
+  { key: "top_speed", unit: "km/h", value: (r) => num(r.max_velocity) },
+];
+
+const SELECT = "date, jumps, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, "
+  + "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, "
+  + "ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, max_velocity";
 
 export async function GET(req: Request) {
   const sb = getSupabaseAdmin();
@@ -47,17 +66,24 @@ export async function GET(req: Request) {
 
   const { data, error } = await sb
     .from("player_external_load_daily")
-    .select("date, jumps, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, ima_fr_band58_total_distance")
+    .select(SELECT)
     .eq("player_id", playerId)
     .gte("date", windowStart)
     .lte("date", refDate)
     .order("date", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = (data ?? []) as Row[];
+  const rows = (data ?? []) as unknown as Row[];
   const todayRow = rows.find((r) => String(r.date) === refDate) ?? null;
   // Baseline rows = everything strictly before the ref date.
   const priorRows = rows.filter((r) => String(r.date) < refDate);
+
+  // Capability detection (per player, NOT tier name): does his data carry IMA?
+  // If not (GPS-only / Lite), show the GPS signals he genuinely receives.
+  const hasIMA = rows.some((r) => num(r.jumps) > 0 || num(r.accel_b2_3_tot_effs_gen2) > 0
+    || num(r.decel_b2_3_tot_effs_gen2) > 0 || codSum(r) > 0);
+  const source = hasIMA ? "ima" : "gps";
+  const METRICS = hasIMA ? IMA_METRICS : GPS_METRICS;
 
   const metrics = METRICS.map((m) => {
     const todayVal = todayRow ? Math.round(m.value(todayRow)) : null;
@@ -79,7 +105,8 @@ export async function GET(req: Request) {
     ok: true,
     date: refDate,
     hasData,
+    source,
     metrics,
-    note: "Player's own IMA movement vs their recent normal. Descriptive and motivating, not an injury or risk signal.",
+    note: `Player's own ${source.toUpperCase()} movement vs their recent normal. Descriptive and motivating, not an injury or risk signal.`,
   });
 }

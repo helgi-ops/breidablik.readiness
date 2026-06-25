@@ -5036,8 +5036,11 @@ export default function PlayerClient() {
                     ) : catapultToday || catapultHistory.length ? (
                       <div className="mt-3 space-y-4">
                         {(() => {
+                          // Require a positive value (his or the team's): IMA-only
+                          // metrics (accel/decel B2-3) are present-but-0 on GPS-only
+                          // (Lite) data, so `!= null` would render spurious "0" tiles.
                           const todayTiles = todayVsTeamMetrics.filter(
-                            (item) => item.value != null || (item.teamAverage != null && item.teamAverage > 0)
+                            (item) => (item.value != null && item.value > 0) || (item.teamAverage != null && item.teamAverage > 0)
                           );
                           return todayTiles.length > 0 ? (
                             <div>
