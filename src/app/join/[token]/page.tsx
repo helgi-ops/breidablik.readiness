@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
 type InviteInfo = {
   invite: { token: string; targetRole: string; label: string | null };
@@ -88,6 +89,21 @@ export default function JoinPage() {
 
   const team = info.team;
   const isCoachInvite = info.invite.targetRole === "COACH";
+  const isExecInvite = info.invite.targetRole === "EXEC";
+
+  // EXEC (management) onboarding is self-contained: redeem the grant if already
+  // signed in, otherwise sign in and return here. It does NOT go through the
+  // player signup flow (no team/gender/sport selection — a GM just gets read access).
+  async function handleExecJoin() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { router.push(`/login?next=${encodeURIComponent(`/join/${token}`)}`); return; }
+    const res = await fetch(`/api/exec-invites/${token}/accept`, {
+      method: "POST", headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) { window.location.href = "/exec"; return; }
+    const j = await res.json().catch(() => ({}));
+    setError(j.error ?? "Ekki tókst að virkja stjórnanda-aðgang.");
+  }
   const genderLabel = team.gender ? GENDER_LABEL[team.gender] : null;
   const sportLabel = team.sport ? SPORT_LABEL[team.sport] : null;
   const teamDisplay = [team.name, genderLabel].filter(Boolean).join(" — ");
@@ -113,7 +129,7 @@ export default function JoinPage() {
           className="mx-auto mb-8 h-48 w-auto"
         />
         <h1 className="text-2xl font-semibold text-neutral-900">
-          {isCoachInvite ? "Þjálfaraboð" : "Skráðu þig í lið"}
+          {isExecInvite ? "Stjórnandaboð" : isCoachInvite ? "Þjálfaraboð" : "Skráðu þig í lið"}
         </h1>
 
         <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-5 py-4">
@@ -124,16 +140,18 @@ export default function JoinPage() {
         </div>
 
         <p className="mt-4 text-sm text-neutral-600">
-          {isCoachInvite
+          {isExecInvite
+            ? "Þú hefur fengið boð um að skoða stöðu félagsins sem stjórnandi — lesaðgangur að samantektum (engin einstaklingsgögn)."
+            : isCoachInvite
             ? "Þú hefur fengið boð um að skrá þig sem þjálfari."
             : "Þjálfarinn þinn hefur boðið þér að skrá þig í MicroPulse. Smelltu á hnappinn til að búa til aðgang."}
         </p>
 
         <button
-          onClick={() => router.push(signupUrl)}
+          onClick={() => (isExecInvite ? void handleExecJoin() : router.push(signupUrl))}
           className="mt-6 w-full rounded-2xl bg-neutral-900 px-6 py-3 text-sm font-semibold text-white hover:bg-neutral-700 transition"
         >
-          {isCoachInvite ? "Búa til þjálfaraaðgang" : "Búa til aðgang"}
+          {isExecInvite ? "Halda áfram sem stjórnandi" : isCoachInvite ? "Búa til þjálfaraaðgang" : "Búa til aðgang"}
         </button>
 
         <div className="mt-4 text-sm text-neutral-500">

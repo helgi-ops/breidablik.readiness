@@ -113,8 +113,8 @@ export async function POST(req: Request) {
     const { userId, teamId } = await requireCoach(req);
     const body = await req.json().catch(() => ({}));
     const targetRole = String(body.targetRole ?? "PLAYER").toUpperCase();
-    if (targetRole !== "PLAYER" && targetRole !== "COACH") {
-      return NextResponse.json({ error: "targetRole must be PLAYER or COACH" }, { status: 400 });
+    if (!["PLAYER", "COACH", "EXEC"].includes(targetRole)) {
+      return NextResponse.json({ error: "targetRole must be PLAYER, COACH or EXEC" }, { status: 400 });
     }
     const label = body.label ? String(body.label).trim().slice(0, 100) : null;
     const expiresInDays = Math.min(Math.max(Number(body.expiresInDays) || 90, 1), 365);

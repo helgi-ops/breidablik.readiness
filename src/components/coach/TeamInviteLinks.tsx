@@ -24,7 +24,7 @@ export default function TeamInviteLinks() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [newRole, setNewRole] = useState<"PLAYER" | "COACH">("PLAYER");
+  const [newRole, setNewRole] = useState<"PLAYER" | "COACH" | "EXEC">("PLAYER");
   const [newLabel, setNewLabel] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -141,11 +141,12 @@ export default function TeamInviteLinks() {
             <div className="flex items-center gap-2">
               <select
                 value={newRole}
-                onChange={e => setNewRole(e.target.value as "PLAYER" | "COACH")}
+                onChange={e => setNewRole(e.target.value as "PLAYER" | "COACH" | "EXEC")}
                 className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white"
               >
                 <option value="PLAYER">Leikmaður</option>
                 <option value="COACH">Þjálfari</option>
+                <option value="EXEC">Stjórnandi</option>
               </select>
               <input
                 type="text"
