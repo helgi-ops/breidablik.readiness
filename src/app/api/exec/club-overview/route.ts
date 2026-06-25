@@ -66,21 +66,31 @@ function confidenceFor(withRead: number, squad: number): { level: ConfidenceLeve
   return { level, coverage };
 }
 
-function verdict(a: Avail, adherencePct: number | null): { EN: string; IS: string } {
-  if (a.total === 0) {
-    return { EN: "No readings yet today — check-ins still coming in.", IS: "Engir lestrar enn í dag — innskráningar enn að berast." };
+const COVERAGE_GATE = 0.5; // below this, too few readings to call squad availability
+
+function verdict(a: Avail, adh: { withRead: number; squad: number; pct: number | null }): { EN: string; IS: string } {
+  const { withRead, squad, pct } = adh;
+  if (withRead === 0) {
+    return { EN: "No readings in yet today — check-ins still coming.", IS: "Engir lestrar komnir í dag — innskráningar enn að berast." };
   }
-  const clearedPct = a.cleared / a.total;
+  // Coverage gate: don't claim a squad-wide verdict off a handful of players —
+  // lead with the data gap so "strong" never appears on 2-of-23 coverage.
+  const coverage = squad > 0 ? withRead / squad : 1;
+  if (coverage < COVERAGE_GATE) {
+    return {
+      EN: `Only ${withRead} of ${squad} players have a reading today (${pct}%) — too few to judge availability yet.`,
+      IS: `Aðeins ${withRead} af ${squad} leikmönnum með lestur í dag (${pct}%) — of fáir til að meta mönnun.`,
+    };
+  }
+  const clearedPct = a.total ? a.cleared / a.total : 0;
   const wordEN = clearedPct >= 0.8 ? "strong" : clearedPct >= 0.6 ? "solid" : clearedPct >= 0.4 ? "mixed" : "stretched";
   const wordIS = clearedPct >= 0.8 ? "sterk" : clearedPct >= 0.6 ? "góð" : clearedPct >= 0.4 ? "blönduð" : "tæp";
   const flagged = a.managed + a.unavailable;
-  const tailEN = flagged === 0 ? "everyone cleared" : `${a.managed} managed${a.unavailable ? `, ${a.unavailable} unavailable` : ""}`;
-  const tailIS = flagged === 0 ? "allir klárir" : `${a.managed} í stýringu${a.unavailable ? `, ${a.unavailable} ófáanleg` : ""}`;
-  const adhEN = adherencePct != null ? ` · ${adherencePct}% checked in.` : ".";
-  const adhIS = adherencePct != null ? ` · ${adherencePct}% innskráð.` : ".";
+  const tailEN = flagged === 0 ? "all assessed players cleared" : `${a.managed} managed${a.unavailable ? `, ${a.unavailable} unavailable` : ""}`;
+  const tailIS = flagged === 0 ? "allir metnir klárir" : `${a.managed} í stýringu${a.unavailable ? `, ${a.unavailable} ófáanleg` : ""}`;
   return {
-    EN: `Squad availability ${wordEN}; ${tailEN} today${adhEN}`,
-    IS: `Mönnun liðs ${wordIS}; ${tailIS} í dag${adhIS}`,
+    EN: `Squad availability ${wordEN}; ${tailEN}. ${pct}% checked in.`,
+    IS: `Mönnun liðs ${wordIS}; ${tailIS}. ${pct}% innskráð.`,
   };
 }
 
@@ -149,7 +159,7 @@ export async function GET(req: NextRequest) {
       availability: avail,
       adherence: { withRead: today_.withRead, squad, pct: adherencePct },
       confidence: confidenceFor(today_.withRead, squad),
-      verdict: verdict(avail, adherencePct),
+      verdict: verdict(avail, { withRead: today_.withRead, squad, pct: adherencePct }),
       trend: buildTrend(trendByTeam.get(t.id)),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -183,7 +193,7 @@ export async function GET(req: NextRequest) {
       availability: rollAvail,
       adherence: { withRead: rollWithRead, squad: rollSquad, pct: rollAdherencePct },
       confidence: confidenceFor(rollWithRead, rollSquad),
-      verdict: verdict(rollAvail, rollAdherencePct),
+      verdict: verdict(rollAvail, { withRead: rollWithRead, squad: rollSquad, pct: rollAdherencePct }),
       trend: buildTrend(rollTrendAcc),
     },
     teams,
