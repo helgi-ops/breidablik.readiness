@@ -962,6 +962,20 @@ function PWABottomNav({
                 );
               })}
             </div>
+            {/* Sign out — always reachable here in the mobile shell (the
+                desktop header's sign-out isn't shown in the PWA layout). */}
+            <div className="px-3 pb-3">
+              <button
+                onClick={async () => {
+                  setMoreOpen(false);
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+                className="w-full rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+              >
+                {lang === "IS" ? "Útskrá" : "Sign out"}
+              </button>
+            </div>
           </div>
         </>
       )}
