@@ -470,6 +470,17 @@ export function CoachSidebar({
             />
           )}
         </div>
+        {/* Sticky footer with sign-out — same as the football-team sidebar.
+            The PT variant was missing it, leaving PT coaches no way to log out. */}
+        <div className="shrink-0 border-t border-slate-200 bg-white p-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <button
+            type="button"
+            onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            {lang === "IS" ? "Útskrá" : "Sign out"}
+          </button>
+        </div>
       </div>
     );
   }
