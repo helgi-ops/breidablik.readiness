@@ -101,6 +101,34 @@ export function buildBriefing(a: Avail, adh: Adherence, trend: Array<{ clearedPc
   };
 }
 
+/**
+ * Injury burden — AGGREGATE only. A GM tracks how many are sidelined and whether
+ * it's improving, NOT who or what (no names, body parts, diagnoses — that stays
+ * with the medical staff). Counts in, plain language out.
+ */
+export type InjurySummary = { out: number; newRecent: number; returnedRecent: number };
+
+export function injuryNarrative(inj: InjurySummary): { label: Bi; briefing: Bi } {
+  const { out, newRecent, returnedRecent } = inj;
+  if (out === 0 && newRecent === 0 && returnedRecent === 0) {
+    return {
+      label: { EN: "None out", IS: "Engir frá" },
+      briefing: { EN: "No players are currently sidelined through injury.", IS: "Enginn leikmaður er frá vegna meiðsla núna." },
+    };
+  }
+  const headEN = out === 0 ? "No players are currently out through injury" : `${out} ${out === 1 ? "player is" : "players are"} currently out through injury`;
+  const headIS = out === 0 ? "Enginn er frá vegna meiðsla núna" : `${out} ${out === 1 ? "leikmaður er" : "leikmenn eru"} frá vegna meiðsla núna`;
+  const bEN: string[] = [], bIS: string[] = [];
+  if (newRecent > 0) { bEN.push(`${newRecent} new in the last two weeks`); bIS.push(`${newRecent} ${newRecent === 1 ? "nýtt tilfelli" : "ný tilfelli"} síðustu tvær vikur`); }
+  if (returnedRecent > 0) { bEN.push(`${returnedRecent} returned recently`); bIS.push(`${returnedRecent} ${returnedRecent === 1 ? "snéri" : "snéru"} aftur nýlega`); }
+  const tailEN = bEN.length ? ` — ${bEN.join(", ")}.` : ".";
+  const tailIS = bIS.length ? ` — ${bIS.join(", ")}.` : ".";
+  return {
+    label: { EN: out === 0 ? "None out" : `${out} out`, IS: out === 0 ? "Engir frá" : `${out} frá` },
+    briefing: { EN: `${headEN}${tailEN}`, IS: `${headIS}${tailIS}` },
+  };
+}
+
 export type LoadBand = "building" | "sustained" | "easing" | "na";
 
 /**

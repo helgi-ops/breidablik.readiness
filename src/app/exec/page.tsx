@@ -19,7 +19,8 @@ type Trend = { weekStart: string; total: number; clearedPct: number | null };
 type Conf = { level: "high" | "moderate" | "low"; coverage: number };
 type Adherence = { withRead: number; squad: number; pct: number | null };
 type Load = { band: "building" | "sustained" | "easing" | "na"; ratio: number | null; label: Bi; briefing: Bi };
-type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; load: Load; trend: Trend[] };
+type Injury = { label: Bi; briefing: Bi; out: number; newRecent: number; returnedRecent: number };
+type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; load: Load; injury: Injury; trend: Trend[] };
 type TeamTile = Tile & { teamId: string; name: string; gender: string | null; teamType: string | null };
 type Resp = {
   date: string;
@@ -167,6 +168,15 @@ export default function ExecClubStatusPage() {
           </div>
         ) : null}
 
+        {/* Injury burden — aggregate only (counts, no names/diagnoses). */}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Meiðsli" : "Injuries"}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tile.injury.out === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{tx(tile.injury.label)}</span>
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">{tx(tile.injury.briefing)}</p>
+        </div>
+
         {/* Training load — second narrative dimension. */}
         <div className="mt-3 border-t border-slate-100 pt-3">
           <div className="flex items-center gap-2">
@@ -214,8 +224,8 @@ export default function ExecClubStatusPage() {
 
       <p className="text-[10px] leading-snug text-slate-400">
         {is
-          ? "„Aðsókn“ = hlutfall leikmanna með lestur í dag (wellness á Pro, GPS á Lite) — sýnir hve mikið kerfið er notað. „Klárir/í stýringu/ófáanleg“ byggir á kanónísku readiness-litunum (þeim sömu og þjálfarar sjá). Aðeins talningar — engin svefn-, eymsla- eða meiðsla-gögn per leikmann."
-          : "“Adherence” = share of players with a reading today (wellness on Pro, GPS on Lite) — shows how much the system is being used. “Cleared/managed/unavailable” uses the canonical readiness colours (the same ones coaches see). Counts only — no per-player sleep, soreness, or injury data."}
+          ? "„Aðsókn“ = hlutfall leikmanna með lestur í dag (wellness á Pro, GPS á Lite) — sýnir hve mikið kerfið er notað. „Klárir/í stýringu/ófáanleg“ byggir á kanónísku readiness-litunum (þeim sömu og þjálfarar sjá). Meiðsli eru sýnd sem fjöldi (frá / ný / til baka) — engin nöfn, greiningar né líkamshlutar; sú smáatriði eru hjá læknateymi. Aðeins talningar — engin einstaklings heilsugögn."
+          : "“Adherence” = share of players with a reading today (wellness on Pro, GPS on Lite) — shows how much the system is being used. “Cleared/managed/unavailable” uses the canonical readiness colours (the same ones coaches see). Injuries are shown as counts (out / new / returned) — no names, diagnoses or body parts; that detail stays with the medical staff. Counts only — no individual health data."}
       </p>
     </div>
   );

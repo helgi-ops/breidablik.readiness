@@ -20,8 +20,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
-  availabilityVerdict as verdict, buildBriefing, confidenceFor, loadTrajectory,
-  type Avail,
+  availabilityVerdict as verdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory,
+  type Avail, type InjurySummary,
 } from "@/lib/micropulse/execBriefing";
 
 export const runtime = "nodejs";
@@ -74,11 +74,14 @@ export async function GET(req: NextRequest) {
   const loadFrom = addDaysISO(today, -28); // acute/chronic window for load trajectory
   const acuteFrom = addDaysISO(today, -7);
 
-  const [teamsRes, playersRes, viewRes, loadRes] = await Promise.all([
+  const [teamsRes, playersRes, viewRes, loadRes, injRes] = await Promise.all([
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
     supabase.from("players").select("team_id").in("team_id", teamIds).eq("is_active", true),
     supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
     supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).gte("date", loadFrom).lte("date", today).limit(20000),
+    // Injuries — counts only. We never select body_part / injury_type / notes;
+    // status + dates are aggregated server-side and only totals are returned.
+    supabase.from("player_injuries").select("team_id, status, injury_date, actual_return_date").in("team_id", teamIds),
   ]);
 
   const teamsMeta = (teamsRes.data ?? []) as Array<{ id: string; name: string | null; gender: string | null; team_type: string | null; club_short_name: string | null }>;
@@ -136,6 +139,19 @@ export async function GET(req: NextRequest) {
     return loadTrajectory(acc.aN ? acc.aSum / acc.aN : null, acc.cN ? acc.cSum / acc.cN : null, acc.days.size);
   };
 
+  // Injury burden — aggregate counts per team (currently out, new + returned in 14d).
+  const injFrom = addDaysISO(today, -14);
+  const injByTeam = new Map<string, InjurySummary>();
+  for (const r of (injRes.data ?? []) as Array<{ team_id: string; status: string | null; injury_date: string | null; actual_return_date: string | null }>) {
+    const tid = String(r.team_id);
+    const acc = injByTeam.get(tid) ?? { out: 0, newRecent: 0, returnedRecent: 0 };
+    if (String(r.status ?? "").toLowerCase() === "injured") acc.out += 1;
+    if (r.injury_date && String(r.injury_date) >= injFrom) acc.newRecent += 1;
+    if (r.actual_return_date && String(r.actual_return_date) >= injFrom) acc.returnedRecent += 1;
+    injByTeam.set(tid, acc);
+  }
+  const teamInjury = (tid: string): InjurySummary => injByTeam.get(tid) ?? { out: 0, newRecent: 0, returnedRecent: 0 };
+
   const teams = teamsMeta.map((t) => {
     const today_ = todayByTeam.get(t.id) ?? { ...emptyAvail(), withRead: 0 };
     const squad = squadByTeam.get(t.id) ?? today_.withRead;
@@ -156,6 +172,7 @@ export async function GET(req: NextRequest) {
       briefing,
       watch,
       load: teamLoad(t.id),
+      injury: { ...injuryNarrative(teamInjury(t.id)), ...teamInjury(t.id) },
       trend,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -187,6 +204,11 @@ export async function GET(req: NextRequest) {
   for (const acc of loadByTeam.values()) { raSum += acc.aSum; raN += acc.aN; rcSum += acc.cSum; rcN += acc.cN; for (const d of acc.days) rDays.add(d); }
   const rollLoad = loadTrajectory(raN ? raSum / raN : null, rcN ? rcSum / rcN : null, rDays.size);
 
+  // Roll-up injury — sum the per-team aggregate counts across the club.
+  const rollInjSumm: InjurySummary = { out: 0, newRecent: 0, returnedRecent: 0 };
+  for (const s of injByTeam.values()) { rollInjSumm.out += s.out; rollInjSumm.newRecent += s.newRecent; rollInjSumm.returnedRecent += s.returnedRecent; }
+  const rollInjury = { ...injuryNarrative(rollInjSumm), ...rollInjSumm };
+
   return NextResponse.json({
     date: today,
     club: {
@@ -201,6 +223,7 @@ export async function GET(req: NextRequest) {
       briefing: rollBrief.briefing,
       watch: rollBrief.watch,
       load: rollLoad,
+      injury: rollInjury,
       trend: rollTrend,
     },
     teams,

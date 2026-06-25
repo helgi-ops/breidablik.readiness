@@ -7,7 +7,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { availabilityVerdict, buildBriefing, confidenceFor, loadTrajectory, trendPhrase } from "../execBriefing";
+import { availabilityVerdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory, trendPhrase } from "../execBriefing";
 
 const avail = (cleared, managed = 0, unavailable = 0) => ({ cleared, managed, unavailable, total: cleared + managed + unavailable });
 
@@ -82,6 +82,24 @@ describe("loadTrajectory", () => {
   });
   it("sustained when acute ~ chronic", () => {
     expect(loadTrajectory(290, 300, 20).band).toBe("sustained");
+  });
+});
+
+describe("injuryNarrative — aggregate, no detail", () => {
+  it("none out → reassuring, no counts leaked", () => {
+    const { label, briefing } = injuryNarrative({ out: 0, newRecent: 0, returnedRecent: 0 });
+    expect(label.EN).toMatch(/none/i);
+    expect(briefing.EN).toMatch(/no players are currently sidelined/i);
+  });
+  it("summarises out + new + returned in plain language", () => {
+    const { label, briefing } = injuryNarrative({ out: 3, newRecent: 1, returnedRecent: 2 });
+    expect(label.EN).toBe("3 out");
+    expect(briefing.EN).toMatch(/3 players are currently out through injury/i);
+    expect(briefing.EN).toMatch(/1 new in the last two weeks/i);
+    expect(briefing.EN).toMatch(/2 returned recently/i);
+  });
+  it("singular grammar for one player", () => {
+    expect(injuryNarrative({ out: 1, newRecent: 0, returnedRecent: 0 }).briefing.EN).toMatch(/1 player is currently out/i);
   });
 });
 
