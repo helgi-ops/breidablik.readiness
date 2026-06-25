@@ -433,7 +433,7 @@ export function CoachSidebar({
           </Link>
         </nav>
 
-        <div className="flex-1 overflow-y-auto px-3 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <Section
             label={lang === "IS" ? "Styrktarþjálfun" : "Strength training"}
             links={ptStrengthLinks}
@@ -529,7 +529,7 @@ export function CoachSidebar({
       </nav>
 
       {/* Categorised sections */}
-      <div className="flex-1 overflow-y-auto px-3 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {!hideWellness && (
           <Section
             label={lang === "IS" ? "Samskipti" : "Communication"}
