@@ -18,14 +18,12 @@ type Bi = { EN: string; IS: string };
 type Trend = { weekStart: string; total: number; clearedPct: number | null };
 type Conf = { level: "high" | "moderate" | "low"; coverage: number };
 type Adherence = { withRead: number; squad: number; pct: number | null };
-type TeamTile = {
-  teamId: string; name: string; gender: string | null; teamType: string | null;
-  availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; trend: Trend[];
-};
+type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; trend: Trend[] };
+type TeamTile = Tile & { teamId: string; name: string; gender: string | null; teamType: string | null };
 type Resp = {
   date: string;
   club: { name: string | null; teamCount: number };
-  rollup: { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; trend: Trend[] };
+  rollup: Tile;
   teams: TeamTile[];
 };
 
@@ -140,21 +138,38 @@ export default function ExecClubStatusPage() {
     );
   };
 
-  const StatusCard = ({ title, gender, tile, hero }: { title: string; gender?: string | null; tile: { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; trend: Trend[] }; hero?: boolean }) => (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${hero ? "p-5" : "p-4"}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <span className={`font-semibold text-slate-900 ${hero ? "text-base" : ""}`}>{title}</span>
-          {gender ? <span className="ml-1.5 text-[10px] uppercase text-slate-400">{gender}</span> : null}
+  const StatusCard = ({ title, gender, tile, hero }: { title: string; gender?: string | null; tile: Tile; hero?: boolean }) => {
+    const watch = tx(tile.watch);
+    return (
+      <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${hero ? "p-5" : "p-4"}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <span className={`font-semibold text-slate-900 ${hero ? "text-base" : ""}`}>{title}</span>
+            {gender ? <span className="ml-1.5 text-[10px] uppercase text-slate-400">{gender}</span> : null}
+          </div>
+          <ConfChip c={tile.confidence} />
         </div>
-        <ConfChip c={tile.confidence} />
+
+        {/* WORDS lead — verdict headline, then the plain-language briefing + what to watch. */}
+        <p className={`mt-1.5 font-bold text-slate-900 ${hero ? "text-lg" : "text-[15px]"}`}>{tx(tile.verdict)}</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">{tx(tile.briefing)}</p>
+        {watch ? (
+          <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+            <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /></svg>
+            <span><span className="font-semibold">{is ? "Fylgjast með: " : "Watch: "}</span>{watch}</span>
+          </div>
+        ) : null}
+
+        {/* Supporting numbers — the detail behind the words. */}
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Tölurnar á bak við" : "The numbers behind it"}</div>
+          <AvailRow a={tile.availability} />
+          <div className="mt-3"><Adherence adh={tile.adherence} /></div>
+          <div className="mt-4 max-w-md"><TrendBars trend={tile.trend} /></div>
+        </div>
       </div>
-      <p className={`mt-1.5 font-semibold text-slate-900 ${hero ? "text-lg" : "text-[15px]"}`}>{tx(tile.verdict)}</p>
-      <div className="mt-3"><AvailRow a={tile.availability} /></div>
-      <div className="mt-3"><Adherence adh={tile.adherence} /></div>
-      <div className="mt-4 max-w-md"><TrendBars trend={tile.trend} /></div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-5">

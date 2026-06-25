@@ -59,6 +59,8 @@ function classify(finalFlag: unknown, finalColor: unknown): Bucket {
 type Avail = { cleared: number; managed: number; unavailable: number; total: number };
 const emptyAvail = (): Avail => ({ cleared: 0, managed: 0, unavailable: 0, total: 0 });
 
+type Bi = { EN: string; IS: string };
+
 type ConfidenceLevel = "high" | "moderate" | "low";
 function confidenceFor(withRead: number, squad: number): { level: ConfidenceLevel; coverage: number } {
   const coverage = squad > 0 ? Math.round((withRead / squad) * 100) / 100 : 0;
@@ -91,6 +93,64 @@ function verdict(a: Avail, adh: { withRead: number; squad: number; pct: number |
   return {
     EN: `Squad availability ${wordEN}; ${tailEN}. ${pct}% checked in.`,
     IS: `Mönnun liðs ${wordIS}; ${tailIS}. ${pct}% innskráð.`,
+  };
+}
+
+/** Plain-language trend phrase from the weekly cleared% series (or null). */
+function trendPhrase(trend: Array<{ clearedPct: number | null }>): Bi | null {
+  const pts = trend.map((t) => t.clearedPct).filter((x): x is number => x != null);
+  if (pts.length < 3) return null;
+  const recent = pts.slice(-2);
+  const prior = pts.slice(-4, -2);
+  if (!prior.length) return null;
+  const ra = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const pa = prior.reduce((a, b) => a + b, 0) / prior.length;
+  const lvl = Math.round(ra), d = ra - pa;
+  if (d > 8) return { EN: `improved to about ${lvl}% cleared recently`, IS: `batnað í um ${lvl}% klára nýlega` };
+  if (d < -8) return { EN: `slipped to about ${lvl}% cleared recently`, IS: `lækkað í um ${lvl}% klára nýlega` };
+  return { EN: `held steady around ${lvl}% cleared`, IS: `haldist stöðug í um ${lvl}% klárum` };
+}
+
+/**
+ * A short plain-language briefing for a GM/board reader: what the numbers mean and
+ * what to watch — not jargon, not a chart. Deterministic (rules, not AI).
+ */
+function buildBriefing(a: Avail, adh: { withRead: number; squad: number; pct: number | null }, trend: Array<{ clearedPct: number | null }>): { briefing: Bi; watch: Bi } {
+  const { withRead, squad, pct } = adh;
+  const tw = trendPhrase(trend);
+  const flagged = a.managed + a.unavailable;
+
+  if (withRead === 0) {
+    return {
+      briefing: { EN: "No players have a reading yet today. Check-ins and GPS uploads usually arrive through the day, so this will fill in.", IS: "Enginn leikmaður er með lestur enn í dag. Innskráningar og GPS berast yfirleitt yfir daginn, svo þetta fyllist inn." },
+      watch: { EN: "", IS: "" },
+    };
+  }
+
+  const coverage = squad > 0 ? withRead / squad : 1;
+  if (coverage < COVERAGE_GATE) {
+    return {
+      briefing: {
+        EN: `Only ${withRead} of ${squad} players have checked in or produced data today, so this is a small sample — not a squad-wide picture. Of those, ${a.cleared} ${a.cleared === 1 ? "is" : "are"} cleared${flagged ? ` and ${flagged} flagged` : ""}. The first thing to move is participation: until more of the squad is logging data, the availability picture${tw ? " and its trend" : ""} can't be relied on.`,
+        IS: `Aðeins ${withRead} af ${squad} leikmönnum hafa skráð sig eða skilað gögnum í dag, svo þetta er lítið úrtak — ekki heildarmynd. Af þeim ${a.cleared === 1 ? "er" : "eru"} ${a.cleared} klár${a.cleared === 1 ? "" : "ir"}${flagged ? ` og ${flagged} flögguð` : ""}. Fyrsta skrefið er þátttaka: þar til fleiri skrá gögn er ekki hægt að treysta mönnunar-myndinni${tw ? " eða þróun hennar" : ""}.`,
+      },
+      watch: {
+        EN: `Watch adherence — at ${pct}% today, the system isn't being used enough to give a reliable read. Worth raising with the staff.`,
+        IS: `Fylgstu með aðsókn — í ${pct}% í dag er kerfið ekki nógu mikið notað til að gefa áreiðanlega mynd. Vert að ræða við þjálfarateymið.`,
+      },
+    };
+  }
+
+  const sampleEN = coverage >= 0.8 ? "a full picture of the squad" : "a fair sample of the squad";
+  const sampleIS = coverage >= 0.8 ? "heildarmynd af hópnum" : "sæmilegt úrtak af hópnum";
+  return {
+    briefing: {
+      EN: `${withRead} of ${squad} players have a reading today (${pct}%), ${sampleEN}. ${a.cleared} ${a.cleared === 1 ? "is" : "are"} cleared${flagged ? `, with ${flagged} being managed by the staff` : " — nobody flagged"}.${tw ? ` Over recent weeks availability has ${tw.EN}.` : ""}`,
+      IS: `${withRead} af ${squad} leikmönnum eru með lestur í dag (${pct}%), ${sampleIS}. ${a.cleared} ${a.cleared === 1 ? "er" : "eru"} klár${a.cleared === 1 ? "" : "ir"}${flagged ? `, og ${flagged} í stýringu hjá þjálfurum` : " — enginn flaggaður"}.${tw ? ` Síðustu vikur hefur mönnun ${tw.IS}.` : ""}`,
+    },
+    watch: flagged > 0
+      ? { EN: `The ${flagged} flagged player${flagged > 1 ? "s are" : " is"} being managed — normal load management, not an alarm.`, IS: `${flagged} flaggaðir leikmenn eru í stýringu — eðlileg álags-stýring, ekki viðvörun.` }
+      : { EN: "Nothing flagged today — the squad looks well managed.", IS: "Ekkert flaggað í dag — hópurinn lítur vel út." },
   };
 }
 
@@ -151,16 +211,21 @@ export async function GET(req: NextRequest) {
     const squad = squadByTeam.get(t.id) ?? today_.withRead;
     const adherencePct = squad > 0 ? Math.round((today_.withRead / squad) * 100) : null;
     const avail: Avail = { cleared: today_.cleared, managed: today_.managed, unavailable: today_.unavailable, total: today_.total };
+    const adherence = { withRead: today_.withRead, squad, pct: adherencePct };
+    const trend = buildTrend(trendByTeam.get(t.id));
+    const { briefing, watch } = buildBriefing(avail, adherence, trend);
     return {
       teamId: t.id,
       name: t.name ?? "—",
       gender: t.gender,
       teamType: t.team_type,
       availability: avail,
-      adherence: { withRead: today_.withRead, squad, pct: adherencePct },
+      adherence,
       confidence: confidenceFor(today_.withRead, squad),
-      verdict: verdict(avail, { withRead: today_.withRead, squad, pct: adherencePct }),
-      trend: buildTrend(trendByTeam.get(t.id)),
+      verdict: verdict(avail, adherence),
+      briefing,
+      watch,
+      trend,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -182,6 +247,9 @@ export async function GET(req: NextRequest) {
     a[bucket] += 1; a.total += 1; rollTrendAcc.set(wk, a);
   }
   const rollAdherencePct = rollSquad > 0 ? Math.round((rollWithRead / rollSquad) * 100) : null;
+  const rollAdherence = { withRead: rollWithRead, squad: rollSquad, pct: rollAdherencePct };
+  const rollTrend = buildTrend(rollTrendAcc);
+  const rollBrief = buildBriefing(rollAvail, rollAdherence, rollTrend);
 
   return NextResponse.json({
     date: today,
@@ -191,10 +259,12 @@ export async function GET(req: NextRequest) {
     },
     rollup: {
       availability: rollAvail,
-      adherence: { withRead: rollWithRead, squad: rollSquad, pct: rollAdherencePct },
+      adherence: rollAdherence,
       confidence: confidenceFor(rollWithRead, rollSquad),
-      verdict: verdict(rollAvail, { withRead: rollWithRead, squad: rollSquad, pct: rollAdherencePct }),
-      trend: buildTrend(rollTrendAcc),
+      verdict: verdict(rollAvail, rollAdherence),
+      briefing: rollBrief.briefing,
+      watch: rollBrief.watch,
+      trend: rollTrend,
     },
     teams,
     note: "Read-only management view. Aggregates only — no individual health or wellness data. Canonical readiness colour (v_coach_readiness_today_v8), counts only.",
