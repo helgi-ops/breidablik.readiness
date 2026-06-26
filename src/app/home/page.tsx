@@ -91,7 +91,7 @@ const COPY: Record<Lang, CopyShape> = {
     },
     hero: {
       title: "Know who's ready — and why.",
-      sub: "One daily view for coaching, performance, and medical staff. Every verdict is explained in plain language and traceable to the data behind it — built on real GPS, FMP, and force-plate signals from your squad.",
+      sub: "One daily view for coaching, performance, and medical staff — built on the GPS data you already own. Every verdict is explained in plain language and traceable to the data behind it, with no analyst required.",
       primary: "Start with Free",
       secondary: "Book a demo",
       trust: "Explainable Performance Intelligence",
@@ -255,7 +255,7 @@ const COPY: Record<Lang, CopyShape> = {
     },
     hero: {
       title: "Veistu hverjir eru tilbúnir — og hvers vegna.",
-      sub: "Eitt daglegt yfirlit fyrir þjálfara-, performance- og medical staff. Hver niðurstaða er útskýrð á mannamáli og rekjanleg til gagnanna á bak við hana — byggt á raunverulegum GPS, FMP og kraftplatamerkjum frá hópnum þínum.",
+      sub: "Eitt daglegt yfirlit fyrir þjálfara-, performance- og medical staff — byggt á GPS-gögnunum sem þú átt nú þegar. Hver niðurstaða er útskýrð á mannamáli og rekjanleg til gagnanna á bak við hana, án greiningarmanns.",
       primary: "Byrjaðu ókeypis",
       secondary: "Bókaðu demo",
       trust: "Útskýranleg ákvarðanataka",
