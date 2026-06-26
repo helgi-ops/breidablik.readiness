@@ -7,7 +7,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { availabilityVerdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory, trendPhrase } from "../execBriefing";
+import { availabilityVerdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory, recoveryNarrative, trendPhrase } from "../execBriefing";
 
 const avail = (cleared, managed = 0, unavailable = 0) => ({ cleared, managed, unavailable, total: cleared + managed + unavailable });
 
@@ -87,19 +87,37 @@ describe("loadTrajectory", () => {
 
 describe("injuryNarrative — aggregate, no detail", () => {
   it("none out → reassuring, no counts leaked", () => {
-    const { label, briefing } = injuryNarrative({ out: 0, newRecent: 0, returnedRecent: 0 });
+    const { label, briefing } = injuryNarrative({ out: 0, newRecent: 0, returnedRecent: 0, returningSoon: 0 });
     expect(label.EN).toMatch(/none/i);
     expect(briefing.EN).toMatch(/no players are currently sidelined/i);
   });
-  it("summarises out + new + returned in plain language", () => {
-    const { label, briefing } = injuryNarrative({ out: 3, newRecent: 1, returnedRecent: 2 });
+  it("summarises out + new + returned + expected-back in plain language", () => {
+    const { label, briefing } = injuryNarrative({ out: 3, newRecent: 1, returnedRecent: 2, returningSoon: 1 });
     expect(label.EN).toBe("3 out");
     expect(briefing.EN).toMatch(/3 players are currently out through injury/i);
     expect(briefing.EN).toMatch(/1 new in the last two weeks/i);
     expect(briefing.EN).toMatch(/2 returned recently/i);
+    expect(briefing.EN).toMatch(/1 expected back within a week/i);
   });
   it("singular grammar for one player", () => {
-    expect(injuryNarrative({ out: 1, newRecent: 0, returnedRecent: 0 }).briefing.EN).toMatch(/1 player is currently out/i);
+    expect(injuryNarrative({ out: 1, newRecent: 0, returnedRecent: 0, returningSoon: 0 }).briefing.EN).toMatch(/1 player is currently out/i);
+  });
+});
+
+describe("recoveryNarrative — post-match rebound", () => {
+  it("unavailable when no recent match (or match too old)", () => {
+    expect(recoveryNarrative({ rebounded: 0, carrying: 0, assessed: 0, matchDate: null, daysAgo: null }).available).toBe(false);
+    expect(recoveryNarrative({ rebounded: 5, carrying: 1, assessed: 6, matchDate: "2026-06-01", daysAgo: 20 }).available).toBe(false);
+  });
+  it("recovered well when most rebounded", () => {
+    const r = recoveryNarrative({ rebounded: 16, carrying: 2, assessed: 18, matchDate: "2026-06-23", daysAgo: 2 });
+    expect(r.available).toBe(true);
+    expect(r.label.EN).toMatch(/recovered well/i);
+    expect(r.briefing.EN).toMatch(/16 of 18 have rebounded to green/i);
+    expect(r.briefing.EN).toMatch(/2 still carrying fatigue/i);
+  });
+  it("still recovering when many carry fatigue", () => {
+    expect(recoveryNarrative({ rebounded: 4, carrying: 10, assessed: 14, matchDate: "2026-06-23", daysAgo: 2 }).label.EN).toMatch(/still recovering/i);
   });
 });
 

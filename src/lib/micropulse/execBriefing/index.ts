@@ -106,10 +106,10 @@ export function buildBriefing(a: Avail, adh: Adherence, trend: Array<{ clearedPc
  * it's improving, NOT who or what (no names, body parts, diagnoses — that stays
  * with the medical staff). Counts in, plain language out.
  */
-export type InjurySummary = { out: number; newRecent: number; returnedRecent: number };
+export type InjurySummary = { out: number; newRecent: number; returnedRecent: number; returningSoon: number };
 
 export function injuryNarrative(inj: InjurySummary): { label: Bi; briefing: Bi } {
-  const { out, newRecent, returnedRecent } = inj;
+  const { out, newRecent, returnedRecent, returningSoon } = inj;
   if (out === 0 && newRecent === 0 && returnedRecent === 0) {
     return {
       label: { EN: "None out", IS: "Engir frá" },
@@ -121,11 +121,41 @@ export function injuryNarrative(inj: InjurySummary): { label: Bi; briefing: Bi }
   const bEN: string[] = [], bIS: string[] = [];
   if (newRecent > 0) { bEN.push(`${newRecent} new in the last two weeks`); bIS.push(`${newRecent} ${newRecent === 1 ? "nýtt tilfelli" : "ný tilfelli"} síðustu tvær vikur`); }
   if (returnedRecent > 0) { bEN.push(`${returnedRecent} returned recently`); bIS.push(`${returnedRecent} ${returnedRecent === 1 ? "snéri" : "snéru"} aftur nýlega`); }
+  if (returningSoon > 0) { bEN.push(`${returningSoon} expected back within a week`); bIS.push(`${returningSoon} ${returningSoon === 1 ? "væntanlegur" : "væntanlegir"} til baka í vikunni`); }
   const tailEN = bEN.length ? ` — ${bEN.join(", ")}.` : ".";
   const tailIS = bIS.length ? ` — ${bIS.join(", ")}.` : ".";
   return {
     label: { EN: out === 0 ? "None out" : `${out} out`, IS: out === 0 ? "Engir frá" : `${out} frá` },
     briefing: { EN: `${headEN}${tailEN}`, IS: `${headIS}${tailIS}` },
+  };
+}
+
+/**
+ * Post-match recovery — how the squad rebounded after the last match. Aggregate
+ * readiness colours in the days after the game: cleared = rebounded, managed/
+ * unavailable = still carrying fatigue. Directional, not a medical recovery test.
+ */
+export type RecoverySummary = { rebounded: number; carrying: number; assessed: number; matchDate: string | null; daysAgo: number | null };
+
+export function recoveryNarrative(r: RecoverySummary): { available: boolean; label: Bi; briefing: Bi } {
+  if (!r.matchDate || r.daysAgo == null || r.daysAgo > 6 || r.assessed === 0) {
+    return {
+      available: false,
+      label: { EN: "No recent match", IS: "Enginn nýlegur leikur" },
+      briefing: { EN: "No match in the last few days to read recovery from.", IS: "Enginn leikur síðustu daga til að lesa endurheimt af." },
+    };
+  }
+  const pct = r.assessed ? r.rebounded / r.assessed : 0;
+  const label: Bi = pct >= 0.8 ? { EN: "Recovered well", IS: "Góð endurheimt" }
+    : pct >= 0.5 ? { EN: "Mostly back", IS: "Að mestu komnir" }
+      : { EN: "Still recovering", IS: "Enn að jafna sig" };
+  return {
+    available: true,
+    label,
+    briefing: {
+      EN: `${r.daysAgo} day${r.daysAgo === 1 ? "" : "s"} after the last match, ${r.rebounded} of ${r.assessed} ${r.rebounded === 1 ? "has" : "have"} rebounded to green${r.carrying ? `; ${r.carrying} still carrying fatigue` : ""}.`,
+      IS: `${r.daysAgo} ${r.daysAgo === 1 ? "degi" : "dögum"} eftir síðasta leik ${r.rebounded === 1 ? "hefur" : "hafa"} ${r.rebounded} af ${r.assessed} náð sér í grænt${r.carrying ? `; ${r.carrying} enn þreyttir` : ""}.`,
+    },
   };
 }
 

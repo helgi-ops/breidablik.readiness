@@ -21,7 +21,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   availabilityVerdict as verdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory,
-  type Avail, type InjurySummary,
+  recoveryNarrative,
+  type Avail, type InjurySummary, type RecoverySummary,
 } from "@/lib/micropulse/execBriefing";
 
 export const runtime = "nodejs";
@@ -45,7 +46,7 @@ async function authenticateExec(req: NextRequest) {
   const { data: et } = await supabase.from("exec_teams").select("team_id").eq("exec_id", userRes.user.id);
   const teamIds = (et ?? []).map((r) => String((r as { team_id: string }).team_id));
   if (!teamIds.length) return { error: "No teams granted to this management account", status: 403 } as const;
-  return { supabase, teamIds } as const;
+  return { supabase, teamIds, userId: userRes.user.id } as const;
 }
 
 function addDaysISO(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -62,27 +63,28 @@ function classify(finalFlag: unknown, finalColor: unknown): Bucket {
 
 const emptyAvail = (): Avail => ({ cleared: 0, managed: 0, unavailable: 0, total: 0 });
 
-type ViewRow = { team_id: string; entry_date: string; final_color: unknown; final_flag: unknown };
+type ViewRow = { team_id: string; entry_date: string; final_color: unknown; final_flag: unknown; player_id: string | null };
 
 export async function GET(req: NextRequest) {
   const ctx = await authenticateExec(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
-  const { supabase, teamIds } = ctx;
+  const { supabase, teamIds, userId } = ctx;
 
   const today = new Date().toISOString().slice(0, 10);
   const trendFrom = addDaysISO(today, -42); // ~6 weeks
   const loadFrom = addDaysISO(today, -28); // acute/chronic window for load trajectory
   const acuteFrom = addDaysISO(today, -7);
 
-  const [teamsRes, playersRes, viewRes, loadRes, injRes] = await Promise.all([
+  const [teamsRes, playersRes, viewRes, loadRes, injRes, matchRes] = await Promise.all([
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
     supabase.from("players").select("id, team_id, full_name").in("team_id", teamIds).eq("is_active", true),
-    supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
+    supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag, player_id").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
     supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).gte("date", loadFrom).lte("date", today).limit(20000),
-    // Injuries — availability level. We select player_id (to name who's OUT) +
-    // status/dates, but NEVER body_part / injury_type / severity / notes — that
-    // medical detail stays with the staff. Only names + counts leave the endpoint.
-    supabase.from("player_injuries").select("team_id, player_id, status, injury_date, actual_return_date").in("team_id", teamIds),
+    // Injuries — availability level. player_id (to name who's OUT) + status/dates +
+    // estimated_return_date (for expected returns), but NEVER body_part /
+    // injury_type / severity / notes — that medical detail stays with the staff.
+    supabase.from("player_injuries").select("team_id, player_id, status, injury_date, actual_return_date, estimated_return_date").in("team_id", teamIds),
+    supabase.from("v_last_match_by_team").select("team_id, last_match_date").in("team_id", teamIds),
   ]);
 
   const teamsMeta = (teamsRes.data ?? []) as Array<{ id: string; name: string | null; gender: string | null; team_type: string | null; club_short_name: string | null }>;
@@ -145,20 +147,50 @@ export async function GET(req: NextRequest) {
   // Injury burden per team: distinct players currently OUT (+ their names, at
   // availability level), plus new/returned cases in the last 14 days.
   const injFrom = addDaysISO(today, -14);
-  type InjAcc = { out: Set<string>; newRecent: number; returnedRecent: number };
+  const soonTo = addDaysISO(today, 7);
+  type InjAcc = { out: Set<string>; newRecent: number; returnedRecent: number; soon: Set<string> };
   const injByTeam = new Map<string, InjAcc>();
-  for (const r of (injRes.data ?? []) as Array<{ team_id: string; player_id: string | null; status: string | null; injury_date: string | null; actual_return_date: string | null }>) {
+  for (const r of (injRes.data ?? []) as Array<{ team_id: string; player_id: string | null; status: string | null; injury_date: string | null; actual_return_date: string | null; estimated_return_date: string | null }>) {
     const tid = String(r.team_id);
-    const acc = injByTeam.get(tid) ?? { out: new Set<string>(), newRecent: 0, returnedRecent: 0 };
-    if (String(r.status ?? "").toLowerCase() === "injured" && r.player_id) acc.out.add(String(r.player_id));
+    const acc = injByTeam.get(tid) ?? { out: new Set<string>(), newRecent: 0, returnedRecent: 0, soon: new Set<string>() };
+    const injured = String(r.status ?? "").toLowerCase() === "injured";
+    if (injured && r.player_id) acc.out.add(String(r.player_id));
     if (r.injury_date && String(r.injury_date) >= injFrom) acc.newRecent += 1;
     if (r.actual_return_date && String(r.actual_return_date) >= injFrom) acc.returnedRecent += 1;
+    if (injured && r.player_id && r.estimated_return_date && String(r.estimated_return_date) >= today && String(r.estimated_return_date) <= soonTo) acc.soon.add(String(r.player_id));
     injByTeam.set(tid, acc);
   }
   const outNamesOf = (ids: Iterable<string>) => [...ids].map((id) => nameById.get(id) ?? "").filter(Boolean).sort();
   const teamInjurySummary = (tid: string): InjurySummary => {
     const acc = injByTeam.get(tid);
-    return { out: acc?.out.size ?? 0, newRecent: acc?.newRecent ?? 0, returnedRecent: acc?.returnedRecent ?? 0 };
+    return { out: acc?.out.size ?? 0, newRecent: acc?.newRecent ?? 0, returnedRecent: acc?.returnedRecent ?? 0, returningSoon: acc?.soon.size ?? 0 };
+  };
+
+  // Post-match recovery: latest readiness colour per player in MD+1..MD+3 after the
+  // last match → rebounded (cleared) vs still carrying fatigue (managed/unavailable).
+  const matchByTeam = new Map<string, string>();
+  for (const m of (matchRes.data ?? []) as Array<{ team_id: string; last_match_date: string | null }>) {
+    if (m.last_match_date) matchByTeam.set(String(m.team_id), String(m.last_match_date));
+  }
+  const recAcc = new Map<string, Map<string, { date: string; bucket: Bucket }>>();
+  for (const r of rows) {
+    const tid = String(r.team_id);
+    const md = matchByTeam.get(tid);
+    if (!md || !r.player_id) continue;
+    if (r.entry_date < addDaysISO(md, 1) || r.entry_date > addDaysISO(md, 3)) continue;
+    const bucket = classify(r.final_flag, r.final_color);
+    if (bucket === "gray") continue;
+    const pm = recAcc.get(tid) ?? new Map<string, { date: string; bucket: Bucket }>();
+    const prev = pm.get(String(r.player_id));
+    if (!prev || r.entry_date > prev.date) pm.set(String(r.player_id), { date: r.entry_date, bucket });
+    recAcc.set(tid, pm);
+  }
+  const teamRecovery = (tid: string): RecoverySummary => {
+    const md = matchByTeam.get(tid) ?? null;
+    const daysAgo = md ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${md}T00:00:00Z`)) / 86400000) : null;
+    let rebounded = 0, carrying = 0;
+    for (const v of recAcc.get(tid)?.values() ?? []) { if (v.bucket === "cleared") rebounded += 1; else carrying += 1; }
+    return { rebounded, carrying, assessed: rebounded + carrying, matchDate: md, daysAgo };
   };
 
   const teams = teamsMeta.map((t) => {
@@ -181,7 +213,8 @@ export async function GET(req: NextRequest) {
       briefing,
       watch,
       load: teamLoad(t.id),
-      injury: { ...injuryNarrative(teamInjurySummary(t.id)), ...teamInjurySummary(t.id), outNames: outNamesOf(injByTeam.get(t.id)?.out ?? []) },
+      injury: { ...injuryNarrative(teamInjurySummary(t.id)), ...teamInjurySummary(t.id), outNames: outNamesOf(injByTeam.get(t.id)?.out ?? []), returningSoonNames: outNamesOf(injByTeam.get(t.id)?.soon ?? []) },
+      recovery: { ...recoveryNarrative(teamRecovery(t.id)), ...teamRecovery(t.id) },
       trend,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -214,10 +247,30 @@ export async function GET(req: NextRequest) {
   const rollLoad = loadTrajectory(raN ? raSum / raN : null, rcN ? rcSum / rcN : null, rDays.size);
 
   // Roll-up injury — union of distinct out-players across the club + summed cases.
-  const rollOut = new Set<string>(); let rollNew = 0, rollRet = 0;
-  for (const acc of injByTeam.values()) { for (const id of acc.out) rollOut.add(id); rollNew += acc.newRecent; rollRet += acc.returnedRecent; }
-  const rollInjSumm: InjurySummary = { out: rollOut.size, newRecent: rollNew, returnedRecent: rollRet };
-  const rollInjury = { ...injuryNarrative(rollInjSumm), ...rollInjSumm, outNames: outNamesOf(rollOut) };
+  const rollOut = new Set<string>(), rollSoon = new Set<string>(); let rollNew = 0, rollRet = 0;
+  for (const acc of injByTeam.values()) { for (const id of acc.out) rollOut.add(id); for (const id of acc.soon) rollSoon.add(id); rollNew += acc.newRecent; rollRet += acc.returnedRecent; }
+  const rollInjSumm: InjurySummary = { out: rollOut.size, newRecent: rollNew, returnedRecent: rollRet, returningSoon: rollSoon.size };
+  const rollInjury = { ...injuryNarrative(rollInjSumm), ...rollInjSumm, outNames: outNamesOf(rollOut), returningSoonNames: outNamesOf(rollSoon) };
+
+  // Roll-up recovery — pool rebounded/carrying across teams, use the most recent match.
+  let rbR = 0, rbC = 0; let minDaysAgo: number | null = null; let recentMatch: string | null = null;
+  for (const t of teams) {
+    rbR += t.recovery.rebounded; rbC += t.recovery.carrying;
+    if (t.recovery.daysAgo != null && (minDaysAgo == null || t.recovery.daysAgo < minDaysAgo)) { minDaysAgo = t.recovery.daysAgo; recentMatch = t.recovery.matchDate; }
+  }
+  const rollRecSumm: RecoverySummary = { rebounded: rbR, carrying: rbC, assessed: rbR + rbC, matchDate: recentMatch, daysAgo: minDaysAgo };
+  const rollRecovery = { ...recoveryNarrative(rollRecSumm), ...rollRecSumm };
+
+  // Audit — record each EXEC view per team, with how many injured-player names
+  // were exposed (the privacy-sensitive part). Best-effort: a failed audit write
+  // is logged but must not break the read.
+  const auditRows = teams.map((t) => ({
+    exec_id: userId, team_id: t.teamId, injured_names_shown: t.injury.out, action: "club_overview_view",
+  }));
+  if (auditRows.length) {
+    const { error: auditErr } = await supabase.from("exec_access_log").insert(auditRows as never);
+    if (auditErr) console.error("[exec audit] insert failed:", auditErr.message);
+  }
 
   return NextResponse.json({
     date: today,
@@ -234,6 +287,7 @@ export async function GET(req: NextRequest) {
       watch: rollBrief.watch,
       load: rollLoad,
       injury: rollInjury,
+      recovery: rollRecovery,
       trend: rollTrend,
     },
     teams,

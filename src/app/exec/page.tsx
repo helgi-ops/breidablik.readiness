@@ -19,8 +19,9 @@ type Trend = { weekStart: string; total: number; clearedPct: number | null };
 type Conf = { level: "high" | "moderate" | "low"; coverage: number };
 type Adherence = { withRead: number; squad: number; pct: number | null };
 type Load = { band: "building" | "sustained" | "easing" | "na"; ratio: number | null; label: Bi; briefing: Bi };
-type Injury = { label: Bi; briefing: Bi; out: number; newRecent: number; returnedRecent: number; outNames: string[] };
-type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; load: Load; injury: Injury; trend: Trend[] };
+type Injury = { label: Bi; briefing: Bi; out: number; newRecent: number; returnedRecent: number; returningSoon: number; outNames: string[]; returningSoonNames: string[] };
+type Recovery = { available: boolean; label: Bi; briefing: Bi; rebounded: number; carrying: number; assessed: number; matchDate: string | null; daysAgo: number | null };
+type Tile = { availability: Avail; adherence: Adherence; confidence: Conf; verdict: Bi; briefing: Bi; watch: Bi; load: Load; injury: Injury; recovery: Recovery; trend: Trend[] };
 type TeamTile = Tile & { teamId: string; name: string; gender: string | null; teamType: string | null };
 type Resp = {
   date: string;
@@ -168,7 +169,18 @@ export default function ExecClubStatusPage() {
           </div>
         ) : null}
 
-        {/* Injury burden — aggregate only (counts, no names/diagnoses). */}
+        {/* Post-match recovery — only when there was a match in the last few days. */}
+        {tile.recovery.available ? (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Endurheimt eftir leik" : "Post-match recovery"}</span>
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{tx(tile.recovery.label)}</span>
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">{tx(tile.recovery.briefing)}</p>
+          </div>
+        ) : null}
+
+        {/* Injury burden — names of who's OUT (availability level); no medical detail. */}
         <div className="mt-3 border-t border-slate-100 pt-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Meiðsli" : "Injuries"}</span>
@@ -177,11 +189,15 @@ export default function ExecClubStatusPage() {
           <p className="mt-1 text-sm leading-relaxed text-slate-600">{tx(tile.injury.briefing)}</p>
           {tile.injury.outNames.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {tile.injury.outNames.map((n) => (
-                <span key={n} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-400" />{n}
-                </span>
-              ))}
+              {tile.injury.outNames.map((n) => {
+                const soon = tile.injury.returningSoonNames.includes(n);
+                return (
+                  <span key={n} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${soon ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                    title={soon ? (is ? "Væntanlegur til baka í vikunni" : "Expected back within a week") : undefined}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${soon ? "bg-emerald-400" : "bg-red-400"}`} />{n}{soon ? " ↩" : ""}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
         </div>
