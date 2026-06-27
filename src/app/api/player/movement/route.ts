@@ -78,10 +78,11 @@ export async function GET(req: Request) {
   // Baseline rows = everything strictly before the ref date.
   const priorRows = rows.filter((r) => String(r.date) < refDate);
 
-  // Capability detection (per player, NOT tier name): does his data carry IMA?
-  // If not (GPS-only / Lite), show the GPS signals he genuinely receives.
-  const hasIMA = rows.some((r) => num(r.jumps) > 0 || num(r.accel_b2_3_tot_effs_gen2) > 0
-    || num(r.decel_b2_3_tot_effs_gen2) > 0 || codSum(r) > 0);
+  // Capability detection (per player, NOT tier name): does his data carry GENUINE
+  // IMA? Only jumps + change-of-direction count — NOT accel/decel B2-3 efforts,
+  // which Core/Lite clubs also have (they fooled the tier heuristic). If no real
+  // IMA, show the GPS signals he genuinely receives.
+  const hasIMA = rows.some((r) => num(r.jumps) > 0 || codSum(r) > 0);
   const source = hasIMA ? "ima" : "gps";
   const METRICS = hasIMA ? IMA_METRICS : GPS_METRICS;
 

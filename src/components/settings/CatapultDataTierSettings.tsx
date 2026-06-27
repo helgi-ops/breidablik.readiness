@@ -11,17 +11,18 @@
  *
  *   2. DECLARED PLAN (the right knob for normal use)
  *      teams.catapult_plan_type = 'lite' | 'pro' | 'premium' | 'unknown'
- *      Wins over heuristic so a Lite team can't accidentally auto-promote
- *      when bogus B2-3 data arrives — the bug that caused the Afturedling
- *      fiasco before Stage 5 landed.
+ *      Wins over heuristic so a Lite team can't accidentally auto-promote.
  *
  *   3. HEURISTIC (fallback when plan is 'unknown')
- *      Counts B2-3 efforts rows in player_external_load_daily, last 30d
+ *      Counts rows with GENUINE IMA (jumps / change-of-direction / IMA
+ *      accel-decel / FMP) in the last 30d. NOT B2-3 accel/decel effort
+ *      counts — Core/Lite clubs have those too, which used to mis-promote
+ *      them to full (e.g. Keflavík). Fixed in get_catapult_data_tier 2026-06-27.
  *
  * The card surfaces all three so admins understand WHY a tier resolved
  * the way it did, and flags mismatches between declared plan and what's
- * actually flowing in (e.g. declared PRO but no B2-3 data → contact
- * Catapult to enable the Reporting Parameters).
+ * actually flowing in (e.g. declared PRO but no IMA data → contact
+ * Catapult to enable the IMA Reporting Parameters).
  */
 
 import * as React from "react";
@@ -75,7 +76,7 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
   const [override, setOverride] = React.useState<Override>("auto");
   const [plan, setPlan]         = React.useState<Plan>("unknown");
   const [resolvedTier, setResolvedTier] = React.useState<Resolved>("lite");
-  const [b23RowCount, setB23RowCount]   = React.useState<number | null>(null);
+  const [imaRowCount, setImaRowCount]   = React.useState<number | null>(null);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
   const [saving, setSaving] = React.useState<"plan" | "override" | null>(null);
   const [error, setError]   = React.useState<string | null>(null);
@@ -103,15 +104,16 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
         const t = String(tierData ?? "").toLowerCase();
         setResolvedTier(t === "full" ? "full" : "lite");
 
-        // B2-3 diagnostic — same query the heuristic uses, surfaced for transparency
+        // IMA diagnostic — same signals the heuristic now uses (genuine S7 IMA, NOT
+        // B2-3 accel/decel efforts, which Core/Lite clubs also have).
         const sinceIso = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
         const { count } = await supabase
           .from("player_external_load_daily")
           .select("date", { count: "exact", head: true })
           .eq("team_id", teamId)
           .gte("date", sinceIso)
-          .or("accel_b2_3_tot_effs_gen2.gt.0,decel_b2_3_tot_effs_gen2.gt.0");
-        if (alive) setB23RowCount(count ?? 0);
+          .or("jumps.gt.0,ima_accel.gt.0,ima_decel.gt.0,ima_cod_left_high.gt.0,ima_band2_accel_count.gt.0,ima_fr_band58_total_distance.gt.0");
+        if (alive) setImaRowCount(count ?? 0);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : "Load failed");
       }
@@ -165,10 +167,10 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
   }
 
   // Mismatch diagnostic — declared plan says PRO/PREMIUM but heuristic
-  // sees no B2-3 data, OR declared LITE but B2-3 data is flowing in.
-  const heuristicWouldSay: Resolved | null = b23RowCount == null
+  // sees no genuine IMA data, OR declared LITE but IMA data is flowing in.
+  const heuristicWouldSay: Resolved | null = imaRowCount == null
     ? null
-    : (b23RowCount >= 5 ? "full" : "lite");
+    : (imaRowCount >= 5 ? "full" : "lite");
   const declaredImplies: Resolved | null = plan === "lite"
     ? "lite"
     : (plan === "pro" || plan === "premium")
@@ -216,11 +218,11 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
           </p>
           <p className="mt-2 text-xs text-zinc-500">
             Detected from <code className="rounded bg-zinc-100 px-1 py-0.5">player_external_load_daily</code>:{" "}
-            {b23RowCount === null
+            {imaRowCount === null
               ? "checking…"
-              : b23RowCount > 0
-              ? `${b23RowCount} rows in the last 30 days have B2-3 efforts populated (≥5 needed for Pro auto-detection).`
-              : "No rows in the last 30 days have B2-3 efforts."}
+              : imaRowCount > 0
+              ? `${imaRowCount} rows in the last 30 days carry genuine IMA data — jumps, change-of-direction, IMA accel/decel, FMP (≥5 needed for Pro auto-detection). B2-3 effort counts are NOT used: Core/Lite clubs have those too.`
+              : "No rows in the last 30 days carry genuine IMA (jumps / CoD / FMP) — reads as Lite. (B2-3 effort counts don't count: Core has them too.)"}
           </p>
         </div>
       </div>
@@ -231,13 +233,13 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
           <strong>⚠️ Declared plan and data don&apos;t match.</strong>{" "}
           {declaredImplies === "full" && heuristicWouldSay === "lite" ? (
             <>
-              You declared <strong>{plan.toUpperCase()}</strong> but no B2-3 efforts data is flowing in (need 5+ rows in 30 days).
-              Check OpenField → Reporting Parameters for &quot;Acceleration B2-3 Total Efforts (Gen 2)&quot; and &quot;Deceleration B2-3 Total Efforts (Gen 2)&quot;.
-              Premium features may not work properly until the data arrives.
+              You declared <strong>{plan.toUpperCase()}</strong> but no genuine IMA data is flowing in (need 5+ rows in 30 days
+              with jumps / change-of-direction / IMA accel-decel / FMP). Check OpenField → Reporting Parameters for the IMA + Free-Running
+              bands. Premium features may not work properly until that data arrives. (B2-3 effort counts alone don&apos;t qualify — Core has those.)
             </>
           ) : (
             <>
-              You declared <strong>LITE</strong> but B2-3 efforts data IS flowing in. If your Catapult plan was upgraded recently,
+              You declared <strong>LITE</strong> but genuine IMA data IS flowing in. If your Catapult plan was upgraded recently,
               switch the declared plan to <strong>Pro</strong> or <strong>Premium</strong> to unlock the matching features.
             </>
           )}
