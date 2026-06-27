@@ -52,14 +52,14 @@ const PLAN_OPTIONS: Array<{
     value: "lite",
     label: "Lite",
     icon: "🟢",
-    desc: "Standard Catapult Activity Reports — Total/HSR/Sprint Distance, Velocity bands, Player Load, Max Velocity. Unlocks Quadrant view (Gabbett 2016), HSR Intelligence (Malone 2017), Foster Monotony, MD HSR Comparison.",
+    desc: "Standard Catapult Activity Reports — Total/HSR/Sprint Distance, Velocity bands, Player Load, Max Velocity, PLUS Gen2 Accel/Decel effort counts (Accel&Decel / B1+ Efforts). Unlocks Quadrant view (Gabbett 2016), HSR Intelligence (Malone 2017), Foster Monotony, MD HSR Comparison.",
     cls: "border-blue-300",
   },
   {
     value: "pro",
     label: "Pro",
     icon: "🟡",
-    desc: "Adds Acceleration & Deceleration Reporting (Gen 2) — B2-3 effort counts. Unlocks Decel Intelligence (McBurnie 2022) and Quadrant view's Gabbett 2017 B2-3 axis on top of all Lite features.",
+    desc: "Adds GENUINE IMA (Vector Pro S7) — jumps, change-of-direction, IMA accel/decel bands. THIS is what distinguishes Pro (B2-3 effort counts are already in Lite). Unlocks Decel Intelligence (McBurnie 2022), IMA Intelligence, and the IMA-driven Train-like-you-play read on top of all Lite features.",
     cls: "border-amber-300",
   },
   {
@@ -213,7 +213,7 @@ export default function CatapultDataTierSettings({ teamId }: Props) {
           </div>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600">
             {resolvedTier === "full"
-              ? "Premium feature set is unlocked: McBurnie Decel Intelligence, Indoor Load, Quadrant view's B2-3 axis."
+              ? "Full (IMA) feature set is unlocked: McBurnie Decel Intelligence, IMA Intelligence, Indoor Load."
               : "Lite feature set is active: Quadrant (volume axis), HSR Intelligence, Foster Monotony, MD HSR Comparison. Decel Intelligence and Indoor Load are hidden — they need data your current plan doesn't include."}
           </p>
           <p className="mt-2 text-xs text-zinc-500">
