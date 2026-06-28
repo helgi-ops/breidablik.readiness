@@ -16,12 +16,13 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import MovementNarrativeModal from "@/components/coach/MovementNarrativeModal";
 
+type Bi = { EN: string; IS: string };
 type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null };
 type Item = {
   player_id: string; name: string; refDate: string;
   driftType: "intensity" | "shape" | "mixed" | string; score: number;
   spike?: boolean; peakZ?: number;
-  headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
+  headline: Bi | null; why: Bi | null; counterfactual: Bi | null; suggestedAction: Bi | null;
   confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
   totalDistanceZ: number | null; groupLabel: "role" | "squad"; drivers: Driver[];
 };
@@ -32,6 +33,15 @@ const DRIFT_TINT: Record<string, string> = {
   shape: "bg-violet-100 text-violet-800",
   intensity: "bg-amber-100 text-amber-800",
   mixed: "bg-rose-100 text-rose-800",
+};
+// IS names for the signals-table component column (keyed by driver.key).
+const TABLE_LABEL_IS: Record<string, string> = {
+  multidirectional: "Hlið-til-hliðar hlaup",
+  explosive: "Sprengikraftur",
+  multidirectional_share: "Hlutfall hlið-til-hliðar",
+  decel_share: "Hemlunar-hlutfall",
+  high_speed_share: "Háhraða-hlutfall",
+  metabolic_share: "Efnaskipta-álags-hlutfall",
 };
 const driftWord = (t: string, lang?: string) =>
   IS(lang)
@@ -98,6 +108,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
   if (err) return null; // non-critical surface — never block the Today view on an error
   if (!data) return null;
 
+  const tBi = (b: Bi | null) => (b ? (IS(lang) ? b.IS : b.EN) : null);
   const items = data.items;
 
   // All-clear: a slim line so the coach knows the check ran, suppressing detail.
@@ -173,18 +184,18 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
               {/* One-sentence verdict, plain language — the only thing shown by
                   default so the section stays scannable (4 tight rows, not 4
                   walls of text). Everything else is a click away. */}
-              {it.headline && <p className="mt-1 text-sm text-slate-800">{it.headline}</p>}
+              {it.headline && <p className="mt-1 text-sm text-slate-800">{tBi(it.headline)}</p>}
 
               {/* Why / counterfactual / suggested — collapsed behind "Details"
                   so the head-coach surface shows the verdict first, the reasoning
                   on demand (explainability manifesto). */}
               {isExpanded && (
                 <>
-                  {it.why && <p className="mt-1 text-[12px] leading-snug text-slate-600">{it.why}</p>}
-                  {it.counterfactual && <p className="mt-1 text-[11px] text-slate-500">{it.counterfactual}</p>}
+                  {it.why && <p className="mt-1 text-[12px] leading-snug text-slate-600">{tBi(it.why)}</p>}
+                  {it.counterfactual && <p className="mt-1 text-[11px] text-slate-500">{tBi(it.counterfactual)}</p>}
                   {it.suggestedAction && (
                     <p className="mt-1.5 text-[12px] text-slate-700">
-                      <span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{it.suggestedAction}
+                      <span className="font-semibold">{IS(lang) ? "Tillaga: " : "Suggested: "}</span>{tBi(it.suggestedAction)}
                     </p>
                   )}
                 </>
@@ -227,7 +238,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                         const m = mag(d.z, lang), gm = mag(d.groupZ, lang);
                         return (
                           <tr key={d.key} className="border-t border-slate-200">
-                            <td className="px-1 py-0.5 text-slate-700">{d.label}</td>
+                            <td className="px-1 py-0.5 text-slate-700">{IS(lang) ? (TABLE_LABEL_IS[d.key] ?? d.label) : d.label}</td>
                             <td className="px-1 py-0.5 text-right">
                               <span className={`font-semibold ${m.tone}`}>{m.word}</span>
                               {d.z != null && <span className="ml-1 text-[10px] tabular-nums text-slate-400">{d.z > 0 ? "+" : ""}{d.z}</span>}

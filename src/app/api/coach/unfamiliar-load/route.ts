@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { computeMovementSignature, componentValue, MOVEMENT_COMPONENTS, type MovementDayRow, type GroupBaseline, type ComponentKey } from "@/lib/micropulse/movementSignature";
+import { computeMovementSignature, componentValue, MOVEMENT_COMPONENTS, type MovementDayRow, type GroupBaseline, type ComponentKey, type Bi } from "@/lib/micropulse/movementSignature";
 
 export const runtime = "nodejs";
 
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
     player_id: string; name: string;
     refDate: string; driftType: string; score: number;
     spike: boolean; peakZ: number;
-    headline: string | null; why: string | null; counterfactual: string | null; suggestedAction: string | null;
+    headline: Bi | null; why: Bi | null; counterfactual: Bi | null; suggestedAction: Bi | null;
     confident: boolean; calibrating: boolean; baselineDays: number; componentsPresent: number;
     totalDistanceZ: number | null;
     groupLabel: "role" | "squad"; // is the group norm role-specific or squad-wide?

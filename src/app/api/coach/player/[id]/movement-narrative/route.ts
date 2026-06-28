@@ -130,7 +130,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     : tdZ <= -1 ? `His running volume is below his recent base (total distance ${tdZ} SD) — easing or under-exposed.`
     : "His running volume is steady — sitting within his usual base.";
   const driverLine = sig.headline
-    ? sig.headline
+    ? sig.headline.EN
     : (sig.baselineDays >= 8 ? "He is moving like himself — his movement signature is within his usual envelope." : "Still building his movement baseline (not enough sessions yet).");
   const summary = `${p.full_name ?? "This player"}: ${tdZ == null ? "engine still building" : tdZ >= 1 ? "engine building" : tdZ <= -1 ? "engine easing" : "engine steady"}, ${sig.driftType === "none" ? "driver normal" : `driver ${sig.driftType} drift`}.`;
 
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     engine,
     jumps,
     driver: { components: driverComponents, totalDistanceZ: sig.totalDistanceZ },
-    narrative: { engineLine, driverLine, jumpsLine, summary, suggestedAction: sig.suggestedAction, counterfactual: sig.counterfactual },
+    narrative: { engineLine, driverLine, jumpsLine, summary, suggestedAction: sig.suggestedAction?.EN ?? null, counterfactual: sig.counterfactual?.EN ?? null },
     note: "Engine = GPS capacity/volume; Driver = IMA movement quality. Each metric vs the player's own prior norm. Descriptive, not injury-predictive.",
   });
 }

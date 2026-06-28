@@ -62,15 +62,20 @@ export const COMPONENT_LABEL: Record<ComponentKey, string> = {
   metabolic_share: "Metabolic-load share of work",
 };
 
+/** Bilingual string pair. */
+export type Bi = { EN: string; IS: string };
+
 // Plain-language descriptions for the coach-facing headline (no jargon, no SD).
 // unit is appended to absolute values; pct components are shown as a percentage.
-const PLAIN: Record<ComponentKey, { label: string; unit: string; pct: boolean }> = {
-  multidirectional: { label: "side-to-side / change-of-direction running", unit: " m", pct: false },
-  explosive: { label: "explosive bursts (hard accelerations + braking)", unit: "", pct: false },
-  multidirectional_share: { label: "share of his running that's side-to-side", unit: "", pct: true },
-  decel_share: { label: "share of his efforts that are hard braking", unit: "", pct: true },
-  high_speed_share: { label: "share of his running that's high-speed", unit: "", pct: true },
-  metabolic_share: { label: "share of his running at high metabolic load", unit: "", pct: true },
+// IS labels are lowercase nominative phrases with the possessive built in, so they
+// slot mid-sentence after a dash without case/gender agreement breaking.
+const PLAIN: Record<ComponentKey, { label: Bi; unit: string; pct: boolean }> = {
+  multidirectional: { label: { EN: "side-to-side / change-of-direction running", IS: "hlið-til-hliðar hlaup hans" }, unit: " m", pct: false },
+  explosive: { label: { EN: "explosive bursts (hard accelerations + braking)", IS: "sprengikraftur hans (harðar hröðun + hemlun)" }, unit: "", pct: false },
+  multidirectional_share: { label: { EN: "share of his running that's side-to-side", IS: "hlutfall hlaups hans sem er hlið-til-hliðar" }, unit: "", pct: true },
+  decel_share: { label: { EN: "share of his efforts that are hard braking", IS: "hlutfall átaka hans sem er hörð hemlun" }, unit: "", pct: true },
+  high_speed_share: { label: { EN: "share of his running that's high-speed", IS: "hlutfall hlaups hans sem er háhraða" }, unit: "", pct: true },
+  metabolic_share: { label: { EN: "share of his running at high metabolic load", IS: "hlutfall hlaups hans á háu efnaskipta-álagi" }, unit: "", pct: true },
 };
 function plainVal(key: ComponentKey, v: number): string {
   return PLAIN[key].pct ? `${Math.round(v * 100)}%` : `${Math.round(v).toLocaleString("en-US")}${PLAIN[key].unit}`;
@@ -118,10 +123,10 @@ export type MovementSignature = {
   score: number;            // ranking magnitude (0 if no drift)
   peakZ: number;            // largest concerningZ across drifting components (0 if none)
   spike: boolean;           // a SHARP unfamiliar jump (peakZ >= SPIKE_Z, confident only)
-  headline: string | null;  // plain-language one-liner; null = moving like himself
-  why: string | null;       // plain "why this matters" line
-  counterfactual: string | null;
-  suggestedAction: string | null;
+  headline: Bi | null;  // plain-language one-liner; null = moving like himself
+  why: Bi | null;       // plain "why this matters" line
+  counterfactual: Bi | null;
+  suggestedAction: Bi | null;
 };
 
 const WINDOW_DAYS = 28;
@@ -309,29 +314,59 @@ export function computeMovementSignature(
   const peakZ = top ? round(top.concerningZ ?? 0, 1) : 0;
   const spike = confident && peakZ >= SPIKE_Z;
 
-  let headline: string | null = null;
-  let why: string | null = null;
-  let counterfactual: string | null = null;
-  let suggestedAction: string | null = null;
+  let headline: Bi | null = null;
+  let why: Bi | null = null;
+  let counterfactual: Bi | null = null;
+  let suggestedAction: Bi | null = null;
   if (top) {
-    const plain = PLAIN[top.key].label;
+    const pEN = PLAIN[top.key].label.EN, pIS = PLAIN[top.key].label.IS;
     const recentStr = plainVal(top.key, top.today);
     const usualStr = plainVal(top.key, top.mean);
     const more = (top.z ?? 0) >= 0;
     if (driftType === "shape") {
-      headline = `He's covering his usual distance but moving differently — his ${plain} has ${more ? "risen" : "dropped"} to ${recentStr} this week (he's usually around ${usualStr}).`;
-      why = "Same running volume, but the type of movement changed — a shift like this is easy to miss and means his body is doing something it isn't used to.";
-      suggestedAction = "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.";
+      headline = {
+        EN: `He's covering his usual distance but moving differently — his ${pEN} has ${more ? "risen" : "dropped"} to ${recentStr} this week (he's usually around ${usualStr}).`,
+        IS: `Hann hleypur svipaða vegalengd en hreyfir sig öðruvísi — ${pIS} hefur ${more ? "hækkað" : "lækkað"} í ${recentStr} þessa viku (venjulega um ${usualStr}).`,
+      };
+      why = {
+        EN: "Same running volume, but the type of movement changed — a shift like this is easy to miss and means his body is doing something it isn't used to.",
+        IS: "Sama hlaup-magn, en tegund hreyfingar breyttist — svona breyting er auðvelt að missa af og þýðir að líkaminn er að gera eitthvað sem hann er ekki vanur.",
+      };
+      suggestedAction = {
+        EN: "Keep his total load, but ease his exposure to tight-space / change-of-direction work for 1-2 days, or phase the new demand in gradually.",
+        IS: "Haltu heildar-álaginu, en dragðu úr þröngu-rými / stefnubreytinga-vinnu í 1-2 daga, eða innleiða nýju kröfuna smám saman.",
+      };
     } else if (driftType === "mixed") {
-      headline = `He's doing more running AND moving differently than usual — his ${plain} is up to ${recentStr} this week (usually around ${usualStr}).`;
-      why = "Both how much and how he's moving have jumped at once — the body has had less chance to adapt, so it's worth easing off.";
-      suggestedAction = "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.";
+      headline = {
+        EN: `He's doing more running AND moving differently than usual — his ${pEN} is up to ${recentStr} this week (usually around ${usualStr}).`,
+        IS: `Hann hleypur meira OG hreyfir sig öðruvísi en venjulega — ${pIS} er núna ${recentStr} þessa viku (venjulega um ${usualStr}).`,
+      };
+      why = {
+        EN: "Both how much and how he's moving have jumped at once — the body has had less chance to adapt, so it's worth easing off.",
+        IS: "Bæði hve mikið og hvernig hann hreyfir sig hefur breyst í einu — líkaminn hefur haft minni tíma til að aðlagast, svo það er vert að draga úr.",
+      };
+      suggestedAction = {
+        EN: "Trim his overall load a touch and keep an eye on the change-of-direction demand for a day or two.",
+        IS: "Minnkaðu heildar-álagið aðeins og fylgstu með stefnubreytinga-kröfunni í einn til tvo daga.",
+      };
     } else {
-      headline = `He's doing noticeably more ${plain} than he normally does — about ${recentStr} this week vs his usual ${usualStr}.`;
-      why = "A sudden jump in this kind of high-intensity movement (not just total distance) is the main thing that catches players out, so it's worth a look.";
-      suggestedAction = "Consider easing this demand for 1-2 days so the extra exposure is phased in rather than spiked.";
+      headline = {
+        EN: `He's doing noticeably more ${pEN} than he normally does — about ${recentStr} this week vs his usual ${usualStr}.`,
+        IS: `Hann gerir áberandi meira en venjulega — ${pIS} er um ${recentStr} þessa viku (venjulega ${usualStr}).`,
+      };
+      why = {
+        EN: "A sudden jump in this kind of high-intensity movement (not just total distance) is the main thing that catches players out, so it's worth a look.",
+        IS: "Skyndilegt stökk í svona háákefðar-hreyfingu (ekki bara heildarvegalengd) er helsta atriðið sem kemur leikmönnum í koll, svo það er vert að skoða.",
+      };
+      suggestedAction = {
+        EN: "Consider easing this demand for 1-2 days so the extra exposure is phased in rather than spiked.",
+        IS: "Íhugaðu að draga úr þessari kröfu í 1-2 daga svo auka-útsetningin sé innleidd frekar en að rjúka upp.",
+      };
     }
-    counterfactual = `This only flags because it's well outside his own usual range — if his ${plain} were closer to his typical ${usualStr}, it wouldn't appear here.`;
+    counterfactual = {
+      EN: `This only flags because it's well outside his own usual range — if his ${pEN} were closer to his typical ${usualStr}, it wouldn't appear here.`,
+      IS: `Þetta flaggar aðeins af því það er langt utan hans venjulega bils — ef það væri nær venjulegu ${usualStr} myndi það ekki birtast hér.`,
+    };
   }
 
   return {
