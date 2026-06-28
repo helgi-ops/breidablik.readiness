@@ -38,6 +38,16 @@ const driftWord = (t: string, lang?: string) =>
     ? (t === "shape" ? "hreyfir sig öðruvísi" : t === "mixed" ? "meira + öðruvísi" : "gerir meira en venjulega")
     : (t === "shape" ? "moving differently" : t === "mixed" ? "more + differently" : "doing more than usual");
 
+// Plain-language magnitude for a z-score, so a coach reads the signals table at a
+// glance without knowing what an SD is. The number stays alongside for S&C.
+function mag(z: number | null, lang?: string): { word: string; tone: string } {
+  if (z == null) return { word: "—", tone: "text-slate-400" };
+  const a = Math.abs(z), is = IS(lang);
+  if (a >= 2) return { word: z > 0 ? (is ? "langt yfir venju" : "well above usual") : (is ? "langt undir venju" : "well below usual"), tone: "text-rose-700" };
+  if (a >= 1) return { word: z > 0 ? (is ? "yfir venju" : "above usual") : (is ? "undir venju" : "below usual"), tone: "text-amber-700" };
+  return { word: is ? "um venju" : "about usual", tone: "text-slate-500" };
+}
+
 export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date?: string }) {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,34 +215,53 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                   <table className="w-full text-[11px]">
                     <thead className="text-slate-500">
                       <tr>
-                        <th className="px-1 py-0.5 text-left">Component</th>
-                        <th className="px-1 py-0.5 text-right">{IS(lang) ? "vs hann sjálfur" : "vs himself"}</th>
-                        <th className="px-1 py-0.5 text-right">recent</th>
-                        <th className="px-1 py-0.5 text-right">usual</th>
+                        <th className="px-1 py-0.5 text-left">{IS(lang) ? "Hvað" : "What"}</th>
+                        <th className="px-1 py-0.5 text-right">{IS(lang) ? "breyting (vs venja)" : "change vs his normal"}</th>
+                        <th className="px-1 py-0.5 text-right">{IS(lang) ? "þessa viku" : "this week"}</th>
+                        <th className="px-1 py-0.5 text-right">{IS(lang) ? "hans venja" : "his normal"}</th>
                         <th className="px-1 py-0.5 text-right">{IS(lang) ? (it.groupLabel === "role" ? "vs hlutverk" : "vs lið") : `vs ${it.groupLabel}`}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {it.drivers.map((d) => (
-                        <tr key={d.key} className="border-t border-slate-200">
-                          <td className="px-1 py-0.5 text-slate-700">{d.label}</td>
-                          <td className="px-1 py-0.5 text-right font-semibold tabular-nums text-slate-900">{d.z != null && d.z > 0 ? "+" : ""}{d.z}</td>
-                          <td className="px-1 py-0.5 text-right tabular-nums text-slate-600">{d.today}</td>
-                          <td className="px-1 py-0.5 text-right tabular-nums text-slate-500">{d.mean}±{d.sd}</td>
-                          <td className="px-1 py-0.5 text-right tabular-nums text-slate-500">{d.groupZ != null ? `${d.groupZ > 0 ? "+" : ""}${d.groupZ}` : "—"}</td>
-                        </tr>
-                      ))}
+                      {it.drivers.map((d) => {
+                        const m = mag(d.z, lang), gm = mag(d.groupZ, lang);
+                        return (
+                          <tr key={d.key} className="border-t border-slate-200">
+                            <td className="px-1 py-0.5 text-slate-700">{d.label}</td>
+                            <td className="px-1 py-0.5 text-right">
+                              <span className={`font-semibold ${m.tone}`}>{m.word}</span>
+                              {d.z != null && <span className="ml-1 text-[10px] tabular-nums text-slate-400">{d.z > 0 ? "+" : ""}{d.z}</span>}
+                            </td>
+                            <td className="px-1 py-0.5 text-right tabular-nums text-slate-600">{d.today}</td>
+                            <td className="px-1 py-0.5 text-right tabular-nums text-slate-500">{d.mean}±{d.sd}</td>
+                            <td className="px-1 py-0.5 text-right">
+                              {d.groupZ != null
+                                ? <><span className={gm.tone}>{gm.word}</span><span className="ml-1 text-[10px] tabular-nums text-slate-400">{d.groupZ > 0 ? "+" : ""}{d.groupZ}</span></>
+                                : <span className="text-slate-400">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
-                  <p className="px-1 pt-1 text-[10px] text-slate-400">
+                  <p className="px-1 pt-1 text-[10px] leading-snug text-slate-400">
                     {IS(lang)
-                      ? "„vs hann sjálfur\" = frávik frá hans eigin normi (það sem flaggar). Síðasti dálkur = sama miðað við "
-                      : "“vs himself” = drift from his own norm (what flags). Last column = the same vs his "}
-                    {it.groupLabel === "role" ? (IS(lang) ? "hlutverk." : "role.") : (IS(lang) ? "lið." : "squad.")}
+                      ? "Hver lína: hvernig hann hreyfði sig þessa viku borið saman við hans eigin venju — breytingin er það sem flaggar hann. Síðasti dálkur ber hann saman við "
+                      : "Each row: how he moved this week vs his own normal — the change is what flags him. The last column compares him to his "}
+                    {it.groupLabel === "role" ? (IS(lang) ? "hlutverk í staðinn." : "role instead.") : (IS(lang) ? "lið í staðinn." : "squad instead.")}
                   </p>
                   {it.totalDistanceZ != null && (
-                    <p className="px-1 pt-1 text-[10px] text-slate-400">
-                      {IS(lang) ? "Heildarvegalengd" : "Total distance"} z = {it.totalDistanceZ > 0 ? "+" : ""}{it.totalDistanceZ} SD {IS(lang) ? "(samhengi: er rúmmálið sjálft hátt?)" : "(context: is volume itself up?)"}
+                    <p className="px-1 pt-1 text-[10px] leading-snug text-slate-400">
+                      {(() => {
+                        const td = it.totalDistanceZ as number, up = td >= 0.75, down = td <= -0.75;
+                        return IS(lang)
+                          ? (up ? "Heildarhlaup hans er líka upp þessa viku — eitthvað af þessu er einfaldlega meira magn."
+                              : down ? "Heildarhlaup hans er reyndar niður þessa viku — svo breytingin í hreyfingu sker sig enn meira úr."
+                                : "Heildarhlaup hans þessa viku er um venju — svo þetta snýst um HVERNIG hann hreyfir sig, ekki bara meira hlaup.")
+                          : (up ? "His total running is also up this week — some of this is simply more volume."
+                              : down ? "His total running is actually down this week — so the change in how he moves stands out even more."
+                                : "His total running this week is about normal — so this is about HOW he moves, not just more running.");
+                      })()}
                     </p>
                   )}
                 </div>
