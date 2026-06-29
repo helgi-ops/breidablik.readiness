@@ -9,6 +9,7 @@
 
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import type { FormResult, FormDir } from "@/lib/micropulse/playerGameReport";
 
 export type RadarMetric = { label: string; percentile: number; valueLabel: string };
 export type TrendBar = { label: string; value: number };
@@ -44,6 +45,55 @@ export function ChartZoom({ title, children, large }: { title?: string; children
         document.body,
       )}
     </>
+  );
+}
+
+/**
+ * Form summary: the recent window vs the season baseline, with an overall
+ * verdict and per-metric up/flat/down chips. Plain-language, explainability-first
+ * (a one-sentence read on top). Shared by the coach + player game reports.
+ */
+export function FormSummary({ form, metricLabel, isIS }: { form: FormResult; metricLabel: (key: string) => string; isIS: boolean }) {
+  const tone: Record<FormDir, string> = {
+    up: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    flat: "bg-slate-100 text-slate-600 border-slate-200",
+    down: "bg-amber-100 text-amber-700 border-amber-200",
+  };
+  const icon: Record<FormDir, string> = { up: "↗", flat: "→", down: "↘" };
+  const verdictWord: Record<FormDir, string> = isIS
+    ? { up: "Á uppleið", flat: "Stöðugt", down: "Niðurleið" }
+    : { up: "Trending up", flat: "Steady", down: "Trending down" };
+  const chipDelta = (m: { deltaPct: number }) => `${m.deltaPct > 0 ? "+" : ""}${Math.round(m.deltaPct * 100)}%`;
+
+  // One-sentence read, naming the metrics driving the verdict.
+  const movers = form.metrics.filter((m) => m.dir === (form.verdict === "down" ? "down" : "up")).map((m) => metricLabel(m.key));
+  const moverList = movers.slice(0, 3).join(", ");
+  const sentence = (() => {
+    const n = form.windowN;
+    if (form.verdict === "up") return isIS ? `Síðustu ${n} leikir yfir tímabils-meðaltali${moverList ? ` í ${moverList}` : ""}.` : `Last ${n} matches above his season average${moverList ? ` in ${moverList}` : ""}.`;
+    if (form.verdict === "down") return isIS ? `Síðustu ${n} leikir undir tímabils-meðaltali${moverList ? ` í ${moverList}` : ""}.` : `Last ${n} matches below his season average${moverList ? ` in ${moverList}` : ""}.`;
+    return isIS ? `Síðustu ${n} leikir í takt við tímabils-meðaltal.` : `Last ${n} matches in line with his season average.`;
+  })();
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{isIS ? "Form" : "Form"}</span>
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone[form.verdict]}`}>
+          {icon[form.verdict]} {verdictWord[form.verdict]}
+        </span>
+        <span className="text-[10px] text-slate-400">{isIS ? `síðustu ${form.windowN} af ${form.totalGps} leikjum vs tímabil` : `last ${form.windowN} of ${form.totalGps} matches vs season`}</span>
+      </div>
+      <p className="mb-2 text-[13px] leading-relaxed text-slate-700">{sentence}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {form.metrics.map((m) => (
+          <span key={m.key} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${tone[m.dir]}`}>
+            <span className="font-medium">{metricLabel(m.key)}</span>
+            <span className="tabular-nums">{icon[m.dir]} {chipDelta(m)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

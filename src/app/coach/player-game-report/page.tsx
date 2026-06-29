@@ -12,7 +12,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
-import { ProfileRadar, MatchTrendBars, ChartZoom, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { computeForm } from "@/lib/micropulse/playerGameReport";
 
 type P90 = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
@@ -98,6 +99,16 @@ export default function PlayerGameReportPage() {
 
   const matches = useMemo(() => report?.matches ?? [], [report]);
   const gpsMatches = useMemo(() => matches.filter((m) => m.has_gps), [matches]);
+
+  // Form lens: recent window vs season baseline (null when too few matches).
+  const form = useMemo(
+    () => (report ? computeForm(report.matches, report.summary.per90_avg, report.availableKeys ?? []) : null),
+    [report],
+  );
+  const formLabel = (key: string): string => ({
+    total_distance: IS ? "Vegal." : "Dist", hsr: "HSR", sprint: IS ? "Sprettur" : "Sprint",
+    efforts: IS ? "Átök" : "Efforts", hml: "HML", ima_acc: "Acc", ima_dec: "Dec", cod: "CoD",
+  } as Record<string, string>)[key] ?? key;
 
   // ── Chart data: percentile radar (player vs squad) + per-match trend bars ──
   const charts = useMemo(() => {
@@ -341,6 +352,13 @@ export default function PlayerGameReportPage() {
                 <Tile label={`${t.topSpeed} (km/h)`} value={f1(report.summary.best_top_speed_kmh)} accent />
                 <Tile label={`HSR ${t.per90} (m)`} value={n0(report.summary.per90_avg.hsr)} />
               </div>
+
+              {/* Form lens — recent window vs season baseline */}
+              {form && (
+                <div className="pgr-section mb-6">
+                  <FormSummary form={form} metricLabel={formLabel} isIS={IS} />
+                </div>
+              )}
 
               {/* Visualisations — Engine (GPS) + Driver (IMA) radars + trends.
                   Two profiles when the club captures IMA; Lite/Core drops the

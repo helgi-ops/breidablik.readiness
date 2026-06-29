@@ -88,6 +88,50 @@ function per90(metrics: MatchMetrics, minutes: number): Record<P90Key, number> {
   };
 }
 
+// ── Form lens ────────────────────────────────────────────────────────────────
+// "How is he RIGHT NOW" — the recent window vs his season baseline, the one
+// dimension a season aggregate can't show. Pure + client-callable (no DB).
+
+export type FormDir = "up" | "flat" | "down";
+export type FormMetric = { key: string; recent: number; season: number; deltaPct: number; dir: FormDir };
+export type FormResult = { windowN: number; totalGps: number; metrics: FormMetric[]; up: number; down: number; verdict: FormDir };
+
+const FORM_THRESHOLD = 0.07; // ±7% vs season avg before calling it up/down
+// Running-output metrics assessed for form (all live in the per-match p90; top
+// speed is excluded — it's a peak, not a per-90 average).
+export const FORM_KEYS = ["total_distance", "hsr", "sprint", "efforts", "hml", "ima_acc", "ima_dec", "cod"] as const;
+
+/**
+ * Compare a player's last `windowSize` GPS matches to his season per-90 average,
+ * per metric, and roll up to an overall verdict. Returns null when there aren't
+ * enough matches to read a trend (needs >= 5 GPS matches).
+ */
+export function computeForm(
+  matches: Array<{ has_gps?: boolean; p90?: Record<string, number> | null }>,
+  seasonAvg: Record<string, number>,
+  availableKeys: string[],
+  windowSize = 3,
+): FormResult | null {
+  const gps = matches.filter((m) => m.has_gps && m.p90);
+  if (gps.length < 5) return null;
+  const recent = gps.slice(-windowSize);
+  const metrics: FormMetric[] = (FORM_KEYS as readonly string[])
+    .filter((k) => availableKeys.includes(k))
+    .map((key) => {
+      const recentAvg = recent.reduce((s, m) => s + ((m.p90?.[key] as number) ?? 0), 0) / recent.length;
+      const season = seasonAvg[key] ?? 0;
+      const deltaPct = season > 0 ? (recentAvg - season) / season : 0;
+      const dir: FormDir = deltaPct > FORM_THRESHOLD ? "up" : deltaPct < -FORM_THRESHOLD ? "down" : "flat";
+      return { key, recent: r1(recentAvg), season: r1(season), deltaPct, dir };
+    })
+    .filter((m) => m.season > 0);
+  if (!metrics.length) return null;
+  const up = metrics.filter((m) => m.dir === "up").length;
+  const down = metrics.filter((m) => m.dir === "down").length;
+  const verdict: FormDir = up >= down + 1 && up >= 2 ? "up" : down >= up + 1 && down >= 2 ? "down" : "flat";
+  return { windowN: recent.length, totalGps: gps.length, metrics, up, down, verdict };
+}
+
 export const isoYear = (y: number) => ({ from: `${y}-01-01`, to: `${y}-12-31` });
 export function ageFrom(dob: string | null | undefined): number | null {
   if (!dob) return null;

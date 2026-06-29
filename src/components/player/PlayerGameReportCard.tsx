@@ -13,7 +13,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ProfileRadar, MatchTrendBars, ChartZoom, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { computeForm } from "@/lib/micropulse/playerGameReport";
 
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
@@ -136,6 +137,16 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
     return { top: sorted[0], low: sorted[sorted.length - 1] };
   }, [report, radarEngine, radarDriver]);
 
+  // Form lens: his recent window vs his season baseline (null when too few matches).
+  const form = useMemo(
+    () => (report ? computeForm(report.matches, report.summary.per90_avg, report.availableKeys ?? []) : null),
+    [report],
+  );
+  const formLabel = (key: string): string => ({
+    total_distance: isIS ? "Vegal." : "Dist", hsr: isIS ? "Háhraði" : "HSR", sprint: isIS ? "Sprettur" : "Sprint",
+    efforts: isIS ? "Átök" : "Efforts", hml: "HML", ima_acc: isIS ? "Hröðun" : "Acc", ima_dec: isIS ? "Hemlun" : "Dec", cod: isIS ? "Stefnub." : "CoD",
+  } as Record<string, string>)[key] ?? key;
+
   const series = (key: string): TrendBar[] =>
     (report?.matches ?? []).filter((m) => m.has_gps && m.p90).map((m) => ({
       label: (m.opponent ?? "—").slice(0, 6),
@@ -197,6 +208,9 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
               </div>
             </div>
           )}
+
+          {/* Form lens — your recent matches vs your season baseline */}
+          {form && <FormSummary form={form} metricLabel={formLabel} isIS={isIS} />}
 
           {/* AI summary about you — on-demand, labelled as AI, from your own numbers */}
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
