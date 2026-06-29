@@ -28,7 +28,8 @@ type Cell = { match: number | null; train: number | null; pct: number | null; fl
 type Player = { id: string; name: string; position: string | null; group: string; match_appearances: number; train_sessions: number; metrics: Record<MetricKey, Cell>; gaps: number };
 type MicroCohort = { sessions: number; metrics: Record<MetricKey, number | null> };
 type Micro = { md_day: string; sessions: number; metrics: Record<MetricKey, number | null>; cohorts?: { recovery?: MicroCohort; topup?: MicroCohort } };
-type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[]; groupDemand: Record<string, Record<MetricKey, number | null>> };
+type MicroWindow = "season" | "month" | "week";
+type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[]; microcycleByWindow?: Record<MicroWindow, Micro[]>; microWindowRef?: string; groupDemand: Record<string, Record<MetricKey, number | null>> };
 
 const FLAG: Record<string, string> = {
   under: "bg-red-100 text-red-700", gap: "bg-amber-100 text-amber-700", ok: "bg-emerald-100 text-emerald-700", none: "bg-slate-100 text-slate-400",
@@ -159,7 +160,11 @@ export default function TrainLikeYouPlayPage() {
       .sort((a, b) => b[1] - a[1])[0];
     if (best && best[1] > 0 && best[0] !== mode) setMode(best[0]);
   }, [data, mode, modeDataCount]);
-  const microcycle = useMemo(() => data?.microcycle ?? [], [data]);
+  const [microWindow, setMicroWindow] = useState<MicroWindow>("season");
+  const microcycle = useMemo(
+    () => data?.microcycleByWindow?.[microWindow] ?? data?.microcycle ?? [],
+    [data, microWindow],
+  );
   // Demand baseline = each player's OWN match demand, or his POSITION group's
   // average match demand (position-specific standard). Gaps are mode-specific.
   const players = useMemo(() => {
@@ -361,16 +366,30 @@ export default function TrainLikeYouPlayPage() {
           )}
 
           {/* Microcycle — avg training intensity as % of match demand per MD-day */}
-          {microcycle.length > 0 && (
+          {(data?.microcycleByWindow?.season ?? data?.microcycle ?? []).length > 0 && (
             <div className="tlp-sec rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Vikuskipulag eftir MD-degi (% af leik-kröfu)" : "Weekly periodization by MD-day (% of match demand)"}</div>
-                <select value={microKey} onChange={(e) => setMicroMetric(e.target.value as MetricKey)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
-                  {metricKeys.map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}</option>)}
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <select value={microWindow} onChange={(e) => setMicroWindow(e.target.value as MicroWindow)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
+                    <option value="week">{IS ? "Síðasta vika" : "Last week"}</option>
+                    <option value="month">{IS ? "Síðustu 4 vikur" : "Last 4 weeks"}</option>
+                    <option value="season">{IS ? "Allt tímabilið" : "Whole season"}</option>
+                  </select>
+                  <select value={microKey} onChange={(e) => setMicroMetric(e.target.value as MetricKey)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
+                    {metricKeys.map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="mb-2 text-[10px] text-slate-400">
+                {microWindow === "season"
+                  ? (IS ? "Meðaltal yfir allt tímabilið — dæmigert form." : "Averaged over the whole season — the typical shape.")
+                  : (IS ? `${microWindow === "week" ? "Síðustu 7 dagar" : "Síðustu 4 vikur"}${data?.microWindowRef ? ` (til ${data.microWindowRef})` : ""} — nýlegt álag.` : `${microWindow === "week" ? "Last 7 days" : "Last 4 weeks"}${data?.microWindowRef ? ` (to ${data.microWindowRef})` : ""} — recent load.`)}
               </div>
               <div className="space-y-1.5">
-                {microcycle.map((d) => {
+                {microcycle.length === 0 ? (
+                  <div className="rounded-md bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">{IS ? "Engar æfingar á þessum MD-dögum í völdum glugga." : "No sessions on these MD-days in the selected window."}</div>
+                ) : microcycle.map((d) => {
                   const c = d.cohorts;
                   // MD+1 / MD+2: the squad is two populations. Render a bar per
                   // cohort against its own band, with a plain-language verdict.

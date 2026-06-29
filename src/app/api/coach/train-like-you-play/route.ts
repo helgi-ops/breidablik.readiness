@@ -280,34 +280,50 @@ export async function GET(req: NextRequest) {
   const metricsOf = (b: MicroBucket): Record<string, number | null> =>
     Object.fromEntries(METRICS.map((m) => [m.key, b.counts[m.key] ? Math.round(b.sums[m.key] / b.counts[m.key]) : null]));
 
-  const micro = new Map<string, MicroBucket>();           // combined squad series, by label
-  const microCohort = new Map<string, MicroBucket>();      // `${label}|${recovery|topup}` for split days
-  for (const r of load) {
-    const date = String(r.date);
-    if (matchDates.has(date) || trainDurationSec(r) < MIN_TRAIN_SEC) continue;
-    const { label, lastMatch } = mdDayLabel(date, matchesAsc);
-    if (!label) continue;
-    const pid = String(r.player_id);
-    const demand = matchDemandByPlayer.get(pid);
-    if (!demand) continue;
-    addToBucket(micro, label, r, demand);
-    // MD+1 / MD+2: bucket by whether the player played a full shift (recovery) or
-    // not (top-up). `partial` (30–59 min) folds into top-up.
-    if (COHORT_SPLIT_DAYS.has(label) && lastMatch) {
-      const bucket = cohortFor(minuteRowByKey.get(`${pid}|${lastMatch}`)) === "recovery" ? "recovery" : "topup";
-      addToBucket(microCohort, `${label}|${bucket}`, r, demand);
+  const buildMicrocycle = (rows: Array<Record<string, unknown>>) => {
+    const micro = new Map<string, MicroBucket>();           // combined squad series, by label
+    const microCohort = new Map<string, MicroBucket>();      // `${label}|${recovery|topup}` for split days
+    for (const r of rows) {
+      const date = String(r.date);
+      if (matchDates.has(date) || trainDurationSec(r) < MIN_TRAIN_SEC) continue;
+      const { label, lastMatch } = mdDayLabel(date, matchesAsc);
+      if (!label) continue;
+      const pid = String(r.player_id);
+      const demand = matchDemandByPlayer.get(pid);
+      if (!demand) continue;
+      addToBucket(micro, label, r, demand);
+      // MD+1 / MD+2: bucket by whether the player played a full shift (recovery)
+      // or not (top-up). `partial` (30–59 min) folds into top-up.
+      if (COHORT_SPLIT_DAYS.has(label) && lastMatch) {
+        const bucket = cohortFor(minuteRowByKey.get(`${pid}|${lastMatch}`)) === "recovery" ? "recovery" : "topup";
+        addToBucket(microCohort, `${label}|${bucket}`, r, demand);
+      }
     }
-  }
-  const microcycle = MICRO_ORDER.filter((l) => micro.has(l)).map((l) => {
-    const base = { md_day: l, sessions: micro.get(l)!.sessions, metrics: metricsOf(micro.get(l)!) };
-    if (!COHORT_SPLIT_DAYS.has(l)) return base;
-    const rec = microCohort.get(`${l}|recovery`);
-    const top = microCohort.get(`${l}|topup`);
-    const cohorts: Record<string, { sessions: number; metrics: Record<string, number | null> }> = {};
-    if (rec) cohorts.recovery = { sessions: rec.sessions, metrics: metricsOf(rec) };
-    if (top) cohorts.topup = { sessions: top.sessions, metrics: metricsOf(top) };
-    return Object.keys(cohorts).length ? { ...base, cohorts } : base;
-  });
+    return MICRO_ORDER.filter((l) => micro.has(l)).map((l) => {
+      const base = { md_day: l, sessions: micro.get(l)!.sessions, metrics: metricsOf(micro.get(l)!) };
+      if (!COHORT_SPLIT_DAYS.has(l)) return base;
+      const rec = microCohort.get(`${l}|recovery`);
+      const top = microCohort.get(`${l}|topup`);
+      const cohorts: Record<string, { sessions: number; metrics: Record<string, number | null> }> = {};
+      if (rec) cohorts.recovery = { sessions: rec.sessions, metrics: metricsOf(rec) };
+      if (top) cohorts.topup = { sessions: top.sessions, metrics: metricsOf(top) };
+      return Object.keys(cohorts).length ? { ...base, cohorts } : base;
+    });
+  };
+
+  // Three time windows so the coach can read either the typical season shape or
+  // what happened recently. Windows are anchored to the most recent session date
+  // (robust to a few days of stale data), not "today".
+  const maxDate = load.reduce((mx, r) => { const d = String(r.date); return d > mx ? d : mx; }, "");
+  const isoMinus = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+  const weekStart = maxDate ? isoMinus(maxDate, 6) : from;    // last 7 days inclusive
+  const monthStart = maxDate ? isoMinus(maxDate, 27) : from;  // last 4 weeks
+  const microcycle = buildMicrocycle(load); // season (kept for back-compat)
+  const microcycleByWindow = {
+    season: microcycle,
+    month: buildMicrocycle(load.filter((r) => String(r.date) >= monthStart)),
+    week: buildMicrocycle(load.filter((r) => String(r.date) >= weekStart)),
+  };
 
   // Position-group match demand: the average match per-90 of the group's
   // players per metric — the position-specific standard to train toward
@@ -324,5 +340,5 @@ export async function GET(req: NextRequest) {
     groupDemand[g] = dem;
   }
 
-  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, microcycle, groupDemand });
+  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, microcycle, microcycleByWindow, microWindowRef: maxDate, groupDemand });
 }
