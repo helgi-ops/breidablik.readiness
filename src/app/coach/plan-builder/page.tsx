@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import PlanBuilder from "@/components/trainer/PlanBuilder";
 import PlanAssigner from "@/components/trainer/PlanAssigner";
+import ProgramOverviewModal from "@/components/trainer/ProgramOverviewModal";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -36,6 +37,7 @@ export default function PlanBuilderPage() {
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<{ id: string; name: string } | null>(null);
+  const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null);
 
   // Active team = profiles.team_id (the team switcher persists here).
   useEffect(() => {
@@ -111,12 +113,20 @@ export default function PlanBuilderPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {templates.map((tpl) => (
             <div key={tpl.id} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="font-medium text-slate-900">{tpl.name}</div>
+              {/* Click the name to see a read-only overview — no need to enter Edit. */}
+              <button type="button" onClick={() => setViewing({ id: tpl.id, name: tpl.name })}
+                className="text-left font-medium text-slate-900 hover:text-indigo-600 hover:underline">
+                {tpl.name}
+              </button>
               <div className="mt-1 text-xs text-slate-500">
                 {planTypeLabel(tpl.plan_type)} · {tpl.duration_weeks} {isIS ? "vikur" : "weeks"} · {tpl.sessions_per_week}× {isIS ? "í viku" : "per week"}
                 {tpl.readiness_enabled ? ` · ${isIS ? "readiness virkt" : "readiness on"}` : ""}
               </div>
               <div className="mt-3 flex gap-2">
+                <button type="button" onClick={() => setViewing({ id: tpl.id, name: tpl.name })}
+                  className="flex-1 rounded border px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                  {isIS ? "Skoða" : "View"}
+                </button>
                 <button type="button" onClick={() => { setEditingId(tpl.id); setShowBuilder(true); }}
                   className="flex-1 rounded border px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
                   {isIS ? "Breyta" : "Edit"}
@@ -137,6 +147,16 @@ export default function PlanBuilderPage() {
           templateId={editingId ?? undefined}
           onClose={() => { setShowBuilder(false); setEditingId(null); }}
           onSaved={() => { setShowBuilder(false); setEditingId(null); void fetchTemplates(); }}
+        />
+      )}
+
+      {viewing && teamId && (
+        <ProgramOverviewModal
+          teamId={teamId}
+          templateId={viewing.id}
+          templateName={viewing.name}
+          lang={isIS ? "IS" : "EN"}
+          onClose={() => setViewing(null)}
         />
       )}
 
