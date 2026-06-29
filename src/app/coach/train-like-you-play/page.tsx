@@ -26,7 +26,8 @@ type Baseline = "own" | "position";
 type Flag = "under" | "gap" | "ok" | "none";
 type Cell = { match: number | null; train: number | null; pct: number | null; flag: Flag };
 type Player = { id: string; name: string; position: string | null; group: string; match_appearances: number; train_sessions: number; metrics: Record<MetricKey, Cell>; gaps: number };
-type Micro = { md_day: string; sessions: number; metrics: Record<MetricKey, number | null> };
+type MicroCohort = { sessions: number; metrics: Record<MetricKey, number | null> };
+type Micro = { md_day: string; sessions: number; metrics: Record<MetricKey, number | null>; cohorts?: { recovery?: MicroCohort; topup?: MicroCohort } };
 type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[]; groupDemand: Record<string, Record<MetricKey, number | null>> };
 
 const FLAG: Record<string, string> = {
@@ -53,7 +54,44 @@ const MD_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD-2": { lo: 55, hi: 80 },   // moderate, taper begins
   "MD-1": { lo: 35, hi: 55 },   // taper / activation
 };
+// Top-up cohort bands for the post-match days: non-starters replace the match
+// stimulus they missed → roughly match-equivalent load. Tunable reference, not a
+// rule (Anderson 2016; Hills 2018; Stevens 2017). The Recovery cohort uses the
+// MD_TARGET bands above (those were designed for recovering players).
+const TOPUP_TARGET: Record<string, { lo: number; hi: number }> = {
+  "MD+1": { lo: 80, hi: 110 },
+  "MD+2": { lo: 85, hi: 110 },
+};
 const MICRO_SCALE = 150; // bar axis max (% of match demand)
+
+// One microcycle bar: the value vs its desirable band, with a 100% match line.
+// Shared by the single squad series and the per-cohort (recovery / top-up) bars.
+function MicroBar({ leftLabel, pct, band, sessions, IS, sub = false, lowConf = false }: {
+  leftLabel: string; pct: number | null; band: { lo: number; hi: number } | null; sessions: number; IS: boolean; sub?: boolean; lowConf?: boolean;
+}) {
+  const w = pct == null ? 0 : Math.min(pct, MICRO_SCALE) / MICRO_SCALE * 100;
+  const status: "on" | "under" | "over" | "none" = pct == null || band == null ? "none" : pct < band.lo ? "under" : pct > band.hi ? "over" : "on";
+  const tone = status === "on" ? "bg-emerald-500" : status === "under" ? "bg-amber-400" : status === "over" ? "bg-indigo-500" : pct == null ? "bg-slate-200" : "bg-sky-500";
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`shrink-0 tabular-nums ${sub ? "w-28 pl-2 text-[10px] text-slate-500" : "w-12 text-[11px] font-semibold text-slate-600"}`}>
+        {leftLabel}{lowConf && <span className="ml-1 text-amber-500" title={IS ? "Fá úrtök — lítið traust" : "Few sessions — low confidence"}>!</span>}
+      </div>
+      <div className="relative h-5 flex-1 overflow-hidden rounded bg-slate-100">
+        {band && (
+          <div className="absolute top-0 bottom-0 bg-emerald-200/50 ring-1 ring-inset ring-emerald-300/60"
+            style={{ left: `${band.lo / MICRO_SCALE * 100}%`, width: `${(band.hi - band.lo) / MICRO_SCALE * 100}%` }}
+            title={IS ? `Æskilegt: ${band.lo}–${band.hi}% af leik-kröfu` : `Desirable: ${band.lo}–${band.hi}% of match demand`} />
+        )}
+        <div className="absolute top-0 bottom-0 w-px bg-slate-400" style={{ left: `${100 / MICRO_SCALE * 100}%` }} title={IS ? "100% = leik-ákefð" : "100% = match intensity"} />
+        <div className={`relative h-full ${tone} ${lowConf ? "opacity-40" : "opacity-80"}`} style={{ width: `${w}%` }} />
+      </div>
+      <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">{pct == null ? "—" : `${pct}%`}</div>
+      <div className="w-16 shrink-0 text-right text-[10px] tabular-nums text-slate-400">{band ? `${band.lo}–${band.hi}%` : "—"}</div>
+      <div className="w-8 shrink-0 text-right text-[10px] text-slate-400">{sessions}{IS ? " æf" : " s"}</div>
+    </div>
+  );
+}
 
 export default function TrainLikeYouPlayPage() {
   const [lang] = useLang();
@@ -333,33 +371,36 @@ export default function TrainLikeYouPlayPage() {
               </div>
               <div className="space-y-1.5">
                 {microcycle.map((d) => {
-                  const pct = microKey ? d.metrics[microKey] : null;
-                  const w = pct == null ? 0 : Math.min(pct, MICRO_SCALE) / MICRO_SCALE * 100;
-                  const tgt = MD_TARGET[d.md_day] ?? null;
-                  // On-target read vs the desirable band (rules, not AI).
-                  const status: "on" | "under" | "over" | "none" =
-                    pct == null || tgt == null ? "none" : pct < tgt.lo ? "under" : pct > tgt.hi ? "over" : "on";
-                  const tone = status === "on" ? "bg-emerald-500" : status === "under" ? "bg-amber-400"
-                    : status === "over" ? "bg-indigo-500" : pct == null ? "bg-slate-200" : "bg-sky-500";
-                  return (
-                    <div key={d.md_day} className="flex items-center gap-2">
-                      <div className="w-12 shrink-0 text-[11px] font-semibold tabular-nums text-slate-600">{d.md_day}</div>
-                      <div className="relative h-5 flex-1 overflow-hidden rounded bg-slate-100">
-                        {/* Desirable target band for this MD-day */}
-                        {tgt && (
-                          <div className="absolute top-0 bottom-0 bg-emerald-200/50 ring-1 ring-inset ring-emerald-300/60"
-                            style={{ left: `${tgt.lo / MICRO_SCALE * 100}%`, width: `${(tgt.hi - tgt.lo) / MICRO_SCALE * 100}%` }}
-                            title={IS ? `Æskilegt: ${tgt.lo}–${tgt.hi}% af leik-kröfu` : `Desirable: ${tgt.lo}–${tgt.hi}% of match demand`} />
-                        )}
-                        {/* 100% = full match intensity reference */}
-                        <div className="absolute top-0 bottom-0 w-px bg-slate-400" style={{ left: `${100 / MICRO_SCALE * 100}%` }} title={IS ? "100% = leik-ákefð" : "100% = match intensity"} />
-                        <div className={`relative h-full opacity-80 ${tone}`} style={{ width: `${w}%` }} />
+                  const c = d.cohorts;
+                  // MD+1 / MD+2: the squad is two populations. Render a bar per
+                  // cohort against its own band, with a plain-language verdict.
+                  if (c && (c.recovery || c.topup)) {
+                    const recPct = c.recovery ? c.recovery.metrics[microKey] : null;
+                    const topPct = c.topup ? c.topup.metrics[microKey] : null;
+                    const recBand = MD_TARGET[d.md_day] ?? null;
+                    const topBand = TOPUP_TARGET[d.md_day] ?? null;
+                    const onPlan = (p: number | null, b: { lo: number; hi: number } | null) => p != null && b != null && p >= b.lo && p <= b.hi;
+                    const parts: string[] = [];
+                    if (recPct != null) parts.push(IS ? `byrjunarlið í endurheimt (${recPct}%)` : `starters recovering (${recPct}%)`);
+                    if (topPct != null) parts.push(IS ? `varamenn í top-up (${topPct}%)` : `non-starters topped up (${topPct}%)`);
+                    const tail = recPct != null && topPct != null
+                      ? (onPlan(recPct, recBand) && onPlan(topPct, topBand) ? (IS ? " — bæði á plani." : " — both on plan.") : (IS ? " — athugaðu bilin." : " — check the bands."))
+                      : "";
+                    return (
+                      <div key={d.md_day} className="rounded-md bg-slate-50/70 p-1.5">
+                        <div className="mb-1 flex items-baseline gap-2 px-0.5">
+                          <span className="w-12 shrink-0 text-[11px] font-bold tabular-nums text-slate-700">{d.md_day}</span>
+                          <span className="text-[11px] leading-snug text-slate-600">{parts.join(", ")}{tail}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {c.recovery && <MicroBar leftLabel={IS ? "Endurheimt (spilaði)" : "Recovery (played)"} pct={recPct} band={recBand} sessions={c.recovery.sessions} IS={IS} sub lowConf={c.recovery.sessions < 4} />}
+                          {c.topup && <MicroBar leftLabel={IS ? "Top-up (hvíldur)" : "Top-up (rested)"} pct={topPct} band={topBand} sessions={c.topup.sessions} IS={IS} sub lowConf={c.topup.sessions < 4} />}
+                        </div>
                       </div>
-                      <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">{pct == null ? "—" : `${pct}%`}</div>
-                      <div className="w-16 shrink-0 text-right text-[10px] tabular-nums text-slate-400" title={IS ? "Æskilegt bil (sniðmát)" : "Desirable range (template)"}>{tgt ? `${tgt.lo}–${tgt.hi}%` : "—"}</div>
-                      <div className="w-8 shrink-0 text-right text-[10px] text-slate-400">{d.sessions}{IS ? " æf" : " s"}</div>
-                    </div>
-                  );
+                    );
+                  }
+                  // Every other MD-day: single squad bar (unchanged).
+                  return <MicroBar key={d.md_day} leftLabel={d.md_day} pct={microKey ? d.metrics[microKey] : null} band={MD_TARGET[d.md_day] ?? null} sessions={d.sessions} IS={IS} />;
                 })}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
@@ -369,6 +410,7 @@ export default function TrainLikeYouPlayPage() {
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-indigo-500" />{IS ? "yfir" : "above"}</span>
               </div>
               <div className="mt-1 text-[10px] text-slate-400">{IS ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla; aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016)." : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule; adjust to your model (Martin-García 2018; Akenhead 2016)."}</div>
+              <div className="mt-1 text-[10px] text-slate-400">{IS ? "MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu (≥60 mín) eru í endurheimt; varamenn (DNP/<30 mín) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "MD+1/MD+2 are split in two: players who played (≥60 min) are recovering; non-starters (DNP/<30 min) do a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
             </div>
           )}
 

@@ -148,18 +148,36 @@ function flagFor(kind: MetricKind, pct: number | null): "under" | "gap" | "ok" |
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 // Microcycle day label: recovery days (≤3 after a match) → MD+n; otherwise count
 // down to the next match (MD-1..MD-5). Days in long fixture gaps → off-cycle (null).
-function mdDayLabel(date: string, matchesAsc: string[]): string | null {
+// Returns the MD-day label AND the resolved preceding match date, so the
+// microcycle loop can classify a post-match session's cohort without re-scanning.
+function mdDayLabel(date: string, matchesAsc: string[]): { label: string | null; lastMatch: string | null } {
   let next: string | null = null, last: string | null = null;
   for (const m of matchesAsc) if (m > date) { next = m; break; }
   for (let i = matchesAsc.length - 1; i >= 0; i--) if (matchesAsc[i] < date) { last = matchesAsc[i]; break; }
   const toNext = next ? daysBetween(date, next) : null;
   const since = last ? daysBetween(last, date) : null;
-  if (since != null && since <= 3 && (toNext == null || since <= toNext)) return `MD+${since}`;
-  if (toNext != null && toNext <= 5) return `MD-${toNext}`;
-  if (since != null && since <= 3) return `MD+${since}`;
-  return null;
+  if (since != null && since <= 3 && (toNext == null || since <= toNext)) return { label: `MD+${since}`, lastMatch: last };
+  if (toNext != null && toNext <= 5) return { label: `MD-${toNext}`, lastMatch: last };
+  if (since != null && since <= 3) return { label: `MD+${since}`, lastMatch: last };
+  return { label: null, lastMatch: last };
 }
 const MICRO_ORDER = ["MD+1", "MD+2", "MD+3", "MD-5", "MD-4", "MD-3", "MD-2", "MD-1"];
+// Days whose squad is two populations: players who played the preceding match
+// (recovery) vs those who didn't (compensatory top-up). MD+3 onward re-converge.
+const COHORT_SPLIT_DAYS = new Set(["MD+1", "MD+2"]);
+// Post-match cohort thresholds — tunable references, not rules (Anderson 2016;
+// Hills 2018; Stevens 2017; Nédélec 2012).
+const RECOVERY_MIN_MINUTES = 60; // played a substantial share → recovery
+const TOPUP_MAX_MINUTES = 30;    // played little/none → needs a full top-up
+type Cohort = "recovery" | "topup" | "partial";
+// Classify a player's cohort from his minutes in the preceding match. `partial`
+// (30–59 min) is a real third state but folds into recovery for now (the enum is
+// kept so a third band can be surfaced later without a data change).
+function cohortFor(row: { minutes: number; dnp: boolean } | undefined): Cohort {
+  if (!row || row.dnp || row.minutes < TOPUP_MAX_MINUTES) return "topup";
+  if (row.minutes >= RECOVERY_MIN_MINUTES) return "recovery";
+  return "partial";
+}
 
 export async function GET(req: NextRequest) {
   const ctx = await authenticate(req);
@@ -181,9 +199,12 @@ export async function GET(req: NextRequest) {
   if (!playerIds.length) return NextResponse.json({ season, metrics: METRICS, players: [] });
 
   const matchMinByKey = new Map<string, number>();
+  // Full per-(player, match) minutes incl. DNP / low minutes — for cohort split.
+  const minuteRowByKey = new Map<string, { minutes: number; dnp: boolean }>();
   const matchDates = new Set<string>();
   for (const m of (minutesRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>) {
     matchDates.add(m.match_date);
+    minuteRowByKey.set(`${m.player_id}|${m.match_date}`, { minutes: m.minutes_played ?? 0, dnp: !!m.is_dnp });
     if (!m.is_dnp && (m.minutes_played ?? 0) >= MIN_MATCH_MIN) matchMinByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played ?? 0);
   }
   for (const s of (scheduleRes.data ?? []) as Array<{ match_date: string }>) matchDates.add(s.match_date);
@@ -238,16 +259,11 @@ export async function GET(req: NextRequest) {
 
   // ── Microcycle: average training intensity as % of match demand per MD-day ──
   // (periodization shape — is MD-3 a high day? is MD-1 a taper? Martin-García 2018)
-  const micro = new Map<string, { sessions: number; sums: Record<string, number>; counts: Record<string, number> }>();
-  for (const r of load) {
-    const date = String(r.date);
-    if (matchDates.has(date) || trainDurationSec(r) < MIN_TRAIN_SEC) continue;
-    const label = mdDayLabel(date, matchesAsc);
-    if (!label) continue;
-    const demand = matchDemandByPlayer.get(String(r.player_id));
-    if (!demand) continue;
-    let b = micro.get(label);
-    if (!b) { b = { sessions: 0, sums: {}, counts: {} }; micro.set(label, b); }
+  type MicroBucket = { sessions: number; sums: Record<string, number>; counts: Record<string, number> };
+  const newBucket = (): MicroBucket => ({ sessions: 0, sums: {}, counts: {} });
+  const addToBucket = (map: Map<string, MicroBucket>, key: string, r: Record<string, unknown>, demand: Record<string, number | null>) => {
+    let b = map.get(key);
+    if (!b) { b = newBucket(); map.set(key, b); }
     b.sessions++;
     for (const m of METRICS) {
       const dem = demand[m.key];
@@ -257,12 +273,37 @@ export async function GET(req: NextRequest) {
       b.sums[m.key] = (b.sums[m.key] ?? 0) + (val / dem) * 100;
       b.counts[m.key] = (b.counts[m.key] ?? 0) + 1;
     }
+  };
+  const metricsOf = (b: MicroBucket): Record<string, number | null> =>
+    Object.fromEntries(METRICS.map((m) => [m.key, b.counts[m.key] ? Math.round(b.sums[m.key] / b.counts[m.key]) : null]));
+
+  const micro = new Map<string, MicroBucket>();           // combined squad series, by label
+  const microCohort = new Map<string, MicroBucket>();      // `${label}|${recovery|topup}` for split days
+  for (const r of load) {
+    const date = String(r.date);
+    if (matchDates.has(date) || trainDurationSec(r) < MIN_TRAIN_SEC) continue;
+    const { label, lastMatch } = mdDayLabel(date, matchesAsc);
+    if (!label) continue;
+    const pid = String(r.player_id);
+    const demand = matchDemandByPlayer.get(pid);
+    if (!demand) continue;
+    addToBucket(micro, label, r, demand);
+    // MD+1 / MD+2: bucket the session by whether the player played the preceding
+    // match (recovery) or not (top-up). `partial` folds into recovery for now.
+    if (COHORT_SPLIT_DAYS.has(label) && lastMatch) {
+      const bucket = cohortFor(minuteRowByKey.get(`${pid}|${lastMatch}`)) === "topup" ? "topup" : "recovery";
+      addToBucket(microCohort, `${label}|${bucket}`, r, demand);
+    }
   }
   const microcycle = MICRO_ORDER.filter((l) => micro.has(l)).map((l) => {
-    const b = micro.get(l)!;
-    const metrics: Record<string, number | null> = {};
-    for (const m of METRICS) metrics[m.key] = b.counts[m.key] ? Math.round(b.sums[m.key] / b.counts[m.key]) : null;
-    return { md_day: l, sessions: b.sessions, metrics };
+    const base = { md_day: l, sessions: micro.get(l)!.sessions, metrics: metricsOf(micro.get(l)!) };
+    if (!COHORT_SPLIT_DAYS.has(l)) return base;
+    const rec = microCohort.get(`${l}|recovery`);
+    const top = microCohort.get(`${l}|topup`);
+    const cohorts: Record<string, { sessions: number; metrics: Record<string, number | null> }> = {};
+    if (rec) cohorts.recovery = { sessions: rec.sessions, metrics: metricsOf(rec) };
+    if (top) cohorts.topup = { sessions: top.sessions, metrics: metricsOf(top) };
+    return Object.keys(cohorts).length ? { ...base, cohorts } : base;
   });
 
   // Position-group match demand: the average match per-90 of the group's
