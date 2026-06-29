@@ -42,7 +42,7 @@ const LOAD_COLUMNS =
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
   "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
-  "jumps, accel_decel_efforts, high_metabolic_load_distance_m";
+  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
@@ -160,18 +160,37 @@ export async function computePlayerGameReport(
   const loadByKey = new Map<string, Record<string, unknown>>();
   for (const r of (loadData ?? []) as unknown as Array<Record<string, unknown>>) loadByKey.set(`${r.player_id}|${r.date}`, r);
 
-  const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();
+  // Manual minutes (authoritative) keyed player|date.
+  const manualMin = new Map<string, { minutes: number; dnp: boolean }>();
   for (const m of (minutesRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>) {
-    if (m.is_dnp || !m.minutes_played || m.minutes_played < MIN_QUALIFY_MINUTES) continue;
-    const load = loadByKey.get(`${m.player_id}|${m.match_date}`);
-    if (!load) continue;
-    const metrics = loadRowToMetrics(load);
-    const p90 = per90(metrics, m.minutes_played);
-    let acc = perPlayerP90Sums.get(m.player_id);
-    if (!acc) { acc = { sums: Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>, topSpeed: 0, n: 0 }; perPlayerP90Sums.set(m.player_id, acc); }
-    for (const k of P90_KEYS) acc.sums[k] += p90[k];
-    acc.topSpeed = Math.max(acc.topSpeed, metrics.top_speed_kmh);
-    acc.n += 1;
+    manualMin.set(`${m.player_id}|${m.match_date}`, { minutes: m.minutes_played ?? 0, dnp: !!m.is_dnp });
+  }
+  // Resolve a player's minutes for a match date: a manual entry if present (and
+  // not a DNP), otherwise the Catapult session duration. The duration fallback
+  // lets Core/Lite teams that only upload GPS get the report WITHOUT entering
+  // minutes by hand — match DATES still come from match_schedule (Week-Setup);
+  // the GPS feed just supplies how long each player was on the pitch.
+  const resolveMinutes = (pid: string, date: string, load: Record<string, unknown> | undefined): number => {
+    const man = manualMin.get(`${pid}|${date}`);
+    if (man) return man.dnp ? 0 : (man.minutes || 0);
+    return load ? num(load.session_duration_minutes) : 0;
+  };
+
+  const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();
+  for (const date of matchDates) {
+    for (const pid of playerIds) {
+      const load = loadByKey.get(`${pid}|${date}`);
+      if (!load) continue; // squad benchmark needs the GPS row for that match
+      const minutes = resolveMinutes(pid, date, load);
+      if (minutes < MIN_QUALIFY_MINUTES) continue;
+      const metrics = loadRowToMetrics(load);
+      const p90 = per90(metrics, minutes);
+      let acc = perPlayerP90Sums.get(pid);
+      if (!acc) { acc = { sums: Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>, topSpeed: 0, n: 0 }; perPlayerP90Sums.set(pid, acc); }
+      for (const k of P90_KEYS) acc.sums[k] += p90[k];
+      acc.topSpeed = Math.max(acc.topSpeed, metrics.top_speed_kmh);
+      acc.n += 1;
+    }
   }
 
   const benchKeys = [...P90_KEYS, "top_speed_kmh"] as const;
@@ -196,20 +215,24 @@ export async function computePlayerGameReport(
     return { player: r1(playerValue), team_avg: r1(teamAvg), percentile, rank: rank || values.length, n: values.length };
   }
 
-  const targetMinutes = ((minutesRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)
-    .filter((m) => m.player_id === playerId && !m.is_dnp && (m.minutes_played ?? 0) > 0)
-    .sort((a, b) => a.match_date.localeCompare(b.match_date));
-
-  const matches = targetMinutes.map((m) => {
-    const load = loadByKey.get(`${m.player_id}|${m.match_date}`);
-    const sched = scheduleByDate.get(m.match_date);
-    const metrics = load ? loadRowToMetrics(load) : null;
-    return {
-      date: m.match_date, opponent: sched?.opponent ?? null, competition: sched?.competition ?? null,
-      is_home: sched?.is_home ?? null, minutes: m.minutes_played ?? 0, has_gps: !!load,
-      raw: metrics, p90: metrics ? per90(metrics, m.minutes_played ?? 0) : null,
-    };
-  });
+  // The target player's matches: every match date where his minutes resolve to
+  // > 0 (manual entry, or a Catapult session that day for Core/Lite teams).
+  const matches = matchDates
+    .slice()
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => {
+      const load = loadByKey.get(`${playerId}|${date}`);
+      const minutes = resolveMinutes(playerId, date, load);
+      if (minutes <= 0) return null;
+      const sched = scheduleByDate.get(date);
+      const metrics = load ? loadRowToMetrics(load) : null;
+      return {
+        date, opponent: sched?.opponent ?? null, competition: sched?.competition ?? null,
+        is_home: sched?.is_home ?? null, minutes: Math.round(minutes), has_gps: !!load,
+        raw: metrics, p90: metrics ? per90(metrics, minutes) : null,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
 
   const gpsMatches = matches.filter((m) => m.has_gps && m.raw && m.minutes > 0);
   const acc = perPlayerP90Sums.get(playerId) ?? null;
@@ -231,8 +254,8 @@ export async function computePlayerGameReport(
       player: { id: target.id, full_name: (target.full_name ?? "—").trim(), position: target.position, age: ageFrom(target.date_of_birth) },
       season: { year: season, from, to },
       summary: {
-        matches_played: targetMinutes.length, matches_with_gps: gpsMatches.length,
-        total_minutes: targetMinutes.reduce((s, m) => s + (m.minutes_played ?? 0), 0),
+        matches_played: matches.length, matches_with_gps: gpsMatches.length,
+        total_minutes: matches.reduce((s, m) => s + m.minutes, 0),
         qualifying_matches: acc?.n ?? 0, per90_avg: seasonP90, best_top_speed_kmh: r1(bestTopSpeed),
       },
       benchmarks, availableKeys, matches,
