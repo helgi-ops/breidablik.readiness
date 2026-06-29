@@ -244,19 +244,30 @@ export default function TrainLikeYouPlayPage() {
     const pctTailEN = squadPct != null ? ` The squad is training at about ${squadPct}% of match demand.` : "";
     const pctTailIS = squadPct != null ? ` Liðið þjálfar við um ${squadPct}% af leik-kröfu.` : "";
 
+    // At/above match is the norm on the event/movement basis (drills accumulate
+    // events) — phrase the all-clear headline by magnitude so 264% never reads as
+    // "close to" match demand.
+    const aboveMatch = squadPct != null && squadPct >= 125;
     const sentence = withGaps.length === 0
       ? {
-          EN: `Everyone is training close to what their matches demand${squadPct != null ? ` — about ${squadPct}% of match load on the ${basisEN} basis.` : "."}`,
-          IS: `Allir þjálfa nálægt því sem leikir þeirra krefjast${squadPct != null ? ` — um ${squadPct}% af leik-kröfu á ${basisIS}-grunni.` : "."}`,
+          EN: squadPct == null
+            ? "Everyone is training in line with what their matches demand."
+            : `Everyone is training ${aboveMatch ? "at or above" : "close to"} what their matches demand — about ${squadPct}% of match load on the ${basisEN} basis.`,
+          IS: squadPct == null
+            ? "Allir þjálfa í takt við það sem leikir þeirra krefjast."
+            : `Allir þjálfa ${aboveMatch ? "á eða yfir" : "nálægt"} því sem leikir þeirra krefjast — um ${squadPct}% af leik-kröfu á ${basisIS}-grunni.`,
         }
       : {
           EN: `${withGaps.length} of ${total} ${withGaps.length === 1 ? "player is" : "players are"} under-exposed to match-intensity demands — ${namesStr}.${pctTailEN}`,
           IS: `${withGaps.length} af ${total} ${withGaps.length === 1 ? "leikmaður er" : "leikmenn eru"} undir-þjálfaðir m.v. leik-ákefð — ${namesStr}.${pctTailIS}`,
         };
 
+    const hotBasis = mode === "fmp" || mode === "ima";
+    const aboveTailEN = aboveMatch && hotBasis ? " On this basis training naturally runs above match intensity (movement events pile up in drills), so a high % is expected — this view flags only under-exposure, not overload." : "";
+    const aboveTailIS = aboveMatch && hotBasis ? " Á þessum grunni fer þjálfun eðlilega yfir leik-ákefð (hreyfi-atburðir hlaðast upp í æfingum), svo há prósenta er væntanleg — þessi sýn merkir aðeins van-þjálfun, ekki ofálag." : "";
     const subtitle = {
-      EN: `Train at the intensities the match demands: where a player's best training is well below ${vsEN}, the body isn't being prepared for what the game asks (Gabbett 2016).`,
-      IS: `Þjálfaðu á þeirri ákefð sem leikurinn krefst: þar sem besta þjálfun leikmanns er langt undir ${vsIS} er líkaminn ekki undirbúinn fyrir kröfur leiksins (Gabbett 2016).`,
+      EN: `Train at the intensities the match demands: where a player's best training is well below ${vsEN}, the body isn't being prepared for what the game asks (Gabbett 2016).${aboveTailEN}`,
+      IS: `Þjálfaðu á þeirri ákefð sem leikurinn krefst: þar sem besta þjálfun leikmanns er langt undir ${vsIS} er líkaminn ekki undirbúinn fyrir kröfur leiksins (Gabbett 2016).${aboveTailIS}`,
     };
 
     // Drivers: the most under-exposed players, with the under-trained metric (and
