@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
-import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, MatchTrendBars, ChartZoom, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 
 type P90 = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
@@ -329,7 +329,9 @@ export default function PlayerGameReportPage() {
                           <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700">{IS ? "Vél" : "Engine"}</span>
                           <span className="text-[11px] font-semibold text-slate-700">{IS ? "Líkamlegur prófíll (GPS) vs lið" : "Physical profile (GPS) vs squad"}</span>
                         </div>
-                        <ProfileRadar metrics={charts.radarEngine} />
+                        <ChartZoom title={IS ? "Líkamlegur prófíll (GPS) vs lið" : "Physical profile (GPS) vs squad"} large={<ProfileRadar metrics={charts.radarEngine} maxHeight={560} />}>
+                          <ProfileRadar metrics={charts.radarEngine} />
+                        </ChartZoom>
                       </div>
                     )}
                     {charts.radarDriver.length >= 3 && (
@@ -338,7 +340,9 @@ export default function PlayerGameReportPage() {
                           <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700">{IS ? "Hreyfing" : "Driver"}</span>
                           <span className="text-[11px] font-semibold text-slate-700">{IS ? "Líkamlegur prófíll (IMA) vs lið" : "Physical profile (IMA) vs squad"}</span>
                         </div>
-                        <ProfileRadar metrics={charts.radarDriver} />
+                        <ChartZoom title={IS ? "Líkamlegur prófíll (IMA) vs lið" : "Physical profile (IMA) vs squad"} large={<ProfileRadar metrics={charts.radarDriver} maxHeight={560} />}>
+                          <ProfileRadar metrics={charts.radarDriver} />
+                        </ChartZoom>
                       </div>
                     )}
                     <div className={`space-y-3 rounded-lg border border-slate-200 bg-white p-3 ${charts.radarDriver.length >= 3 ? "md:col-span-2" : ""}`}>

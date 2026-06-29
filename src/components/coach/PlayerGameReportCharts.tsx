@@ -7,17 +7,52 @@
  * (not hover-only) so nothing is lost when printed.
  */
 
+import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
 export type RadarMetric = { label: string; percentile: number; valueLabel: string };
 export type TrendBar = { label: string; value: number };
 
 const INDIGO = "#4f46e5";
 
 /**
+ * Click-to-enlarge wrapper. Shows `children` inline (with a hover ⤢ hint) and,
+ * on click, opens a centered modal rendering `large` — typically the same chart
+ * at a bigger maxHeight. Reused by the coach + player game reports.
+ */
+export function ChartZoom({ title, children, large }: { title?: string; children: ReactNode; large: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}
+        className="group relative block w-full cursor-zoom-in rounded-md transition hover:bg-slate-50/60"
+        aria-label={title ? `Enlarge ${title}` : "Enlarge chart"}>
+        {children}
+        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded bg-white/85 px-1 py-0.5 text-[11px] leading-none text-slate-400 opacity-0 shadow-sm transition group-hover:opacity-100">⤢</span>
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setOpen(false)} role="dialog" aria-modal="true">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              {title ? <div className="text-sm font-semibold text-slate-900">{title}</div> : <span />}
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+            </div>
+            {large}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+/**
  * Percentile radar: each axis is the player's squad percentile (0-100) for one
  * metric. The shaded ring at 50 marks the squad median, so spikes outward =
  * strengths, dips inward = relative weaknesses.
  */
-export function ProfileRadar({ metrics }: { metrics: RadarMetric[] }) {
+export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetric[]; maxHeight?: number }) {
   const N = metrics.length;
   if (N < 3) return null;
   const W = 340, H = 300;
@@ -31,7 +66,7 @@ export function ProfileRadar({ metrics }: { metrics: RadarMetric[] }) {
   const playerPoly = metrics.map((m, i) => pt(i, m.percentile).join(",")).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 300 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight }}>
       {/* concentric rings */}
       {rings.map((ring) => {
         const poly = metrics.map((_, i) => pt(i, ring).join(",")).join(" ");

@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, MatchTrendBars, ChartZoom, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
@@ -235,7 +235,9 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                 <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (GPS) vs liðið" : "Physical profile (GPS) vs squad"}</span>
               </div>
               <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hve mikið þú hleypur — vegalengd, háhraði, sprettur, hæsti hraði, hröðun/hemlun." : "How much running you bring — distance, high-speed, sprint, top speed, accel/decel."}</div>
-              <ProfileRadar metrics={radarEngine} />
+              <ChartZoom title={isIS ? "Líkamlegur prófíll (GPS) vs liðið" : "Physical profile (GPS) vs squad"} large={<ProfileRadar metrics={radarEngine} maxHeight={520} />}>
+                <ProfileRadar metrics={radarEngine} />
+              </ChartZoom>
             </div>
           )}
           {radarDriver.length >= 3 && (
@@ -245,7 +247,9 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                 <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (IMA) vs liðið" : "Physical profile (IMA) vs squad"}</span>
               </div>
               <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hvernig þú hreyfir þig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk, ákafahlaup eftir böndum (B5–B8)." : "How you move — sharp accel/decel, change of direction, jumps, high-intensity running by band (B5–B8)."}</div>
-              <ProfileRadar metrics={radarDriver} />
+              <ChartZoom title={isIS ? "Líkamlegur prófíll (IMA) vs liðið" : "Physical profile (IMA) vs squad"} large={<ProfileRadar metrics={radarDriver} maxHeight={520} />}>
+                <ProfileRadar metrics={radarDriver} />
+              </ChartZoom>
             </div>
           )}
 
