@@ -42,6 +42,7 @@ const ENGINE: MetricCfg[] = [
   { key: "sprint", is: "Sprettir", en: "Sprinting", sis: "Sprettur", sen: "Sprint", unit: "m", fmt: n0 },
   { key: "top_speed_kmh", is: "Hæsti hraði", en: "Top speed", sis: "Hraði", sen: "Speed", unit: "km/h", fmt: f1 },
   { key: "hml", is: "Ákafa-vegalengd", en: "High metabolic distance", sis: "Háless.", sen: "HML", unit: "m", fmt: n0 },
+  { key: "efforts", is: "Hröðunar-/hemlunarátök", en: "Accel/decel efforts", sis: "Átök", sen: "Efforts", unit: "", fmt: f1 },
   { key: "accel", is: "Hröðun (GPS)", en: "Accelerations (GPS)", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
   { key: "decel", is: "Hemlun (GPS)", en: "Decelerations (GPS)", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
 ];

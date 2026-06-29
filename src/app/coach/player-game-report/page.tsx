@@ -119,6 +119,7 @@ export default function PlayerGameReportPage() {
       { key: "sprint", label: IS ? "Sprettur" : "Sprint", fmt: n0 },
       { key: "top_speed_kmh", label: IS ? "Hraði" : "Speed", fmt: f1 },
       { key: "hml", label: "HML", fmt: n0 },
+      { key: "efforts", label: IS ? "Átök" : "Efforts", fmt: f1 },
       { key: "accel", label: "Acc", fmt: f1 },
       { key: "decel", label: "Dec", fmt: f1 },
     ];
