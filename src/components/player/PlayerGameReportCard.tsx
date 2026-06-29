@@ -17,7 +17,7 @@ import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@
 
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
-type Match = { date: string; opponent: string | null; minutes: number; has_gps: boolean; p90: P90 | null };
+type Match = { date: string; opponent: string | null; competition?: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; p90: P90 | null };
 type Report = {
   player: { full_name: string; position: string | null; age: number | null };
   season: { year: number };
@@ -58,6 +58,29 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showMatches, setShowMatches] = useState(false);
+  const [ai, setAi] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
+  const genAi = async () => {
+    setAiLoading(true); setAiErr(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/player/game-report/narrative`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ lang }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setAiErr(j.error ?? "Failed"); return; }
+      setAi(j.narrative as string);
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -164,6 +187,35 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
             </div>
           )}
 
+          {/* AI summary about you — on-demand, labelled as AI, from your own numbers */}
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+                <span>✨</span>{isIS ? "AI samantekt um þig" : "AI summary about you"}
+              </div>
+              {!ai && (
+                <button type="button" onClick={genAi} disabled={aiLoading}
+                  className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                  {aiLoading ? (isIS ? "Skrifa…" : "Writing…") : (isIS ? "Búa til" : "Generate")}
+                </button>
+              )}
+            </div>
+            {aiErr && <div className="mt-2 text-xs text-red-600">{aiErr}</div>}
+            {ai ? (
+              <>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-zinc-700">{ai}</p>
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-zinc-400">
+                  <span className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-indigo-700">AI</span>
+                  {isIS ? "Búið til úr þínum eigin leiktölum. AI útskýrir — tölurnar ráða." : "Generated from your own match numbers. AI explains — the numbers decide."}
+                </div>
+              </>
+            ) : !aiLoading && !aiErr ? (
+              <p className="mt-1 text-xs text-indigo-700/70">
+                {isIS ? "Fáðu stutta samantekt á prófílnum þínum, skrifaða úr þínum eigin tölum." : "Get a short summary of your profile, written from your own numbers."}
+              </p>
+            ) : null}
+          </div>
+
           {/* Percentile radar */}
           {radar.length >= 3 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -179,6 +231,29 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
             <MatchTrendBars title={isIS ? "Vegalengd" : "Distance"} unit="m" bars={series("total_distance")} avg={s.per90_avg.total_distance ?? null} />
             {(avail ? avail.has("hsr") : true) && (
               <MatchTrendBars title={isIS ? "Háhraðahlaup" : "High-speed running"} unit="m" bars={series("hsr")} avg={s.per90_avg.hsr ?? null} color="#0891b2" />
+            )}
+          </div>
+
+          {/* All matches — the player's full game list (his own data) */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <button type="button" onClick={() => setShowMatches((v) => !v)} className="flex w-full items-center justify-between text-sm font-semibold text-zinc-900">
+              <span>{isIS ? "Allir leikir" : "All matches"} <span className="text-zinc-400">({report.matches.length})</span></span>
+              <span className="text-zinc-400">{showMatches ? "▲" : "▼"}</span>
+            </button>
+            {showMatches && (
+              <div className="mt-2 divide-y divide-zinc-100">
+                {report.matches.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
+                    <div className="min-w-0">
+                      <div className="truncate text-zinc-800">{m.opponent ?? "—"}{m.is_home != null ? <span className="text-zinc-400"> · {m.is_home ? (isIS ? "heima" : "home") : (isIS ? "úti" : "away")}</span> : null}</div>
+                      <div className="text-[11px] text-zinc-400">{m.date} · {m.minutes}′{!m.has_gps ? (isIS ? " · engin GPS" : " · no GPS") : ""}</div>
+                    </div>
+                    {m.has_gps && m.p90 ? (
+                      <div className="shrink-0 text-right text-[11px] tabular-nums text-zinc-500">{n0(m.p90.total_distance)} m<span className="text-zinc-400"> /90</span></div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
