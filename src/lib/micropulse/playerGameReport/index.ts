@@ -42,13 +42,17 @@ const LOAD_COLUMNS =
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
   "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
-  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes";
+  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
     total_distance: num(r.total_distance),
     hsr: num(r.high_speed_distance),
-    sprint: num(r.sprint_distance),
+    // Sprint distance = the V6 (top-speed) velocity band. Catapult's separate
+    // "sprint_distance" field needs a sprint threshold configured and is empty
+    // on many Core/Lite units, so prefer velocity_band6 (always computed; for
+    // Pro the two are identical) and fall back to sprint_distance.
+    sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
     player_load: num(r.total_player_load),
     accel: r0(num(r.accelerations)),
     decel: r0(num(r.decelerations)),
