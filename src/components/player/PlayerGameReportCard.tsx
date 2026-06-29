@@ -256,9 +256,13 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
           {/* Per-match trends */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-4">
             <div className="text-sm font-semibold text-zinc-900">{isIS ? "Per leik (á 90 mín)" : "Per match (per 90)"}</div>
-            <MatchTrendBars title={isIS ? "Vegalengd" : "Distance"} unit="m" bars={series("total_distance")} avg={s.per90_avg.total_distance ?? null} />
+            <ChartZoom title={isIS ? "Vegalengd /90" : "Distance /90"} large={<MatchTrendBars title={isIS ? "Vegalengd" : "Distance"} unit="m" bars={series("total_distance")} avg={s.per90_avg.total_distance ?? null} maxHeight={420} />}>
+              <MatchTrendBars title={isIS ? "Vegalengd" : "Distance"} unit="m" bars={series("total_distance")} avg={s.per90_avg.total_distance ?? null} />
+            </ChartZoom>
             {(avail ? avail.has("hsr") : true) && (
-              <MatchTrendBars title={isIS ? "Háhraðahlaup" : "High-speed running"} unit="m" bars={series("hsr")} avg={s.per90_avg.hsr ?? null} color="#0891b2" />
+              <ChartZoom title={isIS ? "Háhraðahlaup /90" : "High-speed running /90"} large={<MatchTrendBars title={isIS ? "Háhraðahlaup" : "High-speed running"} unit="m" bars={series("hsr")} avg={s.per90_avg.hsr ?? null} color="#0891b2" maxHeight={420} />}>
+                <MatchTrendBars title={isIS ? "Háhraðahlaup" : "High-speed running"} unit="m" bars={series("hsr")} avg={s.per90_avg.hsr ?? null} color="#0891b2" />
+              </ChartZoom>
             )}
           </div>
 

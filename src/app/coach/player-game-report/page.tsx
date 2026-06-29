@@ -346,8 +346,12 @@ export default function PlayerGameReportPage() {
                       </div>
                     )}
                     <div className={`space-y-3 rounded-lg border border-slate-200 bg-white p-3 ${charts.radarDriver.length >= 3 ? "md:col-span-2" : ""}`}>
-                      <MatchTrendBars title={IS ? "Vegalengd /90 (m)" : "Distance /90 (m)"} unit="m" bars={charts.distance.bars} avg={charts.distance.avg} />
-                      <MatchTrendBars title={IS ? "Háhraðahlaup /90 (m)" : "High-speed running /90 (m)"} unit="m" bars={charts.hsr.bars} avg={charts.hsr.avg} color="#0ea5e9" />
+                      <ChartZoom title={IS ? "Vegalengd /90 (m)" : "Distance /90 (m)"} large={<MatchTrendBars title={IS ? "Vegalengd /90 (m)" : "Distance /90 (m)"} unit="m" bars={charts.distance.bars} avg={charts.distance.avg} maxHeight={440} />}>
+                        <MatchTrendBars title={IS ? "Vegalengd /90 (m)" : "Distance /90 (m)"} unit="m" bars={charts.distance.bars} avg={charts.distance.avg} />
+                      </ChartZoom>
+                      <ChartZoom title={IS ? "Háhraðahlaup /90 (m)" : "High-speed running /90 (m)"} large={<MatchTrendBars title={IS ? "Háhraðahlaup /90 (m)" : "High-speed running /90 (m)"} unit="m" bars={charts.hsr.bars} avg={charts.hsr.avg} color="#0ea5e9" maxHeight={440} />}>
+                        <MatchTrendBars title={IS ? "Háhraðahlaup /90 (m)" : "High-speed running /90 (m)"} unit="m" bars={charts.hsr.bars} avg={charts.hsr.avg} color="#0ea5e9" />
+                      </ChartZoom>
                     </div>
                   </div>
                 </div>

@@ -111,8 +111,8 @@ export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetri
  * above each bar; short opponent labels below. Bars below average are muted.
  */
 export function MatchTrendBars({
-  title, unit, bars, avg, color = INDIGO,
-}: { title: string; unit: string; bars: TrendBar[]; avg: number | null; color?: string }) {
+  title, unit, bars, avg, color = INDIGO, maxHeight,
+}: { title: string; unit: string; bars: TrendBar[]; avg: number | null; color?: string; maxHeight?: number }) {
   if (!bars.length) return null;
   const W = 340, H = 168;
   const ml = 6, mr = 6, mt = 20, mb = 30;
@@ -131,7 +131,7 @@ export function MatchTrendBars({
         <span className="text-[11px] font-semibold text-slate-700">{title}</span>
         {avg != null && <span className="text-[10px] text-slate-400">avg {Math.round(avg).toLocaleString()} {unit}</span>}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: maxHeight ?? H }}>
         {bars.map((b, i) => {
           const x = xFor(i);
           const y = yFor(b.value);
