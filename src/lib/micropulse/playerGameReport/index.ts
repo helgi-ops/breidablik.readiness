@@ -12,6 +12,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const r0 = (v: number) => Math.round(v);
@@ -48,11 +49,9 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
     total_distance: num(r.total_distance),
     hsr: num(r.high_speed_distance),
-    // Sprint distance = the V6 (top-speed) velocity band. Catapult's separate
-    // "sprint_distance" field needs a sprint threshold configured and is empty
-    // on many Core/Lite units, so prefer velocity_band6 (always computed; for
-    // Pro the two are identical) and fall back to sprint_distance.
-    sprint: num(r.velocity_band6_total_distance) || num(r.sprint_distance),
+    // Sprint distance = the V6 (top-speed) velocity band (empty sprint_distance
+    // on Lite units). Shared helper so every surface resolves it identically.
+    sprint: sprintDistanceM(r),
     player_load: num(r.total_player_load),
     accel: r0(num(r.accelerations)),
     decel: r0(num(r.decelerations)),

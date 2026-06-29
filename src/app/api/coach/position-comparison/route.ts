@@ -15,6 +15,7 @@ import {
   STYLE_METRICS, type StyleMetricKey, type StyleProfile,
   positionGroup, POSITION_GROUPS, buildPopulationStats, classifyStyle,
 } from "@/lib/micropulse/positionStyle";
+import { sprintDistanceM, isMetricLive } from "@/lib/micropulse/catapultCapability";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
@@ -59,10 +60,8 @@ function appearanceProfile(r: Record<string, unknown>, minutes: number): { p90: 
     p90: {
       distance: num(r.total_distance) * f,
       hsr: num(r.high_speed_distance) * f,
-      // Sprint distance = the V6 (top-speed) band; Lite units often leave the
-      // separate sprint_distance field at 0 (no sprint threshold configured), so
-      // prefer velocity_band6 and fall back to sprint_distance (identical on Pro).
-      sprint: (num(r.velocity_band6_total_distance) || num(r.sprint_distance)) * f,
+      // Sprint = V6 band (empty sprint_distance on Lite). Shared resolver.
+      sprint: sprintDistanceM(r) * f,
       accel: num(r.accelerations) * f,
       decel: num(r.decelerations) * f,
       cod: cod * f,
@@ -201,10 +200,7 @@ export async function GET(req: NextRequest) {
   // player once logged with a Pro pod — Keflavík has exactly one) keeps dead
   // accel/decel/CoD/jumps axes alive. GPS metrics are near-universal; genuine IMA
   // is all-or-nothing per tier, so the threshold separates them cleanly.
-  const liveMetrics = STYLE_METRICS.filter((m) => {
-    const vals = squadValues[m];
-    return vals.length > 0 && vals.filter((v) => v > 0).length / vals.length >= 0.5;
-  });
+  const liveMetrics = STYLE_METRICS.filter((m) => isMetricLive(squadValues[m]));
 
   return NextResponse.json({ season, squadAvg, groups, metrics: liveMetrics });
 }

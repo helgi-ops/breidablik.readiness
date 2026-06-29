@@ -30,6 +30,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useLang } from "@/lib/lang";
 import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
@@ -409,9 +410,9 @@ export default function HsrIntelligencePage() {
           const last7 = hist.filter((r) => r.date >= win7Start && r.date <= today);
           const days_7d = new Set(last7.map((r) => r.date)).size;
           const hsr_7d_total      = last7.reduce((s, r) => s + Number(r.high_speed_distance ?? 0), 0);
-          // Sprint distance = the V6 (top-speed) band; Lite units often leave the
-          // separate sprint_distance field at 0, so prefer V6 and fall back to it.
-          const sprint_dist_7d    = last7.reduce((s, r) => s + (Number(r.velocity_band6_total_distance ?? 0) || Number(r.sprint_distance ?? 0)), 0);
+          // Sprint distance = the V6 (top-speed) band (empty sprint_distance on
+          // Lite); shared resolver so it matches every other surface.
+          const sprint_dist_7d    = last7.reduce((s, r) => s + sprintDistanceM(r as Record<string, unknown>), 0);
           const sprint_efforts_7d = last7.reduce((s, r) => s + Number(r.velocity_band6_total_efforts_gen2 ?? 0), 0);
 
           // 28d window (full history we fetched is 28d)
