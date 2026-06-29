@@ -30,27 +30,27 @@ type Report = {
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString());
 const f1 = (v: number | null | undefined) => (v == null ? "—" : (Math.round(v * 10) / 10).toLocaleString());
 
-// Metric labels (bilingual) + formatter — mirrors the coach report so the two
-// surfaces describe the same numbers identically.
-type MetricCfg = { key: string; is: string; en: string; unit: string; fmt: (v: number | null | undefined) => string };
-const METRICS: MetricCfg[] = [
-  { key: "total_distance", is: "Vegalengd", en: "Distance", unit: "m", fmt: n0 },
-  { key: "hsr", is: "Háhraðahlaup", en: "High-speed running", unit: "m", fmt: n0 },
-  { key: "sprint", is: "Sprettir", en: "Sprinting", unit: "m", fmt: n0 },
-  { key: "top_speed_kmh", is: "Hæsti hraði", en: "Top speed", unit: "km/h", fmt: f1 },
-  { key: "accel", is: "Hröðun", en: "Accelerations", unit: "", fmt: f1 },
-  { key: "decel", is: "Hraðaminnkun", en: "Decelerations", unit: "", fmt: f1 },
-  { key: "cod", is: "Stefnubreytingar", en: "Change of direction", unit: "", fmt: f1 },
-  { key: "jumps", is: "Stökk", en: "Jumps", unit: "", fmt: f1 },
-  { key: "efforts", is: "Átök", en: "Efforts", unit: "", fmt: f1 },
-  { key: "hml", is: "Hááless. vegal.", en: "High metabolic dist.", unit: "m", fmt: n0 },
+// Metric labels (bilingual) + short radar-axis labels + formatter. Two groups,
+// echoing the Niklas Virtanen framing the system follows: the ENGINE (GPS — how
+// much running you bring) and the DRIVER (IMA — how explosively you move). On a
+// Lite/Core team the IMA keys are absent from availableKeys, so the Driver radar
+// simply doesn't render and only the Engine profile shows.
+type MetricCfg = { key: string; is: string; en: string; sis: string; sen: string; unit: string; fmt: (v: number | null | undefined) => string };
+const ENGINE: MetricCfg[] = [
+  { key: "total_distance", is: "Vegalengd", en: "Distance", sis: "Vegal.", sen: "Dist", unit: "m", fmt: n0 },
+  { key: "hsr", is: "Háhraðahlaup", en: "High-speed running", sis: "Háhraði", sen: "HSR", unit: "m", fmt: n0 },
+  { key: "sprint", is: "Sprettir", en: "Sprinting", sis: "Sprettur", sen: "Sprint", unit: "m", fmt: n0 },
+  { key: "top_speed_kmh", is: "Hæsti hraði", en: "Top speed", sis: "Hraði", sen: "Speed", unit: "km/h", fmt: f1 },
+  { key: "hml", is: "Ákafa-vegalengd", en: "High metabolic distance", sis: "Háless.", sen: "HML", unit: "m", fmt: n0 },
 ];
-// Short axis labels for the radar (kept tight so they don't overlap).
-const SHORT: Record<string, { is: string; en: string }> = {
-  total_distance: { is: "Vegal.", en: "Dist" }, hsr: { is: "Háhraði", en: "HSR" }, sprint: { is: "Sprettur", en: "Sprint" },
-  top_speed_kmh: { is: "Hraði", en: "Speed" }, accel: { is: "Hröðun", en: "Acc" }, decel: { is: "Hraðam.", en: "Dec" },
-  cod: { is: "Stefnub.", en: "CoD" }, jumps: { is: "Stökk", en: "Jumps" }, efforts: { is: "Átök", en: "Efforts" }, hml: { is: "HML", en: "HML" },
-};
+const DRIVER: MetricCfg[] = [
+  { key: "ima_acc", is: "Snöggar hröðunir", en: "Sharp accelerations", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
+  { key: "ima_dec", is: "Snöggar hemlanir", en: "Sharp decelerations", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
+  { key: "cod", is: "Stefnubreytingar", en: "Change of direction", sis: "Stefnub.", sen: "CoD", unit: "", fmt: f1 },
+  { key: "jumps", is: "Stökk", en: "Jumps", sis: "Stökk", sen: "Jumps", unit: "", fmt: f1 },
+  { key: "ima_hsr", is: "Ákafahlaup", en: "High-intensity running", sis: "Ákafahl.", sen: "HI run", unit: "m", fmt: n0 },
+];
+const ALL: MetricCfg[] = [...ENGINE, ...DRIVER];
 
 export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "EN" }) {
   const isIS = lang === "IS";
@@ -103,27 +103,31 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
 
   const avail = useMemo(() => (report?.availableKeys ? new Set(report.availableKeys) : null), [report]);
 
-  // Radar: squad percentile per metric (spikes out = strengths).
-  const radar: RadarMetric[] = useMemo(() => {
+  // Build a radar (squad percentile per metric; spikes out = strengths) from a
+  // metric group, keeping only the metrics this club actually captures.
+  const buildRadar = useMemo(() => (cfgs: MetricCfg[]): RadarMetric[] => {
     if (!report) return [];
-    return METRICS
+    return cfgs
       .filter((m) => (avail ? avail.has(m.key) : true))
       .map((m) => {
         const b = report.benchmarks[m.key];
         if (!b) return null;
-        const s = SHORT[m.key];
-        return { label: isIS ? (s?.is ?? m.is) : (s?.en ?? m.en), percentile: b.percentile, valueLabel: m.fmt(b.player) } as RadarMetric;
+        return { label: isIS ? m.sis : m.sen, percentile: b.percentile, valueLabel: m.fmt(b.player) } as RadarMetric;
       })
       .filter((x): x is RadarMetric => x != null);
   }, [report, avail, isIS]);
 
-  // Plain-language standout / focus, derived from the radar percentiles.
+  const radarEngine = useMemo(() => buildRadar(ENGINE), [buildRadar]);
+  const radarDriver = useMemo(() => buildRadar(DRIVER), [buildRadar]);
+
+  // Plain-language standout / focus, across BOTH profiles (so an IMA quality can
+  // be the standout, not just a GPS one).
   const verdict = useMemo(() => {
-    if (!report || radar.length < 2) return null;
-    const sorted = [...radar].sort((a, b) => b.percentile - a.percentile);
-    const top = sorted[0], low = sorted[sorted.length - 1];
-    return { top, low };
-  }, [report, radar]);
+    const both = [...radarEngine, ...radarDriver];
+    if (!report || both.length < 2) return null;
+    const sorted = [...both].sort((a, b) => b.percentile - a.percentile);
+    return { top: sorted[0], low: sorted[sorted.length - 1] };
+  }, [report, radarEngine, radarDriver]);
 
   const series = (key: string): TrendBar[] =>
     (report?.matches ?? []).filter((m) => m.has_gps && m.p90).map((m) => ({
@@ -216,12 +220,26 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
             ) : null}
           </div>
 
-          {/* Percentile radar */}
-          {radar.length >= 3 && (
+          {/* Percentile radars — Engine (GPS) and, when the club captures IMA,
+              Driver (movement). Each axis = squad percentile; spikes out = strength. */}
+          {radarEngine.length >= 3 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <div className="text-sm font-semibold text-zinc-900">{isIS ? "Prófíllinn þinn vs liðið" : "Your profile vs the squad"}</div>
-              <div className="text-[11px] text-zinc-500">{isIS ? "Hver ás = hundraðshluti þinn í liðinu. Toppar út = styrkur." : "Each axis = your squad percentile. Spikes out = strengths."}</div>
-              <ProfileRadar metrics={radar} />
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{isIS ? "Vél" : "Engine"}</span>
+                <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (GPS) vs liðið" : "Physical profile (GPS) vs squad"}</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hve mikið þú hleypur — vegalengd, háhraði, sprettur, hæsti hraði." : "How much running you bring — distance, high-speed, sprint, top speed."}</div>
+              <ProfileRadar metrics={radarEngine} />
+            </div>
+          )}
+          {radarDriver.length >= 3 && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">{isIS ? "Hreyfing" : "Driver"}</span>
+                <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (IMA) vs liðið" : "Physical profile (IMA) vs squad"}</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hvernig þú hreyfir þig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk." : "How you move — sharp accel/decel, change of direction, jumps."}</div>
+              <ProfileRadar metrics={radarDriver} />
             </div>
           )}
 
@@ -275,7 +293,7 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                     </tr>
                   </thead>
                   <tbody>
-                    {METRICS.filter((m) => (avail ? avail.has(m.key) : true) && report.benchmarks[m.key]).map((m) => {
+                    {ALL.filter((m) => (avail ? avail.has(m.key) : true) && report.benchmarks[m.key]).map((m) => {
                       const b = report.benchmarks[m.key]!;
                       return (
                         <tr key={m.key} className="border-t border-zinc-100">
