@@ -309,6 +309,31 @@ export default function PlayerGameReportPage() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{t.noData}</div>
           ) : (
             <>
+              {/* AI summary — sits directly under the player's name, the first
+                  thing a coach reads, rather than buried mid-page. */}
+              <div className="pgr-section mb-5 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                    <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white">AI</span>
+                    {t.aiTitle}
+                  </div>
+                  {!narrative && (
+                    <button type="button" onClick={generateNarrative} disabled={aiBusy}
+                      className="pgr-noprint rounded-md bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50">
+                      {aiBusy ? t.aiBusy : t.aiGenerate}
+                    </button>
+                  )}
+                </div>
+                {narrative ? (
+                  <>
+                    <p className="whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{narrative}</p>
+                    <div className="mt-1.5 text-[9px] text-indigo-400">{t.aiLabel}</div>
+                  </>
+                ) : (
+                  <p className="pgr-noprint text-[11px] text-slate-500">{t.aiLabel}.</p>
+                )}
+              </div>
+
               {/* Season summary tiles */}
               <div className="pgr-section mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Tile label={`${t.matchesPlayed} (${t.withGps})`} value={`${report.summary.matches_played} (${report.summary.matches_with_gps})`} />
@@ -379,30 +404,6 @@ export default function PlayerGameReportPage() {
                     );
                   })}
                 </div>
-              </div>
-
-              {/* AI narrative */}
-              <div className="pgr-section mb-6 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                    <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white">AI</span>
-                    {t.aiTitle}
-                  </div>
-                  {!narrative && (
-                    <button type="button" onClick={generateNarrative} disabled={aiBusy}
-                      className="pgr-noprint rounded-md bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50">
-                      {aiBusy ? t.aiBusy : t.aiGenerate}
-                    </button>
-                  )}
-                </div>
-                {narrative ? (
-                  <>
-                    <p className="whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{narrative}</p>
-                    <div className="mt-1.5 text-[9px] text-indigo-400">{t.aiLabel}</div>
-                  </>
-                ) : (
-                  <p className="pgr-noprint text-[11px] text-slate-500">{t.aiLabel}.</p>
-                )}
               </div>
 
               {/* Per-match table */}
