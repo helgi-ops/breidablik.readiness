@@ -42,6 +42,16 @@ export default function TlypTrainingFocus({
 
   if (groups.length === 0) return null;
 
+  // Precompute each group's focus + exceptions, so we can tell whether the whole
+  // squad is clear (no under-exposure anywhere) and show one affirming statement
+  // instead of a wall of identical "On track" pills.
+  const views = groups.map((g) => ({
+    g,
+    focus: rankGroupFocus(g.members, metricKeys).slice(0, maxFocusPerGroup),
+    exceptions: g.members.filter((mem) => mem.modeGaps > 0).sort((a, b) => b.modeGaps - a.modeGaps),
+  }));
+  const allClear = views.every((v) => v.focus.length === 0 && v.exceptions.length === 0);
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline gap-2">
@@ -52,19 +62,29 @@ export default function TlypTrainingFocus({
           {IS ? "út frá götunum hér að neðan" : "from the gaps below"}
         </span>
       </div>
-      <p className="mt-1 text-[12px] leading-snug text-slate-500">
-        {IS
-          ? "Áhersla per leikstöðu, og einstaklingar sem skera sig úr. Hver tillaga vísar í rannsókn (sjáðu tooltip)."
-          : "A focus per position, plus the individuals who stand out. Every suggestion cites its research (hover for the source)."}
-      </p>
+      {!allClear && (
+        <p className="mt-1 text-[12px] leading-snug text-slate-500">
+          {IS
+            ? "Áhersla per leikstöðu, og einstaklingar sem skera sig úr. Hver tillaga vísar í rannsókn (sjáðu tooltip)."
+            : "A focus per position, plus the individuals who stand out. Every suggestion cites its research (hover for the source)."}
+        </p>
+      )}
 
+      {allClear ? (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-800">
+            <span aria-hidden>✓</span>
+            {IS ? "Engin van-undirbúnings-göt á þessum grunni" : "No under-exposure gaps on this basis"}
+          </div>
+          <p className="mt-1 text-[12px] leading-snug text-emerald-700/90">
+            {IS
+              ? "Allar leikstöður þjálfa á eða yfir leik-kröfu — enginn er undir-undirbúinn (kveikir aðeins ef besta þjálfun fellur undir 50% af leik-kröfu, Malone 2017). Þessi hluti birtir hvern á að þjálfa harðar um leið og gat opnast. Skiptu um grunn (FMP / IMA / GPS) til að skoða aðra mæla."
+              : "Every position is training at or above match demand — nobody is under-prepared (this only fires when best training drops below 50% of match demand, Malone 2017). The panel surfaces who to train harder the moment a gap opens up. Switch basis (FMP / IMA / GPS) to check another set of metrics."}
+          </p>
+        </div>
+      ) : (
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {groups.map((g) => {
-          const focus = rankGroupFocus(g.members, metricKeys).slice(0, maxFocusPerGroup);
-          const exceptions = g.members
-            .filter((mem) => mem.modeGaps > 0)
-            .sort((a, b) => b.modeGaps - a.modeGaps);
-
+        {views.map(({ g, focus, exceptions }) => {
           return (
             <div key={g.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
               <div className="text-[13px] font-semibold text-slate-800">{tx(g.label)}</div>
@@ -137,6 +157,7 @@ export default function TlypTrainingFocus({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
