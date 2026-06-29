@@ -171,8 +171,11 @@ const RECOVERY_MIN_MINUTES = 60; // played a substantial share → recovery
 const TOPUP_MAX_MINUTES = 30;    // played little/none → needs a full top-up
 type Cohort = "recovery" | "topup" | "partial";
 // Classify a player's cohort from his minutes in the preceding match. `partial`
-// (30–59 min) is a real third state but folds into recovery for now (the enum is
-// kept so a third band can be surfaced later without a data change).
+// (30–59 min) is a real third state; it folds into TOP-UP, not recovery — the
+// Recovery band is sized for full starters, and a partial appearance still needs
+// a compensatory top-up (validated on Breiðablik: folding partial into recovery
+// inflated MD+1 Recovery from a true 44% to a misleading 76%). The enum is kept
+// so a minutes-scaled third band can be added later.
 function cohortFor(row: { minutes: number; dnp: boolean } | undefined): Cohort {
   if (!row || row.dnp || row.minutes < TOPUP_MAX_MINUTES) return "topup";
   if (row.minutes >= RECOVERY_MIN_MINUTES) return "recovery";
@@ -288,10 +291,10 @@ export async function GET(req: NextRequest) {
     const demand = matchDemandByPlayer.get(pid);
     if (!demand) continue;
     addToBucket(micro, label, r, demand);
-    // MD+1 / MD+2: bucket the session by whether the player played the preceding
-    // match (recovery) or not (top-up). `partial` folds into recovery for now.
+    // MD+1 / MD+2: bucket by whether the player played a full shift (recovery) or
+    // not (top-up). `partial` (30–59 min) folds into top-up.
     if (COHORT_SPLIT_DAYS.has(label) && lastMatch) {
-      const bucket = cohortFor(minuteRowByKey.get(`${pid}|${lastMatch}`)) === "topup" ? "topup" : "recovery";
+      const bucket = cohortFor(minuteRowByKey.get(`${pid}|${lastMatch}`)) === "recovery" ? "recovery" : "topup";
       addToBucket(microCohort, `${label}|${bucket}`, r, demand);
     }
   }
