@@ -83,7 +83,7 @@ const LOAD_COLS =
   "player_id, date, max_velocity, fmp_total_duration_s, fmp_running_high_s, fmp_dynamic_high_s, fmp_dynamic_medium_s, " +
   "ima_accel, ima_decel, jumps, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "accel_decel_efforts, velocity_band6_total_efforts_gen2, high_speed_distance, total_player_load, player_load_per_minute";
+  "accel_decel_efforts, velocity_band6_total_efforts_gen2, high_speed_distance, total_player_load, player_load_per_minute, session_duration_minutes";
 
 function rawMetric(r: Record<string, unknown>, key: MetricKey): number {
   switch (key) {
@@ -219,6 +219,27 @@ export async function GET(req: NextRequest) {
 
   const byPlayer = new Map<string, Array<Record<string, unknown>>>();
   for (const r of load) { const id = String(r.player_id); if (!byPlayer.has(id)) byPlayer.set(id, []); byPlayer.get(id)!.push(r); }
+
+  // Match-minutes fallback for clubs that upload GPS but don't enter minutes by
+  // hand (most Core/Lite teams — e.g. Keflavík had minutes for only 1 of 12
+  // matches, so the match demand was built on a single game and the whole board
+  // was unreliable). On a SCHEDULED match date with no manual minutes, treat the
+  // player's Catapult session that day as his appearance, using
+  // session_duration_minutes (= time on pitch). Manual entries always win.
+  const scheduleDates = new Set<string>();
+  for (const s of (scheduleRes.data ?? []) as Array<{ match_date: string }>) scheduleDates.add(s.match_date);
+  for (const r of load) {
+    const date = String(r.date);
+    if (!scheduleDates.has(date)) continue;
+    const pid = String(r.player_id);
+    const key = `${pid}|${date}`;
+    if (minuteRowByKey.has(key)) continue; // a manual row (played or DNP) wins
+    const mins = num(r.session_duration_minutes);
+    if (mins >= MIN_MATCH_MIN) {
+      matchMinByKey.set(key, mins);
+      minuteRowByKey.set(key, { minutes: mins, dnp: false });
+    }
+  }
 
   const matchDemandByPlayer = new Map<string, Record<string, number | null>>();
   const out = players.map((p) => {
