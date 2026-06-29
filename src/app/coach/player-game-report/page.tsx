@@ -119,13 +119,20 @@ export default function PlayerGameReportPage() {
       { key: "sprint", label: IS ? "Sprettur" : "Sprint", fmt: n0 },
       { key: "top_speed_kmh", label: IS ? "Hraði" : "Speed", fmt: f1 },
       { key: "hml", label: "HML", fmt: n0 },
+      { key: "accel", label: "Acc", fmt: f1 },
+      { key: "decel", label: "Dec", fmt: f1 },
     ];
+    // Driver = inertial movement events + high-intensity running broken into
+    // stride-rate bands B5-B8 (the IMA analogue of GPS V5/V6).
     const driverCfg: Cfg[] = [
       { key: "ima_acc", label: "Acc", fmt: f1 },
       { key: "ima_dec", label: "Dec", fmt: f1 },
       { key: "cod", label: "CoD", fmt: f1 },
       { key: "jumps", label: IS ? "Stökk" : "Jumps", fmt: f1 },
-      { key: "ima_hsr", label: IS ? "Ákafahl." : "HI run", fmt: n0 },
+      { key: "ima_hir5", label: "B5", fmt: n0 },
+      { key: "ima_hir6", label: "B6", fmt: n0 },
+      { key: "ima_hir7", label: "B7", fmt: n0 },
+      { key: "ima_hir8", label: "B8", fmt: n0 },
     ];
     const buildRadar = (cfg: Cfg[]): RadarMetric[] => cfg
       .filter((c) => !avail || avail.has(c.key))

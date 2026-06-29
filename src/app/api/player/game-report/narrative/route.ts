@@ -86,8 +86,11 @@ export async function POST(req: Request) {
   // Keep only the metrics the club captures (top speed always kept — it's a peak).
   const availableKeys = report.availableKeys;
   const isAvail = (k: string) => k === "top_speed_kmh" || availableKeys.includes(k);
+  // The per-band HIR breakdown (ima_hir5-8) is a radar detail; the AI describes
+  // high-intensity running via the lumped `ima_hsr` only — keep the bands out.
+  const HIDE = new Set(["ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
   const pick = (obj: Record<string, unknown> | null | undefined) =>
-    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k)));
+    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k) && !HIDE.has(k)));
 
   const facts = {
     player: { name: report.player.full_name, position: report.player.position ?? "unknown", age: report.player.age ?? "unknown" },

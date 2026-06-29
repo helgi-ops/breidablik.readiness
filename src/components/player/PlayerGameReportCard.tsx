@@ -42,13 +42,19 @@ const ENGINE: MetricCfg[] = [
   { key: "sprint", is: "Sprettir", en: "Sprinting", sis: "Sprettur", sen: "Sprint", unit: "m", fmt: n0 },
   { key: "top_speed_kmh", is: "Hæsti hraði", en: "Top speed", sis: "Hraði", sen: "Speed", unit: "km/h", fmt: f1 },
   { key: "hml", is: "Ákafa-vegalengd", en: "High metabolic distance", sis: "Háless.", sen: "HML", unit: "m", fmt: n0 },
+  { key: "accel", is: "Hröðun (GPS)", en: "Accelerations (GPS)", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
+  { key: "decel", is: "Hemlun (GPS)", en: "Decelerations (GPS)", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
 ];
 const DRIVER: MetricCfg[] = [
   { key: "ima_acc", is: "Snöggar hröðunir", en: "Sharp accelerations", sis: "Hröðun", sen: "Acc", unit: "", fmt: f1 },
   { key: "ima_dec", is: "Snöggar hemlanir", en: "Sharp decelerations", sis: "Hemlun", sen: "Dec", unit: "", fmt: f1 },
   { key: "cod", is: "Stefnubreytingar", en: "Change of direction", sis: "Stefnub.", sen: "CoD", unit: "", fmt: f1 },
   { key: "jumps", is: "Stökk", en: "Jumps", sis: "Stökk", sen: "Jumps", unit: "", fmt: f1 },
-  { key: "ima_hsr", is: "Ákafahlaup", en: "High-intensity running", sis: "Ákafahl.", sen: "HI run", unit: "m", fmt: n0 },
+  // High-intensity running broken into stride-rate bands B5-B8 (rising intensity).
+  { key: "ima_hir5", is: "Ákafahlaup band 5", en: "High-intensity running — band 5", sis: "B5", sen: "B5", unit: "m", fmt: n0 },
+  { key: "ima_hir6", is: "Ákafahlaup band 6", en: "High-intensity running — band 6", sis: "B6", sen: "B6", unit: "m", fmt: n0 },
+  { key: "ima_hir7", is: "Ákafahlaup band 7", en: "High-intensity running — band 7", sis: "B7", sen: "B7", unit: "m", fmt: n0 },
+  { key: "ima_hir8", is: "Ákafahlaup band 8", en: "High-intensity running — band 8", sis: "B8", sen: "B8", unit: "m", fmt: n0 },
 ];
 const ALL: MetricCfg[] = [...ENGINE, ...DRIVER];
 
@@ -228,7 +234,7 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{isIS ? "Vél" : "Engine"}</span>
                 <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (GPS) vs liðið" : "Physical profile (GPS) vs squad"}</span>
               </div>
-              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hve mikið þú hleypur — vegalengd, háhraði, sprettur, hæsti hraði." : "How much running you bring — distance, high-speed, sprint, top speed."}</div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hve mikið þú hleypur — vegalengd, háhraði, sprettur, hæsti hraði, hröðun/hemlun." : "How much running you bring — distance, high-speed, sprint, top speed, accel/decel."}</div>
               <ProfileRadar metrics={radarEngine} />
             </div>
           )}
@@ -238,7 +244,7 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                 <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">{isIS ? "Hreyfing" : "Driver"}</span>
                 <span className="text-sm font-semibold text-zinc-900">{isIS ? "Líkamlegur prófíll (IMA) vs liðið" : "Physical profile (IMA) vs squad"}</span>
               </div>
-              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hvernig þú hreyfir þig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk." : "How you move — sharp accel/decel, change of direction, jumps."}</div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{isIS ? "Hvernig þú hreyfir þig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk, ákafahlaup eftir böndum (B5–B8)." : "How you move — sharp accel/decel, change of direction, jumps, high-intensity running by band (B5–B8)."}</div>
               <ProfileRadar metrics={radarDriver} />
             </div>
           )}

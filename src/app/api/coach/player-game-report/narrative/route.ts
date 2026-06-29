@@ -84,8 +84,11 @@ export async function POST(req: NextRequest) {
 
   // Keep only the metrics the club captures — so the AI never describes a
   // flat-zero column a Core/Lite team doesn't measure.
+  // The per-band HIR breakdown (ima_hir5-8) is a radar detail; the AI describes
+  // high-intensity running via the lumped `ima_hsr` only — keep the bands out.
+  const HIDE = new Set(["ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8"]);
   const pick = (obj: Record<string, unknown> | null | undefined) =>
-    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k)));
+    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => isAvail(k) && !HIDE.has(k)));
 
   const facts = {
     player: { name: player.full_name, position: player.position ?? "unknown", age: player.age ?? "unknown" },

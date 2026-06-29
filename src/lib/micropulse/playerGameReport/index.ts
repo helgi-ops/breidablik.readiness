@@ -22,6 +22,7 @@ export const MIN_QUALIFY_MINUTES = 20; // ignore cameo appearances in the benchm
 export const P90_KEYS = [
   "total_distance", "hsr", "sprint", "player_load",
   "accel", "decel", "ima_acc", "ima_dec", "cod", "jumps", "ima_hsr",
+  "ima_hir5", "ima_hir6", "ima_hir7", "ima_hir8",
   "efforts", "hml",
 ] as const;
 export type P90Key = (typeof P90_KEYS)[number];
@@ -30,6 +31,7 @@ type MatchMetrics = {
   total_distance: number; hsr: number; sprint: number; player_load: number;
   accel: number; decel: number; ima_acc: number; ima_dec: number;
   cod: number; jumps: number; ima_hsr: number; top_speed_kmh: number;
+  ima_hir5: number; ima_hir6: number; ima_hir7: number; ima_hir8: number;
   efforts: number; hml: number;
 };
 
@@ -38,7 +40,9 @@ const LOAD_COLUMNS =
   "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band58_total_distance, jumps, accel_decel_efforts, high_metabolic_load_distance_m";
+  "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
+  "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
+  "jumps, accel_decel_efforts, high_metabolic_load_distance_m";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
@@ -56,6 +60,12 @@ function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
     ),
     jumps: r0(num(r.jumps)),
     ima_hsr: num(r.ima_fr_band58_total_distance),
+    // High-intensity running broken into Catapult stride-rate bands 5-8 (rising
+    // intensity) — the IMA analogue of GPS velocity bands V5/V6.
+    ima_hir5: num(r.ima_fr_band5_total_distance),
+    ima_hir6: num(r.ima_fr_band6_total_distance),
+    ima_hir7: num(r.ima_fr_band7_total_distance),
+    ima_hir8: num(r.ima_fr_band8_total_distance),
     top_speed_kmh: (() => { const v = num(r.max_velocity); return v > 45 ? 0 : v; })(),
     efforts: r0(num(r.accel_decel_efforts)),
     hml: num(r.high_metabolic_load_distance_m),
@@ -68,7 +78,9 @@ function per90(metrics: MatchMetrics, minutes: number): Record<P90Key, number> {
     total_distance: r0(metrics.total_distance * f), hsr: r0(metrics.hsr * f), sprint: r0(metrics.sprint * f),
     player_load: r0(metrics.player_load * f), accel: r1(metrics.accel * f), decel: r1(metrics.decel * f),
     ima_acc: r1(metrics.ima_acc * f), ima_dec: r1(metrics.ima_dec * f), cod: r1(metrics.cod * f),
-    jumps: r1(metrics.jumps * f), ima_hsr: r0(metrics.ima_hsr * f), efforts: r1(metrics.efforts * f), hml: r0(metrics.hml * f),
+    jumps: r1(metrics.jumps * f), ima_hsr: r0(metrics.ima_hsr * f),
+    ima_hir5: r0(metrics.ima_hir5 * f), ima_hir6: r0(metrics.ima_hir6 * f), ima_hir7: r0(metrics.ima_hir7 * f), ima_hir8: r0(metrics.ima_hir8 * f),
+    efforts: r1(metrics.efforts * f), hml: r0(metrics.hml * f),
   };
 }
 
