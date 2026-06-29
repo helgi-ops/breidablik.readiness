@@ -241,6 +241,17 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
             ) : null}
           </div>
 
+          {/* Engine vs Driver explainer — only when both radars show (Pro). */}
+          {radarEngine.length >= 3 && radarDriver.length >= 3 && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-[12px] leading-relaxed text-zinc-600 shadow-sm">
+              {isIS ? (
+                <><span className="font-semibold text-emerald-700">Vél (GPS)</span> = hve mikið þú hleypur (hráa aflið, eins og hestöfl). <span className="font-semibold text-violet-700">Stýring (IMA)</span> = hvernig þú hreyfir þig — snöggar hröðunir, hemlanir, stefnubreytingar, stökk. Tveir geta haft sömu vél en gjörólíka stýringu. <span className="text-zinc-400">(hugmynd: Niklas Virtanen, &bdquo;Data as a language&ldquo;, Catapult)</span></>
+              ) : (
+                <><span className="font-semibold text-emerald-700">Engine (GPS)</span> = how much running you bring (raw output, like horsepower). <span className="font-semibold text-violet-700">Driver (IMA)</span> = how you move — sharp accelerations, decelerations, changes of direction, jumps. Two players can have the same engine but a very different driver. <span className="text-zinc-400">(concept: Niklas Virtanen, “Data as a language”, Catapult)</span></>
+              )}
+            </div>
+          )}
+
           {/* Percentile radars — Engine (GPS) and, when the club captures IMA,
               Driver (movement). Each axis = squad percentile; spikes out = strength. */}
           {radarEngine.length >= 3 && (

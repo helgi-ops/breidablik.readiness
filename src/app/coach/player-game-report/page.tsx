@@ -366,6 +366,17 @@ export default function PlayerGameReportPage() {
               {charts && (charts.radarEngine.length >= 3 || charts.radarDriver.length >= 3) && (
                 <div className="pgr-section mb-6">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Prófíll & þróun" : "Profile & trends"}</div>
+                  {/* Engine vs Driver explainer — the GPS/IMA framing isn't obvious
+                      to every coach. Only shown when both radars are present. */}
+                  {charts.radarDriver.length >= 3 && (
+                    <div className="pgr-section mb-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                      {IS ? (
+                        <><span className="font-semibold text-emerald-700">Vél (GPS)</span> = hve mikið leikmaðurinn skilar — vegalengd, háhraði, sprettir, hraði (hráa aflið, eins og hestöfl). <span className="font-semibold text-violet-700">Stýring (IMA)</span> = hvernig hann hreyfir sig — snöggar hröðunir/hemlanir, stefnubreytingar, stökk. Tveir leikmenn geta haft sömu vél en gjörólíka stýringu. <span className="text-slate-400">(hugmynd: Niklas Virtanen, &bdquo;Data as a language&ldquo;, Catapult)</span></>
+                      ) : (
+                        <><span className="font-semibold text-emerald-700">Engine (GPS)</span> = how much the player brings — distance, high-speed running, sprints, top speed (the raw output, like horsepower). <span className="font-semibold text-violet-700">Driver (IMA)</span> = how he moves — sharp accelerations/decelerations, changes of direction, jumps. Two players can have the same engine but a very different driver. <span className="text-slate-400">(concept: Niklas Virtanen, “Data as a language”, Catapult)</span></>
+                      )}
+                    </div>
+                  )}
                   <div className="grid gap-4 md:grid-cols-2">
                     {charts.radarEngine.length >= 3 && (
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
