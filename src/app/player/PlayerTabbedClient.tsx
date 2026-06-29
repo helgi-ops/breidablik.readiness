@@ -25,6 +25,7 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
+import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -752,6 +753,16 @@ function IconTeam({ active }: { active: boolean }) {
   );
 }
 
+function IconReport({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h2v4H8zM14 11h2v6h-2z" />
+    </svg>
+  );
+}
+
 function IconShield({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -789,6 +800,7 @@ const PWA_PRIMARY_TABS = [
 ];
 
 const PWA_SECONDARY_TABS = [
+  { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport, minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
@@ -1147,7 +1159,8 @@ export default function DevPlayerClient() {
       const showStrength = activeTab === "strength";
       const showChat = activeTab === "chat";
       const showPrivacy = activeTab === "privacy";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy;
+      const showGameReport = activeTab === "gamereport";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -1359,6 +1372,7 @@ export default function DevPlayerClient() {
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
               {activeTab === "strength" && <DevPlayerStrengthTab />}
+              {activeTab === "gamereport" && <PlayerGameReportCard lang={lang as "IS" | "EN"} />}
               {activeTab === "chat" && chatPlayerId && (
                 <div className="mx-auto max-w-lg pb-24">
                   <ChatThread
