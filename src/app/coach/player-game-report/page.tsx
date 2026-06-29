@@ -108,28 +108,38 @@ export default function PlayerGameReportPage() {
     // teams drop the empty IMA columns (cod) and surface efforts/HML instead;
     // Pro teams keep their IMA columns and drop efforts.
     const avail = report.availableKeys ? new Set(report.availableKeys) : null;
-    const radarCfg: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
+    type Cfg = { key: string; label: string; fmt: (v: number | null | undefined) => string };
+    // Two profiles, mirroring the player app + the Engine/Driver framing the
+    // system follows: ENGINE = GPS volume (how much running), DRIVER = genuine
+    // IMA (how explosively the player moves — ima_accel/decel, CoD, jumps, HI
+    // running). On Lite/Core the IMA keys are absent → the Driver radar drops.
+    const engineCfg: Cfg[] = [
       { key: "total_distance", label: IS ? "Vegal." : "Dist", fmt: n0 },
       { key: "hsr", label: "HSR", fmt: n0 },
       { key: "sprint", label: IS ? "Sprettur" : "Sprint", fmt: n0 },
       { key: "top_speed_kmh", label: IS ? "Hraði" : "Speed", fmt: f1 },
-      { key: "accel", label: "Acc", fmt: f1 },
-      { key: "decel", label: "Dec", fmt: f1 },
-      { key: "cod", label: "CoD", fmt: f1 },
-      { key: "efforts", label: IS ? "Átök" : "Efforts", fmt: f1 },
       { key: "hml", label: "HML", fmt: n0 },
     ];
-    const radar: RadarMetric[] = radarCfg
+    const driverCfg: Cfg[] = [
+      { key: "ima_acc", label: "Acc", fmt: f1 },
+      { key: "ima_dec", label: "Dec", fmt: f1 },
+      { key: "cod", label: "CoD", fmt: f1 },
+      { key: "jumps", label: IS ? "Stökk" : "Jumps", fmt: f1 },
+      { key: "ima_hsr", label: IS ? "Ákafahl." : "HI run", fmt: n0 },
+    ];
+    const buildRadar = (cfg: Cfg[]): RadarMetric[] => cfg
       .filter((c) => !avail || avail.has(c.key))
       .map((c) => {
         const b = report.benchmarks[c.key];
         return b ? { label: c.label, percentile: b.percentile, valueLabel: c.fmt(b.player) } : null;
       })
       .filter((x): x is RadarMetric => x != null);
+    const radarEngine = buildRadar(engineCfg);
+    const radarDriver = buildRadar(driverCfg);
     const series = (key: keyof typeof report.summary.per90_avg): TrendBar[] =>
       gpsMatches.map((m) => ({ label: shortOpp(m), value: (m.p90?.[key] as number) ?? 0 }));
     return {
-      radar,
+      radarEngine, radarDriver,
       distance: { bars: series("total_distance"), avg: report.summary.per90_avg.total_distance },
       hsr: { bars: series("hsr"), avg: report.summary.per90_avg.hsr },
       sprint: { bars: series("sprint"), avg: report.summary.per90_avg.sprint },
@@ -299,16 +309,32 @@ export default function PlayerGameReportPage() {
                 <Tile label={`HSR ${t.per90} (m)`} value={n0(report.summary.per90_avg.hsr)} />
               </div>
 
-              {/* Visualisations — radar profile + per-match trends */}
-              {charts && charts.radar.length >= 3 && (
+              {/* Visualisations — Engine (GPS) + Driver (IMA) radars + trends.
+                  Two profiles when the club captures IMA; Lite/Core drops the
+                  Driver radar and shows Engine alongside the trends. */}
+              {charts && (charts.radarEngine.length >= 3 || charts.radarDriver.length >= 3) && (
                 <div className="pgr-section mb-6">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Prófíll & þróun" : "Profile & trends"}</div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="mb-1 text-[11px] font-semibold text-slate-700">{IS ? "Líkamlegur prófíll (vs lið)" : "Physical profile (vs squad)"}</div>
-                      <ProfileRadar metrics={charts.radar} />
-                    </div>
-                    <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                    {charts.radarEngine.length >= 3 && (
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="mb-1 flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700">{IS ? "Vél" : "Engine"}</span>
+                          <span className="text-[11px] font-semibold text-slate-700">{IS ? "Líkamlegur prófíll (GPS) vs lið" : "Physical profile (GPS) vs squad"}</span>
+                        </div>
+                        <ProfileRadar metrics={charts.radarEngine} />
+                      </div>
+                    )}
+                    {charts.radarDriver.length >= 3 && (
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="mb-1 flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700">{IS ? "Hreyfing" : "Driver"}</span>
+                          <span className="text-[11px] font-semibold text-slate-700">{IS ? "Líkamlegur prófíll (IMA) vs lið" : "Physical profile (IMA) vs squad"}</span>
+                        </div>
+                        <ProfileRadar metrics={charts.radarDriver} />
+                      </div>
+                    )}
+                    <div className={`space-y-3 rounded-lg border border-slate-200 bg-white p-3 ${charts.radarDriver.length >= 3 ? "md:col-span-2" : ""}`}>
                       <MatchTrendBars title={IS ? "Vegalengd /90 (m)" : "Distance /90 (m)"} unit="m" bars={charts.distance.bars} avg={charts.distance.avg} />
                       <MatchTrendBars title={IS ? "Háhraðahlaup /90 (m)" : "High-speed running /90 (m)"} unit="m" bars={charts.hsr.bars} avg={charts.hsr.avg} color="#0ea5e9" />
                     </div>
