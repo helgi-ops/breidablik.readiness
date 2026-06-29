@@ -64,11 +64,6 @@ const TOPUP_TARGET: Record<string, { lo: number; hi: number }> = {
   "MD+2": { lo: 85, hi: 110 },
 };
 const MICRO_SCALE = 150; // bar axis max (% of match demand)
-// Inertial / effort COUNT metrics run hot in tight-space training (drills make
-// many low-magnitude events; a match has fewer but faster/harder ones), so their
-// % of match systematically overstates mechanical load — the recovery taper
-// reads cleaner on a running-volume metric. Flag this in-context when selected.
-const HOT_COUNT_METRICS = new Set<MetricKey>(["ima_accel", "ima_decel", "ima_cod", "ima_jumps", "decel_eff", "sprint_eff"]);
 
 // One microcycle bar: the value vs its desirable band, with a 100% match line.
 // Shared by the single squad series and the per-cohort (recovery / top-up) bars.
@@ -402,14 +397,6 @@ export default function TrainLikeYouPlayPage() {
                   ? (IS ? "Meðaltal yfir allt tímabilið — dæmigert form." : "Averaged over the whole season — the typical shape.")
                   : (IS ? `${microWindow === "week" ? "Síðustu 7 dagar" : "Síðustu 4 vikur"}${data?.microWindowRef ? ` (til ${data.microWindowRef})` : ""} — nýlegt álag.` : `${microWindow === "week" ? "Last 7 days" : "Last 4 weeks"}${data?.microWindowRef ? ` (to ${data.microWindowRef})` : ""} — recent load.`)}
               </div>
-              {microKey && HOT_COUNT_METRICS.has(microKey) && (
-                <div className="mb-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] leading-snug text-amber-800">
-                  <span aria-hidden>⚠</span>
-                  <span>{IS
-                    ? "Atburða-talning (hröðun/hemlun/stefnubr./stökk) hleypur heitt í þröngum æfingum — háar % þýða marga lágstyrks-atburði, ekki endilega meira álag. Lestu endurheimtar-formið á hlaupa-mæli (vegalengd/HSR)."
-                    : "Event counts (accel/decel/CoD/jumps) run hot in tight-space training — a high % means many low-magnitude events, not necessarily more load. Read the recovery taper on a running metric (distance/HSR)."}</span>
-                </div>
-              )}
               <div className="space-y-1.5">
                 {microcycle.length === 0 ? (
                   <div className="rounded-md bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">{IS ? "Engar æfingar á þessum MD-dögum í völdum glugga." : "No sessions on these MD-days in the selected window."}</div>
@@ -453,7 +440,7 @@ export default function TrainLikeYouPlayPage() {
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-indigo-500" />{IS ? "yfir" : "above"}</span>
               </div>
               <div className="mt-1 text-[10px] text-slate-400">{IS ? "Æskilegt bil = dæmigert vikuskipulag (lágt MD+1 og MD-1, hámark mið-viku) — viðmið, ekki regla; aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016)." : "Desirable band = a typical periodization shape (low MD+1 & MD-1, peak mid-week) — a reference, not a rule; adjust to your model (Martin-García 2018; Akenhead 2016)."}</div>
-              <div className="mt-1 text-[10px] text-slate-400">{IS ? "MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust. Ath.: snögg-mælar (IMA Decel) hlaupa heitt í þröngum æfingum — lestu taper-formið helst á hlaupa-mæli (vegalengd/HSR)." : "MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence. Note: inertial counts (IMA Decel) run hot in tight-space training — read the taper shape on a running metric (distance/HSR)."}</div>
+              <div className="mt-1 text-[10px] text-slate-400">{IS ? "Hver % = heildar-magn æfingar sem hlutfall af heildar-magni heils leiks (ekki per-90 hraði — það blæs upp stuttar sessionir). MD+1/MD+2 skipt í tvennt: leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt; allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up\" til að bæta upp leik-áreitið sem þá vantaði — hvor með sitt æskilegt bil (Anderson 2016; Hills 2018; Nédélec 2012). „!\" = fá úrtök, lítið traust." : "Each % = the session's total volume as a share of a full match's total (not a per-90 rate — that inflates short sessions). MD+1/MD+2 are split in two: players who played a full shift (≥60 min) are recovering; everyone else (subs, limited or no minutes) does a compensatory “top-up” to replace the match stimulus they missed — each against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012). “!” = few sessions, low confidence."}</div>
             </div>
           )}
 

@@ -271,7 +271,14 @@ export async function GET(req: NextRequest) {
     for (const m of METRICS) {
       const dem = demand[m.key];
       if (dem == null || dem <= 0) continue;
-      const val = m.kind === "max" || m.kind === "rate" ? rawMetric(r, m.key) : rawMetric(r, m.key) / (trainDurationSec(r) / 60) * 90;
+      // VOLUME comparison: the session's TOTAL vs a full match's total (the per-90
+      // demand = a 90-min match). NOT per-90 rate — rate inflates short recovery
+      // sessions on count metrics (a 24-min session ×90/24 reads ~200% of match
+      // when the player actually did ~50% of a match's volume). The periodization
+      // bands are load/volume percentages, so volume is the right comparison.
+      // max (peak) and rate (already per-minute) compare like-for-like, unaffected
+      // by session length, so they keep their raw value too.
+      const val = rawMetric(r, m.key);
       if (!(val > 0)) continue;
       b.sums[m.key] = (b.sums[m.key] ?? 0) + (val / dem) * 100;
       b.counts[m.key] = (b.counts[m.key] ?? 0) + 1;
