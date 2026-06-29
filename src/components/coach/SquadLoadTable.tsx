@@ -53,9 +53,11 @@ const FOOTBALL_METRICS_FULL: Metric[] = [
 const FOOTBALL_METRICS_LITE: Metric[] = [
   { key: "totalDistance",              label: "Total Distance (m)",     shortLabel: "Total Dist",  aliases: ["totalDistance", "total_distance"],                                                              digits: 0 },
   { key: "highSpeedDistance",          label: "HSR Distance (m)",       shortLabel: "HSR Dist",    aliases: ["highSpeedDistance", "high_speed_distance", "hir_dist"],                                          digits: 0 },
-  { key: "sprintDistance",             label: "Sprint Distance (m)",    shortLabel: "Sprint Dist", aliases: ["sprintDistance", "sprint_distance"],                                                            digits: 0 },
   { key: "velocityBand5TotalDistance", label: "Vel Band 5 Dist (m)",    shortLabel: "Vel B5 Dist", aliases: ["velocityBand5TotalDistance", "velocity_band5_total_distance"],                                   digits: 0 },
-  { key: "velocityBand6TotalDistance", label: "Vel Band 6 Dist (m)",    shortLabel: "Vel B6 Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                   digits: 0 },
+  // On Lite the separate "sprint_distance" field is usually 0 (no sprint
+  // threshold configured); the V6 top-speed band IS the sprint distance, so we
+  // surface it under the familiar "Sprint Distance" label and drop the empty one.
+  { key: "velocityBand6TotalDistance", label: "Sprint Distance (m)",    shortLabel: "Sprint Dist", aliases: ["velocityBand6TotalDistance", "velocity_band6_total_distance"],                                   digits: 0 },
   { key: "sprintEfforts",              label: "Sprint Efforts (#)",     shortLabel: "Sprint Eff",  aliases: ["velocity_band6_total_efforts_gen2", "velocityBand6TotalEffortsGen2", "sprintEfforts"],            digits: 0 },
   // Player Load — the classic acute:chronic workload metric (Gabbett); a far
   // better fit for the 7d/28d/ACWR view than a peak like max velocity.

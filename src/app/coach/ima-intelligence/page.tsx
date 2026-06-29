@@ -29,6 +29,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
 import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
+import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 
 const I18N = {
@@ -260,6 +261,11 @@ export default function ImaIntelligencePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <LiteTierBanner
+        feature="IMA Intelligence"
+        reasonIs="IMA Intelligence þarf ekta IMA-gögn úr Catapult (hröðun/hemlun, stefnubreytingar, stökk, Free Running bönd) — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
+        reasonEn="IMA Intelligence needs genuine IMA data from Catapult (accel/decel, change-of-direction, jumps, Free Running bands) — those aren't included in your current Catapult plan."
+      />
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>

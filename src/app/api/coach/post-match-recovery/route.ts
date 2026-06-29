@@ -92,8 +92,24 @@ export async function GET(req: NextRequest) {
   for (const p of (playersRes.data ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>) {
     nameById.set(p.id, { name: (p.full_name ?? "—").trim(), position: p.position });
   }
-  const played = ((minutesRes.data ?? []) as Array<{ player_id: string; minutes_played: number | null; is_dnp: boolean | null }>)
-    .filter((m) => !m.is_dnp && (m.minutes_played ?? 0) > 0);
+  const played: Array<{ player_id: string; minutes_played: number }> =
+    ((minutesRes.data ?? []) as Array<{ player_id: string; minutes_played: number | null; is_dnp: boolean | null }>)
+      .filter((m) => !m.is_dnp && (m.minutes_played ?? 0) > 0)
+      .map((m) => ({ player_id: m.player_id, minutes_played: m.minutes_played ?? 0 }));
+  // Fallback for Lite teams that don't enter minutes by hand: a Catapult session
+  // on the match day (>= 20 min) counts as an appearance, so the recovery board
+  // isn't empty when readiness + GPS exist but minutes don't. Manual entries win.
+  // (Pro clubs leave session_duration empty, so this adds nothing for them.)
+  {
+    const playedSet = new Set(played.map((m) => m.player_id));
+    const { data: matchLoad } = await supabase.from("player_external_load_daily")
+      .select("player_id, session_duration_minutes")
+      .eq("team_id", teamId).eq("source", "catapult").eq("date", match.match_date);
+    for (const r of (matchLoad ?? []) as Array<{ player_id: string; session_duration_minutes: number | null }>) {
+      const pid = String(r.player_id), mins = num(r.session_duration_minutes ?? 0);
+      if (!playedSet.has(pid) && mins >= 20) { played.push({ player_id: pid, minutes_played: Math.round(mins) }); playedSet.add(pid); }
+    }
+  }
   const playerIds = played.map((m) => m.player_id);
 
   // Canonical readiness colour per (player, day) over the recovery window.
@@ -204,7 +220,9 @@ export async function GET(req: NextRequest) {
       const rl = rawLoad.get(m.player_id) ?? null;
       const score = rl ? Math.round(loadScore(rl) * 100) / 100 : null;
       const tier: "high" | "mid" | "low" | null = score == null ? null : score >= 0.4 ? "high" : score <= -0.4 ? "low" : "mid";
-      const load = rl ? { decel: Math.round(rl.decel), score, tier } : null;
+      // Show the signal that actually drove the tier: IMA decel on Pro, the
+      // Gen2 accel+decel effort count on Lite (decel is 0 there).
+      const load = rl ? { decel: Math.round(hasIma ? rl.decel : rl.efforts), score, tier } : null;
       // Cross-tab: heavy echo (high dose, still flagged) vs not-post-match
       // (low dose, flagged → look elsewhere).
       const heavyEcho = lagging && tier === "high";

@@ -191,6 +191,7 @@ type RawRow = {
   date: string;
   high_speed_distance: number | null;
   sprint_distance: number | null;
+  velocity_band6_total_distance: number | null;
   velocity_band6_total_efforts_gen2: number | null;
   max_vel: number | null;
 };
@@ -365,7 +366,7 @@ export default function HsrIntelligencePage() {
         // 28-day load history (covers both 7d acute + 28d chronic windows)
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, high_speed_distance, sprint_distance, velocity_band6_total_efforts_gen2, max_vel")
+          .select("player_id, date, high_speed_distance, sprint_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, max_vel")
           .eq("team_id", teamId)
           .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
@@ -408,7 +409,9 @@ export default function HsrIntelligencePage() {
           const last7 = hist.filter((r) => r.date >= win7Start && r.date <= today);
           const days_7d = new Set(last7.map((r) => r.date)).size;
           const hsr_7d_total      = last7.reduce((s, r) => s + Number(r.high_speed_distance ?? 0), 0);
-          const sprint_dist_7d    = last7.reduce((s, r) => s + Number(r.sprint_distance ?? 0), 0);
+          // Sprint distance = the V6 (top-speed) band; Lite units often leave the
+          // separate sprint_distance field at 0, so prefer V6 and fall back to it.
+          const sprint_dist_7d    = last7.reduce((s, r) => s + (Number(r.velocity_band6_total_distance ?? 0) || Number(r.sprint_distance ?? 0)), 0);
           const sprint_efforts_7d = last7.reduce((s, r) => s + Number(r.velocity_band6_total_efforts_gen2 ?? 0), 0);
 
           // 28d window (full history we fetched is 28d)

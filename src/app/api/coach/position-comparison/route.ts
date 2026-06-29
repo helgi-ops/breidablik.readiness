@@ -45,9 +45,9 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 const MIN_QUALIFY_MINUTES = 20;
 const MIN_APPEARANCES = 2;
 const LOAD_COLUMNS =
-  "player_id, date, total_distance, high_speed_distance, sprint_distance, " +
+  "player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, " +
   "accelerations, decelerations, accel_decel_efforts, max_velocity, " +
-  "total_player_load, player_load_per_minute, " +
+  "total_player_load, player_load_per_minute, session_duration_minutes, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, jumps";
 
@@ -59,7 +59,10 @@ function appearanceProfile(r: Record<string, unknown>, minutes: number): { p90: 
     p90: {
       distance: num(r.total_distance) * f,
       hsr: num(r.high_speed_distance) * f,
-      sprint: num(r.sprint_distance) * f,
+      // Sprint distance = the V6 (top-speed) band; Lite units often leave the
+      // separate sprint_distance field at 0 (no sprint threshold configured), so
+      // prefer velocity_band6 and fall back to sprint_distance (identical on Pro).
+      sprint: (num(r.velocity_band6_total_distance) || num(r.sprint_distance)) * f,
       accel: num(r.accelerations) * f,
       decel: num(r.decelerations) * f,
       cod: cod * f,
@@ -91,17 +94,19 @@ export async function GET(req: NextRequest) {
   const season = Number(new URL(req.url).searchParams.get("season")) || new Date().getUTCFullYear();
   const from = `${season}-01-01`, to = `${season}-12-31`;
 
-  const [playersRes, minutesRes] = await Promise.all([
+  const [playersRes, minutesRes, scheduleRes] = await Promise.all([
     supabase.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true),
     supabase.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
+    supabase.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
   ]);
   if (playersRes.error) return NextResponse.json({ error: playersRes.error.message }, { status: 500 });
 
   const players = (playersRes.data ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>;
   const playerIds = players.map((p) => p.id);
-  const minutes = ((minutesRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)
+  const manualMin = ((minutesRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)
     .filter((m) => !m.is_dnp && (m.minutes_played ?? 0) >= MIN_QUALIFY_MINUTES);
-  const matchDates = Array.from(new Set(minutes.map((m) => m.match_date)));
+  const scheduleDates = Array.from(new Set(((scheduleRes.data ?? []) as Array<{ match_date: string }>).map((s) => s.match_date)));
+  const matchDates = Array.from(new Set([...manualMin.map((m) => m.match_date), ...scheduleDates]));
 
   const { data: loadData, error: loadErr } = matchDates.length && playerIds.length
     ? await supabase.from("player_external_load_daily").select(LOAD_COLUMNS)
@@ -111,6 +116,21 @@ export async function GET(req: NextRequest) {
 
   const loadByKey = new Map<string, Record<string, unknown>>();
   for (const r of (loadData ?? []) as unknown as Array<Record<string, unknown>>) loadByKey.set(`${r.player_id}|${r.date}`, r);
+
+  // Appearances = manual minutes, plus a session-duration fallback on SCHEDULED
+  // match dates with no manual entry — lets Lite teams that don't enter minutes
+  // by hand still get per-90 position profiles (mirrors the Train-like-you-play
+  // and Player Game Report fallback). Manual entries always win.
+  const manualKeys = new Set(manualMin.map((m) => `${m.player_id}|${m.match_date}`));
+  const minutes: Array<{ player_id: string; match_date: string; minutes_played: number }> =
+    manualMin.map((m) => ({ player_id: m.player_id, match_date: m.match_date, minutes_played: m.minutes_played ?? 0 }));
+  const scheduleSet = new Set(scheduleDates);
+  for (const r of (loadData ?? []) as unknown as Array<Record<string, unknown>>) {
+    const date = String(r.date), pid = String(r.player_id);
+    if (!scheduleSet.has(date) || manualKeys.has(`${pid}|${date}`)) continue;
+    const mins = num(r.session_duration_minutes);
+    if (mins >= MIN_QUALIFY_MINUTES) minutes.push({ player_id: pid, match_date: date, minutes_played: mins });
+  }
 
   // ── Per-player season profile (mean per-90, max top speed) ──
   type PlayerAgg = { id: string; name: string; position: string | null; group: string; appearances: number; profile: StyleProfile };
