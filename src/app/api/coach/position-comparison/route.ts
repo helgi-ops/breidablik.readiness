@@ -196,9 +196,15 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => POSITION_GROUPS.findIndex((x) => x.key === a.key) - POSITION_GROUPS.findIndex((x) => x.key === b.key));
 
   // Only surface the axes this club actually has data for (capability-driven):
-  // a metric with no non-zero value across the squad is omitted, so Core clubs
-  // see hsr/sprint/top_speed/efforts instead of dead IMA accel/decel/CoD/jumps bars.
-  const liveMetrics = STYLE_METRICS.filter((m) => squadValues[m].some((v) => v > 0));
+  // a metric must be present for a MEANINGFUL share of the squad (≥ half), not
+  // just one player — otherwise a stray IMA row on a Lite club (e.g. a single
+  // player once logged with a Pro pod — Keflavík has exactly one) keeps dead
+  // accel/decel/CoD/jumps axes alive. GPS metrics are near-universal; genuine IMA
+  // is all-or-nothing per tier, so the threshold separates them cleanly.
+  const liveMetrics = STYLE_METRICS.filter((m) => {
+    const vals = squadValues[m];
+    return vals.length > 0 && vals.filter((v) => v > 0).length / vals.length >= 0.5;
+  });
 
   return NextResponse.json({ season, squadAvg, groups, metrics: liveMetrics });
 }

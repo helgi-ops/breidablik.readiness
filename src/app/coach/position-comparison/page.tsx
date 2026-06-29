@@ -80,7 +80,11 @@ export default function PositionComparisonPage() {
     player_load: { en: "Player Load", is: "Player Load", unit: "AU", fmt: n0 },
     pl_per_min: { en: "Work rate", is: "Ákefð", unit: "AU/min", fmt: f1 },
   };
-  const radarKeys: MetricKey[] = ["distance", "hsr", "sprint", "top_speed", "accel", "decel", "cod"];
+  // Capability-aware radar axes: keep only the movement metrics the club actually
+  // has (data.metrics = the live set from the API). Pro keeps accel/decel/CoD;
+  // Lite drops those (IMA-less) and shows hard efforts instead — never dead spokes.
+  const radarKeys: MetricKey[] = (["distance", "hsr", "sprint", "top_speed", "accel", "decel", "cod", "efforts"] as MetricKey[])
+    .filter((m) => (data?.metrics ?? []).includes(m));
   const groups = useMemo(() => data?.groups ?? [], [data]);
 
   const compareBars = useMemo(() => {
