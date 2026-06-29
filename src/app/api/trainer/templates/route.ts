@@ -96,8 +96,35 @@ export async function GET(req: Request) {
         .single();
 
       if (err) throw new Error(err.message);
+
+      // The saved structure stores only exerciseId per slot — resolve the display
+      // names from the exercise library so consumers (overview + editor) show them.
+      let structure: unknown = t.structure;
+      if (typeof structure === "string") { try { structure = JSON.parse(structure); } catch { structure = []; } }
+      if (Array.isArray(structure)) {
+        type Ex = { exerciseId?: string; name?: string; name_is?: string };
+        type Sess = { groups?: { exercises?: Ex[] }[]; exercises?: Ex[] };
+        const weeks = structure as { sessions?: Sess[] }[];
+        const eachEx = (fn: (e: Ex) => void) => {
+          for (const w of weeks) for (const s of (w?.sessions ?? [])) {
+            for (const g of (s?.groups ?? [])) for (const e of (g?.exercises ?? [])) fn(e);
+            for (const e of (s?.exercises ?? [])) fn(e);
+          }
+        };
+        const ids = new Set<string>();
+        eachEx((e) => { if (e?.exerciseId && !e.name) ids.add(String(e.exerciseId)); });
+        if (ids.size) {
+          const { data: lib } = await sb.from("exercise_library").select("id, name, name_is").in("id", [...ids]);
+          const byId = new Map((lib ?? []).map((x: { id: string; name: string; name_is: string | null }) => [String(x.id), x]));
+          eachEx((e) => {
+            const m = e?.exerciseId ? byId.get(String(e.exerciseId)) : undefined;
+            if (m && !e.name) { e.name = m.name; e.name_is = m.name_is ?? undefined; }
+          });
+        }
+      }
+
       return NextResponse.json({
-        template: { ...t, plan_name: t.name },
+        template: { ...t, structure, plan_name: t.name },
       });
     }
 

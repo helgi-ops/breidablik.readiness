@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
-type Exercise = { name: string; sets: number; reps: string; loadType?: string; loadValue?: number; velocityTarget?: number; rpeTarget?: number };
+type Exercise = { name?: string; name_is?: string; sets: number; reps: string; loadType?: string; loadValue?: number; velocityTarget?: number; rpeTarget?: number };
 type Group = { label: string; exercises: Exercise[] };
 type Session = { name?: string; method?: string; bodySplit?: string; dayOfWeek?: number; groups?: Group[]; exercises?: Exercise[] };
 type Week = { week: number; sessions: Session[] };
@@ -107,7 +107,7 @@ export default function ProgramOverviewModal({ teamId, templateId, templateName,
                                       const ld = loadStr(e);
                                       return (
                                         <div key={ei} className="flex items-baseline justify-between gap-3 text-[13px]">
-                                          <span className="text-slate-700">{e.name}</span>
+                                          <span className="text-slate-700">{(isIS && e.name_is) ? e.name_is : (e.name || (isIS ? "Æfing" : "Exercise"))}</span>
                                           <span className="shrink-0 tabular-nums text-slate-500">{e.sets}×{e.reps}{ld ? ` · ${ld}` : ""}</span>
                                         </div>
                                       );
