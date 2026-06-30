@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { sendCoachInviteEmail } from "@/lib/email/coachInviteEmail";
 
 /**
@@ -18,11 +18,6 @@ function env(name: string) {
   return v;
 }
 
-function getAdmin() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 async function requireTeamAccess(req: Request, teamId: string | null | undefined) {
   const auth = req.headers.get("authorization") || "";

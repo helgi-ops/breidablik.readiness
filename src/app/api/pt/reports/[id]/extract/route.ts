@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { ingestConfirmedReportToVald, type ExtractedReport } from "@/lib/integrations/vald/ingestReport";
 import { buildValdDailySnapshot } from "@/lib/micropulse/vald/snapshot";
 
@@ -22,11 +22,6 @@ export const maxDuration = 60;
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-function getSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 async function requireCoachForReport(req: NextRequest, reportId: string) {
   const sb = getSupabase();

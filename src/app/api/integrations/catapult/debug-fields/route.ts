@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { fetchActivitiesForDate, fetchActivityStatsDetailed } from "@/lib/integrations/catapult/api";
 import {
   extractInterestingMetricKeys,
@@ -15,11 +15,6 @@ function env(name: string) {
   return value;
 }
 
-function getAdminClient() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 async function isAuthorizedCoach(request: Request): Promise<boolean> {
   const auth = request.headers.get("authorization") || "";

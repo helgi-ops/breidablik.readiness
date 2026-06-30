@@ -10,17 +10,12 @@
  * read-only; assignments are scoped to trainer_id = auth.uid().
  */
 import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { isSeasonPhase } from "@/lib/client/seasonPhase";
 
 export const runtime = "nodejs";
 
 function env(n: string) { const v = process.env[n]; if (!v) throw new Error(`Missing ${n}`); return v; }
-function getAdmin(): SupabaseClient {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 async function requireCoach(req: Request) {
   const auth = req.headers.get("authorization") || "";

@@ -18,7 +18,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseServer as admin } from "@/lib/supabaseServer";
 import { computeLoadQuadrant } from "@/lib/client/loadQuadrant";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 import { e1rmFromSet } from "@/lib/client/oneRepMaxFormulas";
@@ -28,9 +28,6 @@ import { getClientBreakRanges, dateInRanges } from "@/lib/notifications/clientBr
 export const runtime = "nodejs";
 
 function env(n: string) { const v = process.env[n]; if (!v) throw new Error(`Missing ${n}`); return v; }
-function admin(): SupabaseClient {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-}
 
 function iso(offsetDaysAgo: number): string {
   const d = new Date(); d.setUTCDate(d.getUTCDate() - offsetDaysAgo);

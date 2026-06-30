@@ -16,13 +16,18 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Local factory (not the shared helper) because this route optionally runs the
+// service client with a caller's bearer token in the Authorization header.
+// Fails loud rather than silently falling back to the anon key.
 function getSupabase(accessToken?: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE;
+  if (!url || !key) {
+    throw new Error(
+      "Supabase service-role env not configured; refusing to fall back to anon.",
+    );
+  }
   return createClient(url, key, {
     auth: { persistSession: false },
     global: accessToken

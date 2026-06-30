@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 
 export const runtime = "nodejs";
@@ -28,15 +28,6 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 const MAX_OUTPUT_TOKENS = 320;
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 async function getCoachTeam(req: NextRequest) {
   const supabase = getSupabase();

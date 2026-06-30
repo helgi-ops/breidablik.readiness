@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
 import { getTeamsWithCatapultCredentials, getConfigFromEnv } from "@/lib/integrations/catapult/api";
 import type { CatapultConfig } from "@/lib/integrations/catapult/api";
@@ -23,11 +23,6 @@ function env(name: string) {
   return value;
 }
 
-function getAdminClient() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 type ProfileRoleRow = {
   role: string | null;

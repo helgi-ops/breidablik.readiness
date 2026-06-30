@@ -30,7 +30,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { loadPlayerStrengthSnapshot, loadCoachOverrides } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession, EXERCISES_BY_ID } from "@/lib/micropulse/strengthProgramming";
@@ -44,15 +44,6 @@ const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 const MAX_OUTPUT_TOKENS = 800;
 const MAX_SUGGESTIONS = 3;
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 async function getCoachAuth(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
   const auth = req.headers.get("authorization") ?? "";

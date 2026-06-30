@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
@@ -25,15 +25,6 @@ import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_SERVICE_ROLE ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 async function getCoachAuth(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
   const auth = req.headers.get("authorization") ?? "";

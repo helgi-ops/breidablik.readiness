@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 import { getReminderContext, sendReminderToMissingPlayers } from "@/lib/reminders/checkinReminders";
 
 export const runtime = "nodejs";
@@ -10,11 +10,6 @@ function env(name: string) {
   return value;
 }
 
-function getAdminClient() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 function isAuthorizedCron(req: Request) {
   const header = req.headers.get("x-cron-secret") || "";

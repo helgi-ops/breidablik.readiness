@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import {
   availabilityVerdict as verdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory,
   recoveryNarrative,
@@ -27,11 +27,6 @@ import {
 
 export const runtime = "nodejs";
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 /** EXEC-only auth → the strict list of team_ids this management user may see. */
 async function authenticateExec(req: NextRequest) {

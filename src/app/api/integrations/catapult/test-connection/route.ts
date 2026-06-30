@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
@@ -11,11 +11,6 @@ function env(name: string) {
   return value;
 }
 
-function getAdminClient() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 type AuthProfile = { role: string; team_id: string | null };
 

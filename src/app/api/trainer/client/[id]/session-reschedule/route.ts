@@ -12,14 +12,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
 function env(n: string) { const v = process.env[n]; if (!v) throw new Error(`Missing ${n}`); return v; }
-function getAdmin(): SupabaseClient {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-}
 const isIso = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function auth(req: NextRequest, clientId: string) {

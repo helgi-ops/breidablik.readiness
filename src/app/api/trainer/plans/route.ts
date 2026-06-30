@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
 import { adaptStructure, clampFreq, type PlanWeekLike } from "@/lib/trainer/sessionFrequency";
 
 /* ── helpers ─────────────────────────────────────────── */
@@ -10,11 +10,6 @@ function env(name: string) {
   return v;
 }
 
-function getAdmin() {
-  return createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
-}
 
 interface AuthProfile {
   role: string;
