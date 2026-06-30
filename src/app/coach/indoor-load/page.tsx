@@ -381,7 +381,7 @@ const PAGE_I18N = {
   indoorMcburnieProxy: { EN: "Indoor McBurnie proxy", IS: "Indoor McBurnie proxy" },
   decelsPerMinDynHigh: { EN: "decels / min Dyn High (healthy", IS: "decels / mín Dyn High (heilbrigt" },
   acwrTitle: { EN: "ACWR (Gabbett 2017)", IS: "ACWR (Gabbett 2017)" },
-  acwrSubtitle: { EN: "7d / 28d-week-avg (sweet spot 0.8-1.3)", IS: "7d / 28d-week-avg (sweet spot 0.8-1.3)" },
+  acwrSubtitle: { EN: "7d / 28d-week-avg (0.8–1.3 = familiar range)", IS: "7d / 28d-week-avg (0.8–1.3 = venjulegt bil)" },
   // Team status sentence parts
   allReadyToday: { EN: "All players ready for full program today", IS: "Allir leikmenn tilbúnir í fullt prógram í dag" },
   needsRest: { EN: "need rest", IS: "þurfa hvíld" },

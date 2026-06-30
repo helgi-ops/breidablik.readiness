@@ -98,7 +98,7 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
   const tiles = [
     { key: "braking", label: { EN: "Braking load", IS: "Hemlunarálag" }, n: elevated("braking"), tip: { EN: "High-intensity deceleration burden (McBurnie 2022) vs each player's norm.", IS: "Háákefðar-hemlunarálag (McBurnie 2022) m.v. eigin venju." } },
     { key: "hsr", label: { EN: "High-speed running", IS: "Háhraðahlaup" }, n: elevated("hsr"), tip: { EN: "High-speed running spikes vs the player's norm.", IS: "Háhraðahlaups-stökk m.v. venju." } },
-    { key: "acwr_spike", label: { EN: "Acute load spike", IS: "Bráðaálags-stökk" }, n: elevated("acwr_spike"), tip: { EN: "Acute:chronic workload ratio above 1.5 (Hulin 2014).", IS: "Bráða:krónísk álagshlutfall yfir 1.5 (Hulin 2014)." } },
+    { key: "acwr_spike", label: { EN: "Acute load spike", IS: "Bráðaálags-stökk" }, n: elevated("acwr_spike"), tip: { EN: "Acute:chronic load ratio above 1.5 — a large, fast jump in load. Flags the SIZE of the spike, not injury risk (ACWR is not a validated injury predictor — Impellizzeri 2020); the concern is whether the jump is into unfamiliar territory.", IS: "Bráða:krónísk álagshlutfall yfir 1.5 — stórt, hratt stökk í álagi. Sýnir STÆRÐ stökksins, ekki meiðsla-áhættu (ACWR er ekki staðfest meiðsla-spá — Impellizzeri 2020); áhyggjuefnið er hvort stökkið sé inn á óþekkt svæði." } },
     { key: "monotony", label: { EN: "Monotony", IS: "Einhæfni" }, n: elevated("monotony"), tip: { EN: "Foster training monotony — day-to-day sameness of load.", IS: "Foster einhæfni — hversu eins álagið er dag frá degi." } },
   ];
 

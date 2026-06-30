@@ -105,7 +105,7 @@ export async function downloadPtClientReportPdf(d: PtClientReport, trainerName =
         {/* Internal load */}
         <Text style={s.sectionTitle}>Training load (last 7 days)</Text>
         <Text style={s.para}>
-          Internal load (sRPE): strength {fmt(d.training.strength_7d)} AU + sport {fmt(d.training.sport_7d)} AU = {fmt(d.training.total_7d)} AU total. Acute:chronic ratio {d.training.acwr != null ? d.training.acwr.toFixed(2) : "—"} — {STATUS_LABEL[d.training.status] ?? d.training.status} (Gabbett sweet spot 0.8–1.3). Confidence: {d.training.confidence}.
+          Internal load (sRPE): strength {fmt(d.training.strength_7d)} AU + sport {fmt(d.training.sport_7d)} AU = {fmt(d.training.total_7d)} AU total. Acute:chronic ratio {d.training.acwr != null ? d.training.acwr.toFixed(2) : "—"} — {STATUS_LABEL[d.training.status] ?? d.training.status} (0.8–1.3 = familiar load range; a spike-size context, not an injury predictor — Gabbett 2016, Impellizzeri 2020). Confidence: {d.training.confidence}.
         </Text>
 
         {/* Strength PRs */}
@@ -159,7 +159,7 @@ export async function downloadPtClientReportPdf(d: PtClientReport, trainerName =
         </Text>
 
         <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 8, lineHeight: 1.4 }}>
-          Adherence = completed ÷ logged sessions. Readiness = daily wellness check-in (sleep, energy, soreness, stress) on a 5–25 scale. Internal load = session RPE × minutes (Foster sRPE). e1RM = estimated 1-rep max (Epley, RIR-adjusted). ACWR = acute(7d) ÷ chronic(28d) load (Gabbett sweet spot 0.8–1.3).
+          Adherence = completed ÷ logged sessions. Readiness = daily wellness check-in (sleep, energy, soreness, stress) on a 5–25 scale. Internal load = session RPE × minutes (Foster sRPE). e1RM = estimated 1-rep max (Epley, RIR-adjusted). ACWR = acute(7d) ÷ chronic(28d) load; 0.8–1.3 = familiar range, a spike-size context, not an injury predictor (Gabbett 2016, Impellizzeri 2020).
         </Text>
       </Page>
     </Document>,

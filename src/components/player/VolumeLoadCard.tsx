@@ -35,16 +35,16 @@ const ACWR_TONE: Record<string, { bg: string; text: string }> = {
 const ACWR_NOTE: Record<"IS" | "EN", Record<string, string>> = {
   IS: {
     low: "Lágt álagshlutfall — magn að minnka.",
-    optimal: "Á kjörbili (0.8–1.3) — álagsaukning örugg.",
+    optimal: "Innan þíns venjulega álagsbils (0.8–1.3) — jöfn framvinda.",
     high: "Hátt — fylgstu með, álag eykst hratt.",
-    very_high: "Mjög hátt (>1.5) — aukin meiðslahætta.",
+    very_high: "Mjög hátt (>1.5) — stórt stökk yfir venju; farðu rólega af stað.",
     building: "Safna grunnlínu fyrir álagshlutfall.",
   },
   EN: {
     low: "Low ratio — volume is dropping.",
-    optimal: "In the sweet spot (0.8–1.3) — safe progression.",
+    optimal: "Within your familiar load range (0.8–1.3) — steady progression.",
     high: "High — watch it, load climbing fast.",
-    very_high: "Very high (>1.5) — elevated injury risk.",
+    very_high: "Very high (>1.5) — a big jump above your usual; ease in gradually.",
     building: "Building a baseline for the ratio.",
   },
 };

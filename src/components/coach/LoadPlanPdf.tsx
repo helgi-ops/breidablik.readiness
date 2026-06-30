@@ -252,7 +252,7 @@ export async function downloadLoadPlanPdf(
             </View>
 
             <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 8, lineHeight: 1.4 }}>
-              HSR VB5 = high-speed running (velocity band 5); Sprint VB6 = sprint distance (band 6); Acc/Dec B2-3 = high-intensity accelerations / decelerations (effort bands 2-3); IMA COD = high-intensity change-of-direction distance. Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load (Gabbett 2016 sweet spot 0.8–1.3).
+              HSR VB5 = high-speed running (velocity band 5); Sprint VB6 = sprint distance (band 6); Acc/Dec B2-3 = high-intensity accelerations / decelerations (effort bands 2-3); IMA COD = high-intensity change-of-direction distance. Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
             </Text>
           </>
         )}

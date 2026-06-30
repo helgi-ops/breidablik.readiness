@@ -356,7 +356,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
                 </tbody>
               </table>
               <p className="px-2 pt-1.5 text-[10px] leading-relaxed text-slate-400">
-                Target = recent training-day average re-scaled by the squad acute:chronic ratio ({plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}). Match ref = the squad&apos;s average on its {plan.coverage.matchDays} highest-load (≈ match) days. Recent avg = the raw last-4-week training-day mean before any adjustment. ACWR sweet spot 0.8–1.3 (Gabbett 2016).
+                Target = recent training-day average re-scaled by the squad acute:chronic ratio ({plan.teamAcwr != null ? plan.teamAcwr.toFixed(2) : "—"}). Match ref = the squad&apos;s average on its {plan.coverage.matchDays} highest-load (≈ match) days. Recent avg = the raw last-4-week training-day mean before any adjustment. ACWR 0.8–1.3 ≈ a load change within the familiar range; it&apos;s a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
               </p>
             </div>
           </details>
