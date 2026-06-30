@@ -217,8 +217,8 @@ export const SprintExposureCard: FC<{ playerId: string }> = ({ playerId }) => {
 
       <p className="mt-2 text-[10px] text-slate-500 leading-snug">
         {lang === "IS"
-          ? "Malone 2018: vikuleg sprint exposure undir 50% af leikdags-meðaltali er tengd 3× hærri hamstring-meiðslaáhættu. Yfir 150% er accumulated spike."
-          : "Malone 2018: weekly sprint exposure below 50% of match demand is linked to ~3× hamstring injury risk. Over 150% is an accumulated spike."}
+          ? "Malone 2017: lítil sprint exposure skilur leikmenn eftir vanbúna (hófleg útsetning er verndandi); sterkasta meiðsla-merkið eru hröð stökk í sprint/HSR, ekki magnið sjálft. Yfir 150% er accumulated spike."
+          : "Malone 2017: low sprint exposure leaves players under-prepared (moderate exposure is protective); the strongest injury signal is rapid increases in sprint/HSR, not the level itself. Over 150% is an accumulated spike."}
       </p>
     </div>
   );

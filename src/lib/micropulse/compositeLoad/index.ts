@@ -301,8 +301,8 @@ export function computeCompositeLoadConcern(input: CompositeLoadInput): Composit
       const acwrVal = input.rpeAcwr?.acwr;
       escalationReasons.push(
         acwrVal != null && acwrVal > 1.5
-          ? `ACWR is ${acwrVal.toFixed(2)} — high injury risk zone (Gabbett).`
-          : `ACWR is ${acwrVal?.toFixed(2) ?? "n/a"} — above safe zone.`
+          ? `ACWR is ${acwrVal.toFixed(2)} — a large, fast load spike (Gabbett 2016; a spike-size signal, not an injury predictor).`
+          : `ACWR is ${acwrVal?.toFixed(2) ?? "n/a"} — above the familiar range.`
       );
     }
     if (externalScore != null && externalScore >= 0.34) {

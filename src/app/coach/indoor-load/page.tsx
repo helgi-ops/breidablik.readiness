@@ -1715,8 +1715,8 @@ function MethodologyFooter({ lang }: { lang: Lang }) {
         <p>
           <strong>ACWR (Acute:Chronic Workload Ratio, Gabbett 2017):</strong>{" "}
           {isEN
-            ? "Weekly cumulative player load divided by the 28-day weekly average. Sweet spot 0.8-1.3 — indicates the player is adapted to the current load. A spike above 1.5 (acute spike) is associated with 2-4× higher injury risk."
-            : "Vikulegt cumulative player load deilt með 28-day weekly average. Sweet spot 0.8-1.3 — sýnir að leikmaður er adapted til að höndla núverandi load. Hækkun yfir 1.5 (acute spike) tengist 2-4× hærri injury risk."}
+            ? "Weekly cumulative player load divided by the 28-day weekly average. 0.8-1.3 = familiar load range — the player is adapted to the current load. A jump above 1.5 is a large, fast load spike — a spike-size signal, not a validated injury predictor (Impellizzeri 2020); what matters is whether the spike is into unfamiliar load."
+            : "Vikulegt cumulative player load deilt með 28-day weekly average. 0.8-1.3 = venjulegt álagsbil — leikmaður er aðlagaður núverandi álagi. Hækkun yfir 1.5 er stórt, hratt álagsstökk — merki um STÆRÐ stökks, ekki staðfest meiðsla-spá (Impellizzeri 2020); það sem skiptir máli er hvort stökkið sé inn á óþekkt álag."}
         </p>
         <ul className="ml-4 list-disc space-y-1">
           <li>

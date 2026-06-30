@@ -86,8 +86,8 @@ const I18N = {
     IS: "vs grunnlína ber bönd 5-8 dagsins saman við 14-daga æfinga-grunnlínu (leikir undanskildir). 100% = típískur dagur. < 70% = léttur. > 150% = þungur dagur, fylgjast með endurheimt.",
   },
   legend3: {
-    EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is the strongest single predictor of non-contact lower-limb injury (Bishop 2020). Flagged when total CoD ≥ 10 efforts.",
-    IS: "CoD ósamhverfa > 15% á háa intensity Change-of-Direction event-um er sterkasti spáþáttur non-contact neðri-líkams meiðsla (Bishop 2020). Merkt þegar heildar CoD ≥ 10 efforts.",
+    EN: "CoD asymmetry > 15% on high-intensity Change-of-Direction events is a commonly-flagged imbalance associated with injury risk — a risk factor, not a validated predictor (the Bishop evidence is mainly single-leg-jump asymmetry). Flagged when total CoD ≥ 10 efforts.",
+    IS: "CoD ósamhverfa > 15% á háa intensity Change-of-Direction event-um er algengt flöggað ójafnvægi sem er tengt meiðsla-áhættu — áhættuþáttur, ekki staðfest spá (gögn Bishop eru aðallega um stökk-ósamhverfu á einum fæti). Merkt þegar heildar CoD ≥ 10 efforts.",
   },
   legend4: {
     EN: "An asterisk (*) on vs baseline means the comparison is based on only 1 training day in the 14-day window — common right now because most pre-Catapult-fix training days have no IMA data. The baseline strengthens automatically as more post-fix days accumulate.",

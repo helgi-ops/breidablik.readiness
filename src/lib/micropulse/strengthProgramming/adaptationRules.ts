@@ -330,7 +330,7 @@ export function applyAdaptationRules(
         triggerIS: "Sprint Exposure UNDERLOAD (< 50% af leikdags-meðaltali)",
         actionEN: "Posterior chain volume preserved — undertraining is the primary risk",
         actionIS: "Aftari keðju volume haldið — undertraining er aðal-áhættan",
-        evidence: "3× hamstring risk for undertrained players (Malone 2018).",
+        evidence: "Low sprint exposure leaves players under-prepared; moderate exposure is protective (Malone 2017).",
       });
     }
   }

@@ -201,9 +201,10 @@ export default function CoDAsymmetryCard({
       </div>
 
       <p className="mt-2.5 text-[10.5px] leading-snug text-slate-500">
-        Per Bishop 2020, high-intensity L/R asymmetry &gt; 15% is the strongest predictor
-        of non-contact lower-limb injury. Low-tier imbalance is often a positional habit
-        and less actionable.
+        High-intensity L/R asymmetry &gt; 15% is a commonly-flagged imbalance associated
+        with injury risk — a risk factor, not a validated predictor (the Bishop /
+        Fort-Vanmeerhaeghe evidence is mainly single-leg-jump asymmetry). Low-tier
+        imbalance is often a positional habit and less actionable.
       </p>
     </div>
   );

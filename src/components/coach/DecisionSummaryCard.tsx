@@ -123,8 +123,10 @@ export type DecisionSummaryRow = {
   _cod_high_asym_pct?: number | null;
   /** Drop in today's max sprint speed (m/s) vs the player's personal
    *  reference (top-3 mean over 28d). Surfaced as a chip when ≥ 3% drop.
-   *  Sport-science background: > 10% drop ≈ 3–4× hamstring injury risk
-   *  (Edouard 2019, Malone 2018). Informational chip — coach decides
+   *  Sport-science background: a > 10% drop signals accumulated fatigue —
+   *  sprint-induced fatigue reduces hamstring/horizontal-force capacity
+   *  (Edouard 2018). A fatigue flag, NOT a validated injury multiplier.
+   *  Informational chip — coach decides
    *  whether to cap top-end sprint exposure today. Verdict pipeline
    *  unchanged for now (defer hard-rule until 2–3 coaches confirm fit). */
   _sprint_drop_pct?: number | null;
@@ -135,9 +137,9 @@ export type DecisionSummaryRow = {
   /** Sprint Exposure band (Malone 2018) — weekly bands 5-8 stride volume
    *  vs match-day demand baseline. Volume-side companion to Sprint Speed
    *  Drop (which is quality-side).
-   *    UNDERLOAD  (< 50%)   → 3× hamstring injury risk per Malone
+   *    UNDERLOAD  (< 50%)   → under-prepared (moderate exposure is protective; Malone 2017)
    *    WATCH      (50–80%)  → playable but undertrained
-   *    SAFE       (80–130%) → sweet spot
+   *    SAFE       (80–130%) → familiar range
    *    OVERLOAD   (> 150%)  → accumulated spike
    *  Surfaced as a chip in the Decision Summary card and gated into the
    *  "Needs attention" filter. Informational — does NOT modify today's
@@ -2569,7 +2571,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                   ? "border-rose-200 bg-rose-50 text-rose-900"
                   : "border-amber-200 bg-amber-50 text-amber-900"
               }`}
-              title="Bishop 2020: high-tier L/R CoD asymmetry > 15% is the strongest predictor of non-contact lower-limb injury (~3× risk). 14-day rolling window. Chronic baseline signal — does not change today's verdict, but coach should consider unilateral work."
+              title="Interlimb asymmetry > 15% is a commonly-flagged imbalance that is associated with injury risk (a risk factor, not a validated predictor — the Bishop/Fort-Vanmeerhaeghe evidence is mainly single-leg-jump asymmetry). 14-day rolling window. Chronic baseline signal — does not change today's verdict, but the coach may consider unilateral work."
             >
               <span className="mt-0.5 shrink-0">⚠️</span>
               <span>
@@ -2580,10 +2582,11 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
-        {/* Sprint Speed Drop chip — Edouard 2019 / Malone 2018 / Buchheit 2014.
+        {/* Sprint Speed Drop chip — Edouard 2018 / Buchheit 2014.
             A drop in today's max sprint velocity vs the player's personal
-            top-3 mean over 28d is one of the strongest hamstring-injury
-            predictors. Render only when:
+            top-3 mean over 28d signals accumulated fatigue (reduced hamstring/
+            horizontal-force capacity) — a fatigue flag, not an injury
+            multiplier. Render only when:
               - drop ≥ 3% (above session-to-session noise threshold)
               - and the verdict isn't already RECOVERY/HOLD/OFF (player
                 isn't doing high-intensity work today anyway).
@@ -2629,7 +2632,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="Edouard 2019 / Malone 2018: a > 10% drop in max sprint speed vs personal peak is associated with 3-4× higher hamstring-injury risk. Today's max velocity is compared to the top-3 mean over the last 28 days. Sub-3% drops are normal session-to-session noise."
+              title="A > 10% drop in max sprint speed vs personal peak can signal accumulated fatigue — sprint-induced fatigue reduces hamstring force and horizontal-force capacity (Edouard 2018). Treat it as a fatigue flag, not a precise injury-risk figure. Today's max velocity is compared to the top-3 mean over the last 28 days. Sub-3% drops are normal session-to-session noise."
             >
               <span className="mt-0.5 shrink-0">🏃</span>
               <span>
@@ -2643,10 +2646,10 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           );
         })()}
 
-        {/* Sprint Exposure chip — Malone 2018 volume-side companion to the
+        {/* Sprint Exposure chip — Malone 2017 volume-side companion to the
             Sprint Speed Drop chip above. UNDERLOAD (< 50% of match demand)
-            is associated with ~3× hamstring injury risk; OVERLOAD (> 150%)
-            is an accumulated spike. Render only when:
+            leaves players under-prepared (moderate exposure is protective);
+            OVERLOAD (> 150%) is an accumulated spike. Render only when:
               - band is UNDERLOAD / WATCH / OVERLOAD (skip SAFE + INSUF_DATA)
               - verdict isn't RECOVERY / HOLD / OFF (no high-intensity work)
             Informational chip — does NOT modify today's verdict, mirroring
@@ -2701,8 +2704,8 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           const action = (() => {
             if (band === "UNDERLOAD") {
               return lang === "IS"
-                ? "Bæta við sprett-blokk fyrir næstu æfingu — gæti aukið meiðslaáhættu á hamstring."
-                : "Add a sprint block to the next session — undertraining raises hamstring injury risk.";
+                ? "Bæta við sprett-blokk fyrir næstu æfingu — lítil sprett-útsetning skilur leikmenn eftir vanbúna."
+                : "Add a sprint block to the next session — low sprint exposure leaves players under-prepared.";
             }
             if (band === "OVERLOAD") {
               return lang === "IS"
@@ -2744,7 +2747,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
           return (
             <div
               className={`mt-3 inline-flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
-              title="Malone 2018: weekly sprint exposure < 50% of match demand → ~3× hamstring injury risk. > 150% is an accumulated spike. Bands 5-8 of Catapult IMA Free Running are summed over the last 7 days and compared to the per-match average across the last 28 days."
+              title="Malone 2017: low sprint exposure leaves players under-prepared (moderate exposure is protective vs lower-limb injury); the strongest injury signal is large RAPID INCREASES in sprint/HSR (≈3–6× odds), not the level itself. < 50% of match demand = under-exposed; > 150% = an accumulated spike. Bands 5-8 of Catapult IMA Free Running are summed over the last 7 days and compared to the per-match average across the last 28 days."
             >
               <span className="mt-0.5 shrink-0">📊</span>
               <span>
