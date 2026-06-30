@@ -4254,13 +4254,18 @@ export default function PlayerClient() {
   // Session workflow handlers removed (feature removed)
 
   const flag: Flag = useMemo(() => {
-    const fromCoachView = parseFinalFlag(coachFinalFlag?.final_flag ?? null);
+    // Canonical readiness colour ONLY: prefer final_flag, then final_color —
+    // sibling columns on the same v_coach_readiness_today_v8 row.
+    const fromCoachView =
+      parseFinalFlag(coachFinalFlag?.final_flag ?? null) ??
+      parseFinalFlag(coachFinalFlag?.final_color ?? null);
     if (fromCoachView) return fromCoachView;
 
-    const fromSystemDecision = decisionToFlag(stage4Final?.system_decision ?? null);
-    if (fromSystemDecision) return fromSystemDecision;
+    // No canonical colour → readiness level. NEVER fall back to the stage4
+    // training action (system_decision): it's an action, not a verdict colour
+    // (CLAUDE.md > "Canonical verdict source").
     return readinessToFlag(plan?.readiness_level);
-  }, [coachFinalFlag?.final_flag, plan?.readiness_level, stage4Final?.system_decision]);
+  }, [coachFinalFlag?.final_flag, coachFinalFlag?.final_color, plan?.readiness_level]);
   const ui = useMemo(() => flagUi(normalizeFlag(flag), lang), [flag, lang]);
 
   // ── "Af hverju?" explanation lines ──────────────────────────────────
