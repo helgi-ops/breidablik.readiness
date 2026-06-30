@@ -16,11 +16,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Resched = { from_date: string; to_date: string; session_id: string };
+type Upcoming = { date: string; session_name: string };
 
 export default function ClientMoveSessionControl({ lang, onChanged }: { lang: "EN" | "IS"; onChanged?: () => void }) {
   const is = lang === "IS";
   const today = new Date().toISOString().slice(0, 10);
   const [list, setList] = useState<Resched[]>([]);
+  const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,8 @@ export default function ClientMoveSessionControl({ lang, onChanged }: { lang: "E
       const res = await fetch(`/api/client/session-reschedule`, { headers: await authHeader() });
       const j = await res.json();
       setList(res.ok ? (j.reschedules ?? []) : []);
-    } catch { setList([]); }
+      setUpcoming(res.ok ? (j.upcoming ?? []) : []);
+    } catch { setList([]); setUpcoming([]); }
   }, [authHeader]);
   useEffect(() => { void load(); }, [load]);
 
@@ -84,8 +87,17 @@ export default function ClientMoveSessionControl({ lang, onChanged }: { lang: "E
       {open && (
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <label className="text-[10px] text-slate-500">
-            <span className="block">{is ? "Dagur æfingar" : "Session's day"}</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+            <span className="block">{is ? "Æfing" : "Session"}</span>
+            {upcoming.length > 0 ? (
+              <select value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 max-w-[200px] rounded-md border border-slate-300 px-2 py-1 text-sm">
+                <option value="">{is ? "Veldu æfingu…" : "Pick a session…"}</option>
+                {upcoming.map((u) => (
+                  <option key={u.date} value={u.date}>{fmt(u.date)} · {u.session_name}</option>
+                ))}
+              </select>
+            ) : (
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-0.5 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+            )}
           </label>
           <label className="text-[10px] text-slate-500">
             <span className="block">{is ? "Nýr dagur" : "New day"}</span>

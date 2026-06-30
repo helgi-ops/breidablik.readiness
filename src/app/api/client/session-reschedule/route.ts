@@ -63,6 +63,44 @@ async function resolveNaturalSession(sb: SupabaseClient, playerId: string, date:
   return { plan, session: (sessionRow as { id: string; session_name: string } | null) ?? null } as const;
 }
 
+/** Upcoming natural sessions (next 28 days, within the active plan) with their
+ *  calendar dates — so the athlete can pick a real session to move instead of
+ *  typing a date. Excludes days already rescheduled. Uses the same forward date
+ *  math as resolveNaturalSession so the two stay consistent. */
+async function upcomingSessions(sb: SupabaseClient, playerId: string, today: string, alreadyMoved: string[]) {
+  const { data: planRow } = await sb
+    .from("individual_training_plans")
+    .select("id, start_date, end_date")
+    .eq("player_id", playerId).eq("status", "active")
+    .lte("start_date", today).gte("end_date", today)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!planRow) return [] as Array<{ date: string; session_name: string }>;
+  const plan = planRow as { id: string; start_date: string; end_date: string };
+  const { data: sess } = await sb
+    .from("individual_training_sessions")
+    .select("week_number, day_of_week, session_name, sort_order")
+    .eq("plan_id", plan.id).order("sort_order", { ascending: true });
+  const byKey = new Map<string, string>();
+  for (const s of (sess ?? []) as Array<{ week_number: number; day_of_week: number; session_name: string }>) {
+    const k = `${s.week_number}|${s.day_of_week}`;
+    if (!byKey.has(k)) byKey.set(k, s.session_name); // first session of the day
+  }
+  const moved = new Set(alreadyMoved);
+  const startMs = Date.parse(plan.start_date + "T00:00:00Z");
+  const todayMs = Date.parse(today + "T00:00:00Z");
+  const out: Array<{ date: string; session_name: string }> = [];
+  for (let i = 0; i <= 28; i++) {
+    const d = new Date(todayMs + i * 86_400_000).toISOString().slice(0, 10);
+    if (d > plan.end_date) break;
+    const dayOffset = Math.max(0, Math.floor((Date.parse(d + "T00:00:00Z") - startMs) / 86_400_000));
+    const week = Math.floor(dayOffset / 7) + 1;
+    const iso = ((new Date(d + "T00:00:00Z").getUTCDay() + 6) % 7) + 1;
+    const name = byKey.get(`${week}|${iso}`);
+    if (name && !moved.has(d)) out.push({ date: d, session_name: name });
+  }
+  return out;
+}
+
 export async function GET(req: Request) {
   const a = await requirePlayer(req);
   if ("error" in a) return NextResponse.json({ error: a.error }, { status: a.status });
@@ -73,7 +111,9 @@ export async function GET(req: Request) {
     .eq("player_id", a.playerId)
     .gte("to_date", today)
     .order("to_date", { ascending: true });
-  return NextResponse.json({ ok: true, reschedules: data ?? [] });
+  const reschedules = (data ?? []) as Array<{ from_date: string; to_date: string; session_id: string }>;
+  const upcoming = await upcomingSessions(a.sb, a.playerId, today, reschedules.map((r) => r.from_date));
+  return NextResponse.json({ ok: true, reschedules, upcoming });
 }
 
 export async function POST(req: Request) {
