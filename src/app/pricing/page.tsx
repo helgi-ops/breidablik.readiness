@@ -1006,6 +1006,11 @@ export default function PricingPage() {
 
       <footer className="border-t py-10 text-center text-xs text-neutral-500">
         © {new Date().getFullYear()} MicroPulse • {t.footer}
+        <div className="mt-2">
+          <Link href="/methodology" className="text-neutral-500 underline hover:text-neutral-900">
+            {lang === "IS" ? "Aðferðafræði og vísindagrunnur" : "Methodology & science basis"}
+          </Link>
+        </div>
       </footer>
     </main>
   );

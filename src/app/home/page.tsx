@@ -71,6 +71,7 @@ type CopyShape = {
     pricing: string;
     features: string;
     blog: string;
+    methodology: string;
   };
   auth: {
     signIn: string;
@@ -237,6 +238,7 @@ const COPY: Record<Lang, CopyShape> = {
       pricing: "Pricing",
       features: "Features",
       blog: "Blog",
+      methodology: "Methodology",
     },
     auth: {
       signIn: "Sign in",
@@ -401,6 +403,7 @@ const COPY: Record<Lang, CopyShape> = {
       pricing: "Verðlagning",
       features: "Eiginleikar",
       blog: "Greinum",
+      methodology: "Aðferðafræði",
     },
     auth: {
       signIn: "Skrá sig inn",
@@ -801,6 +804,9 @@ export default function HomeLanding() {
             </Link>
             <Link href="/blog" className="text-neutral-400 hover:text-white">
               {t.footer.blog}
+            </Link>
+            <Link href="/methodology" className="text-neutral-400 hover:text-white">
+              {t.footer.methodology}
             </Link>
           </div>
         </div>
