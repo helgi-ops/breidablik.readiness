@@ -227,14 +227,14 @@ Overview / Goals / Readiness / Load / Adjustments.
 | `dev-coach-dashboard` (11,115 lines) | Dead weight; never ships | ❌ **DO NOT CUT** — only the `/dev-coach-dashboard` *route* is prod-gated. `DevCoachDashboardClient` (the 11k-line client) **is the live coach dashboard**, rendered by `/coach/page.tsx`. Misleadingly named; rename is the real cleanup, not deletion. |
 | Merge Starter Templates + Templates → one **Programme Library** | Same underlying data, two UXs | ❌ **DO NOT MERGE** — different tables and product modes. `templates` (team side) = `workout_templates` authoring library; `starter-templates` (PT side) = assign `pt_explosive_programmes` to a client. The PT/team split is deliberate (documented in `CoachSidebar.tsx`). |
 | Slim client **Today** (16–19 stacked cards) | Mobile overload | ⚠️ **LARGELY STALE** — the player view is already a tabbed interface (`PlayerTabbedClient`: today/rpe/chat/dashboard/…), tier-gated, with portal-mounted cards. Re-measure on a real device before assuming overload. |
-| Merge Load Intelligence / Decel / HSR / IMA / Indoor / Position → **3 surfaces** | Redundant | 🔶 **UNVERIFIED / high-risk** — must respect the Lite-vs-Pro capability split (efforts vs IMA are tier-complementary) or it regresses. Do not attempt as a blind merge. |
+| Merge Load Intelligence / Decel / HSR / IMA / Indoor / Position → **3 surfaces** | Redundant | ❌ **DECIDED (2026-06-30): do NOT merge.** The surfaces each carry *different variables* and are tier-complementary (Lite = efforts / HSR / V6; Pro = IMA / Decel). Merging would force unlike data shapes into one surface and break the capability model. Keep separate. (Owner decision.) |
 | Explosive-12w / isometric protocols *(verify adoption first)* | Possibly near-zero use | 🔶 Needs usage data — your data decides. |
 
 ### FIX
 | Item | Why |
 |---|---|
 | Sport-science honesty (ACWR caveat, label tunables, drop eta-weeks, cite or cut the 25-set cap) | Closes the manifesto gap; on-brand |
-| Coach IA: collapse Load Monitoring, promote tab-buried analytics, per-page purpose line | Decision clarity |
+| Coach IA: ~~collapse Load Monitoring~~ (decided against — different variables), promote tab-buried analytics, per-page purpose line | Decision clarity |
 | Tier-gating UX: "what unlocks this" on locked pages | Conversion + honesty |
 | Client Today overload: merge/collapse, ≤7 cards above the workout | Mobile usability |
 | Trainer client-detail: sub-tabs | Stop the dumping ground |
@@ -266,7 +266,7 @@ Overview / Goals / Readiness / Load / Adjustments.
 - ❌ `dev-coach-dashboard` is the live coach dashboard, not dead weight — do not delete.
 - ❌ The two programme "libraries" are different data/modes — do not merge.
 - ⚠️ Client Today is already tabbed — re-measure before slimming.
-- 🔶 Load Monitoring → 3 surfaces remains the one open item, but it's high-risk (Lite/Pro capability) and should be driven by usage analytics, not guesswork.
+- ❌ Load Monitoring → 3 surfaces: **DECIDED — do NOT merge** (each surface has different variables and is tier-complementary; merging breaks the capability model). P1-subtract is now closed.
 
 **P2 — clarity:**
 - Per-page "use this to answer …"; tier-gating UX; trainer client-detail sub-tabs.
