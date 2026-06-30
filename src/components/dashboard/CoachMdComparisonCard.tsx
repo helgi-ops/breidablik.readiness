@@ -412,6 +412,29 @@ export default function CoachMdComparisonCard({
         <Header t={t} data={data} mdOverride={mdOverride} onMdChange={setMdOverride} />
       </div>
 
+      {/* ─── One-sentence verdict + confidence (explainability-first) ─── */}
+      {teamAvg && (() => {
+        const isIS = lang === "IS";
+        const sten = teamAvg.overallSten;
+        const above = data.players.filter((p) => (p.overallSten ?? 5) >= 8).length;
+        const below = data.players.filter((p) => (p.overallSten ?? 5) <= 3).length;
+        const hist = data.historicalSessionCount;
+        const md = data.mdDay;
+        const head = sten == null
+          ? (isIS ? `Ekki nóg söguleg gögn fyrir ${md}` : `Not enough history for ${md}`)
+          : sten >= 8 ? (isIS ? `Liðið var þungt á ${md} — yfir venju` : `Squad ran heavy for ${md} — above its usual load`)
+          : sten <= 3 ? (isIS ? `Liðið var létt á ${md} — undir venju` : `Squad ran light for ${md} — below its usual load`)
+          : (isIS ? `${md} í takt við venju liðsins` : `${md} in line with the squad's usual load`);
+        const tail = sten == null ? "" : isIS ? ` ${above} yfir, ${below} undir sinni venju.` : ` ${above} above, ${below} below their norm.`;
+        const conf = isIS ? `${hist} fyrri ${md} ${hist === 1 ? "lota" : "lotur"}` : `${hist} past ${md} ${hist === 1 ? "session" : "sessions"}`;
+        return (
+          <div className="px-4 pb-2">
+            <p className="text-sm font-semibold leading-snug text-slate-800">{head}.{tail}</p>
+            <p className="mt-0.5 text-[10px] text-slate-400">{isIS ? "Traust" : "Confidence"}: {conf}{hist < 5 ? (isIS ? " · lítið úrtak" : " · small sample — read with caution") : ""}. {isIS ? "Borið við eigin venju liðsins (Robertson 2017, STEN)." : "Vs the squad's own norm (Robertson 2017, STEN)."}</p>
+          </div>
+        );
+      })()}
+
       {/* ─── STEN Scale Legend ──────────────────────────────────── */}
       <div className="px-4 pb-3">
         <div className="flex items-center gap-1 text-[9px]">

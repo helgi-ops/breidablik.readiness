@@ -859,6 +859,28 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* ═══ One-sentence verdict + confidence (explainability-first) ═══ */}
+      {(inBand != null || belowBand || aboveBand) && (() => {
+        const isIS = lang === "IS";
+        const pct = plPct != null ? Math.round(plPct) : null;
+        const n = mdPlanning?.sessionCount ?? 0;
+        const head = inBand
+          ? (isIS ? `Æfingin er í bandi${pct != null ? ` — ${pct}% af dæmigerðu álagi` : ""}.` : `This session is in band${pct != null ? ` — ${pct}% of the typical load` : ""}.`)
+          : aboveBand
+          ? (isIS ? `Yfir dæmigerðu álagi${pct != null ? ` — ${pct}%` : ""}. Íhugaðu að taka úr blokk.` : `Above the typical load${pct != null ? ` — ${pct}%` : ""}. Consider trimming a block.`)
+          : (isIS ? `Undir dæmigerðu álagi${pct != null ? ` — ${pct}%` : ""}. Bættu við blokk ef þú vilt meira.` : `Below the typical load${pct != null ? ` — ${pct}%` : ""}. Add a block if you want more.`);
+        return (
+          <div className={`rounded-xl border p-3 ${inBand ? "border-emerald-200 bg-emerald-50" : aboveBand ? "border-amber-200 bg-amber-50" : "border-sky-200 bg-sky-50"}`}>
+            <p className="text-sm font-semibold leading-snug text-slate-800">{head}</p>
+            {n > 0 && (
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                {isIS ? "Traust" : "Confidence"}: {isIS ? `band byggt á ${n} ${n === 1 ? "lotu" : "lotum"}` : `band from ${n} past ${n === 1 ? "session" : "sessions"}`}{n < 4 ? (isIS ? " · lítið úrtak" : " · small sample") : ""} (Martin-García 2018).
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ═══ TOP BAR: Session header + totals ═══ */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {/* Header row: name + MD-day + target + PDF */}
