@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriver } from "@/components/coach/VerdictBanner";
 import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
@@ -224,6 +225,10 @@ export default function PostMatchRecoveryPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <div className="text-base font-bold text-slate-900">{t.title}</div>
+            <PagePurpose
+              en="see who needs recovery after the match and who is ready"
+              is="sjá hverjir þurfa endurheimt eftir leik og hverjir eru tilbúnir"
+            />
             <div className="text-xs text-slate-500">{t.intro}</div>
           </div>
           <div className="ml-auto flex items-end gap-2">

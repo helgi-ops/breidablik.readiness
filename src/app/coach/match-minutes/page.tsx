@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 
 const COPY = {
   EN: {
@@ -249,6 +250,10 @@ export default function CoachMatchMinutesPage() {
       <Card>
         <CardHeader>
           <CardTitle>{t.title}</CardTitle>
+          <PagePurpose
+            en="record who played how long, so load reflects real minutes"
+            is="skrá hver spilaði hve lengi, svo álag endurspegli raunmínútur"
+          />
           <CardDescription>
             {t.subtitle}
           </CardDescription>

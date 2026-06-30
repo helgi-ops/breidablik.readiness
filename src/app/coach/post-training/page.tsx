@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import PostTrainingCard from "@/components/coach/PostTrainingCard";
+import PagePurpose from "@/components/coach/PagePurpose";
 
 export default function PostTrainingPage() {
   const [date, setDate] = useState<string>("");
@@ -14,6 +15,10 @@ export default function PostTrainingPage() {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Post-Training Report</h1>
+          <PagePurpose
+            en="review how today's session compared to what was planned"
+            is="fara yfir hvernig æfing dagsins var miðað við áætlun"
+          />
           <p className="text-sm text-slate-500">
             Did the session land where the plan asked? This reads the captured session and diffs it against the
             pre-session targets — at squad level and per player — so you can review on screen without downloading.

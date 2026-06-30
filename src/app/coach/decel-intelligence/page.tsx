@@ -18,6 +18,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 // PlayerSummaryCard + PlayerAskCard intentionally NOT imported here — see
 // the comment in the expanded-row body. Both live in the Decision Summary
@@ -456,6 +457,10 @@ export default function CoachDecelIntelligencePage() {
               McBurnie 2022 · Load Intelligence v2
             </span>
           </div>
+          <PagePurpose
+            en="see who is absorbing the most braking load and may need eccentric protection"
+            is="sjá hver tekur mest bremsuálag og gæti þurft eccentric vörn"
+          />
           <p className="text-sm text-muted-foreground">
             Eccentric deceleration risk profile per player — implementation of the
             McBurnie, Harper, Jones &amp; Dos'Santos 2022 framework (Sports Medicine).

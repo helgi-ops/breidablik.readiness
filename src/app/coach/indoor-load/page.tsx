@@ -20,6 +20,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
 type Flag = "green" | "yellow" | "red";
@@ -777,6 +778,10 @@ export default function CoachIndoorLoadPage() {
             <span>Indoor Load</span>
           </div>
           <h1 className="text-2xl font-semibold text-slate-900">{pt("pageTitle", lang)}</h1>
+          <PagePurpose
+            en="track training load in the hall when GPS is not available"
+            is="fylgjast með álagi í höll þegar GPS er ekki til staðar"
+          />
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             {pt("pageSubtitle", lang)}
           </p>

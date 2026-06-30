@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import { ProfileRadar, MatchTrendBars, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 import VerdictBanner, { type VerdictTone, type VerdictDriver } from "@/components/coach/VerdictBanner";
 
@@ -245,6 +246,10 @@ export default function PositionComparisonPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <div className="text-base font-bold text-slate-900">{IS ? "Stöðu-samanburður" : "Position comparison"}</div>
+            <PagePurpose
+              en="compare a player's physical output against others in the same position"
+              is="bera saman afköst leikmanns við aðra í sömu stöðu"
+            />
             <div className="text-xs text-slate-500">{IS ? "Hreyfimynstur (GPS + IMA, per-90) eftir leikstöðu — með leikstíl." : "Match movement (GPS + IMA, per-90) by position — with playing style."}</div>
           </div>
           <div className="ml-auto flex items-end gap-2">

@@ -31,6 +31,7 @@ import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSum
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 
 type GpsPlayerInput = {
   id: string;
@@ -145,6 +146,10 @@ export default function LoadIntelligencePage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           {lang === "EN" ? "Load Intelligence" : "Álagsgreining"}
         </h1>
+        <PagePurpose
+          en="see the squad's overall training load and who is trending up or down"
+          is="sjá heildar-álag liðsins og hverjir eru að stíga upp eða niður"
+        />
         <p className="mt-1 text-sm text-slate-600">
           {lang === "EN"
             ? "External GPS signals + internal load (MLI / MLS) on one page — the Internal:External coupling story. Raw daily numbers and the squad load 7d/28d table still live on the GPS Data tab."

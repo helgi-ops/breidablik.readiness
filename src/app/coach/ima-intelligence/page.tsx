@@ -28,6 +28,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
@@ -273,6 +274,10 @@ export default function ImaIntelligencePage() {
             {t("backToDashboard", lang)}
           </Link>
           <h1 className="mt-1 text-2xl font-bold text-slate-900">{t("pageTitle", lang)}</h1>
+          <PagePurpose
+            en="see change-of-direction and movement load per player"
+            is="sjá stefnubreytinga- og hreyfiálag per leikmann"
+          />
           <p className="text-xs text-slate-500">{t("citation", lang)}</p>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">{t("subtitle", lang)}</p>
         </div>

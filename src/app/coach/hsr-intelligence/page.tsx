@@ -33,6 +33,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
 
 type Flag = "green" | "yellow" | "red" | "insufficient";
@@ -517,6 +518,10 @@ export default function HsrIntelligencePage() {
               {tt("citation", lang)}
             </span>
           </div>
+          <PagePurpose
+            en="check each player is getting enough high-speed running before a match"
+            is="athuga hvort hver leikmaður fái nóg háhraðahlaup fyrir leik"
+          />
           <p className="text-sm text-muted-foreground max-w-3xl mt-1">
             {tt("subtitle", lang)}
           </p>

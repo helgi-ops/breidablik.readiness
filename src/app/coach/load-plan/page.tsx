@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import LoadPlanCard from "@/components/coach/LoadPlanCard";
+import PagePurpose from "@/components/coach/PagePurpose";
 import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
 
 export default function LoadPlanPage() {
@@ -27,6 +28,10 @@ export default function LoadPlanPage() {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Pre-Session Report</h1>
+          <PagePurpose
+            en="plan each day's target load for the week around the next match"
+            is="skipuleggja markálag hvers dags vikunnar í kringum næsta leik"
+          />
           <p className="text-sm text-slate-500">
             One detailed, sendable briefing for today: top attention (from check-ins), the recommended session type
             (mechanical / locomotive / mixed) and per-KPI load targets anchored to your match demand, acute:chronic

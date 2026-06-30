@@ -7,6 +7,7 @@ import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard"
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 
 // Minimal shape of the plan the verdict needs — mirrors /api/coach/progressive-overload.
 // The dense ramp table below renders from ProgressiveOverloadCard's own fetch (unchanged).
@@ -163,6 +164,10 @@ export default function ProgressiveOverloadPage() {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Progressive Overload — Build Plan</h1>
+          <PagePurpose
+            en="check training load is rising gradually, not spiking"
+            is="athuga hvort álag sé að stíga jafnt, ekki að stökkva"
+          />
           <p className="text-sm text-slate-500">
             A preparation-phase ramp for every load KPI: a safe week-by-week build from the squad&apos;s current
             baseline toward match demand. Volume ramps faster than high-speed/sprint, every week is capped so the

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
@@ -801,6 +802,10 @@ export default function WeekSetupPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Week setup</h1>
+            <PagePurpose
+              en="set up the training week and tag each day's match-day context"
+              is="setja upp æfingavikuna og merkja leikdags-samhengi hvers dags"
+            />
             <p className="text-sm text-muted-foreground">{t.subtitle}</p>
           </div>
           <div className="text-right text-xs text-muted-foreground">

@@ -24,6 +24,7 @@ import { QuadrantChart, type QuadrantPoint } from "@/components/coach/QuadrantCh
 import SquadLoadTable, { type SquadLoadPlayer } from "@/components/coach/SquadLoadTable";
 import VerdictBanner from "@/components/coach/VerdictBanner";
 import { useLang, type Lang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 
 type Window = 7 | 14 | 28;
 
@@ -517,6 +518,10 @@ export default function CoachQuadrantPage() {
               {isLite ? "Gabbett 2016 · Volume axis" : "Gabbett 2017 · Full axis"}
             </span>
           </div>
+          <PagePurpose
+            en="spot who is in a high-load / low-fitness risk zone at a glance"
+            is="sjá hverjir eru í hááálags / lág-forms áhættureit í fljótu bragði"
+          />
           <p className="text-sm text-muted-foreground">
             {qt("subtitleA", lang)}
             {teamLabel && <> · {teamLabel}</>}

@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
 import { POSITION_GROUPS } from "@/lib/micropulse/positionStyle";
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 import TlypTrainingFocus, { type FocusGroup } from "@/components/coach/TlypTrainingFocus";
@@ -304,6 +305,10 @@ export default function TrainLikeYouPlayPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <div className="text-base font-bold text-slate-900">{IS ? "Train like you Play" : "Train like you Play"}</div>
+            <PagePurpose
+              en="compare training demands to match demands per role"
+              is="bera þjálfunarkröfur saman við leikkröfur per hlutverk"
+            />
             <div className="text-xs text-slate-500">{IS ? "Besta þjálfunar-exposure vs leik-krafa (IMU — virkar innandyra). Grunnur: FMP (Catapult hreyfi-flokkar) eða hrá IMA (atburðir: hröðun, hemlun, stefnubreytingar, stökk)." : "Best training exposure vs match demand (IMU — works indoors). Basis: FMP (Catapult movement zones) or raw IMA (events: accelerations, decelerations, change-of-direction, jumps)."}</div>
           </div>
           <div className="ml-auto flex items-end gap-2">
