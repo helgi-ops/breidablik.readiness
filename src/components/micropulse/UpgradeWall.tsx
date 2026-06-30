@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useLang } from "@/lib/lang";
 import type { MicroPulsePlanKey } from "@/lib/micropulse/product/types";
+
+/** A plain string, or an EN/IS pair for bilingual call sites. */
+type LangText = string | { EN: string; IS: string };
 
 type UpgradeWallProps = {
   /** The plan required to access this feature */
   requiredPlan?: MicroPulsePlanKey;
-  /** Feature name shown in the heading */
-  featureName?: string;
-  /** Optional short description of what the user is missing */
-  description?: string;
+  /** Feature name shown in the heading (string or {EN, IS}) */
+  featureName?: LangText;
+  /** Optional short description of what the user is missing (string or {EN, IS}) */
+  description?: LangText;
   /** Whether to show as a full-page overlay vs. inline block */
   variant?: "overlay" | "inline";
 };
@@ -34,8 +38,31 @@ export default function UpgradeWall({
   description,
   variant = "inline",
 }: UpgradeWallProps) {
+  const [lang] = useLang();
+  const IS = lang === "IS";
   const planLabel = PLAN_LABELS[requiredPlan];
   const colors = PLAN_COLORS[requiredPlan];
+
+  const tx = (v?: LangText): string | undefined =>
+    v == null ? undefined : typeof v === "string" ? v : IS ? v.IS : v.EN;
+  const name = tx(featureName);
+  const desc = tx(description);
+
+  const t = {
+    badge: IS ? `${planLabel}-eiginleiki` : `${planLabel} feature`,
+    headingWithName: name
+      ? IS
+        ? `${name} krefst ${planLabel}`
+        : `${name} requires ${planLabel}`
+      : null,
+    headingDefault: IS
+      ? `Uppfærðu í ${planLabel} til að opna þetta`
+      : `Upgrade to ${planLabel} to unlock this`,
+    descDefault: IS
+      ? `Þessi eiginleiki er í boði á ${planLabel}-pakkanum og ofar.`
+      : `This feature is available on the ${planLabel} plan and above.`,
+    cta: IS ? `Skoða ${planLabel}-pakka` : `View ${planLabel} plan`,
+  };
 
   const content = (
     <div className="flex flex-col items-center justify-center text-center gap-4 py-12 px-6">
@@ -58,21 +85,15 @@ export default function UpgradeWall({
 
       {/* Plan badge */}
       <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${colors.badge}`}>
-        {planLabel} feature
+        {t.badge}
       </span>
 
       {/* Heading */}
       <div>
         <h3 className="text-lg font-semibold text-slate-800">
-          {featureName ? `${featureName} requires ${planLabel}` : `Upgrade to ${planLabel} to unlock this`}
+          {t.headingWithName ?? t.headingDefault}
         </h3>
-        {description ? (
-          <p className="mt-1 text-sm text-slate-500 max-w-xs">{description}</p>
-        ) : (
-          <p className="mt-1 text-sm text-slate-500 max-w-xs">
-            This feature is available on the {planLabel} plan and above.
-          </p>
-        )}
+        <p className="mt-1 text-sm text-slate-500 max-w-xs">{desc ?? t.descDefault}</p>
       </div>
 
       {/* CTA */}
@@ -80,7 +101,7 @@ export default function UpgradeWall({
         href="/pricing"
         className={`inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition ${colors.btn}`}
       >
-        View {planLabel} plan
+        {t.cta}
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
         </svg>

@@ -9705,8 +9705,11 @@ export default function CoachPage() {
       {dashTab === "squad" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Squad overview"
-          description="See all players, filter by readiness flag, and review the full squad table."
+          featureName={{ EN: "Squad overview", IS: "Liðsyfirlit" }}
+          description={{
+            EN: "See all players, filter by readiness flag, and review the full squad table.",
+            IS: "Sjáðu alla leikmenn, síaðu eftir readiness-fána og skoðaðu allt liðsyfirlitið.",
+          }}
         />
       )}
 
@@ -10031,8 +10034,11 @@ export default function CoachPage() {
       {dashTab === "load" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Load & RPE monitoring"
-          description="Session RPE compliance, daily internal load, yesterday GPS load from Catapult, and load metrics."
+          featureName={{ EN: "Load & RPE monitoring", IS: "Álags- og RPE-vöktun" }}
+          description={{
+            EN: "Session RPE compliance, daily internal load, yesterday GPS load from Catapult, and load metrics.",
+            IS: "RPE-skil æfinga, daglegt innra álag, GPS-álag gærdagsins frá Catapult og álagsmælikvarðar.",
+          }}
         />
       )}
 
@@ -10174,8 +10180,11 @@ export default function CoachPage() {
       {dashTab === "gps" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="GPS Data"
-          description="Total distance, velocity bands, accelerations, decelerations, Player Load, IMA metrics, and 7D/28D/ACWR load monitoring for every player."
+          featureName={{ EN: "GPS Data", IS: "GPS gögn" }}
+          description={{
+            EN: "Total distance, velocity bands, accelerations, decelerations, Player Load, IMA metrics, and 7D/28D/ACWR load monitoring for every player.",
+            IS: "Heildarvegalengd, hraðabönd, hröðun, hægingar, Player Load, IMA-mælikvarðar og 7D/28D/ACWR álagsvöktun fyrir hvern leikmann.",
+          }}
         />
       )}
 
@@ -10581,8 +10590,11 @@ export default function CoachPage() {
       {dashTab === "md" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="MD Comparison"
-          description="Compare training session load against historical averages for the same match day designation using Z-scores and STEN."
+          featureName={{ EN: "MD Comparison", IS: "MD samanburður" }}
+          description={{
+            EN: "Compare training session load against historical averages for the same match day designation using Z-scores and STEN.",
+            IS: "Berðu álag æfingar saman við söguleg meðaltöl fyrir sama leikdags-merki með Z-skorum og STEN.",
+          }}
         />
       )}
       {dashTab === "md" && isAtLeastPro && coachTeamId && (
@@ -10597,8 +10609,11 @@ export default function CoachPage() {
       {dashTab === "drills" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Drill Library"
-          description="Team-scoped drill library með GPS load metrics og research-backed SSG templates (Rampinini, Fradua)."
+          featureName={{ EN: "Drill Library", IS: "Drill-safn" }}
+          description={{
+            EN: "Team-scoped drill library with GPS load metrics and research-backed SSG templates (Rampinini, Fradua).",
+            IS: "Liðsbundið drill-safn með GPS-álagsmælikvörðum og rannsóknastuddum SSG-sniðmátum (Rampinini, Fradua).",
+          }}
         />
       )}
       {dashTab === "drills" && isAtLeastPro && coachTeamId && (
@@ -10882,8 +10897,11 @@ export default function CoachPage() {
       {dashTab === "vald" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="VALD / CMJ testing"
-          description="See which players need a CMJ test today, track neuromuscular flags, and monitor force plate data alongside readiness scores."
+          featureName={{ EN: "VALD / CMJ testing", IS: "VALD / CMJ próf" }}
+          description={{
+            EN: "See which players need a CMJ test today, track neuromuscular flags, and monitor force plate data alongside readiness scores.",
+            IS: "Sjáðu hvaða leikmenn þurfa CMJ-próf í dag, fylgstu með taugavöðva-fánum og force plate-gögnum samhliða readiness-skorum.",
+          }}
         />
       )}
       {dashTab === "vald" && isAtLeastPro && (
@@ -10898,8 +10916,11 @@ export default function CoachPage() {
       {dashTab === "strength" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Strength / VBT"
-          description="See each player's personal bests per exercise, today's performance vs PB, estimated 1RM, and VBT readiness signals."
+          featureName={{ EN: "Strength / VBT", IS: "Styrkur / VBT" }}
+          description={{
+            EN: "See each player's personal bests per exercise, today's performance vs PB, estimated 1RM, and VBT readiness signals.",
+            IS: "Sjáðu persónuleg met hvers leikmanns per æfingu, frammistöðu dagsins vs. PB, áætlað 1RM og VBT readiness-merki.",
+          }}
         />
       )}
       {dashTab === "strength" && isAtLeastPro && (
@@ -10912,8 +10933,11 @@ export default function CoachPage() {
       {dashTab === "trend" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Player Trends"
-          description="30, 60 and 90-day readiness, STEN, training action history and GPS load per player."
+          featureName={{ EN: "Player Trends", IS: "Leikmannaþróun" }}
+          description={{
+            EN: "30, 60 and 90-day readiness, STEN, training action history and GPS load per player.",
+            IS: "30, 60 og 90 daga readiness, STEN, saga þjálfunaraðgerða og GPS-álag per leikmann.",
+          }}
         />
       )}
       {dashTab === "trend" && isAtLeastPro && (
@@ -10931,8 +10955,11 @@ export default function CoachPage() {
       {dashTab === "rtp" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Injuries / Return-to-Play"
-          description="Record injuries, track rehabilitation stages, and manage return-to-play progression per player."
+          featureName={{ EN: "Injuries / Return-to-Play", IS: "Meiðsli / Return-to-Play" }}
+          description={{
+            EN: "Record injuries, track rehabilitation stages, and manage return-to-play progression per player.",
+            IS: "Skráðu meiðsli, fylgstu með endurhæfingarstigum og stýrðu return-to-play framvindu per leikmann.",
+          }}
         />
       )}
       {dashTab === "rtp" && isAtLeastPro && (

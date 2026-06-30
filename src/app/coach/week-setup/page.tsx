@@ -785,8 +785,11 @@ export default function WeekSetupPage() {
       <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
         <UpgradeWall
           requiredPlan="PRO"
-          featureName="Week setup"
-          description="Set up the training week, assign match days, and configure session intent for each day."
+          featureName={{ EN: "Week setup", IS: "Vikuuppsetning" }}
+          description={{
+            EN: "Set up the training week, assign match days, and configure session intent for each day.",
+            IS: "Settu upp æfingavikuna, merktu leikdaga og stilltu álagsáherslu hvers dags.",
+          }}
         />
       </div>
     );
