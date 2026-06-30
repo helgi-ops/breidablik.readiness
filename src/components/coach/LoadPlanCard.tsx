@@ -54,6 +54,7 @@ type AttentionPlayer = { player_id: string; name: string; color: string; score: 
 const KPI_LABEL: Record<string, string> = {
   totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed dist (m)",
   sprint: "Sprint dist (m)", accel: "Accelerations", decel: "Decelerations", efforts: "Hard efforts", ima: "High-intensity efforts (m)",
+  imaAccel: "IMA accelerations", imaDecel: "IMA decelerations", imaCod: "Change of direction", jumps: "Jumps",
 };
 // Optional jargon tooltip per KPI — the abbreviation + paper citation stays reachable
 // on hover so the primary label can read plainly (explainability-first §jargon).
@@ -66,7 +67,7 @@ const TYPE_TINT: Record<string, string> = {
   locomotive: "bg-sky-100 text-sky-800",
   mixed: "bg-violet-100 text-violet-800",
 };
-const KPI_ALL: string[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"];
+const KPI_ALL: string[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"];
 const KPI_MEANING: Record<string, string> = {
   totalDistance: "Overall running volume — the size of the session.",
   playerLoad: "Total mechanical work (accelerometer) — the best single 'how hard' number.",
@@ -75,6 +76,10 @@ const KPI_MEANING: Record<string, string> = {
   accel: "High-intensity accelerations — explosive starts (mechanical load).",
   decel: "High-intensity decelerations — braking actions (knee/quad load).",
   ima: "High-intensity multidirectional distance — cutting, changes of direction.",
+  imaAccel: "Explosive accelerations (IMA inertial-sensor count) — Pro only.",
+  imaDecel: "Explosive decelerations / braking (IMA count) — Pro only (McBurnie 2022).",
+  imaCod: "Change-of-direction events (IMA) — cutting load (McBurnie 2022).",
+  jumps: "Jumps (IMA) — take-off / landing load.",
 };
 const fmt = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
 
@@ -318,7 +323,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
           {/* Full per-metric breakdown — every KPI, what it means, target vs match vs recent */}
           <details className="mt-2 rounded-lg border border-slate-200">
             <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-slate-700">
-              All 7 metrics explained — target vs match demand vs recent average
+              {`All ${shownKpis.length} metrics explained`} — target vs match demand vs recent average
             </summary>
             <div className="overflow-x-auto px-1 pb-2">
               <table className="w-full text-xs">
@@ -383,7 +388,7 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
                     <th className="px-2 py-1 text-right">Player Load</th>
                     <th className="px-2 py-1 text-right">Accel B2-3</th>
                     <th className="px-2 py-1 text-right">Decel B2-3</th>
-                    <th className="px-2 py-1 text-right" title="IMA = high-intensity accel/decel/change-of-direction efforts (McBurnie 2022)">IMA COD (m)</th>
+                    <th className="px-2 py-1 text-right" title="IMA high-intensity running distance (Catapult Free-Running bands 5-8)">IMA HIR (m)</th>
                     <th className="px-2 py-1 text-right" title="ACWR = acute:chronic workload ratio (Gabbett 2017)">ACWR</th>
                     <th className="px-2 py-1 text-left">Flag</th>
                   </tr>
