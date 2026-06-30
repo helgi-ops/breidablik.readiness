@@ -421,7 +421,7 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     let flag: PlayerPlan["flag"] = "ok";
     let flagReason: string | null = null;
     if (acwr != null && acwr >= 1.5) { flag = "reduce"; flagReason = `ACWR ${acwr.toFixed(2)} — already spiking, hold them back`; }
-    else if (acwr != null && acwr >= 1.3) { flag = "reduce"; flagReason = `ACWR ${acwr.toFixed(2)} — above the sweet spot`; }
+    else if (acwr != null && acwr >= 1.3) { flag = "reduce"; flagReason = `ACWR ${acwr.toFixed(2)} — above the familiar range`; }
     else if (acwr != null && acwr < 0.8) { flag = "build"; flagReason = `ACWR ${acwr.toFixed(2)} — undertrained, room to build`; }
     return {
       player_id: pid,

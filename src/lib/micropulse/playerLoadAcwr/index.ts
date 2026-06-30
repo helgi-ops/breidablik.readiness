@@ -7,7 +7,9 @@
  *
  * Bands follow the most-cited thresholds from team-sport injury epidemiology:
  *   < 0.8  → UNDERTRAIN  (low chronic exposure / detraining risk)
- *   0.8–1.3 → SAFE       ("sweet spot" — Gabbett 2016)
+ *   0.8–1.3 → familiar load-change range (Gabbett 2016). NB: ACWR is a
+ *           spike-size descriptor, NOT a validated injury predictor
+ *           (Impellizzeri 2020). The band labels load change, not risk.
  *   1.3–1.5 → WATCH      (elevated trajectory — monitor)
  *   > 1.5  → RISK        (3–5× injury hazard ratio — Hulin 2014)
  *

@@ -498,8 +498,8 @@ export function buildVerdictExplanation(input: ExplainInput, lang: Lang = "EN"):
     if (input.primary_load_source === "indoor") {
       if (input.acwr_value != null && input.acwr_flag === "green") {
         why.push(t({
-          EN: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
-          IS: `ACWR ${input.acwr_value.toFixed(2)} (sweet spot 0.8-1.3 — adapted)`,
+          EN: `ACWR ${input.acwr_value.toFixed(2)} (0.8-1.3 = familiar range)`,
+          IS: `ACWR ${input.acwr_value.toFixed(2)} (0.8-1.3 = venjulegt bil)`,
         }, lang));
       }
       if (input.indoor_sessions_7d != null && input.indoor_sessions_7d >= 4) {

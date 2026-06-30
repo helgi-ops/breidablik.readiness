@@ -38,7 +38,9 @@ export type ImaRunningLoad = {
   dominantBand: 5 | 6 | 7 | 8 | null; // band carrying the most distance today
 };
 
-// Gabbett "sweet spot" 0.8–1.3; >1.5 = danger spike.
+// 0.8–1.3 = familiar load-change range (Gabbett 2016); >1.5 = large spike.
+// NB: ACWR is a spike-size descriptor, not a validated injury predictor
+// (Impellizzeri 2020) — see the Methodology page for the framing.
 const ACWR_LOW = 0.8;
 const ACWR_HIGH = 1.3;
 const ACWR_SPIKE = 1.5;

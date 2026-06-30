@@ -219,7 +219,7 @@ function buildLoadReason(args: {
     if (args.acwr_value > 1.5) parts.push(`${en ? "acute 7-day spike" : "acute spike á 7 dögum"} (ACWR ${args.acwr_value.toFixed(2)})`);
     else if (args.acwr_value < 0.5) parts.push(`${en ? "undertraining" : "undirvinnsla"} (ACWR ${args.acwr_value.toFixed(2)})`);
   } else if (args.acwr_flag === "yellow" && args.acwr_value != null) {
-    parts.push(`ACWR ${args.acwr_value.toFixed(2)} (${en ? "outside sweet spot" : "utan sweet spot"})`);
+    parts.push(`ACWR ${args.acwr_value.toFixed(2)} (${en ? "outside familiar range" : "utan venjulegs bils"})`);
   }
   if (args.mcburnie_flag === "red") parts.push(en ? "decel overload (lots of braking, not enough sprint)" : "decel overload (mikið brake-work án nóg sprint)");
   else if (args.mcburnie_flag === "yellow") parts.push(en ? "decel:intensity imbalance" : "decel:intensity skekkja");

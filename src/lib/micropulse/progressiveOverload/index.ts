@@ -13,7 +13,7 @@
  *     ceilings (hamstring exposure — Malone 2017, Gabbett 2016); mechanical
  *     (accel/decel) sits in between.
  *  2. ACWR guardrail. Each week's value is capped so the projected acute:chronic
- *     ratio stays <= 1.3 (Gabbett sweet spot), never spiking. The rolling 4-week
+ *     ratio stays <= 1.3 (Gabbett 2016 familiar range), never spiking. The rolling 4-week
  *     mean is simulated forward so the cap tracks the rising chronic base.
  *  3. Ceiling = match demand. A single session is never ramped past the squad's
  *     own match reference for that KPI — we build TO match load, not beyond.

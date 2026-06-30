@@ -114,7 +114,7 @@ Coaches also see which areas are most flagged on the coach dashboard and can res
         heading: "Hva\u00f0 er ACWR?",
         body: `ACWR er hlutfall milli n\u00fdlegs \u00e1lags (acute, s\u00ed\u00f0ustu 7 dagar) og langt\u00edma\u00e1lags (chronic, s\u00ed\u00f0ustu 28 dagar). Ef hlutfalli\u00f0 er 1.0 \u00fe\u00fd\u00f0ir \u00fea\u00f0 a\u00f0 leikma\u00f0ur er a\u00f0 \u00fej\u00e1lfast \u00e1 sama stigi og hann hefur veri\u00f0 undanfarnar vikur.
 
-Ranns\u00f3knir fr\u00e1 Tim Gabbett og samstarfsf\u00f3lki s\u00fdna sweet spot \u00e1 bilinu 0.8\u20131.3 \u00fear sem mei\u00f0slah\u00e6tta er l\u00e6gst. Undir 0.8 er leikma\u00f0urinn undir\u00fej\u00e1lfa\u00f0ur (sem eykur h\u00e6ttu \u00feegar \u00e1lag eykst skyndilega), og yfir 1.5 er h\u00e6tta \u00e1 overload-mei\u00f0slum verulega aukin.`,
+Tim Gabbett og samstarfsf\u00f3lk vins\u00e6ldu bili\u00f0 0.8\u20131.3 sem \u201evenjulegt" \u00e1lagsbreytinga-bil. En ACWR er ekki sta\u00f0fest mei\u00f0sla-sp\u00e1 \u2014 n\u00fdrri ranns\u00f3knir (Impellizzeri o.fl. 2020) s\u00fdna a\u00f0 \u00fea\u00f0 er t\u00f6lfr\u00e6\u00f0ilega galla\u00f0 og sp\u00e1ir ekki \u00e1rei\u00f0anlega fyrir um mei\u00f0sli. R\u00e9ttari lesning: ACWR m\u00e6lir ST\u00c6R\u00d0 \u00e1lagsst\u00f6kks. \u00dea\u00f0 sem raunverulega skiptir m\u00e1li fyrir mei\u00f0sli er hvort st\u00f6kki\u00f0 \u00fdtir \u00ed\u00fer\u00f3ttamanninum inn \u00e1 \u00f3\u00feekkt \u00e1lag sem l\u00edkaminn er ekki undirb\u00fainn fyrir (Gabbett & Hulin 2016 \u2014 \u201e\u00fea\u00f0 er ekki \u00e1lagi\u00f0 sj\u00e1lft heldur hvernig \u00fe\u00fa kemst \u00feanga\u00f0").`,
       },
       {
         heading: "Hvers vegna load spikes eru h\u00e6ttulegir",
@@ -138,7 +138,7 @@ Kerfi\u00f0 flaggar l\u00edka sj\u00e1lfvirkt leikmenn sem eru \u00ed danger zon
         heading: "What is ACWR?",
         body: `ACWR is the ratio between recent workload (acute, last 7 days) and long-term workload (chronic, last 28 days). A ratio of 1.0 means the player is training at the same level they have been over recent weeks.
 
-Research from Tim Gabbett and colleagues shows a sweet spot between 0.8\u20131.3 where injury risk is lowest. Below 0.8, the player is undertrained (which increases risk when load suddenly rises), and above 1.5, the risk of overload injuries significantly increases.`,
+Tim Gabbett and colleagues popularised the 0.8\u20131.3 band as a "familiar" load-change range. But ACWR is not a validated injury predictor \u2014 later work (Impellizzeri et al. 2020) shows it is statistically flawed and does not reliably forecast injury. The honest reading: ACWR measures the SIZE of a load spike. What actually matters for injury is whether that spike pushes the athlete into unfamiliar load their body isn't prepared for (Gabbett & Hulin 2016 \u2014 "it's not the workload itself, but how you get there").`,
       },
       {
         heading: "Why spikes are dangerous",

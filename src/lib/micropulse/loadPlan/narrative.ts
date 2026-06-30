@@ -128,7 +128,7 @@ export function buildLoadPlanNarrative(plan: NarrativePlan, checkedIn: number | 
   // 4) Recent load (acute:chronic).
   if (plan.teamAcwr != null) {
     narrative.push(
-      `Recent load: the squad's acute (7-day) Player Load is ${fmt(plan.acutePL)} against a ${fmt(plan.chronicPL)} chronic (28-day) average — an acute:chronic ratio of ${plan.teamAcwr.toFixed(2)} (${plan.teamAcwr > 1.3 ? "above the Gabbett sweet spot — keep today controlled" : plan.teamAcwr < 0.8 ? "below the sweet spot — there is room to load" : "inside the 0.8–1.3 sweet spot"}).`,
+      `Recent load: the squad's acute (7-day) Player Load is ${fmt(plan.acutePL)} against a ${fmt(plan.chronicPL)} chronic (28-day) average — an acute:chronic ratio of ${plan.teamAcwr.toFixed(2)} (${plan.teamAcwr > 1.3 ? "above the familiar range — a sizeable jump, keep today controlled" : plan.teamAcwr < 0.8 ? "below the familiar range — there is room to load" : "inside the familiar 0.8–1.3 range"}).`,
     );
   }
 
