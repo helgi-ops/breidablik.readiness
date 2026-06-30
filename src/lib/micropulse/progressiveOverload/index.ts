@@ -35,6 +35,10 @@ const WEEKLY_RATE: Record<LoadKpi, number> = {
   decel: 0.07,
   efforts: 0.07,
   ima: 0.06,
+  imaAccel: 0.07,
+  imaDecel: 0.07,
+  imaCod: 0.06,
+  jumps: 0.06,
   hsr: 0.05,
   sprint: 0.04,
 };
@@ -51,6 +55,10 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
   ima: (r) => num(r.ima_fr_band58_total_distance),
+  imaAccel: (r) => num(r.ima_accel),
+  imaDecel: (r) => num(r.ima_decel),
+  imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
+  jumps: (r) => num(r.jumps),
 };
 function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 function mean(xs: number[]): number | null { const v = xs.filter((x) => Number.isFinite(x) && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; }
@@ -179,7 +187,15 @@ export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): 
   const chronicPL = mean(Array.from(teamPlByDate.entries()).filter(([d]) => d >= chronicFrom && d <= input.sessionDate).map(([, v]) => v));
   const teamAcwr = acutePL != null && chronicPL != null && chronicPL > 0 ? Math.round((acutePL / chronicPL) * 100) / 100 : null;
 
-  const ramps = LOAD_KPIS.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks));
+  // Existing KPIs ramp as before (empty ramps drop out downstream). The genuine
+  // IMA EVENT metrics (Pro only) are gated on a meaningful day share (>= 25%) so
+  // a handful of stray rows on a Lite club (~13% of days) don't produce a dead
+  // IMA ramp. Pro carries them on ~55-100% of days; Lite never does.
+  const allDates = Array.from(dateMeans.keys());
+  const dayShare = (k: LoadKpi) => (allDates.length ? allDates.filter((d) => (dateMeans.get(d)?.[k] ?? 0) > 0).length / allDates.length : 0);
+  const STRICT_IMA = new Set<LoadKpi>(["imaAccel", "imaDecel", "imaCod", "jumps"]);
+  const availableKpis = LOAD_KPIS.filter((k) => !STRICT_IMA.has(k) || dayShare(k) >= 0.25);
+  const ramps = availableKpis.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks));
   const hasData = ramps.some((r) => r.weeks.length > 0);
 
   // Per-player ramp summary (their own baseline + ACWR → can they progress?).

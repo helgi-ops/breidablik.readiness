@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
   // RECENT dates (exactly the recent-baseline window). So we PAGE through every
   // row with .range() and assemble the complete set.
   const from = addDaysISO(sessionDate, -120);
-  const SELECT_COLS = "player_id, date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts";
+  const SELECT_COLS = "player_id, date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts";
   const PAGE = 1000;
   const loadRows: Array<Record<string, unknown>> = [];
   for (let offset = 0; ; offset += PAGE) {

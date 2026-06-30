@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
   // GPS over 120 days, paged past the 1000-row PostgREST cap.
   const from = addDaysISO(sessionDate, -120);
-  const SELECT = "player_id, date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts";
+  const SELECT = "player_id, date, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, high_speed_distance, sprint_distance, accel_decel_efforts";
   const PAGE = 1000;
   const loadRows: Array<Record<string, unknown>> = [];
   for (let offset = 0; ; offset += PAGE) {
@@ -93,6 +93,7 @@ export async function GET(req: NextRequest) {
     totalDistance: "Total distance (m)", playerLoad: "Player Load", hsr: "High-speed distance (m)",
     sprint: "Sprint distance (m)", accel: "Accelerations (B2-3)", decel: "Decelerations (B2-3)",
     efforts: "Hard efforts (accel+decel)", ima: "IMA high-intensity (m)",
+    imaAccel: "IMA accelerations", imaDecel: "IMA decelerations", imaCod: "Change of direction", jumps: "Jumps",
   };
 
   return NextResponse.json({ plan: { ...plan, teamName }, labels });

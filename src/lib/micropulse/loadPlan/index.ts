@@ -28,9 +28,12 @@ export type LoadKpi =
   // Core/Lite have only the combined Gen2 effort count (no accel/decel split, no
   // IMA) — `efforts` carries the braking dimension for them. availableKpis hides
   // whichever the club lacks, so each tier shows only the metrics it has.
-  | "efforts";
+  | "efforts"
+  // Genuine IMA event metrics (Pro / Vector Pro S7 only) — the explosive movement
+  // load Pro clubs uniquely capture. Hidden on Lite by availableKpis.
+  | "imaAccel" | "imaDecel" | "imaCod" | "jumps";
 
-export const LOAD_KPIS: LoadKpi[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"];
+export const LOAD_KPIS: LoadKpi[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"];
 
 export const KPI_LABEL: Record<LoadKpi, string> = {
   totalDistance: "Total distance (m)",
@@ -41,6 +44,10 @@ export const KPI_LABEL: Record<LoadKpi, string> = {
   decel: "Decelerations (B2-3)",
   efforts: "Hard efforts (accel+decel)",
   ima: "IMA high-intensity (m)",
+  imaAccel: "IMA accelerations",
+  imaDecel: "IMA decelerations",
+  imaCod: "Change of direction",
+  jumps: "Jumps",
 };
 
 export type LoadRow = {
@@ -53,6 +60,16 @@ export type LoadRow = {
   accel_b2_3_tot_effs_gen2: number | null;
   decel_b2_3_tot_effs_gen2: number | null;
   ima_fr_band58_total_distance: number | null;
+  // Genuine IMA event columns (Pro only).
+  ima_accel: number | null;
+  ima_decel: number | null;
+  jumps: number | null;
+  ima_cod_left_high: number | null;
+  ima_cod_left_medium: number | null;
+  ima_cod_left_low: number | null;
+  ima_cod_right_high: number | null;
+  ima_cod_right_medium: number | null;
+  ima_cod_right_low: number | null;
   // Lite/Core fallbacks (these are the columns lower-tier exports actually carry).
   high_speed_distance: number | null;
   sprint_distance: number | null;
@@ -70,6 +87,10 @@ const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
   decel: (r) => num(r.decel_b2_3_tot_effs_gen2),
   efforts: (r) => num(r.accel_decel_efforts),
   ima: (r) => num(r.ima_fr_band58_total_distance),
+  imaAccel: (r) => num(r.ima_accel),
+  imaDecel: (r) => num(r.ima_decel),
+  imaCod: (r) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low),
+  jumps: (r) => num(r.jumps),
 };
 
 function num(v: unknown): number {
@@ -247,8 +268,17 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
   // match or training). Lite/Core get {distance, PL, hsr, sprint, efforts}; Full
   // get {…, accel, decel, ima}. Surfaces filter by this so neither tier sees a
   // column of zeros for metrics its Catapult plan doesn't expose.
-  const availableKpis: LoadKpi[] = LOAD_KPIS.filter(
-    (k) => (matchRef[k] ?? 0) > 0 || (trainingAvg[k] ?? 0) > 0,
+  // Existing KPIs keep their original "any non-zero (match or training)" rule.
+  // The genuine IMA EVENT metrics (Pro only) additionally require a MEANINGFUL
+  // day share (>= 25%) so a handful of stray rows on a Lite club (e.g. one player
+  // who once used a Pro pod, ~13% of days) can't surface a dead IMA metric. The
+  // event counts separate cleanly (Pro ~55-100% of days vs Lite ~13%); the lumped
+  // IMA-band metric is sparse even on Pro, so it is NOT subject to the strict gate.
+  const allDates = Array.from(dateMeans.keys());
+  const dayShare = (k: LoadKpi) => (allDates.length ? allDates.filter((d) => (dateMeans.get(d)?.[k] ?? 0) > 0).length / allDates.length : 0);
+  const STRICT_IMA = new Set<LoadKpi>(["imaAccel", "imaDecel", "imaCod", "jumps"]);
+  const availableKpis: LoadKpi[] = LOAD_KPIS.filter((k) =>
+    STRICT_IMA.has(k) ? dayShare(k) >= 0.25 : ((matchRef[k] ?? 0) > 0 || (trainingAvg[k] ?? 0) > 0),
   );
 
   // Targeting mode: microcycle when an MD context exists; otherwise fall back to
