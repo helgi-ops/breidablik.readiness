@@ -68,6 +68,9 @@ const communicationLinks: SidebarLink[] = [
 // data dumps) and groups them visually in the sidebar.
 const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
+  // HSR Intelligence sits right under Load Intelligence; it's also the Lite-tier
+  // counterpart to Decel Intelligence (Malone 2017 + Buchheit 2014).
+  { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
   { href: "/coach/quadrant",           label: { EN: "Quadrant Intelligence",            IS: "Quadrant Intelligence" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
@@ -78,9 +81,6 @@ const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/train-like-you-play", label: { EN: "Train like you Play",              IS: "Train like you Play" } },
   // KSÍ Report lives under Admin (it's an outbound export/report, not a
   // real-time monitoring surface) — see adminLinks below.
-  // HSR Intelligence is the Lite-tier counterpart to Decel Intelligence —
-  // shown only when LITE filtering keeps it (Malone 2017 + Buchheit 2014).
-  { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
 ];
 
 const injuryMonitoringLinks: SidebarLink[] = [
