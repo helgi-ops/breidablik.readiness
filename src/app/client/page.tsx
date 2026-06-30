@@ -37,6 +37,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview";
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
+import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
 import PtReportsCard from "@/components/player/PtReportsCard";
 
 type TodayResp = {
@@ -173,6 +174,13 @@ export default function ClientTodayPage() {
       {/* Full programme overview — only renders if the coach turned plan
           visibility on for this client (read-only, no loads). */}
       <ClientProgrammeOverview lang={lang === "EN" ? "EN" : "IS"} />
+
+      {/* Move any of my sessions to another day, either direction (e.g. do
+          Thursday's session early on Wednesday). Backend allows backward; the
+          control blocks moving into the past. Refresh today's view on change. */}
+      <div className="mt-3">
+        <ClientMoveSessionControl lang={lang === "EN" ? "EN" : "IS"} onChanged={() => { void load(); }} />
+      </div>
 
       {/* Performance reports (VALD etc.) — upload + view own reports. */}
       <PtReportsCard lang={lang === "EN" ? "EN" : "IS"} />
