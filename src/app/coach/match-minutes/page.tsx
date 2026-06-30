@@ -5,6 +5,32 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+
+const COPY = {
+  EN: {
+    title: "MD+1 Minutes",
+    subtitle: "Enter minutes from the last match. This drives STARTER / NON-STARTER.",
+    search: "Search…", refresh: "Refresh", saving: "Saving…", saveAll: "Save all",
+    matchDay: "Match day:", opponent: "Opponent:", opponentPh: "e.g. FH, Víkingur, Valur…",
+    home: "Home", away: "Away", unsaved: "Unsaved", loading: "Loading…",
+    player: "Player", matchDayCol: "Match day", minutes: "Minutes", dnp: "DNP",
+    empty: "No players for this team — or no scheduled match yet.",
+    footer: "STARTER ≥ 60 min · NON-STARTER < 60 min",
+    footerCite: "60-min threshold: Carling 2018; Nédélec 2012; Helsen 2018",
+  },
+  IS: {
+    title: "MD+1 mínútur",
+    subtitle: "Skráðu mínútur úr síðasta leik. Þetta stjórnar STARTER / NON-STARTER.",
+    search: "Leita…", refresh: "Endurhlaða", saving: "Vista…", saveAll: "Vista allt",
+    matchDay: "Leikdagur:", opponent: "Andstæðingur:", opponentPh: "t.d. FH, Víkingur, Valur…",
+    home: "Heima", away: "Úti", unsaved: "Óvistað", loading: "Hleð…",
+    player: "Leikmaður", matchDayCol: "Leikdagur", minutes: "Mínútur", dnp: "DNP",
+    empty: "Engir leikmenn fyrir þetta lið — eða enginn skráður leikur enn.",
+    footer: "STARTER ≥ 60 mín · NON-STARTER < 60 mín",
+    footerCite: "60-mín þröskuldur: Carling 2018; Nédélec 2012; Helsen 2018",
+  },
+} as const;
 
 
 
@@ -35,6 +61,8 @@ type Row = {
 };
 
 export default function CoachMatchMinutesPage() {
+  const [lang] = useLang();
+  const t = COPY[lang === "IS" ? "IS" : "EN"];
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -220,9 +248,9 @@ export default function CoachMatchMinutesPage() {
     <div className="mx-auto max-w-5xl p-4">
       <Card>
         <CardHeader>
-          <CardTitle>MD+1 Minutes</CardTitle>
+          <CardTitle>{t.title}</CardTitle>
           <CardDescription>
-            Skráðu mínútur úr síðasta leik. Þetta stjórnar STARTER / NON-STARTER.
+            {t.subtitle}
           </CardDescription>
         </CardHeader>
 
@@ -230,7 +258,7 @@ export default function CoachMatchMinutesPage() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Leita..."
+                placeholder={t.search}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-64"
@@ -240,10 +268,10 @@ export default function CoachMatchMinutesPage() {
 
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => load(teamId)} disabled={loading || saving}>
-                Refresh
+                {t.refresh}
               </Button>
               <Button onClick={saveAll} disabled={loading || saving}>
-                {saving ? "Saving…" : "Save all"}
+                {saving ? t.saving : t.saveAll}
               </Button>
             </div>
           </div>
@@ -251,7 +279,7 @@ export default function CoachMatchMinutesPage() {
           {/* Match info bar */}
           <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium whitespace-nowrap">Leikdagur:</span>
+              <span className="text-sm font-medium whitespace-nowrap">{t.matchDay}</span>
               <Input
                 type="date"
                 value={matchDate}
@@ -265,9 +293,9 @@ export default function CoachMatchMinutesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium whitespace-nowrap">Andstæðingur:</span>
+              <span className="text-sm font-medium whitespace-nowrap">{t.opponent}</span>
               <Input
-                placeholder="t.d. FH, Víkingur, Valur…"
+                placeholder={t.opponentPh}
                 value={opponent}
                 onChange={(e) => {
                   setOpponent(e.target.value);
@@ -287,7 +315,7 @@ export default function CoachMatchMinutesPage() {
                 disabled={saving}
                 onClick={() => { setIsHome(true); setIsHomeDirty(true); }}
               >
-                Heima
+                {t.home}
               </Button>
               <Button
                 type="button"
@@ -297,7 +325,7 @@ export default function CoachMatchMinutesPage() {
                 disabled={saving}
                 onClick={() => { setIsHome(false); setIsHomeDirty(true); }}
               >
-                Úti
+                {t.away}
               </Button>
             </div>
 
@@ -307,7 +335,7 @@ export default function CoachMatchMinutesPage() {
 
             {(opponentDirty || matchDateDirty || isHomeDirty) && (
               <Badge variant="outline" className="text-amber-600 border-amber-300">
-                Óvistað
+                {t.unsaved}
               </Badge>
             )}
           </div>
@@ -321,16 +349,18 @@ export default function CoachMatchMinutesPage() {
           <Separator />
 
           {loading ? (
-            <div className="text-sm text-muted-foreground">Loading…</div>
+            <div className="text-sm text-muted-foreground">{t.loading}</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-md border bg-muted/20 px-3 py-6 text-center text-sm text-muted-foreground">{t.empty}</div>
           ) : (
             <div className="overflow-x-auto border rounded">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="p-3 text-left">Leikmaður</th>
-                    <th className="p-3">Leikdagur</th>
-                    <th className="p-3 w-32">Mínútur</th>
-                    <th className="p-3 w-24">DNP</th>
+                    <th className="p-3 text-left">{t.player}</th>
+                    <th className="p-3">{t.matchDayCol}</th>
+                    <th className="p-3 w-32">{t.minutes}</th>
+                    <th className="p-3 w-24">{t.dnp}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -370,7 +400,7 @@ export default function CoachMatchMinutesPage() {
         </CardContent>
 
         <CardFooter className="text-xs text-muted-foreground">
-          STARTER ≥ 60 mín · NON-STARTER &lt; 60 mín
+          <span title={t.footerCite} className="cursor-help underline decoration-dotted">{t.footer}</span>
         </CardFooter>
       </Card>
     </div>
