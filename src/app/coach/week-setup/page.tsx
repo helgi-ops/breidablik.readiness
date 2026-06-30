@@ -1087,7 +1087,7 @@ export default function WeekSetupPage() {
 
           <div className="flex justify-between gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading || saving || applying}>
-
+              {t.back}
             </Button>
             <Button type="button" variant="outline" onClick={() => setStep(3)} disabled={loading || saving || applying}>
               {t.next}
