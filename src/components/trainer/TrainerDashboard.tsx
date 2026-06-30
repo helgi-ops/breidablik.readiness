@@ -159,6 +159,11 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [assignments, setAssignments] = useState<PlanAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  // Sub-tab for the expanded client-detail panel. Only one client is expanded
+  // at a time (selectedClient is single), so a single state suffices. Splits the
+  // ~15-section "dumping ground" into focused views (audit P2).
+  type DetailTab = "overview" | "readiness" | "goals" | "load" | "adjust";
+  const [detailTab, setDetailTab] = useState<DetailTab>("overview");
 
   // Invitation form
   const [inviteEmail, setInviteEmail] = useState("");
@@ -633,153 +638,172 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                       hit the row's expand/collapse toggle and close the card. */}
                   {selectedClient?.id === client.id && (
                     <div
-                      className="mt-4 pt-4 border-t grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm"
+                      className="mt-4 pt-4 border-t text-sm"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Sendable progress report */}
-                      <div className="col-span-2 sm:col-span-5">
-                        <button
-                          type="button"
-                          onClick={() => downloadClientReport(client.id)}
-                          disabled={reportBusyId === client.id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
-                        >
-                          {reportBusyId === client.id
-                            ? (isIS ? "Bý til…" : "Generating…")
-                            : (isIS ? "Hlaða niður framvinduskýrslu (4 vikur, PDF)" : "Download progress report (4 weeks, PDF)")}
-                        </button>
+                      {/* Client-detail sub-tabs — was a ~15-section single scroll
+                          (audit P2 "dumping ground"). Split into focused views.
+                          Cards conditionally render so hidden tabs don't fetch. */}
+                      <div className="mb-3 flex flex-wrap gap-1">
+                        {([
+                          ["overview", "Yfirlit", "Overview"],
+                          ["readiness", "Viðbúnaður", "Readiness"],
+                          ["goals", "Markmið", "Goals"],
+                          ["load", "Álag", "Load"],
+                          ["adjust", "Aðlaganir", "Adjustments"],
+                        ] as [DetailTab, string, string][]).map(([key, isLabel, enLabel]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setDetailTab(key)}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${detailTab === key ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                          >
+                            {isIS ? isLabel : enLabel}
+                          </button>
+                        ))}
                       </div>
 
-                      {/* Current programme + remove. Reassign happens via the
-                          Goals card below (or Plan builder). */}
-                      <div className="col-span-2 sm:col-span-5">
-                        <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div className="min-w-0">
-                            <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{isIS ? "Æfingakerfi núna" : "Current programme"}</div>
-                            {client.plan ? (
-                              <div className="flex items-center gap-1.5 text-sm">
-                                <span className="font-medium text-slate-800 truncate">{client.plan.name}</span>
-                                <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${client.plan.kind === "starter" ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-600"}`}>
-                                  {client.plan.kind === "starter" ? (isIS ? "Tilbúið" : "Starter") : (isIS ? "Eigið" : "Custom")}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-sm text-slate-400">{isIS ? "Ekkert kerfi — veldu hér að neðan" : "No programme — assign below"}</div>
-                            )}
-                          </div>
-                          {client.plan && (
+                      {detailTab === "overview" && (
+                        <div className="space-y-4">
+                          {/* Sendable progress report */}
+                          <div>
                             <button
                               type="button"
-                              onClick={() => removeClientProgramme(client)}
-                              disabled={removingPlanId === client.id}
-                              className="shrink-0 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              onClick={() => downloadClientReport(client.id)}
+                              disabled={reportBusyId === client.id}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                             >
-                              {removingPlanId === client.id ? (isIS ? "Fjarlægi…" : "Removing…") : (isIS ? "Fjarlægja" : "Remove")}
+                              {reportBusyId === client.id
+                                ? (isIS ? "Bý til…" : "Generating…")
+                                : (isIS ? "Hlaða niður framvinduskýrslu (4 vikur, PDF)" : "Download progress report (4 weeks, PDF)")}
                             </button>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
-                        <span className="font-medium">{client.readiness?.fatigue ?? "—"}/5</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs block">Sleep</span>
-                        <span className="font-medium">{client.readiness?.sleep ?? "—"}/5</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs block">Stress/Mood</span>
-                        <span className="font-medium">{client.readiness?.stress ?? "—"}/5</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs block">Soreness</span>
-                        <span className="font-medium">{client.readiness?.soreness ?? "—"}/5</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs block">Daily Load</span>
-                        <span className="font-medium">{client.load?.dailyLoad ?? "—"}</span>
-                      </div>
-                      {client.readiness?.soreAreas && client.readiness.soreAreas.length > 0 && (
-                        <div className="col-span-2 sm:col-span-5">
-                          <span className="text-gray-500 text-xs block">Sore Areas</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {(client.readiness.soreAreas as string[]).map((area) => (
-                              <span key={area} className="px-2 py-0.5 bg-red-50 text-red-700 rounded text-xs">
-                                {area}
-                              </span>
-                            ))}
                           </div>
+                          {/* Current programme + remove. Reassign happens via the Goals tab. */}
+                          <div>
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{isIS ? "Æfingakerfi núna" : "Current programme"}</div>
+                                {client.plan ? (
+                                  <div className="flex items-center gap-1.5 text-sm">
+                                    <span className="font-medium text-slate-800 truncate">{client.plan.name}</span>
+                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${client.plan.kind === "starter" ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-600"}`}>
+                                      {client.plan.kind === "starter" ? (isIS ? "Tilbúið" : "Starter") : (isIS ? "Eigið" : "Custom")}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-slate-400">{isIS ? "Ekkert kerfi — veldu í Markmið" : "No programme — assign in Goals"}</div>
+                                )}
+                              </div>
+                              {client.plan && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeClientProgramme(client)}
+                                  disabled={removingPlanId === client.id}
+                                  className="shrink-0 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  {removingPlanId === client.id ? (isIS ? "Fjarlægi…" : "Removing…") : (isIS ? "Fjarlægja" : "Remove")}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {/* AI Client Summary — Haiku digest of the last 14 days.
+                              Only renders when this tab is active (no API spam). */}
+                          <PtClientSummaryCard
+                            clientId={client.id}
+                            clientName={client.name}
+                            lang={isIS ? "IS" : "EN"}
+                          />
+                          <PtReportsCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <MomentumCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
                         </div>
                       )}
-                      {/* AI Client Summary — Haiku-generated digest of the
-                          last 14 days. Only renders when the client row is
-                          expanded so we don't spam the API on dashboard load
-                          for every client. Cached server-side per
-                          (trainer, client, window). */}
-                      <div className="col-span-2 sm:col-span-5">
-                        <PtClientSummaryCard
-                          clientId={client.id}
-                          clientName={client.name}
-                          lang={isIS ? "IS" : "EN"}
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <LoadQuadrant clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <ClientGoalsCard
-                          clientId={client.id}
-                          lang={isIS ? "IS" : "EN"}
-                          templates={templates}
-                          starterCandidates={starterCandidates}
-                          onUseProgramme={(id, name) => {
-                            setAssigningTemplate({ id, name });
-                            setShowPlanAssigner(true);
-                          }}
-                          onAssignStarter={async (programmeKey, level) => {
-                            const { data: { session } } = await supabase.auth.getSession();
-                            const res = await fetch(`/api/trainer/starter-templates`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
-                              body: JSON.stringify({ clientId: client.id, programmeKey, level }),
-                            });
-                            const j = await res.json().catch(() => ({}));
-                            if (!res.ok) throw new Error(j.error ?? "Assign failed");
-                            fetchAssignments();
-                          }}
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <PlanVisibilityToggle clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <MoveClientSessionControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <PtReportsCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <ClientSessionLogCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <AutoProgressionCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <VolumeLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <TrainingLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <MomentumCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <PtGamesManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
-                        <ClientBreaksManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-5">
+
+                      {detailTab === "readiness" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                            <div>
+                              <span className="text-gray-500 text-xs block">Fatigue/Energy</span>
+                              <span className="font-medium">{client.readiness?.fatigue ?? "—"}/5</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-xs block">Sleep</span>
+                              <span className="font-medium">{client.readiness?.sleep ?? "—"}/5</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-xs block">Stress/Mood</span>
+                              <span className="font-medium">{client.readiness?.stress ?? "—"}/5</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-xs block">Soreness</span>
+                              <span className="font-medium">{client.readiness?.soreness ?? "—"}/5</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-xs block">Daily Load</span>
+                              <span className="font-medium">{client.load?.dailyLoad ?? "—"}</span>
+                            </div>
+                          </div>
+                          {client.readiness?.soreAreas && client.readiness.soreAreas.length > 0 && (
+                            <div>
+                              <span className="text-gray-500 text-xs block">Sore Areas</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(client.readiness.soreAreas as string[]).map((area) => (
+                                  <span key={area} className="px-2 py-0.5 bg-red-50 text-red-700 rounded text-xs">
+                                    {area}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {detailTab === "goals" && (
+                        <div className="space-y-4">
+                          <ClientGoalsCard
+                            clientId={client.id}
+                            lang={isIS ? "IS" : "EN"}
+                            templates={templates}
+                            starterCandidates={starterCandidates}
+                            onUseProgramme={(id, name) => {
+                              setAssigningTemplate({ id, name });
+                              setShowPlanAssigner(true);
+                            }}
+                            onAssignStarter={async (programmeKey, level) => {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const res = await fetch(`/api/trainer/starter-templates`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+                                body: JSON.stringify({ clientId: client.id, programmeKey, level }),
+                              });
+                              const j = await res.json().catch(() => ({}));
+                              if (!res.ok) throw new Error(j.error ?? "Assign failed");
+                              fetchAssignments();
+                            }}
+                          />
+                          <PlanVisibilityToggle clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <PtGamesManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                        </div>
+                      )}
+
+                      {detailTab === "load" && (
+                        <div className="space-y-4">
+                          <LoadQuadrant clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <VolumeLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <TrainingLoadCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                        </div>
+                      )}
+
+                      {detailTab === "adjust" && (
+                        <div className="space-y-4">
+                          <MoveClientSessionControl clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <ClientSessionLogCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <AutoProgressionCard clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                          <ClientBreaksManager clientId={client.id} lang={isIS ? "IS" : "EN"} />
+                        </div>
+                      )}
+
+                      {/* Danger zone — always visible regardless of sub-tab */}
+                      <div className="mt-4 pt-3 border-t">
                         <RemoveClientButton clientId={client.id} clientName={client.name} lang={isIS ? "IS" : "EN"} onRemoved={fetchClients} />
                       </div>
                     </div>
