@@ -317,12 +317,21 @@ export async function computeMdComparison(args: {
   // Sort by name
   players.sort((a, b) => a.playerName.localeCompare(b.playerName));
 
+  // Capability gate: the sprint-distance + genuine IMA/FMP metrics are dead on
+  // Lite (sprint_distance ~0; IMA/FMP absent) and must NOT be kept alive by a
+  // single stray Pro-pod row. Require them on >= 25% of rows; the other metrics
+  // (distance, HSR, velocity bands, B2-3, etc.) are near-universal on both tiers.
+  const STRICT = new Set<MdMetricKey>(["sprintDistance", "imaAccel", "imaDecel", "imaCod", "jumps", "fmpDynamicHigh"]);
+  const share = (k: MdMetricKey) => (historicalRows.length ? historicalRows.filter((r) => { const v = extractMetric(r, k); return v != null && v > 0; }).length / historicalRows.length : 0);
+  const availableMetrics = MD_COMPARISON_METRICS.filter((k) => !STRICT.has(k) || share(k) >= 0.25);
+
   return {
     date,
     mdDay,
     teamId,
     players,
     historicalSessionCount: candidateDates.length,
+    availableMetrics,
   };
 }
 

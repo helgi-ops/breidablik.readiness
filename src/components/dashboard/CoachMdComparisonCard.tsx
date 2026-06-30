@@ -253,11 +253,14 @@ export default function CoachMdComparisonCard({
     else fetchPlanning();
   }, [mode, fetchComparison, fetchPlanning]);
 
-  // Determine which metrics have any data
+  // Determine which metrics to show: must have data AND be capability-available
+  // (the lib's dayShare gate drops dead sprint_distance / IMA / FMP on Lite that a
+  // single stray Pro-pod row would otherwise keep alive).
   const activeMetrics = useMemo(() => {
     if (!data || data.players.length === 0) return [];
+    const avail = data.availableMetrics ? new Set(data.availableMetrics) : null;
     return data.players[0].metrics
-      .filter((m) => data.players.some((p) => p.metrics.find((pm) => pm.metric === m.metric && pm.value != null)))
+      .filter((m) => (!avail || avail.has(m.metric)) && data.players.some((p) => p.metrics.find((pm) => pm.metric === m.metric && pm.value != null)))
       .map((m) => m.metric);
   }, [data]);
 
@@ -516,19 +519,19 @@ export default function CoachMdComparisonCard({
                   {/* Summary stats */}
                   <div className="grid grid-cols-4 gap-2 text-center">
                     <div className="rounded-lg bg-white border border-slate-200 p-2">
-                      <div className="text-[9px] text-slate-400 uppercase">Meðaltal</div>
+                      <div className="text-[9px] text-slate-400 uppercase">{t.mean}</div>
                       <div className="text-base font-bold tabular-nums text-slate-800">{fmtVal(tm?.avgValue ?? null, label.unit === "#" ? 0 : 0)}</div>
                     </div>
                     <div className="rounded-lg bg-white border border-slate-200 p-2">
-                      <div className="text-[9px] text-slate-400 uppercase">MD viðmið</div>
+                      <div className="text-[9px] text-slate-400 uppercase">{t.mdAvg}</div>
                       <div className="text-base font-bold tabular-nums text-slate-600">{fmtVal(tm?.mdMean ?? 0, 0)}</div>
                     </div>
                     <div className="rounded-lg bg-white border border-slate-200 p-2">
-                      <div className="text-[9px] text-slate-400 uppercase">Lægst</div>
+                      <div className="text-[9px] text-slate-400 uppercase">{t.min}</div>
                       <div className="text-base font-bold tabular-nums text-blue-600">{fmtVal(minVal, 0)}</div>
                     </div>
                     <div className="rounded-lg bg-white border border-slate-200 p-2">
-                      <div className="text-[9px] text-slate-400 uppercase">Hæst</div>
+                      <div className="text-[9px] text-slate-400 uppercase">{t.max}</div>
                       <div className="text-base font-bold tabular-nums text-rose-600">{fmtVal(maxVal, 0)}</div>
                     </div>
                   </div>

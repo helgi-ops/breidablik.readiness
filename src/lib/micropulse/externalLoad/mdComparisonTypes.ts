@@ -77,6 +77,10 @@ export type MdComparisonResult = {
   teamId: string;
   players: PlayerMdComparison[];
   historicalSessionCount: number;
+  /** Metrics the club actually captures on a meaningful share of days — surfaces
+   *  filter columns by this so Lite teams don't see dead sprint_distance / IMA /
+   *  FMP columns kept alive by a single stray Pro-pod row. */
+  availableMetrics: MdMetricKey[];
 };
 
 // ─── Planning Mode Types ───────────────────────────────────────────────────
