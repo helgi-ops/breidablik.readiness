@@ -18,9 +18,12 @@
  *   Monotony  ≤ 1.5   safe
  *             1.5–2.0 watch
  *             > 2.0   high overtraining risk
- *   Strain    ≤ 4500  safe
- *             4500–6000 watch
+ *   Strain    ≤ 4000  safe
+ *             4000–6000 watch
  *             > 6000  illness/injury "danger zone"
+ *   (Watch band 4000 calibrated 2026-06 against ~4.5k real player-weeks:
+ *    flags the top ~8.5% — a genuine early-warning spread below the 6000
+ *    danger ceiling. Aligned with loadIntelligence.ts + the Methodology page.)
  *
  * Single shared helper used by both FosterMonotonyStrainCard and the
  * Decision Summary load-signals block.
@@ -74,7 +77,7 @@ export function fosterStatus(monotony: number | null, strain: number | null): Fo
   const monotonyHigh = monotony > 2.0;
   const monotonyWatch = monotony > 1.5;
   const strainDanger = strain > 6000;
-  const strainWatch = strain > 4500;
+  const strainWatch = strain > 4000;
   if (monotonyHigh || strainDanger) return "danger";
   if (monotonyWatch || strainWatch) return "watch";
   return "safe";

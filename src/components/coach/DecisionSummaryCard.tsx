@@ -2085,7 +2085,7 @@ const ReadinessLoadDetail: FC<{
                   return (
                     <div
                       className={`flex flex-col rounded-lg border px-3 py-2 min-w-[7rem] ${tone.cls}`}
-                      title={`Foster Monotony & Strain (last 7 days). Monotony ${monotony.toFixed(2)} (${monotony > 2.0 ? "HIGH" : monotony > 1.5 ? "WATCH" : "SAFE"}) — day-to-day load variability. Strain ${Math.round(strain).toLocaleString()} AU (${strain > 6000 ? "DANGER" : strain > 4500 ? "WATCH" : "SAFE"}) — weekly load × monotony. Foster 1998 thresholds.`}
+                      title={`Foster Monotony & Strain (last 7 days). Monotony ${monotony.toFixed(2)} (${monotony > 2.0 ? "HIGH" : monotony > 1.5 ? "WATCH" : "SAFE"}) — day-to-day load variability. Strain ${Math.round(strain).toLocaleString()} AU (${strain > 6000 ? "DANGER" : strain > 4000 ? "WATCH" : "SAFE"}) — weekly load × monotony. Foster 1998 method; cutoffs tuned to our data.`}
                     >
                       <span className="text-[9px] font-semibold uppercase opacity-70">Foster strain</span>
                       <span className="text-lg font-bold tabular-nums">{Math.round(strain).toLocaleString()}</span>

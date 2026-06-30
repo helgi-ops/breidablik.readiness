@@ -18,8 +18,8 @@
  *   Monotony  ≤ 1.5   safe
  *             1.5–2.0 watch
  *             > 2.0   high overtraining risk
- *   Strain    ≤ 4500  safe
- *             4500–6000 watch
+ *   Strain    ≤ 4000  safe
+ *             4000–6000 watch
  *             > 6000  illness/injury "danger zone"
  *
  * Why Lite teams care: this is the OG load-monitoring math (used since
@@ -77,8 +77,8 @@ const I18N = {
     IS: "Monotony = meðal-vikuálag ÷ staðalfrávik. Mælir hversu LÍK æfingar eru dag frá degi. >2.0 þýðir mjög lítill breytileiki milli daga — jafnvel í hófi-magni eykur þetta veikinda/meiðsla-áhættu (Foster 1998). Þjálfara-aðgerð: breyta intensity milli daga, jafnvel þótt heildar vikumagn haldist eins.",
   },
   strainTip:    {
-    EN: "Strain = weekly load × monotony. Combined signal beats either metric alone (Foster 1998). >4500 AU = watch; >6000 AU = illness/injury danger zone. Two players with the same weekly load can have very different strain if one trains evenly and the other has spikes.",
-    IS: "Strain = vikuálag × monotony. Sameinað merki er sterkara en hvor mæling fyrir sig (Foster 1998). >4500 AU = fylgjast með; >6000 AU = veikinda/meiðsla-svæði. Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain ef annar æfir jafnt en hinn hefur spikes.",
+    EN: "Strain = weekly load × monotony. Combined signal beats either metric alone (Foster 1998). >4000 AU = watch; >6000 AU = illness/injury danger zone. Two players with the same weekly load can have very different strain if one trains evenly and the other has spikes.",
+    IS: "Strain = vikuálag × monotony. Sameinað merki er sterkara en hvor mæling fyrir sig (Foster 1998). >4000 AU = fylgjast með; >6000 AU = veikinda/meiðsla-svæði. Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain ef annar æfir jafnt en hinn hefur spikes.",
   },
   days:         { EN: "Days",            IS: "Dagar" },
   flag:         { EN: "Status",          IS: "Staða" },
@@ -139,7 +139,7 @@ function monotonyFlag(v: number | null): { label: string; bg: string; fg: string
 function strainFlag(v: number | null): { label: string; bg: string; fg: string; key: "safe" | "watch" | "danger" | "na" } {
   if (v == null)   return { key: "na",     label: "—",      bg: "bg-slate-50",   fg: "text-slate-400" };
   if (v > 6000)    return { key: "danger", label: "DANGER", bg: "bg-rose-100",   fg: "text-rose-800 font-semibold" };
-  if (v > 4500)    return { key: "watch",  label: "WATCH",  bg: "bg-amber-100",  fg: "text-amber-800 font-semibold" };
+  if (v > 4000)    return { key: "watch",  label: "WATCH",  bg: "bg-amber-100",  fg: "text-amber-800 font-semibold" };
   return                  { key: "safe",   label: "SAFE",   bg: "bg-emerald-50", fg: "text-emerald-800" };
 }
 
