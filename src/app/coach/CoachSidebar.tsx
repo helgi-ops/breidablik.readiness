@@ -184,7 +184,6 @@ const adminLinks: SidebarLink[] = [
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
   { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
   { href: "/coach/assessment-upload", label: { EN: "Assessment upload", IS: "Mælingaupphleðsla" } },
-  { href: "/coach/automation-center", label: { EN: "Automation",        IS: "Automation" } },
 ];
 
 // Super-admin links — visible ONLY to MicroPulse owner/admin accounts
