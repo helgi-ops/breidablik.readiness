@@ -96,6 +96,7 @@ import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
 import UnfamiliarSpikeBanner from "@/components/coach/UnfamiliarSpikeBanner";
 import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
+import ImaVerdictStrip from "@/components/coach/ImaVerdictStrip";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
@@ -8769,9 +8770,11 @@ export default function CoachPage() {
               for this squad AND present today. Rule-derived, cites the 30-day recovery
               rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
           <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
-          {/* Load verdict (strip) — the load axis next to the readiness briefing;
-              one plain line, links to /coach/load-intelligence. Rules decide, not AI. */}
+          {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
+              the movement axis (IMA), each one plain line linking to its own detail
+              page. Rules decide, not AI. */}
           <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
+          <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
           {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
           <UnfamiliarLoadCard lang={lang} date={today} />
           {/* Today Command Center */}
