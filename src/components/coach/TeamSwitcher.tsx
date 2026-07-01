@@ -39,6 +39,7 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
   const [teams, setTeams] = useState<CoachTeam[]>([]);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [query, setQuery] = useState("");
 
   const fetchTeams = useCallback(async () => {
     try {
@@ -114,58 +115,87 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
       {open && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setQuery(""); }} />
 
-          {/* Dropdown */}
-          <div className="absolute top-full left-0 mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[220px]">
-            {/* Group: Personal trainer */}
-            {teams.some((t) => t.teamType === "personal_trainer") && (
-              <>
-                <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wide">
-                  {ct.personalTrainer}
-                </div>
-                {teams
-                  .filter((t) => t.teamType === "personal_trainer")
-                  .map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => { onSwitch(t); setOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 ${
-                        t.id === currentTeamId ? "bg-gray-100 font-medium" : ""
-                      }`}
-                    >
-                      <span>👤</span>
-                      <span className="truncate">{t.name}</span>
-                    </button>
-                  ))}
-              </>
-            )}
+          {/* Dropdown — searchable + scroll-capped. A coach can belong to many
+              teams (100+ for staff); without a search box and a height cap the
+              list runs off-screen and buries teams (a coach reported not seeing
+              a team they had access to). */}
+          <div className="absolute top-full left-0 mt-1 z-50 flex max-h-[75vh] w-[280px] flex-col overflow-hidden rounded-lg border bg-white shadow-lg">
+            <div className="border-b p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={lang === "EN" ? "Search teams…" : "Leita að liði…"}
+                className="w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
 
-            {/* Group: Club teams */}
-            {teams.some((t) => t.teamType === "club_team") && (
-              <>
-                <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wide mt-1">
-                  {ct.clubTeam}
-                </div>
-                {teams
-                  .filter((t) => t.teamType === "club_team")
-                  .map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => { onSwitch(t); setOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 ${
-                        t.id === currentTeamId ? "bg-gray-100 font-medium" : ""
-                      }`}
-                    >
-                      <span>🏟</span>
-                      <span className="truncate">{t.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto">
-                        {[sportLabel(t.sport, lang === "EN" ? "EN" : "IS"), genderLabel(t.gender, lang === "EN" ? "EN" : "IS")].filter(Boolean).join(" · ")}
-                      </span>
-                    </button>
-                  ))}
-              </>
-            )}
+            <div className="overflow-y-auto py-1">
+              {(() => {
+                const q = query.trim().toLowerCase();
+                const matches = (t: CoachTeam) =>
+                  !q || t.name.toLowerCase().includes(q) || (t.sport ?? "").toLowerCase().includes(q);
+                const pt = teams.filter((t) => t.teamType === "personal_trainer" && matches(t));
+                const club = teams.filter((t) => t.teamType === "club_team" && matches(t));
+
+                if (pt.length === 0 && club.length === 0) {
+                  return (
+                    <div className="px-3 py-3 text-sm text-gray-400">
+                      {lang === "EN" ? "No teams match." : "Ekkert lið passar."}
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    {pt.length > 0 && (
+                      <>
+                        <div className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                          {ct.personalTrainer}
+                        </div>
+                        {pt.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => { onSwitch(t); setOpen(false); setQuery(""); }}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                              t.id === currentTeamId ? "bg-gray-100 font-medium" : ""
+                            }`}
+                          >
+                            <span>👤</span>
+                            <span className="truncate">{t.name}</span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+
+                    {club.length > 0 && (
+                      <>
+                        <div className="mt-1 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+                          {ct.clubTeam}
+                        </div>
+                        {club.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => { onSwitch(t); setOpen(false); setQuery(""); }}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${
+                              t.id === currentTeamId ? "bg-gray-100 font-medium" : ""
+                            }`}
+                          >
+                            <span>🏟</span>
+                            <span className="truncate">{t.name}</span>
+                            <span className="ml-auto text-xs text-gray-400">
+                              {[sportLabel(t.sport, lang === "EN" ? "EN" : "IS"), genderLabel(t.gender, lang === "EN" ? "EN" : "IS")].filter(Boolean).join(" · ")}
+                            </span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </>
       )}
