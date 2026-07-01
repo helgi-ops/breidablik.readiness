@@ -160,7 +160,18 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
     // IMA breakdown (driver)
     case "imaAccel":          return get("ima_accel");
     case "imaDecel":          return get("ima_decel");
-    case "imaCod":            return get("ima_cod");
+    case "imaCod": {
+      // Total CoD = sum of the six directional buckets (the aggregate ima_cod
+      // column is NULL on our tiers). Null only when all six are null.
+      const parts = [
+        get("ima_cod_left_high"), get("ima_cod_left_medium"), get("ima_cod_left_low"),
+        get("ima_cod_right_high"), get("ima_cod_right_medium"), get("ima_cod_right_low"),
+      ];
+      return parts.every((v) => v == null) ? null : parts.reduce((s: number, v) => s + (v ?? 0), 0);
+    }
+    case "imaStrideBand6":    return get("ima_fr_band6_stride_count");
+    case "imaStrideBand7":    return get("ima_fr_band7_stride_count");
+    case "imaStrideBand8":    return get("ima_fr_band8_stride_count");
   }
 }
 
@@ -180,7 +191,10 @@ const MATCH_DEMAND_SELECT_COLS = [
   "fmp_dynamic_high_s",
   "fmp_dynamic_medium_s",
   "fmp_running_high_s",
-  "ima_total",
+  "ima_total", "ima_accel", "ima_decel",
+  "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
+  "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
+  "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
   // FULL-game filter duration sources
   "fmp_total_duration_s",
   "player_load_per_minute",

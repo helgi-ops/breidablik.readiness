@@ -40,29 +40,24 @@ export const WEEKLY_LOAD_METRICS_INDOOR = [
 
 // ─── IMA (driver) KPI list ─────────────────────────────────────────────────
 // The inertial-movement "driver" to GPS's "engine" (Niklas Virtanen). Sensor-
-// derived (works indoors): total IMA plus its accel / decel / change-of-
-// direction breakdown, so a coach sees not just how much movement load but
-// which kind.
-//
-// Two constants on purpose:
-//   • _ALL keeps every ima* key valid end-to-end (type union, labels, tracker,
-//     targets) — including imaCod.
-//   • the rendered group (used by `group=ima`) EXCLUDES imaCod, because on the
-//     current Catapult tiers both ima_cod and cod_events are parked NULL (same
-//     limit as IMA Impacts) — an always-empty CoD tile would violate the
-//     explainability manifesto. Move "imaCod" into the rendered group the
-//     moment a tier populates it.
-export const WEEKLY_LOAD_METRICS_IMA_ALL = [
-  "imaTotal",
-  "imaAccel",
-  "imaDecel",
-  "imaCod",
-] as const;
-
+// derived (works indoors):
+//   • Total / Accel / Decel — IMA event load and its accel-vs-decel split.
+//   • CoD — change of direction. The aggregate `ima_cod` column is NULL on our
+//     tiers, but Catapult DOES capture CoD as directional events
+//     (`ima_cod_{left,right}_{high,medium,low}`); the tracker/targets sum those
+//     six into a total CoD count. So this is a first-class signal, not a proxy
+//     derived from accel/decel + clock.
+//   • Stride bands 6-8 — high-cadence Free-Running stride counts (the fast /
+//     sprint cadence bands, `ima_fr_band{6,7,8}_stride_count`): the running-
+//     intensity companion to the movement-event load.
 export const WEEKLY_LOAD_METRICS_IMA = [
   "imaTotal",
   "imaAccel",
   "imaDecel",
+  "imaCod",
+  "imaStrideBand6",
+  "imaStrideBand7",
+  "imaStrideBand8",
 ] as const;
 
 /**
@@ -75,7 +70,7 @@ export const WEEKLY_LOAD_METRICS = WEEKLY_LOAD_METRICS_OUTDOOR;
 export type WeeklyLoadMetricKey =
   | (typeof WEEKLY_LOAD_METRICS_OUTDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_INDOOR)[number]
-  | (typeof WEEKLY_LOAD_METRICS_IMA_ALL)[number];
+  | (typeof WEEKLY_LOAD_METRICS_IMA)[number];
 
 /** Return the active KPI list for a given indoor flag. */
 export function getActiveWeeklyLoadMetrics(indoor: boolean): readonly WeeklyLoadMetricKey[] {
@@ -92,7 +87,7 @@ export const ALL_WEEKLY_LOAD_METRICS: readonly WeeklyLoadMetricKey[] = [
   ...WEEKLY_LOAD_METRICS_INDOOR.filter(
     (k) => !(WEEKLY_LOAD_METRICS_OUTDOOR as readonly string[]).includes(k)
   ),
-  ...WEEKLY_LOAD_METRICS_IMA_ALL.filter(
+  ...WEEKLY_LOAD_METRICS_IMA.filter(
     (k) =>
       !(WEEKLY_LOAD_METRICS_OUTDOOR as readonly string[]).includes(k) &&
       !(WEEKLY_LOAD_METRICS_INDOOR as readonly string[]).includes(k)
@@ -118,6 +113,10 @@ export const WEEKLY_LOAD_LABELS: Record<WeeklyLoadMetricKey, { en: string; is: s
   imaAccel:         { en: "IMA Accel",       is: "IMA Hröðun",        unit: "#" },
   imaDecel:         { en: "IMA Decel",       is: "IMA Hemlun",        unit: "#" },
   imaCod:           { en: "IMA CoD",         is: "IMA Stefnubr.",     unit: "#" },
+  // High-cadence Free-Running stride bands (fast / sprint cadence)
+  imaStrideBand6:   { en: "Stride B6",       is: "Skref-band 6",      unit: "#" },
+  imaStrideBand7:   { en: "Stride B7",       is: "Skref-band 7",      unit: "#" },
+  imaStrideBand8:   { en: "Stride B8",       is: "Skref-band 8",      unit: "#" },
 };
 
 // ─── Shared result types ───────────────────────────────────────────────────

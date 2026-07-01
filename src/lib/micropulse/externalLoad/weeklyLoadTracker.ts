@@ -78,8 +78,30 @@ type RawRow = {
   ima_total: number | null;
   ima_accel: number | null;
   ima_decel: number | null;
-  ima_cod: number | null;
+  // CoD directional breakdown — the aggregate ima_cod column is NULL on our
+  // tiers, so total CoD is the sum of these six directional/intensity buckets.
+  ima_cod_left_high: number | null;
+  ima_cod_left_medium: number | null;
+  ima_cod_left_low: number | null;
+  ima_cod_right_high: number | null;
+  ima_cod_right_medium: number | null;
+  ima_cod_right_low: number | null;
+  // High-cadence Free-Running stride bands (fast / sprint cadence)
+  ima_fr_band6_stride_count: number | null;
+  ima_fr_band7_stride_count: number | null;
+  ima_fr_band8_stride_count: number | null;
 };
+
+// Total CoD = sum of the six directional buckets. Null only when all six are
+// null (so a genuine no-CoD row stays null rather than a misleading 0).
+function sumCod(row: RawRow): number | null {
+  const parts = [
+    row.ima_cod_left_high, row.ima_cod_left_medium, row.ima_cod_left_low,
+    row.ima_cod_right_high, row.ima_cod_right_medium, row.ima_cod_right_low,
+  ];
+  if (parts.every((v) => v == null)) return null;
+  return parts.reduce((s: number, v) => s + (v ?? 0), 0);
+}
 
 function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
   switch (key) {
@@ -98,7 +120,10 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     // IMA breakdown (driver)
     case "imaAccel":          return row.ima_accel;
     case "imaDecel":          return row.ima_decel;
-    case "imaCod":            return row.ima_cod;
+    case "imaCod":            return sumCod(row);
+    case "imaStrideBand6":    return row.ima_fr_band6_stride_count;
+    case "imaStrideBand7":    return row.ima_fr_band7_stride_count;
+    case "imaStrideBand8":    return row.ima_fr_band8_stride_count;
   }
 }
 
@@ -115,7 +140,10 @@ const SELECT_COLS = [
   "accel_b2_3_tot_effs_gen2", "decel_b2_3_tot_effs_gen2",
   // Indoor (FMP + IMA)
   "fmp_dynamic_high_s", "fmp_dynamic_medium_s", "fmp_running_high_s",
-  "ima_total", "ima_accel", "ima_decel", "ima_cod",
+  "ima_total", "ima_accel", "ima_decel",
+  "ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low",
+  "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low",
+  "ima_fr_band6_stride_count", "ima_fr_band7_stride_count", "ima_fr_band8_stride_count",
 ].join(", ");
 
 export async function computeWeeklyLoad(args: {
