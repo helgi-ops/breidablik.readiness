@@ -22,6 +22,8 @@ Every verdict carries its inputs. If the engine says "yellow", the coach can tra
 ### 2. Plain language by default, jargon behind toggles
 The first thing a coach sees must be a sentence they can read without sport-science training. Composite, ACWR, neural load, IMA, FMP — these live in tooltips, "show details" toggles, and S&C drill-down views. They never appear on the morning brief surface.
 
+**The read is layered, not compressed.** "Five seconds" is the *glance* (layer 0: the one-sentence verdict), not a ceiling on the whole card. The default, no-click view is layer 0 **plus** layer 1 — 2–3 plain supporting facts (the "why", the named exceptions, the one key number) a coach can read in ~10–15 seconds when they want more than the glance. Only layer 2 — raw tables, KPI grids, jargon, sub-scores — waits behind an opt-in toggle. The anti-pattern is jumping straight from the one-liner to a raw table: that hides the plain "why" the coach needs most. Verdict first and boldest; supporting facts plain and visible; data on demand.
+
 ### 3. Counterfactuals are first-class
 Every flagged player gets a "what would change this" lever. The coach should never wonder *what is the system asking me to do differently?* The lever is part of the data model, not an afterthought.
 
@@ -101,7 +103,7 @@ labelled "Rules decide — not AI"), though the formal policy doc is still pendi
 - Building features for the S&C audience that the head coach must navigate around.
 
 ### Patterns to use
-- One-sentence verdict at the top of every card. Tiles and chips are drill-down.
+- The layered read: (0) one-sentence verdict at the top, always first and boldest; (1) 2–3 plain supporting facts visible without a click — the ~15-second read (the "why", named exceptions, the key number, in plain words); (2) raw tables / KPI grids / jargon behind a "Show details" toggle. Never jump 0 → 2.
 - Plain-language label first; numeric chip second; jargon tooltip third.
 - For every flag, render the counterfactual ("if X had been Y → GREEN").
 - For every verdict, render the confidence (signal coverage + baseline maturity).
@@ -113,7 +115,7 @@ labelled "Rules decide — not AI"), though the formal policy doc is still pendi
 Before shipping any new feature, ask:
 
 1. Does this carry its own provenance? (If you click into it, can you see what fed it?)
-2. Can a non-S&C coach read it in five seconds?
+2. Can a non-S&C coach get the verdict at a glance — and the plain "why" (2–3 facts) without opening a drill-down?
 3. Does it answer "why" as well as "what"?
 4. If it makes a recommendation, can the coach see (and override) the reasoning?
 5. If it uses AI, is the AI labelled as AI, and does it cite real data?

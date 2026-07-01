@@ -297,6 +297,32 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
       : "Fjölbreytni álags er í öruggu bili hjá öllum í vikunni.";
   })();
 
+  // Layer-1 supporting facts (no click): the player carrying the most weekly load
+  // and the risk split — the ~15-second read before the table.
+  const fosterFacts: string | null = (() => {
+    if (loading || rows.length === 0) return null;
+    const classify = (r: PlayerRow) => {
+      const m = monotonyFlag(r.monotony);
+      const s = strainFlag(r.strain);
+      if (m.key === "high" || s.key === "danger") return "danger";
+      if (m.key === "watch" || s.key === "watch") return "watch";
+      return "safe";
+    };
+    const danger = rows.filter((r) => classify(r) === "danger").length;
+    const watch = rows.filter((r) => classify(r) === "watch").length;
+    const safe = rows.length - danger - watch;
+    const highest = [...rows].filter((r) => r.strain != null).sort((a, b) => (b.strain ?? 0) - (a.strain ?? 0))[0];
+    const split = lang === "IS"
+      ? `${danger} í hættu · ${watch} að fylgjast með · ${safe} örugg`
+      : `${danger} at risk · ${watch} to watch · ${safe} safe`;
+    if (highest) {
+      return lang === "IS"
+        ? `Mesta heildarálag vikunnar: ${highest.name.split(" ")[0]}. ${split}.`
+        : `Highest weekly load: ${highest.name.split(" ")[0]}. ${split}.`;
+    }
+    return `${split}.`;
+  })();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -320,7 +346,10 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
 
       <CardContent className="p-0">
         {fosterVerdict && (
-          <p className="border-b border-slate-100 px-6 py-3 text-sm font-medium text-slate-800">{fosterVerdict}</p>
+          <div className="border-b border-slate-100 px-6 py-3">
+            <p className="text-sm font-medium text-slate-800">{fosterVerdict}</p>
+            {fosterFacts && <p className="mt-0.5 text-xs text-slate-500">{fosterFacts}</p>}
+          </div>
         )}
         {loading && (
           <div className="px-6 py-10 text-center text-sm text-slate-400">

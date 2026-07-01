@@ -317,6 +317,26 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
       : "Allir eru við eða nálægt sínu leikdags-HSR viðmiði í vikunni — engar viðbætur þarf.";
   })();
 
+  // Layer-1 supporting facts (visible without a click): the furthest-below player
+  // and the squad split — the ~15-second read before the full table.
+  const mdFacts: string | null = (() => {
+    if (loading || rows.length === 0) return null;
+    const under = rows.filter((r) => r.flag === "under");
+    const watch = rows.filter((r) => r.flag === "watch");
+    const ready = rows.filter((r) => r.flag === "ready");
+    const over = rows.filter((r) => r.flag === "over");
+    const worst = [...under].sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999))[0];
+    const split = lang === "IS"
+      ? `Staða: ${ready.length} tilbúnir · ${watch.length} að fylla · ${over.length} yfir`
+      : `Squad: ${ready.length} ready · ${watch.length} to top up · ${over.length} over`;
+    if (worst && worst.pct != null) {
+      return lang === "IS"
+        ? `Lengst undir: ${worst.name.split(" ")[0]} (${Math.round(worst.pct)}% af leikdags-HSR). ${split}.`
+        : `Furthest below: ${worst.name.split(" ")[0]} at ${Math.round(worst.pct)}% of his match-day HSR. ${split}.`;
+    }
+    return `${split}.`;
+  })();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -340,7 +360,10 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
 
       <CardContent className="p-0">
         {mdVerdict && (
-          <p className="border-b border-slate-100 px-6 py-3 text-sm font-medium text-slate-800">{mdVerdict}</p>
+          <div className="border-b border-slate-100 px-6 py-3">
+            <p className="text-sm font-medium text-slate-800">{mdVerdict}</p>
+            {mdFacts && <p className="mt-0.5 text-xs text-slate-500">{mdFacts}</p>}
+          </div>
         )}
         {loading && (
           <div className="px-6 py-10 text-center text-sm text-slate-400">{tt("loading", lang)}</div>

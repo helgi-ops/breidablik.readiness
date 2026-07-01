@@ -7,7 +7,7 @@ Guidance for anyone — human or AI — writing code in this repo.
 All coach-facing features must satisfy [`docs/explainability-first.md`](docs/explainability-first.md).
 
 In short:
-- One-sentence verdict at the top of every card; tiles and chips are drill-down.
+- The layered read: (0) one-sentence verdict at the top, first and boldest [the ~5s glance]; (1) 2–3 plain supporting facts visible without a click [the ~10–15s read — the "why", named exceptions, key number]; (2) raw tables/KPI grids/jargon behind a "Show details" toggle. Never jump 0 → 2 (don't hide the plain "why" behind the same toggle as the raw data).
 - Plain language by default; sport-science jargon (composite, ACWR, HIR, IMA, FMP, neural load) lives behind tooltips and "Show details" toggles, never in the primary view.
 - Every flagged player gets a counterfactual ("if X had been Y → GREEN").
 - Every verdict shows its confidence (signal coverage + baseline maturity).
@@ -19,7 +19,7 @@ In short:
 Before shipping any new feature, run the five-question check in the manifesto:
 
 1. Does this carry its own provenance?
-2. Can a non-S&C coach read it in five seconds?
+2. Can a non-S&C coach get the verdict at a glance — and the plain "why" (2–3 facts) without opening a drill-down?
 3. Does it answer "why" as well as "what"?
 4. If it makes a recommendation, can the coach see (and override) the reasoning?
 5. If it uses AI, is the AI labelled as AI, and does it cite real data?

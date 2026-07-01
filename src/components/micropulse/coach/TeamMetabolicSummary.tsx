@@ -221,6 +221,31 @@ export default function TeamMetabolicSummary({
             .join(", ")}.`
         : "Metabolic load is in a normal range across the squad.";
 
+  // Layer-1 supporting facts (no click): the highest scorers, the dominant
+  // fatigue type, and how many are in a normal range — the ~15-second read.
+  const metabolicFacts: string | null = (() => {
+    if (loading || !rows.some((r) => r.metabolic_data_valid)) return null;
+    const valid = rows.filter((r) => r.metabolic_data_valid);
+    const high = valid.filter((r) => r.metabolic_load_band === "high" || r.metabolic_load_band === "very_high");
+    const normal = valid.length - high.length;
+    if (high.length === 0) return `${valid.length} players with valid data — all in a normal range.`;
+    const top = [...high]
+      .sort((a, b) => (b.metabolic_load_score ?? 0) - (a.metabolic_load_score ?? 0))
+      .slice(0, 2)
+      .map((r) => `${r.player_name.split(" ")[0]} ${r.metabolic_load_score ?? "—"}`)
+      .join(", ");
+    const counts = new Map<string, number>();
+    for (const r of high) {
+      const k = String(r.fatigue_type ?? "");
+      if (!k || k === "none") continue;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let dom: string | null = null, max = 0;
+    for (const [k, v] of counts) if (v > max) { max = v; dom = k; }
+    const domLabel = dom ? dom.replace(/_/g, " ") : null;
+    return `Highest: ${top}${domLabel ? ` · mostly ${domLabel}` : ""}. ${normal} in a normal range.`;
+  })();
+
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
       {/* ── Header ───────────────────────────────────────────────── */}
@@ -256,9 +281,10 @@ export default function TeamMetabolicSummary({
       </div>
 
       {metabolicVerdict && (
-        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">
-          {metabolicVerdict}
-        </p>
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <p className="text-sm font-medium text-slate-800">{metabolicVerdict}</p>
+          {metabolicFacts && <p className="mt-0.5 text-xs text-slate-500">{metabolicFacts}</p>}
+        </div>
       )}
 
       {/* ── Summary tiles ─────────────────────────────────────────── */}
