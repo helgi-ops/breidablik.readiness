@@ -1793,11 +1793,16 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                   {teamSignals.imaSpikes.length > 0 ? (
                     <span>
                       {textParts.length > 0 ? " · " : null}
+                      {/* Plain language on purpose — this is a DIFFERENT signal from
+                          "moving differently" above: not a change in movement type,
+                          but a sharp jump in how much high-intensity running the
+                          player did vs his own usual. No IMA jargon in the sentence;
+                          the link names the destination page. */}
                       {lang === "IS"
-                        ? `${teamSignals.imaSpikes.length} með IMA-spike í dag (${imaNames}) `
-                        : `${teamSignals.imaSpikes.length} with an IMA spike today (${imaNames}) `}
+                        ? `${teamSignals.imaSpikes.length} ${teamSignals.imaSpikes.length === 1 ? "hljóp" : "hlupu"} mun meira háákefðar en venjulega í dag (${imaNames}) `
+                        : `${teamSignals.imaSpikes.length} did much more high-intensity running than usual today (${imaNames}) `}
                       <a href="/coach/ima-intelligence" className="font-normal underline decoration-dotted underline-offset-2 hover:opacity-80">
-                        {lang === "IS" ? "IMA →" : "IMA →"}
+                        {lang === "IS" ? "sjá IMA →" : "see IMA →"}
                       </a>
                     </span>
                   ) : null}
