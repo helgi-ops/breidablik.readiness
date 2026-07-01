@@ -136,6 +136,11 @@ export default function PlannedSessionLoadCard(props: PlannedSessionLoadCardProp
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Rationale — the plain-language answer, directly under the band verdict
+            (the three sRPE/AU/% targets below are the drill-down). */}
+        <p className={`text-xs leading-relaxed ${s.text}`}>
+          {is ? plan.rationaleIS : plan.rationaleEN}
+        </p>
         {/* Three targets — sRPE intensity×duration, sRPE load, % of match */}
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
@@ -172,11 +177,6 @@ export default function PlannedSessionLoadCard(props: PlannedSessionLoadCardProp
             </div>
           </div>
         </div>
-
-        {/* Rationale — one line, tied to the MD day */}
-        <p className={`text-xs leading-relaxed ${s.text}`}>
-          {is ? plan.rationaleIS : plan.rationaleEN}
-        </p>
 
         {/* Readiness-adjusted note — separate from the plan number */}
         {showReadinessNote ? (

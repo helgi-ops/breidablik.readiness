@@ -75,3 +75,39 @@ quadrant · decel-intelligence · PlannedSessionLoadCard.
 
 *Verified 2026-07-01 by opening each surface's default render. Method: 3 parallel
 inspections + hand-verification of the worst offenders.*
+
+---
+
+## Verification update (2026-07-01) — mount points change the priority
+
+The scorecard above rated each card **standalone**. But a card being "data-first"
+only matters where a coach hits it **without opting in**. Checking where each
+flagged card is actually mounted:
+
+- **Already gated (deep-dive only) → low urgency:** `GpsLoadIntelligence`,
+  `MechanicalLoadIndexCard`, `MdHsrComparisonCard` render **only inside the
+  load-intelligence `<details>`** ("Show S&C details") — a coach sees them after
+  opting in.
+- **In answer-first pages / drill-downs → fine:** `ProgressiveOverloadCard` (below
+  the progressive-overload page verdict), `PlayerLoadAcwrCard` (inside a
+  decel-intelligence per-player row).
+- **`LoadMetricsCard` is DEAD CODE** — 0 mounts anywhere. Not a fix; a *cut*
+  candidate (let usage analytics confirm, then delete).
+- **`SessionRpeMonitoringCard`** already leads with a plain compliance summary
+  ("X/Y submitted · Z missing · N% compliance") + lists who's missing — fine.
+
+### Done (the genuinely-ungated / high-visibility ones)
+- ✅ **`DailyInternalLoadCard`** (dashboard Load tab, was a pure dump) — added a
+  computed verdict + moved the per-player table behind the new `<ShowDetails>`.
+- ✅ **`PlannedSessionLoadCard`** (the **"today"** landing tab) — promoted the
+  plain rationale above the sRPE/AU tiles, right under the band verdict.
+- ✅ **`GpsLoadIntelligence`** — hoisted the Cohort Alerts answer to the top
+  (polish; it's already gated).
+- ✅ New reusable **`<ShowDetails>`** (`src/components/common/ShowDetails.tsx`).
+
+### Remaining (low urgency — let usage data drive it)
+The mixed analytics pages (hsr / ima / quadrant / decel-intelligence) each already
+lead with a `VerdictBanner`; the only gap is that a jargon table renders inline
+after it. Wrapping those tables in `<ShowDetails>` is the same one-line pattern,
+but they are deep-dive S&C surfaces — worth doing only if usage analytics shows
+coaches actually open them.
