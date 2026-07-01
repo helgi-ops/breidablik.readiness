@@ -3,11 +3,6 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  MICROPULSE_PRODUCT_IDENTITY,
-  ORDERED_PLAN_DEFINITIONS,
-  getPlanSummary,
-} from "@/lib/micropulse/product";
 
 type Lang = "IS" | "EN";
 
