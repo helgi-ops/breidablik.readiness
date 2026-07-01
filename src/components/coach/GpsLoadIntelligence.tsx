@@ -313,6 +313,10 @@ export default function GpsLoadIntelligence({
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
 
+        {/* Answer-first: the plain-language cohort alerts lead; the KPI tiles +
+            signal table below are the drill-down (was rendered at the bottom). */}
+        <CohortAlerts rows={rows} lang={lang} />
+
         {/* ── Team Status Summary ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           <KpiTile
@@ -464,9 +468,6 @@ export default function GpsLoadIntelligence({
             </tbody>
           </table>
         </div>
-
-        {/* ── Cohort Alerts ── */}
-        <CohortAlerts rows={rows} lang={lang} />
 
       </CardContent>
     </Card>

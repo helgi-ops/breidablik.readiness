@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { loadBandBadgeClass, loadBandLabel } from "@/lib/player-load/formatters";
 import type { DailyLoadSummaryResponse } from "@/lib/player-load/types";
+import { useLang } from "@/lib/lang";
+import ShowDetails from "@/components/common/ShowDetails";
 
 type DailyInternalLoadResponse = {
   ok: boolean;
@@ -57,6 +59,32 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
   }, [teamId]);
 
   const rows = data?.rows ?? [];
+
+  // Answer-first: one plain sentence a coach reads in ~5 seconds — who trained
+  // hard today (HIGH/VERY_HIGH band), or "all in range". The tiles/table below
+  // are the drill-down.
+  const [lang] = useLang();
+  const IS = lang === "IS";
+  const hardRows = rows.filter((r) => r.load_band === "HIGH" || r.load_band === "VERY_HIGH");
+  const nWithLoad = data?.summary?.playersWithLoad ?? rows.length;
+  const hardNames = hardRows.map((r) => r.player_name);
+  const hardShown = hardNames.slice(0, 3).join(", ") + (hardNames.length > 3 ? ` +${hardNames.length - 3}` : "");
+  const verdict = loading
+    ? ""
+    : error
+    ? ""
+    : rows.length === 0
+    ? IS
+      ? "Ekkert innra álag skráð fyrir þennan dag enn."
+      : "No internal load logged for this day yet."
+    : hardRows.length > 0
+    ? IS
+      ? `${hardRows.length} með þunga æfingu í dag: ${hardShown}. Aðrir í lagi.`
+      : `${hardRows.length} logged a hard session today: ${hardShown}. The rest are in range.`
+    : IS
+    ? `Innra álag í lagi hjá liðinu í dag — ${nWithLoad} skráðu.`
+    : `Internal load is in range across the squad today — ${nWithLoad} logged.`;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -86,6 +114,12 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
         </div>
       </div>
 
+      {verdict ? (
+        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">
+          {verdict}
+        </p>
+      ) : null}
+
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Players with load</div>
@@ -111,13 +145,9 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
 
       {error ? <div className="mt-2 text-xs text-rose-700">{error}</div> : null}
 
-      {!loading && !error ? (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-          <div className="text-xs font-semibold text-slate-700">Player daily load</div>
-          {rows.length === 0 ? (
-            <div className="mt-2 text-xs text-slate-500">No load entries for selected date.</div>
-          ) : (
-            <div className="mt-2 max-h-72 overflow-auto">
+      {!loading && !error && rows.length > 0 ? (
+        <ShowDetails label={{ EN: "Show per-player breakdown", IS: "Sýna sundurliðun per leikmann" }}>
+            <div className="max-h-72 overflow-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-slate-500">
@@ -155,8 +185,7 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+        </ShowDetails>
       ) : null}
     </div>
   );
