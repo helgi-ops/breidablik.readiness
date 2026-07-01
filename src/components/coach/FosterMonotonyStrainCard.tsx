@@ -267,6 +267,36 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
     ? { label: tt("variantRpe", lang), bg: "bg-emerald-100 text-emerald-800 border-emerald-300" }
     : { label: tt("variantVol", lang), bg: "bg-blue-100 text-blue-800 border-blue-300" };
 
+  // Answer-first: one plain sentence before the table. Danger = load too samey
+  // (high monotony) or too relentless (high strain); worst case leads.
+  const fosterVerdict: string | null = (() => {
+    if (loading || rows.length === 0) return null;
+    const classify = (r: PlayerRow) => {
+      const m = monotonyFlag(r.monotony);
+      const s = strainFlag(r.strain);
+      if (m.key === "high" || s.key === "danger") return "danger";
+      if (m.key === "watch" || s.key === "watch") return "watch";
+      return "safe";
+    };
+    const danger = rows.filter((r) => classify(r) === "danger");
+    const watch = rows.filter((r) => classify(r) === "watch");
+    const names = (arr: PlayerRow[]) =>
+      arr.slice(0, 3).map((r) => r.name.split(" ")[0]).join(", ") + (arr.length > 3 ? ` +${arr.length - 3}` : "");
+    if (danger.length > 0) {
+      return lang === "EN"
+        ? `${danger.length} ${danger.length === 1 ? "player's" : "players'"} load is too samey or too relentless this week — vary the hard and easy days: ${names(danger)}.`
+        : `Álag ${danger.length} ${danger.length === 1 ? "leikmanns" : "leikmanna"} er of einsleitt eða of stíft í vikunni — dreifðu þungum og léttum dögum: ${names(danger)}.`;
+    }
+    if (watch.length > 0) {
+      return lang === "EN"
+        ? `${watch.length} ${watch.length === 1 ? "player" : "players"} to keep an eye on for load variety this week: ${names(watch)}.`
+        : `${watch.length} ${watch.length === 1 ? "leikmaður" : "leikmenn"} til að fylgjast með varðandi fjölbreytni álags í vikunni: ${names(watch)}.`;
+    }
+    return lang === "EN"
+      ? "Everyone's training variety is in the safe range this week."
+      : "Fjölbreytni álags er í öruggu bili hjá öllum í vikunni.";
+  })();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -289,6 +319,9 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
       </CardHeader>
 
       <CardContent className="p-0">
+        {fosterVerdict && (
+          <p className="border-b border-slate-100 px-6 py-3 text-sm font-medium text-slate-800">{fosterVerdict}</p>
+        )}
         {loading && (
           <div className="px-6 py-10 text-center text-sm text-slate-400">
             {lang === "EN" ? "Loading…" : "Hleður…"}

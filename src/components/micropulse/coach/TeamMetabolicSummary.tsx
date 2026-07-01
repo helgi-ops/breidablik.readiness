@@ -207,6 +207,20 @@ export default function TeamMetabolicSummary({
   // data, self-hide rather than show an empty composite for lower-tier clubs.
   if (payload && rows.length > 0 && !rows.some((r) => r.metabolic_data_valid)) return null;
 
+  // Answer-first: one plain sentence before the tiles/table — how many are
+  // carrying high metabolic (energy-system) load, and who's highest.
+  const highRows = rows.filter((r) => r.metabolic_load_band === "high" || r.metabolic_load_band === "very_high");
+  const metabolicVerdict: string | null =
+    loading || !rows.some((r) => r.metabolic_data_valid)
+      ? null
+      : highRows.length > 0
+        ? `${highRows.length} ${highRows.length === 1 ? "player is" : "players are"} carrying high metabolic (energy-system) load — highest: ${[...highRows]
+            .sort((a, b) => (b.metabolic_load_score ?? 0) - (a.metabolic_load_score ?? 0))
+            .slice(0, 3)
+            .map((r) => r.player_name.split(" ")[0])
+            .join(", ")}.`
+        : "Metabolic load is in a normal range across the squad.";
+
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
       {/* ── Header ───────────────────────────────────────────────── */}
@@ -240,6 +254,12 @@ export default function TeamMetabolicSummary({
           </button>
         </div>
       </div>
+
+      {metabolicVerdict && (
+        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">
+          {metabolicVerdict}
+        </p>
+      )}
 
       {/* ── Summary tiles ─────────────────────────────────────────── */}
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

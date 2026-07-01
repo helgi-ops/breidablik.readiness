@@ -293,6 +293,30 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
     ? { label: tt("strategyMatch", lang), cls: "bg-emerald-100 text-emerald-800 border-emerald-300" }
     : { label: tt("strategySynthetic", lang), cls: "bg-blue-100 text-blue-800 border-blue-300" };
 
+  // Answer-first: one plain sentence a coach reads before the table. Leads with
+  // the most actionable case — UNDER (below match-day HSR = high acute risk on
+  // the next MD, needs a top-up), then OVER, else all-clear.
+  const mdVerdict: string | null = (() => {
+    if (loading || rows.length === 0) return null;
+    const under = rows.filter((r) => r.flag === "under");
+    const over = rows.filter((r) => r.flag === "over");
+    const names = (arr: Row[]) =>
+      arr.slice(0, 3).map((r) => r.name.split(" ")[0]).join(", ") + (arr.length > 3 ? ` +${arr.length - 3}` : "");
+    if (under.length > 0) {
+      return lang === "EN"
+        ? `${under.length} ${under.length === 1 ? "player is" : "players are"} under their match-day HSR baseline — top up in the MD-1 session: ${names(under)}.`
+        : `${under.length} ${under.length === 1 ? "leikmaður er" : "leikmenn eru"} undir sínu leikdags-HSR viðmiði — fylltu í MD-1 æfingunni: ${names(under)}.`;
+    }
+    if (over.length > 0) {
+      return lang === "EN"
+        ? `${over.length} ${over.length === 1 ? "player is" : "players are"} over their match-day HSR demand — ease their last session before the game.`
+        : `${over.length} ${over.length === 1 ? "leikmaður er" : "leikmenn eru"} yfir sínu leikdags-HSR viðmiði — léttu síðustu æfingu fyrir leik.`;
+    }
+    return lang === "EN"
+      ? "Everyone is at or near their match-day HSR demand this week — no top-ups needed."
+      : "Allir eru við eða nálægt sínu leikdags-HSR viðmiði í vikunni — engar viðbætur þarf.";
+  })();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -315,6 +339,9 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
       </CardHeader>
 
       <CardContent className="p-0">
+        {mdVerdict && (
+          <p className="border-b border-slate-100 px-6 py-3 text-sm font-medium text-slate-800">{mdVerdict}</p>
+        )}
         {loading && (
           <div className="px-6 py-10 text-center text-sm text-slate-400">{tt("loading", lang)}</div>
         )}
