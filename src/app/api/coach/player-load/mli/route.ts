@@ -64,6 +64,10 @@ type ResponseRow = {
 type ResponsePayload = {
   ok: boolean;
   error?: string;
+  /** The date the returned rows are actually from (may be < requestedDate on a rest day). */
+  date?: string;
+  /** The date the coach asked for (today unless a date was picked). */
+  requestedDate?: string;
   summary?: {
     avgMli: number | null;
     highCount: number;
@@ -217,14 +221,25 @@ export async function GET(req: Request) {
       grouped.set(row.player_id, current);
     }
 
+    // MLI is a per-session score. On a rest day the requested date has no rows,
+    // so instead of returning empty (which makes the card vanish) fall back to
+    // the most recent date that actually has data (<= requested). The card shows
+    // that as "last session" so a rest day still surfaces the mechanical picture.
+    const availableDates = Array.from(new Set(rows.map((r) => r.date)))
+      .filter((d) => d <= dateKey)
+      .sort();
+    const effectiveDate = availableDates.length ? availableDates[availableDates.length - 1] : dateKey;
+
     const computedRows: ResponseRow[] = [];
     for (const [playerId, playerRows] of grouped.entries()) {
+      // Ascending by date so each day's residual/history is built before it.
+      playerRows.sort((a, b) => a.date.localeCompare(b.date));
       const historicalMli = new Map<string, number | null>();
       for (const row of playerRows) {
         const computed = computeMechanicalLoad(playerRows, row.date, historicalMli);
         if (!computed) continue;
         historicalMli.set(row.date, computed.mli);
-        if (row.date !== dateKey) continue;
+        if (row.date !== effectiveDate) continue;
         computedRows.push({
           player_id: playerId,
           player_name: rosterById.get(playerId)?.full_name ?? "Unknown player",
@@ -265,6 +280,8 @@ export async function GET(req: Request) {
 
     const payload: ResponsePayload = {
       ok: true,
+      date: effectiveDate,
+      requestedDate: dateKey,
       summary: {
         avgMli,
         highCount,

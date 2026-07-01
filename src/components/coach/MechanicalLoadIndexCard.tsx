@@ -28,6 +28,8 @@ type ResponseRow = {
 type ResponsePayload = {
   ok: boolean;
   error?: string;
+  date?: string;
+  requestedDate?: string;
   summary?: {
     avgMli: number | null;
     highCount: number;
@@ -130,10 +132,15 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
 
   const rows = data?.rows ?? [];
   const anyCss = rows.some((r) => r.css != null);
-  // MLI is computed from accel/decel B2-3 efforts — columns Core/Lite Catapult
-  // plans don't expose. If no player has an MLI, self-hide rather than show a
-  // card of "—" for lower-tier clubs (the load-verdict + GPS surfaces cover them).
+  // Genuine no-data only: a club whose Catapult tier never exposes the accel/
+  // decel B2-3 efforts MLI is built from (Core/Lite). Note the API already falls
+  // back to the most recent session, so a rest day for an IMA-tier club does NOT
+  // land here — it shows that last session below with a "last session" note.
   if (data && !rows.some((r) => r.mli != null)) return null;
+
+  // The rows may be from an earlier date than requested (rest day → last session).
+  const shownDate = data?.date ?? null;
+  const staleSession = !!(data?.requestedDate && shownDate && shownDate !== data.requestedDate);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -144,6 +151,13 @@ export default function MechanicalLoadIndexCard({ teamId }: { teamId?: string | 
           <div className="mt-1 text-xs text-slate-500">
             Derived mechanical stress score from acceleration, deceleration and density inputs.
           </div>
+          {staleSession && shownDate ? (
+            <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+              No session on the requested day — showing the last session (
+              {new Date(`${shownDate}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+              ).
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
