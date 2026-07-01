@@ -84,8 +84,28 @@ export default function RecoveryWatchBanner({ lang = "EN" }: { lang?: "IS" | "EN
   const onTrack = (data.summary.evaluated ?? 0) - data.summary.alerting; // recovered/on_track
   const days = data.match?.days_ago ?? null;
 
+  // Worst-first (most negative z). Escalate cases are serious ("past the
+  // expected echo — refer to physio") so they stay visible; the routine
+  // monitor/incomplete list collapses behind a toggle to keep Today light.
+  const bySeverity = [...alerting].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  const escalate = bySeverity.filter((w) => w.status === "escalate");
+  const rest = bySeverity.filter((w) => w.status !== "escalate");
+  const worst = rest[0] ?? null;
+  const restStatuses = Array.from(new Set(rest.map((w) => w.status)));
+
+  const signalLine = (w: Watch) => (
+    <>
+      {w.driver && FIELD_LABEL[w.driver.field]
+        ? <span className="font-semibold">{IS ? FIELD_LABEL[w.driver.field].IS : FIELD_LABEL[w.driver.field].EN} ↓ </span>
+        : null}
+      {IS ? "líðan" : "readiness"} z {w.z ?? "—"} · MD+{w.mdOffset ?? "?"}
+      {!w.confident && <span className="ml-1 opacity-70">· {IS ? "grunnlína að kvarðast" : "baseline calibrating"}</span>}
+    </>
+  );
+
   return (
     <div className="pmr-sec rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+      {/* Verdict — always visible */}
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-sm font-semibold text-amber-900">
           {IS ? "Endurheimtar-vakt" : "Recovery watch"}
@@ -102,31 +122,73 @@ export default function RecoveryWatchBanner({ lang = "EN" }: { lang?: "IS" | "EN
         )}
       </div>
 
-      <ul className="mt-2 space-y-1.5">
-        {alerting.map((w) => {
-          const s = STATUS[w.status] ?? STATUS.monitor;
-          return (
-            <li key={w.player_id} className={`rounded-lg border px-3 py-2 text-xs leading-snug ${s.tone}`}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-semibold">
-                  {w.name}{w.position ? <span className="ml-1 font-normal opacity-60">{w.position}</span> : null}
-                </span>
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide opacity-80">
-                  {IS ? s.label.IS : s.label.EN}
-                </span>
-              </div>
-              <div className="mt-0.5 tabular-nums opacity-90">
-                {w.driver && FIELD_LABEL[w.driver.field]
-                  ? <span className="font-semibold">{IS ? FIELD_LABEL[w.driver.field].IS : FIELD_LABEL[w.driver.field].EN} ↓ </span>
-                  : null}
-                {IS ? "líðan" : "readiness"} z {w.z ?? "—"} · MD+{w.mdOffset ?? "?"}
-                {!w.confident && <span className="ml-1 opacity-70">· {IS ? "grunnlína að kvarðast" : "baseline calibrating"}</span>}
-              </div>
-              <div className="mt-0.5 opacity-90">{IS ? s.action.IS : s.action.EN}</div>
-            </li>
-          );
-        })}
-      </ul>
+      {/* Escalate — serious (past the expected echo); never hidden behind the toggle */}
+      {escalate.length > 0 && (
+        <ul className="mt-2 space-y-1.5">
+          {escalate.map((w) => {
+            const s = STATUS[w.status] ?? STATUS.monitor;
+            return (
+              <li key={w.player_id} className={`rounded-lg border px-3 py-2 text-xs leading-snug ${s.tone}`}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold">
+                    {w.name}{w.position ? <span className="ml-1 font-normal opacity-60">{w.position}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                    {IS ? s.label.IS : s.label.EN}
+                  </span>
+                </div>
+                <div className="mt-0.5 tabular-nums opacity-90">{signalLine(w)}</div>
+                <div className="mt-0.5 opacity-90">{IS ? s.action.IS : s.action.EN}</div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Routine monitor/incomplete — collapsed by default; one compact line each,
+          worst first, with the shared action shown once (not repeated per row). */}
+      {rest.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer select-none text-xs font-medium text-amber-800">
+            {IS ? `Sýna alla ${rest.length}` : `Show all ${rest.length}`} ▾
+            {worst ? (
+              <span className="ml-1.5 font-normal text-amber-600">
+                · {IS ? "mest undir" : "most affected"}: {worst.name} (z {worst.z ?? "—"})
+              </span>
+            ) : null}
+          </summary>
+
+          <ul className="mt-2 divide-y divide-amber-200/60">
+            {rest.map((w) => {
+              const s = STATUS[w.status] ?? STATUS.monitor;
+              return (
+                <li key={w.player_id} className="flex items-baseline justify-between gap-3 py-1.5 text-xs text-amber-900">
+                  <span className="min-w-0">
+                    <span className="font-semibold">{w.name}</span>
+                    {w.position ? <span className="ml-1 opacity-50">{w.position}</span> : null}
+                    <span className="ml-2 tabular-nums opacity-90">{signalLine(w)}</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                    {IS ? s.label.IS : s.label.EN}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-2 space-y-0.5">
+            {restStatuses.map((st) => {
+              const s = STATUS[st] ?? STATUS.monitor;
+              return (
+                <p key={st} className="text-[11px] leading-snug text-amber-800">
+                  <span className="font-semibold">{IS ? s.label.IS : s.label.EN}: </span>
+                  {IS ? s.action.IS : s.action.EN}
+                </p>
+              );
+            })}
+          </div>
+        </details>
+      )}
 
       <p className="mt-2 text-[10px] leading-snug text-amber-700/80">
         {IS
