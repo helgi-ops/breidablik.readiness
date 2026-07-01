@@ -102,6 +102,24 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
     { key: "monotony", label: { EN: "Monotony", IS: "Einhæfni" }, n: elevated("monotony"), tip: { EN: "Foster training monotony — day-to-day sameness of load.", IS: "Foster einhæfni — hversu eins álagið er dag frá degi." } },
   ];
 
+  // Plain-language reason the confidence is what it is — so a coach reads the
+  // verdict for what it is worth, not more. A thin baseline is the biggest
+  // caveat (the whole verdict compares "this week" to very little history), so
+  // it wins; otherwise a low level means missing signals for the data tier.
+  const bd = t.confidence.baselineDays;
+  const plainConfidence: Lang2 | null =
+    bd <= 3
+      ? {
+          EN: `Read this as a direction, not a conclusion — there ${bd === 1 ? "is" : "are"} only ${bd} day${bd === 1 ? "" : "s"} of load history to compare this week against so far. It firms up as the week banks more sessions.`,
+          IS: `Lestu þetta sem stefnu, ekki niðurstöðu — það ${bd === 1 ? "er" : "eru"} aðeins ${bd} dag${bd === 1 ? "ur" : "ar"} af álagssögu til að bera vikuna saman við enn sem komið er. Það styrkist eftir því sem vikan safnar fleiri æfingum.`,
+        }
+      : (t.confidence.level ?? "").toLowerCase() === "low"
+        ? {
+            EN: "Lower confidence — some load signals aren't in this squad's data tier, so the verdict leans on the ones that are.",
+            IS: "Minni vissa — sum álagsmerki eru ekki í gagna-þrepi þessa liðs, svo dómurinn hallast á þau sem eru til staðar.",
+          }
+        : null;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       {/* One-sentence verdict */}
@@ -120,6 +138,14 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
           : ` · ${Math.round(t.confidence.coverage * 6)}/6 ${IS ? "merki" : "signals"}`}
         {" "}· {t.confidence.baselineDays}-{IS ? "daga grunnlína" : "day baseline"}
       </div>
+
+      {/* Plain-language caveat when confidence is materially limited — the honest
+          "how much to trust this" line, in words a non-S&C coach reads directly. */}
+      {plainConfidence && (
+        <p className="mt-1 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
+          {tx(plainConfidence)}
+        </p>
+      )}
 
       {/* Intensity dimension (Task B) — work rate vs each player's OWN usual day.
           A distinct labelled load signal, never the readiness colour. Jargon
