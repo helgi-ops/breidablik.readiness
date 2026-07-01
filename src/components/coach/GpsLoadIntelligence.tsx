@@ -194,6 +194,24 @@ export default function GpsLoadIntelligence({
   );
   if (!rows.length || !hasAnySignal) return null;
 
+  // Answer-first headline above the cohort alerts: the overall GPS load state in
+  // one sentence, naming who is in the high band. Cohort alerts below cluster the
+  // specific issues (decel, HID fatigue, eccentric, residual).
+  const highRows = rows.filter((r) => r.loadState === "high");
+  const gpsNames = highRows.slice(0, 3).map((r) => r.name.split(" ")[0]).join(", ") + (highRows.length > 3 ? ` +${highRows.length - 3}` : "");
+  const gpsVerdict =
+    highCount > 0
+      ? lang === "IS"
+        ? `${highCount} í háu GPS-álagi í dag${elevatedCount > 0 ? `, ${elevatedCount} yfir viðmiði` : ""} — ${gpsNames}.`
+        : `${highCount} at high GPS load today${elevatedCount > 0 ? `, ${elevatedCount} elevated` : ""} — ${gpsNames}.`
+      : elevatedCount > 0
+        ? lang === "IS"
+          ? `${elevatedCount} yfir sínu venjulega GPS-álagi í dag, enginn í háu bili.`
+          : `${elevatedCount} above their usual GPS load today, none in the high band.`
+        : lang === "IS"
+          ? "GPS-álag er í eðlilegu bili hjá öllum í dag."
+          : "GPS load is in a normal range across the squad today.";
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else { setSortKey(key); setSortAsc(false); }
@@ -313,8 +331,9 @@ export default function GpsLoadIntelligence({
       </CardHeader>
       <CardContent className="pt-0 space-y-4">
 
-        {/* Answer-first: the plain-language cohort alerts lead; the KPI tiles +
-            signal table below are the drill-down (was rendered at the bottom). */}
+        {/* Answer-first: a one-line load-state headline, then the plain-language
+            cohort alerts; the KPI tiles + signal table below are the drill-down. */}
+        <p className="text-sm font-medium text-slate-800">{gpsVerdict}</p>
         <CohortAlerts rows={rows} lang={lang} />
 
         {/* ── Team Status Summary ── */}

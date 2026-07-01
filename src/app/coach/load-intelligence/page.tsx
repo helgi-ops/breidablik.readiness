@@ -195,7 +195,7 @@ export default function LoadIntelligencePage() {
             <GpsLoadIntelligence players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
             {teamId && <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
             {teamId && <MdHsrComparisonCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
-            {teamId && <MechanicalLoadIndexCard teamId={teamId} />}
+            {teamId && <MechanicalLoadIndexCard teamId={teamId} lang={lang === "EN" ? "EN" : "IS"} />}
             {teamId && <TeamMetabolicSummary teamId={teamId} />}
           </div>
         </details>
