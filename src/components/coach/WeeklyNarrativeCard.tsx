@@ -15,19 +15,31 @@ import { buildWeeklyNarrative, type WeeklyNarrativeInput } from "@/lib/micropuls
  * Renders nothing while loading or when there is no data yet. This way
  * it stays out of the way for fresh teams that don't have history.
  */
-export const WeeklyNarrativeCard: FC<{ teamId: string | null }> = ({ teamId }) => {
+export const WeeklyNarrativeCard: FC<{ teamId?: string | null }> = ({ teamId }) => {
   const [lang] = useLang();
   const [input, setInput] = useState<WeeklyNarrativeInput | null>(null);
 
   useEffect(() => {
-    if (!teamId) {
-      setInput(null);
-      return;
-    }
     let alive = true;
     (async () => {
       try {
         const sb = getSupabaseClient();
+        // Resolve team: use the prop, else the logged-in coach's profile team —
+        // so this card can mount on surfaces that don't thread a teamId
+        // (e.g. the Reporting Center).
+        let tid = teamId ?? null;
+        if (!tid) {
+          const { data: authRes } = await sb.auth.getUser();
+          const uid = authRes?.user?.id;
+          if (uid) {
+            const { data: prof } = await sb.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+            tid = (prof as { team_id?: string } | null)?.team_id ?? null;
+          }
+        }
+        if (!tid) {
+          if (alive) setInput(null);
+          return;
+        }
         const today = new Date().toISOString().slice(0, 10);
         const start7 = (() => {
           const d = new Date(`${today}T00:00:00.000Z`);
@@ -44,7 +56,7 @@ export const WeeklyNarrativeCard: FC<{ teamId: string | null }> = ({ teamId }) =
         const { data: pl } = await sb
           .from("players")
           .select("id, full_name")
-          .eq("team_id", teamId)
+          .eq("team_id", tid)
           .eq("is_active", true);
         if (!alive) return;
         const players = ((pl ?? []) as Array<{ id: string; full_name: string | null }>);

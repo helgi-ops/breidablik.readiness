@@ -89,7 +89,6 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
-import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
 import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
 import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -99,7 +98,6 @@ import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
-import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
@@ -9672,22 +9670,9 @@ export default function CoachPage() {
               system-health metrics in the way. See the System health
               section at the bottom of /coach/reporting-center. */}
 
-          {/* Weekly surface (Tier 2 IA merge) — ONE weekly read, the rules→AI
-              explainability stack:
-                • WeeklyNarrativeCard (top) = deterministic 7-day overview —
-                  one-line story + 2–3 facts + recommendation. Always-on, free.
-                  Self-hides on fresh teams with no data.
-                • WeeklyStoryCard (below) = optional AI prose synthesis of the
-                  same 7 days (Claude Haiku, opt-in, ELITE), clearly labelled AI.
-              Previously these were two separate dashboard cards 340 lines apart
-              (WeeklyStory was nested in Today Command Center) — the coach met two
-              weekly summaries. Manifesto: rules are the default surface, AI is
-              the labelled drill-down OF THE SAME SUBJECT — so they belong here as
-              one stacked unit. No data/logic removed; only the mount moved. */}
-          <div className="space-y-3">
-            <WeeklyNarrativeCard teamId={coachTeamId} />
-            <WeeklyStoryCard lang={lang} />
-          </div>
+          {/* Weekly cards (WeeklyNarrative + WeeklyStory) moved OFF Today to the
+              Reporting Center — Today is the daily read; weekly summaries belong
+              on the weekly surface. See /coach/reporting-center. */}
 
           {/* Readiness × Load quadrant intentionally removed from the Today
               surface. It's a scatter plot with S&C-only axes ("0.5 = normal ·

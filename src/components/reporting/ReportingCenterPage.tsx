@@ -6,6 +6,8 @@ import { downloadReportPdf } from "./ReportPdf";
 import type { PdfRenderModel } from "@/lib/micropulse/reporting";
 import { useLang } from "@/lib/lang";
 import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
+import WeeklyNarrativeCard from "@/components/coach/WeeklyNarrativeCard";
+import WeeklyStoryCard from "@/components/coach/WeeklyStoryCard";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -375,6 +377,15 @@ export default function ReportingCenterPage() {
       <div>
         <h1 className="text-xl font-semibold text-zinc-900">Skýrslur</h1>
         <p className="text-sm text-zinc-500">Readiness yfirlit og PDF útflutningur</p>
+      </div>
+
+      {/* Weekly narrative — moved off the Today page (Today is the daily read;
+          weekly summaries belong on the weekly surface). Deterministic 7-day
+          overview + the optional AI weekly story of the same week. Both self-hide
+          / are opt-in, so a fresh team sees nothing. */}
+      <div className="space-y-3">
+        <WeeklyNarrativeCard />
+        <WeeklyStoryCard lang={lang} />
       </div>
 
       {/* Tab toggle + date picker + download */}
