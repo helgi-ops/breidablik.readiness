@@ -13,6 +13,7 @@ import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotifica
 import { useLang } from "@/lib/lang";
 import type { CoachTeam } from "@/components/coach/TeamSwitcher";
 import { CoachSidebar } from "./CoachSidebar";
+import UsageTracker from "@/components/coach/UsageTracker";
 
 
 /**
@@ -246,6 +247,8 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background md:grid md:grid-cols-[240px_1fr]">
+      {/* Usage analytics — one fire-and-forget page_view per route change. */}
+      <UsageTracker />
       {/* ── Mobile-only header (drawer trigger) ─────────────────────────── */}
       <header className="md:hidden sticky top-0 z-40 border-b bg-background/95 backdrop-blur flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">

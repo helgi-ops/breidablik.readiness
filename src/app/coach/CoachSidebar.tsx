@@ -195,6 +195,7 @@ const adminLinks: SidebarLink[] = [
 // LV Profile rather than via a separate super-admin section.
 const superAdminLinks: SidebarLink[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
+  { href: "/coach/usage-analytics", label: { EN: "Usage analytics", IS: "Notkunar-greining" } },
 ];
 
 // ─── Active-link matcher (handles ?tab=… deep links too) ────────────────────
