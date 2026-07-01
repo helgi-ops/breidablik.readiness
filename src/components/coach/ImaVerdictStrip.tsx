@@ -7,19 +7,20 @@
  * linking to the IMA Intelligence page — the exact mirror of the "Load →" strip
  * that links to Load Intelligence.
  *
- * Rules decide, not AI. Self-hides when there is no IMA session captured today
- * (IMA is a per-session movement signal — nothing to summarise on a rest day).
+ * Rules decide, not AI. Always present on any day the squad has an IMA history:
+ * on a rest day it falls back to the last captured session (labelled), the same
+ * way the Load strip stays present with its weekly read.
  */
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type ImaPlayer = { full_name: string; sprint_vs_baseline_pct: number | null; total_strides: number };
-type ImaResp = { profile?: { per_player?: ImaPlayer[] } };
+type ImaResp = { profile?: { per_player?: ImaPlayer[] }; date?: string; requestedDate?: string };
 
 export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; date?: string }) {
   const is = lang === "IS";
-  const [state, setState] = useState<{ spikes: string[]; evaluated: number } | null>(null);
+  const [state, setState] = useState<{ spikes: string[]; evaluated: number; shownDate: string | null; stale: boolean } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -29,7 +30,7 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
         const { data: { session } } = await sb.auth.getSession();
         if (!session?.access_token) return;
         const res = await fetch(
-          `/api/coach/team/ima-day-profile?${date ? `date=${date}&` : ""}lang=${is ? "IS" : "EN"}`,
+          `/api/coach/team/ima-day-profile?${date ? `date=${date}&` : ""}fallback=last&lang=${is ? "IS" : "EN"}`,
           { headers: { Authorization: `Bearer ${session.access_token}` } },
         );
         if (!alive || !res.ok) return;
@@ -38,7 +39,9 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
         // Same threshold the IMA page verdict uses: high-cadence sprint running
         // >= 150% of the player's 14-day training-only baseline = acute:chronic spike.
         const spikes = players.filter((p) => (p.sprint_vs_baseline_pct ?? 0) >= 150).map((p) => p.full_name);
-        setState({ spikes, evaluated: players.length });
+        const shownDate = j.date ?? null;
+        const stale = !!(j.requestedDate && shownDate && shownDate !== j.requestedDate);
+        setState({ spikes, evaluated: players.length, shownDate, stale });
       } catch { /* supplementary — fail silent, the Load strip still stands */ }
     })();
     return () => { alive = false; };
@@ -46,18 +49,26 @@ export default function ImaVerdictStrip({ lang, date }: { lang?: "IS" | "EN"; da
 
   if (!state || state.evaluated === 0) return null;
 
+  const dateNote = state.stale && state.shownDate
+    ? ` (${new Date(`${state.shownDate}T00:00:00`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" })})`
+    : "";
+
   const spiking = state.spikes.length > 0;
   const names = state.spikes.slice(0, 3).map((n) => n.split(" ")[0]).join(", ")
     + (state.spikes.length > 3 ? ` +${state.spikes.length - 3}` : "");
   const tone = spiking ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200";
   const label = spiking ? (is ? "Spike" : "Spiking") : (is ? "Í lagi" : "In range");
+  // "today" on a real session; "last session (29 Jun)" when it fell back.
+  const when = state.stale
+    ? (is ? `síðustu session${dateNote}` : `last session${dateNote}`)
+    : (is ? "í dag" : "today");
   const sentence = spiking
     ? (is
-        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira háákefðar en venjulega í dag — ${names}`
-        : `${state.spikes.length} did much more high-intensity running than usual today — ${names}`)
+        ? `${state.spikes.length} ${state.spikes.length === 1 ? "hljóp" : "hlupu"} mun meira háákefðar en venjulega ${when} — ${names}`
+        : `${state.spikes.length} did much more high-intensity running than usual ${when} — ${names}`)
     : (is
-        ? "Háákefðar hlaup innan venju hjá öllum í dag"
-        : "High-intensity running within range across the squad today");
+        ? `Háákefðar hlaup innan venju hjá öllum ${when}`
+        : `High-intensity running within range across the squad ${when}`);
 
   return (
     <a

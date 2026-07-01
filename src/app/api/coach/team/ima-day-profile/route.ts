@@ -50,7 +50,30 @@ export async function GET(req: NextRequest) {
 
   // Default to today (UTC) when no date is provided
   const today = new Date().toISOString().slice(0, 10);
-  const dateIso = dateParam && isIsoDate(dateParam) ? dateParam : today;
+  const requestedDate = dateParam && isIsoDate(dateParam) ? dateParam : today;
+  let dateIso = requestedDate;
+
+  // fallback=last: when the requested day has no IMA session (e.g. a rest day),
+  // resolve the most recent date (<= requested) that DOES, so a per-session
+  // summary strip still surfaces. Opt-in — the IMA page never passes it, so its
+  // exact-date behaviour is unchanged.
+  if (url.searchParams.get("fallback") === "last") {
+    const { data: pl } = await ctx.supabase.from("players").select("id").eq("team_id", ctx.teamId);
+    const ids = ((pl ?? []) as Array<{ id: string }>).map((p) => p.id);
+    if (ids.length > 0) {
+      const { data: latest } = await ctx.supabase
+        .from("player_external_load_daily")
+        .select("date")
+        .in("player_id", ids)
+        .lte("date", requestedDate)
+        .not("ima_total", "is", null)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const d = (latest as { date?: string } | null)?.date;
+      if (d && isIsoDate(d)) dateIso = d;
+    }
+  }
 
   try {
     const profile = await loadImaDayProfile(ctx.supabase, {
@@ -58,7 +81,7 @@ export async function GET(req: NextRequest) {
       dateIso,
       lang,
     });
-    return NextResponse.json({ profile });
+    return NextResponse.json({ profile, date: dateIso, requestedDate });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: "load_failed", detail: msg }, { status: 500 });
