@@ -83,8 +83,8 @@ export default function BlogListingPage() {
           </h1>
           <p className="mt-2 text-base text-zinc-500">
             {lang === "IS"
-              ? "Vísindabyggð fræðsla um meiðslaforvarnir, álagsstjórnun og þjálfunarfræði."
-              : "Evidence-based education on injury prevention, load management, and training science."}
+              ? "Vísindabyggð fræðsla um álagsstjórnun, readiness og þjálfunarfræði."
+              : "Evidence-based education on load management, readiness, and training science."}
           </p>
         </div>
 

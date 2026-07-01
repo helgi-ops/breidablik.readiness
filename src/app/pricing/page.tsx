@@ -29,7 +29,6 @@ const COPY = {
       label: "Sport environment",
       outdoor: "Outdoor (Football, Rugby…)",
       indoor: "Indoor (Basketball, Handball, Volleyball…)",
-      indoorNote: "GPS monitoring requires outdoor GPS hardware. Indoor sports skip GPS and save €70/month.",
     },
     plans: {
       title: "Choose the MicroPulse plan that fits your team",
@@ -86,7 +85,7 @@ const COPY = {
       lite: {
         name: "Lite",
         pricePrimary: "€129 / month",
-        priceLocal: "17.990 kr / mánuð",
+        priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Best for lower-division clubs and indoor sports without IMU vests",
         note: "Standalone sport-science suite for clubs on standard Catapult Activity Reports — or no GPS at all. Built on Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
         bullets: [
@@ -94,7 +93,7 @@ const COPY = {
           "Unlimited squad size",
           "Coach dashboard & team readiness overview",
           "Quadrant view — volume-axis ACWR per player",
-          "HSR Intelligence — hamstring/soft-tissue injury risk per player",
+          "HSR Intelligence — hamstring/soft-tissue load & exposure per player",
           "Foster Monotony + Strain — overtraining detection from sRPE × duration",
           "MD HSR Comparison — periodization helper, % of MD HSR reached",
           "Squad Load 7d/28d/ACWR table — per-player workload trends",
@@ -112,7 +111,7 @@ const COPY = {
       },
       elite: {
         name: "Elite",
-        pricePrimary: "From €1250 / month",
+        pricePrimary: "From €1.050 / month",
         priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Best for professional clubs and multi-team organizations",
         note: "Adds AI translation layer + multi-team intelligence on top of Pro.",
@@ -227,7 +226,6 @@ const COPY = {
       label: "Umhverfi íþróttar",
       outdoor: "Utandyra (Fótbolti, Rugby…)",
       indoor: "Innanhúss (Körfubolti, Handbolti, Blak…)",
-      indoorNote: "GPS monitoring krefst utandyra GPS búnaðar. Innanhúss íþróttir sleppa GPS og spara €70/mánuð.",
     },
     plans: {
       title: "Leiðir",
@@ -284,7 +282,7 @@ const COPY = {
       lite: {
         name: "Lite",
         pricePrimary: "€129 / month",
-        priceLocal: "17.990 kr / mánuð",
+        priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Fyrir neðri-deildar lið og innanhúss íþróttir án IMU vesta",
         note: "Sjálfstæð sport-science suite fyrir lið með standard Catapult Activity Reports — eða engan GPS yfirleitt. Byggð á Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
         bullets: [
@@ -292,7 +290,7 @@ const COPY = {
           "Ótakmarkaður hópur",
           "Coach dashboard & liðsyfirsýn readiness",
           "Quadrant view — volume-axis ACWR per leikmann",
-          "HSR Intelligence — hamstring/soft-tissue meiðsla-áhætta per leikmann",
+          "HSR Intelligence — hamstring/soft-tissue álag og útsetning per leikmann",
           "Foster Monotony + Strain — overtraining-greining úr sRPE × tíma",
           "MD HSR Comparison — periodization helper, % af MD HSR náð",
           "Squad Load 7d/28d/ACWR tafla — per-leikmanns álagsþróun",
@@ -310,7 +308,7 @@ const COPY = {
       },
       elite: {
         name: "Elite",
-        pricePrimary: "From €1250 / month",
+        pricePrimary: "From €1.050 / month",
         priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
         note: "Bætir AI túlkunarlagi + multi-team intelligence ofan á Pro.",
@@ -733,9 +731,6 @@ export default function PricingPage() {
                   {t.sportToggle.indoor}
                 </button>
               </div>
-              {sportEnv === "indoor" && (
-                <p className="max-w-xs text-right text-xs text-emerald-700">{t.sportToggle.indoorNote}</p>
-              )}
             </div>
           </div>
 
