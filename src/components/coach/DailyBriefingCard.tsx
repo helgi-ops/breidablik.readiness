@@ -1520,7 +1520,12 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
   //   • post-match recovery watch      — /api/coach/recovery-watch (still below baseline)
   // Fail-silent: if either is unavailable the pulse sentence stands alone. The
   // per-player detail still lives in the banners/cards below (drill-down).
-  const [teamSignals, setTeamSignals] = useState<{ spikes: string[]; belowBaseline: number; daysAfterMatch: number | null } | null>(null);
+  //   • IMA movement spikes            — /api/coach/team/ima-day-profile (sprint
+  //     high-cadence running >= 150% of the player's 14-day baseline = acute:chronic
+  //     spike). IMA is the "driver" to GPS's "engine" (Niklas Virtanen); unlike the
+  //     GPS spike there is no IMA detail card on Today, so this one links out to
+  //     /coach/ima-intelligence.
+  const [teamSignals, setTeamSignals] = useState<{ spikes: string[]; belowBaseline: number; daysAfterMatch: number | null; imaSpikes: string[] } | null>(null);
   React.useEffect(() => {
     let alive = true;
     (async () => {
@@ -1529,9 +1534,10 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
         const { data: { session } } = await sb.auth.getSession();
         if (!session?.access_token) return;
         const auth = { headers: { Authorization: `Bearer ${session.access_token}` } };
-        const [spikeRes, recRes] = await Promise.all([
+        const [spikeRes, recRes, imaRes] = await Promise.all([
           fetch(`/api/coach/unfamiliar-load?date=${today}`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null),
           fetch(`/api/coach/recovery-watch`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+          fetch(`/api/coach/team/ima-day-profile?date=${today}&lang=${lang}`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null),
         ]);
         if (!alive) return;
         const spikes = ((spikeRes?.items ?? []) as Array<{ name: string; spike?: boolean }>)
@@ -1544,11 +1550,15 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           ? (recRes.watches as Array<{ status: string }>).filter((w) => ALERTING.has(w.status)).length
           : (recRes?.summary?.alerting ?? 0);
         const daysAfterMatch: number | null = recRes?.match?.days_ago ?? null;
-        setTeamSignals({ spikes, belowBaseline, daysAfterMatch });
+        // Same threshold the IMA page verdict uses (sprint_vs_baseline_pct >= 150).
+        const imaSpikes = ((imaRes?.profile?.per_player ?? []) as Array<{ full_name: string; sprint_vs_baseline_pct: number | null; total_strides: number }>)
+          .filter((p) => p.total_strides > 0 && (p.sprint_vs_baseline_pct ?? 0) >= 150)
+          .map((p) => p.full_name);
+        setTeamSignals({ spikes, belowBaseline, daysAfterMatch, imaSpikes });
       } catch { /* supplementary — the pulse sentence stands alone */ }
     })();
     return () => { alive = false; };
-  }, [today]);
+  }, [today, lang]);
 
   // Whether the attention list is expanded to show all rows or collapsed to
   // the first 5. Toggled by the "+N more" / "Sýna færri" button below.
@@ -1753,11 +1763,13 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           <div className="text-base font-semibold leading-snug">
             {pulse.sentence}
           </div>
-          {/* Woven team signals — spikes + post-match recovery folded into the
-              5-second read so this card is the single story. Detail below. */}
-          {teamSignals && (teamSignals.spikes.length > 0 || teamSignals.belowBaseline > 0) ? (
-            <div className="mt-1 text-sm font-medium leading-snug opacity-90">
-              {[
+          {/* Woven team signals — GPS spikes, post-match recovery, and IMA
+              movement spikes folded into the 5-second read so this card is the
+              single story. GPS/recovery detail is in the cards below; the IMA
+              spike links out (no IMA card on Today). */}
+          {teamSignals && (teamSignals.spikes.length > 0 || teamSignals.belowBaseline > 0 || teamSignals.imaSpikes.length > 0) ? (
+            (() => {
+              const textParts = [
                 teamSignals.spikes.length > 0
                   ? (lang === "IS"
                       ? `${teamSignals.spikes.length} hreyfa sig öðruvísi í dag (${teamSignals.spikes.slice(0, 2).map((n) => n.split(" ")[0]).join(", ")}${teamSignals.spikes.length > 2 ? ` +${teamSignals.spikes.length - 2}` : ""})`
@@ -1768,9 +1780,30 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                       ? `${teamSignals.belowBaseline} enn undir grunnlínu${teamSignals.daysAfterMatch != null ? ` (${teamSignals.daysAfterMatch}d eftir leik)` : ""}`
                       : `${teamSignals.belowBaseline} still below baseline${teamSignals.daysAfterMatch != null ? ` (${teamSignals.daysAfterMatch}d after the match)` : ""}`)
                   : null,
-              ].filter(Boolean).join(" · ")}
-              <span className="ml-1 font-normal opacity-70">— {lang === "IS" ? "nánar að neðan" : "detail below"}</span>
-            </div>
+              ].filter(Boolean);
+              const imaNames = teamSignals.imaSpikes.slice(0, 2).map((n) => n.split(" ")[0]).join(", ") + (teamSignals.imaSpikes.length > 2 ? ` +${teamSignals.imaSpikes.length - 2}` : "");
+              return (
+                <div className="mt-1 text-sm font-medium leading-snug opacity-90">
+                  {textParts.length > 0 ? (
+                    <span>
+                      {textParts.join(" · ")}
+                      <span className="ml-1 font-normal opacity-70">— {lang === "IS" ? "nánar að neðan" : "detail below"}</span>
+                    </span>
+                  ) : null}
+                  {teamSignals.imaSpikes.length > 0 ? (
+                    <span>
+                      {textParts.length > 0 ? " · " : null}
+                      {lang === "IS"
+                        ? `${teamSignals.imaSpikes.length} með IMA-spike í dag (${imaNames}) `
+                        : `${teamSignals.imaSpikes.length} with an IMA spike today (${imaNames}) `}
+                      <a href="/coach/ima-intelligence" className="font-normal underline decoration-dotted underline-offset-2 hover:opacity-80">
+                        {lang === "IS" ? "IMA →" : "IMA →"}
+                      </a>
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })()
           ) : null}
           {(alertCount > 0 || monitorCount > 0 || consecutiveOffBeforeToday > 0) ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-1">
