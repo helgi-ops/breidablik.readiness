@@ -32,6 +32,9 @@ export type PlannedSessionLoadCardProps = {
   redCount: number;
   yellowCount: number;
   totalPlayers: number;
+  /** "full" = the card (planning surfaces); "chip" = one-line summary for the
+   *  readiness-focused Today page, where the full planning card is overkill. */
+  variant?: "full" | "chip";
 };
 
 const BAND_STYLE: Record<SessionLoadBand, { bg: string; border: string; text: string; chip: string }> = {
@@ -71,6 +74,7 @@ export default function PlannedSessionLoadCard(props: PlannedSessionLoadCardProp
     lang, mdDay, dayType, focus,
     daysSincePrev, daysToNext,
     redCount, yellowCount, totalPlayers,
+    variant = "full",
   } = props;
   const is = lang === "IS";
 
@@ -81,6 +85,26 @@ export default function PlannedSessionLoadCard(props: PlannedSessionLoadCardProp
   });
 
   const title = is ? "Áætlað æfingaálag" : "Planned session load";
+
+  // Chip variant — a one-line plan summary for the readiness-focused Today page.
+  // The full card is a planning artifact; here a chip is enough (band + the key
+  // numbers + the "ease off" cue when today's squad is flagged).
+  if (variant === "chip") {
+    if (!plan.applicable) return null;
+    const s = BAND_STYLE[plan.band];
+    const easeOff = totalPlayers > 0 && (redCount >= 1 || (redCount + yellowCount) >= Math.ceil(totalPlayers * 0.25));
+    return (
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-xs ${s.border} ${s.bg}`}>
+        <span className="font-semibold uppercase tracking-[0.14em] text-slate-500">{is ? "Áætlun í dag" : "Today's plan"}</span>
+        <span className={`font-bold ${s.text}`}>{bandLabel(plan.band, lang)}</span>
+        <span className="text-slate-300">·</span>
+        <span className="font-medium text-slate-700">RPE {plan.rpe} · {plan.durationMin}′ · ~{plan.matchPct}% {is ? "af leik" : "of match"}</span>
+        {easeOff ? (
+          <span className="text-amber-800">— {is ? "íhugaðu neðri mörk (readiness-flöggun í dag)" : "consider the lower end (readiness flags today)"}</span>
+        ) : null}
+      </div>
+    );
+  }
 
   // ── Non-training day (match / off / no-md) — muted state ───────────────
   // For OFF days we now compose a microcycle-aware paragraph (place in the

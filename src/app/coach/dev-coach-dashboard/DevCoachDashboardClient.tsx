@@ -9654,6 +9654,7 @@ export default function CoachPage() {
             if (dt === "OFF" || dt === "GAME") return null;
             return (
               <PlannedSessionLoadCard
+                variant="chip"
                 lang={lang}
                 mdDay={mdDayToday}
                 dayType={todayPlannedDayType}
