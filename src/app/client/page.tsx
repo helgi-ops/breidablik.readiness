@@ -39,6 +39,7 @@ import ClientProgrammeOverview from "@/components/player/ClientProgrammeOverview
 import ClientMoveSessionButton from "@/components/player/ClientMoveSessionButton";
 import ClientMoveSessionControl from "@/components/player/ClientMoveSessionControl";
 import PtReportsCard from "@/components/player/PtReportsCard";
+import MethodologyLink from "@/components/common/MethodologyLink";
 
 type TodayResp = {
   ok: true;
@@ -504,6 +505,7 @@ export default function ClientTodayPage() {
                 <div className="mt-1 text-[10px] text-slate-500">
                   Foster 1998 · sRPE × duration · 7-day rolling
                 </div>
+                <MethodologyLink />
               </div>
             );
           })()}
@@ -532,6 +534,7 @@ export default function ClientTodayPage() {
                 <div className="text-[10px] text-slate-500">
                   ≥80% 1RM · Pareja-Blanco 2017
                 </div>
+                <MethodologyLink />
               </div>
             );
           })()}
@@ -554,13 +557,19 @@ export default function ClientTodayPage() {
                 <div className="mt-1 text-base font-semibold text-emerald-900">
                   {onTrack
                     ? (lang === "IS"
-                        ? `${f.target_kg} kg eftir ~${f.eta_weeks} vikur`
-                        : `${f.target_kg} kg in ~${f.eta_weeks} weeks`)
+                        ? `Að meðaltali +${f.weekly_rate_kg.toFixed(1)} kg/viku`
+                        : `Averaging +${f.weekly_rate_kg.toFixed(1)} kg/week`)
                     : (lang === "IS" ? "Engin upp-leitni núna" : "No upward trend right now")}
                 </div>
+                {onTrack && (
+                  <div className="text-xs text-emerald-700 mt-0.5">
+                    {lang === "IS"
+                      ? `Haldist þetta: ~${f.target_kg} kg eftir ~${f.eta_weeks} vikur`
+                      : `If this holds: ~${f.target_kg} kg in ~${f.eta_weeks} weeks`}
+                  </div>
+                )}
                 <div className="text-xs text-emerald-700 mt-0.5">
                   {lang === "IS" ? "Núv. PR" : "Current PR"} {f.current_pr_kg} kg
-                  {onTrack && ` · +${f.weekly_rate_kg.toFixed(1)} kg/${lang === "IS" ? "viku" : "wk"}`}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
                   Linear regression on Epley e1RM · {f.sessions} {lang === "IS" ? "skráðar æfingar" : "logged sessions"}

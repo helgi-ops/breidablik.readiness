@@ -226,7 +226,7 @@ export function forecastPR(points: ProgressionPoint[]): PrForecast | null {
   } else {
     etaDays = Math.ceil(gap / slope);
     etaWeeks = Number((etaDays / 7).toFixed(1));
-    reason = `On track to hit ${target} kg in ~${etaWeeks} weeks at +${weeklyRate.toFixed(1)} kg/wk.`;
+    reason = `Trending +${weeklyRate.toFixed(1)} kg/wk. If this holds, about ${target} kg in ~${etaWeeks} weeks.`;
   }
 
   return {

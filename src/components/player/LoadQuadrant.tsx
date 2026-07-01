@@ -12,6 +12,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
 
 type Lang = "IS" | "EN";
 
@@ -190,6 +192,7 @@ export default function LoadQuadrant({ lang = "IS", clientId }: { lang?: Lang; c
         </div>
       </div>
       <p className="text-[11px] text-slate-500">{t.why}: {t.whyText(q)}</p>
+      <MethodologyLink caveat={ACWR_CAVEAT} />
     </div>
   );
 }

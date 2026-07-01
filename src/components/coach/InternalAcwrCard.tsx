@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
 
 type AcwrZone = "undertrain" | "optimal" | "caution" | "high_risk" | "insufficient";
 
@@ -265,6 +267,7 @@ export default function InternalAcwrCard({ teamId }: { teamId?: string | null })
               <span><strong className="text-red-500">High risk</strong> &gt;1.5</span>
               <span className="ml-auto text-slate-300">Acute = 7-day sRPE</span>
             </div>
+            <MethodologyLink caveat={ACWR_CAVEAT} />
           </div>
         )}
       </div>

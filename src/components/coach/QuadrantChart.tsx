@@ -22,6 +22,8 @@
  */
 
 import * as React from "react";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
 
 export type QuadrantPoint = {
   playerId: string;
@@ -216,6 +218,7 @@ export function QuadrantChart({
         <span className="text-slate-400">·</span>
         <span>dot size encodes ACWR (larger = ratio &gt; 1.3)</span>
       </div>
+      <MethodologyLink caveat={ACWR_CAVEAT} />
     </div>
   );
 }

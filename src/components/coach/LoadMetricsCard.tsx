@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { acwrBandBadgeClass } from "@/lib/player-load-metrics/formatters";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
 import type { AcwrBand, LoadTrend } from "@/lib/player-load-metrics/types";
 
 type Row = {
@@ -84,6 +86,7 @@ export default function LoadMetricsCard({ teamId }: { teamId?: string | null }) 
           <div className="mt-1 text-xs text-slate-500">
             Acute = 7-day avg, Chronic = 28-day avg, ACWR = Acute / Chronic. Context metric only.
           </div>
+          <MethodologyLink caveat={ACWR_CAVEAT} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input

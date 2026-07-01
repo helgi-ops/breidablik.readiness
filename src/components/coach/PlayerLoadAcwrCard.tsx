@@ -22,6 +22,8 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
 
 type AcwrBand = "INSUFFICIENT_DATA" | "UNDERTRAIN" | "SAFE" | "WATCH" | "RISK";
 
@@ -228,9 +230,10 @@ export default function PlayerLoadAcwrCard({ playerId }: { playerId: string }) {
           <div className="mt-3 flex items-center gap-3">
             <Sparkline values={trend.map((r) => r.load)} />
             <div className="text-[10px] text-slate-500">
-              28-day daily Player Load. Bands: &lt;0.8 undertrain · 0.8–1.3 steady · 1.3–1.5 watch · &gt;1.5 spike. Workload signal, not injury prediction (Impellizzeri 2020).
+              28-day daily Player Load. Bands: &lt;0.8 undertrain · 0.8–1.3 steady · 1.3–1.5 watch · &gt;1.5 spike.
             </div>
           </div>
+          <MethodologyLink caveat={ACWR_CAVEAT} />
         </>
       )}
     </div>

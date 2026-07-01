@@ -36,6 +36,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import MethodologyLink from "@/components/common/MethodologyLink";
 
 type Props = {
   teamId: string;
@@ -203,7 +204,7 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
         if (alive) setVariant(useVolumeFallback ? "volume" : "rpe");
 
         // If falling back, fetch external load instead.
-        let dailyByPlayer = new Map<string, Map<string, number>>();
+        const dailyByPlayer = new Map<string, Map<string, number>>();
         if (!useVolumeFallback) {
           for (const r of rpeRows) {
             const pid = String(r.player_id);
@@ -374,6 +375,7 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
             <div className="font-semibold text-slate-700">{tt("helpHeader", lang)}</div>
             <p className="mt-1">{tt("helpBody", lang)}</p>
+            <MethodologyLink />
           </div>
         )}
       </CardContent>
