@@ -8742,13 +8742,10 @@ export default function CoachPage() {
           />
           {/* Team break / return-to-training banner (declared breaks). */}
           {coachTeamId && <CoachBreakBanner teamId={coachTeamId} lang={lang === "EN" ? "EN" : "IS"} />}
-          {/* Sharp unfamiliar-load spikes — top-of-brief alert (detail in the
-              Unfamiliar Load card below). */}
-          <UnfamiliarSpikeBanner lang={lang} date={today} />
-          {/* Post-match recovery watch — players still below baseline for their
-              MD-day (recoveryWatch lib). Self-hides when nothing needs attention. */}
-          <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
-          {/* Daily briefing — Gabbett (2020) Communicate step */}
+          {/* Daily briefing — Gabbett (2020) Communicate step. This is now the
+              single "what's the story today" read: it weaves the sharp-spike and
+              post-match recovery signals into its 5-second pulse, and the
+              detailed banners sit directly below it as the drill-down. */}
           <DailyBriefingCard
             today={today}
             lang={lang}
@@ -8764,6 +8761,10 @@ export default function CoachPage() {
             playerInjuries={playerInjuryStatus}
             playerDeltas={yesterdayDeltas}
           />
+          {/* Drill-down for the two signals the briefing names above — the
+              per-player detail. Each self-hides when nothing needs attention. */}
+          <UnfamiliarSpikeBanner lang={lang} date={today} />
+          <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
           {/* Calibration context beside the verdict — when a colour is over-sensitive
               for this squad AND present today. Rule-derived, cites the 30-day recovery
               rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}

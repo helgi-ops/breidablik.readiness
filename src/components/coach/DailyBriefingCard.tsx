@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useMemo, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   flagAgainstBaseline,
@@ -1512,6 +1513,43 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
     return count;
   }, [recentDayTypes, today]);
 
+  // Today's other team signals, woven into the 5-second read so the briefing is
+  // the single "what's the story today" surface (rather than the coach stitching
+  // three separate top-of-page banners). Two supplementary reads:
+  //   • sharp unfamiliar-load spikes  — /api/coach/unfamiliar-load (spike filter)
+  //   • post-match recovery watch      — /api/coach/recovery-watch (still below baseline)
+  // Fail-silent: if either is unavailable the pulse sentence stands alone. The
+  // per-player detail still lives in the banners/cards below (drill-down).
+  const [teamSignals, setTeamSignals] = useState<{ spikes: string[]; belowBaseline: number; daysAfterMatch: number | null } | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        const auth = { headers: { Authorization: `Bearer ${session.access_token}` } };
+        const [spikeRes, recRes] = await Promise.all([
+          fetch(`/api/coach/unfamiliar-load?date=${today}`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+          fetch(`/api/coach/recovery-watch`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        ]);
+        if (!alive) return;
+        const spikes = ((spikeRes?.items ?? []) as Array<{ name: string; spike?: boolean }>)
+          .filter((i) => i.spike)
+          .map((i) => i.name);
+        // Match the RecoveryWatchBanner's own count exactly (it filters watches by
+        // alerting status) so the woven number never disagrees with the banner below.
+        const ALERTING = new Set(["monitor", "incomplete", "escalate"]);
+        const belowBaseline: number = Array.isArray(recRes?.watches)
+          ? (recRes.watches as Array<{ status: string }>).filter((w) => ALERTING.has(w.status)).length
+          : (recRes?.summary?.alerting ?? 0);
+        const daysAfterMatch: number | null = recRes?.match?.days_ago ?? null;
+        setTeamSignals({ spikes, belowBaseline, daysAfterMatch });
+      } catch { /* supplementary — the pulse sentence stands alone */ }
+    })();
+    return () => { alive = false; };
+  }, [today]);
+
   // Whether the attention list is expanded to show all rows or collapsed to
   // the first 5. Toggled by the "+N more" / "Sýna færri" button below.
   const [showAllAttention, setShowAllAttention] = useState(false);
@@ -1715,6 +1753,25 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
           <div className="text-base font-semibold leading-snug">
             {pulse.sentence}
           </div>
+          {/* Woven team signals — spikes + post-match recovery folded into the
+              5-second read so this card is the single story. Detail below. */}
+          {teamSignals && (teamSignals.spikes.length > 0 || teamSignals.belowBaseline > 0) ? (
+            <div className="mt-1 text-sm font-medium leading-snug opacity-90">
+              {[
+                teamSignals.spikes.length > 0
+                  ? (lang === "IS"
+                      ? `${teamSignals.spikes.length} hreyfa sig öðruvísi í dag (${teamSignals.spikes.slice(0, 2).map((n) => n.split(" ")[0]).join(", ")}${teamSignals.spikes.length > 2 ? ` +${teamSignals.spikes.length - 2}` : ""})`
+                      : `${teamSignals.spikes.length} moving differently today (${teamSignals.spikes.slice(0, 2).map((n) => n.split(" ")[0]).join(", ")}${teamSignals.spikes.length > 2 ? ` +${teamSignals.spikes.length - 2}` : ""})`)
+                  : null,
+                teamSignals.belowBaseline > 0
+                  ? (lang === "IS"
+                      ? `${teamSignals.belowBaseline} enn undir grunnlínu${teamSignals.daysAfterMatch != null ? ` (${teamSignals.daysAfterMatch}d eftir leik)` : ""}`
+                      : `${teamSignals.belowBaseline} still below baseline${teamSignals.daysAfterMatch != null ? ` (${teamSignals.daysAfterMatch}d after the match)` : ""}`)
+                  : null,
+              ].filter(Boolean).join(" · ")}
+              <span className="ml-1 font-normal opacity-70">— {lang === "IS" ? "nánar að neðan" : "detail below"}</span>
+            </div>
+          ) : null}
           {(alertCount > 0 || monitorCount > 0 || consecutiveOffBeforeToday > 0) ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-1">
               {alertCount > 0 ? (
