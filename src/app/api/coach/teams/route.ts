@@ -38,13 +38,20 @@ export async function GET(req: Request) {
 
     const teamIds = ctRows.map((r) => r.team_id);
 
-    // Step 2: Fetch team details
-    const { data: teamRows, error: teamErr } = await sb
-      .from("teams")
-      .select("id, name, sport, team_type, gender")
-      .in("id", teamIds);
-
-    if (teamErr) throw new Error(teamErr.message);
+    // Step 2: Fetch team details in BATCHES. A single .in() with 100+ ids builds
+    // a query URL long enough to be truncated by the gateway, silently dropping
+    // ids near the end of the list (a staff coach on 100+ teams lost teams past
+    // ~position 50). Small batches keep each URL short.
+    const CHUNK = 40;
+    const teamRows: Array<{ id: string; name: string | null; sport: string | null; team_type: string | null; gender: string | null }> = [];
+    for (let i = 0; i < teamIds.length; i += CHUNK) {
+      const { data: batch, error: teamErr } = await sb
+        .from("teams")
+        .select("id, name, sport, team_type, gender")
+        .in("id", teamIds.slice(i, i + CHUNK));
+      if (teamErr) throw new Error(teamErr.message);
+      if (batch) teamRows.push(...batch);
+    }
 
     // Build lookup
     const teamMap = new Map<string, (typeof teamRows extends (infer T)[] | null ? T : never)>();

@@ -57,14 +57,23 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
 
       const teamIds = ctRows.map((r: { team_id: string }) => r.team_id);
 
-      // Fetch team details
-      const { data: teamRows, error: teamErr } = await supabase
-        .from("teams")
-        .select("id, name, sport, team_type, gender")
-        .in("id", teamIds)
-        .order("name", { ascending: true });
-
-      if (teamErr || !teamRows) return;
+      // Fetch team details in BATCHES. A single .in() with 100+ ids builds a
+      // query URL long enough to be truncated by the API gateway, silently
+      // dropping ids near the END of the list — a staff coach on 100+ teams lost
+      // every team past ~position 50 (e.g. HK at physical position 79 vanished
+      // from the switcher while Keflavík at 17 showed). Small batches keep each
+      // URL short so every team comes back regardless of how many there are.
+      const CHUNK = 40;
+      const teamRows: Array<{ id: string; name: string; sport: string; team_type: string; gender: string | null }> = [];
+      for (let i = 0; i < teamIds.length; i += CHUNK) {
+        const { data: batch, error: batchErr } = await supabase
+          .from("teams")
+          .select("id, name, sport, team_type, gender")
+          .in("id", teamIds.slice(i, i + CHUNK));
+        if (batchErr) return;
+        if (batch) teamRows.push(...batch);
+      }
+      if (teamRows.length === 0) return;
 
       // Build lookup
       const primaryMap = new Map<string, boolean>();
@@ -80,7 +89,7 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
           gender: t.gender ?? null,
           isPrimary: primaryMap.get(t.id) ?? false,
         }))
-        .sort((a: CoachTeam, b: CoachTeam) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+        .sort((a: CoachTeam, b: CoachTeam) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0) || a.name.localeCompare(b.name));
 
       setTeams(result);
     } catch (err) {
