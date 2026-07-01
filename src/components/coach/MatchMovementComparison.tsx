@@ -1,0 +1,320 @@
+"use client";
+
+/**
+ * MatchMovementComparison — the driver-layer (IMA) match comparison, the
+ * companion to GPS/MD comparison. GPS volume is similar match-to-match; this
+ * shows HOW a player moved. One fetched dataset, three views:
+ *   • norm  — a player's latest match vs his own match-average
+ *   • ab    — match A vs match B for a player
+ *   • squad — every player in one match
+ * Explainability-first: a plain verdict on top, the five-dimension breakdown
+ * below, raw numbers behind "Show details". Rules compute it; no AI.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import ShowDetails from "@/components/common/ShowDetails";
+import {
+  MOVEMENT_DIMENSIONS,
+  fmtDim,
+  type DimensionKey,
+  type MovementFingerprint,
+  type MatchMovementResult,
+  type MatchMovementRow,
+} from "@/lib/micropulse/matchMovement/types";
+
+type Mode = "norm" | "ab" | "squad";
+
+function fmtDate(iso: string, is: boolean): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" });
+}
+
+/** Signed deviation of a value vs a baseline — % for rate/ratio dims, points for pct dims. */
+function deviation(key: DimensionKey, cur: number | null, base: number | null): { rel: number; abs: number } | null {
+  if (cur == null || base == null) return null;
+  const dim = MOVEMENT_DIMENSIONS.find((d) => d.key === key)!;
+  const rel = dim.kind === "pct" ? cur - base : base !== 0 ? ((cur - base) / base) * 100 : 0;
+  return { rel, abs: Math.abs(rel) };
+}
+function isSignificant(key: DimensionKey, abs: number): boolean {
+  const dim = MOVEMENT_DIMENSIONS.find((d) => d.key === key)!;
+  return dim.kind === "pct" ? abs >= 10 : abs >= 20;
+}
+function dirWord(key: DimensionKey, rel: number, is: boolean): string {
+  const d = MOVEMENT_DIMENSIONS.find((x) => x.key === key)!;
+  return rel > 0 ? (is ? d.moreIS : d.moreEN) : is ? d.lessIS : d.lessEN;
+}
+function magWord(key: DimensionKey, rel: number, is: boolean): string {
+  const d = MOVEMENT_DIMENSIONS.find((x) => x.key === key)!;
+  const m = Math.abs(Math.round(rel));
+  return d.kind === "pct" ? `${m} ${is ? "stig" : "pts"}` : `${m}%`;
+}
+
+type Series = { label: string; fp: MovementFingerprint; barClass: string };
+
+function DimBars({ series, is }: { series: Series[]; is: boolean }) {
+  return (
+    <div className="space-y-2.5">
+      {MOVEMENT_DIMENSIONS.map((d) => {
+        const vals = series.map((s) => s.fp[d.key]).filter((v): v is number => v != null);
+        const max = vals.length ? Math.max(...vals, d.kind === "ratio" ? 1 : 0) : 1;
+        return (
+          <div key={d.key}>
+            <div className="mb-0.5 text-[11px] font-medium text-slate-500">{is ? d.is : d.en}</div>
+            <div className="space-y-1">
+              {series.map((s) => {
+                const v = s.fp[d.key];
+                const w = v != null && max > 0 ? Math.max(4, Math.round((v / max) * 100)) : 0;
+                return (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className="w-24 shrink-0 truncate text-[11px] text-slate-500">{s.label}</div>
+                    <div className="h-4 flex-1 rounded bg-slate-100">
+                      <div className={`h-4 rounded ${s.barClass}`} style={{ width: `${w}%` }} />
+                    </div>
+                    <div className="w-12 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">{fmtDim(d.key, v)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function MatchMovementComparison() {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [data, setData] = useState<MatchMovementResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [mode, setMode] = useState<Mode>("norm");
+  const [playerId, setPlayerId] = useState<string>("");
+  const [matchA, setMatchA] = useState<string>("");
+  const [matchB, setMatchB] = useState<string>("");
+  const [squadMatch, setSquadMatch] = useState<string>("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) { if (alive) { setErr("Unauthorized"); setLoading(false); } return; }
+        const res = await fetch("/api/coach/match-movement", { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const json = await res.json();
+        if (!alive) return;
+        if (!res.ok) { setErr(json.error ?? "Failed"); setLoading(false); return; }
+        setData(json as MatchMovementResult);
+        setLoading(false);
+      } catch (e) { if (alive) { setErr(e instanceof Error ? e.message : "Network error"); setLoading(false); } }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Derive the effective selection INLINE (default to the first player / latest
+  // match) so a fresh load shows something without seeding state from an effect
+  // — avoids the cascading-render setState-in-effect pattern.
+  const effPlayerId = playerId || (data ? (data.players.find((p) => p.matches >= 1)?.player_id ?? data.players[0]?.player_id ?? "") : "");
+  const playerRows = useMemo(
+    () => (data && effPlayerId ? data.rows.filter((r) => r.player_id === effPlayerId).sort((a, b) => b.match_date.localeCompare(a.match_date)) : []),
+    [data, effPlayerId],
+  );
+
+  if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-400">{is ? "Hleður…" : "Loading…"}</div>;
+  if (err || !data) return null; // silent — page shows its own context
+  if (data.rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+        {is ? "Engin leikja-IMA gögn enn (þarf Catapult IMA á leikdögum)." : "No match IMA data yet (needs Catapult IMA on match days)."}
+      </div>
+    );
+  }
+
+  const effMatchA = matchA || playerRows[0]?.match_date || "";
+  const effMatchB = matchB || playerRows[1]?.match_date || "";
+  const effSquadMatch = squadMatch || (data.matchDates[data.matchDates.length - 1] ?? "");
+  const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
+
+  // ── Verdict + series per mode ───────────────────────────────────────────────
+  let verdict = "";
+  let facts: string[] = [];
+  let series: Series[] = [];
+  let squadRows: MatchMovementRow[] = [];
+
+  if (mode === "norm") {
+    const latest = playerRows.find((r) => r.match_date === effMatchA) ?? playerRows[0];
+    const norm = data.playerAverages[effPlayerId];
+    if (latest && norm) {
+      series = [
+        { label: is ? "Þessi leikur" : "This match", fp: latest.fingerprint, barClass: "bg-indigo-500" },
+        { label: is ? "Hans venja" : "His usual", fp: norm, barClass: "bg-slate-400" },
+      ];
+      const devs = MOVEMENT_DIMENSIONS
+        .map((d) => ({ d, dev: deviation(d.key, latest.fingerprint[d.key], norm[d.key]) }))
+        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .sort((a, b) => b.dev.abs - a.dev.abs);
+      if (devs.length === 0) {
+        verdict = is
+          ? `${playerName} hreyfði sig eins og venjulega í leiknum ${fmtDate(latest.match_date, is)}.`
+          : `${playerName} moved like his usual self in the ${fmtDate(latest.match_date, is)} match.`;
+      } else {
+        const parts = devs.slice(0, 2).map((x) => `${dirWord(x.d.key, x.dev.rel, is)} (${magWord(x.d.key, x.dev.rel, is)})`);
+        verdict = is
+          ? `${playerName} hreyfði sig öðruvísi í leiknum ${fmtDate(latest.match_date, is)} — ${parts.join(", ")} en venjulega.`
+          : `${playerName} moved differently in the ${fmtDate(latest.match_date, is)} match — ${parts.join(", ")} than usual.`;
+        facts = devs.slice(2, 4).map((x) => `${is ? x.d.is : x.d.en}: ${dirWord(x.d.key, x.dev.rel, is)} (${magWord(x.d.key, x.dev.rel, is)})`);
+      }
+    }
+  } else if (mode === "ab") {
+    const a = playerRows.find((r) => r.match_date === effMatchA);
+    const b = playerRows.find((r) => r.match_date === effMatchB);
+    if (a && b) {
+      series = [
+        { label: fmtDate(a.match_date, is), fp: a.fingerprint, barClass: "bg-indigo-500" },
+        { label: fmtDate(b.match_date, is), fp: b.fingerprint, barClass: "bg-emerald-500" },
+      ];
+      const diffs = MOVEMENT_DIMENSIONS
+        .map((d) => ({ d, dev: deviation(d.key, b.fingerprint[d.key], a.fingerprint[d.key]) }))
+        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .sort((x, y) => y.dev.abs - x.dev.abs);
+      if (diffs.length === 0) {
+        verdict = is
+          ? `${playerName} hreyfði sig svipað í báðum leikjum.`
+          : `${playerName} moved similarly in both matches.`;
+      } else {
+        const parts = diffs.slice(0, 2).map((x) => `${dirWord(x.d.key, x.dev.rel, is)} (${magWord(x.d.key, x.dev.rel, is)})`);
+        verdict = is
+          ? `Í leiknum ${fmtDate(b.match_date, is)} vs ${fmtDate(a.match_date, is)}: ${playerName} með ${parts.join(", ")}.`
+          : `In the ${fmtDate(b.match_date, is)} vs ${fmtDate(a.match_date, is)} match: ${playerName} showed ${parts.join(", ")}.`;
+      }
+    }
+  } else {
+    squadRows = data.rows.filter((r) => r.match_date === effSquadMatch).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0));
+    // Standouts: highest CoD/min and most accel-biased.
+    const topCod = [...squadRows].filter((r) => r.fingerprint.codPerMin != null).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0))[0];
+    const topAccel = [...squadRows].filter((r) => r.fingerprint.accelDecelRatio != null).sort((a, b) => (b.fingerprint.accelDecelRatio ?? 0) - (a.fingerprint.accelDecelRatio ?? 0))[0];
+    if (squadRows.length > 0) {
+      verdict = is
+        ? `${squadRows.length} leikmenn í leiknum ${fmtDate(effSquadMatch, is)}.`
+        : `${squadRows.length} players in the ${fmtDate(effSquadMatch, is)} match.`;
+      if (topCod) facts.push(is ? `Mest stefnubreyting: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/mín)` : `Most change-of-direction: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/min)`);
+      if (topAccel) facts.push(is ? `Hröðunar-þyngstur: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})` : `Most acceleration-biased: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})`);
+    }
+  }
+
+  const modeBtn = (m: Mode, label: string) => (
+    <button
+      onClick={() => setMode(m)}
+      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${mode === m ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+    >
+      {label}
+    </button>
+  );
+  const selectCls = "h-8 rounded-md border border-slate-300 bg-white px-2 text-xs";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">{is ? "Catapult · IMA driver" : "Catapult · IMA driver"}</div>
+            <div className="text-sm font-semibold text-slate-900">{is ? "Hreyfi-samanburður (leikir)" : "Match Movement Comparison"}</div>
+          </div>
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+            {modeBtn("norm", is ? "vs venja" : "vs norm")}
+            {modeBtn("ab", is ? "Leikur A/B" : "Match A/B")}
+            {modeBtn("squad", is ? "Allt liðið" : "Squad")}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {(mode === "norm" || mode === "ab") && (
+            <select value={effPlayerId} onChange={(e) => { setPlayerId(e.target.value); setMatchA(""); setMatchB(""); }} className={selectCls}>
+              {data.players.filter((p) => p.matches >= 1).map((p) => (
+                <option key={p.player_id} value={p.player_id}>{p.name}{p.position ? ` (${p.position})` : ""}</option>
+              ))}
+            </select>
+          )}
+          {mode === "norm" && (
+            <select value={effMatchA} onChange={(e) => setMatchA(e.target.value)} className={selectCls}>
+              {playerRows.map((r) => <option key={r.match_date} value={r.match_date}>{fmtDate(r.match_date, is)} · {r.minutes}′</option>)}
+            </select>
+          )}
+          {mode === "ab" && (
+            <>
+              <select value={effMatchA} onChange={(e) => setMatchA(e.target.value)} className={selectCls}>
+                {playerRows.map((r) => <option key={r.match_date} value={r.match_date}>A: {fmtDate(r.match_date, is)}</option>)}
+              </select>
+              <select value={effMatchB} onChange={(e) => setMatchB(e.target.value)} className={selectCls}>
+                {playerRows.map((r) => <option key={r.match_date} value={r.match_date}>B: {fmtDate(r.match_date, is)}</option>)}
+              </select>
+            </>
+          )}
+          {mode === "squad" && (
+            <select value={effSquadMatch} onChange={(e) => setSquadMatch(e.target.value)} className={selectCls}>
+              {[...data.matchDates].reverse().map((d) => <option key={d} value={d}>{fmtDate(d, is)}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4">
+        {/* Verdict + facts (layers 0-1) */}
+        {verdict ? (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-sm font-medium text-slate-800">{verdict}</p>
+            {facts.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
+                {facts.map((f, i) => <li key={i}>· {f}</li>)}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {/* Breakdown */}
+        {mode === "squad" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-500">
+                  <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
+                  <th className="py-1 pr-2 text-right">{is ? "Mín" : "Min"}</th>
+                  {MOVEMENT_DIMENSIONS.map((d) => <th key={d.key} className="py-1 pr-2 text-right">{is ? d.is : d.en}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {squadRows.map((r) => (
+                  <tr key={r.player_id} className="border-t align-top">
+                    <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}</td>
+                    <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.minutes}′</td>
+                    {MOVEMENT_DIMENSIONS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : series.length > 0 ? (
+          <DimBars series={series} is={is} />
+        ) : (
+          <div className="text-sm text-slate-400">{is ? "Veldu leik(i)." : "Pick a match / matches."}</div>
+        )}
+
+        <ShowDetails label={{ EN: "What the dimensions mean", IS: "Hvað víddirnar þýða" }}>
+          <ul className="space-y-1 text-xs text-slate-600">
+            <li><b>{is ? "IMA álag / mín" : "IMA load / min"}</b> — {is ? "heildar hreyfi-vinnumagn á mínútu." : "overall inertial-movement work rate per minute."}</li>
+            <li><b>{is ? "Hröðun : Hemlun" : "Accel : Decel"}</b> — {is ? ">1 = hraðar meira; <1 = hemlar meira (McBurnie 2022)." : ">1 = accelerates more; <1 = brakes more (McBurnie 2022)."}</li>
+            <li><b>{is ? "Stefnubreytingar / mín" : "Change-of-direction / min"}</b> — {is ? "fjöldi stefnubreytinga á mínútu." : "change-of-direction events per minute."}</li>
+            <li><b>{is ? "Stefnubr. vinstri %" : "CoD left %"}</b> — {is ? "hlutfall vinstri vs hægri (ósamhverfa)." : "share of turns to the left vs right (asymmetry)."}</li>
+            <li><b>{is ? "Háákefðar skref / mín" : "High-cadence strides / min"}</b> — {is ? "sprett-tegund hlaups (bönd 6-8)." : "sprint-type running (bands 6-8)."}</li>
+          </ul>
+          <p className="mt-2 text-[11px] text-slate-400">{is ? "Normalíserað per mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg norm), di Prampero 2015." : "Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}</p>
+        </ShowDetails>
+      </div>
+    </div>
+  );
+}

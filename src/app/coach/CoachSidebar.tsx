@@ -75,6 +75,7 @@ const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
+  { href: "/coach/match-movement",     label: { EN: "Match Movement",                   IS: "Hreyfi-samanburður" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
   { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },

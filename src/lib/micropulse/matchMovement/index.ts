@@ -20,41 +20,11 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { MovementFingerprint, MatchMovementRow, MatchMovementResult } from "./types";
 
-export type MovementFingerprint = {
-  totalPerMin: number | null;
-  accelDecelRatio: number | null;
-  codPerMin: number | null;
-  codLeftPct: number | null;
-  hiCadencePerMin: number | null;
-};
-
-export const MOVEMENT_DIMENSIONS: Array<{ key: keyof MovementFingerprint; en: string; is: string; kind: "rate" | "ratio" | "pct" }> = [
-  { key: "totalPerMin",     en: "IMA load / min",         is: "IMA álag / mín",        kind: "rate" },
-  { key: "accelDecelRatio", en: "Accel : Decel",          is: "Hröðun : Hemlun",       kind: "ratio" },
-  { key: "codPerMin",       en: "Change-of-dir / min",    is: "Stefnubreyt. / mín",    kind: "rate" },
-  { key: "codLeftPct",      en: "CoD left %",             is: "CoD vinstri %",         kind: "pct" },
-  { key: "hiCadencePerMin", en: "High-cadence strides/min", is: "Háákefðar skref/mín", kind: "rate" },
-];
-
-export type MatchMovementRow = {
-  player_id: string;
-  name: string;
-  position: string | null;
-  match_date: string;
-  minutes: number;
-  fingerprint: MovementFingerprint;
-  raw: { imaTotal: number | null; codTotal: number | null; codLeft: number | null; codRight: number | null; hiCadence: number | null };
-};
-
-export type MatchMovementResult = {
-  teamId: string;
-  matchDates: string[];
-  rows: MatchMovementRow[];
-  /** Per-player mean of each fingerprint dimension across their matches (the "norm"). */
-  playerAverages: Record<string, MovementFingerprint>;
-  players: Array<{ player_id: string; name: string; position: string | null; matches: number }>;
-};
+// Re-export the client-safe types + dimension metadata from one place. The UI
+// imports directly from ./types to avoid pulling this server module in.
+export * from "./types";
 
 type RawRow = {
   player_id: string;
