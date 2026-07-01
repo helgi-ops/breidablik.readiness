@@ -152,13 +152,24 @@ export default function CoachWeeklyLoadCard({
   teamId,
   lang,
   date,
+  group,
+  title,
+  subtitle,
 }: {
   teamId: string;
   lang: Lang;
   /** Optional reference date (ISO). When set, shows the week containing this date. */
   date?: string;
+  /** KPI group override. "ima" fetches the IMA driver set (total + accel/decel/CoD). */
+  group?: "ima";
+  /** Header title override (e.g. "Weekly IMA Load"). Falls back to the default. */
+  title?: string;
+  /** Header subtitle override. Falls back to the default. */
+  subtitle?: string;
 }) {
   const t = COPY[lang];
+  const headerTitle = title ?? t.title;
+  const headerSubtitle = subtitle ?? t.subtitle;
   const [data, setData] = useState<WeeklyLoadResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +216,7 @@ export default function CoachWeeklyLoadCard({
     setError(null);
     const params = new URLSearchParams({ teamId });
     if (date) params.set("date", date);
+    if (group) params.set("group", group);
     if (viewMode === "player" && selectedPlayerId) {
       params.set("playerId", selectedPlayerId);
     }
@@ -219,7 +231,7 @@ export default function CoachWeeklyLoadCard({
         setError(err.message ?? "Fetch failed");
         setLoading(false);
       });
-  }, [teamId, date, viewMode, selectedPlayerId]);
+  }, [teamId, date, group, viewMode, selectedPlayerId]);
 
   useEffect(() => {
     if (viewMode === "player" && !selectedPlayerId) return;
@@ -259,7 +271,7 @@ export default function CoachWeeklyLoadCard({
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="p-4">
           <div className="flex items-center gap-3 mb-3">
-            <h3 className="text-sm font-bold text-slate-800">{t.title}</h3>
+            <h3 className="text-sm font-bold text-slate-800">{headerTitle}</h3>
             <div className="flex rounded-lg border border-slate-200 overflow-hidden">
               <button className="px-2.5 py-1 text-[10px] font-semibold bg-white text-slate-500 hover:bg-slate-50" onClick={() => setViewMode("team")}>{lang === "IS" ? "Lið" : "Team"}</button>
               <button className="px-2.5 py-1 text-[10px] font-semibold bg-slate-800 text-white">{lang === "IS" ? "Leikmaður" : "Player"}</button>
@@ -352,7 +364,7 @@ export default function CoachWeeklyLoadCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
-              <h3 className="text-sm font-bold text-slate-800">{t.title}</h3>
+              <h3 className="text-sm font-bold text-slate-800">{headerTitle}</h3>
               {/* Team / Player toggle */}
               <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                 <button
@@ -393,7 +405,7 @@ export default function CoachWeeklyLoadCard({
               </div>
             )}
             {viewMode === "team" && (
-              <p className="mt-0.5 text-[11px] text-slate-400">{t.subtitle}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">{headerSubtitle}</p>
             )}
             {viewMode === "player" && selectedPlayerId && (
               <p className="mt-0.5 text-[11px] text-slate-400">

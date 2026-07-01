@@ -157,6 +157,10 @@ function metricFromRow(row: Record<string, unknown>, key: WeeklyLoadMetricKey): 
     case "fmpDynamicMedium":  return get("fmp_dynamic_medium_s");
     case "fmpRunningHigh":    return get("fmp_running_high_s");
     case "imaTotal":          return get("ima_total");
+    // IMA breakdown (driver)
+    case "imaAccel":          return get("ima_accel");
+    case "imaDecel":          return get("ima_decel");
+    case "imaCod":            return get("ima_cod");
   }
 }
 

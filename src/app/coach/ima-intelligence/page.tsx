@@ -31,6 +31,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
+import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 
 const I18N = {
@@ -229,6 +230,24 @@ export default function ImaIntelligencePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Resolve the coach's team once, so the weekly IMA card (which needs a teamId)
+  // can mount alongside the day profile.
+  const [teamId, setTeamId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: authRes } = await sb.auth.getUser();
+        const uid = authRes?.user?.id;
+        if (!uid) return;
+        const { data: prof } = await sb.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+        if (alive) setTeamId((prof as { team_id?: string } | null)?.team_id ?? null);
+      } catch { /* best-effort — the day profile still renders without it */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -292,6 +311,22 @@ export default function ImaIntelligencePage() {
           />
         </div>
       </div>
+
+      {/* Weekly IMA driver load — the week's inertial-movement load (total +
+          accel/decel/CoD) vs the typical week: the "driver" companion to the
+          day profile below. Renders independently of today's session. */}
+      {teamId && (
+        <div className="mb-6">
+          <CoachWeeklyLoadCard
+            teamId={teamId}
+            lang={lang}
+            date={date}
+            group="ima"
+            title={lang === "IS" ? "Vikulegt IMA-álag" : "Weekly IMA Load"}
+            subtitle={lang === "IS" ? "Uppsafnað IMA (driver) álag vikunnar vs dæmigert" : "Cumulative IMA (driver) load this week vs typical"}
+          />
+        </div>
+      )}
 
       {loading && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">

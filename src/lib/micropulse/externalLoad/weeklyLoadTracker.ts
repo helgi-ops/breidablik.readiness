@@ -76,6 +76,9 @@ type RawRow = {
   fmp_dynamic_medium_s: number | null;
   fmp_running_high_s: number | null;
   ima_total: number | null;
+  ima_accel: number | null;
+  ima_decel: number | null;
+  ima_cod: number | null;
 };
 
 function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
@@ -92,6 +95,10 @@ function extractMetric(row: RawRow, key: WeeklyLoadMetricKey): number | null {
     case "fmpDynamicMedium":  return row.fmp_dynamic_medium_s;
     case "fmpRunningHigh":    return row.fmp_running_high_s;
     case "imaTotal":          return row.ima_total;
+    // IMA breakdown (driver)
+    case "imaAccel":          return row.ima_accel;
+    case "imaDecel":          return row.ima_decel;
+    case "imaCod":            return row.ima_cod;
   }
 }
 
@@ -108,7 +115,7 @@ const SELECT_COLS = [
   "accel_b2_3_tot_effs_gen2", "decel_b2_3_tot_effs_gen2",
   // Indoor (FMP + IMA)
   "fmp_dynamic_high_s", "fmp_dynamic_medium_s", "fmp_running_high_s",
-  "ima_total",
+  "ima_total", "ima_accel", "ima_decel", "ima_cod",
 ].join(", ");
 
 export async function computeWeeklyLoad(args: {
@@ -121,6 +128,13 @@ export async function computeWeeklyLoad(args: {
   playerId?: string;
   /** Override auto-detected indoor mode. */
   indoor?: boolean;
+  /**
+   * Explicit KPI list override. When provided (e.g. the IMA driver group), it
+   * replaces the indoor/outdoor auto-selection so a caller can request a
+   * specific metric set without changing the team's mode. All downstream loops
+   * read `activeMetrics`, so this is the only wiring needed.
+   */
+  metrics?: readonly WeeklyLoadMetricKey[];
 }): Promise<WeeklyLoadResult> {
   const { teamId, historicalWeeks = 8, playerId } = args;
   const sb = getSupabaseAdmin();
@@ -128,7 +142,7 @@ export async function computeWeeklyLoad(args: {
 
   // Resolve indoor mode once up front — drives the active KPI list.
   const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
-  const activeMetrics = getActiveWeeklyLoadMetrics(indoor);
+  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor);
 
   // Read team config once to know whether the baseline rollup should
   // exclude match days (recommended for indoor teams).
