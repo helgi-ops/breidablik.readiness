@@ -50,7 +50,7 @@ const COPY = {
         cta: "Start Free",
       },
       pro: {
-        name: "Pro",
+        name: "Pro (Team)",
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Best for clubs on Premium Catapult plans (B2-3 efforts or IMU bands) — any sport",
@@ -83,7 +83,7 @@ const COPY = {
         cta: "Start Pro",
       },
       lite: {
-        name: "Lite",
+        name: "Lite (Club)",
         pricePrimary: "€129 / month",
         priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Best for lower-division clubs and indoor sports without IMU vests",
@@ -110,7 +110,7 @@ const COPY = {
         cta: "Start Lite",
       },
       elite: {
-        name: "Elite",
+        name: "Elite (Academy)",
         pricePrimary: "From €1.050 / month",
         priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Best for professional clubs and multi-team organizations",
@@ -247,7 +247,7 @@ const COPY = {
         cta: "Byrja með Free",
       },
       pro: {
-        name: "Pro",
+        name: "Pro (Team)",
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Fyrir lið með Premium Catapult áskrift (B2-3 efforts eða IMU bands) — hvaða íþrótt sem er",
@@ -280,7 +280,7 @@ const COPY = {
         cta: "Bóka demo",
       },
       lite: {
-        name: "Lite",
+        name: "Lite (Club)",
         pricePrimary: "€129 / month",
         priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Fyrir neðri-deildar lið og innanhúss íþróttir án IMU vesta",
@@ -307,7 +307,7 @@ const COPY = {
         cta: "Byrja Lite",
       },
       elite: {
-        name: "Elite",
+        name: "Elite (Academy)",
         pricePrimary: "From €1.050 / month",
         priceLocal: "149.990 kr / mánuð",
         priceSecondary: "Fyrir atvinnuklúbba, multi-team skipulag og leiðtogateymi.",
@@ -852,9 +852,9 @@ export default function PricingPage() {
               <div className="grid grid-cols-5 gap-0 border-b bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
                 <div>Feature</div>
                 <div className="text-center">Free</div>
-                <div className="text-center">Lite</div>
-                <div className="text-center">Pro</div>
-                <div className="text-center">Elite</div>
+                <div className="text-center">Lite (Club)</div>
+                <div className="text-center">Pro (Team)</div>
+                <div className="text-center">Elite (Academy)</div>
               </div>
               {t.compare.rows.map((r) => (
                 <div key={r[0]} className="grid grid-cols-5 gap-0 border-b px-4 py-3 text-sm">

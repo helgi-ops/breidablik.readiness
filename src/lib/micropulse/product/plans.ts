@@ -26,7 +26,7 @@ export const PLAN_DEFINITIONS: Record<PlanDefinition["key"], PlanDefinition> = {
   // down strategically.
   LITE: {
     key: "LITE",
-    displayName: "Lite",
+    displayName: "Lite (Club)",
     monthlyPriceLabel: "€129 / month · 18.900 kr / mán.",
     annualPriceLabel: null,
     targetAudience: ["Lower-division clubs", "Indoor sports without IMU vests", "Clubs on standard Catapult plans", "Academies graduating from Free"],
@@ -37,7 +37,7 @@ export const PLAN_DEFINITIONS: Record<PlanDefinition["key"], PlanDefinition> = {
   },
   PRO: {
     key: "PRO",
-    displayName: "Pro",
+    displayName: "Pro (Team)",
     monthlyPriceLabel: "€349 / month · 49.990 kr / mán.",
     annualPriceLabel: null,
     targetAudience: ["S&C coaches", "Performance staff", "Top-flight clubs", "Premium Catapult subscribers (B2-3 efforts or IMU bands)"],
@@ -48,7 +48,7 @@ export const PLAN_DEFINITIONS: Record<PlanDefinition["key"], PlanDefinition> = {
   },
   ELITE: {
     key: "ELITE",
-    displayName: "Elite",
+    displayName: "Elite (Academy)",
     monthlyPriceLabel: "From €1.050 / month · 149.990 kr / mán.",
     annualPriceLabel: null,
     targetAudience: ["Professional clubs", "Multi-team organizations", "Performance directors", "Medical and leadership staff"],
