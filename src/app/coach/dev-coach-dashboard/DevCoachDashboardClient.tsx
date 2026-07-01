@@ -98,7 +98,6 @@ import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
 import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
-import PlannedSessionLoadCard from "@/components/coach/PlannedSessionLoadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, PVA_KPIS, PVA_LABEL, type PlannedVsActual, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { downloadLoadPlanPdf, type LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
@@ -9637,34 +9636,13 @@ export default function CoachPage() {
                 })}
               />
             )}
-          {/* Planned session load — Week-setup MD context turned into a
-              coach-facing load target (type / band / sRPE / % of match).
-              On OFF days and match days the muted version was duplicating
-              the green TODAY card's "rest day" / "match day" message, so
-              we suppress it here — the OFF-day microcycle paragraph now
-              lives as the first bullet inside the green TODAY card.
-              On a manual / no-MD week we still show it ("set up the match
-              week") because that prompt is genuinely unique info. */}
-          {(() => {
-            const todayPlannedDayType =
-              (rows[0] as { planned_day_type?: string | null } | undefined)?.planned_day_type ?? null;
-            const dt = String(todayPlannedDayType ?? "").trim().toUpperCase();
-            if (dt === "OFF" || dt === "GAME") return null;
-            return (
-              <PlannedSessionLoadCard
-                variant="chip"
-                lang={lang}
-                mdDay={mdDayToday}
-                dayType={todayPlannedDayType}
-                focus={(rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null}
-                daysSincePrev={daysSincePrevToday}
-                daysToNext={daysToNextToday}
-                redCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "red").length}
-                yellowCount={(rows as Array<{ final_color?: string | null }>).filter((r) => r.final_color === "yellow").length}
-                totalPlayers={rows.length}
-              />
-            );
-          })()}
+          {/* Planned session load removed from Today: the chip read its day
+              type from rows[0].planned_day_type, which does NOT reliably carry
+              the Week-setup OFF designation — so on an OFF day it fell back to
+              the MD-offset base and showed a mid-week peak load (e.g. VERY HIGH
+              · RPE 8 · 90′). Planning load is a Week-setup concern, not part of
+              the daily readiness read. The OFF-day microcycle note already lives
+              as the first bullet inside the green TODAY card. */}
           {/* Verdict-accuracy / calibration widget moved to the Reporting
               Center — coaches doing their morning briefing don't want
               system-health metrics in the way. See the System health
