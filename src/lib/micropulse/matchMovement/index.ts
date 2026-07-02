@@ -44,6 +44,8 @@ type RawRow = {
   velocity_band6_total_distance: number | null;
   sprint_distance: number | null;
   max_velocity: number | null;
+  // Minutes fallback when a team hasn't hand-entered match minutes.
+  session_duration_minutes: number | null;
 };
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -120,7 +122,7 @@ const LOAD_COLS =
   "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
   "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
   "total_player_load, accel_decel_efforts, high_speed_distance, " +
-  "velocity_band6_total_distance, sprint_distance, max_velocity";
+  "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes";
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
@@ -144,46 +146,55 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     return d.toISOString().slice(0, 10);
   })();
 
-  // Match minutes → which (player, date) are matches + how long they played.
-  const { data: mm } = await sb
-    .from("match_player_minutes")
-    .select("player_id, match_date, minutes_played")
-    .in("player_id", playerIds)
-    .gte("match_date", since)
-    .gte("minutes_played", MIN_MINUTES);
-  const minutesByKey = new Map<string, number>();
+  // Match DATES = fixtures (Week-Setup / match_schedule) ∪ any hand-entered
+  // minutes. Minutes themselves fall back to the Catapult session duration, so a
+  // Core/Lite team that just sets its fixtures gets Match Movement WITHOUT
+  // entering minutes by hand (mirrors the player game report).
+  const [schedRes, minRes] = await Promise.all([
+    sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", since),
+    sb.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).gte("match_date", since),
+  ]);
   const matchDateSet = new Set<string>();
-  for (const r of ((mm ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null }>)) {
-    if (r.minutes_played == null) continue;
-    minutesByKey.set(`${r.player_id}|${r.match_date}`, Number(r.minutes_played));
-    matchDateSet.add(r.match_date);
+  for (const s of ((schedRes.data ?? []) as Array<{ match_date: string }>)) matchDateSet.add(s.match_date);
+  const manualMin = new Map<string, { minutes: number; dnp: boolean }>();
+  for (const m of ((minRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)) {
+    matchDateSet.add(m.match_date);
+    manualMin.set(`${m.player_id}|${m.match_date}`, { minutes: m.minutes_played ?? 0, dnp: !!m.is_dnp });
   }
   const matchDates = Array.from(matchDateSet).sort();
   if (matchDates.length === 0) return emptyResult(teamId);
 
-  // External-load rows for those match dates.
+  // Catapult load rows for those match dates.
   const { data: extData } = await sb
     .from("player_external_load_daily")
     .select(LOAD_COLS)
+    .eq("source", "catapult")
     .in("player_id", playerIds)
     .in("date", matchDates);
   const ext = ((extData ?? []) as unknown as RawRow[]);
 
-  // Only rows that are actual match appearances (minutes resolved).
-  const appearances = ext.filter((row) => minutesByKey.has(`${row.player_id}|${row.date}`));
+  // Resolve a player's minutes for a match date: a manual entry if present (and
+  // not a DNP), otherwise the Catapult session duration. Keep only appearances
+  // with enough minutes for the per-minute rates to be stable.
+  const resolveMinutes = (row: RawRow): number => {
+    const man = manualMin.get(`${row.player_id}|${row.date}`);
+    if (man) return man.dnp ? 0 : man.minutes || 0;
+    return n(row.session_duration_minutes);
+  };
+  const appearances = ext
+    .map((row) => ({ row, minutes: Math.round(resolveMinutes(row)) }))
+    .filter((x) => x.minutes >= MIN_MINUTES);
 
   // Variant: prefer the true IMA driver when the club broadly captures it; fall
   // back to the GPS movement read for Core/Lite. "Broadly" = at least half of
   // match appearances carry IMA (mixed-tier teams tip to whichever dominates).
-  const imaCount = appearances.filter((row) => n(row.ima_total) > 0).length;
-  const gpsCount = appearances.filter(gpsHasData).length;
+  const imaCount = appearances.filter((x) => n(x.row.ima_total) > 0).length;
+  const gpsCount = appearances.filter((x) => gpsHasData(x.row)).length;
   const variant: MovementVariant =
     imaCount > 0 && imaCount >= Math.ceil(appearances.length * 0.5) ? "ima" : gpsCount > 0 ? "gps" : "ima";
 
   const rows: MatchMovementRow[] = [];
-  for (const row of ext) {
-    const minutes = minutesByKey.get(`${row.player_id}|${row.date}`);
-    if (minutes == null) continue; // has a row that day but wasn't a match appearance
+  for (const { row, minutes } of appearances) {
     const meta = nameById.get(row.player_id);
     if (!meta) continue;
     if (variant === "ima") {
