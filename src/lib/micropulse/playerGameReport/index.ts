@@ -43,7 +43,7 @@ const LOAD_COLUMNS =
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
   "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
-  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance";
+  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
@@ -220,7 +220,15 @@ export async function computePlayerGameReport(
   const resolveMinutes = (pid: string, date: string, load: Record<string, unknown> | undefined): number => {
     const man = manualMin.get(`${pid}|${date}`);
     if (man) return man.dnp ? 0 : (man.minutes || 0);
-    return load ? num(load.session_duration_minutes) : 0;
+    if (!load) return 0;
+    const sd = num(load.session_duration_minutes);
+    if (sd > 0) return sd;
+    // Fallback for clubs (e.g. HK) that send player_load_per_minute but not
+    // session_duration: minutes = total load ÷ load-per-minute. Capped to guard
+    // glitchy per-minute values.
+    const plpm = num(load.player_load_per_minute);
+    const pl = num(load.total_player_load);
+    return plpm > 0 && pl > 0 ? Math.min(200, pl / plpm) : 0;
   };
 
   const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();

@@ -46,6 +46,7 @@ type RawRow = {
   max_velocity: number | null;
   // Minutes fallback when a team hasn't hand-entered match minutes.
   session_duration_minutes: number | null;
+  player_load_per_minute: number | null;
 };
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -122,7 +123,7 @@ const LOAD_COLS =
   "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
   "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
   "total_player_load, accel_decel_efforts, high_speed_distance, " +
-  "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes";
+  "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes, player_load_per_minute";
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
@@ -179,7 +180,14 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const resolveMinutes = (row: RawRow): number => {
     const man = manualMin.get(`${row.player_id}|${row.date}`);
     if (man) return man.dnp ? 0 : man.minutes || 0;
-    return n(row.session_duration_minutes);
+    const sd = n(row.session_duration_minutes);
+    if (sd > 0) return sd;
+    // Some clubs (e.g. HK) don't populate session_duration but do send
+    // player_load_per_minute — minutes = total load ÷ load-per-minute (the exact
+    // session duration Catapult computed). Capped to guard glitchy per-min values.
+    const plpm = n(row.player_load_per_minute);
+    const load = n(row.total_player_load);
+    return plpm > 0 && load > 0 ? Math.min(200, load / plpm) : 0;
   };
   const appearances = ext
     .map((row) => ({ row, minutes: Math.round(resolveMinutes(row)) }))
