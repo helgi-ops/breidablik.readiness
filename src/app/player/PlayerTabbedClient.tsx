@@ -26,6 +26,7 @@ import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
 import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
+import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -1372,7 +1373,12 @@ export default function DevPlayerClient() {
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
               {activeTab === "vald" && <DevPlayerVALDTab />}
               {activeTab === "strength" && <DevPlayerStrengthTab />}
-              {activeTab === "gamereport" && <PlayerGameReportCard lang={lang as "IS" | "EN"} />}
+              {activeTab === "gamereport" && (
+                <div className="space-y-4">
+                  <PlayerGameReportCard lang={lang as "IS" | "EN"} />
+                  <PlayerMatchMovementCard />
+                </div>
+              )}
               {activeTab === "chat" && chatPlayerId && (
                 <div className="mx-auto max-w-lg pb-24">
                   <ChatThread
