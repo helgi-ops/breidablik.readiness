@@ -20,7 +20,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { MovementFingerprint, MatchMovementRow, MatchMovementResult } from "./types";
+import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands } from "./types";
 
 // Re-export the client-safe types + dimension metadata from one place. The UI
 // imports directly from ./types to avoid pulling this server module in.
@@ -35,13 +35,14 @@ type RawRow = {
   ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null;
   ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null;
   ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
+  ima_band1_decel_count: number | null; ima_band2_decel_count: number | null; ima_band3_decel_count: number | null;
 };
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const ratio = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 const perMin = (v: number, min: number): number | null => (min > 0 ? v / min : null);
 
-function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"] } {
+function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
   const codLeft = n(row.ima_cod_left_high) + n(row.ima_cod_left_medium) + n(row.ima_cod_left_low);
   const codRight = n(row.ima_cod_right_high) + n(row.ima_cod_right_medium) + n(row.ima_cod_right_low);
   const codTotal = codLeft + codRight;
@@ -61,6 +62,18 @@ function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint;
       codRight: codTotal > 0 ? codRight : null,
       hiCadence: hiCadence || null,
     },
+    // Raw per-match counts for the S&C drill-down (band 3 / high = injury-relevant).
+    sub: {
+      decelLow: row.ima_band1_decel_count ?? null,
+      decelMed: row.ima_band2_decel_count ?? null,
+      decelHigh: row.ima_band3_decel_count ?? null,
+      stride6: row.ima_fr_band6_stride_count ?? null,
+      stride7: row.ima_fr_band7_stride_count ?? null,
+      stride8: row.ima_fr_band8_stride_count ?? null,
+      codHigh: codTotal > 0 ? n(row.ima_cod_left_high) + n(row.ima_cod_right_high) : null,
+      codMed: codTotal > 0 ? n(row.ima_cod_left_medium) + n(row.ima_cod_right_medium) : null,
+      codLow: codTotal > 0 ? n(row.ima_cod_left_low) + n(row.ima_cod_right_low) : null,
+    },
   };
 }
 
@@ -68,7 +81,8 @@ const IMA_COLS =
   "player_id, date, ima_total, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
-  "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count";
+  "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
+  "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count";
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
@@ -81,7 +95,7 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const players = ((pl ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>);
   const nameById = new Map(players.map((p) => [p.id, { name: p.full_name ?? "—", position: p.position ?? null }]));
   const playerIds = players.map((p) => p.id);
-  if (playerIds.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, players: [] };
+  if (playerIds.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] };
 
   const since = (() => {
     const d = new Date();
@@ -104,7 +118,7 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     matchDateSet.add(r.match_date);
   }
   const matchDates = Array.from(matchDateSet).sort();
-  if (matchDates.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, players: [] };
+  if (matchDates.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] };
 
   // IMA rows for those match dates.
   const { data: extData } = await sb
@@ -121,8 +135,8 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     if (row.ima_total == null) continue; // no IMA captured
     const meta = nameById.get(row.player_id);
     if (!meta) continue;
-    const { fp, raw } = fingerprintOf(row, minutes);
-    rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw });
+    const { fp, raw, sub } = fingerprintOf(row, minutes);
+    rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
   }
 
   // Per-player averages (the "norm") — mean of each dimension across their matches.
@@ -133,7 +147,9 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     byPlayer.set(r.player_id, arr);
   }
   const playerAverages: Record<string, MovementFingerprint> = {};
+  const subAverages: Record<string, SubBands> = {};
   const playerList: MatchMovementResult["players"] = [];
+  const SUB_KEYS: Array<keyof SubBands> = ["decelLow", "decelMed", "decelHigh", "stride6", "stride7", "stride8", "codHigh", "codMed", "codLow"];
   for (const [pid, prs] of byPlayer) {
     const mean = (key: keyof MovementFingerprint): number | null => {
       const vals = prs.map((r) => r.fingerprint[key]).filter((v): v is number => v != null);
@@ -146,10 +162,15 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
       codLeftPct: mean("codLeftPct"),
       hiCadencePerMin: mean("hiCadencePerMin"),
     };
+    const subMean = (key: keyof SubBands): number | null => {
+      const vals = prs.map((r) => r.sub[key]).filter((v): v is number => v != null);
+      return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
+    };
+    subAverages[pid] = Object.fromEntries(SUB_KEYS.map((k) => [k, subMean(k)])) as SubBands;
     const meta = nameById.get(pid);
     playerList.push({ player_id: pid, name: meta?.name ?? "—", position: meta?.position ?? null, matches: prs.length });
   }
   playerList.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { teamId, matchDates, rows, playerAverages, players: playerList };
+  return { teamId, matchDates, rows, playerAverages, subAverages, players: playerList };
 }

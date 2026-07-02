@@ -58,6 +58,35 @@ export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
   return rel > 0 ? (is ? d.whyMoreIS : d.whyMoreEN) : is ? d.whyLessIS : d.whyLessEN;
 }
 
+/**
+ * S&C drill-down — raw per-match counts behind "Show details". The high-intensity
+ * bands (decelHigh, codHigh, stride8) are the injury/performance-relevant ones
+ * that the summed fingerprint dimensions hide. Raw counts (not per-minute) as
+ * S&C read them; the series labels carry the minutes for context.
+ */
+export type SubBands = {
+  decelLow: number | null; decelMed: number | null; decelHigh: number | null;
+  stride6: number | null; stride7: number | null; stride8: number | null;
+  codHigh: number | null; codMed: number | null; codLow: number | null;
+};
+export type SubKey = keyof SubBands;
+
+export const SUB_BAND_GROUPS: Array<{
+  group: "decel" | "stride" | "cod";
+  labelEN: string; labelIS: string;
+  bands: Array<{ key: SubKey; en: string; is: string; high?: boolean }>;
+}> = [
+  { group: "decel", labelEN: "Deceleration by intensity", labelIS: "Hemlun eftir styrk", bands: [
+    { key: "decelLow", en: "Low", is: "Lág" }, { key: "decelMed", en: "Medium", is: "Miðl" }, { key: "decelHigh", en: "High", is: "Há", high: true },
+  ] },
+  { group: "cod", labelEN: "Change-of-direction by intensity", labelIS: "Stefnubreyting eftir styrk", bands: [
+    { key: "codHigh", en: "High", is: "Há", high: true }, { key: "codMed", en: "Medium", is: "Miðl" }, { key: "codLow", en: "Low", is: "Lág" },
+  ] },
+  { group: "stride", labelEN: "High-cadence stride bands", labelIS: "Háákefðar skref-bönd", bands: [
+    { key: "stride6", en: "Band 6", is: "Band 6" }, { key: "stride7", en: "Band 7", is: "Band 7" }, { key: "stride8", en: "Band 8 (sprint)", is: "Band 8 (sprettur)", high: true },
+  ] },
+];
+
 export type MatchMovementRow = {
   player_id: string;
   name: string;
@@ -66,6 +95,7 @@ export type MatchMovementRow = {
   minutes: number;
   fingerprint: MovementFingerprint;
   raw: { imaTotal: number | null; codTotal: number | null; codLeft: number | null; codRight: number | null; hiCadence: number | null };
+  sub: SubBands;
 };
 
 export type MatchMovementResult = {
@@ -74,6 +104,8 @@ export type MatchMovementResult = {
   rows: MatchMovementRow[];
   /** Per-player mean of each dimension across their matches (the "norm"). */
   playerAverages: Record<string, MovementFingerprint>;
+  /** Per-player mean of each sub-band across their matches (S&C drill-down norm). */
+  subAverages: Record<string, SubBands>;
   players: Array<{ player_id: string; name: string; position: string | null; matches: number }>;
 };
 

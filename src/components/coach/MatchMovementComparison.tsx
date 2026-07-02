@@ -17,12 +17,14 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import {
   MOVEMENT_DIMENSIONS,
+  SUB_BAND_GROUPS,
   fmtDim,
   whyWord,
   type DimensionKey,
   type MovementFingerprint,
   type MatchMovementResult,
   type MatchMovementRow,
+  type SubBands,
 } from "@/lib/micropulse/matchMovement/types";
 
 type Mode = "norm" | "ab" | "squad";
@@ -53,6 +55,51 @@ function magWord(key: DimensionKey, rel: number, is: boolean): string {
 }
 
 type Series = { label: string; fp: MovementFingerprint; barClass: string };
+type SubSeries = { label: string; sub: SubBands; barClass: string };
+
+/** S&C drill-down — raw per-match sub-band counts, grouped, high-intensity flagged. */
+function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean }) {
+  return (
+    <div className="space-y-3">
+      {SUB_BAND_GROUPS.map((g) => (
+        <div key={g.group}>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? g.labelIS : g.labelEN}</div>
+          <div className="space-y-1.5">
+            {g.bands.map((b) => {
+              const vals = series.map((s) => s.sub[b.key]).filter((v): v is number => v != null);
+              const max = vals.length ? Math.max(...vals) : 1;
+              return (
+                <div key={b.key}>
+                  <div className={`mb-0.5 text-[10px] ${b.high ? "font-semibold text-rose-600" : "text-slate-400"}`}>
+                    {is ? b.is : b.en}{b.high ? (is ? " · meiðsla-relevant" : " · injury-relevant") : ""}
+                  </div>
+                  {series.map((s) => {
+                    const v = s.sub[b.key];
+                    const w = v != null && max > 0 ? Math.max(4, Math.round((v / max) * 100)) : 0;
+                    return (
+                      <div key={s.label} className="flex items-center gap-2">
+                        <div className="w-24 shrink-0 truncate text-[10px] text-slate-500">{s.label}</div>
+                        <div className="h-3 flex-1 rounded bg-slate-100">
+                          <div className={`h-3 rounded ${b.high ? "bg-rose-400" : s.barClass}`} style={{ width: `${w}%` }} />
+                        </div>
+                        <div className="w-10 shrink-0 text-right text-[10px] font-semibold tabular-nums text-slate-700">{v == null ? "—" : Math.round(v)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <p className="text-[10px] leading-snug text-slate-400">
+        {is
+          ? "Hráar tölur per leik. Háir decel-ar / CoD / sprett-bönd (rautt) eru meiðsla-/afkasta-relevant — sem summan í fingrafarinu felur (McBurnie 2022)."
+          : "Raw per-match counts. High-intensity decels / CoD / sprint bands (red) are the injury/performance-relevant ones the summed fingerprint hides (McBurnie 2022)."}
+      </p>
+    </div>
+  );
+}
 
 function DimBars({ series, is }: { series: Series[]; is: boolean }) {
   return (
@@ -146,6 +193,7 @@ export default function MatchMovementComparison() {
   let confidence = "";       // the data behind it (matches / minutes)
   let facts: string[] = [];
   let series: Series[] = [];
+  let subSeries: SubSeries[] = [];
   let squadRows: MatchMovementRow[] = [];
 
   const nMatches = data.players.find((p) => p.player_id === effPlayerId)?.matches ?? 0;
@@ -158,6 +206,10 @@ export default function MatchMovementComparison() {
       series = [
         { label: is ? "Þessi leikur" : "This match", fp: latest.fingerprint, barClass: "bg-indigo-500" },
         { label: is ? "Hans venja" : "His usual", fp: norm, barClass: "bg-slate-400" },
+      ];
+      if (data.subAverages[effPlayerId]) subSeries = [
+        { label: is ? "Þessi leikur" : "This match", sub: latest.sub, barClass: "bg-indigo-500" },
+        { label: is ? "Hans venja" : "His usual", sub: data.subAverages[effPlayerId], barClass: "bg-slate-400" },
       ];
       const devs = MOVEMENT_DIMENSIONS
         .map((d) => ({ d, dev: deviation(d.key, latest.fingerprint[d.key], norm[d.key]) }))
@@ -186,6 +238,10 @@ export default function MatchMovementComparison() {
       series = [
         { label: fmtDate(a.match_date, is), fp: a.fingerprint, barClass: "bg-indigo-500" },
         { label: fmtDate(b.match_date, is), fp: b.fingerprint, barClass: "bg-emerald-500" },
+      ];
+      subSeries = [
+        { label: fmtDate(a.match_date, is), sub: a.sub, barClass: "bg-indigo-500" },
+        { label: fmtDate(b.match_date, is), sub: b.sub, barClass: "bg-emerald-500" },
       ];
       const diffs = MOVEMENT_DIMENSIONS
         .map((d) => ({ d, dev: deviation(d.key, b.fingerprint[d.key], a.fingerprint[d.key]) }))
@@ -332,6 +388,13 @@ export default function MatchMovementComparison() {
           <DimBars series={series} is={is} />
         ) : (
           <div className="text-sm text-slate-400">{is ? "Veldu leik(i)." : "Pick a match / matches."}</div>
+        )}
+
+        {/* S&C drill-down — opt-in sub-band depth (kept out of the head-coach view). */}
+        {subSeries.length > 0 && (
+          <ShowDetails label={{ EN: "S&C breakdown — raw sub-bands", IS: "S&C sundurliðun — hrá undir-bönd" }} hint={{ EN: "decel / CoD by intensity · stride bands 6-8", IS: "decel / CoD eftir styrk · skref-bönd 6-8" }}>
+            <SubBandsBreakdown series={subSeries} is={is} />
+          </ShowDetails>
         )}
 
         <ShowDetails label={{ EN: "What the dimensions mean", IS: "Hvað víddirnar þýða" }}>
