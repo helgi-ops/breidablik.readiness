@@ -60,9 +60,10 @@ export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
 
 /**
  * S&C drill-down — raw per-match counts behind "Show details". The high-intensity
- * bands (decelHigh, codHigh, stride8) are the injury/performance-relevant ones
- * that the summed fingerprint dimensions hide. Raw counts (not per-minute) as
- * S&C read them; the series labels carry the minutes for context.
+ * bands (decelHigh, codHigh, stride8) are the demanding end that the summed
+ * fingerprint dimensions hide — a descriptive read of mechanical demand, not an
+ * injury prediction. Raw counts (not per-minute) as S&C read them; the series
+ * labels carry the minutes for context.
  */
 export type SubBands = {
   decelLow: number | null; decelMed: number | null; decelHigh: number | null;

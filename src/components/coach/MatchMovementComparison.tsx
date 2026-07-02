@@ -71,7 +71,7 @@ function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean })
               return (
                 <div key={b.key}>
                   <div className={`mb-0.5 text-[10px] ${b.high ? "font-semibold text-rose-600" : "text-slate-400"}`}>
-                    {is ? b.is : b.en}{b.high ? (is ? " · meiðsla-relevant" : " · injury-relevant") : ""}
+                    {is ? b.is : b.en}{b.high ? (is ? " · háákefðar" : " · high-intensity") : ""}
                   </div>
                   {series.map((s) => {
                     const v = s.sub[b.key];
@@ -94,8 +94,8 @@ function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean })
       ))}
       <p className="text-[10px] leading-snug text-slate-400">
         {is
-          ? "Hráar tölur per leik. Háir decel-ar / CoD / sprett-bönd (rautt) eru meiðsla-/afkasta-relevant — sem summan í fingrafarinu felur (McBurnie 2022)."
-          : "Raw per-match counts. High-intensity decels / CoD / sprint bands (red) are the injury/performance-relevant ones the summed fingerprint hides (McBurnie 2022)."}
+          ? "Hráar tölur per leik. Háákefðar decel-ar / CoD / sprett-bönd (rautt) eru krefjandi endinn sem summan í fingrafarinu felur — lýsandi vélræn krafa (McBurnie 2022), ekki meiðsla-spá."
+          : "Raw per-match counts. High-intensity decels / CoD / sprint bands (red) are the demanding end the summed fingerprint hides — a descriptive read of mechanical demand (McBurnie 2022), not an injury prediction."}
       </p>
     </div>
   );
