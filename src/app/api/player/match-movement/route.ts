@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
-import { MOVEMENT_DIMENSIONS, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
+import { movementDimensions, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
 
 export const runtime = "nodejs";
 
@@ -41,14 +41,14 @@ export async function GET(req: Request) {
     const allAvgs = Object.values(full.playerAverages);
     const percentiles = {} as Record<DimensionKey, number>;
     const squadMedian = {} as MovementFingerprint;
-    for (const d of MOVEMENT_DIMENSIONS) {
+    for (const d of movementDimensions(full.variant)) {
       const vals = allAvgs.map((fp) => fp[d.key]).filter((v): v is number => v != null).sort((a, b) => a - b);
       const mine = average?.[d.key] ?? null;
       percentiles[d.key] = mine != null && vals.length >= 2 ? Math.round((vals.filter((v) => v < mine).length / (vals.length - 1)) * 100) : 50;
       squadMedian[d.key] = vals.length ? vals[Math.floor(vals.length / 2)] : null;
     }
 
-    return NextResponse.json({ matches, average, percentiles, squadMedian, matchCount: matches.length });
+    return NextResponse.json({ variant: full.variant, matches, average, percentiles, squadMedian, matchCount: matches.length });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
   }

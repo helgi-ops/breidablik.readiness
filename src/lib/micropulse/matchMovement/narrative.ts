@@ -10,11 +10,13 @@
  */
 
 import type { MovementFingerprint, SubBands } from "./types";
+import { dimByKey } from "./types";
 
 export const NARRATIVE_MODEL = "claude-haiku-4-5-20251001";
 
 /** Plain-language meaning of every fingerprint dimension + sub-band the AI sees. */
 export const MM_METRIC_GUIDE: Record<string, string> = {
+  // IMA driver dimensions (Pro/ELITE)
   totalPerMin: "overall movement work per minute — accelerations, decelerations and turns combined (how busy the game was)",
   accelDecelRatio: "ratio of accelerating to braking; above 1 = more accelerating (front-foot, explosive), below 1 = more braking (reactive, stop-start)",
   codPerMin: "change-of-direction actions per minute — cuts and turns (the agility demand)",
@@ -29,19 +31,24 @@ export const MM_METRIC_GUIDE: Record<string, string> = {
   codHigh: "high-intensity changes of direction (raw count)",
   codMed: "medium-intensity changes of direction (raw count)",
   codLow: "low-intensity changes of direction (raw count)",
+  // GPS movement dimensions (Core/Lite)
+  workPerMin: "overall GPS workload per minute (player load) — how hard the game was physically",
+  effortsPerMin: "sharp accelerations and decelerations per minute — the agility / stop-start demand",
+  hsrPerMin: "high-speed running metres per minute",
+  sprintPerMin: "sprint-distance metres per minute — top-end running",
+  topSpeed: "peak sprint speed (km/h) for the match",
 };
 
 export type FpEntry = { label: string; minutes?: number; fingerprint: MovementFingerprint; sub?: SubBands | null };
 
-/** Round the two fingerprints + sub-bands to compact JSON the model can read. */
+/** Round a fingerprint to compact JSON the model can read (kind-aware). */
 function compactFp(fp: MovementFingerprint): Record<string, number | null> {
-  return {
-    totalPerMin: round(fp.totalPerMin, 2),
-    accelDecelRatio: round(fp.accelDecelRatio, 2),
-    codPerMin: round(fp.codPerMin, 2),
-    codLeftPct: round(fp.codLeftPct, 0),
-    hiCadencePerMin: round(fp.hiCadencePerMin, 2),
-  };
+  const out: Record<string, number | null> = {};
+  for (const [k, v] of Object.entries(fp)) {
+    const kind = dimByKey(k)?.kind;
+    out[k] = round(v, kind === "pct" ? 0 : 2);
+  }
+  return out;
 }
 function compactSub(sub: SubBands | null | undefined): Record<string, number | null> | undefined {
   if (!sub) return undefined;
@@ -55,10 +62,17 @@ function round(v: number | null, dp: number): number | null {
   return Math.round(v * f) / f;
 }
 
+export type Sensor = "ima" | "gps";
+const dataSource = (s: Sensor) =>
+  s === "gps"
+    ? "GPS movement signals (Core/Lite units — no inertial IMA). This is a GPS movement read, NOT the inertial driver."
+    : "Catapult inertial-movement (IMA) — the DRIVER layer: HOW he moved (accelerate/brake/turn), not how much he ran.";
+
 /** Facts for a two-shape comparison (norm / A-B / player-picks). */
-export function buildComparisonFacts(a: FpEntry, b: FpEntry) {
+export function buildComparisonFacts(a: FpEntry, b: FpEntry, sensor: Sensor = "ima") {
   return {
     view: "comparison" as const,
+    data_source: dataSource(sensor),
     a: { label: a.label, minutes: a.minutes ?? null, fingerprint: compactFp(a.fingerprint), sub_bands: compactSub(a.sub) },
     b: { label: b.label, minutes: b.minutes ?? null, fingerprint: compactFp(b.fingerprint), sub_bands: compactSub(b.sub) },
     metric_guide: MM_METRIC_GUIDE,
@@ -70,9 +84,11 @@ export function buildSquadFacts(
   matchLabel: string,
   players: Array<{ name: string; position: string | null; fingerprint: MovementFingerprint }>,
   compare?: { label: string; meanA: MovementFingerprint; meanB: MovementFingerprint } | null,
+  sensor: Sensor = "ima",
 ) {
   return {
     view: "squad" as const,
+    data_source: dataSource(sensor),
     match: matchLabel,
     players: players.map((p) => ({ name: p.name, position: p.position ?? "unknown", fingerprint: compactFp(p.fingerprint) })),
     squad_compare: compare
@@ -85,10 +101,10 @@ export function buildSquadFacts(
 const SHARED_RULES = `Hard rules:
 - Use ONLY the numbers in the data. Never invent, estimate, or round differently.
 - Describe ONLY dimensions present; if a value is null, say nothing about it.
-- This is the DRIVER layer (IMA) — HOW the player moved (accelerate/brake/turn), NOT how much he ran (that is GPS). Frame it that way.
-- Reference every metric by its plain meaning from metric_guide. You may use a term like "change of direction" or "braking" but never raw jargon ("IMA", "band 8", "ACWR").
+- The data_source field says which sensor these numbers come from — respect it exactly. Never call GPS data "IMA"/"the driver", and don't claim inertial detail (change of direction, left/right, braking split) unless a metric for it is actually present.
+- This is about HOW the player moved (movement style), not a match rating. Reference every metric by its plain meaning from metric_guide, in plain words — never raw jargon ("IMA", "band 8", "ACWR", "player load").
 - Descriptive, NOT predictive: describe the movement style and mechanical demand only. Never claim or imply injury risk, predict injury, or give medical, transfer, or recruitment advice. No training prescriptions.
-- Percentages (CoD left %) are asymmetry, not volume. Ratios (accel:decel) are balance, not counts. "per minute" normalises for time on the pitch.`;
+- Percentages are asymmetry, not volume. Ratios (accel:decel) are balance, not counts. "per minute" normalises for time on the pitch.`;
 
 export const COACH_SYSTEM = `You explain a football player's (or squad's) MOVEMENT comparison to a coach, from Catapult inertial-movement (IMA) data. Many coaches are new to this data, so be clear and instructive.
 

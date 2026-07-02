@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
 import type { MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
-import { MOVEMENT_DIMENSIONS } from "@/lib/micropulse/matchMovement/types";
+import { movementDimensions } from "@/lib/micropulse/matchMovement/types";
 import { buildComparisonFacts, buildSquadFacts, callMatchMovementAI, COACH_SYSTEM } from "@/lib/micropulse/matchMovement/narrative";
 
 export const runtime = "nodejs";
@@ -24,11 +24,11 @@ function fmtDate(iso: string): string {
 }
 
 /** Squad mean of each dimension across a set of fingerprints (nulls skipped). */
-function meanFp(fps: MovementFingerprint[]): MovementFingerprint {
-  const out = {} as MovementFingerprint;
-  for (const d of MOVEMENT_DIMENSIONS) {
-    const vals = fps.map((f) => f[d.key]).filter((v): v is number => v != null);
-    out[d.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+function meanFp(fps: MovementFingerprint[], keys: string[]): MovementFingerprint {
+  const out: MovementFingerprint = {};
+  for (const k of keys) {
+    const vals = fps.map((f) => f[k]).filter((v): v is number => v != null);
+    out[k] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }
   return out;
 }
@@ -67,6 +67,7 @@ export async function POST(req: Request) {
 
     const data = await computeMatchMovement({ teamId });
     if (data.rows.length === 0) return NextResponse.json({ error: "No match movement data yet" }, { status: 422 });
+    const dimKeys = movementDimensions(data.variant).map((d) => d.key);
 
     let facts: unknown;
 
@@ -80,8 +81,9 @@ export async function POST(req: Request) {
         fmtDate(squadMatch),
         rows.map((r) => ({ name: r.name, position: r.position, fingerprint: r.fingerprint })),
         rowsB.length > 0
-          ? { label: fmtDate(compareDate!), meanA: meanFp(rows.map((r) => r.fingerprint)), meanB: meanFp(rowsB.map((r) => r.fingerprint)) }
+          ? { label: fmtDate(compareDate!), meanA: meanFp(rows.map((r) => r.fingerprint), dimKeys), meanB: meanFp(rowsB.map((r) => r.fingerprint), dimKeys) }
           : null,
+        data.variant,
       );
     } else {
       const playerId = body.playerId || data.players.find((p) => p.matches >= 1)?.player_id || data.players[0]?.player_id || "";
@@ -96,6 +98,7 @@ export async function POST(req: Request) {
         facts = { player: name, ...buildComparisonFacts(
           { label: `${name} — ${fmtDate(a.match_date)}`, minutes: a.minutes, fingerprint: a.fingerprint, sub: a.sub },
           { label: `${name} — ${fmtDate(b.match_date)}`, minutes: b.minutes, fingerprint: b.fingerprint, sub: b.sub },
+          data.variant,
         ) };
       } else {
         const norm = data.playerAverages[playerId];
@@ -105,6 +108,7 @@ export async function POST(req: Request) {
         facts = { player: name, ...buildComparisonFacts(
           { label: `${name} — this match (${fmtDate(a.match_date)})`, minutes: a.minutes, fingerprint: a.fingerprint, sub: a.sub },
           { label: `${name} — his usual (average of ${n} matches)`, fingerprint: norm, sub: subNorm },
+          data.variant,
         ) };
       }
     }

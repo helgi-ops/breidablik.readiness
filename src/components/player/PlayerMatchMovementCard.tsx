@@ -12,9 +12,10 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { ProfileRadar, CompareRadar, ChartZoom, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
-import { fmtDim, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
+import { fmtDim, type DimensionKey, type MovementFingerprint, type MovementVariant } from "@/lib/micropulse/matchMovement/types";
 
 type Resp = {
+  variant?: MovementVariant;
   matches: Array<{ date: string; minutes: number; fingerprint: MovementFingerprint }>;
   average: MovementFingerprint | null;
   percentiles: Record<DimensionKey, number>;
@@ -22,10 +23,12 @@ type Resp = {
   matchCount: number;
 };
 
+type PlayerLabel = { en: string; is: string; quality?: boolean; infoEN: string; infoIS: string };
+
 // Player-friendly labels (no S&C jargon) for each movement dimension. `info` is
 // a plain one-liner explaining what the axis tells the PLAYER — most players
 // don't know IMA, so it never uses the term.
-const PLAYER_LABELS: Record<DimensionKey, { en: string; is: string; quality?: boolean; infoEN: string; infoIS: string }> = {
+const PLAYER_LABELS: Record<DimensionKey, PlayerLabel> = {
   totalPerMin:     { en: "Work rate",   is: "Vinnumagn",   quality: true,
     infoEN: "How much total movement you pack into each minute — starts, stops, turns and runs combined. Higher = a busier, more active game.",
     infoIS: "Hversu mikla hreyfingu þú kemur fyrir á hverri mínútu — spretti, stopp, snúninga og hlaup samanlagt. Hærra = virkari leikur." },
@@ -43,6 +46,27 @@ const PLAYER_LABELS: Record<DimensionKey, { en: string; is: string; quality?: bo
     infoIS: "Hversu mikið hratt sprett-hlaup þú tekur á mínútu. Hærra = meira hraðahlaup í leiknum þínum." },
 };
 const RADAR_ORDER: DimensionKey[] = ["totalPerMin", "accelDecelRatio", "codPerMin", "hiCadencePerMin", "codLeftPct"];
+
+// GPS variant (Core/Lite) — no IMA, so player-friendly labels for the GPS
+// movement signals. Still plain, no jargon.
+const GPS_PLAYER_LABELS: Record<DimensionKey, PlayerLabel> = {
+  workPerMin:    { en: "Work rate",   is: "Vinnumagn",   quality: true,
+    infoEN: "How hard you worked each minute overall. Higher = a busier, more demanding game.",
+    infoIS: "Hversu mikið þú lagðir á þig á hverri mínútu. Hærra = annasamari, kröfuharðari leikur." },
+  effortsPerMin: { en: "Agility efforts", is: "Átök",    quality: true,
+    infoEN: "How many sharp accelerations and stops you made per minute — your stop-start, change-of-pace work. Higher = a more agile, busy game.",
+    infoIS: "Hversu margar snöggar hröðunir og stopp þú tókst á mínútu — stopp-og-fara vinnan þín. Hærra = liprari, annasamari leikur." },
+  hsrPerMin:     { en: "High-speed running", is: "Háhraðahlaup", quality: true,
+    infoEN: "How much fast running you did per minute. Higher = more high-speed running in your game.",
+    infoIS: "Hversu mikið hratt hlaup þú tókst á mínútu. Hærra = meira háhraðahlaup í leiknum þínum." },
+  sprintPerMin:  { en: "Sprinting",   is: "Sprettur",    quality: true,
+    infoEN: "How much all-out sprint running you did per minute. Higher = more top-speed running.",
+    infoIS: "Hversu mikið hámarkshraða sprett-hlaup þú tókst á mínútu. Hærra = meira hámarkshraða hlaup." },
+  topSpeed:      { en: "Top speed",   is: "Hæsti hraði", quality: true,
+    infoEN: "The fastest speed you reached in the match (km/h).",
+    infoIS: "Hæsti hraði sem þú náðir í leiknum (km/klst)." },
+};
+const GPS_RADAR_ORDER: DimensionKey[] = ["workPerMin", "effortsPerMin", "hsrPerMin", "sprintPerMin", "topSpeed"];
 
 export default function PlayerMatchMovementCard() {
   const [lang] = useLang();
@@ -74,8 +98,10 @@ export default function PlayerMatchMovementCard() {
 
   const radar: RadarMetric[] = useMemo(() => {
     if (!data) return [];
-    return RADAR_ORDER.map((k) => ({
-      label: is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en,
+    const order = data.variant === "gps" ? GPS_RADAR_ORDER : RADAR_ORDER;
+    const labels = data.variant === "gps" ? GPS_PLAYER_LABELS : PLAYER_LABELS;
+    return order.map((k) => ({
+      label: is ? labels[k].is : labels[k].en,
       percentile: data.percentiles[k] ?? 50,
       valueLabel: fmtDim(k, data.average?.[k] ?? null),
     }));
@@ -84,9 +110,14 @@ export default function PlayerMatchMovementCard() {
   if (loading) return null;
   if (!data || data.matchCount === 0) return null;
 
+  // Variant-aware labels/order (IMA driver on Pro, GPS movement on Lite).
+  const isGps = data.variant === "gps";
+  const ORDER = isGps ? GPS_RADAR_ORDER : RADAR_ORDER;
+  const LABELS = isGps ? GPS_PLAYER_LABELS : PLAYER_LABELS;
+
   // Positive standout — the "quality" dimension he ranks highest on.
-  const standout = (["totalPerMin", "accelDecelRatio", "codPerMin", "hiCadencePerMin"] as DimensionKey[])
-    .filter((k) => data.percentiles[k] != null)
+  const standout = ORDER
+    .filter((k) => LABELS[k].quality && data.percentiles[k] != null)
     .sort((a, b) => (data.percentiles[b] ?? 0) - (data.percentiles[a] ?? 0))[0];
   const standoutPct = standout ? data.percentiles[standout] : 0;
 
@@ -100,11 +131,11 @@ export default function PlayerMatchMovementCard() {
   const labelFor = (sel: string): string => (sel === "usual" ? (is ? "Venjan þín" : "Your usual") : dateLabel(sel));
   const fpA = fpFor(effA);
   const fpB = fpFor(effB);
-  const compareAxes = RADAR_ORDER.map((k) => (is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en));
+  const compareAxes = ORDER.map((k) => (is ? LABELS[k].is : LABELS[k].en));
   const compareSeries = fpA && fpB && effA !== effB
     ? [
-        { label: labelFor(effA), values: RADAR_ORDER.map((k) => fpA[k]), color: "#4f46e5" },
-        { label: labelFor(effB), values: RADAR_ORDER.map((k) => fpB[k]), color: "#94a3b8" },
+        { label: labelFor(effA), values: ORDER.map((k) => fpA[k]), color: "#4f46e5" },
+        { label: labelFor(effB), values: ORDER.map((k) => fpB[k]), color: "#94a3b8" },
       ]
     : [];
 
@@ -143,7 +174,7 @@ export default function PlayerMatchMovementCard() {
       {standout && standoutPct >= 60 && (
         <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-sm text-slate-800">
           <span className="font-semibold">{is ? "Þinn styrkur: " : "Your standout: "}</span>
-          {is ? PLAYER_LABELS[standout].is : PLAYER_LABELS[standout].en}
+          {is ? LABELS[standout].is : LABELS[standout].en}
           {" — "}
           {is ? `þú ert í efstu ${100 - standoutPct}% liðsins.` : `you're in the top ${100 - standoutPct}% of the squad.`}
         </div>
@@ -165,7 +196,7 @@ export default function PlayerMatchMovementCard() {
       <div className="mt-3">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvað þýðir hvað?" : "What does each mean?"}</div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
-          {RADAR_ORDER.map((k) => {
+          {ORDER.map((k) => {
             const active = openInfo === k;
             return (
               <button
@@ -175,7 +206,7 @@ export default function PlayerMatchMovementCard() {
                 aria-expanded={active}
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${active ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
               >
-                {is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en}
+                {is ? LABELS[k].is : LABELS[k].en}
                 <span className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold ${active ? "bg-indigo-500 text-white" : "bg-slate-200 text-slate-500"}`}>i</span>
               </button>
             );
@@ -183,9 +214,9 @@ export default function PlayerMatchMovementCard() {
         </div>
         {openInfo && (
           <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-snug text-slate-700">
-            <span className="font-semibold">{is ? PLAYER_LABELS[openInfo].is : PLAYER_LABELS[openInfo].en}</span>
+            <span className="font-semibold">{is ? LABELS[openInfo].is : LABELS[openInfo].en}</span>
             {" — "}
-            {is ? PLAYER_LABELS[openInfo].infoIS : PLAYER_LABELS[openInfo].infoEN}
+            {is ? LABELS[openInfo].infoIS : LABELS[openInfo].infoEN}
           </div>
         )}
       </div>

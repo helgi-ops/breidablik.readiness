@@ -12,8 +12,8 @@ export default function MatchMovementPage() {
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Hreyfi-samanburður" : "Match Movement"}</h1>
         <PagePurpose
-          en="compare how a player moved across matches — the IMA driver, not GPS volume"
-          is="berðu saman hvernig leikmaður hreyfði sig milli leikja — IMA driver, ekki GPS magn"
+          en="compare how a player moved across matches — his movement signature, match to match (IMA driver on Pro, GPS movement on Lite)"
+          is="berðu saman hvernig leikmaður hreyfði sig milli leikja — hreyfi-einkenni hans (IMA driver á Pro, GPS-hreyfing á Lite)"
         />
         <p className="mt-1 text-xs text-slate-500">Buchheit 2014 · McBurnie 2022 · di Prampero 2015</p>
       </div>

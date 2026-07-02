@@ -66,6 +66,7 @@ export async function POST(req: Request) {
     const facts = buildComparisonFacts(
       { label: `your ${fmtDate(a.match_date)} match`, minutes: a.minutes, fingerprint: a.fingerprint, sub: a.sub },
       bEntry,
+      data.variant,
     );
 
     const narrative = await callMatchMovementAI({ apiKey, system: PLAYER_SYSTEM, facts, lang, audience: "player", maxTokens: 500 });

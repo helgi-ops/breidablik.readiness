@@ -17,11 +17,13 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import { CompareRadar, ChartZoom } from "@/components/coach/PlayerGameReportCharts";
 import {
-  MOVEMENT_DIMENSIONS,
   SUB_BAND_GROUPS,
   fmtDim,
   whyWord,
+  dimByKey,
+  movementDimensions,
   type DimensionKey,
+  type MovementDimension,
   type MovementFingerprint,
   type MatchMovementResult,
   type MatchMovementRow,
@@ -30,8 +32,8 @@ import {
 
 type Mode = "norm" | "ab" | "squad";
 
-// Plain, coach-facing definition of each IMA dimension — IMA is new to many
-// coaches, so this says what the axis IS in one line, no S&C jargon.
+// Plain, coach-facing definition of each dimension (IMA + GPS variants) — the
+// data is new to many coaches, so this says what the axis IS in one line.
 const DIM_DEFS: Record<DimensionKey, { en: string; is: string }> = {
   totalPerMin:     { en: "The overall amount of movement work per minute — accelerations, decelerations and turns combined.",
                      is: "Heildar hreyfi-vinna á mínútu — hröðun, hemlun og snúningar samanlagt." },
@@ -43,6 +45,17 @@ const DIM_DEFS: Record<DimensionKey, { en: string; is: string }> = {
                      is: "Hlutfall vinstri vs hægri snúninga. Um 50% er jafnt; mikil skekkja bendir á einhliða mynstur." },
   hiCadencePerMin: { en: "Fast, sprint-type running per minute (stride bands 6-8) — the IMA read on high-speed running.",
                      is: "Hratt sprett-hlaup á mínútu (skref-bönd 6-8) — IMA-mæling á hröðu hlaupi." },
+  // GPS variant (Core/Lite)
+  workPerMin:      { en: "Overall physical workload per minute (GPS player load) — how hard the game was.",
+                     is: "Heildar líkamlegt álag á mínútu (GPS) — hversu erfiður leikurinn var." },
+  effortsPerMin:   { en: "Sharp accelerations and decelerations per minute — the agility / stop-start demand (the GPS stand-in for change of direction).",
+                     is: "Snöggar hröðunir og hemlanir á mínútu — lipurðar-/stopp-og-fara krafan (GPS-staðgengill fyrir stefnubreytingar)." },
+  hsrPerMin:       { en: "High-speed running metres per minute — how much fast running.",
+                     is: "Háhraðahlaup (metrar) á mínútu — hversu mikið hratt hlaup." },
+  sprintPerMin:    { en: "Sprint-distance metres per minute — top-end running.",
+                     is: "Sprett-vegalengd (metrar) á mínútu — hámarkshraða hlaup." },
+  topSpeed:        { en: "Peak sprint speed reached in the match (km/h).",
+                     is: "Hæsti hraði sem náðist í leiknum (km/klst)." },
 };
 
 function fmtDate(iso: string, is: boolean): string {
@@ -52,28 +65,28 @@ function fmtDate(iso: string, is: boolean): string {
 /** Signed deviation of a value vs a baseline — % for rate/ratio dims, points for pct dims. */
 function deviation(key: DimensionKey, cur: number | null, base: number | null): { rel: number; abs: number } | null {
   if (cur == null || base == null) return null;
-  const dim = MOVEMENT_DIMENSIONS.find((d) => d.key === key)!;
+  const dim = dimByKey(key)!;
   const rel = dim.kind === "pct" ? cur - base : base !== 0 ? ((cur - base) / base) * 100 : 0;
   return { rel, abs: Math.abs(rel) };
 }
 function isSignificant(key: DimensionKey, abs: number): boolean {
-  const dim = MOVEMENT_DIMENSIONS.find((d) => d.key === key)!;
+  const dim = dimByKey(key)!;
   return dim.kind === "pct" ? abs >= 10 : abs >= 20;
 }
 function dirWord(key: DimensionKey, rel: number, is: boolean): string {
-  const d = MOVEMENT_DIMENSIONS.find((x) => x.key === key)!;
+  const d = dimByKey(key)!;
   return rel > 0 ? (is ? d.moreIS : d.moreEN) : is ? d.lessIS : d.lessEN;
 }
 function magWord(key: DimensionKey, rel: number, is: boolean): string {
-  const d = MOVEMENT_DIMENSIONS.find((x) => x.key === key)!;
+  const d = dimByKey(key)!;
   const m = Math.abs(Math.round(rel));
   return d.kind === "pct" ? `${m} ${is ? "stig" : "pts"}` : `${m}%`;
 }
 
 /** Squad mean of each dimension across a match's rows (nulls skipped). */
-function meanFp(rows: MatchMovementRow[]): MovementFingerprint {
-  const out = {} as MovementFingerprint;
-  for (const d of MOVEMENT_DIMENSIONS) {
+function meanFp(rows: MatchMovementRow[], dims: MovementDimension[]): MovementFingerprint {
+  const out: MovementFingerprint = {};
+  for (const d of dims) {
     const vals = rows.map((r) => r.fingerprint[d.key]).filter((v): v is number => v != null);
     out[d.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }
@@ -127,10 +140,10 @@ function SubBandsBreakdown({ series, is }: { series: SubSeries[]; is: boolean })
   );
 }
 
-function DimBars({ series, is }: { series: Series[]; is: boolean }) {
+function DimBars({ series, is, dims }: { series: Series[]; is: boolean; dims: MovementDimension[] }) {
   return (
     <div className="space-y-2.5">
-      {MOVEMENT_DIMENSIONS.map((d) => {
+      {dims.map((d) => {
         const vals = series.map((s) => s.fp[d.key]).filter((v): v is number => v != null);
         const max = vals.length ? Math.max(...vals, d.kind === "ratio" ? 1 : 0) : 1;
         return (
@@ -218,6 +231,15 @@ export default function MatchMovementComparison() {
   const effSquadMatch = squadMatch || (data.matchDates[data.matchDates.length - 1] ?? "");
   const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
 
+  // The dimension set depends on the club's data: the true IMA driver (Pro/ELITE)
+  // or the GPS movement read (Core/Lite). Everything below is variant-generic.
+  const DIMS = movementDimensions(data.variant);
+  const isGps = data.variant === "gps";
+  // The squad "standout" dimensions differ by variant (IMA has change-of-direction
+  // + accel:decel; GPS has accel/decel efforts + top speed).
+  const primaryKey = isGps ? "effortsPerMin" : "codPerMin";
+  const secondaryKey = isGps ? "topSpeed" : "accelDecelRatio";
+
   // AI explanation — the selection signature so a stale narrative never lingers
   // after the coach changes what's shown (only display `ai` if it matches).
   const aiSig = `${mode}|${effPlayerId}|${effMatchA}|${effMatchB}|${effSquadMatch}|${squadMatchB}`;
@@ -261,13 +283,13 @@ export default function MatchMovementComparison() {
         { label: is ? "Þessi leikur" : "This match", fp: latest.fingerprint, barClass: "bg-indigo-500" },
         { label: is ? "Hans venja" : "His usual", fp: norm, barClass: "bg-slate-400" },
       ];
-      if (data.subAverages[effPlayerId]) subSeries = [
+      if (!isGps && data.subAverages[effPlayerId]) subSeries = [
         { label: is ? "Þessi leikur" : "This match", sub: latest.sub, barClass: "bg-indigo-500" },
         { label: is ? "Hans venja" : "His usual", sub: data.subAverages[effPlayerId], barClass: "bg-slate-400" },
       ];
-      const devs = MOVEMENT_DIMENSIONS
+      const devs = DIMS
         .map((d) => ({ d, dev: deviation(d.key, latest.fingerprint[d.key], norm[d.key]) }))
-        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .filter((x): x is { d: MovementDimension; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
         .sort((a, b) => b.dev.abs - a.dev.abs);
       if (devs.length === 0) {
         verdict = is
@@ -293,13 +315,13 @@ export default function MatchMovementComparison() {
         { label: fmtDate(a.match_date, is), fp: a.fingerprint, barClass: "bg-indigo-500" },
         { label: fmtDate(b.match_date, is), fp: b.fingerprint, barClass: "bg-emerald-500" },
       ];
-      subSeries = [
+      if (!isGps) subSeries = [
         { label: fmtDate(a.match_date, is), sub: a.sub, barClass: "bg-indigo-500" },
         { label: fmtDate(b.match_date, is), sub: b.sub, barClass: "bg-emerald-500" },
       ];
-      const diffs = MOVEMENT_DIMENSIONS
+      const diffs = DIMS
         .map((d) => ({ d, dev: deviation(d.key, b.fingerprint[d.key], a.fingerprint[d.key]) }))
-        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .filter((x): x is { d: MovementDimension; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
         .sort((x, y) => y.dev.abs - x.dev.abs);
       if (diffs.length === 0) {
         verdict = is
@@ -317,21 +339,21 @@ export default function MatchMovementComparison() {
                       : `${fmtDate(a.match_date, is)}: ${a.minutes}′ · ${fmtDate(b.match_date, is)}: ${b.minutes}′`;
     }
   } else {
-    squadRows = data.rows.filter((r) => r.match_date === effSquadMatch).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0));
+    squadRows = data.rows.filter((r) => r.match_date === effSquadMatch).sort((a, b) => (b.fingerprint[primaryKey] ?? 0) - (a.fingerprint[primaryKey] ?? 0));
     const squadRowsB = squadMatchB && squadMatchB !== effSquadMatch ? data.rows.filter((r) => r.match_date === squadMatchB) : [];
 
     if (squadRowsB.length > 0 && squadRows.length > 0) {
       // Squad-vs-squad: compare the two matches by the squad's MEAN fingerprint,
       // then name the biggest individual movers (players who played both).
-      const avgA = meanFp(squadRows);
-      const avgB = meanFp(squadRowsB);
+      const avgA = meanFp(squadRows, DIMS);
+      const avgB = meanFp(squadRowsB, DIMS);
       series = [
         { label: fmtDate(effSquadMatch, is), fp: avgA, barClass: "bg-indigo-500" },
         { label: fmtDate(squadMatchB, is), fp: avgB, barClass: "bg-emerald-500" },
       ];
-      const diffs = MOVEMENT_DIMENSIONS
+      const diffs = DIMS
         .map((d) => ({ d, dev: deviation(d.key, avgA[d.key], avgB[d.key]) }))
-        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .filter((x): x is { d: MovementDimension; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
         .sort((x, y) => y.dev.abs - x.dev.abs);
       if (diffs.length === 0) {
         verdict = is
@@ -345,32 +367,34 @@ export default function MatchMovementComparison() {
         interpretation = (is ? "Í stuttu máli: " : "In plain terms: ") +
           diffs.slice(0, 2).map((x) => whyWord(x.d.key, x.dev.rel, is)).join(is ? "; og " : "; and ") + ".";
       }
-      // Biggest movers by change-of-direction among players who played both.
+      // Biggest movers on the primary movement dimension among players who played both.
       const bBy = new Map(squadRowsB.map((r) => [r.player_id, r]));
       const movers = squadRows
-        .map((r) => { const rb = bBy.get(r.player_id); const dev = rb ? deviation("codPerMin", r.fingerprint.codPerMin, rb.fingerprint.codPerMin) : null; return dev && isSignificant("codPerMin", dev.abs) ? { name: r.name.split(" ")[0], rel: dev.rel } : null; })
+        .map((r) => { const rb = bBy.get(r.player_id); const dev = rb ? deviation(primaryKey, r.fingerprint[primaryKey], rb.fingerprint[primaryKey]) : null; return dev && isSignificant(primaryKey, dev.abs) ? { name: r.name.split(" ")[0], rel: dev.rel } : null; })
         .filter((x): x is { name: string; rel: number } => x != null)
         .sort((a, b) => Math.abs(b.rel) - Math.abs(a.rel))
         .slice(0, 2);
-      facts = movers.map((m) => is
-        ? `${m.name}: ${dirWord("codPerMin", m.rel, is)} (${magWord("codPerMin", m.rel, is)})`
-        : `${m.name}: ${dirWord("codPerMin", m.rel, is)} (${magWord("codPerMin", m.rel, is)})`);
+      facts = movers.map((m) => `${m.name}: ${dirWord(primaryKey, m.rel, is)} (${magWord(primaryKey, m.rel, is)})`);
       confidence = is
         ? `${fmtDate(effSquadMatch, is)}: ${squadRows.length} leikm. · ${fmtDate(squadMatchB, is)}: ${squadRowsB.length} leikm.`
         : `${fmtDate(effSquadMatch, is)}: ${squadRows.length} players · ${fmtDate(squadMatchB, is)}: ${squadRowsB.length} players`;
     } else {
-      // Single-match squad snapshot (no comparison match picked).
-      const topCod = [...squadRows].filter((r) => r.fingerprint.codPerMin != null).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0))[0];
-      const topAccel = [...squadRows].filter((r) => r.fingerprint.accelDecelRatio != null).sort((a, b) => (b.fingerprint.accelDecelRatio ?? 0) - (a.fingerprint.accelDecelRatio ?? 0))[0];
+      // Single-match squad snapshot (no comparison match picked). Standouts are
+      // the two variant-appropriate movement dimensions.
+      const top1 = [...squadRows].filter((r) => r.fingerprint[primaryKey] != null).sort((a, b) => (b.fingerprint[primaryKey] ?? 0) - (a.fingerprint[primaryKey] ?? 0))[0];
+      const top2 = [...squadRows].filter((r) => r.fingerprint[secondaryKey] != null).sort((a, b) => (b.fingerprint[secondaryKey] ?? 0) - (a.fingerprint[secondaryKey] ?? 0))[0];
+      const dimName = (k: string) => (is ? dimByKey(k)!.is : dimByKey(k)!.en);
       if (squadRows.length > 0) {
         verdict = is
           ? `${squadRows.length} leikmenn í leiknum ${fmtDate(effSquadMatch, is)}.`
           : `${squadRows.length} players in the ${fmtDate(effSquadMatch, is)} match.`;
-        if (topCod) facts.push(is ? `Mest stefnubreyting: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/mín)` : `Most change-of-direction: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/min)`);
-        if (topAccel) facts.push(is ? `Hröðunar-þyngstur: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})` : `Most acceleration-biased: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})`);
-        interpretation = is
-          ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver var lipurðar-/hröðunar-/hemlunar-þyngstur. Veldu annan leik til að bera liðið saman."
-          : "In plain terms: compare how each player moved — who was the most agility-, acceleration- or braking-heavy. Pick a second match to compare the squad across games.";
+        if (top1) facts.push(`${is ? "Mest" : "Most"} ${dimName(primaryKey)}: ${top1.name.split(" ")[0]} (${fmtDim(primaryKey, top1.fingerprint[primaryKey])})`);
+        if (top2) facts.push(`${is ? "Hæst" : "Highest"} ${dimName(secondaryKey)}: ${top2.name.split(" ")[0]} (${fmtDim(secondaryKey, top2.fingerprint[secondaryKey])})`);
+        interpretation = isGps
+          ? (is ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver vann mest, tók flest átök og spretti. Veldu annan leik til að bera liðið saman."
+                : "In plain terms: compare how each player moved — who worked hardest, made the most efforts and sprinted most. Pick a second match to compare the squad across games.")
+          : (is ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver var lipurðar-/hröðunar-/hemlunar-þyngstur. Veldu annan leik til að bera liðið saman."
+                : "In plain terms: compare how each player moved — who was the most agility-, acceleration- or braking-heavy. Pick a second match to compare the squad across games.");
         confidence = is ? `${squadRows.length} leikmenn með ≥20′ í þessum leik` : `${squadRows.length} players with ≥20′ in this match`;
       }
     }
@@ -378,10 +402,10 @@ export default function MatchMovementComparison() {
 
   // Overlay radar — the two compared fingerprints as shapes on shared axes.
   const RADAR_COLORS = ["#4f46e5", "#10b981"];
-  const compareAxes = MOVEMENT_DIMENSIONS.map((d) => (is ? d.is : d.en));
+  const compareAxes = DIMS.map((d) => (is ? d.is : d.en));
   const compareSeries = series.map((s, i) => ({
     label: s.label,
-    values: MOVEMENT_DIMENSIONS.map((d) => s.fp[d.key]),
+    values: DIMS.map((d) => s.fp[d.key]),
     color: RADAR_COLORS[i] ?? "#64748b",
   }));
 
@@ -415,7 +439,7 @@ export default function MatchMovementComparison() {
       </div>
       <div>
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Eftir víddum" : "By dimension"}</div>
-        <DimBars series={series} is={is} />
+        <DimBars series={series} is={is} dims={DIMS} />
       </div>
     </div>
   );
@@ -425,8 +449,13 @@ export default function MatchMovementComparison() {
       <div className="border-b border-slate-100 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-slate-400">{is ? "Catapult · IMA driver" : "Catapult · IMA driver"}</div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">{isGps ? "Catapult · GPS movement" : "Catapult · IMA driver"}</div>
             <div className="text-sm font-semibold text-slate-900">{is ? "Hreyfi-samanburður (leikir)" : "Match Movement Comparison"}</div>
+            {isGps && (
+              <div className="mt-0.5 text-[10px] leading-snug text-amber-600">
+                {is ? "GPS-hreyfing (Lite) — ekki IMA driver. Byggt á álagi, átökum og spretti." : "GPS movement (Lite) — not the IMA driver. Based on load, efforts and sprinting."}
+              </div>
+            )}
           </div>
           <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
             {modeBtn("norm", is ? "vs venja" : "vs norm")}
@@ -533,11 +562,11 @@ export default function MatchMovementComparison() {
           ) : null}
         </div>
 
-        {/* IMA is new to many coaches — tap a dimension for a plain one-liner. */}
+        {/* The data is new to many coaches — tap a dimension for a plain one-liner. */}
         <div className="mb-4">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvað þýðir hvað? (IMA)" : "What does each mean? (IMA)"}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? `Hvað þýðir hvað? (${isGps ? "GPS" : "IMA"})` : `What does each mean? (${isGps ? "GPS" : "IMA"})`}</div>
           <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1.5">
-            {MOVEMENT_DIMENSIONS.map((d) => {
+            {DIMS.map((d) => {
               const active = openDef === d.key;
               return (
                 <button
@@ -555,7 +584,7 @@ export default function MatchMovementComparison() {
           </div>
           {openDef && (
             <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-snug text-slate-700">
-              <span className="font-semibold">{is ? MOVEMENT_DIMENSIONS.find((d) => d.key === openDef)!.is : MOVEMENT_DIMENSIONS.find((d) => d.key === openDef)!.en}</span>
+              <span className="font-semibold">{is ? dimByKey(openDef)!.is : dimByKey(openDef)!.en}</span>
               {" — "}
               {is ? DIM_DEFS[openDef].is : DIM_DEFS[openDef].en}
             </div>
@@ -581,7 +610,7 @@ export default function MatchMovementComparison() {
                   <tr className="text-left text-slate-500">
                     <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
                     <th className="py-1 pr-2 text-right">{is ? "Mín" : "Min"}</th>
-                    {MOVEMENT_DIMENSIONS.map((d) => <th key={d.key} className="py-1 pr-2 text-right">{is ? d.is : d.en}</th>)}
+                    {DIMS.map((d) => <th key={d.key} className="py-1 pr-2 text-right">{is ? d.is : d.en}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -589,7 +618,7 @@ export default function MatchMovementComparison() {
                     <tr key={r.player_id} className="border-t align-top">
                       <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}</td>
                       <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.minutes}′</td>
-                      {MOVEMENT_DIMENSIONS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
+                      {DIMS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
                     </tr>
                   ))}
                 </tbody>
@@ -611,13 +640,15 @@ export default function MatchMovementComparison() {
 
         <ShowDetails label={{ EN: "What the dimensions mean", IS: "Hvað víddirnar þýða" }}>
           <ul className="space-y-1 text-xs text-slate-600">
-            <li><b>{is ? "IMA álag / mín" : "IMA load / min"}</b> — {is ? "heildar hreyfi-vinnumagn á mínútu." : "overall inertial-movement work rate per minute."}</li>
-            <li><b>{is ? "Hröðun : Hemlun" : "Accel : Decel"}</b> — {is ? ">1 = hraðar meira; <1 = hemlar meira (McBurnie 2022)." : ">1 = accelerates more; <1 = brakes more (McBurnie 2022)."}</li>
-            <li><b>{is ? "Stefnubreytingar / mín" : "Change-of-direction / min"}</b> — {is ? "fjöldi stefnubreytinga á mínútu." : "change-of-direction events per minute."}</li>
-            <li><b>{is ? "Stefnubr. vinstri %" : "CoD left %"}</b> — {is ? "hlutfall vinstri vs hægri (ósamhverfa)." : "share of turns to the left vs right (asymmetry)."}</li>
-            <li><b>{is ? "Háákefðar skref / mín" : "High-cadence strides / min"}</b> — {is ? "sprett-tegund hlaups (bönd 6-8)." : "sprint-type running (bands 6-8)."}</li>
+            {DIMS.map((d) => (
+              <li key={d.key}><b>{is ? d.is : d.en}</b> — {is ? DIM_DEFS[d.key].is : DIM_DEFS[d.key].en}</li>
+            ))}
           </ul>
-          <p className="mt-2 text-[11px] text-slate-400">{is ? "Normalíserað per mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg norm), di Prampero 2015." : "Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}</p>
+          <p className="mt-2 text-[11px] text-slate-400">
+            {isGps
+              ? (is ? "Normalíserað per mínútu (hæsti hraði er toppgildi). GPS-hreyfing — ekki IMA driver. Reglur reikna — ekki AI." : "Normalised per minute (top speed is a peak). GPS movement — not the IMA driver. Rules compute — not AI.")
+              : (is ? "Normalíserað per mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg norm), di Prampero 2015." : "Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015.")}
+          </p>
         </ShowDetails>
       </div>
     </div>

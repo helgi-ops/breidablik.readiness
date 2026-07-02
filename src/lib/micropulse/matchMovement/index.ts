@@ -1,26 +1,26 @@
 /**
- * Match Movement (IMA) — the "driver" companion to GPS match comparison.
+ * Match Movement — the "driver" companion to GPS match comparison.
  *
  * GPS volume (distance, HSR) is usually similar match-to-match; what changes is
- * HOW a player moved — the inertial-movement signature (Niklas Virtanen: GPS =
- * engine, IMA = driver). This computes a per-player, per-match "movement
- * fingerprint" from Catapult IMA, normalised per minute so matches of different
- * length compare fairly. One engine feeds all three views:
+ * HOW a player moved (Niklas Virtanen: GPS = engine, IMA = driver). This computes
+ * a per-player, per-match "movement fingerprint", normalised per minute so
+ * matches of different length compare fairly. One engine feeds all three views:
  *   1. a player vs his own match-average (how was this match different?)
  *   2. match A vs match B (side by side)
  *   3. the whole squad in one match (who moved how)
  *
- * All five dimensions are movement TYPE, not volume:
- *   • totalPerMin       — overall IMA work rate
- *   • accelDecelRatio   — accelerate-heavy (>1) vs brake-heavy (<1)
- *   • codPerMin         — change-of-direction volume
- *   • codLeftPct        — directional balance (L/R asymmetry)
- *   • hiCadencePerMin   — high-cadence (sprint-type) stride rate
- * Citations: McBurnie 2022 (decel/CoD), di Prampero 2015, Buchheit 2014 norms.
+ * Two variants, chosen from what the club's data actually contains:
+ *   • ima  (Pro/ELITE) — the true inertial driver: accel:decel balance, change of
+ *     direction, L/R asymmetry, stride cadence. Citations: McBurnie 2022, di
+ *     Prampero 2015, Buchheit 2014 norms.
+ *   • gps  (Core/Lite) — Lite units capture no IMA, so the fingerprint is built
+ *     from GPS movement signals (player load, accel/decel efforts, high-speed +
+ *     sprint running, top speed). A GPS movement read, not the inertial driver.
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands } from "./types";
+import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands, MovementVariant } from "./types";
+import { EMPTY_SUB, movementDimensions } from "./types";
 
 // Re-export the client-safe types + dimension metadata from one place. The UI
 // imports directly from ./types to avoid pulling this server module in.
@@ -29,6 +29,7 @@ export * from "./types";
 type RawRow = {
   player_id: string;
   date: string;
+  // IMA (Pro/ELITE)
   ima_total: number | null;
   ima_accel: number | null;
   ima_decel: number | null;
@@ -36,13 +37,22 @@ type RawRow = {
   ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null;
   ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
   ima_band1_decel_count: number | null; ima_band2_decel_count: number | null; ima_band3_decel_count: number | null;
+  // GPS (Core/Lite fallback)
+  total_player_load: number | null;
+  accel_decel_efforts: number | null;
+  high_speed_distance: number | null;
+  velocity_band6_total_distance: number | null;
+  sprint_distance: number | null;
+  max_velocity: number | null;
 };
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const ratio = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 const perMin = (v: number, min: number): number | null => (min > 0 ? v / min : null);
 
-function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
+const EMPTY_RAW: MatchMovementRow["raw"] = { imaTotal: null, codTotal: null, codLeft: null, codRight: null, hiCadence: null };
+
+function imaFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
   const codLeft = n(row.ima_cod_left_high) + n(row.ima_cod_left_medium) + n(row.ima_cod_left_low);
   const codRight = n(row.ima_cod_right_high) + n(row.ima_cod_right_medium) + n(row.ima_cod_right_low);
   const codTotal = codLeft + codRight;
@@ -62,7 +72,6 @@ function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint;
       codRight: codTotal > 0 ? codRight : null,
       hiCadence: hiCadence || null,
     },
-    // Raw per-match counts for the S&C drill-down (band 3 / high = injury-relevant).
     sub: {
       decelLow: row.ima_band1_decel_count ?? null,
       decelMed: row.ima_band2_decel_count ?? null,
@@ -77,15 +86,47 @@ function fingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint;
   };
 }
 
-const IMA_COLS =
+/** GPS movement fingerprint (Core/Lite) — no IMA, so no sub-band depth. */
+function gpsFingerprintOf(row: RawRow, minutes: number): { fp: MovementFingerprint; raw: MatchMovementRow["raw"]; sub: SubBands } {
+  const load = n(row.total_player_load);
+  const efforts = n(row.accel_decel_efforts);
+  const hsr = n(row.high_speed_distance);
+  const sprint = n(row.velocity_band6_total_distance) || n(row.sprint_distance);
+  const topRaw = n(row.max_velocity);
+  const top = topRaw > 0 && topRaw <= 45 ? topRaw : 0; // guard GPS-glitch spikes
+  return {
+    fp: {
+      workPerMin: load > 0 ? perMin(load, minutes) : null,
+      effortsPerMin: efforts > 0 ? perMin(efforts, minutes) : null,
+      hsrPerMin: hsr > 0 ? perMin(hsr, minutes) : null,
+      sprintPerMin: sprint > 0 ? perMin(sprint, minutes) : null,
+      topSpeed: top > 0 ? top : null,
+    },
+    raw: EMPTY_RAW,
+    sub: EMPTY_SUB,
+  };
+}
+
+/** True when a GPS row carries at least one usable movement signal. */
+function gpsHasData(row: RawRow): boolean {
+  return n(row.total_player_load) > 0 || n(row.accel_decel_efforts) > 0 || n(row.high_speed_distance) > 0 ||
+    n(row.velocity_band6_total_distance) > 0 || n(row.sprint_distance) > 0 || n(row.max_velocity) > 0;
+}
+
+const LOAD_COLS =
   "player_id, date, ima_total, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
-  "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count";
+  "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
+  "total_player_load, accel_decel_efforts, high_speed_distance, " +
+  "velocity_band6_total_distance, sprint_distance, max_velocity";
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
+
+const emptyResult = (teamId: string): MatchMovementResult =>
+  ({ teamId, variant: "ima", matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] });
 
 export async function computeMatchMovement(args: { teamId: string; sinceDays?: number }): Promise<MatchMovementResult> {
   const { teamId, sinceDays = 400 } = args;
@@ -95,7 +136,7 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const players = ((pl ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>);
   const nameById = new Map(players.map((p) => [p.id, { name: p.full_name ?? "—", position: p.position ?? null }]));
   const playerIds = players.map((p) => p.id);
-  if (playerIds.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] };
+  if (playerIds.length === 0) return emptyResult(teamId);
 
   const since = (() => {
     const d = new Date();
@@ -118,28 +159,46 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     matchDateSet.add(r.match_date);
   }
   const matchDates = Array.from(matchDateSet).sort();
-  if (matchDates.length === 0) return { teamId, matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] };
+  if (matchDates.length === 0) return emptyResult(teamId);
 
-  // IMA rows for those match dates.
+  // External-load rows for those match dates.
   const { data: extData } = await sb
     .from("player_external_load_daily")
-    .select(IMA_COLS)
+    .select(LOAD_COLS)
     .in("player_id", playerIds)
     .in("date", matchDates);
   const ext = ((extData ?? []) as unknown as RawRow[]);
 
+  // Only rows that are actual match appearances (minutes resolved).
+  const appearances = ext.filter((row) => minutesByKey.has(`${row.player_id}|${row.date}`));
+
+  // Variant: prefer the true IMA driver when the club broadly captures it; fall
+  // back to the GPS movement read for Core/Lite. "Broadly" = at least half of
+  // match appearances carry IMA (mixed-tier teams tip to whichever dominates).
+  const imaCount = appearances.filter((row) => n(row.ima_total) > 0).length;
+  const gpsCount = appearances.filter(gpsHasData).length;
+  const variant: MovementVariant =
+    imaCount > 0 && imaCount >= Math.ceil(appearances.length * 0.5) ? "ima" : gpsCount > 0 ? "gps" : "ima";
+
   const rows: MatchMovementRow[] = [];
   for (const row of ext) {
     const minutes = minutesByKey.get(`${row.player_id}|${row.date}`);
-    if (minutes == null) continue; // has IMA that day but wasn't a match appearance
-    if (row.ima_total == null) continue; // no IMA captured
+    if (minutes == null) continue; // has a row that day but wasn't a match appearance
     const meta = nameById.get(row.player_id);
     if (!meta) continue;
-    const { fp, raw, sub } = fingerprintOf(row, minutes);
-    rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
+    if (variant === "ima") {
+      if (row.ima_total == null) continue; // no IMA captured
+      const { fp, raw, sub } = imaFingerprintOf(row, minutes);
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
+    } else {
+      if (!gpsHasData(row)) continue; // no GPS movement signal captured
+      const { fp, raw, sub } = gpsFingerprintOf(row, minutes);
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
+    }
   }
 
   // Per-player averages (the "norm") — mean of each dimension across their matches.
+  const dimKeys = movementDimensions(variant).map((d) => d.key);
   const byPlayer = new Map<string, MatchMovementRow[]>();
   for (const r of rows) {
     const arr = byPlayer.get(r.player_id) ?? [];
@@ -151,17 +210,11 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const playerList: MatchMovementResult["players"] = [];
   const SUB_KEYS: Array<keyof SubBands> = ["decelLow", "decelMed", "decelHigh", "stride6", "stride7", "stride8", "codHigh", "codMed", "codLow"];
   for (const [pid, prs] of byPlayer) {
-    const mean = (key: keyof MovementFingerprint): number | null => {
+    const mean = (key: string): number | null => {
       const vals = prs.map((r) => r.fingerprint[key]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
     };
-    playerAverages[pid] = {
-      totalPerMin: mean("totalPerMin"),
-      accelDecelRatio: mean("accelDecelRatio"),
-      codPerMin: mean("codPerMin"),
-      codLeftPct: mean("codLeftPct"),
-      hiCadencePerMin: mean("hiCadencePerMin"),
-    };
+    playerAverages[pid] = Object.fromEntries(dimKeys.map((k) => [k, mean(k)])) as MovementFingerprint;
     const subMean = (key: keyof SubBands): number | null => {
       const vals = prs.map((r) => r.sub[key]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
@@ -172,5 +225,5 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   }
   playerList.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { teamId, matchDates, rows, playerAverages, subAverages, players: playerList };
+  return { teamId, variant, matchDates, rows, playerAverages, subAverages, players: playerList };
 }
