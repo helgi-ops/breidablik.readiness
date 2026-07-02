@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
+import { ProfileRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 import {
   MOVEMENT_DIMENSIONS,
   SUB_BAND_GROUPS,
@@ -186,6 +187,22 @@ export default function MatchMovementComparison() {
   const effMatchB = matchB || playerRows[1]?.match_date || "";
   const effSquadMatch = squadMatch || (data.matchDates[data.matchDates.length - 1] ?? "");
   const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
+
+  // Movement-shape radar: the selected player's squad percentile on each
+  // dimension (from his match-average). Spikes out = above the squad, dips in =
+  // below — the intuitive "how he moves" shape. Only when a player is selected.
+  const radarMetrics: RadarMetric[] =
+    mode === "squad" || !data.playerAverages[effPlayerId]
+      ? []
+      : MOVEMENT_DIMENSIONS.map((d) => {
+          const mine = data.playerAverages[effPlayerId][d.key];
+          const all = Object.values(data.playerAverages).map((fp) => fp[d.key]).filter((v): v is number => v != null);
+          let percentile = 50;
+          if (mine != null && all.length >= 2) {
+            percentile = Math.round((all.filter((v) => v < mine).length / (all.length - 1)) * 100);
+          }
+          return { label: is ? d.is : d.en, percentile, valueLabel: fmtDim(d.key, mine) };
+        });
 
   // ── Verdict + series per mode ───────────────────────────────────────────────
   let verdict = "";          // layer 0 — the WHAT (metric read)
@@ -385,7 +402,18 @@ export default function MatchMovementComparison() {
             </table>
           </div>
         ) : series.length > 0 ? (
-          <DimBars series={series} is={is} />
+          <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+            {radarMetrics.length >= 3 && (
+              <div>
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-prófíll vs lið" : "Movement profile vs squad"}</div>
+                <ProfileRadar metrics={radarMetrics} maxHeight={260} />
+              </div>
+            )}
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Eftir víddum" : "By dimension"}</div>
+              <DimBars series={series} is={is} />
+            </div>
+          </div>
         ) : (
           <div className="text-sm text-slate-400">{is ? "Veldu leik(i)." : "Pick a match / matches."}</div>
         )}
