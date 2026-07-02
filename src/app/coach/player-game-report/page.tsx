@@ -398,6 +398,25 @@ export default function PlayerGameReportPage() {
                         <ChartZoom title={IS ? "Líkamlegur prófíll (IMA) vs lið" : "Physical profile (IMA) vs squad"} large={<ProfileRadar metrics={charts.radarDriver} maxHeight={560} />}>
                           <ProfileRadar metrics={charts.radarDriver} />
                         </ChartZoom>
+                        {/* IMA is new to many coaches — plain glossary of the Driver axes. */}
+                        <details className="mt-2 group">
+                          <summary className="cursor-pointer list-none text-[11px] font-medium text-violet-700 marker:content-none">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">i</span>
+                              {IS ? "Hvað þýða þessar breytur?" : "What do these mean?"}
+                              <span className="text-slate-400 group-open:hidden">▸</span>
+                              <span className="hidden text-slate-400 group-open:inline">▾</span>
+                            </span>
+                          </summary>
+                          <ul className="mt-1.5 space-y-1 text-[11px] leading-snug text-slate-600">
+                            <li><b>Acc</b> — {IS ? "snöggar hröðunir: hversu oft hann sprengir sig upp í meiri hraða (alvöru spretti, ekki jafnt hlaup)." : "sharp accelerations: how often he explodes up to a higher speed (genuine bursts, not steady running)."}</li>
+                            <li><b>Dec</b> — {IS ? "kröftug hemlun: hversu oft hann hemlar snöggt — hemlunar-álagið sem jafnt hlaup felur." : "hard decelerations: how often he brakes sharply — the braking load steady running hides."}</li>
+                            <li><b>CoD</b> — {IS ? "stefnubreytingar: beygjur og snúningar. Liprari, meira snúnings-leikur sést hér." : "changes of direction: cuts and turns. A more agile, twisty game shows here."}</li>
+                            <li><b>{IS ? "Stökk" : "Jumps"}</b> — {IS ? "stökk: frákast og lending (skallar, návígi)." : "jumps: take-offs and landings (headers, aerial duels)."}</li>
+                            <li><b>B5–B8</b> — {IS ? "skref-tíðni bönd: háákefðar hlaup skipt eftir styrk (B8 = sprett-tíðni) — IMA-mæling á hröðu hlaupi, eins og GPS hraða-svæði." : "stride-rate bands: high-cadence running split by intensity (B8 = sprint-cadence) — the IMA read on fast running, like GPS speed zones."}</li>
+                          </ul>
+                          <p className="mt-1.5 text-[10px] text-slate-400">{IS ? "Miðað við liðið. McBurnie 2022, Buchheit 2014." : "Compared to the squad. McBurnie 2022, Buchheit 2014."}</p>
+                        </details>
                       </div>
                     )}
                     <div className={`space-y-3 rounded-lg border border-slate-200 bg-white p-3 ${charts.radarDriver.length >= 3 ? "md:col-span-2" : ""}`}>

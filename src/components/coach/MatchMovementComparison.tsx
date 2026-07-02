@@ -30,6 +30,21 @@ import {
 
 type Mode = "norm" | "ab" | "squad";
 
+// Plain, coach-facing definition of each IMA dimension — IMA is new to many
+// coaches, so this says what the axis IS in one line, no S&C jargon.
+const DIM_DEFS: Record<DimensionKey, { en: string; is: string }> = {
+  totalPerMin:     { en: "The overall amount of movement work per minute — accelerations, decelerations and turns combined.",
+                     is: "Heildar hreyfi-vinna á mínútu — hröðun, hemlun og snúningar samanlagt." },
+  accelDecelRatio: { en: "The balance of speeding up vs slowing down. Above 1 = more accelerating (front-foot); below 1 = more braking (reactive).",
+                     is: "Jafnvægi milli hröðunar og hemlunar. Yfir 1 = meiri hröðun (sóknar); undir 1 = meiri hemlun (viðbragð)." },
+  codPerMin:       { en: "How often the player changes direction per minute — the agility demand of his game.",
+                     is: "Hversu oft leikmaðurinn skiptir um stefnu á mínútu — lipurðar-krafan í leik hans." },
+  codLeftPct:      { en: "Share of turns to the left vs right. Near 50% is balanced; a big skew flags a one-sided pattern.",
+                     is: "Hlutfall vinstri vs hægri snúninga. Um 50% er jafnt; mikil skekkja bendir á einhliða mynstur." },
+  hiCadencePerMin: { en: "Fast, sprint-type running per minute (stride bands 6-8) — the IMA read on high-speed running.",
+                     is: "Hratt sprett-hlaup á mínútu (skref-bönd 6-8) — IMA-mæling á hröðu hlaupi." },
+};
+
 function fmtDate(iso: string, is: boolean): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" });
 }
@@ -156,6 +171,7 @@ export default function MatchMovementComparison() {
   const [matchB, setMatchB] = useState<string>("");
   const [squadMatch, setSquadMatch] = useState<string>("");
   const [squadMatchB, setSquadMatchB] = useState<string>(""); // "" = no comparison
+  const [openDef, setOpenDef] = useState<DimensionKey | null>(null); // which dimension explainer is open
 
   useEffect(() => {
     let alive = true;
@@ -454,6 +470,35 @@ export default function MatchMovementComparison() {
             )}
           </div>
         ) : null}
+
+        {/* IMA is new to many coaches — tap a dimension for a plain one-liner. */}
+        <div className="mb-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvað þýðir hvað? (IMA)" : "What does each mean? (IMA)"}</div>
+          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1.5">
+            {MOVEMENT_DIMENSIONS.map((d) => {
+              const active = openDef === d.key;
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  onClick={() => setOpenDef(active ? null : d.key)}
+                  aria-expanded={active}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${active ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
+                >
+                  {is ? d.is : d.en}
+                  <span className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold ${active ? "bg-indigo-500 text-white" : "bg-slate-200 text-slate-500"}`}>i</span>
+                </button>
+              );
+            })}
+          </div>
+          {openDef && (
+            <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-snug text-slate-700">
+              <span className="font-semibold">{is ? MOVEMENT_DIMENSIONS.find((d) => d.key === openDef)!.is : MOVEMENT_DIMENSIONS.find((d) => d.key === openDef)!.en}</span>
+              {" — "}
+              {is ? DIM_DEFS[openDef].is : DIM_DEFS[openDef].en}
+            </div>
+          )}
+        </div>
 
         {/* Breakdown */}
         {mode === "squad" ? (
