@@ -55,6 +55,16 @@ function magWord(key: DimensionKey, rel: number, is: boolean): string {
   return d.kind === "pct" ? `${m} ${is ? "stig" : "pts"}` : `${m}%`;
 }
 
+/** Squad mean of each dimension across a match's rows (nulls skipped). */
+function meanFp(rows: MatchMovementRow[]): MovementFingerprint {
+  const out = {} as MovementFingerprint;
+  for (const d of MOVEMENT_DIMENSIONS) {
+    const vals = rows.map((r) => r.fingerprint[d.key]).filter((v): v is number => v != null);
+    out[d.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+  return out;
+}
+
 type Series = { label: string; fp: MovementFingerprint; barClass: string };
 type SubSeries = { label: string; sub: SubBands; barClass: string };
 
@@ -145,6 +155,7 @@ export default function MatchMovementComparison() {
   const [matchA, setMatchA] = useState<string>("");
   const [matchB, setMatchB] = useState<string>("");
   const [squadMatch, setSquadMatch] = useState<string>("");
+  const [squadMatchB, setSquadMatchB] = useState<string>(""); // "" = no comparison
 
   useEffect(() => {
     let alive = true;
@@ -265,19 +276,61 @@ export default function MatchMovementComparison() {
     }
   } else {
     squadRows = data.rows.filter((r) => r.match_date === effSquadMatch).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0));
-    // Standouts: highest CoD/min and most accel-biased.
-    const topCod = [...squadRows].filter((r) => r.fingerprint.codPerMin != null).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0))[0];
-    const topAccel = [...squadRows].filter((r) => r.fingerprint.accelDecelRatio != null).sort((a, b) => (b.fingerprint.accelDecelRatio ?? 0) - (a.fingerprint.accelDecelRatio ?? 0))[0];
-    if (squadRows.length > 0) {
-      verdict = is
-        ? `${squadRows.length} leikmenn í leiknum ${fmtDate(effSquadMatch, is)}.`
-        : `${squadRows.length} players in the ${fmtDate(effSquadMatch, is)} match.`;
-      if (topCod) facts.push(is ? `Mest stefnubreyting: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/mín)` : `Most change-of-direction: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/min)`);
-      if (topAccel) facts.push(is ? `Hröðunar-þyngstur: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})` : `Most acceleration-biased: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})`);
-      interpretation = is
-        ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver var lipurðar-/hröðunar-/hemlunar-þyngstur."
-        : "In plain terms: compare how each player moved — who was the most agility-, acceleration- or braking-heavy.";
-      confidence = is ? `${squadRows.length} leikmenn með ≥20′ í þessum leik` : `${squadRows.length} players with ≥20′ in this match`;
+    const squadRowsB = squadMatchB && squadMatchB !== effSquadMatch ? data.rows.filter((r) => r.match_date === squadMatchB) : [];
+
+    if (squadRowsB.length > 0 && squadRows.length > 0) {
+      // Squad-vs-squad: compare the two matches by the squad's MEAN fingerprint,
+      // then name the biggest individual movers (players who played both).
+      const avgA = meanFp(squadRows);
+      const avgB = meanFp(squadRowsB);
+      series = [
+        { label: fmtDate(effSquadMatch, is), fp: avgA, barClass: "bg-indigo-500" },
+        { label: fmtDate(squadMatchB, is), fp: avgB, barClass: "bg-emerald-500" },
+      ];
+      const diffs = MOVEMENT_DIMENSIONS
+        .map((d) => ({ d, dev: deviation(d.key, avgA[d.key], avgB[d.key]) }))
+        .filter((x): x is { d: (typeof MOVEMENT_DIMENSIONS)[number]; dev: { rel: number; abs: number } } => x.dev != null && isSignificant(x.d.key, x.dev.abs))
+        .sort((x, y) => y.dev.abs - x.dev.abs);
+      if (diffs.length === 0) {
+        verdict = is
+          ? `Liðið hreyfði sig svipað í báðum leikjum (${fmtDate(effSquadMatch, is)} vs ${fmtDate(squadMatchB, is)}).`
+          : `The squad moved similarly in both matches (${fmtDate(effSquadMatch, is)} vs ${fmtDate(squadMatchB, is)}).`;
+      } else {
+        const parts = diffs.slice(0, 2).map((x) => `${dirWord(x.d.key, x.dev.rel, is)} (${magWord(x.d.key, x.dev.rel, is)})`);
+        verdict = is
+          ? `Liðið í heild — ${fmtDate(effSquadMatch, is)} vs ${fmtDate(squadMatchB, is)}: ${parts.join(", ")}.`
+          : `The squad overall — ${fmtDate(effSquadMatch, is)} vs ${fmtDate(squadMatchB, is)}: ${parts.join(", ")}.`;
+        interpretation = (is ? "Í stuttu máli: " : "In plain terms: ") +
+          diffs.slice(0, 2).map((x) => whyWord(x.d.key, x.dev.rel, is)).join(is ? "; og " : "; and ") + ".";
+      }
+      // Biggest movers by change-of-direction among players who played both.
+      const bBy = new Map(squadRowsB.map((r) => [r.player_id, r]));
+      const movers = squadRows
+        .map((r) => { const rb = bBy.get(r.player_id); const dev = rb ? deviation("codPerMin", r.fingerprint.codPerMin, rb.fingerprint.codPerMin) : null; return dev && isSignificant("codPerMin", dev.abs) ? { name: r.name.split(" ")[0], rel: dev.rel } : null; })
+        .filter((x): x is { name: string; rel: number } => x != null)
+        .sort((a, b) => Math.abs(b.rel) - Math.abs(a.rel))
+        .slice(0, 2);
+      facts = movers.map((m) => is
+        ? `${m.name}: ${dirWord("codPerMin", m.rel, is)} (${magWord("codPerMin", m.rel, is)})`
+        : `${m.name}: ${dirWord("codPerMin", m.rel, is)} (${magWord("codPerMin", m.rel, is)})`);
+      confidence = is
+        ? `${fmtDate(effSquadMatch, is)}: ${squadRows.length} leikm. · ${fmtDate(squadMatchB, is)}: ${squadRowsB.length} leikm.`
+        : `${fmtDate(effSquadMatch, is)}: ${squadRows.length} players · ${fmtDate(squadMatchB, is)}: ${squadRowsB.length} players`;
+    } else {
+      // Single-match squad snapshot (no comparison match picked).
+      const topCod = [...squadRows].filter((r) => r.fingerprint.codPerMin != null).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0))[0];
+      const topAccel = [...squadRows].filter((r) => r.fingerprint.accelDecelRatio != null).sort((a, b) => (b.fingerprint.accelDecelRatio ?? 0) - (a.fingerprint.accelDecelRatio ?? 0))[0];
+      if (squadRows.length > 0) {
+        verdict = is
+          ? `${squadRows.length} leikmenn í leiknum ${fmtDate(effSquadMatch, is)}.`
+          : `${squadRows.length} players in the ${fmtDate(effSquadMatch, is)} match.`;
+        if (topCod) facts.push(is ? `Mest stefnubreyting: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/mín)` : `Most change-of-direction: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/min)`);
+        if (topAccel) facts.push(is ? `Hröðunar-þyngstur: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})` : `Most acceleration-biased: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})`);
+        interpretation = is
+          ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver var lipurðar-/hröðunar-/hemlunar-þyngstur. Veldu annan leik til að bera liðið saman."
+          : "In plain terms: compare how each player moved — who was the most agility-, acceleration- or braking-heavy. Pick a second match to compare the squad across games.";
+        confidence = is ? `${squadRows.length} leikmenn með ≥20′ í þessum leik` : `${squadRows.length} players with ≥20′ in this match`;
+      }
     }
   }
 
@@ -299,6 +352,29 @@ export default function MatchMovementComparison() {
     </button>
   );
   const selectCls = "h-8 rounded-md border border-slate-300 bg-white px-2 text-xs";
+
+  // The two-shape comparison (radar + dimension bars) — shared by norm / ab, and
+  // by squad when a comparison match is picked (then the shapes are squad means).
+  const comparisonView = (
+    <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+      <div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-form (radar)" : "Movement shape (radar)"}</div>
+        <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
+          {compareSeries.map((s) => (
+            <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
+              <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
+            </span>
+          ))}
+        </div>
+        <p className="mt-1 text-[10px] leading-snug text-slate-400">{is ? "Hvert ás normalíserað að stærra gildinu — sýnir form-muninn milli leikjanna." : "Each axis normalised to the larger value — shows the shape difference between the matches."}</p>
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Eftir víddum" : "By dimension"}</div>
+        <DimBars series={series} is={is} />
+      </div>
+    </div>
+  );
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -340,9 +416,16 @@ export default function MatchMovementComparison() {
             </>
           )}
           {mode === "squad" && (
-            <select value={effSquadMatch} onChange={(e) => setSquadMatch(e.target.value)} className={selectCls}>
-              {[...data.matchDates].reverse().map((d) => <option key={d} value={d}>{fmtDate(d, is)}</option>)}
-            </select>
+            <>
+              <select value={effSquadMatch} onChange={(e) => setSquadMatch(e.target.value)} className={selectCls}>
+                {[...data.matchDates].reverse().map((d) => <option key={d} value={d}>{fmtDate(d, is)}</option>)}
+              </select>
+              <span className="text-xs text-slate-400">{is ? "vs" : "vs"}</span>
+              <select value={squadMatchB} onChange={(e) => setSquadMatchB(e.target.value)} className={selectCls}>
+                <option value="">{is ? "— (einn leikur)" : "— (single match)"}</option>
+                {[...data.matchDates].reverse().filter((d) => d !== effSquadMatch).map((d) => <option key={d} value={d}>{fmtDate(d, is)}</option>)}
+              </select>
+            </>
           )}
         </div>
       </div>
@@ -374,45 +457,40 @@ export default function MatchMovementComparison() {
 
         {/* Breakdown */}
         {mode === "squad" ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-slate-500">
-                  <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
-                  <th className="py-1 pr-2 text-right">{is ? "Mín" : "Min"}</th>
-                  {MOVEMENT_DIMENSIONS.map((d) => <th key={d.key} className="py-1 pr-2 text-right">{is ? d.is : d.en}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {squadRows.map((r) => (
-                  <tr key={r.player_id} className="border-t align-top">
-                    <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.minutes}′</td>
-                    {MOVEMENT_DIMENSIONS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : series.length > 0 ? (
-          <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-            <div>
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-form (radar)" : "Movement shape (radar)"}</div>
-              <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
-              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
-                {compareSeries.map((s) => (
-                  <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
-                    <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
-                  </span>
-                ))}
+          <>
+            {/* Squad-vs-squad shape comparison, shown only when a second match is picked. */}
+            {series.length > 0 && (
+              <div className="mb-6 border-b border-slate-100 pb-6">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Liðið í heild — meðal-hreyfing" : "Squad overall — average movement"}</div>
+                {comparisonView}
               </div>
-              <p className="mt-1 text-[10px] leading-snug text-slate-400">{is ? "Hvert ás normalíserað að stærra gildinu — sýnir form-muninn milli leikjanna." : "Each axis normalised to the larger value — shows the shape difference between the matches."}</p>
+            )}
+            <div className="overflow-x-auto">
+              {series.length > 0 && (
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? `Leikmenn — ${fmtDate(effSquadMatch, is)}` : `Players — ${fmtDate(effSquadMatch, is)}`}</div>
+              )}
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-500">
+                    <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
+                    <th className="py-1 pr-2 text-right">{is ? "Mín" : "Min"}</th>
+                    {MOVEMENT_DIMENSIONS.map((d) => <th key={d.key} className="py-1 pr-2 text-right">{is ? d.is : d.en}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {squadRows.map((r) => (
+                    <tr key={r.player_id} className="border-t align-top">
+                      <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.minutes}′</td>
+                      {MOVEMENT_DIMENSIONS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Eftir víddum" : "By dimension"}</div>
-              <DimBars series={series} is={is} />
-            </div>
-          </div>
+          </>
+        ) : series.length > 0 ? (
+          comparisonView
         ) : (
           <div className="text-sm text-slate-400">{is ? "Veldu leik(i)." : "Pick a match / matches."}</div>
         )}
