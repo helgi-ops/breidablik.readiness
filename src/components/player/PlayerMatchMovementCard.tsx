@@ -22,13 +22,25 @@ type Resp = {
   matchCount: number;
 };
 
-// Player-friendly labels (no S&C jargon) for each movement dimension.
-const PLAYER_LABELS: Record<DimensionKey, { en: string; is: string; quality?: boolean }> = {
-  totalPerMin:     { en: "Work rate",   is: "Vinnumagn",   quality: true },
-  accelDecelRatio: { en: "Explosive",   is: "Sprengikraftur", quality: true },
-  codPerMin:       { en: "Agility",     is: "Lipurð",      quality: true },
-  codLeftPct:      { en: "L / R balance", is: "V / H jafnvægi" },
-  hiCadencePerMin: { en: "Sprinting",   is: "Sprettur",    quality: true },
+// Player-friendly labels (no S&C jargon) for each movement dimension. `info` is
+// a plain one-liner explaining what the axis tells the PLAYER — most players
+// don't know IMA, so it never uses the term.
+const PLAYER_LABELS: Record<DimensionKey, { en: string; is: string; quality?: boolean; infoEN: string; infoIS: string }> = {
+  totalPerMin:     { en: "Work rate",   is: "Vinnumagn",   quality: true,
+    infoEN: "How much total movement you pack into each minute — starts, stops, turns and runs combined. Higher = a busier, more active game.",
+    infoIS: "Hversu mikla hreyfingu þú kemur fyrir á hverri mínútu — spretti, stopp, snúninga og hlaup samanlagt. Hærra = virkari leikur." },
+  accelDecelRatio: { en: "Explosive",   is: "Sprengikraftur", quality: true,
+    infoEN: "Whether you speed up more than you slow down. Higher = more explosive, front-foot bursts; lower = more braking and stopping.",
+    infoIS: "Hvort þú hraðar meira en þú hemlar. Hærra = meiri sprengikraftur og sóknar-hreyfing; lægra = meiri hemlun og stopp." },
+  codPerMin:       { en: "Agility",     is: "Lipurð",      quality: true,
+    infoEN: "How often you change direction — cuts, turns and twists. Higher = a more agile, twisty game.",
+    infoIS: "Hversu oft þú skiptir um stefnu — beygjur og snúninga. Hærra = liprari, meira snúnings-leikur." },
+  codLeftPct:      { en: "L / R balance", is: "V / H jafnvægi",
+    infoEN: "Whether you turn more to your left or your right. Around 50% is even both ways — handy for spotting a one-sided habit.",
+    infoIS: "Hvort þú snýrð meira til vinstri eða hægri. Um 50% er jafnt á báða vegu — gott til að sjá ef þú ert einhliða." },
+  hiCadencePerMin: { en: "Sprinting",   is: "Sprettur",    quality: true,
+    infoEN: "How much fast, sprint-type running you do per minute. Higher = more high-speed running in your game.",
+    infoIS: "Hversu mikið hratt sprett-hlaup þú tekur á mínútu. Hærra = meira hraðahlaup í leiknum þínum." },
 };
 const RADAR_ORDER: DimensionKey[] = ["totalPerMin", "accelDecelRatio", "codPerMin", "hiCadencePerMin", "codLeftPct"];
 
@@ -39,6 +51,7 @@ export default function PlayerMatchMovementCard() {
   const [loading, setLoading] = useState(true);
   const [selA, setSelA] = useState<string>("");        // a match date
   const [selB, setSelB] = useState<string>("usual");   // a match date or "usual"
+  const [openInfo, setOpenInfo] = useState<DimensionKey | null>(null); // which axis explainer is open
 
   useEffect(() => {
     let alive = true;
@@ -118,6 +131,35 @@ export default function PlayerMatchMovementCard() {
           ? "Toppar út = yfir liðs-miðgildi, inn = undir. Þetta lýsir hreyfi-stíl þínum — ekki gott/slæmt."
           : "Spikes out = above the squad median, dips in = below. This describes your movement style — not good/bad."}
       </p>
+
+      {/* What each axis means — tap the (i) for a plain explanation (touch-friendly). */}
+      <div className="mt-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvað þýðir hvað?" : "What does each mean?"}</div>
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
+          {RADAR_ORDER.map((k) => {
+            const active = openInfo === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setOpenInfo(active ? null : k)}
+                aria-expanded={active}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${active ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
+              >
+                {is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en}
+                <span className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold ${active ? "bg-indigo-500 text-white" : "bg-slate-200 text-slate-500"}`}>i</span>
+              </button>
+            );
+          })}
+        </div>
+        {openInfo && (
+          <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-snug text-slate-700">
+            <span className="font-semibold">{is ? PLAYER_LABELS[openInfo].is : PLAYER_LABELS[openInfo].en}</span>
+            {" — "}
+            {is ? PLAYER_LABELS[openInfo].infoIS : PLAYER_LABELS[openInfo].infoEN}
+          </div>
+        )}
+      </div>
 
       {data.matches.length >= 1 && (
         <div className="mt-4 border-t border-slate-100 pt-3">
