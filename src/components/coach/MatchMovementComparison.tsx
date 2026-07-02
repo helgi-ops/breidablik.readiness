@@ -18,6 +18,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import {
   MOVEMENT_DIMENSIONS,
   fmtDim,
+  whyWord,
   type DimensionKey,
   type MovementFingerprint,
   type MatchMovementResult,
@@ -140,10 +141,15 @@ export default function MatchMovementComparison() {
   const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
 
   // ── Verdict + series per mode ───────────────────────────────────────────────
-  let verdict = "";
+  let verdict = "";          // layer 0 — the WHAT (metric read)
+  let interpretation = "";   // layer 1 — the "what it means" for the coach
+  let confidence = "";       // the data behind it (matches / minutes)
   let facts: string[] = [];
   let series: Series[] = [];
   let squadRows: MatchMovementRow[] = [];
+
+  const nMatches = data.players.find((p) => p.player_id === effPlayerId)?.matches ?? 0;
+  const thinNorm = (is ? " · venja enn að myndast" : " · norm still forming");
 
   if (mode === "norm") {
     const latest = playerRows.find((r) => r.match_date === effMatchA) ?? playerRows[0];
@@ -166,8 +172,12 @@ export default function MatchMovementComparison() {
         verdict = is
           ? `${playerName} hreyfði sig öðruvísi í leiknum ${fmtDate(latest.match_date, is)} — ${parts.join(", ")} en venjulega.`
           : `${playerName} moved differently in the ${fmtDate(latest.match_date, is)} match — ${parts.join(", ")} than usual.`;
+        interpretation = (is ? "Í stuttu máli: " : "In plain terms: ") +
+          devs.slice(0, 2).map((x) => whyWord(x.d.key, x.dev.rel, is)).join(is ? "; og " : "; and ") + ".";
         facts = devs.slice(2, 4).map((x) => `${is ? x.d.is : x.d.en}: ${dirWord(x.d.key, x.dev.rel, is)} (${magWord(x.d.key, x.dev.rel, is)})`);
       }
+      confidence = (is ? `Byggt á ${nMatches} leikjum hans · þessi leikur ${latest.minutes}′` : `Based on his ${nMatches} matches · this game ${latest.minutes}′`)
+        + (nMatches < 3 ? thinNorm : "");
     }
   } else if (mode === "ab") {
     const a = playerRows.find((r) => r.match_date === effMatchA);
@@ -190,7 +200,11 @@ export default function MatchMovementComparison() {
         verdict = is
           ? `Í leiknum ${fmtDate(b.match_date, is)} vs ${fmtDate(a.match_date, is)}: ${playerName} með ${parts.join(", ")}.`
           : `In the ${fmtDate(b.match_date, is)} vs ${fmtDate(a.match_date, is)} match: ${playerName} showed ${parts.join(", ")}.`;
+        interpretation = (is ? `Í ${fmtDate(b.match_date, is)}-leiknum: ` : `In the ${fmtDate(b.match_date, is)} match: `) +
+          diffs.slice(0, 2).map((x) => whyWord(x.d.key, x.dev.rel, is)).join(is ? "; og " : "; and ") + ".";
       }
+      confidence = is ? `${fmtDate(a.match_date, is)}: ${a.minutes}′ · ${fmtDate(b.match_date, is)}: ${b.minutes}′`
+                      : `${fmtDate(a.match_date, is)}: ${a.minutes}′ · ${fmtDate(b.match_date, is)}: ${b.minutes}′`;
     }
   } else {
     squadRows = data.rows.filter((r) => r.match_date === effSquadMatch).sort((a, b) => (b.fingerprint.codPerMin ?? 0) - (a.fingerprint.codPerMin ?? 0));
@@ -203,6 +217,10 @@ export default function MatchMovementComparison() {
         : `${squadRows.length} players in the ${fmtDate(effSquadMatch, is)} match.`;
       if (topCod) facts.push(is ? `Mest stefnubreyting: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/mín)` : `Most change-of-direction: ${topCod.name.split(" ")[0]} (${fmtDim("codPerMin", topCod.fingerprint.codPerMin)}/min)`);
       if (topAccel) facts.push(is ? `Hröðunar-þyngstur: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})` : `Most acceleration-biased: ${topAccel.name.split(" ")[0]} (${fmtDim("accelDecelRatio", topAccel.fingerprint.accelDecelRatio)})`);
+      interpretation = is
+        ? "Í stuttu máli: berðu saman hvernig hver leikmaður hreyfði sig — hver var lipurðar-/hröðunar-/hemlunar-þyngstur."
+        : "In plain terms: compare how each player moved — who was the most agility-, acceleration- or braking-heavy.";
+      confidence = is ? `${squadRows.length} leikmenn með ≥20′ í þessum leik` : `${squadRows.length} players with ≥20′ in this match`;
     }
   }
 
@@ -264,14 +282,26 @@ export default function MatchMovementComparison() {
       </div>
 
       <div className="p-4">
-        {/* Verdict + facts (layers 0-1) */}
+        {/* Verdict (0) → interpretation (1) → facts → confidence + provenance. */}
         {verdict ? (
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <p className="text-sm font-medium text-slate-800">{verdict}</p>
+            {interpretation && <p className="mt-1 text-[13px] leading-snug text-slate-600">{interpretation}</p>}
             {facts.length > 0 && (
               <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
                 {facts.map((f, i) => <li key={i}>· {f}</li>)}
               </ul>
+            )}
+            {confidence && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 border-t border-slate-200 pt-1.5 text-[11px] text-slate-400">
+                <span title={is ? "Þekja gagna — hversu traust dómurinn er" : "Data coverage — how much to trust the verdict"}>
+                  {is ? "Vissa" : "Confidence"}: {confidence}
+                </span>
+                <span className="text-slate-300">·</span>
+                <span title={is ? "Deterministic útreikningur úr Catapult IMA — ekkert AI" : "Deterministic calculation from Catapult IMA — no AI"}>
+                  {is ? "Reglur reikna, ekki AI" : "Rules compute — not AI"}
+                </span>
+              </div>
             )}
           </div>
         ) : null}

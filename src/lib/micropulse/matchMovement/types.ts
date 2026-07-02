@@ -23,22 +23,40 @@ export const MOVEMENT_DIMENSIONS: Array<{
   en: string;
   is: string;
   kind: "rate" | "ratio" | "pct";
-  /** Plain-language name of the "more" direction (for verdicts). */
+  /** Plain-language name of the "more" / "less" direction (the metric read). */
   moreEN: string; moreIS: string;
-  /** Plain-language name of the "less" direction. */
   lessEN: string; lessIS: string;
+  /** What that direction MEANS for a coach (the interpretation, layer 1). */
+  whyMoreEN: string; whyMoreIS: string;
+  whyLessEN: string; whyLessIS: string;
 }> = [
   { key: "totalPerMin",     en: "IMA load / min",           is: "IMA álag / mín",       kind: "rate",
-    moreEN: "more movement load", moreIS: "meira hreyfiálag", lessEN: "less movement load", lessIS: "minna hreyfiálag" },
+    moreEN: "more movement load", moreIS: "meira hreyfiálag", lessEN: "less movement load", lessIS: "minna hreyfiálag",
+    whyMoreEN: "a higher overall movement workload", whyMoreIS: "hærra heildar hreyfiálag",
+    whyLessEN: "a lower overall movement workload", whyLessIS: "lægra heildar hreyfiálag" },
   { key: "accelDecelRatio", en: "Accel : Decel",            is: "Hröðun : Hemlun",      kind: "ratio",
-    moreEN: "more acceleration-biased", moreIS: "hröðunar-þyngri", lessEN: "more braking-biased", lessIS: "hemlunar-þyngri" },
+    moreEN: "more acceleration-biased", moreIS: "hröðunar-þyngri", lessEN: "more braking-biased", lessIS: "hemlunar-þyngri",
+    whyMoreEN: "he accelerated far more than he braked — more explosive, front-foot movement", whyMoreIS: "hann hraðaði mun meira en hann hemlaði — sprengikraftur, framfótar-leikur",
+    whyLessEN: "he braked far more than he accelerated — more reactive, stop-start movement", whyLessIS: "hann hemlaði mun meira en hann hraðaði — viðbragð, stopp-og-fara" },
   { key: "codPerMin",       en: "Change-of-direction / min", is: "Stefnubreytingar / mín", kind: "rate",
-    moreEN: "more change-of-direction", moreIS: "meiri stefnubreyting", lessEN: "less change-of-direction", lessIS: "minni stefnubreyting" },
+    moreEN: "more change-of-direction", moreIS: "meiri stefnubreyting", lessEN: "less change-of-direction", lessIS: "minni stefnubreyting",
+    whyMoreEN: "a more agility-heavy game — lots of turns", whyMoreIS: "lipurðar-þyngri leikur — margar stefnubreytingar",
+    whyLessEN: "a more linear game — fewer turns", whyLessIS: "línulegri leikur — færri stefnubreytingar" },
   { key: "codLeftPct",      en: "CoD left %",               is: "Stefnubr. vinstri %",  kind: "pct",
-    moreEN: "more left-side turns", moreIS: "meira vinstri", lessEN: "more right-side turns", lessIS: "meira hægri" },
+    moreEN: "more left-side turns", moreIS: "meira vinstri", lessEN: "more right-side turns", lessIS: "meira hægri",
+    whyMoreEN: "he turned to his left more (his side/role or the opponent)", whyMoreIS: "hann beygði meira til vinstri (hlið/hlutverk eða andstæðingur)",
+    whyLessEN: "he turned to his right more (his side/role or the opponent)", whyLessIS: "hann beygði meira til hægri (hlið/hlutverk eða andstæðingur)" },
   { key: "hiCadencePerMin", en: "High-cadence strides / min", is: "Háákefðar skref / mín", kind: "rate",
-    moreEN: "more high-cadence running", moreIS: "meira háákefðar hlaup", lessEN: "less high-cadence running", lessIS: "minna háákefðar hlaup" },
+    moreEN: "more high-cadence running", moreIS: "meira háákefðar hlaup", lessEN: "less high-cadence running", lessIS: "minna háákefðar hlaup",
+    whyMoreEN: "more sprint-type running", whyMoreIS: "meira sprett-tegundar hlaup",
+    whyLessEN: "less sprint-type running", whyLessIS: "minna sprett-tegundar hlaup" },
 ];
+
+/** The coaching interpretation of a signed deviation on a dimension (layer 1). */
+export function whyWord(key: DimensionKey, rel: number, is: boolean): string {
+  const d = MOVEMENT_DIMENSIONS.find((x) => x.key === key)!;
+  return rel > 0 ? (is ? d.whyMoreIS : d.whyMoreEN) : is ? d.whyLessIS : d.whyLessEN;
+}
 
 export type MatchMovementRow = {
   player_id: string;
