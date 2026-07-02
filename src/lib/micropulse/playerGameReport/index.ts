@@ -217,18 +217,23 @@ export async function computePlayerGameReport(
   // lets Core/Lite teams that only upload GPS get the report WITHOUT entering
   // minutes by hand — match DATES still come from match_schedule (Week-Setup);
   // the GPS feed just supplies how long each player was on the pitch.
+  // Resolve minutes. Priority: manual entry, else a sane session_duration (some
+  // clubs, e.g. Afturelding, store it in SECONDS — normalise), else the exact
+  // duration implied by player_load_per_minute (some clubs, e.g. HK, send that
+  // but not session_duration). Short appearances are kept; only implausibly long
+  // values (glitches / un-normalisable seconds) are dropped.
+  const MAX_MIN = 200;
   const resolveMinutes = (pid: string, date: string, load: Record<string, unknown> | undefined): number => {
     const man = manualMin.get(`${pid}|${date}`);
     if (man) return man.dnp ? 0 : (man.minutes || 0);
     if (!load) return 0;
-    const sd = num(load.session_duration_minutes);
-    if (sd > 0) return sd;
-    // Fallback for clubs (e.g. HK) that send player_load_per_minute but not
-    // session_duration: minutes = total load ÷ load-per-minute. Capped to guard
-    // glitchy per-minute values.
+    let sdm = num(load.session_duration_minutes);
+    if (sdm > MAX_MIN && sdm / 60 > 0) sdm = sdm / 60; // stored as seconds
+    if (sdm > 0 && sdm <= MAX_MIN) return sdm;
     const plpm = num(load.player_load_per_minute);
     const pl = num(load.total_player_load);
-    return plpm > 0 && pl > 0 ? Math.min(200, pl / plpm) : 0;
+    const derived = plpm > 0 && pl > 0 ? pl / plpm : 0;
+    return derived > 0 && derived <= MAX_MIN ? derived : 0;
   };
 
   const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();

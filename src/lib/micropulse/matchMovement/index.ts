@@ -127,6 +127,8 @@ const LOAD_COLS =
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
+/** Upper bound for a plausible match/session duration (guards seconds-vs-minutes + glitches). */
+const MAX_MATCH_MINUTES = 200;
 
 const emptyResult = (teamId: string): MatchMovementResult =>
   ({ teamId, variant: "ima", matchDates: [], rows: [], playerAverages: {}, subAverages: {}, players: [] });
@@ -177,17 +179,21 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   // Resolve a player's minutes for a match date: a manual entry if present (and
   // not a DNP), otherwise the Catapult session duration. Keep only appearances
   // with enough minutes for the per-minute rates to be stable.
+  // Resolve plausible match minutes. Priority: a manual entry, else a sane
+  // session_duration (some clubs, e.g. Afturelding, store it in SECONDS —
+  // normalise), else the exact duration implied by player_load_per_minute (some
+  // clubs, e.g. HK, send that but not session_duration). Anything outside a sane
+  // match window is treated as unusable so a bad row can't distort per-min rates.
   const resolveMinutes = (row: RawRow): number => {
     const man = manualMin.get(`${row.player_id}|${row.date}`);
     if (man) return man.dnp ? 0 : man.minutes || 0;
-    const sd = n(row.session_duration_minutes);
-    if (sd > 0) return sd;
-    // Some clubs (e.g. HK) don't populate session_duration but do send
-    // player_load_per_minute — minutes = total load ÷ load-per-minute (the exact
-    // session duration Catapult computed). Capped to guard glitchy per-min values.
+    let sdm = n(row.session_duration_minutes);
+    if (sdm > MAX_MATCH_MINUTES && sdm / 60 >= MIN_MINUTES) sdm = sdm / 60; // stored as seconds
+    if (sdm >= MIN_MINUTES && sdm <= MAX_MATCH_MINUTES) return sdm;
     const plpm = n(row.player_load_per_minute);
     const load = n(row.total_player_load);
-    return plpm > 0 && load > 0 ? Math.min(200, load / plpm) : 0;
+    const derived = plpm > 0 && load > 0 ? load / plpm : 0;
+    return derived >= MIN_MINUTES && derived <= MAX_MATCH_MINUTES ? derived : 0;
   };
   const appearances = ext
     .map((row) => ({ row, minutes: Math.round(resolveMinutes(row)) }))
