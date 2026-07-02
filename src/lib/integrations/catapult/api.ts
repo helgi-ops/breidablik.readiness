@@ -909,6 +909,79 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
   return mergedPayload;
 }
 
+// ── Diagnostic-only: explicit IMA jump-count probe ────────────────────────────
+// Jumps are NOT in any explicitly-requested parameter list (see CATAPULT_IMA_
+// PARAMETERS — accel/decel/CoD/impacts only). They only arrive via the base
+// call's `requested_only:false`, i.e. the org's DEFAULT Reporting_Parameters
+// group. This probe explicitly requests the jump parameters so we can tell
+// whether a team's OpenField actually COMPUTES jumps (present here, but missing
+// from its default group) vs never captures them at all. Used ONLY by the debug
+// route — it does not feed ingestion / normalize / storage.
+export const CATAPULT_JUMP_PARAMETERS = [
+  "IMA Jump Count Low Band",
+  "IMA Jump Count Med Band",
+  "IMA Jump Count Medium Band",
+  "IMA Jump Count High Band",
+  "Total Jumps",
+];
+
+export type JumpProbeResult = {
+  parameter: string;
+  success: boolean;
+  error: string | null;
+  returnedKeys: string[];
+  nonZeroAthletes: number;
+  maxValue: number;
+  sampleValues: Record<string, unknown>;
+};
+
+export async function probeJumpParameters(activityId: string): Promise<JumpProbeResult[]> {
+  const results: JumpProbeResult[] = [];
+  for (const paramName of CATAPULT_JUMP_PARAMETERS) {
+    try {
+      const payload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      const rows = extractStatsRows(payload);
+      const keySet = new Set<string>();
+      for (const row of rows.slice(0, 3)) for (const k of Object.keys(row)) keySet.add(k);
+      const jumpKeys = Array.from(keySet).filter((k) => /jump/i.test(k)).sort();
+      let nonZeroAthletes = 0;
+      let maxValue = 0;
+      for (const row of rows) {
+        let best = 0;
+        for (const k of jumpKeys) {
+          const raw = row[k];
+          const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+          if (v != null && Number.isFinite(v) && v > best) best = v;
+        }
+        if (best > 0) {
+          nonZeroAthletes += 1;
+          if (best > maxValue) maxValue = best;
+        }
+      }
+      const firstRow = rows[0] ?? {};
+      const sampleValues: Record<string, unknown> = {};
+      for (const k of jumpKeys) sampleValues[k] = firstRow[k];
+      results.push({ parameter: paramName, success: true, error: null, returnedKeys: jumpKeys, nonZeroAthletes, maxValue, sampleValues });
+    } catch (error) {
+      results.push({
+        parameter: paramName,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown jump-probe error",
+        returnedKeys: [],
+        nonZeroAthletes: 0,
+        maxValue: 0,
+        sampleValues: {},
+      });
+    }
+  }
+  return results;
+}
+
 export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   basePayload: unknown;
   imaOnlyPayload: unknown | null;

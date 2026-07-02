@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
-import { fetchActivitiesForDate, fetchActivityStatsDetailed } from "@/lib/integrations/catapult/api";
+import {
+  fetchActivitiesForDate,
+  fetchActivityStatsDetailed,
+  getConfigForTeam,
+  setActiveCatapultConfig,
+  probeJumpParameters,
+} from "@/lib/integrations/catapult/api";
 import {
   extractInterestingMetricKeys,
   flattenMetricRecord,
@@ -96,9 +102,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  // DIAGNOSTIC ONLY — clearly-marked, auth-gated per-team override. When ?teamId=
+  // is passed, resolve that team's Catapult creds (same source the backfill uses)
+  // and route all fetches to its org instead of the global env. Reset in finally.
+  let teamOverride: string | null = null;
   try {
     const url = new URL(request.url);
     const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+    const teamId = url.searchParams.get("teamId");
+    if (teamId) {
+      const cfg = await getConfigForTeam(teamId);
+      if (!cfg) {
+        return NextResponse.json({ ok: false, error: `No Catapult config for team ${teamId}` }, { status: 404 });
+      }
+      setActiveCatapultConfig(cfg);
+      teamOverride = teamId;
+    }
 
     const activities = await fetchActivitiesForDate(date);
     if (!activities.length) {
@@ -310,9 +329,29 @@ export async function GET(request: Request) {
       /(avg|average|peak|max|mean).*(metabolic|meta|power)/i,
     );
 
+    // ── JUMP DIAGNOSTIC (the point of the ?teamId probe) ──────────────────
+    // 1) Are jumps already in this org's DEFAULT Reporting_Parameters group?
+    //    The base call uses requested_only:false, so anything here is in the
+    //    default group. Empty ⇒ jumps are NOT in the default group.
+    const jumpDefaultGroupKeys = dumpKeysWithSampleValues(rowsMerged, allRawKeys, /jump/i);
+    // 2) Explicit probe — request the jump parameters directly (requested_only
+    //    :true). Nonzero here (while the default group is empty) ⇒ the org
+    //    COMPUTES jumps and the fix is to request them explicitly (our side).
+    //    All-zero/absent here (while control accel > 0) ⇒ org isn't capturing
+    //    jumps at all (their OpenField side).
+    const jumpProbe = await probeJumpParameters(activity.id);
+    // 3) Control: accel must be > 0 to prove the fetch itself works for this team.
+    const controlAccelHigh = imaAggregates.imaAccelHigh;
+
     return NextResponse.json({
       ok: true,
       date,
+      teamTargeted: teamOverride,
+      // ── Jump diagnosis (read these three first) ──────────────────────────
+      jumpProbe,
+      jumpDefaultGroupKeys,
+      controlAccelHigh,
+      normalizedJumps: normalizedFirst?.jumps ?? null,
       activity: { id: activity.id, name: activity.name },
       athleteCount: rowsMerged.length,
       baseRowCount: rowsBase.length,
@@ -420,5 +459,8 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Debug failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  } finally {
+    // Always clear the diagnostic per-team override so it can't leak into other requests.
+    if (teamOverride) setActiveCatapultConfig(null);
   }
 }
