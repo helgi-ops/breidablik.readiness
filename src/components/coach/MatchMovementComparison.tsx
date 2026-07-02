@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { ProfileRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import { CompareRadar } from "@/components/coach/PlayerGameReportCharts";
 import {
   MOVEMENT_DIMENSIONS,
   SUB_BAND_GROUPS,
@@ -188,22 +188,6 @@ export default function MatchMovementComparison() {
   const effSquadMatch = squadMatch || (data.matchDates[data.matchDates.length - 1] ?? "");
   const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
 
-  // Movement-shape radar: the selected player's squad percentile on each
-  // dimension (from his match-average). Spikes out = above the squad, dips in =
-  // below — the intuitive "how he moves" shape. Only when a player is selected.
-  const radarMetrics: RadarMetric[] =
-    mode === "squad" || !data.playerAverages[effPlayerId]
-      ? []
-      : MOVEMENT_DIMENSIONS.map((d) => {
-          const mine = data.playerAverages[effPlayerId][d.key];
-          const all = Object.values(data.playerAverages).map((fp) => fp[d.key]).filter((v): v is number => v != null);
-          let percentile = 50;
-          if (mine != null && all.length >= 2) {
-            percentile = Math.round((all.filter((v) => v < mine).length / (all.length - 1)) * 100);
-          }
-          return { label: is ? d.is : d.en, percentile, valueLabel: fmtDim(d.key, mine) };
-        });
-
   // ── Verdict + series per mode ───────────────────────────────────────────────
   let verdict = "";          // layer 0 — the WHAT (metric read)
   let interpretation = "";   // layer 1 — the "what it means" for the coach
@@ -296,6 +280,15 @@ export default function MatchMovementComparison() {
       confidence = is ? `${squadRows.length} leikmenn með ≥20′ í þessum leik` : `${squadRows.length} players with ≥20′ in this match`;
     }
   }
+
+  // Overlay radar — the two compared fingerprints as shapes on shared axes.
+  const RADAR_COLORS = ["#4f46e5", "#10b981"];
+  const compareAxes = MOVEMENT_DIMENSIONS.map((d) => (is ? d.is : d.en));
+  const compareSeries = series.map((s, i) => ({
+    label: s.label,
+    values: MOVEMENT_DIMENSIONS.map((d) => s.fp[d.key]),
+    color: RADAR_COLORS[i] ?? "#64748b",
+  }));
 
   const modeBtn = (m: Mode, label: string) => (
     <button
@@ -403,12 +396,18 @@ export default function MatchMovementComparison() {
           </div>
         ) : series.length > 0 ? (
           <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-            {radarMetrics.length >= 3 && (
-              <div>
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-prófíll vs lið" : "Movement profile vs squad"}</div>
-                <ProfileRadar metrics={radarMetrics} maxHeight={260} />
+            <div>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-form (radar)" : "Movement shape (radar)"}</div>
+              <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
+                {compareSeries.map((s) => (
+                  <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
+                    <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
+                  </span>
+                ))}
               </div>
-            )}
+              <p className="mt-1 text-[10px] leading-snug text-slate-400">{is ? "Hvert ás normalíserað að stærra gildinu — sýnir form-muninn milli leikjanna." : "Each axis normalised to the larger value — shows the shape difference between the matches."}</p>
+            </div>
             <div>
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Eftir víddum" : "By dimension"}</div>
               <DimBars series={series} is={is} />

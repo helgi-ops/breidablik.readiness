@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { ProfileRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, CompareRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 import { fmtDim, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
 
 type Resp = {
@@ -72,6 +72,17 @@ export default function PlayerMatchMovementCard() {
     .sort((a, b) => (data.percentiles[b] ?? 0) - (data.percentiles[a] ?? 0))[0];
   const standoutPct = standout ? data.percentiles[standout] : 0;
 
+  // "Last match vs your usual" — two shapes overlaid so the player can compare
+  // his most recent game to his own norm.
+  const lastMatch = data.matches[0];
+  const compareAxes = RADAR_ORDER.map((k) => (is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en));
+  const compareSeries = lastMatch && data.average
+    ? [
+        { label: is ? "Síðasti leikur" : "Last match", values: RADAR_ORDER.map((k) => lastMatch.fingerprint[k]), color: "#4f46e5" },
+        { label: is ? "Venjan þín" : "Your usual", values: RADAR_ORDER.map((k) => data.average![k]), color: "#94a3b8" },
+      ]
+    : [];
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500">{is ? "Hreyfing" : "Movement"}</div>
@@ -98,6 +109,20 @@ export default function PlayerMatchMovementCard() {
           ? "Toppar út = yfir liðs-miðgildi, inn = undir. Þetta lýsir hreyfi-stíl þínum — ekki gott/slæmt."
           : "Spikes out = above the squad median, dips in = below. This describes your movement style — not good/bad."}
       </p>
+
+      {compareSeries.length === 2 && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Síðasti leikur vs venjan þín" : "Last match vs your usual"}</div>
+          <div className="mt-1"><CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} /></div>
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
+            {compareSeries.map((s) => (
+              <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
+                <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

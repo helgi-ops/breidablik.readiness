@@ -157,6 +157,44 @@ export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetri
 }
 
 /**
+ * Overlay radar — compares 2+ fingerprints as polygons on shared axes. Each
+ * axis is normalised to the max across the series (so the bigger value sits near
+ * the edge), which shows the SHAPE difference between two matches. Legend is
+ * rendered by the caller. Used by Match Movement (coach + player).
+ */
+export function CompareRadar({ axes, series, maxHeight = 300 }: {
+  axes: string[];
+  series: Array<{ label: string; values: Array<number | null>; color: string }>;
+  maxHeight?: number;
+}) {
+  const N = axes.length;
+  if (N < 3 || series.length === 0) return null;
+  const W = 340, H = 300, cx = W / 2, cy = H / 2 + 4, R = 100;
+  const angle = (i: number) => (-90 + (i * 360) / N) * (Math.PI / 180);
+  const axisMax = axes.map((_, i) => Math.max(1, ...series.map((s) => s.values[i] ?? 0)) * 1.1);
+  const pt = (i: number, v: number | null) => {
+    const r = v == null ? 0 : (Math.max(0, v) / axisMax[i]) * R;
+    return [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))] as const;
+  };
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight }}>
+      {[25, 50, 75, 100].map((ring) => {
+        const poly = axes.map((_, i) => { const r = (ring / 100) * R; return `${cx + r * Math.cos(angle(i))},${cy + r * Math.sin(angle(i))}`; }).join(" ");
+        return <polygon key={ring} points={poly} fill="none" stroke="#e2e8f0" strokeWidth={1} />;
+      })}
+      {axes.map((_, i) => { const r = R; return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke="#e2e8f0" strokeWidth={1} />; })}
+      {series.map((s) => (
+        <polygon key={s.label} points={axes.map((_, i) => pt(i, s.values[i]).join(",")).join(" ")} fill={s.color} fillOpacity={0.14} stroke={s.color} strokeWidth={2} />
+      ))}
+      {axes.map((label, i) => {
+        const r = R * 1.16;
+        return <text key={i} x={cx + r * Math.cos(angle(i))} y={cy + r * Math.sin(angle(i))} fontSize={8.5} fill="#64748b" textAnchor="middle" dominantBaseline="middle">{label}</text>;
+      })}
+    </svg>
+  );
+}
+
+/**
  * Per-match vertical bars with a dashed season-average line. Value labels sit
  * above each bar; short opponent labels below. Bars below average are muted.
  */
