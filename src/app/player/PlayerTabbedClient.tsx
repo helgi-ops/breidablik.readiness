@@ -27,6 +27,7 @@ import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
 import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
 import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
+import PlayerLastMatchHeroCard from "@/components/player/PlayerLastMatchHeroCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -666,6 +667,59 @@ function WeeklyDigestPortal({ activeTab, lang, hideWellness }: { activeTab: DevP
   if (!mountNode || activeTab !== "today") return null;
 
   return createPortal(<WeeklyDigestCard lang={lang} hideWellness={hideWellness} />, mountNode);
+}
+
+// ── "Your last match" hero card portal ───────────────────────────────────────
+//
+// One compact, celebratory glance at the player's most recent GPS match (top
+// speed hero + one sentence + season-best pill), mounted near the top of the
+// Today content. "See full report →" switches to the existing gamereport tab —
+// the deep detail is not stacked on Home. Self-hides when there's no GPS match.
+
+function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onSeeReport: () => void }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+
+      // Anchor just after the weekly digest (falling back to the ATE command
+      // card, then the header) so the hero sits high on Today, above the session.
+      const digestSlot = document.getElementById("dev-weekly-digest-card-slot");
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = digestSlot ?? ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) {
+        if (attempts < 25) window.setTimeout(place, 300);
+        return;
+      }
+
+      let slot = document.getElementById("dev-last-match-hero-slot");
+      if (!slot) {
+        slot = document.createElement("div");
+        slot.id = "dev-last-match-hero-slot";
+        slot.className = "mt-3";
+      }
+
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
+      }
+
+      setMountNode((prev) => (prev === slot ? prev : slot));
+    };
+
+    place();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!mountNode || activeTab !== "today") return null;
+
+  return createPortal(<PlayerLastMatchHeroCard lang={lang} onSeeReport={onSeeReport} />, mountNode);
 }
 
 // ── PWA detection ────────────────────────────────────────────────────────────
@@ -1361,6 +1415,9 @@ export default function DevPlayerClient() {
           (being portal-mounted) sometimes failed to appear. One reliable
           inline explanation surface, mirroring the coach Daily Briefing. */}
       <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} hideWellness={hideWellness} />
+      {/* "Your last match" hero — engagement glance on Home; deep report is one
+          tap away on the gamereport tab (progressive disclosure). */}
+      <LastMatchHeroPortal activeTab={activeTab} lang={lang as "IS" | "EN"} onSeeReport={() => setTab("gamereport")} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)
