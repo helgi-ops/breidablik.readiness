@@ -856,6 +856,7 @@ const PWA_PRIMARY_TABS = [
 
 const PWA_SECONDARY_TABS = [
   { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport, minTier: "free"  as const, href: null as string | null },
+  { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
@@ -1215,7 +1216,8 @@ export default function DevPlayerClient() {
       const showChat = activeTab === "chat";
       const showPrivacy = activeTab === "privacy";
       const showGameReport = activeTab === "gamereport";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport;
+      const showMovement = activeTab === "movement";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport || showMovement;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -1433,6 +1435,10 @@ export default function DevPlayerClient() {
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
                   <PlayerGameReportCard lang={lang as "IS" | "EN"} />
+                </div>
+              )}
+              {activeTab === "movement" && (
+                <div className="mx-auto max-w-lg pb-24">
                   <PlayerMatchMovementCard />
                 </div>
               )}
