@@ -52,6 +52,9 @@ export default function PlayerMatchMovementCard() {
   const [selA, setSelA] = useState<string>("");        // a match date
   const [selB, setSelB] = useState<string>("usual");   // a match date or "usual"
   const [openInfo, setOpenInfo] = useState<DimensionKey | null>(null); // which axis explainer is open
+  const [ai, setAi] = useState<{ sig: string; text: string } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +107,30 @@ export default function PlayerMatchMovementCard() {
         { label: labelFor(effB), values: RADAR_ORDER.map((k) => fpB[k]), color: "#94a3b8" },
       ]
     : [];
+
+  // AI explanation — self-scoped; the server re-computes the numbers from just
+  // the picked comparison. Tag with a signature so a stale narrative never shows
+  // after the player changes the pickers.
+  const aiSig = `${effA}|${effB}`;
+  const genAi = async () => {
+    setAiBusy(true); setAiErr(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch("/api/player/match-movement/narrative", {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ lang: is ? "IS" : "EN", selA: effA, selB: effB }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setAiErr(j.error ?? "Failed"); return; }
+      setAi({ sig: aiSig, text: j.narrative as string });
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -194,6 +221,39 @@ export default function PlayerMatchMovementCard() {
           ) : (
             <p className="mt-2 text-xs text-slate-400">{is ? "Veldu tvennt ólíkt til að bera saman." : "Pick two different things to compare."}</p>
           )}
+
+          {/* AI explanation — plain, written to you from your own numbers. */}
+          <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+                <span>✨</span>{is ? "AI útskýring" : "AI explanation"}
+              </div>
+              {(!ai || ai.sig !== aiSig) && (
+                <button
+                  type="button"
+                  onClick={genAi}
+                  disabled={aiBusy}
+                  className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {aiBusy ? (is ? "Skrifa…" : "Writing…") : (is ? "Útskýra" : "Explain")}
+                </button>
+              )}
+            </div>
+            {aiErr && <div className="mt-2 text-xs text-red-600">{aiErr}</div>}
+            {ai && ai.sig === aiSig ? (
+              <>
+                <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{ai.text}</p>
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-indigo-700">AI</span>
+                  {is ? "Skrifað úr þínum eigin tölum. AI útskýrir — reglur ráða." : "Written from your own numbers. AI explains — the numbers decide."}
+                </div>
+              </>
+            ) : !aiBusy && !aiErr ? (
+              <p className="mt-1 text-xs text-indigo-700/70">
+                {is ? "Fáðu útskýringu á venjulegu máli á hvernig þú hreyfðir þig." : "Get a plain-language explanation of how you moved."}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

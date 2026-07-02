@@ -172,6 +172,9 @@ export default function MatchMovementComparison() {
   const [squadMatch, setSquadMatch] = useState<string>("");
   const [squadMatchB, setSquadMatchB] = useState<string>(""); // "" = no comparison
   const [openDef, setOpenDef] = useState<DimensionKey | null>(null); // which dimension explainer is open
+  const [ai, setAi] = useState<{ sig: string; text: string } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -214,6 +217,29 @@ export default function MatchMovementComparison() {
   const effMatchB = matchB || playerRows[1]?.match_date || "";
   const effSquadMatch = squadMatch || (data.matchDates[data.matchDates.length - 1] ?? "");
   const playerName = data.players.find((p) => p.player_id === effPlayerId)?.name ?? "—";
+
+  // AI explanation — the selection signature so a stale narrative never lingers
+  // after the coach changes what's shown (only display `ai` if it matches).
+  const aiSig = `${mode}|${effPlayerId}|${effMatchA}|${effMatchB}|${effSquadMatch}|${squadMatchB}`;
+  const genAi = async () => {
+    setAiBusy(true); setAiErr(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch("/api/coach/match-movement/narrative", {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ lang, mode, playerId: effPlayerId, matchA: effMatchA, matchB: effMatchB, squadMatch: effSquadMatch, squadMatchB }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setAiErr(j.error ?? "Failed"); return; }
+      setAi({ sig: aiSig, text: j.narrative as string });
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   // ── Verdict + series per mode ───────────────────────────────────────────────
   let verdict = "";          // layer 0 — the WHAT (metric read)
@@ -472,6 +498,40 @@ export default function MatchMovementComparison() {
             )}
           </div>
         ) : null}
+
+        {/* AI explanation — detailed, labelled AI, written from the re-computed
+            Catapult numbers (the client sends only the selection, not figures). */}
+        <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-indigo-900">
+              <span>✨</span>{is ? "AI útskýring" : "AI explanation"}
+            </div>
+            {(!ai || ai.sig !== aiSig) && (
+              <button
+                type="button"
+                onClick={genAi}
+                disabled={aiBusy}
+                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {aiBusy ? (is ? "Skrifa…" : "Writing…") : (is ? "Útskýra" : "Explain")}
+              </button>
+            )}
+          </div>
+          {aiErr && <div className="mt-2 text-xs text-red-600">{aiErr}</div>}
+          {ai && ai.sig === aiSig ? (
+            <>
+              <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{ai.text}</p>
+              <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-indigo-700">AI</span>
+                {is ? "Skrifað úr endurreiknuðum Catapult-tölum. AI útskýrir — reglur ráða." : "Written from the re-computed Catapult numbers. AI explains — rules decide."}
+              </div>
+            </>
+          ) : !aiBusy && !aiErr ? (
+            <p className="mt-1 text-xs text-indigo-700/70">
+              {is ? "Fáðu ítarlega útskýringu á þessum samanburði, skrifaða úr tölunum." : "Get a detailed explanation of this comparison, written from the numbers."}
+            </p>
+          ) : null}
+        </div>
 
         {/* IMA is new to many coaches — tap a dimension for a plain one-liner. */}
         <div className="mb-4">
