@@ -37,6 +37,8 @@ export default function PlayerMatchMovementCard() {
   const is = lang === "IS";
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selA, setSelA] = useState<string>("");        // a match date
+  const [selB, setSelB] = useState<string>("usual");   // a match date or "usual"
 
   useEffect(() => {
     let alive = true;
@@ -72,14 +74,21 @@ export default function PlayerMatchMovementCard() {
     .sort((a, b) => (data.percentiles[b] ?? 0) - (data.percentiles[a] ?? 0))[0];
   const standoutPct = standout ? data.percentiles[standout] : 0;
 
-  // "Last match vs your usual" — two shapes overlaid so the player can compare
-  // his most recent game to his own norm.
-  const lastMatch = data.matches[0];
+  // Player picks the two things to compare — a match vs another match, or a
+  // match vs his own usual. Defaults: last match vs usual.
+  const dateLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" });
+  const effA = selA || data.matches[0]?.date || "";
+  const effB = selB || "usual";
+  const fpFor = (sel: string): MovementFingerprint | null =>
+    sel === "usual" ? data.average : (data.matches.find((m) => m.date === sel)?.fingerprint ?? null);
+  const labelFor = (sel: string): string => (sel === "usual" ? (is ? "Venjan þín" : "Your usual") : dateLabel(sel));
+  const fpA = fpFor(effA);
+  const fpB = fpFor(effB);
   const compareAxes = RADAR_ORDER.map((k) => (is ? PLAYER_LABELS[k].is : PLAYER_LABELS[k].en));
-  const compareSeries = lastMatch && data.average
+  const compareSeries = fpA && fpB && effA !== effB
     ? [
-        { label: is ? "Síðasti leikur" : "Last match", values: RADAR_ORDER.map((k) => lastMatch.fingerprint[k]), color: "#4f46e5" },
-        { label: is ? "Venjan þín" : "Your usual", values: RADAR_ORDER.map((k) => data.average![k]), color: "#94a3b8" },
+        { label: labelFor(effA), values: RADAR_ORDER.map((k) => fpA[k]), color: "#4f46e5" },
+        { label: labelFor(effB), values: RADAR_ORDER.map((k) => fpB[k]), color: "#94a3b8" },
       ]
     : [];
 
@@ -110,17 +119,33 @@ export default function PlayerMatchMovementCard() {
           : "Spikes out = above the squad median, dips in = below. This describes your movement style — not good/bad."}
       </p>
 
-      {compareSeries.length === 2 && (
+      {data.matches.length >= 1 && (
         <div className="mt-4 border-t border-slate-100 pt-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Síðasti leikur vs venjan þín" : "Last match vs your usual"}</div>
-          <div className="mt-1"><CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} /></div>
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
-            {compareSeries.map((s) => (
-              <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
-                <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
-              </span>
-            ))}
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Berðu saman leiki" : "Compare matches"}</div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+            <select value={effA} onChange={(e) => setSelA(e.target.value)} className="h-8 rounded-md border border-slate-300 bg-white px-2">
+              {data.matches.map((m) => <option key={m.date} value={m.date}>{dateLabel(m.date)} · {m.minutes}′</option>)}
+            </select>
+            <span className="text-slate-400">{is ? "vs" : "vs"}</span>
+            <select value={effB} onChange={(e) => setSelB(e.target.value)} className="h-8 rounded-md border border-slate-300 bg-white px-2">
+              <option value="usual">{is ? "Venjan þín" : "Your usual"}</option>
+              {data.matches.map((m) => <option key={m.date} value={m.date}>{dateLabel(m.date)}</option>)}
+            </select>
           </div>
+          {compareSeries.length === 2 ? (
+            <>
+              <div className="mt-2"><CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} /></div>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
+                {compareSeries.map((s) => (
+                  <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
+                    <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-slate-400">{is ? "Veldu tvennt ólíkt til að bera saman." : "Pick two different things to compare."}</p>
+          )}
         </div>
       )}
     </div>
