@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { CompareRadar } from "@/components/coach/PlayerGameReportCharts";
+import { CompareRadar, ChartZoom } from "@/components/coach/PlayerGameReportCharts";
 import {
   MOVEMENT_DIMENSIONS,
   SUB_BAND_GROUPS,
@@ -375,7 +375,9 @@ export default function MatchMovementComparison() {
     <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
       <div>
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hreyfi-form (radar)" : "Movement shape (radar)"}</div>
-        <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
+        <ChartZoom title={is ? "Hreyfi-form (radar)" : "Movement shape (radar)"} large={<CompareRadar axes={compareAxes} series={compareSeries} maxHeight={520} />}>
+          <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
+        </ChartZoom>
         <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
           {compareSeries.map((s) => (
             <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">

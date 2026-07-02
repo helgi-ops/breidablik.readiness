@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { ProfileRadar, CompareRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import { ProfileRadar, CompareRadar, ChartZoom, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 import { fmtDim, type DimensionKey, type MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
 
 type Resp = {
@@ -123,7 +123,9 @@ export default function PlayerMatchMovementCard() {
       )}
 
       <div className="mt-3">
-        <ProfileRadar metrics={radar} maxHeight={280} />
+        <ChartZoom title={is ? "Hvernig þú hreyfir þig" : "How you move"} large={<ProfileRadar metrics={radar} maxHeight={520} />}>
+          <ProfileRadar metrics={radar} maxHeight={280} />
+        </ChartZoom>
       </div>
 
       <p className="mt-1 text-[11px] leading-snug text-slate-400">
@@ -176,7 +178,11 @@ export default function PlayerMatchMovementCard() {
           </div>
           {compareSeries.length === 2 ? (
             <>
-              <div className="mt-2"><CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} /></div>
+              <div className="mt-2">
+                <ChartZoom title={is ? "Berðu saman leiki" : "Compare matches"} large={<CompareRadar axes={compareAxes} series={compareSeries} maxHeight={520} />}>
+                  <CompareRadar axes={compareAxes} series={compareSeries} maxHeight={260} />
+                </ChartZoom>
+              </div>
               <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]">
                 {compareSeries.map((s) => (
                   <span key={s.label} className="inline-flex items-center gap-1 text-slate-600">
