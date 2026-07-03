@@ -154,11 +154,15 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   // Core/Lite team that just sets its fixtures gets Match Movement WITHOUT
   // entering minutes by hand (mirrors the player game report).
   const [schedRes, minRes] = await Promise.all([
-    sb.from("match_schedule").select("match_date").eq("team_id", teamId).gte("match_date", since),
+    sb.from("match_schedule").select("match_date, opponent").eq("team_id", teamId).gte("match_date", since),
     sb.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).gte("match_date", since),
   ]);
   const matchDateSet = new Set<string>();
-  for (const s of ((schedRes.data ?? []) as Array<{ match_date: string }>)) matchDateSet.add(s.match_date);
+  // A real match needs an opponent — ignore opponent-less schedule rows (training/
+  // test days mistakenly added) so they can't become phantom matches.
+  for (const s of ((schedRes.data ?? []) as Array<{ match_date: string; opponent: string | null }>)) {
+    if ((s.opponent ?? "").trim() !== "") matchDateSet.add(s.match_date);
+  }
   const manualMin = new Map<string, { minutes: number; dnp: boolean }>();
   for (const m of ((minRes.data ?? []) as Array<{ player_id: string; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>)) {
     matchDateSet.add(m.match_date);

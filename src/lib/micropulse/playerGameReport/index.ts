@@ -189,9 +189,14 @@ export async function computePlayerGameReport(
   if (!target) return { ok: false, error: "Player not on this team", status: 404 };
   const playerIds = players.map((p) => p.id);
 
+  // A real match needs an opponent. Ignore schedule rows without one (they're
+  // training/test days mistakenly added to the schedule) so they never appear as
+  // phantom "—" matches. Manual-minute dates are always intentional, so kept.
   const matchDates = Array.from(new Set([
     ...((minutesRes.data ?? []) as Array<{ match_date: string }>).map((m) => m.match_date),
-    ...((scheduleRes.data ?? []) as Array<{ match_date: string }>).map((m) => m.match_date),
+    ...((scheduleRes.data ?? []) as Array<{ match_date: string; opponent: string | null }>)
+      .filter((m) => (m.opponent ?? "").trim() !== "")
+      .map((m) => m.match_date),
   ]));
 
   const { data: loadData, error: loadErr } = matchDates.length
