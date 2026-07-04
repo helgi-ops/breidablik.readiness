@@ -107,6 +107,35 @@ export default function ReportingCenterPage() {
   const [error, setError] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // The coach's active team — the single scope for every query on this page.
+  // Read from profiles.team_id (CoachShell persists team switches there and
+  // hard-reloads, so this page always reflects the currently selected club).
+  // Without it we must NOT query readiness/roster, or we'd leak other clubs.
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState<string>("");
+  const [teamResolved, setTeamResolved] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) { if (alive) setTeamResolved(true); return; }
+        const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+        const tid = (prof as { team_id?: string | null } | null)?.team_id ?? null;
+        if (alive) setTeamId(tid);
+        if (tid) {
+          const { data: team } = await supabase.from("teams").select("name").eq("id", tid).maybeSingle();
+          if (alive) setTeamName((team as { name?: string | null } | null)?.name ?? "");
+        }
+      } finally {
+        if (alive) setTeamResolved(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [supabase]);
+
   // Daily data
   const [dailyData, setDailyData] = useState<DailyData | null>(null);
 
@@ -116,24 +145,26 @@ export default function ReportingCenterPage() {
 
   // ── Load daily ──────────────────────────────────────────────────────
 
-  async function loadDaily(targetDate: string) {
+  async function loadDaily(targetDate: string, tid: string) {
     setLoading(true);
     setError("");
     try {
       const { data: rows, error: qErr } = await supabase
         .from("v_coach_readiness_today_v8")
         .select("player_id, full_name, total_score, final_color, fatigue_energy, sleep_quality, stress_mood, muscle_soreness, sleep_duration")
+        .eq("team_id", tid)
         .eq("entry_date", targetDate)
         .order("total_score", { ascending: true })
         .order("full_name", { ascending: true });
 
       if (qErr) throw new Error(qErr.message);
 
-      // Get roster count (all active players)
+      // Roster count — this team's active players only.
       const { count } = await supabase
         .from("players")
         .select("id", { count: "exact", head: true })
-        .eq("status", "active");
+        .eq("team_id", tid)
+        .eq("is_active", true);
 
       setDailyData({
         rows: (rows ?? []) as PlayerRow[],
@@ -149,7 +180,7 @@ export default function ReportingCenterPage() {
 
   // ── Load weekly ─────────────────────────────────────────────────────
 
-  async function loadWeekly(monday: string) {
+  async function loadWeekly(monday: string, tid: string) {
     setLoading(true);
     setError("");
     try {
@@ -159,6 +190,7 @@ export default function ReportingCenterPage() {
       const { data: rows, error: qErr } = await supabase
         .from("v_coach_readiness_today_v8")
         .select("player_id, full_name, entry_date, total_score, final_color")
+        .eq("team_id", tid)
         .gte("entry_date", monday)
         .lte("entry_date", lastDate)
         .order("entry_date", { ascending: true });
@@ -168,7 +200,8 @@ export default function ReportingCenterPage() {
       const { count } = await supabase
         .from("players")
         .select("id", { count: "exact", head: true })
-        .eq("status", "active");
+        .eq("team_id", tid)
+        .eq("is_active", true);
 
       const roster = count ?? 0;
       const allRows = (rows ?? []) as Array<{ player_id: string; full_name: string; entry_date: string; total_score: number | null; final_color: string | null }>;
@@ -215,14 +248,14 @@ export default function ReportingCenterPage() {
   // ── Auto-load on tab/date change ────────────────────────────────────
 
   useEffect(() => {
-    if (tab === "daily") void loadDaily(date);
+    if (teamId && tab === "daily") void loadDaily(date, teamId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, date]);
+  }, [tab, date, teamId]);
 
   useEffect(() => {
-    if (tab === "weekly") void loadWeekly(weekStart);
+    if (teamId && tab === "weekly") void loadWeekly(weekStart, teamId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, weekStart]);
+  }, [tab, weekStart, teamId]);
 
   // ── PDF builders ────────────────────────────────────────────────────
 
@@ -281,7 +314,7 @@ export default function ReportingCenterPage() {
             ]
           : []),
       ],
-      footerNote: "MicroPulse Readiness · Breiðablik",
+      footerNote: `MicroPulse Readiness${teamName ? ` · ${teamName}` : ""}`,
     };
   }
 
@@ -337,7 +370,7 @@ export default function ReportingCenterPage() {
             ]
           : []),
       ],
-      footerNote: "MicroPulse Readiness · Breiðablik",
+      footerNote: `MicroPulse Readiness${teamName ? ` · ${teamName}` : ""}`,
     };
   }
 
@@ -458,6 +491,13 @@ export default function ReportingCenterPage() {
 
       {/* Error */}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {/* No team resolved — don't (and can't safely) show any club's data. */}
+      {teamResolved && !teamId && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {lang === "EN" ? "No team is selected for your account." : "Ekkert lið er valið á reikningnum þínum."}
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
