@@ -13,10 +13,16 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import ShareMatchButton from "./ShareMatchButton";
+import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 
-type Raw = { top_speed_kmh?: number; total_distance?: number };
+type Raw = { top_speed_kmh?: number; total_distance?: number; sprint?: number };
 type Match = { date: string; opponent: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; raw?: Raw | null };
-type Report = { summary: { best_top_speed_kmh: number }; matches: Match[] };
+type ClubInfo = { name: string; themeColor: string | null; logoUrl: string | null };
+type Report = { summary: { best_top_speed_kmh: number }; matches: Match[]; club?: ClubInfo; player?: { full_name?: string } };
+
+const clampSpeed = (v: number | undefined) => (typeof v === "number" && v > 0 && v <= 45 ? v : 0);
+const toStats = (m: Match): ShareStats => ({ topSpeed: clampSpeed(m.raw?.top_speed_kmh), distance: m.raw?.total_distance ?? 0, sprints: m.raw?.sprint ?? 0 });
 
 const f1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString();
 
@@ -57,6 +63,9 @@ export default function PlayerLastMatchHeroCard({ lang = "IS", onSeeReport }: { 
   // Season-best when this match's peak ties the season max (rounded to 0.1 km/h).
   const isSeasonBest = top > 0 && Math.round(top * 10) >= Math.round(best * 10);
 
+  const allMatches = report.matches.filter((m) => m.has_gps && m.raw).map(toStats);
+  const club = report.club ?? { name: "", themeColor: null, logoUrl: null };
+
   const vs = last.opponent ? (isIS ? ` gegn ${last.opponent}` : ` against ${last.opponent}`) : "";
   const homeAway = last.is_home == null ? "" : last.is_home ? (isIS ? " (heima)" : " (home)") : (isIS ? " (úti)" : " (away)");
   const sentence = distKm > 0
@@ -78,13 +87,22 @@ export default function PlayerLastMatchHeroCard({ lang = "IS", onSeeReport }: { 
         <span className="text-base font-semibold text-zinc-500">km/h</span>
       </div>
       <p className="mt-1 text-sm leading-relaxed text-zinc-600">{sentence}</p>
-      <button
-        type="button"
-        onClick={onSeeReport}
-        className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:text-green-800"
-      >
-        {isIS ? "Sjá heildarskýrslu" : "See full report"} →
-      </button>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onSeeReport}
+          className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:text-green-800"
+        >
+          {isIS ? "Sjá heildarskýrslu" : "See full report"} →
+        </button>
+        <ShareMatchButton
+          lang={isIS ? "IS" : "EN"}
+          club={club}
+          playerName={report.player?.full_name ?? ""}
+          match={{ date: last.date, opponent: last.opponent, ...toStats(last) }}
+          allMatches={allMatches}
+        />
+      </div>
     </div>
   );
 }

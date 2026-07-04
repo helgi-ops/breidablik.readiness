@@ -15,10 +15,14 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 import { computeForm } from "@/lib/micropulse/playerGameReport";
+import ShareMatchButton from "./ShareMatchButton";
+import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
-type Match = { date: string; opponent: string | null; competition?: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; p90: P90 | null };
+type RawMatch = { top_speed_kmh?: number; total_distance?: number; sprint?: number };
+type Match = { date: string; opponent: string | null; competition?: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; p90: P90 | null; raw?: RawMatch | null };
+type ClubInfo = { name: string; themeColor: string | null; logoUrl: string | null };
 type Report = {
   player: { full_name: string; position: string | null; age: number | null };
   season: { year: number };
@@ -26,7 +30,11 @@ type Report = {
   benchmarks: Record<string, Bench>;
   availableKeys: string[];
   matches: Match[];
+  club?: ClubInfo;
 };
+
+const clampSpeed = (v: number | undefined) => (typeof v === "number" && v > 0 && v <= 45 ? v : 0);
+const matchStats = (m: Match): ShareStats => ({ topSpeed: clampSpeed(m.raw?.top_speed_kmh), distance: m.raw?.total_distance ?? 0, sprints: m.raw?.sprint ?? 0 });
 
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString());
 const f1 = (v: number | null | undefined) => (v == null ? "—" : (Math.round(v * 10) / 10).toLocaleString());
@@ -159,6 +167,10 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
 
   const s = report.summary;
   const noData = s.matches_with_gps === 0;
+
+  // Shareable match card context: this player's GPS matches + club theming.
+  const shareClub = report.club ?? { name: "", themeColor: null, logoUrl: null };
+  const shareAll: ShareStats[] = report.matches.filter((m) => m.has_gps && m.raw).map(matchStats);
 
   return (
     <div className="mx-auto max-w-lg space-y-3 pb-24">
@@ -307,7 +319,19 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                       <div className="text-[11px] text-zinc-400">{m.date} · {m.minutes}′{!m.has_gps ? (isIS ? " · engin GPS" : " · no GPS") : ""}</div>
                     </div>
                     {m.has_gps && m.p90 ? (
-                      <div className="shrink-0 text-right text-[11px] tabular-nums text-zinc-500">{n0(m.p90.total_distance)} m<span className="text-zinc-400"> /90</span></div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <div className="text-right text-[11px] tabular-nums text-zinc-500">{n0(m.p90.total_distance)} m<span className="text-zinc-400"> /90</span></div>
+                        {m.raw && (matchStats(m).topSpeed > 0 || matchStats(m).distance > 0 || matchStats(m).sprints > 0) && (
+                          <ShareMatchButton
+                            lang={isIS ? "IS" : "EN"}
+                            variant="icon"
+                            club={shareClub}
+                            playerName={report.player.full_name}
+                            match={{ date: m.date, opponent: m.opponent, ...matchStats(m) }}
+                            allMatches={shareAll}
+                          />
+                        )}
+                      </div>
                     ) : null}
                   </div>
                 ))}
