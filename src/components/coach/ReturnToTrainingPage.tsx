@@ -127,6 +127,14 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
     curAdh?.cells.forEach((c) => m.set(c.quality, c));
     return m;
   }, [curAdh]);
+  // Re-injury watch: actual load OVER the recommended target on one of THIS
+  // injury's key re-injury qualities. Doing more than the graded ramp on those
+  // qualities, too soon, is the re-injury danger — surface it at layer 0.
+  const riskOvershoots = useMemo(() => {
+    const risk = new Set(data?.injuryProfile?.riskQualities ?? []);
+    if (!curAdh || !risk.size) return [];
+    return curAdh.cells.filter((c) => risk.has(c.quality) && c.status === "over" && c.target > 0);
+  }, [curAdh, data?.injuryProfile]);
   // The real sessions that fall inside the current plan week (Mon–Sun of weekStart).
   const weekSessions = useMemo(() => {
     if (!curAdh) return [];
@@ -169,6 +177,29 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           </div>
         </div>
       </div>
+
+      {/* Layer 0 — re-injury watch: actual OVER recommended on a key re-injury quality */}
+      {riskOvershoots.length > 0 && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-rose-800">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+            {is ? "Endurmeiðsla-vakt" : "Re-injury watch"}
+          </div>
+          <div className="mt-1 space-y-0.5 text-sm text-rose-700">
+            {riskOvershoots.map((c) => (
+              <div key={c.quality}>
+                <span className="font-semibold">{is ? LABEL[c.quality].is : LABEL[c.quality].en}</span>{" "}
+                {is ? "er" : "is"} <span className="font-semibold">+{c.deltaPct}%</span> {is ? "yfir ráðlögðu vikunnar" : "over this week's recommendation"} ({f0(c.actual)} {is ? "af" : "of"} {f0(c.target)}) — {is ? "aftur í" : "back to"} {f0(c.target)} {is ? "heldur honum á stigaðri upptröppun." : "keeps him on the graded ramp."}
+              </div>
+            ))}
+          </div>
+          {data.injuryProfile && (
+            <div className="mt-1 text-[11px] text-rose-600/80">
+              {is ? "Þetta eru lykil-endurmeiðsla-gæði fyrir" : "These are the key re-injury qualities for"} {is ? data.injuryProfile.label.is.split("—")[0].trim() : data.injuryProfile.label.en.split("—")[0].trim()}. {is ? "Að fara yfir stigaða álagið of snemma er helsta endurmeiðsla-hættan." : "Exceeding the graded load too soon is the main re-injury risk."}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Injury source disagreement (surface, don't resolve) */}
       {data.injuryDiscrepancy && (
