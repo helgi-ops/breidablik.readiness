@@ -8762,21 +8762,33 @@ export default function CoachPage() {
             playerInjuries={playerInjuryStatus}
             playerDeltas={yesterdayDeltas}
           />
-          {/* Drill-down for the two signals the briefing names above — the
-              per-player detail. Each self-hides when nothing needs attention. */}
-          <UnfamiliarSpikeBanner lang={lang} date={today} />
-          <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
-          {/* Calibration context beside the verdict — when a colour is over-sensitive
-              for this squad AND present today. Rule-derived, cites the 30-day recovery
-              rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
-          <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
-          {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
-              the movement axis (IMA), each one plain line linking to its own detail
-              page. Rules decide, not AI. */}
-          <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
-          <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
-          {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
-          <UnfamiliarLoadCard lang={lang} date={today} />
+          {/* Fasi 2 (decision-first): the deep S&C signal layer moves below the
+              briefing under a "Show details" disclosure. These are the drill-down
+              (per-player / per-signal detail), each self-hiding when nothing needs
+              attention — kept, not removed (acceptance #6). Verdict + attention
+              stay at the top; the S&C detail is one click away. */}
+          <details className="group rounded-xl border border-border bg-card/60">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground">
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              {lang === "IS" ? "Sýna nánar — S&C merki" : "Show details — S&C signals"}
+            </summary>
+            <div className="space-y-4 px-4 pb-4">
+              {/* Drill-down for the two signals the briefing names above. */}
+              <UnfamiliarSpikeBanner lang={lang} date={today} />
+              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Calibration context beside the verdict — when a colour is over-sensitive
+                  for this squad AND present today. Rule-derived, cites the 30-day recovery
+                  rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
+              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
+                  the movement axis (IMA), each one plain line linking to its own detail
+                  page. Rules decide, not AI. */}
+              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
+              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
+              <UnfamiliarLoadCard lang={lang} date={today} />
+            </div>
+          </details>
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
