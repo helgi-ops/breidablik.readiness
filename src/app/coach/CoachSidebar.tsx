@@ -279,7 +279,7 @@ function Section({
         type="button"
         onClick={toggle}
         aria-expanded={effectiveOpen}
-        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-sm font-bold text-slate-800 hover:bg-slate-100"
+        className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground font-[family-name:var(--font-display)] hover:bg-muted/60"
       >
         <span>{label}</span>
         <svg
@@ -307,16 +307,16 @@ function Section({
                 <Link
                   href={l.href}
                   onClick={onNavigate}
-                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
+                  className={`flex items-center justify-between rounded-md border-l-2 px-3 py-2 text-sm transition-colors ${
                     active
-                      ? "bg-slate-900 text-white font-medium"
-                      : "text-slate-700 hover:bg-slate-100"
+                      ? "border-primary bg-primary/5 font-semibold text-primary"
+                      : "border-transparent text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <span>{tt(l.label, lang)}</span>
                   {badgeCount > 0 && (
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                      active ? "bg-white/20 text-white" : "bg-amber-500 text-white"
+                      active ? "bg-primary/15 text-primary" : "bg-amber-500 text-white"
                     }`}>
                       {badgeCount}
                     </span>
@@ -602,7 +602,7 @@ export function CoachSidebar({
           />
         )}
         <div className="mt-4">
-          <div className="mb-1 px-3 py-1.5 text-sm font-bold text-slate-800">
+          <div className="mb-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground font-[family-name:var(--font-display)]">
             TV
           </div>
           <a
