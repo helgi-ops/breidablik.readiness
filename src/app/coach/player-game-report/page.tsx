@@ -23,7 +23,7 @@ type P90 = {
 type Raw = P90 & { top_speed_kmh: number };
 type Match = {
   date: string; opponent: string | null; competition: string | null; is_home: boolean | null;
-  minutes: number; has_gps: boolean; raw: Raw | null; p90: P90 | null;
+  minutes: number; has_gps: boolean; estimated?: boolean; raw: Raw | null; p90: P90 | null;
 };
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type Report = {
@@ -482,7 +482,7 @@ export default function PlayerGameReportPage() {
                         return (
                           <tr key={m.date} className="border-b border-slate-100">
                             <td className="px-1.5 py-0.5 text-slate-600">{m.date}</td>
-                            <td className="px-1.5 py-0.5 font-medium text-slate-800">{formatMatchLabel(m.opponent, m.is_home, { home: t.home, away: t.away })}</td>
+                            <td className="px-1.5 py-0.5 font-medium text-slate-800">{formatMatchLabel(m.opponent, m.is_home, { home: t.home, away: t.away })}{m.estimated ? <span className="ml-1 rounded-full border border-amber-300 px-1 py-0.5 text-[8px] font-semibold uppercase text-amber-600" title={IS ? "Áætlað — ekki raunmæling" : "Estimated — not a pod measurement"}>{IS ? "áætl." : "est."}</span> : null}</td>
                             <td className="px-1.5 py-0.5 text-right tabular-nums text-slate-500">{m.minutes || "·"}</td>
                             {!m.has_gps ? (
                               <td colSpan={4 + matchCols.length} className="px-1.5 py-0.5 text-center text-[10px] italic text-slate-400">{IS ? "engin GPS" : "no GPS"}</td>
