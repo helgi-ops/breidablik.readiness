@@ -391,25 +391,52 @@ function Timeline({ history, windows, showMatches }: { history: Session[]; windo
   const rows = history.filter((s) => showMatches || !s.isMatch);
   if (!rows.length) return <div className="py-8 text-center text-xs text-slate-400">No sessions</div>;
   const W = 900, H = 180, padL = 8, padR = 8, padT = 8, padB = 18;
-  const n = rows.length;
-  const bw = Math.max(2, (W - padL - padR) / n - 1);
+  const innerW = W - padL - padR;
+  const DAY = 86400000;
+  const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
+  const firstD = rows[0].date, lastD = rows[rows.length - 1].date;
+  const t0 = ms(firstD), t1 = Math.max(ms(lastD), t0 + DAY);
+  const span = t1 - t0;
+  // Position by CALENDAR DATE, not session index — so a no-training layoff shows
+  // as a real gap instead of collapsing to nothing.
+  const x = (d: string) => padL + ((ms(d) - t0) / span) * innerW;
+  const bw = Math.max(2, Math.min(10, innerW / (span / DAY) - 0.5));
   const maxDist = Math.max(1, ...rows.map((s) => s.distance));
   const maxSpeed = Math.max(1, ...rows.map((s) => s.topSpeed));
-  const x = (i: number) => padL + (i * (W - padL - padR)) / n;
   const yD = (v: number) => H - padB - (v / maxDist) * (H - padT - padB);
   const yS = (v: number) => H - padB - (v / maxSpeed) * (H - padT - padB);
-  const inWin = (d: string) => windows.some((w) => d >= w.start && d <= w.end);
-  const speedPts = rows.map((s, i) => `${(x(i) + bw / 2).toFixed(1)},${(s.topSpeed > 0 ? yS(s.topSpeed) : H - padB).toFixed(1)}`).join(" ");
+
+  // Injury windows as shaded background bands (clipped to the data range).
+  const bands = windows
+    .map((w) => { const s = w.start > firstD ? w.start : firstD; const e = w.end < lastD ? w.end : lastD; return s <= e ? { s, e } : null; })
+    .filter((b): b is { s: string; e: string } => b !== null);
+
+  // Top-speed line, broken across gaps > 10 days so it doesn't bridge the layoff.
+  const segs: string[][] = [];
+  let cur: string[] = [];
+  rows.forEach((s, i) => {
+    if (i > 0 && (ms(s.date) - ms(rows[i - 1].date)) / DAY > 10) { if (cur.length) segs.push(cur); cur = []; }
+    cur.push(`${x(s.date).toFixed(1)},${(s.topSpeed > 0 ? yS(s.topSpeed) : H - padB).toFixed(1)}`);
+  });
+  if (cur.length) segs.push(cur);
+
+  // Calendar month ticks.
+  const ticks: string[] = [];
+  const dt = new Date(t0); dt.setUTCDate(1);
+  while (dt.getTime() <= t1) { const iso = dt.toISOString().slice(0, 10); if (ms(iso) >= t0) ticks.push(iso); dt.setUTCMonth(dt.getUTCMonth() + 1); }
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 200 }}>
+      {bands.map((b, i) => (
+        <rect key={"b" + i} x={x(b.s)} y={padT} width={Math.max(1, x(b.e) - x(b.s))} height={H - padT - padB} fill="#fca5a5" opacity={0.18} />
+      ))}
       {rows.map((s, i) => {
-        const injured = inWin(s.date);
+        const injured = bands.some((b) => s.date >= b.s && s.date <= b.e);
         const fill = s.estimated ? "#fbbf24" : injured ? "#fca5a5" : s.isMatch ? "#c4b5fd" : "#94a3b8";
-        return <rect key={s.date + i} x={x(i)} y={yD(s.distance)} width={bw} height={Math.max(0, H - padB - yD(s.distance))} fill={fill} rx={1} />;
+        return <rect key={s.date + i} x={x(s.date) - bw / 2} y={yD(s.distance)} width={bw} height={Math.max(0, H - padB - yD(s.distance))} fill={fill} rx={1} />;
       })}
-      <polyline points={speedPts} fill="none" stroke="#0ea5e9" strokeWidth={1.5} />
-      {/* month ticks */}
-      {rows.map((s, i) => (i % Math.ceil(n / 8) === 0 ? <text key={"t" + i} x={x(i)} y={H - 4} fontSize={9} fill="#94a3b8">{s.date.slice(5)}</text> : null))}
+      {segs.map((pts, i) => <polyline key={"sp" + i} points={pts.join(" ")} fill="none" stroke="#0ea5e9" strokeWidth={1.5} />)}
+      {ticks.map((d, i) => <text key={"t" + i} x={x(d)} y={H - 4} fontSize={9} fill="#94a3b8">{d.slice(5)}</text>)}
     </svg>
   );
 }
