@@ -208,7 +208,7 @@ function riskTrendLinePoints(values: number[], width = 320, height = 80, padding
 
 function readinessMarkerTone(state: "GREEN" | "YELLOW" | "RED" | "GRAY"): string {
   if (state === "GREEN") return "#1c7a4a";
-  if (state === "YELLOW") return "#ca8a04";
+  if (state === "YELLOW") return "#b0700f";
   if (state === "RED") return "#a83e28";
   return "#8b8676";
 }

@@ -571,7 +571,7 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
 
   const chipColor =
     dailyDecision.playerState === "GREEN" ? "#2b8a54" :
-    dailyDecision.playerState === "YELLOW" ? "#eab308" :
+    dailyDecision.playerState === "YELLOW" ? "#cb8420" :
     dailyDecision.playerState === "RED" ? "#b34a30" :
     "#a9a493";
 

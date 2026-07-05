@@ -555,10 +555,10 @@ export default function LoginInner() {
             {teamInviteLocked ? (
               <label style={{ display: "grid", gap: 6 }}>
                 <span>Lið</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, border: "1px solid #a5d6a7", background: "#e8f5e9" }}>
-                  <span style={{ color: "#2e7d32" }}>✓</span>
-                  <span style={{ fontWeight: 600, color: "#1b5e20" }}>{teamInviteTeamName ?? "..."}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#66bb6a" }}>Frá boðslink</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 8, border: "1px solid #b0d6bd", background: "#eaf3ec" }}>
+                  <span style={{ color: "#16653d" }}>✓</span>
+                  <span style={{ fontWeight: 600, color: "#145233" }}>{teamInviteTeamName ?? "..."}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#47a06f" }}>Frá boðslink</span>
                 </div>
               </label>
             ) : gender && sport && (
@@ -578,12 +578,12 @@ export default function LoginInner() {
                   ))}
                 </select>
                 {teamId && teamHasCoach === false && (
-                  <div style={{ background: "#fff8e1", border: "1px solid #ffd54f", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
+                  <div style={{ background: "#faf1de", border: "1px solid #e0b257", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
                     ⚠️ Enginn þjálfari er skráður hjá þessu liði enn. Þjálfari þarf að skrá sig áður en leikmaður getur skráð sig.
                   </div>
                 )}
                 {teamId && teamHasCoach === true && (
-                  <div style={{ background: "#e8f5e9", border: "1px solid #a5d6a7", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
+                  <div style={{ background: "#eaf3ec", border: "1px solid #b0d6bd", padding: "8px 10px", borderRadius: 8, fontSize: 13 }}>
                     ✓ Þjálfari er skráður — skráning leyfð.
                   </div>
                 )}
@@ -621,7 +621,7 @@ export default function LoginInner() {
         )}
 
         {err && (
-          <div style={{ background: "#ffecec", border: "1px solid #ffb3b3", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "#f8e9e3", border: "1px solid #e6b6a6", padding: 10, borderRadius: 8 }}>
             {err}
           </div>
         )}

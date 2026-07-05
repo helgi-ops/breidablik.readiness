@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
         </label>
 
         {error && (
-          <div style={{ background: "#ffecec", padding: 10, borderRadius: 8 }}>
+          <div style={{ background: "#f8e9e3", padding: 10, borderRadius: 8 }}>
             {error}
           </div>
         )}

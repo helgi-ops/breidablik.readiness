@@ -124,7 +124,7 @@ export default function RedirectInner() {
       <p style={{ opacity: 0.8 }}>Tek þig á rétt svæði.</p>
 
       {error ? (
-        <div style={{ marginTop: 12, background: "#ffecec", border: "1px solid #ffb3b3", padding: 10, borderRadius: 8 }}>
+        <div style={{ marginTop: 12, background: "#f8e9e3", border: "1px solid #e6b6a6", padding: 10, borderRadius: 8 }}>
           {error}
           <div style={{ marginTop: 10 }}>
             <button

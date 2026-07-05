@@ -7590,7 +7590,7 @@ export default function CoachPage() {
               {renderMetricTile(
                 "Today",
                 zText,
-                zVal != null && zVal > 0 ? "text-[#3f6f1f]" : "text-slate-900",
+                zVal != null && zVal > 0 ? "text-[#16653d]" : "text-slate-900",
                 "border-[#ece7de] bg-[#f7f4ee]",
                 zVal == null ? "vs his usual" :
                   zVal > 0.5 ? "above his usual" :
@@ -7600,8 +7600,8 @@ export default function CoachPage() {
               {renderMetricTile(
                 "vs yesterday",
                 dzText,
-                dzVal != null && dzVal > 0 ? "text-[#3f6f1f]" : dzVal != null && dzVal < 0 ? "text-rose-700" : "text-slate-900",
-                "border-[#dce9c9] bg-[#eaf4da]",
+                dzVal != null && dzVal > 0 ? "text-[#16653d]" : dzVal != null && dzVal < 0 ? "text-rose-700" : "text-slate-900",
+                "border-[#d3e8da] bg-[#eaf3ec]",
                 dzVal == null ? "change since last reading" :
                   dzVal > 0.3 ? "improving" :
                   dzVal < -0.3 ? "trending down" :
