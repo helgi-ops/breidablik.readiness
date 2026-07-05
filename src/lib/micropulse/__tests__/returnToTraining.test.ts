@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { computeReturnToTraining, QUALITY_ORDER, type RttSession } from "../returnToTraining";
+import { computeReturnToTraining, injuryRiskProfile, QUALITY_ORDER, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
   return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, cod: 200, topSpeed: 30, ...o };
@@ -60,6 +60,31 @@ test("targets never exceed the healthy ceiling and locked qualities hold", () =>
     if (r.baseline[w.quality] > 0) assert.ok(w.target <= r.baseline[w.quality] + 0.01);
     if (w.locked) assert.ok(w.why.toLowerCase().includes("unlocks"));
   }
+});
+
+test("injuryRiskProfile maps tissue → key re-injury qualities", () => {
+  assert.deepEqual(new Set(injuryRiskProfile(["hamstring"]).riskQualities), new Set(["hsr", "sprint", "decel"]));
+  const head = injuryRiskProfile(["Concussion"]);
+  assert.equal(head.category, "head");
+  assert.equal(head.riskQualities.length, 0); // symptom-limited, handled as a ceiling
+  assert.ok(injuryRiskProfile(["ACL / knee"]).riskQualities.includes("cod"));
+  assert.ok(injuryRiskProfile(["ankle sprain"]).riskQualities.includes("decel"));
+});
+
+test("the injury's risk qualities ramp slower and are flagged caution", () => {
+  const s = fixture();
+  const plain = computeReturnToTraining({ sessions: s, refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04" });
+  const risk = computeReturnToTraining({ sessions: s, refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04", riskQualities: ["hsr"] });
+  const hsrRisk = risk.plan!.weeks.filter((w) => w.quality === "hsr" && !w.locked);
+  const hsrPlain = plain.plan!.weeks.filter((w) => w.quality === "hsr" && !w.locked);
+  assert.ok(hsrRisk.every((w) => w.caution));
+  assert.ok(hsrPlain.every((w) => !w.caution));
+  // a risk quality's target never exceeds the same week's non-risk target
+  for (let i = 0; i < hsrRisk.length; i++) assert.ok(hsrRisk[i].target <= hsrPlain[i].target + 0.01);
+  // non-risk qualities are unaffected
+  const volRisk = risk.plan!.weeks.find((w) => w.quality === "volume" && w.week === 3)!;
+  const volPlain = plain.plan!.weeks.find((w) => w.quality === "volume" && w.week === 3)!;
+  assert.equal(volRisk.target, volPlain.target);
 });
 
 test("every unlocked target carries a why-line with % of healthy baseline", () => {

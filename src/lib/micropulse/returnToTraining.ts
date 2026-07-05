@@ -41,16 +41,39 @@ export type RttInput = {
   refDate: string;              // "today" (YYYY-MM-DD)
   rttStartDate?: string | null; // graded-return start; null → not started yet
   currentlyInjured: boolean;    // an OPEN injury with no return date
-  weeks?: number;               // default 5
+  weeks?: number;               // default = number of qualities
   headInjury?: boolean;         // load is a ceiling, not a stage trigger
+  riskQualities?: QualityKey[]; // the injury's key re-injury qualities (ramp slower)
 };
+
+/**
+ * Injury-type → the qualities most implicated in RE-INJURY for that tissue,
+ * which the plan reintroduces lower and ramps more slowly. Clinical, not
+ * exhaustive: a hamstring re-tears on high-speed running; a knee/ankle on
+ * change-of-direction + braking; a concussion is symptom-limited (handled
+ * separately as a load ceiling).
+ */
+export function injuryRiskProfile(types: string[]): { category: string; riskQualities: QualityKey[]; label: { en: string; is: string } } {
+  const t = types.join(" ").toLowerCase();
+  const m = (re: RegExp) => re.test(t);
+  if (m(/concuss|head|hia/)) return { category: "head", riskQualities: [], label: { en: "Head injury — symptom-limited return", is: "Höfuðáverki — einkenna-stýrð endurkoma" } };
+  if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "decel"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
+  if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
+  if (m(/quad|rectus femoris/)) return { category: "quad", riskQualities: ["sprint", "accel"], label: { en: "Quadriceps — sprinting & acceleration ramp slowly", is: "Framlæri — sprettir og hröðun aukast hægt" } };
+  if (m(/groin|adduct/)) return { category: "groin", riskQualities: ["cod", "sprint"], label: { en: "Groin/adductor — change-of-direction & sprint ramp slowly", is: "Nári — stefnubreytingar og sprettir aukast hægt" } };
+  if (m(/acl|knee|mcl|meniscus|patell/)) return { category: "knee", riskQualities: ["cod", "decel", "accel"], label: { en: "Knee — change-of-direction & braking are the key re-injury qualities", is: "Hné — stefnubreytingar og hemlun eru lykil-endurmeiðsla-gæðin" } };
+  if (m(/ankle|lateral ligament|syndesmo/)) return { category: "ankle", riskQualities: ["cod", "decel"], label: { en: "Ankle — change-of-direction & braking ramp slowly", is: "Ökkli — stefnubreytingar og hemlun aukast hægt" } };
+  if (m(/hip|flexor/)) return { category: "hip", riskQualities: ["sprint", "cod"], label: { en: "Hip — sprint & change-of-direction ramp slowly", is: "Mjöðm — sprettir og stefnubreytingar aukast hægt" } };
+  if (m(/muscle|strain|tear/)) return { category: "muscle", riskQualities: ["hsr", "sprint"], label: { en: "Muscle strain — high-speed running ramps slowly", is: "Vöðvatognun — háhraðahlaup eykst hægt" } };
+  return { category: "general", riskQualities: ["sprint", "cod"], label: { en: "Ramping the most re-injury-prone qualities slowly", is: "Aukum þau gæði sem eru mest endurmeiðsla-hætt hægt" } };
+}
 
 export type RttBaseline = Record<QualityKey, number> & { builtFromHealthySessions: number; topSpeed: number };
 export type RttFloor = Record<QualityKey, number> & { topSpeed: number };
 export type RttWeekTarget = {
   week: number; quality: QualityKey;
   target: number; pctOfHealthy: number; wow: number; acwr: number;
-  locked: boolean; unlockWeek: number; why: string;
+  locked: boolean; unlockWeek: number; caution: boolean; why: string;
 };
 export type RttResult = {
   currentlyInjured: boolean;
@@ -62,8 +85,10 @@ export type RttResult = {
 };
 
 const RAMP = 1.10;          // ≤10%/week keeps the load ACWR under ~1.3
+const RAMP_CAUTION = 1.07;  // slower ramp for the injury's key re-injury qualities
 const P_CEILING = 0.85;     // "robust" reference percentile (not the freak max)
 const REINTRO_FRAC = 0.30;  // reintroduce a dormant quality at 30% of its ceiling
+const REINTRO_CAUTION = 0.20; // reintroduce a re-injury-prone quality lower
 
 const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: number }> = {
   volume:   { en: "Player load", is: "Álag", unit: "", dp: 0 },
@@ -136,6 +161,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
 
   const targetsByQuality = Object.fromEntries(QUALITY_ORDER.map((q) => [q, [] as number[]])) as Record<QualityKey, number[]>;
   const weekTargets: RttWeekTarget[] = [];
+  const riskSet = new Set(inp.riskQualities ?? []);
 
   for (let w = 1; w <= weeks; w++) {
     for (let qi = 0; qi < QUALITY_ORDER.length; qi++) {
@@ -143,6 +169,9 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
       const uw = unlockWeek(qi);
       const ceiling = baseline[q] || 0;
       const locked = w < uw;
+      const risky = riskSet.has(q);
+      const ramp = risky ? RAMP_CAUTION : RAMP;       // this injury's key qualities ramp slower
+      const reintroFrac = risky ? REINTRO_CAUTION : REINTRO_FRAC;
       const prevArr = targetsByQuality[q];
       const prev = prevArr.length ? prevArr[prevArr.length - 1] : floor[q];
 
@@ -152,11 +181,11 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
       } else if (w === uw) {
         // Introduce: for a quality he's already doing, ramp the floor; for a
         // dormant quality (sprint/COD ≈ 0), reintroduce at a conservative %.
-        const startFromFloor = floor[q] * RAMP;
-        const reintro = ceiling * REINTRO_FRAC;
+        const startFromFloor = floor[q] * ramp;
+        const reintro = ceiling * reintroFrac;
         target = Math.min(ceiling || startFromFloor, Math.max(startFromFloor, floor[q] > 0.05 * ceiling ? startFromFloor : reintro));
       } else {
-        target = Math.min(ceiling, prev * RAMP); // ramp toward ceiling, ACWR-capped
+        target = Math.min(ceiling, prev * ramp); // ramp toward ceiling, ACWR-capped
       }
       target = round(target, QLABEL[q].dp);
       prevArr.push(target);
@@ -172,10 +201,12 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
 
       weekTargets.push({
         week: w, quality: q, target, pctOfHealthy, wow, acwr, locked, unlockWeek: uw,
+        caution: risky && !locked,
         why: locked
           ? `Held — ${QLABEL[q].en} unlocks week ${uw}`
           : `${fmt(target)}${QLABEL[q].unit ? " " + QLABEL[q].unit : ""} = ${pctOfHealthy}% of healthy baseline (${fmt(ceiling)})` +
-            `${prev > 0 ? `; last ${fmt(prev)}` : ""}${wow ? `; ${wow > 0 ? "+" : ""}${wow}% keeps ACWR at ${acwr.toFixed(2)}` : ""}`,
+            `${prev > 0 ? `; last ${fmt(prev)}` : ""}${wow ? `; ${wow > 0 ? "+" : ""}${wow}% keeps ACWR at ${acwr.toFixed(2)}` : ""}` +
+            `${risky ? " · key re-injury quality — ramping slowly" : ""}`,
       });
     }
   }

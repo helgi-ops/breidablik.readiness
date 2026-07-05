@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { computeReturnToTraining, type RttSession } from "@/lib/micropulse/returnToTraining";
+import { computeReturnToTraining, injuryRiskProfile, type RttSession } from "@/lib/micropulse/returnToTraining";
 
 export const runtime = "nodejs";
 
@@ -105,7 +105,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     const { data: saved } = await sb.from("rtt_plans").select("rtt_start_date, weeks, overrides").eq("player_id", playerId).maybeSingle();
     const rttStartDate = (saved as { rtt_start_date?: string | null } | null)?.rtt_start_date ?? null;
 
-    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, headInjury });
+    // Injury-type awareness: classify from the active injury (else the most
+    // recent) so the plan ramps THAT injury's key re-injury qualities slower.
+    const activeTypes = windows.filter((w) => w.isActive).map((w) => w.type);
+    const recentWin = [...windows].sort((a, b) => b.start.localeCompare(a.start))[0];
+    const profile = injuryRiskProfile(activeTypes.length ? activeTypes : recentWin ? [recentWin.type] : []);
+
+    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, headInjury, riskQualities: profile.riskQualities });
 
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
@@ -114,6 +120,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       injuryWindows: windows,
       injuryDiscrepancy,
       headInjury,
+      injuryProfile: profile,
       rttStartDate,
       overrides: (saved as { overrides?: unknown } | null)?.overrides ?? [],
       ...result,

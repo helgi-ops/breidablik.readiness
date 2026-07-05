@@ -26,13 +26,15 @@ const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
 
 type Session = { date: string; injured: boolean; isMatch: boolean; estimated: boolean; load: number; distance: number; hsr: number; sprint: number; cod: number; topSpeed: number };
 type Win = { start: string; end: string; type: string; source: string; isActive: boolean };
-type WeekTarget = { week: number; quality: Quality; target: number; pctOfHealthy: number; wow: number; acwr: number; locked: boolean; unlockWeek: number; why: string };
+type WeekTarget = { week: number; quality: Quality; target: number; pctOfHealthy: number; wow: number; acwr: number; locked: boolean; unlockWeek: number; caution: boolean; why: string };
+type InjuryProfile = { category: string; label: { en: string; is: string }; riskQualities: Quality[] };
 type Resp = {
   player: { id: string; name: string };
   history: Session[];
   injuryWindows: Win[];
   injuryDiscrepancy: boolean;
   headInjury: boolean;
+  injuryProfile?: InjuryProfile;
   currentlyInjured: boolean;
   rttStartDate: string | null;
   baseline: Record<Quality, number> & { builtFromHealthySessions: number; topSpeed: number };
@@ -114,6 +116,15 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
       {data.headInjury && (
         <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
           {is ? "Höfuðáverki: endurkoma er einkenna-stýrð (HIA/GRTP). Álagið er ÞAK, ekki kveikja — það má aldrei færa stig sjálfkrafa." : "Head injury: graded return is symptom-limited (HIA/GRTP). Load is a CEILING, not a trigger — it never advances a stage on its own."}
+        </div>
+      )}
+      {/* Injury-type awareness: the injury's key re-injury qualities ramp slower. */}
+      {!data.headInjury && data.injuryProfile && data.injuryProfile.riskQualities.length > 0 && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+          <span className="font-semibold">{is ? "Meiðsla-aðlögun: " : "Injury-specific: "}</span>
+          {is ? data.injuryProfile.label.is : data.injuryProfile.label.en}. {" "}
+          {is ? "Þessi gæði aukast hægar (7%/viku) og eru sett inn lægra." : "These qualities ramp more slowly (7%/week) and start lower."}
+          <span className="ml-1">({data.injuryProfile.riskQualities.map((q) => (is ? LABEL[q].is : LABEL[q].en)).join(", ")})</span>
         </div>
       )}
 
@@ -216,7 +227,10 @@ function QualityCard({ w, floor, ceiling, is }: { w: WeekTarget; floor: number; 
   return (
     <div className={`rounded-xl border p-3 shadow-sm ${w.locked ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}>
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-800">{label}</div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+          {label}
+          {w.caution && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-orange-700" title={is ? "Lykil-endurmeiðsla-gæði fyrir þetta meiðsli — hægari aðlögun" : "Key re-injury quality for this injury — slower ramp"}>{is ? "gát" : "caution"}</span>}
+        </div>
         {w.locked ? (
           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">{is ? `læst · vika ${w.unlockWeek}` : `hold · wk ${w.unlockWeek}`}</span>
         ) : (
