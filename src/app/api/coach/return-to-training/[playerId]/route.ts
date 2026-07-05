@@ -111,11 +111,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
 
     // Injury-type awareness: classify from the active injury (else the most
     // recent) so the plan ramps THAT injury's key re-injury qualities slower.
-    const activeTypes = windows.filter((w) => w.isActive).map((w) => w.type);
+    const activeWins = windows.filter((w) => w.isActive);
+    const activeTypes = activeWins.map((w) => w.type);
     const recentWin = [...windows].sort((a, b) => b.start.localeCompare(a.start))[0];
     const profile = injuryRiskProfile(activeTypes.length ? activeTypes : recentWin ? [recentWin.type] : []);
 
-    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, headInjury, riskQualities: profile.riskQualities });
+    // Layoff = days out for the governing injury (active one, else most recent):
+    // from its start to when training resumes (coach's start date, else today).
+    // Drives how high/long the ramp is — a short layoff barely detrains.
+    const governing = activeWins.sort((a, b) => a.start.localeCompare(b.start))[0] ?? recentWin;
+    const layoffEnd = rttStartDate ?? (governing && !currentlyInjured ? governing.end : now);
+    const dayMs = 86400000;
+    const layoffDays = governing ? Math.max(0, Math.round((Date.parse(layoffEnd) - Date.parse(governing.start)) / dayMs)) : null;
+
+    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities });
 
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },

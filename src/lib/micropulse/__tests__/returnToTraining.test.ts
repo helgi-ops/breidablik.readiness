@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { computeReturnToTraining, injuryRiskProfile, QUALITY_ORDER, type RttSession } from "../returnToTraining";
+import { computeReturnToTraining, injuryRiskProfile, retainedFraction, QUALITY_ORDER, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
   return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, topSpeed: 30, ...o };
@@ -88,6 +88,31 @@ test("left/right change-of-direction asymmetry is reported (monitored, not rampe
   assert.ok((r.asymmetry.healthyLeftPct ?? 0) >= 50 && (r.asymmetry.healthyLeftPct ?? 0) <= 55); // ~53% left in the fixture
   // asymmetry is NOT a plan quality
   assert.ok(!r.plan!.weeks.some((w) => (w.quality as string) === "asymmetry"));
+});
+
+test("retainedFraction: ~full for a few days off, decays with a long layoff, stays bounded", () => {
+  assert.equal(retainedFraction(2), 1);
+  assert.ok(retainedFraction(10) > retainedFraction(28));
+  assert.ok(retainedFraction(28) > retainedFraction(84));
+  assert.ok(retainedFraction(400) >= 0.35 && retainedFraction(10) <= 1);
+});
+
+test("a short layoff yields a shorter ramp that starts higher than a long layoff", () => {
+  const s = fixture();
+  const shortL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 10 });
+  const longL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 70 });
+  const span = (r: typeof shortL) => Math.max(...r.plan!.weeks.map((w) => w.week));
+  assert.ok(span(shortL) < span(longL), `short ${span(shortL)} < long ${span(longL)}`);
+  assert.equal(shortL.layoff.rampWeeks, span(shortL));
+  const vol1 = (r: typeof shortL) => r.plan!.weeks.find((w) => w.week === 1 && w.quality === "volume")!.target;
+  assert.ok(vol1(shortL) > vol1(longL), `short v1 ${vol1(shortL)} > long v1 ${vol1(longL)}`);
+  assert.ok((shortL.layoff.retainedPct ?? 0) > (longL.layoff.retainedPct ?? 0));
+  for (const q of QUALITY_ORDER) assert.ok(shortL.rampFrom[q] >= shortL.floor[q]); // never below measured floor
+});
+
+test("ACWR stays capped even when the plan starts high after a short layoff", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), ...START, layoffDays: 10 });
+  for (const w of r.plan!.weeks) assert.ok(w.acwr <= 1.3, `week ${w.week} ${w.quality} acwr ${w.acwr}`);
 });
 
 test("every unlocked target carries a why-line with % of healthy weekly baseline", () => {

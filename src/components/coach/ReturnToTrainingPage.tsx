@@ -40,6 +40,8 @@ type Resp = {
   rttStartDate: string | null;
   baseline: Record<Quality, number> & { builtFromHealthyWeeks: number; topSpeed: number };
   floor: Record<Quality, number> & { topSpeed: number };
+  rampFrom?: Record<Quality, number> & { topSpeed: number };
+  layoff?: { days: number | null; retainedPct: number | null; rampWeeks: number };
   asymmetry: { healthyLeftPct: number | null; currentLeftPct: number | null; imbalanced: boolean };
   plan: { verdict: string; weeks: WeekTarget[] } | null;
   confidence: "high" | "medium" | "low";
@@ -102,8 +104,15 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{is ? "Aftur í æfingar" : "Return-to-training"}</span>
             {data.currentlyInjured && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-700">{is ? "Meiddur núna" : "Currently injured"}</span>}
           </div>
-          <div className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${confColor}`} title={is ? "Þroski grunnlínu — fjöldi heilbrigðra vikna sem loftið er byggt á" : "Baseline maturity — how many healthy weeks the ceiling is built from"}>
-            {is ? "Vissa" : "Confidence"}: {conf} · {data.baseline.builtFromHealthyWeeks} {is ? "heilbrigðar vikur" : "healthy weeks"}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${confColor}`} title={is ? "Þroski grunnlínu — fjöldi heilbrigðra vikna sem loftið er byggt á" : "Baseline maturity — how many healthy weeks the ceiling is built from"}>
+              {is ? "Vissa" : "Confidence"}: {conf} · {data.baseline.builtFromHealthyWeeks} {is ? "heilbrigðar vikur" : "healthy weeks"}
+            </span>
+            {data.layoff?.days != null && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700" title={is ? "Lengd fjarveru ræður hversu hátt og lengi upptröppunin er — stutt fjarvera heldur mestu álagsþoli (detraining)." : "Layoff length sets how high and long the ramp is — a short layoff keeps most capacity (detraining)."}>
+                {data.layoff.days} {is ? "daga frá" : "day layoff"} · ~{data.layoff.retainedPct}% {is ? "álagsþol eftir" : "capacity"} · {data.layoff.rampWeeks} {is ? "vikna plan" : "wk plan"}
+              </span>
+            )}
           </div>
         </div>
       </div>

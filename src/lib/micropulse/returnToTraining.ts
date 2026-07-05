@@ -7,6 +7,13 @@
  *     weeks' totals, MATCHES INCLUDED (a normal healthy week has a match), never
  *     injured-window weeks, never a squad average, never a single freak session.
  *   • Floor = his most recent weekly load (may be rehab — that's where he is now).
+ *   • Ramp origin & length scale with the LAYOFF. A player out 10 days barely
+ *     detrains — he keeps most of his capacity, so the plan starts high and takes
+ *     ~2 weeks; a player out 10 weeks genuinely detrains, so it starts low and
+ *     takes many. We retain a decaying fraction of the ceiling with layoff days
+ *     (detraining curve), take the ramp ORIGIN = max(measured floor, retained ×
+ *     ceiling), and derive the number of weeks from how far that origin sits below
+ *     the ceiling under the 10%/week climb. Short layoff → short plan.
  *   • Plan = ramps each quality week by week in a fixed clinical order (volume →
  *     distance → HSR → sprint → IMA accel → IMA decel → high-intensity braking →
  *     change-of-direction LAST — the most re-injury-prone), each unlocked only
@@ -46,7 +53,8 @@ export type RttInput = {
   refDate: string;
   rttStartDate?: string | null;
   currentlyInjured: boolean;
-  weeks?: number;               // default = number of qualities
+  layoffDays?: number | null;   // days out (injury start → return/now). Drives ramp origin & length.
+  weeks?: number;               // hard override of the derived plan length
   headInjury?: boolean;
   riskQualities?: QualityKey[];
 };
@@ -74,11 +82,14 @@ export type RttWeekTarget = {
   target: number; pctOfHealthy: number; wow: number; acwr: number;
   locked: boolean; unlockWeek: number; caution: boolean; why: string;
 };
+export type RttLayoff = { days: number | null; retainedPct: number | null; rampWeeks: number };
 export type RttResult = {
   currentlyInjured: boolean;
   unit: "week";
   baseline: RttBaseline;
   floor: RttFloor;
+  rampFrom: RttFloor;   // detraining-adjusted week-1 origin per quality (≥ measured floor)
+  layoff: RttLayoff;
   asymmetry: RttAsymmetry;
   plan: { verdict: string; weeks: RttWeekTarget[] } | null;
   confidence: "high" | "medium" | "low";
@@ -90,6 +101,21 @@ const P_CEILING = 0.85;
 const REINTRO_FRAC = 0.30;
 const REINTRO_CAUTION = 0.20;
 const ASYM_TOLERANCE = 12; // percentage-points from healthy L/R balance to flag
+const DETRAIN_TAU = 50;    // days — capacity decay constant of the detraining curve
+const DETRAIN_FLOOR = 0.35; // never assume <35% retained (he's still a trained athlete)
+const MIN_RAMP_WEEKS = 2;
+const MAX_RAMP_WEEKS = 12;
+
+/**
+ * Fraction of healthy capacity retained after `layoffDays` out. ~1.0 for a few
+ * days off, decaying toward DETRAIN_FLOOR over months (detraining literature:
+ * meaningful aerobic/neuromuscular loss builds after ~2 weeks). This sets how
+ * high the plan starts and — via the load bridge — how many weeks it needs.
+ */
+export function retainedFraction(layoffDays: number): number {
+  if (!Number.isFinite(layoffDays) || layoffDays <= 3) return 1;
+  return DETRAIN_FLOOR + (1 - DETRAIN_FLOOR) * Math.exp(-(layoffDays - 3) / DETRAIN_TAU);
+}
 
 const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: number }> = {
   volume:    { en: "Weekly player load", is: "Vikuálag", unit: "", dp: 0 },
@@ -125,7 +151,6 @@ function weekStart(dateIso: string): string {
 type WeekAgg = { weekStart: string; injured: boolean; totals: Record<QualityKey, number>; topSpeed: number; codLeft: number; codRight: number };
 
 export function computeReturnToTraining(inp: RttInput): RttResult {
-  const weeks = inp.weeks ?? QUALITY_ORDER.length;
   const real = inp.sessions.filter((s) => !s.estimated);
 
   // Aggregate sessions → weeks (MATCHES INCLUDED — a healthy week has a match).
@@ -168,8 +193,30 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
 
   const confidence: RttResult["confidence"] = healthyWeeks.length >= 4 ? "high" : healthyWeeks.length >= 2 ? "medium" : "low";
 
+  // ── Detraining-scaled ramp origin & length ─────────────────────────────────
+  // A short layoff keeps most of the ceiling → start high, few weeks. A long one
+  // detrains → start near the measured floor, many weeks. The measured floor is a
+  // hard lower bound (never plan below what he's actually doing now).
+  const hasLayoff = inp.layoffDays != null && Number.isFinite(inp.layoffDays);
+  const retained = hasLayoff ? retainedFraction(inp.layoffDays as number) : null;
+  const rampFrom = { topSpeed: floor.topSpeed } as RttFloor;
+  for (const q of QUALITY_ORDER) {
+    const retainedTarget = retained != null ? round(retained * baseline[q], QLABEL[q].dp) : 0;
+    rampFrom[q] = Math.max(floor[q], retainedTarget);
+  }
+  // Derive plan length from the volume bridge (origin → ceiling under 10%/week),
+  // unless the coach hard-overrides. No layoff info → keep the full staged ramp.
+  let weeks = inp.weeks ?? QUALITY_ORDER.length;
+  if (inp.weeks == null && hasLayoff) {
+    const originVol = rampFrom.volume, ceilVol = baseline.volume;
+    const bridge = ceilVol > 0 && originVol > 0 && originVol < ceilVol ? Math.ceil(Math.log(ceilVol / originVol) / Math.log(RAMP)) : 0;
+    const minWeeks = (inp.riskQualities?.length ?? 0) > 0 ? MIN_RAMP_WEEKS + 1 : MIN_RAMP_WEEKS;
+    weeks = Math.min(MAX_RAMP_WEEKS, Math.max(minWeeks, bridge));
+  }
+  const layoff: RttLayoff = { days: hasLayoff ? Math.round(inp.layoffDays as number) : null, retainedPct: retained != null ? Math.round(retained * 100) : null, rampWeeks: weeks };
+
   if (inp.currentlyInjured && !inp.rttStartDate) {
-    return { currentlyInjured: true, unit: "week", baseline, floor, asymmetry, plan: null, confidence };
+    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, confidence };
   }
 
   const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / (QUALITY_ORDER.length - 1)));
@@ -187,15 +234,16 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
       const risky = riskSet.has(q);
       const ramp = risky ? RAMP_CAUTION : RAMP;
       const reintroFrac = risky ? REINTRO_CAUTION : REINTRO_FRAC;
+      const origin = rampFrom[q];
       const prevArr = targetsByQuality[q];
-      const prev = prevArr.length ? prevArr[prevArr.length - 1] : floor[q];
+      const prev = prevArr.length ? prevArr[prevArr.length - 1] : origin;
 
       let target: number;
       if (locked) target = floor[q];
       else if (w === uw) {
-        const startFromFloor = floor[q] * ramp;
+        const startFromOrigin = origin * ramp;
         const reintro = ceiling * reintroFrac;
-        target = Math.min(ceiling || startFromFloor, Math.max(startFromFloor, floor[q] > 0.05 * ceiling ? startFromFloor : reintro));
+        target = Math.min(ceiling || startFromOrigin, Math.max(startFromOrigin, origin > 0.05 * ceiling ? startFromOrigin : reintro));
       } else target = Math.min(ceiling, prev * ramp);
       target = round(target, QLABEL[q].dp);
       prevArr.push(target);
@@ -226,9 +274,10 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   }
 
   const w1 = QUALITY_ORDER.filter((_, qi) => unlockWeek(qi) <= 1).map((q) => QLABEL[q].en.toLowerCase().replace("weekly ", ""));
-  const verdict = `Week 1 of ${weeks} · rebuild ${w1.join(" + ") || "weekly load"}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
+  const layoffNote = layoff.days != null ? ` · ${layoff.days}-day layoff (~${layoff.retainedPct}% capacity retained)` : "";
+  const verdict = `Week 1 of ${weeks} · rebuild ${w1.join(" + ") || "weekly load"}${layoffNote}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
 
-  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, asymmetry, plan: { verdict, weeks: weekTargets }, confidence };
+  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, weeks: weekTargets }, confidence };
 }
 
 export { QLABEL as RTT_QUALITY_LABELS };
