@@ -13,6 +13,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(process.cwd(), "src"),
+      // `server-only` throws if imported outside a React Server Component; stub it
+      // so pure-logic modules that guard with it can be unit-tested in node.
+      "server-only": resolve(process.cwd(), "src/test/stubs/server-only.ts"),
     },
   },
   test: {

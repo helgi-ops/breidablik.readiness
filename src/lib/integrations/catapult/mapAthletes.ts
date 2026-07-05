@@ -3,16 +3,25 @@ import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { CatapultAthlete, CatapultAthleteMapRecord } from "./types";
 
-type PlayerRow = {
+export type PlayerRow = {
   id: string;
   full_name: string | null;
   team_id: string | null;
   email?: string | null;
 };
 
-function normalizeName(value: string | null | undefined): string {
+/**
+ * Fold a name to a comparable key. Diacritics are stripped to their BASE letter
+ * with no spurious spaces: after NFKD splits an accented vowel into base + a
+ * combining mark, we delete the combining marks (U+0300–U+036F) BEFORE the
+ * `[^\w\s]→space` step. Without this, "Örn" → "o rn" (two tokens) while plain
+ * "Orn" → "orn", so the correct same-name match failed and a looser wrong one
+ * won. þ/ð/æ have no canonical decomposition, so they keep explicit rules.
+ */
+export function normalizeName(value: string | null | undefined): string {
   return String(value ?? "")
     .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "") // fold diacritics (ö→o, á→a, ý→y…) without inserting spaces
     .replace(/þ/gi, "th")
     .replace(/ð/gi, "d")
     .replace(/æ/gi, "ae")
@@ -51,10 +60,10 @@ function getCatapultNameCandidates(athlete: CatapultAthlete): string[] {
     candidates.add(`${first} ${lastInitial}`);
   }
 
-  if (first) {
-    candidates.add(first);
-  }
-
+  // NOTE: the bare first-name candidate was intentionally removed. It let an
+  // athlete like "Dagur Orn Fjeldsted" match a player whose whole name is just
+  // "Dagur" (a different person). First+last-initial is the loosest we allow, and
+  // even that only auto-commits when it is the UNIQUE match within the team.
   return Array.from(candidates);
 }
 
@@ -176,16 +185,26 @@ export async function upsertCatapultAthleteMapping(record: CatapultAthleteMapRec
   if (error) throw new Error(error.message);
 }
 
-export async function mapCatapultAthleteToPlayer(
+/**
+ * Pure matching decision (no DB) — unit-testable. `players` is expected to be
+ * ALREADY team-scoped to `sourceTeamId` (loadPlayersWithEmail does that). This
+ * function enforces two hard rules that make cross-team mismatches impossible:
+ *   1. No `sourceTeamId` → return null. Auto-matching against every club's roster
+ *      is exactly the failure mode; never match globally.
+ *   2. A persisted mapping is honored ONLY if its player is on this team. A stale
+ *      cross-team row (the historical incident) must not keep routing data.
+ */
+export function resolveCatapultMatch(
   athlete: CatapultAthlete,
-  options?: { sourceTeamId?: string | null }
-): Promise<CatapultAthleteMapRecord | null> {
-  const sourceTeamId = options?.sourceTeamId ?? null;
-  const manualMap = await getManualCatapultMappings({ sourceTeamId });
-  const existing = manualMap.get(athlete.id);
-  if (existing) return existing;
+  players: PlayerRow[],
+  existing: CatapultAthleteMapRecord | undefined,
+  sourceTeamId: string | null,
+): CatapultAthleteMapRecord | null {
+  if (!sourceTeamId) return null;
 
-  const players = await loadPlayersWithEmail(sourceTeamId);
+  const teamPlayerIds = new Set(players.map((p) => p.id));
+  if (existing && teamPlayerIds.has(existing.micropulsePlayerId)) return existing;
+
   const athleteEmail = String(athlete.email ?? "").trim().toLowerCase();
   if (athleteEmail) {
     const emailMatch = players.find((player) => String(player.email ?? "").trim().toLowerCase() === athleteEmail);
@@ -236,4 +255,19 @@ export async function mapCatapultAthleteToPlayer(
     confidence: 0.64,
     sourceTeamId,
   };
+}
+
+export async function mapCatapultAthleteToPlayer(
+  athlete: CatapultAthlete,
+  options?: { sourceTeamId?: string | null }
+): Promise<CatapultAthleteMapRecord | null> {
+  const sourceTeamId = options?.sourceTeamId ?? null;
+  // Refuse to even load a roster without a team scope — see resolveCatapultMatch.
+  if (!sourceTeamId) return null;
+
+  const [players, manualMap] = await Promise.all([
+    loadPlayersWithEmail(sourceTeamId),
+    getManualCatapultMappings({ sourceTeamId }),
+  ]);
+  return resolveCatapultMatch(athlete, players, manualMap.get(athlete.id), sourceTeamId);
 }

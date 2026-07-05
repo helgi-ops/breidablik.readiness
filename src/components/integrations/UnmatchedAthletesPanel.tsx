@@ -66,8 +66,10 @@ export default function UnmatchedAthletesPanel() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saveSuccess, setSaveSuccess] = useState<Record<string, boolean>>({});
   const [isOpen, setIsOpen] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   const fetchData = useCallback(async () => {
+    setAttempted(true);
     setLoading(true);
     setError("");
     try {
@@ -86,12 +88,15 @@ export default function UnmatchedAthletesPanel() {
     }
   }, []);
 
-  // Fetch on first open
+  // Fetch once on first open. Gate on `attempted` (not `!data`) so a failed
+  // request does NOT retrigger the effect every render — that spun the endpoint
+  // ~200x on a 400. The error banner's "Reyna aftur" button (and Endursækja)
+  // call fetchData directly to retry on demand.
   useEffect(() => {
-    if (isOpen && !data && !loading) {
+    if (isOpen && !attempted && !loading) {
       fetchData();
     }
-  }, [isOpen, data, loading, fetchData]);
+  }, [isOpen, attempted, loading, fetchData]);
 
   async function saveMapping(athlete: UnmatchedAthlete) {
     const playerId = selections[athlete.catapultId];

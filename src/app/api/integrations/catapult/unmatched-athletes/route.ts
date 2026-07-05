@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdminClient } from "@/lib/supabaseServer";
-import { fetchCatapultAthletes, getConfigForTeam, setActiveCatapultConfig } from "@/lib/integrations/catapult/api";
+import { fetchCatapultAthletes, getConfigForTeam, getConfigFromEnv, setActiveCatapultConfig } from "@/lib/integrations/catapult/api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "@/lib/integrations/catapult/mapAthletes";
 import type { CatapultAthleteMapRecord } from "@/lib/integrations/catapult/types";
 
@@ -50,8 +50,19 @@ export async function GET(req: Request) {
   try {
     const { teamId } = await requireCoachContext(req);
 
-    // Get Catapult config for this team
-    const config = await getConfigForTeam(teamId);
+    // Get Catapult config for this team. Fall back to the legacy env config
+    // (mirrors daily-sync) so env-configured teams like Breiðablik work — but
+    // ONLY when the env account actually belongs to THIS team, so a different
+    // team can never fetch another club's athletes.
+    let config = await getConfigForTeam(teamId);
+    if (!config) {
+      try {
+        const envConfig = getConfigFromEnv();
+        if (envConfig.teamId && envConfig.teamId === teamId) config = envConfig;
+      } catch {
+        // No env config available — fall through to the 400 below.
+      }
+    }
     if (!config) {
       return NextResponse.json({
         error: "Catapult er ekki tengt fyrir þetta lið. Settu upp credentials í Catapult uppsetningu.",

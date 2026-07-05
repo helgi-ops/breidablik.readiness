@@ -205,12 +205,19 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-/** Legacy: read Catapult credentials from environment variables */
+/**
+ * Legacy: read Catapult credentials from environment variables.
+ * `teamId` (CATAPULT_TEAM_ID) is REQUIRED for the env path to auto-match
+ * athletes — without it the sync can only record athletes as unmatched, because
+ * matching against every club's roster is what caused a cross-team mismatch.
+ * Set CATAPULT_TEAM_ID to the team that owns this Catapult org (Breiðablik).
+ */
 export function getConfigFromEnv(): CatapultConfig {
   return {
     baseUrl: (process.env.CATAPULT_API_BASE?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
     apiKey: requiredEnv("CATAPULT_API_KEY"),
     orgId: requiredEnv("CATAPULT_ORG_ID"),
+    teamId: process.env.CATAPULT_TEAM_ID?.trim() || undefined,
   };
 }
 

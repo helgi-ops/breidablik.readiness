@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes, setActiveCatapultConfig } from "./api";
+import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes, setActiveCatapultConfig, getConfigFromEnv } from "./api";
 import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
@@ -370,7 +370,15 @@ export async function syncCatapultDailyMetrics(
     setActiveCatapultConfig(options.config);
   }
   try {
-    return await _syncCatapultDailyMetricsInner(inputDate, options);
+    // Resolve the team whose roster athlete-matching is scoped to. A DB config
+    // carries its teamId; the legacy env path resolves it from CATAPULT_TEAM_ID.
+    // If neither yields a team, sourceTeamId stays null and matching is refused
+    // (athletes recorded unmatched) — never a cross-team global match.
+    let sourceTeamId = options?.config?.teamId ?? null;
+    if (!sourceTeamId && !options?.config) {
+      try { sourceTeamId = getConfigFromEnv().teamId ?? null; } catch { sourceTeamId = null; }
+    }
+    return await _syncCatapultDailyMetricsInner(inputDate, { debugIma: options?.debugIma, sourceTeamId });
   } finally {
     // Always reset config after sync to avoid leaking between teams
     if (options?.config) {
@@ -381,11 +389,24 @@ export async function syncCatapultDailyMetrics(
 
 async function _syncCatapultDailyMetricsInner(
   inputDate?: string | null,
-  options?: { debugIma?: boolean }
+  options?: { debugIma?: boolean; sourceTeamId?: string | null }
 ): Promise<CatapultSyncResult> {
   const targetDate = dateKey(inputDate);
   const debugImaEnabled = options?.debugIma || process.env.CATAPULT_DEBUG_IMA === "true";
+  const sourceTeamId = options?.sourceTeamId ?? null;
   const warnings: string[] = [];
+  if (!sourceTeamId) {
+    // No team scope — every athlete will be recorded unmatched (safe) instead of
+    // matched against every club's roster. Surface it loudly so it's fixed.
+    warnings.push("No source team resolved for Catapult matching (set CATAPULT_TEAM_ID). Athlete matching skipped to prevent cross-team mismatches.");
+    await logIntegrationEvent({
+      provider: "catapult",
+      scope: "athlete-map",
+      status: "warning",
+      message: "Catapult sync ran without a source team — athlete matching skipped (set CATAPULT_TEAM_ID).",
+      metadata: { date: targetDate },
+    });
+  }
   const athleteDirectory = await loadAthleteDirectory();
   const activities = await fetchActivitiesForDate(targetDate);
 
@@ -448,7 +469,7 @@ async function _syncCatapultDailyMetricsInner(
       lastName: "",
       email: null,
     };
-    const mapped = await mapCatapultAthleteToPlayer(athlete);
+    const mapped = await mapCatapultAthleteToPlayer(athlete, { sourceTeamId });
     if (!mapped) {
       unmatchedCount += 1;
       const athleteName = [athlete.firstName, athlete.lastName].filter(Boolean).join(" ").trim() || "(no name)";
