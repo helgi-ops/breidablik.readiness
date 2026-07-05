@@ -44,16 +44,21 @@ export async function GET(req: Request) {
       if (open) cur.currentlyInjured = true;
       byPlayer.set(pid, cur);
     };
-    // Open iff NOT explicitly closed. is_active === false / status === "cleared"
-    // means resolved even when no return_date was recorded (the common case) —
-    // treating a missing return_date as "still open" is what wrongly kept cleared
-    // players flagged as injured.
-    for (const r of (ieRes.data ?? []) as Array<{ player_id: string; injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
-      note(r.player_id, r.injury_date, r.injury_type, r.return_date, r.is_active !== false && (!r.return_date || r.return_date >= now));
-    }
+    // player_injuries (the RTP workflow) is AUTHORITATIVE for who is currently
+    // injured — same rule as the Injuries/RTP page: active = status !== "cleared".
+    // A passed estimated return date does NOT close an injury; only "cleared" or
+    // an actual return does. injury_events.is_active can be stale, so it only
+    // drives "currently injured" for players with no RTP record (else it is
+    // display-only).
+    const piPlayers = new Set<string>();
     for (const r of (piRes.data ?? []) as Array<{ player_id: string; injury_date: string; injury_type: string | null; status: string | null; actual_return_date: string | null; estimated_return_date: string | null }>) {
+      piPlayers.add(r.player_id);
       const end = r.actual_return_date ?? r.estimated_return_date ?? now;
-      note(r.player_id, r.injury_date, r.injury_type, end, r.status !== "cleared" && !r.actual_return_date && end >= now);
+      note(r.player_id, r.injury_date, r.injury_type, end, r.status !== "cleared" && !r.actual_return_date);
+    }
+    for (const r of (ieRes.data ?? []) as Array<{ player_id: string; injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
+      const ieOpen = r.is_active !== false && (!r.return_date || r.return_date >= now);
+      note(r.player_id, r.injury_date, r.injury_type, r.return_date, !piPlayers.has(r.player_id) && ieOpen);
     }
 
     const injured = [...byPlayer.values()].sort((a, b) => Number(b.currentlyInjured) - Number(a.currentlyInjured) || (b.injuryDate ?? "").localeCompare(a.injuryDate ?? ""));

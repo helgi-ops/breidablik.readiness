@@ -48,19 +48,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       sb.from("player_injuries").select("injury_date, injury_type, status, rtp_stage, estimated_return_date, actual_return_date").eq("player_id", playerId),
     ]);
     const windows: Win[] = [];
-    // Active iff NOT explicitly closed. is_active === false / status === "cleared"
-    // means resolved even when no return_date was recorded — treating a missing
-    // return_date as "still open" wrongly kept cleared players flagged as injured.
+    // player_injuries (the RTP workflow) is AUTHORITATIVE — same rule as the
+    // Injuries/RTP page: active = status !== "cleared". A passed estimated return
+    // date does NOT close an injury; only "cleared" or an actual return does.
+    // injury_events.is_active can be stale, so it only marks "active" for players
+    // with no RTP record (else it is history-only, still shaded on the timeline).
+    const hasPi = (piRes.data ?? []).length > 0;
     for (const r of (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
       if (!r.injury_date) continue;
-      windows.push({ start: r.injury_date, end: r.return_date ?? now, type: r.injury_type ?? "injury", source: "injury_events", isActive: r.is_active !== false && (!r.return_date || r.return_date >= now) });
+      const ieOpen = r.is_active !== false && (!r.return_date || r.return_date >= now);
+      windows.push({ start: r.injury_date, end: ieOpen ? now : (r.return_date ?? now), type: r.injury_type ?? "injury", source: "injury_events", isActive: !hasPi && ieOpen });
     }
     for (const r of (piRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; status: string | null; actual_return_date: string | null; estimated_return_date: string | null }>) {
       if (!r.injury_date) continue;
-      const end = r.actual_return_date ?? r.estimated_return_date ?? now;
-      windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: r.status !== "cleared" && !r.actual_return_date && end >= now });
+      const open = r.status !== "cleared" && !r.actual_return_date;
+      const end = open ? now : (r.actual_return_date ?? r.estimated_return_date ?? now);
+      windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: open });
     }
-    const currentlyInjured = windows.some((w) => w.isActive && (!w.end || w.end >= now));
+    const currentlyInjured = windows.some((w) => w.isActive);
     const headInjury = windows.some((w) => /concuss|head|hia|heilahrist|höfu|hofu|hnakk/i.test(w.type) && (w.isActive || w.end >= since));
     // Surface a source disagreement (e.g. concussion vs sprain) rather than pick one.
     const typesByStart = new Map<string, Set<string>>();
