@@ -324,10 +324,11 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 type="button"
                 onClick={() => setNavModePersist("rail")}
                 title={lang === "IS" ? "Prófa táknarönd (tilraun)" : "Try the icon rail (experiment)"}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={lang === "IS" ? "Prófa táknarönd" : "Try the icon rail"}
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="6" height="18" rx="1" /><line x1="13" y1="7" x2="20" y2="7" /><line x1="13" y1="12" x2="20" y2="12" /><line x1="13" y1="17" x2="18" y2="17" /></svg>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="6" height="18" rx="1" /><line x1="13" y1="7" x2="20" y2="7" /><line x1="13" y1="12" x2="20" y2="12" /><line x1="13" y1="17" x2="18" y2="17" /></svg>
+                {lang === "IS" ? "Táknarönd" : "Icon rail"}
               </button>
             )}
             <InstallPwaButton role="coach" variant="compact" />
