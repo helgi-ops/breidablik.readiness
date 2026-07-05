@@ -48,16 +48,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       sb.from("player_injuries").select("injury_date, injury_type, status, rtp_stage, estimated_return_date, actual_return_date").eq("player_id", playerId),
     ]);
     const windows: Win[] = [];
+    // Active iff NOT explicitly closed. is_active === false / status === "cleared"
+    // means resolved even when no return_date was recorded — treating a missing
+    // return_date as "still open" wrongly kept cleared players flagged as injured.
     for (const r of (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
       if (!r.injury_date) continue;
-      const open = !r.return_date || !!r.is_active;
-      windows.push({ start: r.injury_date, end: r.return_date ?? now, type: r.injury_type ?? "injury", source: "injury_events", isActive: open && (!r.return_date || r.return_date >= now) });
+      windows.push({ start: r.injury_date, end: r.return_date ?? now, type: r.injury_type ?? "injury", source: "injury_events", isActive: r.is_active !== false && (!r.return_date || r.return_date >= now) });
     }
     for (const r of (piRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; status: string | null; actual_return_date: string | null; estimated_return_date: string | null }>) {
       if (!r.injury_date) continue;
       const end = r.actual_return_date ?? r.estimated_return_date ?? now;
-      const open = !r.actual_return_date;
-      windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: open && end >= now });
+      windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: r.status !== "cleared" && !r.actual_return_date && end >= now });
     }
     const currentlyInjured = windows.some((w) => w.isActive && (!w.end || w.end >= now));
     const headInjury = windows.some((w) => /concuss|head|hia|heilahrist|höfu|hofu|hnakk/i.test(w.type) && (w.isActive || w.end >= since));
