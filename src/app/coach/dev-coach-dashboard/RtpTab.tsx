@@ -32,7 +32,6 @@ const COPY = {
     bodyPart:         "Líkamshlutar",
     injuryType:       "Tegund meiðsla",
     severity:         "Alvarleiki",
-    estReturn:        "Áætluð skiladagsetning",
     notes:            "Athugasemdir",
     notesPlaceholder: "Lýsing á meiðslum, meðferð, o.fl.",
     saveBtn:          "Vista meiðsli",
@@ -42,7 +41,7 @@ const COPY = {
     progressBtn:      (label: string) => `Fara yfir í: ${label}`,
     clearedMsg:       "✓ Leikmaður hefur grænljós — tilbúinn til leiks",
     statusLabel:      "Staða",
-    actualReturn:     "Raunveruleg skiladagur",
+    clearedAutoNote:  "Skiladagur skráist sjálfkrafa þegar staðan er sett á „búinn“.",
     saveChanges:      "Vista breytingar",
     close:            "Loka",
     daysAgo:          (n: number) => `${n} dagar liðnir`,
@@ -81,7 +80,6 @@ const COPY = {
     bodyPart:         "Body part",
     injuryType:       "Injury type",
     severity:         "Severity",
-    estReturn:        "Estimated return date",
     notes:            "Notes",
     notesPlaceholder: "Description, treatment plan, etc.",
     saveBtn:          "Save injury",
@@ -91,7 +89,7 @@ const COPY = {
     progressBtn:      (label: string) => `Progress to: ${label}`,
     clearedMsg:       "✓ Player is cleared — available for match play",
     statusLabel:      "Status",
-    actualReturn:     "Actual return date",
+    clearedAutoNote:  "Return date is recorded automatically when status is set to cleared.",
     saveChanges:      "Save changes",
     close:            "Close",
     daysAgo:          (n: number) => `${n} days ago`,
@@ -335,7 +333,6 @@ function NewInjuryForm({ players, teamId, lang, onSaved, onCancel }: NewInjuryFo
   const [bodyPart, setBodyPart]     = useState<string>(ct.bodyParts[0]);
   const [injuryType, setInjuryType] = useState<string>(ct.injuryTypes[0]);
   const [severity, setSeverity]     = useState<"mild" | "moderate" | "severe">("moderate");
-  const [estReturn, setEstReturn]   = useState("");
   const [notes, setNotes]           = useState("");
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
@@ -360,7 +357,6 @@ function NewInjuryForm({ players, teamId, lang, onSaved, onCancel }: NewInjuryFo
       severity,
       status: "injured",
       rtp_stage: 0,
-      estimated_return_date: estReturn || null,
       notes: notes || null,
     });
 
@@ -411,10 +407,6 @@ function NewInjuryForm({ players, teamId, lang, onSaved, onCancel }: NewInjuryFo
               <option value="moderate">{ct.moderate}</option>
               <option value="severe">{ct.severe}</option>
             </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">{ct.estReturn}</label>
-            <input type="date" className={field} value={estReturn} onChange={e => setEstReturn(e.target.value)} />
           </div>
         </div>
         <div>
@@ -467,32 +459,36 @@ function InjuryCard({
   const [localStage, setLocalStage]     = useState(injury.rtp_stage);
   const [localStatus, setLocalStatus]   = useState(injury.status);
   const [localNotes, setLocalNotes]     = useState(injury.notes ?? "");
-  const [actualReturn, setActualReturn] = useState(injury.actual_return_date ?? "");
 
   const days = daysSince(injury.injury_date);
+  const today = new Date().toISOString().slice(0, 10);
   const currentStageInfo = stages[localStage];
 
   async function handleProgressStage() {
     const next = Math.min(5, localStage + 1);
     const nextStatus: Injury["status"] = next === 5 ? "cleared" : next >= 3 ? "rtp_training" : next >= 1 ? "rehabilitation" : "injured";
+    // Return date is auto-recorded on clear (no manual date to guess).
+    const returned = nextStatus === "cleared" ? (injury.actual_return_date ?? today) : null;
     setSaving(true);
     await supabase
       .from("player_injuries")
-      .update({ rtp_stage: next, status: nextStatus })
+      .update({ rtp_stage: next, status: nextStatus, actual_return_date: returned })
       .eq("id", injury.id);
     setLocalStage(next);
     setLocalStatus(nextStatus);
-    onUpdate(injury.id, { rtp_stage: next, status: nextStatus });
+    onUpdate(injury.id, { rtp_stage: next, status: nextStatus, actual_return_date: returned });
     setSaving(false);
   }
 
   async function handleSaveNotes() {
+    // Return date follows status: set on clear, cleared otherwise (no manual date).
+    const returned = localStatus === "cleared" ? (injury.actual_return_date ?? today) : null;
     setSaving(true);
     await supabase
       .from("player_injuries")
-      .update({ notes: localNotes || null, actual_return_date: actualReturn || null, status: localStatus })
+      .update({ notes: localNotes || null, actual_return_date: returned, status: localStatus })
       .eq("id", injury.id);
-    onUpdate(injury.id, { notes: localNotes || null, actual_return_date: actualReturn || null, status: localStatus });
+    onUpdate(injury.id, { notes: localNotes || null, actual_return_date: returned, status: localStatus });
     setSaving(false);
     setExpanded(false);
   }
@@ -582,34 +578,22 @@ function InjuryCard({
             )}
           </div>
 
-          {/* Status + actual return */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                {ct.statusLabel}
-              </label>
-              <select
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={localStatus}
-                onChange={e => setLocalStatus(e.target.value as Injury["status"])}
-              >
-                <option value="injured">{ct.injured}</option>
-                <option value="rehabilitation">{ct.rehabilitation}</option>
-                <option value="rtp_training">{ct.rtp_training}</option>
-                <option value="cleared">{ct.cleared}</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                {ct.actualReturn}
-              </label>
-              <input
-                type="date"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={actualReturn}
-                onChange={e => setActualReturn(e.target.value)}
-              />
-            </div>
+          {/* Status (return date is auto-recorded on clear) */}
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+              {ct.statusLabel}
+            </label>
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={localStatus}
+              onChange={e => setLocalStatus(e.target.value as Injury["status"])}
+            >
+              <option value="injured">{ct.injured}</option>
+              <option value="rehabilitation">{ct.rehabilitation}</option>
+              <option value="rtp_training">{ct.rtp_training}</option>
+              <option value="cleared">{ct.cleared}</option>
+            </select>
+            <p className="mt-1 text-[11px] text-slate-400">{ct.clearedAutoNote}</p>
           </div>
 
           {/* Notes */}
