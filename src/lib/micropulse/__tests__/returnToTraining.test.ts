@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import { computeReturnToTraining, QUALITY_ORDER, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
-  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, cod: 200, topSpeed: 30, ...o };
+  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, cod: 200, topSpeed: 30, ...o };
 }
 
 // A healthy training block + an injured rehab block (lower everything) + a big match.
 function fixture(): RttSession[] {
   const healthy = ["2026-05-09", "2026-05-12", "2026-05-15", "2026-05-19", "2026-05-22", "2026-05-26", "2026-05-28"].map((d) =>
-    session(d, { load: 480, distance: 6400, hsr: 950, sprint: 320, cod: 210, topSpeed: 31 }),
+    session(d, { load: 480, distance: 6400, hsr: 950, sprint: 320, accel: 48, decel: 42, cod: 210, topSpeed: 31 }),
   );
-  const match = session("2026-05-24", { isMatch: true, load: 620, distance: 11000, hsr: 1500, sprint: 480, cod: 300, topSpeed: 32 });
+  const match = session("2026-05-24", { isMatch: true, load: 620, distance: 11000, hsr: 1500, sprint: 480, accel: 70, decel: 65, cod: 300, topSpeed: 32 });
   const injured = ["2026-06-15", "2026-06-18", "2026-06-22"].map((d) =>
-    session(d, { injured: true, load: 300, distance: 3500, hsr: 200, sprint: 0, cod: 0, topSpeed: 20 }),
+    session(d, { injured: true, load: 300, distance: 3500, hsr: 200, sprint: 0, accel: 10, decel: 8, cod: 0, topSpeed: 20 }),
   );
   return [...healthy, match, ...injured];
 }
@@ -33,13 +33,18 @@ test("currently injured with no return date → no plan (coach must start it)", 
   assert.ok(r.baseline.builtFromHealthySessions > 0); // baseline still computed
 });
 
-test("volume unlocks first, change-of-direction unlocks LAST", () => {
-  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04", weeks: 5 });
+test("volume unlocks first, IMA accel/decel then change-of-direction LAST", () => {
+  const weeks = QUALITY_ORDER.length; // default: one quality per week
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04" });
   assert.ok(r.plan);
   const unlock = (q: string) => r.plan!.weeks.find((w) => w.quality === q)!.unlockWeek;
   assert.equal(unlock("volume"), 1);
-  assert.equal(unlock("cod"), 5);
-  // order is strictly increasing across the clinical qualities
+  assert.equal(unlock("cod"), weeks); // change-of-direction is the very last quality
+  // the IMA mechanical qualities come after sprint, COD after accel & decel
+  assert.ok(unlock("accel") > unlock("sprint"));
+  assert.ok(unlock("decel") >= unlock("accel"));
+  assert.ok(unlock("cod") >= unlock("decel"));
+  // order is non-decreasing across the clinical qualities
   const uw = QUALITY_ORDER.map(unlock);
   for (let i = 1; i < uw.length; i++) assert.ok(uw[i] >= uw[i - 1]);
 });

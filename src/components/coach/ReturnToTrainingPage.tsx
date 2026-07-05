@@ -12,14 +12,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
-type Quality = "volume" | "distance" | "hsr" | "sprint" | "cod";
-const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "cod"];
+type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "cod";
+const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "cod"];
 const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   volume: { en: "Player load", is: "Álag", unit: "" },
   distance: { en: "Distance", is: "Vegalengd", unit: "m" },
   hsr: { en: "High-speed running", is: "Háhraðahlaup", unit: "m" },
   sprint: { en: "Sprinting", is: "Sprettur", unit: "m" },
-  cod: { en: "Change of direction", is: "Stefnubreytingar", unit: "" },
+  accel: { en: "Accelerations (IMA)", is: "Hröðun (IMA)", unit: "" },
+  decel: { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "" },
+  cod: { en: "Change of direction (IMA)", is: "Stefnubreytingar (IMA)", unit: "" },
 };
 
 type Session = { date: string; injured: boolean; isMatch: boolean; estimated: boolean; load: number; distance: number; hsr: number; sprint: number; cod: number; topSpeed: number };
@@ -221,15 +223,21 @@ function QualityCard({ w, floor, ceiling, is }: { w: WeekTarget; floor: number; 
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${acwrColor}`} title="acute:chronic workload ratio">ACWR {w.acwr.toFixed(2)}</span>
         )}
       </div>
-      {!w.locked && (
-        <div className="mt-1 flex items-baseline gap-1.5">
-          <span className="text-2xl font-bold tabular-nums text-slate-900">{f0(w.target)}</span>
-          <span className="text-xs text-slate-400">{LABEL[w.quality].unit}</span>
-          <span className="ml-auto text-[11px] text-slate-500">{is ? "af" : "of"} {f0(ceiling)} ({w.pctOfHealthy}%)</span>
-        </div>
+      {!w.locked && ceiling <= 0 ? (
+        <p className="mt-1 text-[11px] text-slate-400">{is ? "Engin heilbrigð grunnlína fyrir þessa breytu (t.d. ekkert IMA)." : "No healthy baseline for this quality (e.g. no IMA captured)."}</p>
+      ) : !w.locked ? (
+        <>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tabular-nums text-slate-900">{f0(w.target)}</span>
+            <span className="text-xs text-slate-400">{LABEL[w.quality].unit}</span>
+            <span className="ml-auto text-[11px] text-slate-500">{is ? "af" : "of"} {f0(ceiling)} ({w.pctOfHealthy}%)</span>
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">{w.why}</p>
+          <div className="mt-1 text-[10px] text-slate-400">{is ? "núna" : "now"} {f0(floor)} → {f0(w.target)}{w.wow ? ` · ${w.wow > 0 ? "+" : ""}${w.wow}%` : ""}</div>
+        </>
+      ) : (
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">{w.why}</p>
       )}
-      <p className="mt-1 text-[11px] leading-snug text-slate-500">{w.why}</p>
-      {!w.locked && <div className="mt-1 text-[10px] text-slate-400">{is ? "núna" : "now"} {f0(floor)} → {f0(w.target)}{w.wow ? ` · ${w.wow > 0 ? "+" : ""}${w.wow}%` : ""}</div>}
     </div>
   );
 }

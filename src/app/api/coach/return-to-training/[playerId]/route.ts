@@ -78,7 +78,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     // ── Sessions ───────────────────────────────────────────────────────────
     const { data: load } = await sb
       .from("player_external_load_daily")
-      .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
+      .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
       .eq("player_id", playerId).eq("source", "catapult").gte("date", since).order("date");
 
     const sessions: RttSession[] = ((load ?? []) as Array<Record<string, unknown>>).map((r) => {
@@ -94,6 +94,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
         distance: num(r.total_distance),
         hsr: num(r.high_speed_distance),
         sprint: num(r.sprint_distance) || num(r.velocity_band6_total_distance),
+        accel: num(r.ima_accel),
+        decel: num(r.ima_decel),
         cod: cod > 0 ? cod : num(r.accel_decel_efforts),
         topSpeed: clampSpeed(r.max_velocity),
       };

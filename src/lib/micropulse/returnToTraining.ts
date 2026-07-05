@@ -16,8 +16,10 @@
  * load plan is a CEILING, not a stage trigger — graded return is symptom-limited.
  */
 
-export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "cod";
-export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "cod"];
+export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "cod";
+// Clinical order: rebuild volume → linear running → sprint → the mechanical IMA
+// qualities (accel → decel → change-of-direction LAST, the most re-injury-prone).
+export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "cod"];
 
 export type RttSession = {
   date: string;
@@ -28,6 +30,8 @@ export type RttSession = {
   distance: number;  // total_distance (m)
   hsr: number;       // high_speed_distance (m)
   sprint: number;    // sprint_distance (m)
+  accel: number;     // IMA accelerations (count)
+  decel: number;     // IMA decelerations (count) — eccentric braking, injury-relevant
   cod: number;       // change-of-direction load (IMA CoD, or accel/decel efforts)
   topSpeed: number;  // max_velocity (km/h)
 };
@@ -66,10 +70,12 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   distance: { en: "Distance", is: "Vegalengd", unit: "m", dp: 0 },
   hsr:      { en: "High-speed running", is: "Háhraðahlaup", unit: "m", dp: 0 },
   sprint:   { en: "Sprinting", is: "Sprettur", unit: "m", dp: 0 },
-  cod:      { en: "Change of direction", is: "Stefnubreytingar", unit: "", dp: 0 },
+  accel:    { en: "Accelerations (IMA)", is: "Hröðun (IMA)", unit: "", dp: 0 },
+  decel:    { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "", dp: 0 },
+  cod:      { en: "Change of direction (IMA)", is: "Stefnubreytingar (IMA)", unit: "", dp: 0 },
 };
 
-const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", cod: "cod" };
+const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", accel: "accel", decel: "decel", cod: "cod" };
 const val = (s: RttSession, q: QualityKey): number => s[QFIELD[q]] as number;
 
 function percentile(sortedAsc: number[], p: number): number {
@@ -93,7 +99,7 @@ function peakOf(sessions: RttSession[]): number {
 }
 
 export function computeReturnToTraining(inp: RttInput): RttResult {
-  const weeks = inp.weeks ?? 5;
+  const weeks = inp.weeks ?? QUALITY_ORDER.length; // one quality unlocks per week
   const real = inp.sessions.filter((s) => !s.estimated);
   const healthyTraining = real.filter((s) => !s.injured && !s.isMatch);
   const healthyMatches = real.filter((s) => !s.injured && s.isMatch);
@@ -128,7 +134,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   // so the last quality unlocks in the final week even if weeks != 5.
   const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / (QUALITY_ORDER.length - 1)));
 
-  const targetsByQuality: Record<QualityKey, number[]> = { volume: [], distance: [], hsr: [], sprint: [], cod: [] };
+  const targetsByQuality = Object.fromEntries(QUALITY_ORDER.map((q) => [q, [] as number[]])) as Record<QualityKey, number[]>;
   const weekTargets: RttWeekTarget[] = [];
 
   for (let w = 1; w <= weeks; w++) {
