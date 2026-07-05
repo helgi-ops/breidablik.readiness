@@ -78,6 +78,10 @@ const COPY = {
     secNormsHint: "Hvernig sub-skor dagsins ber af venju leikmanns (Robertson 2017).",
     secLoad: "Æfingaálag",
     secLoadHint: "Hreyfingaálag í gær á móti rúllandi 28-daga meðaltali (Gabbett 2017).",
+    secUnfamiliar: "Óvanalegt álag",
+    unfamiliarBody: (pct: number, ratio: string) => `Hreyfingaálag í gær var +${pct}% yfir hans 28-daga vana (${ratio}×).`,
+    unfamiliarTissue: "Vefir í hættu — vöðva-/sina-þreytu-merki til staðar.",
+    unfamiliarWhy: "Óvant áreiti er hæsta einstaka meiðslaáhættan: líkaminn fær meira eða annað álag en hann er vanur.",
     secBreakdown: "Sundurliðun álags",
     secBreakdownHint: "Hve mikið hver tegund vinnu var yfir venjulegu í gær.",
     secFatigue: "Mynstur þreytu",
@@ -103,6 +107,10 @@ const COPY = {
     secNormsHint: "How today's sub-scores compare to his usual (Robertson 2017).",
     secLoad: "Training load",
     secLoadHint: "His movement load yesterday vs his 28-day rolling mean (Gabbett 2017).",
+    secUnfamiliar: "Unfamiliar load",
+    unfamiliarBody: (pct: number, ratio: string) => `Movement load yesterday was +${pct}% over his 28-day norm (${ratio}×).`,
+    unfamiliarTissue: "Tissue at risk — muscle/tendon fatigue signal present.",
+    unfamiliarWhy: "An unfamiliar stimulus is the single biggest injury risk: the body gets more or different load than it is used to.",
     secBreakdown: "Load breakdown",
     secBreakdownHint: "How much each type of work was above his usual yesterday.",
     secFatigue: "Fatigue signature",
@@ -200,6 +208,29 @@ export default function DecisionTraceModal({ open, item, subscores, date, lang, 
         </div>
 
         <div className="px-5 py-4 space-y-5">
+          {/* (0) Unfamiliar load — FIRST-CLASS. An unfamiliar stimulus (load well
+              above his own 28-day norm) is the single biggest injury risk, so it
+              leads the trace, not buried in the load breakdown. ≥70% over → red,
+              otherwise amber. Only shown when actually elevated (≥50% over). */}
+          {item.plSpike != null && item.plSpike >= 1.5 && (() => {
+            const pct = Math.round((item.plSpike - 1) * 100);
+            const red = item.plSpike >= 1.7; // ≥70% over familiar → destructive
+            const tissue = item.fatigueType === "TISSUE";
+            const tone = red
+              ? "border-red-300 bg-red-50 text-red-800"
+              : "border-amber-300 bg-amber-50 text-amber-800";
+            return (
+              <div className={`rounded-xl border px-4 py-3 ${tone}`}>
+                <div className="flex items-center gap-2 text-sm font-bold">
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                  {t.secUnfamiliar}
+                </div>
+                <p className="mt-1 text-sm">{t.unfamiliarBody(pct, item.plSpike.toFixed(2))}</p>
+                {tissue ? <p className="mt-1 text-[13px] font-medium">{t.unfamiliarTissue}</p> : null}
+                <p className="mt-1 text-[11px] opacity-80">{t.unfamiliarWhy}</p>
+              </div>
+            );
+          })()}
           {/* (1) Wellness — sum of sub-scores */}
           {subSum ? (
             <Section title={t.secWellness} hint={t.secWellnessFormula}>
