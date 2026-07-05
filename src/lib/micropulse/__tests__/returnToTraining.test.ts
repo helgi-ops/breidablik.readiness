@@ -1,0 +1,65 @@
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { computeReturnToTraining, QUALITY_ORDER, type RttSession } from "../returnToTraining";
+
+function session(date: string, o: Partial<RttSession> = {}): RttSession {
+  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, cod: 200, topSpeed: 30, ...o };
+}
+
+// A healthy training block + an injured rehab block (lower everything) + a big match.
+function fixture(): RttSession[] {
+  const healthy = ["2026-05-09", "2026-05-12", "2026-05-15", "2026-05-19", "2026-05-22", "2026-05-26", "2026-05-28"].map((d) =>
+    session(d, { load: 480, distance: 6400, hsr: 950, sprint: 320, cod: 210, topSpeed: 31 }),
+  );
+  const match = session("2026-05-24", { isMatch: true, load: 620, distance: 11000, hsr: 1500, sprint: 480, cod: 300, topSpeed: 32 });
+  const injured = ["2026-06-15", "2026-06-18", "2026-06-22"].map((d) =>
+    session(d, { injured: true, load: 300, distance: 3500, hsr: 200, sprint: 0, cod: 0, topSpeed: 20 }),
+  );
+  return [...healthy, match, ...injured];
+}
+
+test("ceiling is built from healthy, non-match, real sessions only — not injured or match", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-07-04" });
+  assert.equal(r.baseline.builtFromHealthySessions, 7); // the 7 healthy training days
+  // ~p85 of healthy distance (6400), NOT the injured 3500 nor the 11000 match.
+  assert.ok(r.baseline.distance >= 6000 && r.baseline.distance <= 6600);
+  assert.ok(r.baseline.topSpeed >= 30 && r.baseline.topSpeed <= 31.5);
+});
+
+test("currently injured with no return date → no plan (coach must start it)", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: null });
+  assert.equal(r.plan, null);
+  assert.equal(r.currentlyInjured, true);
+  assert.ok(r.baseline.builtFromHealthySessions > 0); // baseline still computed
+});
+
+test("volume unlocks first, change-of-direction unlocks LAST", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04", weeks: 5 });
+  assert.ok(r.plan);
+  const unlock = (q: string) => r.plan!.weeks.find((w) => w.quality === q)!.unlockWeek;
+  assert.equal(unlock("volume"), 1);
+  assert.equal(unlock("cod"), 5);
+  // order is strictly increasing across the clinical qualities
+  const uw = QUALITY_ORDER.map(unlock);
+  for (let i = 1; i < uw.length; i++) assert.ok(uw[i] >= uw[i - 1]);
+});
+
+test("no week exceeds ACWR ~1.3 on any quality", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04", weeks: 5 });
+  for (const w of r.plan!.weeks) assert.ok(w.acwr <= 1.3, `week ${w.week} ${w.quality} acwr ${w.acwr}`);
+});
+
+test("targets never exceed the healthy ceiling and locked qualities hold", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04", weeks: 5 });
+  for (const w of r.plan!.weeks) {
+    if (r.baseline[w.quality] > 0) assert.ok(w.target <= r.baseline[w.quality] + 0.01);
+    if (w.locked) assert.ok(w.why.toLowerCase().includes("unlocks"));
+  }
+});
+
+test("every unlocked target carries a why-line with % of healthy baseline", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: true, rttStartDate: "2026-07-04" });
+  const unlocked = r.plan!.weeks.filter((w) => !w.locked && w.target > 0);
+  assert.ok(unlocked.length > 0);
+  for (const w of unlocked) assert.ok(/of healthy baseline/.test(w.why));
+});
