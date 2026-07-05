@@ -401,12 +401,12 @@ export default function MatchMovementComparison() {
   }
 
   // Overlay radar — the two compared fingerprints as shapes on shared axes.
-  const RADAR_COLORS = ["#4f46e5", "#10b981"];
+  const RADAR_COLORS = ["#4f46e5", "#2b8a54"];
   const compareAxes = DIMS.map((d) => (is ? d.is : d.en));
   const compareSeries = series.map((s, i) => ({
     label: s.label,
     values: DIMS.map((d) => s.fp[d.key]),
-    color: RADAR_COLORS[i] ?? "#64748b",
+    color: RADAR_COLORS[i] ?? "#8b8676",
   }));
 
   const modeBtn = (m: Mode, label: string) => (

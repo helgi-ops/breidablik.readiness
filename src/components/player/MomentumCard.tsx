@@ -31,7 +31,7 @@ const COPY = {
 } as const;
 
 const LEVEL_COLOR: Record<string, string> = {
-  high: "#10b981", building: "#f59e0b", low: "#94a3b8",
+  high: "#2b8a54", building: "#cb8420", low: "#a9a493",
 };
 
 export default function MomentumCard({ lang = "IS", clientId }: { lang?: Lang; clientId?: string }) {

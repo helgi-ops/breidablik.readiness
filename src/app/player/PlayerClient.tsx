@@ -207,10 +207,10 @@ function riskTrendLinePoints(values: number[], width = 320, height = 80, padding
 }
 
 function readinessMarkerTone(state: "GREEN" | "YELLOW" | "RED" | "GRAY"): string {
-  if (state === "GREEN") return "#16a34a";
+  if (state === "GREEN") return "#1c7a4a";
   if (state === "YELLOW") return "#ca8a04";
-  if (state === "RED") return "#dc2626";
-  return "#64748b";
+  if (state === "RED") return "#a83e28";
+  return "#8b8676";
 }
 
 // ============================
@@ -4757,7 +4757,7 @@ export default function PlayerClient() {
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {activeTeams.map((tt) => {
                         const label = tt.short || tt.name;
-                        const color = tt.color || "#64748b";
+                        const color = tt.color || "#8b8676";
                         const bg = `${color}1a`;
                         const roleLabel =
                           tt.role === "national_team"
@@ -5151,11 +5151,11 @@ export default function PlayerClient() {
                   {playerRiskTrend.riskScores.length >= 2 ? (
                     <div className="rounded-xl border bg-white p-3">
                       <svg viewBox="0 0 320 80" className="h-20 w-full" role="img" aria-label="Player risk trend">
-                        <line x1="0" y1="79.5" x2="320" y2="79.5" stroke="#e5e7eb" strokeWidth="1" />
-                        <line x1="0" y1="40" x2="320" y2="40" stroke="#f3f4f6" strokeWidth="1" />
+                        <line x1="0" y1="79.5" x2="320" y2="79.5" stroke="#e6e1d4" strokeWidth="1" />
+                        <line x1="0" y1="40" x2="320" y2="40" stroke="#efece2" strokeWidth="1" />
                         <polyline
                           fill="none"
-                          stroke="#334155"
+                          stroke="#565044"
                           strokeWidth="1.8"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -5172,7 +5172,7 @@ export default function PlayerClient() {
                                 r="2.4"
                                 fill={readinessMarkerTone(playerRiskTrend.readinessStates[idx] ?? "GRAY")}
                               />
-                              <text x={x} y={Math.max(8, y - 4)} textAnchor="middle" fontSize="7" fill="#334155">
+                              <text x={x} y={Math.max(8, y - 4)} textAnchor="middle" fontSize="7" fill="#565044">
                                 {score.toFixed(1)}
                               </text>
                             </g>

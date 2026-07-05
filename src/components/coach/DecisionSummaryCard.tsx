@@ -1898,7 +1898,7 @@ const ReadinessLoadDetail: FC<{
                   <div className="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${pct}%`, backgroundColor: item.value <= 2 ? "#f87171" : item.value <= 3 ? "#fbbf24" : "#34d399" }}
+                      style={{ width: `${pct}%`, backgroundColor: item.value <= 2 ? "#c26449" : item.value <= 3 ? "#de9328" : "#47a06f" }}
                     />
                   </div>
                   <span className={`text-sm font-bold tabular-nums w-6 text-right ${col.text}`}>{item.value}</span>

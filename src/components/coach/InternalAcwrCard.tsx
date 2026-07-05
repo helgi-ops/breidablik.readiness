@@ -41,7 +41,7 @@ const ZONE_META: Record<AcwrZone, { label: string; bg: string; text: string; bar
 
 function WeekSparkline({ loads, zone }: { loads: [number, number, number, number]; zone: AcwrZone }) {
   const max = Math.max(...loads, 1);
-  const barColor = zone === "high_risk" ? "#ef4444" : zone === "caution" ? "#f59e0b" : zone === "optimal" ? "#10b981" : zone === "undertrain" ? "#60a5fa" : "#94a3b8";
+  const barColor = zone === "high_risk" ? "#b34a30" : zone === "caution" ? "#cb8420" : zone === "optimal" ? "#2b8a54" : zone === "undertrain" ? "#60a5fa" : "#a9a493";
 
   return (
     <svg width="44" height="24" viewBox="0 0 44 24" aria-hidden="true">
@@ -55,7 +55,7 @@ function WeekSparkline({ loads, zone }: { loads: [number, number, number, number
             width={8}
             height={h}
             rx={2}
-            fill={i === 3 ? barColor : "#cbd5e1"}
+            fill={i === 3 ? barColor : "#d5cfbe"}
             opacity={i === 3 ? 1 : 0.6}
           />
         );

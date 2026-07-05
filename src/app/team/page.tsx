@@ -749,7 +749,7 @@ export default function TeamPage() {
       {/* PT clients belong on /client, not the football team surface. */}
       <PtClientGuard />
       {/* Team Header */}
-      <div className="w-full" style={{ backgroundColor: teamData.team?.club_theme_color ?? "#16a34a" }}>
+      <div className="w-full" style={{ backgroundColor: teamData.team?.club_theme_color ?? "#1c7a4a" }}>
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
             {teamData.team?.club_logo_url && (
@@ -822,7 +822,7 @@ export default function TeamPage() {
 
         {/* Non Negotiables Section — Breiðablik only */}
         {profile?.team_id === "94b52a06-0b83-48da-8664-639ec3486a0c" && <section>
-          <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)" }}>
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-emerald-800/30" style={{ background: "linear-gradient(135deg, #11422a 0%, #145233 50%, #16653d 100%)" }}>
             <div className="px-5 pt-5 pb-3 flex items-center justify-between">
               <h2 className="text-lg font-extrabold tracking-wide text-white uppercase">Non Negotiables</h2>
               <span className="text-xs text-emerald-300/70 font-medium">{nnIndex + 1} / 8</span>

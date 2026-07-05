@@ -1141,51 +1141,51 @@ function acwrFmt(x: number | null) {
 }
 
 const reportStyles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
-  header: { marginBottom: 14, paddingBottom: 10, borderBottom: "2 solid #E5E7EB" },
+  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
+  header: { marginBottom: 14, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
   h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
   headerMeta: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  headerMetaText: { fontSize: 10, color: "#4B5563" },
-  muted: { color: "#6B7280", fontSize: 9 },
+  headerMetaText: { fontSize: 10, color: "#6d6858" },
+  muted: { color: "#8b8676", fontSize: 9 },
   // Player card
-  playerCard: { marginBottom: 14, border: "1 solid #D1D5DB", borderRadius: 6, overflow: "hidden" },
-  playerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: "8 10", backgroundColor: "#F9FAFB" },
+  playerCard: { marginBottom: 14, border: "1 solid #d5cfbe", borderRadius: 6, overflow: "hidden" },
+  playerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: "8 10", backgroundColor: "#f7f5ef" },
   playerName: { fontSize: 13, fontWeight: 700 },
-  badgeYellow: { fontSize: 11, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "2 8", borderRadius: 4 },
-  badgeRed: { fontSize: 11, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "2 8", borderRadius: 4 },
+  badgeYellow: { fontSize: 11, fontWeight: 700, color: "#7c5210", backgroundColor: "#f3e0b4", padding: "2 8", borderRadius: 4 },
+  badgeRed: { fontSize: 11, fontWeight: 700, color: "#72291c", backgroundColor: "#f1d3c8", padding: "2 8", borderRadius: 4 },
   // Coach action box
-  actionBoxRecovery: { backgroundColor: "#FEE2E2", padding: "8 10", borderBottom: "1 solid #FECACA" },
-  actionBoxModified: { backgroundColor: "#FEF3C7", padding: "8 10", borderBottom: "1 solid #FDE68A" },
-  actionBoxFull: { backgroundColor: "#DCFCE7", padding: "8 10", borderBottom: "1 solid #BBF7D0" },
-  actionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", marginBottom: 2, textTransform: "uppercase" },
-  actionTextRecovery: { fontSize: 12, fontWeight: 700, color: "#991B1B" },
-  actionTextModified: { fontSize: 12, fontWeight: 700, color: "#92400E" },
-  actionTextFull: { fontSize: 12, fontWeight: 700, color: "#166534" },
-  actionNote: { fontSize: 9, color: "#4B5563", marginTop: 2 },
+  actionBoxRecovery: { backgroundColor: "#f1d3c8", padding: "8 10", borderBottom: "1 solid #e6b6a6" },
+  actionBoxModified: { backgroundColor: "#f3e0b4", padding: "8 10", borderBottom: "1 solid #e9c983" },
+  actionBoxFull: { backgroundColor: "#d3e8da", padding: "8 10", borderBottom: "1 solid #b0d6bd" },
+  actionLabel: { fontSize: 9, fontWeight: 700, color: "#8b8676", marginBottom: 2, textTransform: "uppercase" },
+  actionTextRecovery: { fontSize: 12, fontWeight: 700, color: "#72291c" },
+  actionTextModified: { fontSize: 12, fontWeight: 700, color: "#7c5210" },
+  actionTextFull: { fontSize: 12, fontWeight: 700, color: "#145233" },
+  actionNote: { fontSize: 9, color: "#6d6858", marginTop: 2 },
   // Body sections
   cardBody: { padding: "8 10" },
-  sectionLabel: { fontSize: 9, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
-  reasonItem: { fontSize: 10, color: "#1F2937", marginBottom: 3, paddingLeft: 8 },
+  sectionLabel: { fontSize: 9, fontWeight: 700, color: "#8b8676", textTransform: "uppercase", marginBottom: 4, marginTop: 6 },
+  reasonItem: { fontSize: 10, color: "#3a352c", marginBottom: 3, paddingLeft: 8 },
   // Injury risk
   injuryRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  injuryLabelLow: { fontSize: 10, fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "1 6", borderRadius: 3 },
-  injuryLabelModerate: { fontSize: 10, fontWeight: 700, color: "#92400E", backgroundColor: "#FEF3C7", padding: "1 6", borderRadius: 3 },
-  injuryLabelHigh: { fontSize: 10, fontWeight: 700, color: "#991B1B", backgroundColor: "#FEE2E2", padding: "1 6", borderRadius: 3 },
-  injuryRec: { fontSize: 9, color: "#374151", marginBottom: 2, paddingLeft: 8 },
+  injuryLabelLow: { fontSize: 10, fontWeight: 700, color: "#145233", backgroundColor: "#d3e8da", padding: "1 6", borderRadius: 3 },
+  injuryLabelModerate: { fontSize: 10, fontWeight: 700, color: "#7c5210", backgroundColor: "#f3e0b4", padding: "1 6", borderRadius: 3 },
+  injuryLabelHigh: { fontSize: 10, fontWeight: 700, color: "#72291c", backgroundColor: "#f1d3c8", padding: "1 6", borderRadius: 3 },
+  injuryRec: { fontSize: 9, color: "#565044", marginBottom: 2, paddingLeft: 8 },
   // Reference table
-  refTableWrap: { marginTop: 8, borderTop: "1 solid #E5E7EB", paddingTop: 6 },
-  refTableLabel: { fontSize: 8, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 },
-  table: { border: "1 solid #E5E7EB", borderRadius: 3 },
-  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
-  cellH: { flex: 1, padding: "3 4", fontSize: 8, fontWeight: 700, color: "#6B7280" },
-  cell: { flex: 1, padding: "3 4", fontSize: 8, color: "#374151" },
+  refTableWrap: { marginTop: 8, borderTop: "1 solid #e6e1d4", paddingTop: 6 },
+  refTableLabel: { fontSize: 8, color: "#a9a493", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 },
+  table: { border: "1 solid #e6e1d4", borderRadius: 3 },
+  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
+  cellH: { flex: 1, padding: "3 4", fontSize: 8, fontWeight: 700, color: "#8b8676" },
+  cell: { flex: 1, padding: "3 4", fontSize: 8, color: "#565044" },
   // Footer
-  footerBar: { marginTop: 12, paddingTop: 8, borderTop: "1 solid #E5E7EB", flexDirection: "row", justifyContent: "space-between" },
+  footerBar: { marginTop: 12, paddingTop: 8, borderTop: "1 solid #e6e1d4", flexDirection: "row", justifyContent: "space-between" },
   footerCount: { fontSize: 10 },
-  footerGreen: { color: "#166534", fontWeight: 700 },
-  footerYellow: { color: "#92400E", fontWeight: 700 },
-  footerRed: { color: "#991B1B", fontWeight: 700 },
+  footerGreen: { color: "#145233", fontWeight: 700 },
+  footerYellow: { color: "#7c5210", fontWeight: 700 },
+  footerRed: { color: "#72291c", fontWeight: 700 },
 });
 
 function coachAction(mode: "full" | "modified" | "recovery"): { boxStyle: any; textStyle: any; title: string; note: string } {
@@ -1332,46 +1332,46 @@ function ReadinessRiskReportDocument({ data }: { data: ReadinessRiskReportData }
 
 // ── Post-Training GPS Report PDF ──────────────────────────────
 const postStyles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
   h1: { fontSize: 15, fontWeight: 700, marginBottom: 4 },
-  subtitle: { fontSize: 10, color: "#6B7280", marginBottom: 14 },
+  subtitle: { fontSize: 10, color: "#8b8676", marginBottom: 14 },
   section: { marginBottom: 14 },
-  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #E5E7EB" },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #e6e1d4" },
   summaryRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  summaryBox: { flex: 1, border: "1 solid #E5E7EB", borderRadius: 4, padding: 6, alignItems: "center" },
+  summaryBox: { flex: 1, border: "1 solid #e6e1d4", borderRadius: 4, padding: 6, alignItems: "center" },
   summaryVal: { fontSize: 13, fontWeight: 700 },
-  summaryLabel: { fontSize: 8, color: "#6B7280", marginTop: 2 },
-  table: { border: "1 solid #D1D5DB", borderRadius: 4, overflow: "hidden" },
-  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
-  tRowAlt: { flexDirection: "row", borderTop: "1 solid #E5E7EB", backgroundColor: "#F9FAFB" },
+  summaryLabel: { fontSize: 8, color: "#8b8676", marginTop: 2 },
+  table: { border: "1 solid #d5cfbe", borderRadius: 4, overflow: "hidden" },
+  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
+  tRowAlt: { flexDirection: "row", borderTop: "1 solid #e6e1d4", backgroundColor: "#f7f5ef" },
   colName: { width: "18%", padding: 4, fontSize: 9 },
-  colPos: { width: "8%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colPos: { width: "8%", padding: 4, fontSize: 9, color: "#8b8676" },
   colFlag: { width: "8%", padding: 4, fontSize: 9, textAlign: "center" },
   colMetric: { width: "9%", padding: 4, fontSize: 9, textAlign: "right" },
   colPct: { width: "7%", padding: 4, fontSize: 9, textAlign: "right" },
   colAttn: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
   // RPE-specific table columns
   colRpeName: { width: "19%", padding: 4, fontSize: 9 },
-  colRpePos: { width: "7%", padding: 4, fontSize: 9, color: "#6B7280" },
+  colRpePos: { width: "7%", padding: 4, fontSize: 9, color: "#8b8676" },
   colRpeScore: { width: "9%", padding: 4, fontSize: 9, textAlign: "center" },
   colRpeDesc: { width: "12%", padding: 4, fontSize: 9 },
   colRpeDur: { width: "11%", padding: 4, fontSize: 9, textAlign: "right" },
   colRpeLoad: { width: "12%", padding: 4, fontSize: 9, textAlign: "right" },
   colRpeBand: { width: "18%", padding: 4, fontSize: 9 },
   hdr: { fontWeight: 700 },
-  attnAlert: { color: "#DC2626", fontWeight: 700 },
-  attnMonitor: { color: "#D97706", fontWeight: 700 },
-  attnOk: { color: "#16A34A" },
-  flagRed: { color: "#DC2626", fontWeight: 700 },
-  flagYellow: { color: "#D97706", fontWeight: 700 },
-  flagGreen: { color: "#16A34A" },
-  alertBox: { marginBottom: 6, padding: 6, border: "1 solid #FCA5A5", borderRadius: 4, backgroundColor: "#FEF2F2" },
+  attnAlert: { color: "#a83e28", fontWeight: 700 },
+  attnMonitor: { color: "#b0700f", fontWeight: 700 },
+  attnOk: { color: "#1c7a4a" },
+  flagRed: { color: "#a83e28", fontWeight: 700 },
+  flagYellow: { color: "#b0700f", fontWeight: 700 },
+  flagGreen: { color: "#1c7a4a" },
+  alertBox: { marginBottom: 6, padding: 6, border: "1 solid #d68e77", borderRadius: 4, backgroundColor: "#f8e9e3" },
   alertName: { fontWeight: 700, marginBottom: 2 },
-  alertLine: { color: "#7F1D1D", fontSize: 9 },
-  monitorBox: { marginBottom: 6, padding: 6, border: "1 solid #FDE68A", borderRadius: 4, backgroundColor: "#FFFBEB" },
+  alertLine: { color: "#5c2318", fontSize: 9 },
+  monitorBox: { marginBottom: 6, padding: 6, border: "1 solid #e9c983", borderRadius: 4, backgroundColor: "#faf1de" },
   monitorName: { fontWeight: 700, marginBottom: 2 },
-  monitorLine: { color: "#78350F", fontSize: 9 },
+  monitorLine: { color: "#66450f", fontSize: 9 },
 });
 
 function numFmt2(v: number | null, digits = 0): string {
@@ -1460,10 +1460,10 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
   const ls = data.loadSummary;
   const plPct = ls.pl.pctAvg;
   const recentColor =
-    plPct == null ? "#6B7280"
-      : plPct <= 110 ? "#059669"
-      : plPct <= 140 ? "#D97706"
-      : "#DC2626";
+    plPct == null ? "#8b8676"
+      : plPct <= 110 ? "#1c7a4a"
+      : plPct <= 140 ? "#b0700f"
+      : "#a83e28";
   const recentBand =
     plPct == null ? null
       : plPct <= 90 ? "below the recent norm"
@@ -1528,13 +1528,13 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         </View>
 
         {/* ── Explainability — session load overview (top of report) ── */}
-        <View style={[postStyles.section, { backgroundColor: "#F8FAFC", border: "1 solid #E2E8F0", borderRadius: 4, padding: 10 }]}>
+        <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]}>
           <Text style={postStyles.sectionTitle}>Session Load — Explainability</Text>
           <Text style={{ fontSize: 11, fontWeight: 700, color: recentColor, lineHeight: 1.4, marginBottom: 4 }}>
             {loadVerdict}
           </Text>
           {loadInterpretation ? (
-            <Text style={{ fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 8 }}>{loadInterpretation}</Text>
+            <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 8 }}>{loadInterpretation}</Text>
           ) : null}
 
           {/* Metric breakdown — today vs 4-week average vs typical match */}
@@ -1551,7 +1551,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
               ["Total Distance (m)", ls.dist, 0],
               ["High-Speed Distance (m)", ls.hsd, 0],
             ] as Array<[string, typeof ls.pl, number]>).map(([label, m], i) => {
-              const c = m.pctAvg == null ? "#111827" : m.pctAvg <= 110 ? "#059669" : m.pctAvg <= 140 ? "#D97706" : "#DC2626";
+              const c = m.pctAvg == null ? "#221f18" : m.pctAvg <= 110 ? "#1c7a4a" : m.pctAvg <= 140 ? "#b0700f" : "#a83e28";
               return (
                 <View key={label} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
                   <Text style={{ width: "34%", padding: 4, fontSize: 9, fontWeight: 700 }}>{label}</Text>
@@ -1566,18 +1566,18 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
 
           {/* Player distribution vs each player's own 4-week norm */}
           {ls.distribution.total > 0 && (
-            <Text style={{ fontSize: 9, color: "#334155", marginTop: 6 }}>
+            <Text style={{ fontSize: 9, color: "#565044", marginTop: 6 }}>
               Players vs their own 4-week norm ({ls.distribution.total} with GPS):{" "}
-              <Text style={{ color: "#DC2626", fontWeight: 700 }}>{ls.distribution.above} above (≥130%)</Text> ·{" "}
-              <Text style={{ color: "#D97706" }}>{ls.distribution.elevated} elevated</Text> ·{" "}
-              <Text style={{ color: "#059669" }}>{ls.distribution.inLine} in line</Text> ·{" "}
+              <Text style={{ color: "#a83e28", fontWeight: 700 }}>{ls.distribution.above} above (≥130%)</Text> ·{" "}
+              <Text style={{ color: "#b0700f" }}>{ls.distribution.elevated} elevated</Text> ·{" "}
+              <Text style={{ color: "#1c7a4a" }}>{ls.distribution.inLine} in line</Text> ·{" "}
               {ls.distribution.below} below
             </Text>
           )}
 
           {/* Spiking players (named) */}
           {ls.spikePlayers.length > 0 && (
-            <Text style={{ fontSize: 9, color: "#B91C1C", marginTop: 6, lineHeight: 1.4 }}>
+            <Text style={{ fontSize: 9, color: "#8c3221", marginTop: 6, lineHeight: 1.4 }}>
               Spikes (above their usual): {ls.spikePlayers.slice(0, 10).map((p) => {
                 const parts: string[] = [];
                 if (p.plPct != null) parts.push(`+${Math.round(p.plPct)}% PL`);
@@ -1588,7 +1588,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
             </Text>
           )}
 
-          <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 6, lineHeight: 1.4 }}>
+          <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6, lineHeight: 1.4 }}>
             Baselines use the team total for each metric over the prior 4 weeks (catapult/manual GPS). &quot;4-wk avg&quot; = mean of prior session days; &quot;match&quot; = the highest team-load day in the window (matches are a team&apos;s peak-load days). A player spike = Player Load ≥30% above their own 4-week average, or ACWR ≥ 1.5 (Gabbett 2016 acute:chronic ceiling).
           </Text>
         </View>
@@ -1597,7 +1597,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         {data.plannedVsActual && data.plannedVsActual.hasPlan && (() => {
           const pva = data.plannedVsActual;
           const pvaColor = (st: PvaStatus) =>
-            st === "on" ? "#059669" : st === "over" || st === "under" ? "#D97706" : st === "well_over" || st === "well_under" ? "#DC2626" : "#94A3B8";
+            st === "on" ? "#1c7a4a" : st === "over" || st === "under" ? "#b0700f" : st === "well_over" || st === "well_under" ? "#a83e28" : "#a9a493";
           return (
             <View style={[postStyles.section, { backgroundColor: "#F5F3FF", border: "1 solid #DDD6FE", borderRadius: 4, padding: 10 }]} wrap={false}>
               <Text style={postStyles.sectionTitle}>Planned vs Actual — did we hit the recommendation?</Text>
@@ -1605,7 +1605,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                 Plan: {pva.mode === "microcycle" && pva.mdLabel ? `${pva.mdLabel} · ${pva.loadType} · ${pva.matchPct}% of match` : "recent-load baseline (mixed)"}
                 {pva.readinessAdjustPct !== 0 ? ` · readiness-adjusted ${pva.readinessAdjustPct}%` : ""}
               </Text>
-              <Text style={{ fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 8 }}>{pva.summary}</Text>
+              <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 8 }}>{pva.summary}</Text>
 
               {/* Team-level: planned vs actual per KPI */}
               <View style={postStyles.table}>
@@ -1624,7 +1624,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                   </View>
                 ))}
               </View>
-              <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 5, lineHeight: 1.4 }}>
+              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
                 Planned = the pre-session recommendation for this date (per player), readiness-adjusted. On plan = 85–115% (green); 116–140% or 60–84% = elevated/reduced (amber); &gt;140% or &lt;60% = well off plan (red).
               </Text>
             </View>
@@ -1635,7 +1635,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         {data.plannedVsActual && data.plannedVsActual.hasPlan && data.plannedVsActual.players.length > 0 && (() => {
           const pva = data.plannedVsActual;
           const pvaColor = (st: PvaStatus) =>
-            st === "on" ? "#059669" : st === "over" || st === "under" ? "#D97706" : st === "well_over" || st === "well_under" ? "#DC2626" : "#94A3B8";
+            st === "on" ? "#1c7a4a" : st === "over" || st === "under" ? "#b0700f" : st === "well_over" || st === "well_under" ? "#a83e28" : "#a9a493";
           const pctCell = (kpi: typeof PVA_KPIS[number], pp: typeof pva.players[number]) => {
             const c = pp.byKpi[kpi];
             return <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right", fontWeight: 700 }, { color: pvaColor(c.status) }]}>{c.pctOfPlan != null ? `${c.pctOfPlan}%` : "—"}</Text>;
@@ -1665,7 +1665,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
                   </View>
                 ))}
               </View>
-              <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 5, lineHeight: 1.4 }}>
+              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
                 Each cell = the player&apos;s actual for that metric as a % of their own readiness-adjusted target. Green 85–115% (on plan), amber 60–84% / 116–140%, red &lt;60% / &gt;140%. A dash means no target or no capture for that metric.
               </Text>
             </View>
@@ -1692,9 +1692,9 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
         </View>
 
         {/* Interpretation text */}
-        <View style={[postStyles.section, { backgroundColor: "#F9FAFB", border: "1 solid #E5E7EB", borderRadius: 4, padding: 10 }]}>
-          <Text style={{ fontSize: 10, color: "#111827", lineHeight: 1.5 }}>{interpretText}</Text>
-          <Text style={{ fontSize: 8, color: "#9CA3AF", marginTop: 6 }}>
+        <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]}>
+          <Text style={{ fontSize: 10, color: "#221f18", lineHeight: 1.5 }}>{interpretText}</Text>
+          <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
             Session Load = RPE x Mínútur (AU). Flokkur: &lt;200 Very light · 200-399 Light · 400-599 Moderate · 600-799 Hard · &gt;=800 Very hard
           </Text>
         </View>
@@ -1980,9 +1980,9 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
               {pagePlayers.map((p, i) => {
                 const rowStyle = i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt;
                 const vs = p.sprint_vs_baseline_pct;
-                const vsStyle = vs == null ? {} : vs > 150 ? { color: "#DC2626", fontWeight: 700 } : vs > 120 ? { color: "#D97706" } : {};
+                const vsStyle = vs == null ? {} : vs > 150 ? { color: "#a83e28", fontWeight: 700 } : vs > 120 ? { color: "#b0700f" } : {};
                 const asym = p.cod_asymmetry_pct;
-                const asymStyle = asym != null && asym > 15 ? { color: "#DC2626", fontWeight: 700 } : {};
+                const asymStyle = asym != null && asym > 15 ? { color: "#a83e28", fontWeight: 700 } : {};
                 return (
                   <View key={p.player_id} style={rowStyle}>
                     <Text style={{ width: "20%", padding: 4, fontSize: 9 }}>{p.full_name}</Text>
@@ -1999,7 +1999,7 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
               })}
             </View>
             {pgIdx === imaPages.length - 1 && (
-              <Text style={{ fontSize: 8, color: "#9CA3AF", marginTop: 6 }}>
+              <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 6 }}>
                 IMA Free Running: 8-banda stride dreifing (Low b1-3 · Mid b4-6 · High b7-8). Sprint = bönd 5-8 vs persónuleg 14-daga grunnlína. CoD ósamhverfa &gt; 15% á háa intensity = aukin meiðslahætta (Bishop 2020).
               </Text>
             )}
@@ -8146,13 +8146,13 @@ export default function CoachPage() {
                             <span className="tabular-nums">min {Math.min(...volatilitySummary.dailyComposite).toFixed(1)} · max {Math.max(...volatilitySummary.dailyComposite).toFixed(1)}</span>
                           </div>
                           <svg viewBox="0 0 220 44" className="h-11 w-full" role="img" aria-label="Recent volatility line graph">
-                            <line x1="0" y1="43.5" x2="220" y2="43.5" stroke="#E5E7EB" strokeWidth="1" />
-                            <line x1="0" y1="22" x2="220" y2="22" stroke="#F3F4F6" strokeWidth="1" />
-                            <polyline fill="none" stroke="#374151" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" points={volatilityLinePoints(volatilitySummary.dailyComposite)} />
+                            <line x1="0" y1="43.5" x2="220" y2="43.5" stroke="#e6e1d4" strokeWidth="1" />
+                            <line x1="0" y1="22" x2="220" y2="22" stroke="#efece2" strokeWidth="1" />
+                            <polyline fill="none" stroke="#565044" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" points={volatilityLinePoints(volatilitySummary.dailyComposite)} />
                             {volatilityGraphPoints.map((p, idx) => (
                               <g key={`${pid}-vol-point-${idx}`}>
-                                <circle cx={p.x} cy={p.y} r="1.8" fill="#111827" />
-                                <text x={p.x} y={Math.max(7, p.y - 3)} textAnchor="middle" fontSize="6" fill="#374151">
+                                <circle cx={p.x} cy={p.y} r="1.8" fill="#221f18" />
+                                <text x={p.x} y={Math.max(7, p.y - 3)} textAnchor="middle" fontSize="6" fill="#565044">
                                   {p.value.toFixed(1)}
                                 </text>
                               </g>
@@ -10668,16 +10668,16 @@ export default function CoachPage() {
         }
 
         function flagColor(v: number | null): string {
-          if (v == null) return "#94A3B8";
-          if (v < 33) return "#EF4444";
-          if (v < 60) return "#F59E0B";
-          return "#22C55E";
+          if (v == null) return "#a9a493";
+          if (v < 33) return "#b34a30";
+          if (v < 60) return "#cb8420";
+          return "#2b8a54";
         }
 
         const SERIES = [
           { key: "ci",    label: "Check-in",  color: "#3B82F6", fn: (p: VolatilityDailyPoint) => normCI(p.checkInScore) },
           { key: "z",     label: "Z-score",   color: "#8B5CF6", fn: (p: VolatilityDailyPoint) => normZ(p.zScore) },
-          { key: "sor",   label: "Soreness",  color: "#F97316", fn: (p: VolatilityDailyPoint) => normSor(p.soreness) },
+          { key: "sor",   label: "Soreness",  color: "#cb8420", fn: (p: VolatilityDailyPoint) => normSor(p.soreness) },
           { key: "sleep", label: "Sleep",     color: "#14B8A6", fn: (p: VolatilityDailyPoint) => normSleep(p.sleepQuality) },
         ] as const;
 
@@ -10759,19 +10759,19 @@ export default function CoachPage() {
                               const y = toY(val, 0, 100);
                               return (
                                 <line key={val} x1={PAD.left} x2={W - PAD.right} y1={y} y2={y}
-                                  stroke="#E2E8F0" strokeWidth="1" strokeDasharray={val === 50 ? "3,3" : undefined} />
+                                  stroke="#e6e1d4" strokeWidth="1" strokeDasharray={val === 50 ? "3,3" : undefined} />
                               );
                             })}
 
                             {/* Y-axis labels */}
                             {yLabels.map(({ val, label }) => (
                               <text key={val} x={PAD.left - 4} y={toY(val, 0, 100) + 3.5}
-                                textAnchor="end" fontSize="8" fill="#94A3B8">{label}</text>
+                                textAnchor="end" fontSize="8" fill="#a9a493">{label}</text>
                             ))}
 
                             {/* X-axis ticks */}
                             {xTicks.map(({ lbl, x }) => (
-                              <text key={lbl} x={x} y={H - 4} textAnchor="middle" fontSize="8" fill="#94A3B8">{lbl}</text>
+                              <text key={lbl} x={x} y={H - 4} textAnchor="middle" fontSize="8" fill="#a9a493">{lbl}</text>
                             ))}
 
                             {/* Data lines per series */}
@@ -10836,7 +10836,7 @@ export default function CoachPage() {
                               const x = toX(todayIdx, pts.length);
                               return (
                                 <line x1={x} x2={x} y1={PAD.top} y2={H - PAD.bottom}
-                                  stroke="#1E293B" strokeWidth="1" strokeDasharray="3,2" opacity="0.4" />
+                                  stroke="#3a352c" strokeWidth="1" strokeDasharray="3,2" opacity="0.4" />
                               );
                             })()}
                           </svg>

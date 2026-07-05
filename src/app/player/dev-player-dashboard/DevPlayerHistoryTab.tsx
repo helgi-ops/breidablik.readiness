@@ -59,10 +59,10 @@ function normEnergy(v: number | null): number | null {
 }
 
 function flagColor(v: number | null): string {
-  if (v == null) return "#94A3B8";
-  if (v < 33) return "#EF4444";
-  if (v < 60) return "#F59E0B";
-  return "#22C55E";
+  if (v == null) return "#a9a493";
+  if (v < 33) return "#b34a30";
+  if (v < 60) return "#cb8420";
+  return "#2b8a54";
 }
 
 // ── SVG chart helpers ────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ function buildPath(pts: Array<{ x: number; y: number } | null>): string {
 
 const SERIES = [
   { key: "ci",    label: "Check-in",  color: "#3B82F6", fn: (p: DailyPoint) => normCI(p.checkInScore) },
-  { key: "sor",   label: "Þreyta",    color: "#F97316", fn: (p: DailyPoint) => normSor(p.soreness) },
+  { key: "sor",   label: "Þreyta",    color: "#cb8420", fn: (p: DailyPoint) => normSor(p.soreness) },
   { key: "sleep", label: "Svefn",     color: "#14B8A6", fn: (p: DailyPoint) => normSleep(p.sleepQuality) },
   { key: "energy",label: "Orka",      color: "#8B5CF6", fn: (p: DailyPoint) => normEnergy(p.energy) },
 ] as const;
@@ -269,7 +269,7 @@ export default function DevPlayerHistoryTab() {
                         key={val}
                         x1={PAD.left} x2={W - PAD.right}
                         y1={y} y2={y}
-                        stroke="#E4E4E7"
+                        stroke="#e6e1d4"
                         strokeWidth="1"
                         strokeDasharray={val === 50 ? "4,4" : undefined}
                       />
@@ -284,7 +284,7 @@ export default function DevPlayerHistoryTab() {
                       y={toY(val) + 4}
                       textAnchor="end"
                       fontSize="11"
-                      fill="#A1A1AA"
+                      fill="#a9a493"
                     >
                       {label}
                     </text>
@@ -298,7 +298,7 @@ export default function DevPlayerHistoryTab() {
                       y={H - 8}
                       textAnchor="middle"
                       fontSize="11"
-                      fill="#A1A1AA"
+                      fill="#a9a493"
                     >
                       {lbl}
                     </text>
@@ -313,7 +313,7 @@ export default function DevPlayerHistoryTab() {
                       <line
                         x1={x} x2={x}
                         y1={PAD.top} y2={H - PAD.bottom}
-                        stroke="#18181B"
+                        stroke="#221f18"
                         strokeWidth="1"
                         strokeDasharray="3,2"
                         opacity="0.3"

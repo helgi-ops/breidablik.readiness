@@ -43,8 +43,8 @@ function Spark({ values, flag }: { values: number[]; flag?: boolean }) {
   const lx = w - pad, ly = h - pad - ((last - min) / span) * (h - 2 * pad);
   return (
     <svg width={w} height={h} className="overflow-visible">
-      <polyline points={pts} fill="none" stroke={flag ? "#e11d48" : "#6366f1"} strokeWidth="1.5" />
-      <circle cx={lx} cy={ly} r="2" fill={flag ? "#e11d48" : "#6366f1"} />
+      <polyline points={pts} fill="none" stroke={flag ? "#a83e28" : "#6366f1"} strokeWidth="1.5" />
+      <circle cx={lx} cy={ly} r="2" fill={flag ? "#a83e28" : "#6366f1"} />
     </svg>
   );
 }
@@ -77,13 +77,13 @@ function ClockRadar({ usual, recent, flagged }: { usual: Record<string, number>;
     return [cx + r * Math.sin(theta), cy - r * Math.cos(theta)];
   };
   const poly = (vec: Record<string, number>) => RADAR_ORDER.map((d) => pt(d, vec).join(",")).join(" ");
-  const recentColor = flagged ? "#e11d48" : "#4f46e5";
+  const recentColor = flagged ? "#a83e28" : "#4f46e5";
   return (
     <svg width="184" height="184" viewBox="0 0 184 184">
-      {[0.33, 0.66, 1].map((f) => <circle key={f} cx={cx} cy={cy} r={R * f} fill="none" stroke="#e2e8f0" strokeWidth="1" />)}
+      {[0.33, 0.66, 1].map((f) => <circle key={f} cx={cx} cy={cy} r={R * f} fill="none" stroke="#e6e1d4" strokeWidth="1" />)}
       {RADAR_ORDER.map((d) => { const idx = Number(d) % 12; const th = idx * 30 * Math.PI / 180; return <line key={d} x1={cx} y1={cy} x2={cx + R * Math.sin(th)} y2={cy - R * Math.cos(th)} stroke="#eef2f7" strokeWidth="1" />; })}
       {/* His usual shape = calm grey backdrop (everyone's looks alike — it's only the reference). */}
-      <polygon points={poly(usual)} fill="#94a3b8" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 2" />
+      <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#d5cfbe" strokeWidth="1" strokeDasharray="3 2" />
       {/* This week = the hero line. Faint fill + thick stroke + vertex dots so any deviation from his own usual shape pops immediately. */}
       <polygon points={poly(recent)} fill={recentColor} fillOpacity={flagged ? 0.1 : 0.06} stroke={recentColor} strokeWidth="2.5" strokeLinejoin="round" />
       {RADAR_ORDER.map((d) => { const [x, y] = pt(d, recent); return <circle key={`rv${d}`} cx={x} cy={y} r="2.2" fill={recentColor} />; })}

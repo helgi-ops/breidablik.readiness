@@ -122,8 +122,8 @@ export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetri
         const poly = metrics.map((_, i) => pt(i, ring).join(",")).join(" ");
         const isMedian = ring === 50;
         return (
-          <polygon key={ring} points={poly} fill={isMedian ? "#f1f5f9" : "none"}
-            stroke={isMedian ? "#cbd5e1" : "#e2e8f0"} strokeWidth={isMedian ? 1.25 : 1} />
+          <polygon key={ring} points={poly} fill={isMedian ? "#efece2" : "none"}
+            stroke={isMedian ? "#d5cfbe" : "#e6e1d4"} strokeWidth={isMedian ? 1.25 : 1} />
         );
       })}
       {/* spokes + axis labels */}
@@ -133,9 +133,9 @@ export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetri
         const anchor = Math.abs(lx - cx) < 6 ? "middle" : lx > cx ? "start" : "end";
         return (
           <g key={m.label}>
-            <line x1={cx} y1={cy} x2={x} y2={y} stroke="#e2e8f0" strokeWidth={1} />
-            <text x={lx} y={ly - 3} fontSize={9} fontWeight={600} fill="#475569" textAnchor={anchor}>{m.label}</text>
-            <text x={lx} y={ly + 7} fontSize={8} fill="#94a3b8" textAnchor={anchor}>{m.valueLabel}</text>
+            <line x1={cx} y1={cy} x2={x} y2={y} stroke="#e6e1d4" strokeWidth={1} />
+            <text x={lx} y={ly - 3} fontSize={9} fontWeight={600} fill="#6d6858" textAnchor={anchor}>{m.label}</text>
+            <text x={lx} y={ly + 7} fontSize={8} fill="#a9a493" textAnchor={anchor}>{m.valueLabel}</text>
           </g>
         );
       })}
@@ -148,9 +148,9 @@ export function ProfileRadar({ metrics, maxHeight = 300 }: { metrics: RadarMetri
       {/* legend */}
       <g>
         <rect x={cx - 70} y={H - 14} width={9} height={9} fill={INDIGO} fillOpacity={0.18} stroke={INDIGO} />
-        <text x={cx - 58} y={H - 6} fontSize={9} fill="#475569">Player percentile</text>
-        <line x1={cx + 36} y1={H - 9} x2={cx + 50} y2={H - 9} stroke="#cbd5e1" strokeWidth={1.25} />
-        <text x={cx + 54} y={H - 6} fontSize={9} fill="#475569">squad median</text>
+        <text x={cx - 58} y={H - 6} fontSize={9} fill="#6d6858">Player percentile</text>
+        <line x1={cx + 36} y1={H - 9} x2={cx + 50} y2={H - 9} stroke="#d5cfbe" strokeWidth={1.25} />
+        <text x={cx + 54} y={H - 6} fontSize={9} fill="#6d6858">squad median</text>
       </g>
     </svg>
   );
@@ -180,15 +180,15 @@ export function CompareRadar({ axes, series, maxHeight = 300 }: {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight }}>
       {[25, 50, 75, 100].map((ring) => {
         const poly = axes.map((_, i) => { const r = (ring / 100) * R; return `${cx + r * Math.cos(angle(i))},${cy + r * Math.sin(angle(i))}`; }).join(" ");
-        return <polygon key={ring} points={poly} fill="none" stroke="#e2e8f0" strokeWidth={1} />;
+        return <polygon key={ring} points={poly} fill="none" stroke="#e6e1d4" strokeWidth={1} />;
       })}
-      {axes.map((_, i) => { const r = R; return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke="#e2e8f0" strokeWidth={1} />; })}
+      {axes.map((_, i) => { const r = R; return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke="#e6e1d4" strokeWidth={1} />; })}
       {series.map((s) => (
         <polygon key={s.label} points={axes.map((_, i) => pt(i, s.values[i]).join(",")).join(" ")} fill={s.color} fillOpacity={0.14} stroke={s.color} strokeWidth={2} />
       ))}
       {axes.map((label, i) => {
         const r = R * 1.16;
-        return <text key={i} x={cx + r * Math.cos(angle(i))} y={cy + r * Math.sin(angle(i))} fontSize={8.5} fill="#64748b" textAnchor="middle" dominantBaseline="middle">{label}</text>;
+        return <text key={i} x={cx + r * Math.cos(angle(i))} y={cy + r * Math.sin(angle(i))} fontSize={8.5} fill="#8b8676" textAnchor="middle" dominantBaseline="middle">{label}</text>;
       })}
     </svg>
   );
@@ -228,15 +228,15 @@ export function MatchTrendBars({
             <g key={i}>
               <rect x={x} y={y} width={bw} height={mt + plotH - y} rx={1.5}
                 fill={color} fillOpacity={below ? 0.32 : 0.85} />
-              <text x={x + bw / 2} y={y - 3} fontSize={8} fontWeight={600} fill="#334155" textAnchor="middle">
+              <text x={x + bw / 2} y={y - 3} fontSize={8} fontWeight={600} fill="#565044" textAnchor="middle">
                 {Math.round(b.value).toLocaleString()}
               </text>
-              <text x={x + bw / 2} y={H - 18} fontSize={7.5} fill="#94a3b8" textAnchor="middle">{b.label}</text>
+              <text x={x + bw / 2} y={H - 18} fontSize={7.5} fill="#a9a493" textAnchor="middle">{b.label}</text>
             </g>
           );
         })}
         {avgY != null && (
-          <line x1={ml} x2={W - mr} y1={avgY} y2={avgY} stroke="#0f172a" strokeWidth={1} strokeDasharray="3 3" opacity={0.55} />
+          <line x1={ml} x2={W - mr} y1={avgY} y2={avgY} stroke="#221f18" strokeWidth={1} strokeDasharray="3 3" opacity={0.55} />
         )}
       </svg>
     </div>

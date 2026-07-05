@@ -712,7 +712,7 @@ export default function PlayerAccessPanel({
               ) : (
                 <ul className="mt-2 space-y-2">
                   {memberships.map((m) => {
-                    const color = m.team.color || "#64748b";
+                    const color = m.team.color || "#8b8676";
                     const label = m.team.short || m.team.name;
                     return (
                       <li
@@ -757,7 +757,7 @@ export default function PlayerAccessPanel({
               ) : (
                 <ul className="mt-2 space-y-2">
                   {grants.map((g) => {
-                    const color = g.team.color || "#64748b";
+                    const color = g.team.color || "#8b8676";
                     const label = g.team.short || g.team.name;
                     const scopeLabel =
                       g.scope === "live" ? t.grantScopeLive : t.grantScopeHistoric;
@@ -974,7 +974,7 @@ export default function PlayerAccessPanel({
                 <>
                   <ul className="mt-2 divide-y divide-zinc-100 rounded-xl border">
                     {audit.map((row) => {
-                      const teamColor = row.teamColor || "#64748b";
+                      const teamColor = row.teamColor || "#8b8676";
                       return (
                         <li
                           key={row.id}

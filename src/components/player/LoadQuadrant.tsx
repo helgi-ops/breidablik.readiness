@@ -81,11 +81,11 @@ const COPY = {
 } as const;
 
 const ZONE_COLOR: Record<string, string> = {
-  primed: "#16a34a",
-  overreaching: "#d97706",
-  detrained: "#64748b",
-  danger: "#dc2626",
-  baseline: "#94a3b8",
+  primed: "#1c7a4a",
+  overreaching: "#b0700f",
+  detrained: "#8b8676",
+  danger: "#a83e28",
+  baseline: "#a9a493",
 };
 
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
@@ -129,7 +129,7 @@ export default function LoadQuadrant({ lang = "IS", clientId }: { lang?: Lang; c
   const divX = pad + 0.5 * (W - 2 * pad);
   const acwrLineFrac = clamp((1.3 - 0.5) / (1.8 - 0.5), 0.08, 0.92);
   const divY = pad + (1 - acwrLineFrac) * (H - 2 * pad);
-  const color = ZONE_COLOR[q.zone] ?? "#94a3b8";
+  const color = ZONE_COLOR[q.zone] ?? "#a9a493";
 
   return (
     <div className="rounded-2xl border bg-white shadow-sm p-4 space-y-3">
@@ -149,30 +149,30 @@ export default function LoadQuadrant({ lang = "IS", clientId }: { lang?: Lang; c
       <div className="flex justify-center">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px]" role="img" aria-label={t.title}>
           {/* zone tints */}
-          <rect x={divX} y={pad} width={W - pad - divX} height={divY - pad} fill="#16a34a" opacity="0.06" />
-          <rect x={divX} y={divY} width={W - pad - divX} height={H - pad - divY} fill="#16a34a" opacity="0.03" />
-          <rect x={pad} y={pad} width={divX - pad} height={divY - pad} fill="#dc2626" opacity="0.05" />
-          <rect x={pad} y={divY} width={divX - pad} height={H - pad - divY} fill="#64748b" opacity="0.05" />
+          <rect x={divX} y={pad} width={W - pad - divX} height={divY - pad} fill="#1c7a4a" opacity="0.06" />
+          <rect x={divX} y={divY} width={W - pad - divX} height={H - pad - divY} fill="#1c7a4a" opacity="0.03" />
+          <rect x={pad} y={pad} width={divX - pad} height={divY - pad} fill="#a83e28" opacity="0.05" />
+          <rect x={pad} y={divY} width={divX - pad} height={H - pad - divY} fill="#8b8676" opacity="0.05" />
 
           {/* axes */}
-          <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#cbd5e1" strokeWidth="1" />
-          <line x1={pad} y1={pad} x2={pad} y2={H - pad} stroke="#cbd5e1" strokeWidth="1" />
+          <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#d5cfbe" strokeWidth="1" />
+          <line x1={pad} y1={pad} x2={pad} y2={H - pad} stroke="#d5cfbe" strokeWidth="1" />
           {/* dividers */}
-          <line x1={divX} y1={pad} x2={divX} y2={H - pad} stroke="#e2e8f0" strokeDasharray="4 3" />
-          <line x1={pad} y1={divY} x2={W - pad} y2={divY} stroke="#e2e8f0" strokeDasharray="4 3" />
+          <line x1={divX} y1={pad} x2={divX} y2={H - pad} stroke="#e6e1d4" strokeDasharray="4 3" />
+          <line x1={pad} y1={divY} x2={W - pad} y2={divY} stroke="#e6e1d4" strokeDasharray="4 3" />
 
           {/* zone labels */}
-          <text x={(divX + W - pad) / 2} y={pad + 12} textAnchor="middle" fontSize="9" fill="#16a34a">{t.zoneLabels.overreaching}</text>
-          <text x={(divX + W - pad) / 2} y={H - pad - 6} textAnchor="middle" fontSize="9" fill="#16a34a">{t.zoneLabels.primed}</text>
-          <text x={(pad + divX) / 2} y={pad + 12} textAnchor="middle" fontSize="9" fill="#dc2626">{t.zoneLabels.danger}</text>
-          <text x={(pad + divX) / 2} y={H - pad - 6} textAnchor="middle" fontSize="9" fill="#64748b">{t.zoneLabels.detrained}</text>
+          <text x={(divX + W - pad) / 2} y={pad + 12} textAnchor="middle" fontSize="9" fill="#1c7a4a">{t.zoneLabels.overreaching}</text>
+          <text x={(divX + W - pad) / 2} y={H - pad - 6} textAnchor="middle" fontSize="9" fill="#1c7a4a">{t.zoneLabels.primed}</text>
+          <text x={(pad + divX) / 2} y={pad + 12} textAnchor="middle" fontSize="9" fill="#a83e28">{t.zoneLabels.danger}</text>
+          <text x={(pad + divX) / 2} y={H - pad - 6} textAnchor="middle" fontSize="9" fill="#8b8676">{t.zoneLabels.detrained}</text>
 
           {/* current position */}
           <circle cx={px} cy={py} r="7" fill={color} stroke="white" strokeWidth="2" />
 
           {/* axis captions */}
-          <text x={W / 2} y={H - 4} textAnchor="middle" fontSize="9" fill="#64748b">→ {t.fitness}</text>
-          <text x={10} y={H / 2} textAnchor="middle" fontSize="9" fill="#64748b" transform={`rotate(-90 10 ${H / 2})`}>→ {t.fatigue}</text>
+          <text x={W / 2} y={H - 4} textAnchor="middle" fontSize="9" fill="#8b8676">→ {t.fitness}</text>
+          <text x={10} y={H / 2} textAnchor="middle" fontSize="9" fill="#8b8676" transform={`rotate(-90 10 ${H / 2})`}>→ {t.fatigue}</text>
         </svg>
       </div>
 

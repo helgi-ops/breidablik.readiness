@@ -121,10 +121,10 @@ export default function VolumeLoadCard({ lang = "IS", clientId }: { lang?: Lang;
               const isLast = i === v.weeks.length - 1;
               return (
                 <rect key={w.week_start} x={x} y={H - pad - h} width={barW * 0.7} height={h}
-                  rx="2" fill={isLast ? "#0f172a" : "#94a3b8"} />
+                  rx="2" fill={isLast ? "#221f18" : "#a9a493"} />
               );
             })}
-            <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e2e8f0" />
+            <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e6e1d4" />
           </svg>
 
           <div className="space-y-1.5">

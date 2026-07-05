@@ -195,23 +195,23 @@ function Sparkline({ values, lang }: { values: Array<number | null>; lang: Lang 
     >
       <defs>
         <linearGradient id="weekly-digest-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+          <stop offset="0%" stopColor="#2b8a54" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#2b8a54" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#weekly-digest-grad)" />
-      <path d={linePath} fill="none" stroke="#10b981" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={linePath} fill="none" stroke="#2b8a54" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
       {points.map((p, i) => (
         <circle
           key={i}
           cx={p.x}
           cy={p.y}
           r={i === points.length - 1 ? 3 : 1.75}
-          fill="#10b981"
+          fill="#2b8a54"
           opacity={i === points.length - 1 ? 1 : 0.6}
         />
       ))}
-      <circle cx={lastPoint.x} cy={lastPoint.y} r={5} fill="#10b981" opacity="0.18" />
+      <circle cx={lastPoint.x} cy={lastPoint.y} r={5} fill="#2b8a54" opacity="0.18" />
     </svg>
   );
 }

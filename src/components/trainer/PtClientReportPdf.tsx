@@ -26,23 +26,23 @@ const fmt = (n: number | null | undefined) => (n == null ? "—" : Math.round(n)
 const fmt1 = (n: number | null | undefined) => (n == null ? "—" : (Math.round(n * 10) / 10).toLocaleString("en-US"));
 
 const s = StyleSheet.create({
-  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, paddingBottom: 6, borderBottom: "2 solid #4F46E5" },
   brand: { fontSize: 12, fontWeight: 700, color: "#4F46E5", letterSpacing: 0.5 },
-  brandMeta: { fontSize: 8, color: "#9CA3AF" },
+  brandMeta: { fontSize: 8, color: "#a9a493" },
   h1: { fontSize: 15, fontWeight: 700, marginBottom: 2 },
-  sub: { fontSize: 10, color: "#6B7280", marginBottom: 10 },
+  sub: { fontSize: 10, color: "#8b8676", marginBottom: 10 },
   bottomLine: { borderLeft: "4 solid #4F46E5", backgroundColor: "#EEF2FF", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10, fontSize: 11, fontWeight: 700, color: "#1E1B4B" },
-  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #E5E7EB", marginTop: 10 },
-  para: { fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 4 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #e6e1d4", marginTop: 10 },
+  para: { fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 4 },
   cardsRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
-  card: { flex: 1, border: "1 solid #E5E7EB", borderRadius: 4, padding: 8 },
-  cardVal: { fontSize: 16, fontWeight: 700, color: "#111827" },
-  cardLbl: { fontSize: 8, color: "#6B7280", marginTop: 1 },
-  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
-  tRowAlt: { flexDirection: "row", borderTop: "1 solid #E5E7EB", backgroundColor: "#F9FAFB" },
-  footer: { position: "absolute", bottom: 18, left: 28, right: 28, flexDirection: "row", justifyContent: "space-between", borderTop: "1 solid #E5E7EB", paddingTop: 6, fontSize: 7.5, color: "#9CA3AF" },
+  card: { flex: 1, border: "1 solid #e6e1d4", borderRadius: 4, padding: 8 },
+  cardVal: { fontSize: 16, fontWeight: 700, color: "#221f18" },
+  cardLbl: { fontSize: 8, color: "#8b8676", marginTop: 1 },
+  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
+  tRowAlt: { flexDirection: "row", borderTop: "1 solid #e6e1d4", backgroundColor: "#f7f5ef" },
+  footer: { position: "absolute", bottom: 18, left: 28, right: 28, flexDirection: "row", justifyContent: "space-between", borderTop: "1 solid #e6e1d4", paddingTop: 6, fontSize: 7.5, color: "#a9a493" },
 });
 
 const STATUS_LABEL: Record<string, string> = { low: "below baseline", optimal: "in the sweet spot", high: "elevated", very_high: "spiking", building: "still building a baseline" };
@@ -81,7 +81,7 @@ export async function downloadPtClientReportPdf(d: PtClientReport, trainerName =
             <Text style={s.cardLbl}>Adherence ({d.adherence.completed}/{d.adherence.total} sessions)</Text>
           </View>
           <View style={s.card}>
-            <Text style={s.cardVal}>{fmt1(d.readiness.avgScore)}<Text style={{ fontSize: 9, color: "#9CA3AF" }}> /25</Text></Text>
+            <Text style={s.cardVal}>{fmt1(d.readiness.avgScore)}<Text style={{ fontSize: 9, color: "#a9a493" }}> /25</Text></Text>
             <Text style={s.cardLbl}>Avg readiness · {d.readiness.checkIns} check-ins</Text>
           </View>
           <View style={s.card}>
@@ -122,7 +122,7 @@ export async function downloadPtClientReportPdf(d: PtClientReport, trainerName =
                 <View key={p.exercise + i} style={i % 2 === 0 ? s.tRow : s.tRowAlt}>
                   <Text style={{ width: "46%", padding: 4 }}>{p.exercise}</Text>
                   <Text style={{ width: "27%", padding: 4, textAlign: "right", fontWeight: 700 }}>{fmt1(p.e1rm)}</Text>
-                  <Text style={{ width: "27%", padding: 4, textAlign: "right", color: "#059669" }}>+{fmt1(p.delta_kg)} kg</Text>
+                  <Text style={{ width: "27%", padding: 4, textAlign: "right", color: "#1c7a4a" }}>+{fmt1(p.delta_kg)} kg</Text>
                 </View>
               ))}
             </View>
@@ -158,7 +158,7 @@ export async function downloadPtClientReportPdf(d: PtClientReport, trainerName =
           {d.volume.by_lift.length ? ` Top lifts by volume: ${d.volume.by_lift.slice(0, 4).map((l) => `${l.lift} ${fmt(l.total)} kg`).join(", ")}.` : ""}
         </Text>
 
-        <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 8, lineHeight: 1.4 }}>
+        <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 8, lineHeight: 1.4 }}>
           Adherence = completed ÷ logged sessions. Readiness = daily wellness check-in (sleep, energy, soreness, stress) on a 5–25 scale. Internal load = session RPE × minutes (Foster sRPE). e1RM = estimated 1-rep max (Epley, RIR-adjusted). ACWR = acute(7d) ÷ chronic(28d) load; 0.8–1.3 = familiar range, a spike-size context, not an injury predictor (Gabbett 2016, Impellizzeri 2020).
         </Text>
       </Page>

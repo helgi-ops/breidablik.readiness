@@ -39,7 +39,7 @@ function Ring({ logged, planned }: { logged: number; planned: number | null }) {
   const pct = planned && planned > 0 ? Math.min(1, logged / planned) : (logged > 0 ? 1 : 0);
   const r = 26, c = 2 * Math.PI * r;
   const full = planned != null && logged >= planned;
-  const stroke = full ? "#10b981" : logged > 0 ? "#6366f1" : "#cbd5e1";
+  const stroke = full ? "#2b8a54" : logged > 0 ? "#6366f1" : "#d5cfbe";
   return (
     <svg viewBox="0 0 64 64" className="h-16 w-16 shrink-0">
       <circle cx="32" cy="32" r={r} fill="none" stroke="#eef2f7" strokeWidth="7" />

@@ -71,7 +71,7 @@ export default function DevPlayerTabs({ activeTab, onChange, planTier = "FREE" }
               {locked && (
                 <span
                   className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
-                  style={{ background: tab.minTier === "elite" ? "#FEF3C7" : "#DBEAFE", color: tab.minTier === "elite" ? "#92400E" : "#1E40AF" }}
+                  style={{ background: tab.minTier === "elite" ? "#f3e0b4" : "#DBEAFE", color: tab.minTier === "elite" ? "#7c5210" : "#1E40AF" }}
                   aria-hidden="true"
                 >
                   {lockLabel}

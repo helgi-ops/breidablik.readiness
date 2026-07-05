@@ -49,11 +49,11 @@ function fmtDate(ts: string): string {
 }
 
 function asymmetryColor(pct: number | null): string {
-  if (pct == null) return "#94a3b8";
+  if (pct == null) return "#a9a493";
   const abs = Math.abs(pct);
-  if (abs >= 15) return "#dc2626";
-  if (abs >= 10) return "#f59e0b";
-  return "#16a34a";
+  if (abs >= 15) return "#a83e28";
+  if (abs >= 10) return "#cb8420";
+  return "#1c7a4a";
 }
 
 function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -258,7 +258,7 @@ export default function DevPlayerVALDTab() {
               </div>
               <div
                 className="rounded-xl px-3 py-1.5 text-sm font-bold"
-                style={{ background: "#f0fdf4", color: "#15803d" }}
+                style={{ background: "#eaf3ec", color: "#16653d" }}
               >
                 {fmt(latestFD?.jump_height_cm, 1, " cm")}
               </div>

@@ -1495,8 +1495,8 @@ function HistorySparkline({ history, lang = "EN" }: { history: HistoryPoint[]; l
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" preserveAspectRatio="none">
         {/* Grid: spike threshold (rose) and baseline (slate) reference lines */}
-        <line x1={padX} x2={W - padX} y1={spikeY} y2={spikeY} stroke="#fda4af" strokeWidth="0.6" strokeDasharray="2,2" />
-        <line x1={padX} x2={W - padX} y1={baseY} y2={baseY} stroke="#cbd5e1" strokeWidth="0.6" strokeDasharray="2,2" />
+        <line x1={padX} x2={W - padX} y1={spikeY} y2={spikeY} stroke="#d68e77" strokeWidth="0.6" strokeDasharray="2,2" />
+        <line x1={padX} x2={W - padX} y1={baseY} y2={baseY} stroke="#d5cfbe" strokeWidth="0.6" strokeDasharray="2,2" />
         {/* Daily bars */}
         {days.map((day, i) => {
           const x = padX + i * colW + colW / 2;
@@ -1505,17 +1505,17 @@ function HistorySparkline({ history, lang = "EN" }: { history: HistoryPoint[]; l
           if (score == null || score <= 0) {
             // Rest day — faint dot at baseline
             return (
-              <circle key={day.date} cx={x} cy={baseY} r="1" fill="#e2e8f0" />
+              <circle key={day.date} cx={x} cy={baseY} r="1" fill="#e6e1d4" />
             );
           }
           const y = yFor(score);
           const barH = H - padY - y;
           const fill =
-            score >= 140 ? "#f43f5e" // spike → rose
-              : score >= 110 ? "#f59e0b" // heavy → amber
-              : score >= 90 ? "#10b981" // typical → emerald
+            score >= 140 ? "#b34a30" // spike → rose
+              : score >= 110 ? "#cb8420" // heavy → amber
+              : score >= 90 ? "#2b8a54" // typical → emerald
               : score >= 60 ? "#0ea5e9" // below avg → sky
-              : "#94a3b8"; // light → slate
+              : "#a9a493"; // light → slate
           return (
             <g key={day.date}>
               <rect
@@ -1530,7 +1530,7 @@ function HistorySparkline({ history, lang = "EN" }: { history: HistoryPoint[]; l
               </rect>
               {/* Indoor marker dot */}
               {isIndoor && (
-                <circle cx={x} cy={y - 2} r="1.4" fill="#f43f5e">
+                <circle cx={x} cy={y - 2} r="1.4" fill="#b34a30">
                   <title>{`Indoor session — ${day.point?.duration_min ?? "?"} min`}</title>
                 </circle>
               )}

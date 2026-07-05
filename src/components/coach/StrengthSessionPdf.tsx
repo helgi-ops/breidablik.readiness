@@ -16,39 +16,39 @@ import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { StrengthSession } from "@/lib/micropulse/strengthProgramming/types";
 
 const styles = StyleSheet.create({
-  page: { padding: 24, fontSize: 9, fontFamily: "Helvetica", color: "#0f172a" },
-  cover: { padding: 48, fontFamily: "Helvetica", color: "#0f172a" },
+  page: { padding: 24, fontSize: 9, fontFamily: "Helvetica", color: "#221f18" },
+  cover: { padding: 48, fontFamily: "Helvetica", color: "#221f18" },
   coverTitle: { fontSize: 24, fontFamily: "Helvetica-Bold", marginBottom: 8 },
-  coverSubtitle: { fontSize: 12, color: "#475569", marginBottom: 24 },
-  coverParagraph: { fontSize: 10, color: "#334155", lineHeight: 1.4, marginBottom: 12 },
-  coverEvidence: { fontSize: 8, color: "#64748b", marginTop: 24, lineHeight: 1.4 },
+  coverSubtitle: { fontSize: 12, color: "#6d6858", marginBottom: 24 },
+  coverParagraph: { fontSize: 10, color: "#565044", lineHeight: 1.4, marginBottom: 12 },
+  coverEvidence: { fontSize: 8, color: "#8b8676", marginTop: 24, lineHeight: 1.4 },
 
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, borderBottomWidth: 1, borderBottomColor: "#cbd5e1", paddingBottom: 6 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, borderBottomWidth: 1, borderBottomColor: "#d5cfbe", paddingBottom: 6 },
   playerName: { fontSize: 16, fontFamily: "Helvetica-Bold" },
   mdBadge: { fontSize: 10, fontFamily: "Helvetica-Bold", backgroundColor: "#4338ca", color: "#ffffff", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 3 },
 
-  meta: { flexDirection: "row", gap: 12, marginBottom: 10, fontSize: 8, color: "#475569" },
-  summary: { fontSize: 10, marginBottom: 12, color: "#1e293b", lineHeight: 1.4 },
+  meta: { flexDirection: "row", gap: 12, marginBottom: 10, fontSize: 8, color: "#6d6858" },
+  summary: { fontSize: 10, marginBottom: 12, color: "#3a352c", lineHeight: 1.4 },
 
-  block: { marginBottom: 10, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 3, padding: 6 },
+  block: { marginBottom: 10, borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3, padding: 6 },
   blockTitle: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#3730a3", marginBottom: 2, textTransform: "uppercase" },
-  blockNote: { fontSize: 7, color: "#64748b", fontStyle: "italic", marginBottom: 4, lineHeight: 1.3 },
+  blockNote: { fontSize: 7, color: "#8b8676", fontStyle: "italic", marginBottom: 4, lineHeight: 1.3 },
 
-  exerciseRow: { marginTop: 4, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: "#e2e8f0" },
+  exerciseRow: { marginTop: 4, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: "#e6e1d4" },
   exerciseRowFirst: { marginTop: 0, paddingTop: 0, borderTopWidth: 0 },
-  exerciseName: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#0f172a" },
-  exerciseDose: { fontSize: 9, color: "#334155", marginTop: 1 },
-  exerciseCue: { fontSize: 8, color: "#64748b", fontStyle: "italic", marginTop: 1 },
-  exerciseMod: { fontSize: 8, color: "#9a3412", fontFamily: "Helvetica-Bold", marginTop: 2, backgroundColor: "#fef3c7", paddingHorizontal: 3, paddingVertical: 1 },
+  exerciseName: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#221f18" },
+  exerciseDose: { fontSize: 9, color: "#565044", marginTop: 1 },
+  exerciseCue: { fontSize: 8, color: "#8b8676", fontStyle: "italic", marginTop: 1 },
+  exerciseMod: { fontSize: 8, color: "#7c5210", fontFamily: "Helvetica-Bold", marginTop: 2, backgroundColor: "#f3e0b4", paddingHorizontal: 3, paddingVertical: 1 },
 
-  audit: { marginTop: 6, borderTopWidth: 1, borderTopColor: "#cbd5e1", paddingTop: 6 },
+  audit: { marginTop: 6, borderTopWidth: 1, borderTopColor: "#d5cfbe", paddingTop: 6 },
   auditTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#3730a3", marginBottom: 4 },
-  auditEntry: { fontSize: 8, marginBottom: 3, lineHeight: 1.4, color: "#334155" },
+  auditEntry: { fontSize: 8, marginBottom: 3, lineHeight: 1.4, color: "#565044" },
   auditTrigger: { fontFamily: "Helvetica-Bold" },
 
-  footer: { position: "absolute", bottom: 16, left: 24, right: 24, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: "#94a3b8" },
+  footer: { position: "absolute", bottom: 16, left: 24, right: 24, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: "#a9a493" },
 
-  blocked: { marginTop: 12, padding: 12, backgroundColor: "#fef3c7", borderRadius: 3, fontSize: 10, color: "#92400e" },
+  blocked: { marginTop: 12, padding: 12, backgroundColor: "#f3e0b4", borderRadius: 3, fontSize: 10, color: "#7c5210" },
 });
 
 export type StrengthSessionPdfData = {

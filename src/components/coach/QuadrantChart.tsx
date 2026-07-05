@@ -47,17 +47,17 @@ type Props = {
 // Brand colours
 const FOREST  = "#005A2B";
 const CYAN    = "#29B7E6";
-const SLATE   = "#1E293B";
-const MUTED   = "#64748B";
-const LIGHT   = "#94A3B8";
-const BORDER  = "#E2E8F0";
-const RED     = "#DC2626";
-const YELLOW  = "#F59E0B";
-const GREEN   = "#16A34A";
-const QR_RED  = "#FEE2E2";
-const QR_YEL  = "#FEF3C7";
-const QR_GRN  = "#DCFCE7";
-const QR_GRY  = "#F1F5F9";
+const SLATE   = "#3a352c";
+const MUTED   = "#8b8676";
+const LIGHT   = "#a9a493";
+const BORDER  = "#e6e1d4";
+const RED     = "#a83e28";
+const YELLOW  = "#cb8420";
+const GREEN   = "#1c7a4a";
+const QR_RED  = "#f1d3c8";
+const QR_YEL  = "#f3e0b4";
+const QR_GRN  = "#d3e8da";
+const QR_GRY  = "#efece2";
 
 function median(arr: number[]): number {
   if (arr.length === 0) return 0;
@@ -249,7 +249,7 @@ function Tooltip({ x, y, point }: { x: number; y: number; point: QuadrantPoint }
   const h = 52 + (hasAcwr ? 14 : 0) + (hasEdi ? 14 : 0);
   // EDI colour: green ≤ 1.20, yellow 1.20–1.35, orange > 1.35 (di Prampero 2015 thresholds)
   const ediColour = hasEdi
-    ? (point.edi! <= 1.20 ? GREEN : point.edi! <= 1.35 ? YELLOW : "#FB923C")
+    ? (point.edi! <= 1.20 ? GREEN : point.edi! <= 1.35 ? YELLOW : "#de9328")
     : LIGHT;
   return (
     <g style={{ pointerEvents: "none" }}>

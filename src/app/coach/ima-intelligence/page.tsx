@@ -384,11 +384,11 @@ type RunDistRow = {
 };
 
 const ACWR_STYLE: Record<RunDistRow["status"], { bg: string; text: string; label: (lang: Lang) => string }> = {
-  spike:        { bg: "#FEE2E2", text: "#B91C1C", label: (l) => (l === "IS" ? "Spike" : "Spike") },
-  high:         { bg: "#FEF3C7", text: "#B45309", label: (l) => (l === "IS" ? "Hátt" : "High") },
-  optimal:      { bg: "#DCFCE7", text: "#15803D", label: (l) => (l === "IS" ? "Í lagi" : "OK") },
+  spike:        { bg: "#f1d3c8", text: "#8c3221", label: (l) => (l === "IS" ? "Spike" : "Spike") },
+  high:         { bg: "#f3e0b4", text: "#9a6410", label: (l) => (l === "IS" ? "Hátt" : "High") },
+  optimal:      { bg: "#d3e8da", text: "#16653d", label: (l) => (l === "IS" ? "Í lagi" : "OK") },
   low:          { bg: "#E0F2FE", text: "#0369A1", label: (l) => (l === "IS" ? "Lágt" : "Low") },
-  insufficient: { bg: "#F1F5F9", text: "#64748B", label: (l) => (l === "IS" ? "Byggist" : "Building") },
+  insufficient: { bg: "#efece2", text: "#8b8676", label: (l) => (l === "IS" ? "Byggist" : "Building") },
 };
 
 function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {

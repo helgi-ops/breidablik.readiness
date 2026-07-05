@@ -77,13 +77,13 @@ export type PlayerSnapshotPdfData = {
 };
 
 const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
 
   // Header
-  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #E5E7EB" },
+  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   h1: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
-  subtitle: { fontSize: 10, color: "#4B5563" },
+  subtitle: { fontSize: 10, color: "#6d6858" },
   badge: {
     fontSize: 9,
     fontWeight: 700,
@@ -91,15 +91,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  badgeHigh: { backgroundColor: "#FEE2E2", color: "#991B1B", borderColor: "#FCA5A5" },
-  badgeElevated: { backgroundColor: "#FEF3C7", color: "#92400E", borderColor: "#FCD34D" },
-  badgeLow: { backgroundColor: "#D1FAE5", color: "#065F46", borderColor: "#6EE7B7" },
+  badgeHigh: { backgroundColor: "#f1d3c8", color: "#72291c", borderColor: "#d68e77" },
+  badgeElevated: { backgroundColor: "#f3e0b4", color: "#7c5210", borderColor: "#e0b257" },
+  badgeLow: { backgroundColor: "#d3e8da", color: "#145233", borderColor: "#82bf98" },
 
   // Section title
   sectionTitle: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#374151",
+    color: "#565044",
     textTransform: "uppercase",
     marginBottom: 6,
     marginTop: 12,
@@ -113,16 +113,16 @@ const styles = StyleSheet.create({
     padding: "6 8",
     flex: 1,
   },
-  tileSlate: { borderColor: "#E5E7EB", backgroundColor: "#F9FAFB" },
-  tileGreen: { borderColor: "#A7F3D0", backgroundColor: "#ECFDF5" },
-  tileAmber: { borderColor: "#FCD34D", backgroundColor: "#FFFBEB" },
-  tileRed: { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" },
-  tileLabel: { fontSize: 7, color: "#6B7280", textTransform: "uppercase", marginBottom: 2 },
-  tileValue: { fontSize: 16, fontWeight: 700, color: "#111827" },
-  tileBand: { fontSize: 7, color: "#6B7280", marginTop: 2 },
+  tileSlate: { borderColor: "#e6e1d4", backgroundColor: "#f7f5ef" },
+  tileGreen: { borderColor: "#b0d6bd", backgroundColor: "#eaf3ec" },
+  tileAmber: { borderColor: "#e0b257", backgroundColor: "#faf1de" },
+  tileRed: { borderColor: "#d68e77", backgroundColor: "#f8e9e3" },
+  tileLabel: { fontSize: 7, color: "#8b8676", textTransform: "uppercase", marginBottom: 2 },
+  tileValue: { fontSize: 16, fontWeight: 700, color: "#221f18" },
+  tileBand: { fontSize: 7, color: "#8b8676", marginTop: 2 },
 
   // Narrative / body text
-  bodyText: { fontSize: 10, color: "#1F2937", lineHeight: 1.4, marginBottom: 4 },
+  bodyText: { fontSize: 10, color: "#3a352c", lineHeight: 1.4, marginBottom: 4 },
 
   // Risk analysis
   riskBox: {
@@ -132,60 +132,60 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 6,
   },
-  riskBoxHigh: { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" },
-  riskBoxElevated: { borderColor: "#FCD34D", backgroundColor: "#FFFBEB" },
-  riskSummary: { fontSize: 10, color: "#111827", fontWeight: 700, marginBottom: 6 },
+  riskBoxHigh: { borderColor: "#d68e77", backgroundColor: "#f8e9e3" },
+  riskBoxElevated: { borderColor: "#e0b257", backgroundColor: "#faf1de" },
+  riskSummary: { fontSize: 10, color: "#221f18", fontWeight: 700, marginBottom: 6 },
 
   driverRow: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#e6e1d4",
     backgroundColor: "#FFFFFF",
     borderRadius: 3,
     padding: 6,
     marginBottom: 4,
   },
   driverHead: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  driverLabel: { fontSize: 9, fontWeight: 700, color: "#111827" },
-  driverValue: { fontSize: 9, fontWeight: 700, color: "#374151" },
-  driverExplanation: { fontSize: 8.5, color: "#374151", lineHeight: 1.35 },
+  driverLabel: { fontSize: 9, fontWeight: 700, color: "#221f18" },
+  driverValue: { fontSize: 9, fontWeight: 700, color: "#565044" },
+  driverExplanation: { fontSize: 8.5, color: "#565044", lineHeight: 1.35 },
 
   // Recommendations
   recBox: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#e6e1d4",
     backgroundColor: "#FFFFFF",
     borderRadius: 3,
     padding: 6,
     marginTop: 4,
   },
-  recTitle: { fontSize: 8, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", marginBottom: 4 },
-  recItem: { fontSize: 8.5, color: "#1F2937", marginBottom: 2, lineHeight: 1.35 },
+  recTitle: { fontSize: 8, fontWeight: 700, color: "#8b8676", textTransform: "uppercase", marginBottom: 4 },
+  recItem: { fontSize: 8.5, color: "#3a352c", marginBottom: 2, lineHeight: 1.35 },
 
   // Wellness grid
   grid3: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   gridCell: {
     width: "32.5%",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    borderColor: "#e6e1d4",
+    backgroundColor: "#f7f5ef",
     borderRadius: 3,
     padding: "4 6",
     marginBottom: 4,
   },
-  gridLabel: { fontSize: 7, color: "#6B7280", textTransform: "uppercase", marginBottom: 1 },
-  gridValue: { fontSize: 11, fontWeight: 700, color: "#111827" },
+  gridLabel: { fontSize: 7, color: "#8b8676", textTransform: "uppercase", marginBottom: 1 },
+  gridValue: { fontSize: 11, fontWeight: 700, color: "#221f18" },
 
   // RPE entry
   rpeItem: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#e6e1d4",
     borderRadius: 3,
     padding: 6,
     marginBottom: 4,
   },
   rpeTop: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
-  rpeTitle: { fontSize: 10, fontWeight: 700, color: "#111827" },
-  rpeMeta: { fontSize: 8, color: "#6B7280" },
+  rpeTitle: { fontSize: 10, fontWeight: 700, color: "#221f18" },
+  rpeMeta: { fontSize: 8, color: "#8b8676" },
 
   footer: {
     position: "absolute",
@@ -193,10 +193,10 @@ const styles = StyleSheet.create({
     left: 28,
     right: 28,
     fontSize: 7,
-    color: "#9CA3AF",
+    color: "#a9a493",
     textAlign: "center",
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#e6e1d4",
     paddingTop: 6,
   },
 });

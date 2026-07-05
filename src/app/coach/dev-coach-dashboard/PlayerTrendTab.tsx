@@ -112,7 +112,7 @@ function teamBadgeBg(color: string | null): string {
 function SourceTeamBadge({ team }: { team: { name: string; short: string | null; color: string | null } | null }) {
   if (!team) return <span className="text-slate-300 text-xs">—</span>;
   const label = team.short || team.name;
-  const color = team.color || "#64748b";
+  const color = team.color || "#8b8676";
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
@@ -138,12 +138,12 @@ function addDaysISO(dateStr: string, days: number): string {
 }
 
 function stenColor(sten: number | null): string {
-  if (sten == null) return "#94a3b8";
-  if (sten >= 9)   return "#059669";
-  if (sten >= 7)   return "#10b981";
+  if (sten == null) return "#a9a493";
+  if (sten >= 9)   return "#1c7a4a";
+  if (sten >= 7)   return "#2b8a54";
   if (sten >= 5)   return "#6366f1";
-  if (sten >= 3)   return "#f59e0b";
-  return "#ef4444";
+  if (sten >= 3)   return "#cb8420";
+  return "#b34a30";
 }
 
 function stenChip(sten: number | null): string {
@@ -591,13 +591,13 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
               label={ct.daysRecovery}
               value={String(daysRecovery)}
               sub={ct.days}
-              accent="#ef4444"
+              accent="#b34a30"
             />
             <KpiTile
               label={ct.daysReduced}
               value={String(daysReduced)}
               sub={ct.days}
-              accent="#f59e0b"
+              accent="#cb8420"
             />
           </div>
 
@@ -652,7 +652,7 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
               values={loadValues}
               min={0}
               max={maxLoad}
-              color="#f59e0b"
+              color="#cb8420"
               current={
                 latestLoad != null
                   ? isBasketball

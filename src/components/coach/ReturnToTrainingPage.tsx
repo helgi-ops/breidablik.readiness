@@ -524,15 +524,15 @@ function Timeline({ history, windows, showMatches }: { history: Session[]; windo
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 200 }}>
       {bands.map((b, i) => (
-        <rect key={"b" + i} x={x(b.s)} y={padT} width={Math.max(1, x(b.e) - x(b.s))} height={H - padT - padB} fill="#fca5a5" opacity={0.18} />
+        <rect key={"b" + i} x={x(b.s)} y={padT} width={Math.max(1, x(b.e) - x(b.s))} height={H - padT - padB} fill="#d68e77" opacity={0.18} />
       ))}
       {rows.map((s, i) => {
         const injured = bands.some((b) => s.date >= b.s && s.date <= b.e);
-        const fill = s.estimated ? "#fbbf24" : injured ? "#fca5a5" : s.isMatch ? "#c4b5fd" : "#94a3b8";
+        const fill = s.estimated ? "#de9328" : injured ? "#d68e77" : s.isMatch ? "#c4b5fd" : "#a9a493";
         return <rect key={s.date + i} x={x(s.date) - bw / 2} y={yD(s.distance)} width={bw} height={Math.max(0, H - padB - yD(s.distance))} fill={fill} rx={1} />;
       })}
       {segs.map((pts, i) => <polyline key={"sp" + i} points={pts.join(" ")} fill="none" stroke="#0ea5e9" strokeWidth={1.5} />)}
-      {ticks.map((d, i) => <text key={"t" + i} x={x(d)} y={H - 4} fontSize={9} fill="#94a3b8">{d.slice(5)}</text>)}
+      {ticks.map((d, i) => <text key={"t" + i} x={x(d)} y={H - 4} fontSize={9} fill="#a9a493">{d.slice(5)}</text>)}
     </svg>
   );
 }

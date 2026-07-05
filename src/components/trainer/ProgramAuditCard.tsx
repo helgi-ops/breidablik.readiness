@@ -28,11 +28,11 @@ const FAMILY_LABELS: Record<Lang, Record<MovementFamily, string>> = {
 
 const FAMILY_COLOR: Record<MovementFamily, string> = {
   squat: "#6366f1", // indigo
-  hinge: "#10b981", // emerald
-  push: "#f59e0b",  // amber
+  hinge: "#2b8a54", // emerald
+  push: "#cb8420",  // amber
   pull: "#3b82f6",  // blue
   core: "#a855f7",  // purple
-  carry: "#64748b", // slate
+  carry: "#8b8676", // slate
 };
 
 const COPY = {
@@ -215,7 +215,7 @@ export default function ProgramAuditCard({
                       className="w-full rounded-t"
                       style={{
                         height: `${Math.max(4, (v / maxVol) * 36)}px`,
-                        backgroundColor: isSpike ? "#f59e0b" : "#cbd5e1",
+                        backgroundColor: isSpike ? "#cb8420" : "#d5cfbe",
                       }}
                       title={`${v} ${t.sets}`}
                     />

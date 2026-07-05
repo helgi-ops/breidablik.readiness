@@ -9,21 +9,21 @@ const colors = {
   primary: "#1E3A8A",
   primaryLight: "#DBEAFE",
   accent: "#2563EB",
-  text: "#111827",
-  textMuted: "#6B7280",
-  textLight: "#9CA3AF",
-  border: "#E5E7EB",
-  bg: "#F9FAFB",
+  text: "#221f18",
+  textMuted: "#8b8676",
+  textLight: "#a9a493",
+  border: "#e6e1d4",
+  bg: "#f7f5ef",
   white: "#FFFFFF",
-  greenBg: "#ECFDF5",
-  greenBorder: "#A7F3D0",
-  greenText: "#065F46",
-  yellowBg: "#FFFBEB",
-  yellowBorder: "#FDE68A",
-  yellowText: "#92400E",
-  redBg: "#FEF2F2",
-  redBorder: "#FECACA",
-  redText: "#991B1B",
+  greenBg: "#eaf3ec",
+  greenBorder: "#b0d6bd",
+  greenText: "#145233",
+  yellowBg: "#faf1de",
+  yellowBorder: "#e9c983",
+  yellowText: "#7c5210",
+  redBg: "#f8e9e3",
+  redBorder: "#e6b6a6",
+  redText: "#72291c",
 };
 
 const styles = StyleSheet.create({
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   },
   tableHead: {
     flexDirection: "row",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#efece2",
   },
   tableRow: {
     flexDirection: "row",
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   tableRowAlt: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#f7f5ef",
   },
   cellH: {
     padding: "5 6",

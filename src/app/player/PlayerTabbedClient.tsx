@@ -570,10 +570,10 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
   const copy = ateCardCopy(dailyDecision.playerState);
 
   const chipColor =
-    dailyDecision.playerState === "GREEN" ? "#22c55e" :
+    dailyDecision.playerState === "GREEN" ? "#2b8a54" :
     dailyDecision.playerState === "YELLOW" ? "#eab308" :
-    dailyDecision.playerState === "RED" ? "#ef4444" :
-    "#94a3b8";
+    dailyDecision.playerState === "RED" ? "#b34a30" :
+    "#a9a493";
 
   const stateLabel =
     dailyDecision.playerState === "GREEN" ? "GREEN" :
@@ -583,7 +583,7 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
 
   // Use the team colour directly as the card background (white text stays readable
   // on typical dark/medium sports-team colours). Falls back to slate-900 when unset.
-  const cardBg = clubThemeColor ?? "#0f172a";
+  const cardBg = clubThemeColor ?? "#221f18";
 
   return createPortal(
     <div
@@ -605,7 +605,7 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
         {dailyDecision.sessionMode !== "pending" && (
           <span
             className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{ background: "rgba(255,255,255,0.10)", color: "#cbd5e1" }}
+            style={{ background: "rgba(255,255,255,0.10)", color: "#d5cfbe" }}
           >
             {dailyDecision.sessionMode === "full" ? "Full session" :
              dailyDecision.sessionMode === "modified" ? "Modified session" :

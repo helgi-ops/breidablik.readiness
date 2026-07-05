@@ -24,7 +24,7 @@ interface Props {
   bg?: string;
 }
 
-export default function LineSpark({ data, height = 160, yLabel = "", stroke = "#0f172a", bg = "#ffffff" }: Props) {
+export default function LineSpark({ data, height = 160, yLabel = "", stroke = "#221f18", bg = "#ffffff" }: Props) {
   const [hover, setHover] = useState<Point | null>(null);
 
   const dims = useMemo(() => {
@@ -65,8 +65,8 @@ export default function LineSpark({ data, height = 160, yLabel = "", stroke = "#
           const y = yFor(v);
           return (
             <g key={i}>
-              <line x1={ml} x2={W - 8} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="2 3" />
-              <text x={ml - 4} y={y} dominantBaseline="middle" textAnchor="end" fontSize={9} fill="#94a3b8">
+              <line x1={ml} x2={W - 8} y1={y} y2={y} stroke="#e6e1d4" strokeDasharray="2 3" />
+              <text x={ml - 4} y={y} dominantBaseline="middle" textAnchor="end" fontSize={9} fill="#a9a493">
                 {v.toFixed(0)}
               </text>
             </g>
@@ -82,7 +82,7 @@ export default function LineSpark({ data, height = 160, yLabel = "", stroke = "#
               key={i}
               cx={xFor(i)} cy={yFor(d.y)}
               r={isPr ? 4.5 : 3}
-              fill={isPr ? "#f59e0b" : stroke}
+              fill={isPr ? "#cb8420" : stroke}
               stroke={isPr ? "#ffffff" : "transparent"}
               strokeWidth={isPr ? 1.5 : 0}
               onMouseEnter={() => setHover(d)}
@@ -92,8 +92,8 @@ export default function LineSpark({ data, height = 160, yLabel = "", stroke = "#
           );
         })}
         {/* X axis labels — first and last only to keep it clean */}
-        <text x={ml} y={H - 6} fontSize={9} fill="#94a3b8">{data[0].x.slice(5)}</text>
-        <text x={W - 8} y={H - 6} fontSize={9} fill="#94a3b8" textAnchor="end">
+        <text x={ml} y={H - 6} fontSize={9} fill="#a9a493">{data[0].x.slice(5)}</text>
+        <text x={W - 8} y={H - 6} fontSize={9} fill="#a9a493" textAnchor="end">
           {data[data.length - 1].x.slice(5)}
         </text>
       </svg>

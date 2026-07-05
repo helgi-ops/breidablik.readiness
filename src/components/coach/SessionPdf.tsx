@@ -59,17 +59,17 @@ export type SessionPdfData = {
 };
 
 const styles = StyleSheet.create({
-  page: { padding: 28, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
-  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #E5E7EB" },
+  page: { padding: 28, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
+  header: { marginBottom: 12, paddingBottom: 10, borderBottom: "2 solid #e6e1d4" },
   h1: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
-  metaRow: { flexDirection: "row", gap: 14, fontSize: 10, color: "#4B5563", marginTop: 2 },
-  metaLabel: { color: "#9CA3AF", fontSize: 8, textTransform: "uppercase", marginBottom: 1 },
-  metaValue: { fontSize: 11, fontWeight: 700, color: "#111827" },
+  metaRow: { flexDirection: "row", gap: 14, fontSize: 10, color: "#6d6858", marginTop: 2 },
+  metaLabel: { color: "#a9a493", fontSize: 8, textTransform: "uppercase", marginBottom: 1 },
+  metaValue: { fontSize: 11, fontWeight: 700, color: "#221f18" },
 
   sectionTitle: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#374151",
+    color: "#565044",
     textTransform: "uppercase",
     marginBottom: 6,
     marginTop: 10,
@@ -91,11 +91,11 @@ const styles = StyleSheet.create({
   tileValueBig: { fontSize: 16, fontWeight: 700, color: "#1E3A8A" },
 
   // Drills table
-  table: { borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 3, marginTop: 4 },
-  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
-  tRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#E5E7EB" },
-  cellH: { padding: "5 6", fontSize: 8, fontWeight: 700, color: "#6B7280", textTransform: "uppercase" },
-  cell: { padding: "5 6", fontSize: 9, color: "#1F2937" },
+  table: { borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3, marginTop: 4 },
+  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
+  tRow: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e6e1d4" },
+  cellH: { padding: "5 6", fontSize: 8, fontWeight: 700, color: "#8b8676", textTransform: "uppercase" },
+  cell: { padding: "5 6", fontSize: 9, color: "#3a352c" },
   idxCol: { width: 22 },
   nameCol: { flex: 1 },
   smallCol: { width: 34, textAlign: "right" },
@@ -106,19 +106,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: "#efece2",
     padding: "5 8",
   },
-  cmpRowOk: { backgroundColor: "#ECFDF5" },
-  cmpRowLow: { backgroundColor: "#FFF7ED" },
-  cmpRowHigh: { backgroundColor: "#FEF2F2" },
+  cmpRowOk: { backgroundColor: "#eaf3ec" },
+  cmpRowLow: { backgroundColor: "#faf1de" },
+  cmpRowHigh: { backgroundColor: "#f8e9e3" },
   cmpIcon: { width: 14, fontSize: 10, fontWeight: 700 },
-  cmpIconOk: { color: "#047857" },
-  cmpIconLow: { color: "#C2410C" },
-  cmpIconHigh: { color: "#B91C1C" },
-  cmpLabel: { flex: 1, fontSize: 9, color: "#1F2937" },
+  cmpIconOk: { color: "#16653d" },
+  cmpIconLow: { color: "#9a6410" },
+  cmpIconHigh: { color: "#8c3221" },
+  cmpLabel: { flex: 1, fontSize: 9, color: "#3a352c" },
   cmpValue: { width: 50, textAlign: "right", fontSize: 9, fontWeight: 700 },
-  cmpBand: { width: 90, textAlign: "right", fontSize: 7, color: "#6B7280" },
+  cmpBand: { width: 90, textAlign: "right", fontSize: 7, color: "#8b8676" },
 
   footer: {
     position: "absolute",
@@ -126,10 +126,10 @@ const styles = StyleSheet.create({
     left: 28,
     right: 28,
     fontSize: 7,
-    color: "#9CA3AF",
+    color: "#a9a493",
     textAlign: "center",
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#e6e1d4",
     paddingTop: 6,
   },
 });
@@ -244,7 +244,7 @@ export function SessionPdfDocument({ data }: { data: SessionPdfData }) {
                 <Text style={[styles.cell, styles.idxCol]}>{i + 1}</Text>
                 <View style={[styles.cell, styles.nameCol]}>
                   <Text style={{ fontSize: 9, fontWeight: 700 }}>{d.drill_name}</Text>
-                  <Text style={{ fontSize: 7, color: "#6B7280", marginTop: 1 }}>
+                  <Text style={{ fontSize: 7, color: "#8b8676", marginTop: 1 }}>
                     {CATEGORY_LABELS[d.category] ?? d.category}
                     {d.drill_format ? ` · ${d.drill_format}` : ""}
                     {d.reps ? ` · ${d.reps}` : ""}
@@ -265,7 +265,7 @@ export function SessionPdfDocument({ data }: { data: SessionPdfData }) {
         {data.planningMetrics.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Breytur vs {data.mdDay} saga</Text>
-            <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 3 }}>
+            <View style={{ borderWidth: 1, borderColor: "#e6e1d4", borderRadius: 3 }}>
               {data.planningMetrics.map((m, i) => {
                 const rowStyle =
                   m.status === "ok"

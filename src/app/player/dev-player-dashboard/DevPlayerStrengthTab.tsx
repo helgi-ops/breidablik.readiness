@@ -262,7 +262,7 @@ function LoadVelocityChart({ points }: { points: Array<{ load: number; velocity:
         {/* Grid lines */}
         {velTicks.map((v) => (
           <g key={v}>
-            <line x1={PAD.left} y1={scaleY(v)} x2={W - PAD.right} y2={scaleY(v)} stroke="#e4e4e7" strokeWidth={0.5} strokeDasharray="3,3" />
+            <line x1={PAD.left} y1={scaleY(v)} x2={W - PAD.right} y2={scaleY(v)} stroke="#e6e1d4" strokeWidth={0.5} strokeDasharray="3,3" />
             <text x={PAD.left - 4} y={scaleY(v) + 3} textAnchor="end" className="fill-zinc-400" style={{ fontSize: 8 }}>{v.toFixed(1)}</text>
           </g>
         ))}
@@ -271,8 +271,8 @@ function LoadVelocityChart({ points }: { points: Array<{ load: number; velocity:
         ))}
 
         {/* Axes */}
-        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + plotH} stroke="#d4d4d8" strokeWidth={0.75} />
-        <line x1={PAD.left} y1={PAD.top + plotH} x2={W - PAD.right} y2={PAD.top + plotH} stroke="#d4d4d8" strokeWidth={0.75} />
+        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + plotH} stroke="#d5cfbe" strokeWidth={0.75} />
+        <line x1={PAD.left} y1={PAD.top + plotH} x2={W - PAD.right} y2={PAD.top + plotH} stroke="#d5cfbe" strokeWidth={0.75} />
 
         {/* Regression line */}
         {regLine && (
@@ -287,7 +287,7 @@ function LoadVelocityChart({ points }: { points: Array<{ load: number; velocity:
         {/* 1RM estimate marker */}
         {est1RM && (
           <g>
-            <line x1={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y1={scaleY(0.3)} x2={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y2={scaleY(0.3) - 8} stroke="#f59e0b" strokeWidth={1} strokeDasharray="2,2" />
+            <line x1={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y1={scaleY(0.3)} x2={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y2={scaleY(0.3) - 8} stroke="#cb8420" strokeWidth={1} strokeDasharray="2,2" />
             <text x={scaleX(Math.min(est1RM, maxLoad + rangeLoad * 0.3))} y={scaleY(0.3) - 10} textAnchor="middle" className="fill-amber-600" style={{ fontSize: 8, fontWeight: 700 }}>~{est1RM}kg</text>
           </g>
         )}
@@ -318,7 +318,7 @@ function VelocitySparkline({ data }: { data: Array<{ date: string; velocity: num
     return (
       <div className="flex items-center gap-2">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxWidth: 140, height: 32 }}>
-          <circle cx={W / 2} cy={H / 2} r={3} fill="#71717a" stroke="white" strokeWidth={0.75} />
+          <circle cx={W / 2} cy={H / 2} r={3} fill="#8b8676" stroke="white" strokeWidth={0.75} />
         </svg>
         <span className="text-[10px] tabular-nums text-zinc-400">1 session</span>
       </div>
@@ -341,8 +341,8 @@ function VelocitySparkline({ data }: { data: Array<{ date: string; velocity: num
   const first3Avg = vels.slice(0, Math.min(3, vels.length)).reduce((a, b) => a + b, 0) / Math.min(3, vels.length);
   const last3Avg = vels.slice(-Math.min(3, vels.length)).reduce((a, b) => a + b, 0) / Math.min(3, vels.length);
   const trending = last3Avg > first3Avg ? "up" : last3Avg < first3Avg ? "down" : "flat";
-  const trendColor = trending === "up" ? "#10b981" : trending === "down" ? "#f59e0b" : "#71717a";
-  const trendStroke = trending === "up" ? "#10b981" : trending === "down" ? "#f59e0b" : "#a1a1aa";
+  const trendColor = trending === "up" ? "#2b8a54" : trending === "down" ? "#cb8420" : "#8b8676";
+  const trendStroke = trending === "up" ? "#2b8a54" : trending === "down" ? "#cb8420" : "#a9a493";
 
   return (
     <div className="flex items-center gap-2">

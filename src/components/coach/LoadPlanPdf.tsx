@@ -38,20 +38,20 @@ const LABEL: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
 
 const s = StyleSheet.create({
-  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 10, color: "#111827", fontFamily: "Helvetica" },
+  page: { paddingTop: 28, paddingHorizontal: 28, paddingBottom: 44, fontSize: 10, color: "#221f18", fontFamily: "Helvetica" },
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, paddingBottom: 6, borderBottom: "2 solid #4F46E5" },
   brand: { fontSize: 12, fontWeight: 700, color: "#4F46E5", letterSpacing: 0.5 },
-  brandMeta: { fontSize: 8, color: "#9CA3AF" },
+  brandMeta: { fontSize: 8, color: "#a9a493" },
   bottomLine: { borderLeft: "4 solid #4F46E5", backgroundColor: "#EEF2FF", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10, fontSize: 11, fontWeight: 700, color: "#1E1B4B" },
-  footer: { position: "absolute", bottom: 18, left: 28, right: 28, flexDirection: "row", justifyContent: "space-between", borderTop: "1 solid #E5E7EB", paddingTop: 6, fontSize: 7.5, color: "#9CA3AF" },
+  footer: { position: "absolute", bottom: 18, left: 28, right: 28, flexDirection: "row", justifyContent: "space-between", borderTop: "1 solid #e6e1d4", paddingTop: 6, fontSize: 7.5, color: "#a9a493" },
   h1: { fontSize: 15, fontWeight: 700, marginBottom: 2 },
-  sub: { fontSize: 10, color: "#6B7280", marginBottom: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #E5E7EB", marginTop: 10 },
+  sub: { fontSize: 10, color: "#8b8676", marginBottom: 12 },
+  sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6, paddingBottom: 3, borderBottom: "1 solid #e6e1d4", marginTop: 10 },
   row: { flexDirection: "row" },
-  tHead: { flexDirection: "row", backgroundColor: "#F3F4F6" },
-  tRow: { flexDirection: "row", borderTop: "1 solid #E5E7EB" },
-  tRowAlt: { flexDirection: "row", borderTop: "1 solid #E5E7EB", backgroundColor: "#F9FAFB" },
-  para: { fontSize: 9.5, color: "#334155", lineHeight: 1.5, marginBottom: 4 },
+  tHead: { flexDirection: "row", backgroundColor: "#efece2" },
+  tRow: { flexDirection: "row", borderTop: "1 solid #e6e1d4" },
+  tRowAlt: { flexDirection: "row", borderTop: "1 solid #e6e1d4", backgroundColor: "#f7f5ef" },
+  para: { fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 4 },
   badge: { fontSize: 10, fontWeight: 700, color: "#1E3A8A" },
 });
 
@@ -86,8 +86,8 @@ export async function downloadLoadPlanPdf(
         </Text>
 
         {restDay ? (
-          <View style={{ borderLeft: "4 solid #64748B", backgroundColor: "#F1F5F9", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10 }}>
-            <Text style={{ fontSize: 11, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>Rest day — no training load planned.</Text>
+          <View style={{ borderLeft: "4 solid #8b8676", backgroundColor: "#efece2", paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, fontWeight: 700, color: "#221f18", marginBottom: 2 }}>Rest day — no training load planned.</Text>
             <Text style={[s.para, { marginBottom: 0 }]}>Marked as a rest day, so no load targets are prescribed. Use today for recovery; the readiness check-ins below still flag anyone to keep an eye on.</Text>
           </View>
         ) : plan.hasTargets ? <Text style={s.bottomLine}>{bottomLine}</Text> : null}
@@ -108,15 +108,15 @@ export async function downloadLoadPlanPdf(
             ) : (
               topAttention.slice(0, 20).map((a) => (
                 <View key={a.player_id} style={{ marginBottom: 4 }}>
-                  <Text style={{ fontSize: 10, fontWeight: 700, color: a.color === "red" ? "#B91C1C" : "#92400E" }}>
+                  <Text style={{ fontSize: 10, fontWeight: 700, color: a.color === "red" ? "#8c3221" : "#7c5210" }}>
                     {a.name}  ·  {a.color.toUpperCase()}{a.score != null ? `  ·  readiness ${a.score}/25` : ""}
                   </Text>
                   {a.drivers && a.drivers.length > 0 ? (
                     a.drivers.map((d, i) => (
-                      <Text key={i} style={{ fontSize: 9, color: "#374151", marginLeft: 10, lineHeight: 1.35 }}>— {d}</Text>
+                      <Text key={i} style={{ fontSize: 9, color: "#565044", marginLeft: 10, lineHeight: 1.35 }}>— {d}</Text>
                     ))
                   ) : (
-                    <Text style={{ fontSize: 9, color: "#374151", marginLeft: 10 }}>{a.reason ?? ""}</Text>
+                    <Text style={{ fontSize: 9, color: "#565044", marginLeft: 10 }}>{a.reason ?? ""}</Text>
                   )}
                 </View>
               ))
@@ -159,8 +159,8 @@ export async function downloadLoadPlanPdf(
 
             {/* Readiness-adjusted prescription callout — mirrors the on-screen amber box. */}
             {plan.readinessAdjustPct !== 0 && plan.adjustedTargets?.length ? (
-              <View style={{ borderLeft: "3 solid #F59E0B", paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
-                <Text style={[s.para, { color: "#92400E" }]}>
+              <View style={{ borderLeft: "3 solid #cb8420", paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
+                <Text style={[s.para, { color: "#7c5210" }]}>
                   After the {plan.readinessAdjustPct}% readiness trim — prescribe today: {plan.adjustedTargets.filter((t) => t.target != null).map((t) => `${LABEL[t.kpi] ?? t.kpi} ${fmt(t.target)}`).join(" · ")}.
                 </Text>
               </View>
@@ -191,7 +191,7 @@ export async function downloadLoadPlanPdf(
                     </View>
                   ))}
                 </View>
-                <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 4, lineHeight: 1.4 }}>
+                <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 4, lineHeight: 1.4 }}>
                   Per-player team means on the squad&apos;s last training days before this session (oldest first). &quot;Peak/match&quot; marks a highest-load (≈ match) day. This is the trajectory today&apos;s target sits on top of.
                 </Text>
               </>
@@ -245,13 +245,13 @@ export async function downloadLoadPlanPdf(
                   <Text style={{ width: "8%", padding: 3, textAlign: "right" }}>{fmt(pp.accel)}</Text>
                   <Text style={{ width: "8%", padding: 3, textAlign: "right" }}>{fmt(pp.decel)}</Text>
                   <Text style={{ width: "9%", padding: 3, textAlign: "right" }}>{fmt(pp.ima)}</Text>
-                  <Text style={[{ width: "8%", padding: 3, textAlign: "right" }, pp.acwr != null && pp.acwr >= 1.3 ? { color: "#DC2626", fontWeight: 700 } : pp.acwr != null && pp.acwr < 0.8 ? { color: "#D97706" } : {}]}>{pp.acwr != null ? pp.acwr.toFixed(2) : "—"}</Text>
+                  <Text style={[{ width: "8%", padding: 3, textAlign: "right" }, pp.acwr != null && pp.acwr >= 1.3 ? { color: "#a83e28", fontWeight: 700 } : pp.acwr != null && pp.acwr < 0.8 ? { color: "#b0700f" } : {}]}>{pp.acwr != null ? pp.acwr.toFixed(2) : "—"}</Text>
                   <Text style={{ width: "10%", padding: 3 }}>{pp.flag === "reduce" ? "reduce" : pp.flag === "build" ? "build" : "—"}</Text>
                 </View>
               ))}
             </View>
 
-            <Text style={{ fontSize: 8, color: "#94A3B8", marginTop: 8, lineHeight: 1.4 }}>
+            <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 8, lineHeight: 1.4 }}>
               HSR VB5 = high-speed running (velocity band 5); Sprint VB6 = sprint distance (band 6); Acc/Dec B2-3 = high-intensity accelerations / decelerations (effort bands 2-3); IMA COD = high-intensity change-of-direction distance. Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
             </Text>
           </>

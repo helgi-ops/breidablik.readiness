@@ -416,8 +416,8 @@ export default function PositionComparisonPage() {
 const STYLE_AXES: Array<{ key: string; en: string; is: string; color: string }> = [
   { key: "speed", en: "Speed", is: "Hraði", color: "#0ea5e9" },
   { key: "agility", en: "Agility", is: "Snerpa", color: "#8b5cf6" },
-  { key: "volume", en: "Engine", is: "Vél", color: "#10b981" },
-  { key: "aerial", en: "Aerial", is: "Loftógn", color: "#f59e0b" },
+  { key: "volume", en: "Engine", is: "Vél", color: "#2b8a54" },
+  { key: "aerial", en: "Aerial", is: "Loftógn", color: "#cb8420" },
 ];
 
 function chipTone(key: string): string {
