@@ -13,6 +13,7 @@ import PWANotificationPrompt from "@/app/player/dev-player-dashboard/PWANotifica
 import { useLang } from "@/lib/lang";
 import type { CoachTeam } from "@/components/coach/TeamSwitcher";
 import { CoachSidebar } from "./CoachSidebar";
+import { CoachIconRail } from "./CoachIconRail";
 import UsageTracker from "@/components/coach/UsageTracker";
 
 
@@ -137,6 +138,22 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // with a hamburger button that opens this slide-out drawer.
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
+  // ── Fasi 3B: desktop nav mode (experiment, behind a flag) ─────────────────
+  // "list" = the current section sidebar (default, safe). "rail" = the narrow
+  // icon rail + flyout. Persisted per browser so a coach who opts in keeps it.
+  // PT teams always get the list (the rail covers the football-coach layout).
+  const [navMode, setNavMode] = useState<"list" | "rail">("list");
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe: hydrate the persisted nav mode after mount (localStorage is client-only)
+      if (localStorage.getItem("coach-nav-mode") === "rail") setNavMode("rail");
+    } catch { /* ignore */ }
+  }, []);
+  const setNavModePersist = (m: "list" | "rail") => {
+    setNavMode(m);
+    try { localStorage.setItem("coach-nav-mode", m); } catch { /* ignore */ }
+  };
+
   // Close drawer whenever the route changes (so tapping a link inside the
   // drawer feels like normal navigation — no manual close needed).
   useEffect(() => {
@@ -245,8 +262,11 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
     );
   }
 
+  const isPt = String(teamType ?? "").toLowerCase() === "personal_trainer";
+  const useRail = navMode === "rail" && !isPt;
+
   return (
-    <div className="min-h-screen bg-background md:grid md:grid-cols-[240px_1fr]">
+    <div className={`min-h-screen bg-background md:grid ${useRail ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[240px_1fr]"}`}>
       {/* Usage analytics — one fire-and-forget page_view per route change. */}
       <UsageTracker />
       {/* ── Mobile-only header (drawer trigger) ─────────────────────────── */}
@@ -285,21 +305,45 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           CoachSidebar already shows the team identity, so the separate
           logo+name row was redundant. Install PWA button stays in the
           top-right slot — small footprint, only visible when installable. */}
-      <aside className="hidden md:flex md:flex-col md:border-r md:border-slate-200 md:bg-white md:sticky md:top-0 md:h-screen">
-        <div className="flex items-center justify-end px-4 py-2">
-          <InstallPwaButton role="coach" variant="compact" />
-        </div>
-        <CoachSidebar
-          isAdmin={isAdmin}
-          notesCount={notesCount}
-          pendingCount={pendingCount}
-          currentTab={currentTab}
-          currentTeamId={currentTeamId}
-          catapultDataTier={catapultDataTier}
-          teamType={teamType}
-          onSwitchTeam={handleSwitchTeam}
-        />
-      </aside>
+      {useRail ? (
+        <aside className="relative z-30 hidden md:block md:sticky md:top-0 md:h-screen">
+          <CoachIconRail
+            isAdmin={isAdmin}
+            notesCount={notesCount}
+            pendingCount={pendingCount}
+            currentTab={currentTab}
+            catapultDataTier={catapultDataTier}
+            onToggleNav={() => setNavModePersist("list")}
+          />
+        </aside>
+      ) : (
+        <aside className="hidden md:flex md:flex-col md:border-r md:border-slate-200 md:bg-white md:sticky md:top-0 md:h-screen">
+          <div className="flex items-center justify-between px-4 py-2">
+            {!isPt && (
+              <button
+                type="button"
+                onClick={() => setNavModePersist("rail")}
+                title={lang === "IS" ? "Prófa táknarönd (tilraun)" : "Try the icon rail (experiment)"}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={lang === "IS" ? "Prófa táknarönd" : "Try the icon rail"}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="6" height="18" rx="1" /><line x1="13" y1="7" x2="20" y2="7" /><line x1="13" y1="12" x2="20" y2="12" /><line x1="13" y1="17" x2="18" y2="17" /></svg>
+              </button>
+            )}
+            <InstallPwaButton role="coach" variant="compact" />
+          </div>
+          <CoachSidebar
+            isAdmin={isAdmin}
+            notesCount={notesCount}
+            pendingCount={pendingCount}
+            currentTab={currentTab}
+            currentTeamId={currentTeamId}
+            catapultDataTier={catapultDataTier}
+            teamType={teamType}
+            onSwitchTeam={handleSwitchTeam}
+          />
+        </aside>
+      )}
 
       {/* ── Mobile drawer (renders the same CoachSidebar) ──────────────── */}
       {mobileDrawerOpen && (

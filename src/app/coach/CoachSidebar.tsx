@@ -30,15 +30,15 @@ import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
-type Bi = { EN: string; IS: string };
-const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
+export type Bi = { EN: string; IS: string };
+export const tt = (b: Bi, lang: Lang) => (lang === "IS" ? b.IS : b.EN);
 
 // `badgeKey` lets a link opt into one of the live counts the sidebar already
 // fetches (currently just "pending" = pending player approvals). The Section
 // component reads the count from a `badges` prop and renders the pill.
-type SidebarLink = { href: string; label: Bi; badgeKey?: "pending" };
+export type SidebarLink = { href: string; label: Bi; badgeKey?: "pending" };
 
-const communicationLinks: SidebarLink[] = [
+export const communicationLinks: SidebarLink[] = [
   { href: "/coach/conversations", label: { EN: "Conversations", IS: "Samtöl" } },
   { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
   { href: "/team",                label: { EN: "Team Page",     IS: "Liðssíða" } },
@@ -66,7 +66,7 @@ const communicationLinks: SidebarLink[] = [
 // All Load Monitoring labels end in "Intelligence" — consistent naming
 // pattern signals to coaches that these are analytical surfaces (not raw
 // data dumps) and groups them visually in the sidebar.
-const loadMonitoringLinks: SidebarLink[] = [
+export const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
   // HSR Intelligence sits right under Load Intelligence; it's also the Lite-tier
   // counterpart to Decel Intelligence (Malone 2017 + Buchheit 2014).
@@ -84,14 +84,14 @@ const loadMonitoringLinks: SidebarLink[] = [
   // real-time monitoring surface) — see adminLinks below.
 ];
 
-const injuryMonitoringLinks: SidebarLink[] = [
+export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
-const performanceAnalyticsLinks: SidebarLink[] = [
+export const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach?tab=trend",          label: { EN: "Trends",                           IS: "Þróun" } },
   { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
   { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
@@ -104,7 +104,7 @@ const performanceAnalyticsLinks: SidebarLink[] = [
 // pitch-session items. The two workflows have different owners at most
 // clubs (head coach vs S&C coach) so separating them mirrors how the
 // staff actually splits responsibilities.
-const teamPlanningLinks: SidebarLink[] = [
+export const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
@@ -161,7 +161,7 @@ const ptCommunicationLinks: SidebarLink[] = [
   { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
 ];
 
-const strengthPlanningLinks: SidebarLink[] = [
+export const strengthPlanningLinks: SidebarLink[] = [
   // /coach/strength is the DAILY action page — per-player ~20 min sessions
   // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
   { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
@@ -174,7 +174,7 @@ const strengthPlanningLinks: SidebarLink[] = [
   { href: "/coach/recovery-protocols",  label: { EN: "Recovery protocols",    IS: "Recovery protocols" } },
 ];
 
-const adminLinks: SidebarLink[] = [
+export const adminLinks: SidebarLink[] = [
   // Players sits at the top — it's the highest-frequency admin task
   // (approving pending players + roster edits) and the badge needs
   // visibility.
@@ -195,13 +195,13 @@ const adminLinks: SidebarLink[] = [
 // Explosive Power 12w is NOT here — it's mounted under PT Strength training
 // (still admin-only) so Helgi can reach it alongside Custom programmes and
 // LV Profile rather than via a separate super-admin section.
-const superAdminLinks: SidebarLink[] = [
+export const superAdminLinks: SidebarLink[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
   { href: "/coach/usage-analytics", label: { EN: "Usage analytics", IS: "Notkunar-greining" } },
 ];
 
 // ─── Active-link matcher (handles ?tab=… deep links too) ────────────────────
-function isLinkActive(href: string, pathname: string, currentTab: string | null): boolean {
+export function isLinkActive(href: string, pathname: string, currentTab: string | null): boolean {
   const [path, query] = href.split("?");
   if (!query) return pathname?.startsWith(path) ?? false;
   if (pathname !== path) return false;
@@ -340,7 +340,7 @@ function Section({
 // Gabbett 2016 volume-axis variant (total_distance × sRPE) which works
 // fine without B2-3. Only Indoor Load (FMP / IMA bands) and Decel
 // Intelligence (McBurnie 2022 B2-3 cluster) have no useful Lite fallback.
-const LITE_HIDDEN_HREFS = new Set<string>([
+export const LITE_HIDDEN_HREFS = new Set<string>([
   "/coach/indoor-load",
   "/coach/decel-intelligence",
   "/coach/ima-intelligence",
@@ -350,7 +350,7 @@ const LITE_HIDDEN_HREFS = new Set<string>([
 // features. /coach/hsr-intelligence is the Malone 2017 + Buchheit 2014
 // counterpart to Decel Intelligence; on Full plans it's redundant with
 // the higher-fidelity Decel page so we hide it.
-const FULL_HIDDEN_HREFS = new Set<string>([
+export const FULL_HIDDEN_HREFS = new Set<string>([
   "/coach/hsr-intelligence",
 ]);
 
