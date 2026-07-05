@@ -83,6 +83,8 @@ export type RttWeekTarget = {
   locked: boolean; unlockWeek: number; caution: boolean; why: string;
 };
 export type RttLayoff = { days: number | null; retainedPct: number | null; rampWeeks: number };
+export type RttAdherenceCell = { quality: QualityKey; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
+export type RttAdherenceWeek = { week: number; weekStart: string; sessions: number; inProgress: boolean; cells: RttAdherenceCell[] };
 export type RttResult = {
   currentlyInjured: boolean;
   unit: "week";
@@ -91,7 +93,8 @@ export type RttResult = {
   rampFrom: RttFloor;   // detraining-adjusted week-1 origin per quality (≥ measured floor)
   layoff: RttLayoff;
   asymmetry: RttAsymmetry;
-  plan: { verdict: string; weeks: RttWeekTarget[] } | null;
+  plan: { verdict: string; currentWeek: number; weeks: RttWeekTarget[] } | null;
+  adherence: RttAdherenceWeek[]; // actual weekly load vs the recommended ramp, per elapsed plan week
   confidence: "high" | "medium" | "low";
 };
 
@@ -101,6 +104,7 @@ const P_CEILING = 0.85;
 const REINTRO_FRAC = 0.30;
 const REINTRO_CAUTION = 0.20;
 const ASYM_TOLERANCE = 12; // percentage-points from healthy L/R balance to flag
+const ADHERE_BAND = 15;    // ±% around the recommended target that still counts as "on plan"
 const DETRAIN_TAU = 50;    // days — capacity decay constant of the detraining curve
 const DETRAIN_FLOOR = 0.35; // never assume <35% retained (he's still a trained athlete)
 const MIN_RAMP_WEEKS = 2;
@@ -147,8 +151,13 @@ function weekStart(dateIso: string): string {
   d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
   return d.toISOString().slice(0, 10);
 }
+function addDays(dateIso: string, n: number): string {
+  const d = new Date(`${dateIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
-type WeekAgg = { weekStart: string; injured: boolean; totals: Record<QualityKey, number>; topSpeed: number; codLeft: number; codRight: number };
+type WeekAgg = { weekStart: string; injured: boolean; count: number; totals: Record<QualityKey, number>; topSpeed: number; codLeft: number; codRight: number };
 
 export function computeReturnToTraining(inp: RttInput): RttResult {
   const real = inp.sessions.filter((s) => !s.estimated);
@@ -158,8 +167,9 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   for (const s of real) {
     const wk = weekStart(s.date);
     let a = byWeek.get(wk);
-    if (!a) { a = { weekStart: wk, injured: false, totals: Object.fromEntries(QUALITY_ORDER.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
+    if (!a) { a = { weekStart: wk, injured: false, count: 0, totals: Object.fromEntries(QUALITY_ORDER.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
     if (s.injured) a.injured = true;                       // any injured day → not a healthy week
+    a.count += 1;
     for (const q of QUALITY_ORDER) a.totals[q] += s[QFIELD[q]] as number;
     if (s.topSpeed > 0 && s.topSpeed <= 45) a.topSpeed = Math.max(a.topSpeed, s.topSpeed);
     a.codLeft += s.codLeft; a.codRight += s.codRight;
@@ -216,7 +226,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const layoff: RttLayoff = { days: hasLayoff ? Math.round(inp.layoffDays as number) : null, retainedPct: retained != null ? Math.round(retained * 100) : null, rampWeeks: weeks };
 
   if (inp.currentlyInjured && !inp.rttStartDate) {
-    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, confidence };
+    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, adherence: [], confidence };
   }
 
   const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / (QUALITY_ORDER.length - 1)));
@@ -273,11 +283,37 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     }
   }
 
+  // ── Adherence: actual weekly load vs the recommended ramp ─────────────────
+  // Once the plan is started (rttStartDate anchors week 1's Monday), map his
+  // REAL sessions into plan weeks and compare each week's actual total to what
+  // was recommended. The in-progress week is flagged (partial, don't read
+  // "under" as behind). This closes the loop: recommended vs what he did.
+  const adherence: RttAdherenceWeek[] = [];
+  const anchor = inp.rttStartDate ? weekStart(inp.rttStartDate) : null;
+  if (anchor) {
+    const refWk = weekStart(inp.refDate);
+    const elapsed = Math.max(0, Math.round((Date.parse(refWk) - Date.parse(anchor)) / (7 * 86400000)));
+    const lastWeek = Math.min(weeks, elapsed + 1);
+    for (let w = 1; w <= lastWeek; w++) {
+      const ws = addDays(anchor, 7 * (w - 1));
+      const agg = byWeek.get(ws);
+      const cells: RttAdherenceCell[] = QUALITY_ORDER.map((q) => {
+        const target = weekTargets.find((t) => t.week === w && t.quality === q)?.target ?? 0;
+        const actual = round(agg?.totals[q] ?? 0, QLABEL[q].dp);
+        const deltaPct = target > 0 ? Math.round((actual / target - 1) * 100) : actual > 0 ? 100 : 0;
+        const status: RttAdherenceCell["status"] = deltaPct > ADHERE_BAND ? "over" : deltaPct < -ADHERE_BAND ? "under" : "on";
+        return { quality: q, target, actual, deltaPct, status };
+      });
+      adherence.push({ week: w, weekStart: ws, sessions: agg?.count ?? 0, inProgress: ws === refWk, cells });
+    }
+  }
+
+  const currentWeek = adherence.length ? adherence[adherence.length - 1].week : 1;
   const w1 = QUALITY_ORDER.filter((_, qi) => unlockWeek(qi) <= 1).map((q) => QLABEL[q].en.toLowerCase().replace("weekly ", ""));
   const layoffNote = layoff.days != null ? ` · ${layoff.days}-day layoff (~${layoff.retainedPct}% capacity retained)` : "";
-  const verdict = `Week 1 of ${weeks} · rebuild ${w1.join(" + ") || "weekly load"}${layoffNote}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
+  const verdict = `Week ${currentWeek} of ${weeks} · ${currentWeek === 1 ? "rebuild" : "rebuilding"} ${w1.join(" + ") || "weekly load"}${layoffNote}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
 
-  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, weeks: weekTargets }, confidence };
+  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, currentWeek, weeks: weekTargets }, adherence, confidence };
 }
 
 export { QLABEL as RTT_QUALITY_LABELS };

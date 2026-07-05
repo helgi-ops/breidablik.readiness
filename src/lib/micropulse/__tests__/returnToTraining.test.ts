@@ -115,6 +115,30 @@ test("ACWR stays capped even when the plan starts high after a short layoff", ()
   for (const w of r.plan!.weeks) assert.ok(w.acwr <= 1.3, `week ${w.week} ${w.quality} acwr ${w.acwr}`);
 });
 
+test("adherence pairs actual weekly load with the recommended target once the plan is started", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15" });
+  assert.ok(r.adherence.length >= 1);
+  const wk1 = r.adherence.find((a) => a.week === 1)!;
+  assert.equal(wk1.weekStart, "2026-06-15");
+  assert.equal(wk1.sessions, 2); // 06-15 + 06-17 fall in that ISO week
+  const vol = wk1.cells.find((c) => c.quality === "volume")!;
+  assert.equal(vol.actual, 600); // 300 + 300
+  assert.ok(vol.target > 0);
+  assert.equal(vol.deltaPct, Math.round((vol.actual / vol.target - 1) * 100));
+  assert.ok(["under", "on", "over"].includes(vol.status));
+});
+
+test("the in-progress (current) plan week is flagged and empty weeks read zero actual", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15" });
+  const last = r.adherence[r.adherence.length - 1];
+  assert.equal(last.inProgress, true);
+  assert.equal(last.weekStart, "2026-06-29"); // Monday of the ref week
+  assert.equal(last.sessions, 0);
+  assert.equal(last.cells.find((c) => c.quality === "volume")!.actual, 0);
+  // no start date → nothing to compare against
+  assert.deepEqual(computeReturnToTraining({ sessions: fixture(), ...START, rttStartDate: null }).adherence, []);
+});
+
 test("every unlocked target carries a why-line with % of healthy weekly baseline", () => {
   const r = computeReturnToTraining({ sessions: fixture(), ...START });
   const unlocked = r.plan!.weeks.filter((w) => !w.locked && w.target > 0);
