@@ -17,7 +17,7 @@ import ShareMatchButton from "./ShareMatchButton";
 import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 
 type Raw = { top_speed_kmh?: number; total_distance?: number; sprint?: number };
-type Match = { date: string; opponent: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; raw?: Raw | null };
+type Match = { date: string; opponent: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; estimated?: boolean; raw?: Raw | null };
 type ClubInfo = { name: string; themeColor: string | null; logoUrl: string | null };
 type Report = { summary: { best_top_speed_kmh: number }; matches: Match[]; club?: ClubInfo; player?: { full_name?: string } };
 
@@ -53,9 +53,9 @@ export default function PlayerLastMatchHeroCard({ lang = "IS", onSeeReport }: { 
   // Most recent match that actually carries a GPS top speed. Skipping matches
   // without GPS (indoor / no vests) means we never render a blank/000 hero.
   const last = [...report.matches]
-    .filter((m) => m.has_gps && m.raw && (m.raw.top_speed_kmh ?? 0) > 0)
+    .filter((m) => m.has_gps && m.raw && (m.raw.top_speed_kmh ?? 0) > 0 && !m.estimated)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
-  if (!last) return null; // no GPS match this season → hide, no empty state
+  if (!last) return null; // no real GPS match this season → hide, no empty state
 
   const top = last.raw!.top_speed_kmh ?? 0;
   const distKm = (last.raw!.total_distance ?? 0) / 1000;
@@ -63,7 +63,7 @@ export default function PlayerLastMatchHeroCard({ lang = "IS", onSeeReport }: { 
   // Season-best when this match's peak ties the season max (rounded to 0.1 km/h).
   const isSeasonBest = top > 0 && Math.round(top * 10) >= Math.round(best * 10);
 
-  const allMatches = report.matches.filter((m) => m.has_gps && m.raw).map(toStats);
+  const allMatches = report.matches.filter((m) => m.has_gps && m.raw && !m.estimated).map(toStats);
   const club = report.club ?? { name: "", themeColor: null, logoUrl: null };
 
   const vs = last.opponent ? (isIS ? ` gegn ${last.opponent}` : ` against ${last.opponent}`) : "";

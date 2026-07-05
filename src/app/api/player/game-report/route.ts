@@ -38,8 +38,8 @@ export async function GET(req: Request) {
   const { data: team } = await sb.from("teams").select("name, club_theme_color, club_logo_url").eq("id", teamId).maybeSingle();
   const t = team as { name?: string | null; club_theme_color?: string | null; club_logo_url?: string | null } | null;
 
-  const gps = (res.report.matches as Array<{ has_gps?: boolean; raw?: { top_speed_kmh?: number; total_distance?: number; sprint?: number } | null }>)
-    .filter((m) => m.has_gps && m.raw);
+  const gps = (res.report.matches as Array<{ has_gps?: boolean; estimated?: boolean; raw?: { top_speed_kmh?: number; total_distance?: number; sprint?: number } | null }>)
+    .filter((m) => m.has_gps && m.raw && !m.estimated); // estimates never define a season best
   const clampSpeed = (v: number | undefined) => (typeof v === "number" && v > 0 && v <= 45 ? v : 0);
   const maxOf = (f: (m: { raw?: { top_speed_kmh?: number; total_distance?: number; sprint?: number } | null }) => number) =>
     gps.reduce((mx, m) => Math.max(mx, f(m)), 0);

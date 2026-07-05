@@ -43,7 +43,7 @@ const LOAD_COLUMNS =
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band58_total_distance, ima_fr_band5_total_distance, ima_fr_band6_total_distance, " +
   "ima_fr_band7_total_distance, ima_fr_band8_total_distance, " +
-  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute";
+  "jumps, accel_decel_efforts, high_metabolic_load_distance_m, session_duration_minutes, velocity_band6_total_distance, player_load_per_minute, raw_payload_json";
 
 function loadRowToMetrics(r: Record<string, unknown>): MatchMetrics {
   return {
@@ -241,11 +241,16 @@ export async function computePlayerGameReport(
     return derived > 0 && derived <= MAX_MIN ? derived : 0;
   };
 
+  // "Forgot pod?" estimates are excluded from all baselines/benchmarks/PBs so an
+  // estimate can never feed a percentile, a season best, or a future estimate.
+  const isEstimated = (load: Record<string, unknown> | undefined): boolean =>
+    !!(load?.raw_payload_json as { estimated?: boolean } | null)?.estimated;
+
   const perPlayerP90Sums = new Map<string, { sums: Record<P90Key, number>; topSpeed: number; n: number }>();
   for (const date of matchDates) {
     for (const pid of playerIds) {
       const load = loadByKey.get(`${pid}|${date}`);
-      if (!load) continue; // squad benchmark needs the GPS row for that match
+      if (!load || isEstimated(load)) continue; // squad benchmark needs a REAL GPS row
       const minutes = resolveMinutes(pid, date, load);
       if (minutes < MIN_QUALIFY_MINUTES) continue;
       const metrics = loadRowToMetrics(load);
@@ -294,6 +299,7 @@ export async function computePlayerGameReport(
       return {
         date, opponent: sched?.opponent ?? null, competition: sched?.competition ?? null,
         is_home: sched?.is_home ?? null, minutes: Math.round(minutes), has_gps: !!load,
+        estimated: isEstimated(load),
         raw: metrics, p90: metrics ? per90(metrics, minutes) : null,
       };
     })
@@ -304,7 +310,8 @@ export async function computePlayerGameReport(
   const seasonP90 = acc && acc.n > 0
     ? Object.fromEntries(P90_KEYS.map((k) => [k, r1(acc.sums[k] / acc.n)])) as Record<P90Key, number>
     : Object.fromEntries(P90_KEYS.map((k) => [k, 0])) as Record<P90Key, number>;
-  const bestTopSpeed = gpsMatches.reduce((mx, m) => Math.max(mx, m.raw!.top_speed_kmh), 0);
+  // Season-best top speed excludes estimates — a PB must be a real measurement.
+  const bestTopSpeed = gpsMatches.filter((m) => !m.estimated).reduce((mx, m) => Math.max(mx, m.raw!.top_speed_kmh), 0);
 
   const benchmarks: GameReport["benchmarks"] = {};
   for (const k of P90_KEYS) benchmarks[k] = benchmark(k, acc && acc.n > 0 ? acc.sums[k] / acc.n : null);

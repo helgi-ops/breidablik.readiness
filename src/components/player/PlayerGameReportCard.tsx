@@ -21,7 +21,7 @@ import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
 type RawMatch = { top_speed_kmh?: number; total_distance?: number; sprint?: number };
-type Match = { date: string; opponent: string | null; competition?: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; p90: P90 | null; raw?: RawMatch | null };
+type Match = { date: string; opponent: string | null; competition?: string | null; is_home?: boolean | null; minutes: number; has_gps: boolean; estimated?: boolean; p90: P90 | null; raw?: RawMatch | null };
 type ClubInfo = { name: string; themeColor: string | null; logoUrl: string | null };
 type Report = {
   player: { full_name: string; position: string | null; age: number | null };
@@ -170,7 +170,7 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
 
   // Shareable match card context: this player's GPS matches + club theming.
   const shareClub = report.club ?? { name: "", themeColor: null, logoUrl: null };
-  const shareAll: ShareStats[] = report.matches.filter((m) => m.has_gps && m.raw).map(matchStats);
+  const shareAll: ShareStats[] = report.matches.filter((m) => m.has_gps && m.raw && !m.estimated).map(matchStats);
 
   return (
     <div className="mx-auto max-w-lg space-y-3 pb-24">
@@ -315,13 +315,20 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                 {report.matches.map((m, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
                     <div className="min-w-0">
-                      <div className="truncate text-zinc-800">{m.opponent ?? "—"}{m.is_home != null ? <span className="text-zinc-400"> · {m.is_home ? (isIS ? "heima" : "home") : (isIS ? "úti" : "away")}</span> : null}</div>
+                      <div className="flex items-center gap-1.5 truncate text-zinc-800">
+                        {m.opponent ?? "—"}{m.is_home != null ? <span className="text-zinc-400"> · {m.is_home ? (isIS ? "heima" : "home") : (isIS ? "úti" : "away")}</span> : null}
+                        {m.estimated && (
+                          <span className="rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600" title={isIS ? "Áætlað út frá leikja-meðaltali — ekki raunmæling" : "Estimated from match average — not a pod measurement"}>
+                            {isIS ? "áætl." : "est."}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-zinc-400">{m.date} · {m.minutes}′{!m.has_gps ? (isIS ? " · engin GPS" : " · no GPS") : ""}</div>
                     </div>
                     {m.has_gps && m.p90 ? (
                       <div className="flex shrink-0 items-center gap-2">
                         <div className="text-right text-[11px] tabular-nums text-zinc-500">{n0(m.p90.total_distance)} m<span className="text-zinc-400"> /90</span></div>
-                        {m.raw && (matchStats(m).topSpeed > 0 || matchStats(m).distance > 0 || matchStats(m).sprints > 0) && (
+                        {m.raw && !m.estimated && (matchStats(m).topSpeed > 0 || matchStats(m).distance > 0 || matchStats(m).sprints > 0) && (
                           <ShareMatchButton
                             lang={isIS ? "IS" : "EN"}
                             variant="icon"

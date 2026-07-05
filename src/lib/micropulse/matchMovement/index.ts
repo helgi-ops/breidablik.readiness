@@ -47,6 +47,7 @@ type RawRow = {
   // Minutes fallback when a team hasn't hand-entered match minutes.
   session_duration_minutes: number | null;
   player_load_per_minute: number | null;
+  raw_payload_json: { estimated?: boolean } | null;
 };
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -123,7 +124,7 @@ const LOAD_COLS =
   "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
   "ima_band1_decel_count, ima_band2_decel_count, ima_band3_decel_count, " +
   "total_player_load, accel_decel_efforts, high_speed_distance, " +
-  "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes, player_load_per_minute";
+  "velocity_band6_total_distance, sprint_distance, max_velocity, session_duration_minutes, player_load_per_minute, raw_payload_json";
 
 /** Minimum minutes for a match to count — below this the per-minute rates are noisy. */
 const MIN_MINUTES = 20;
@@ -215,14 +216,15 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   for (const { row, minutes } of appearances) {
     const meta = nameById.get(row.player_id);
     if (!meta) continue;
+    const estimated = !!row.raw_payload_json?.estimated;
     if (variant === "ima") {
       if (row.ima_total == null) continue; // no IMA captured
       const { fp, raw, sub } = imaFingerprintOf(row, minutes);
-      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, fingerprint: fp, raw, sub });
     } else {
       if (!gpsHasData(row)) continue; // no GPS movement signal captured
       const { fp, raw, sub } = gpsFingerprintOf(row, minutes);
-      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, fingerprint: fp, raw, sub });
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, fingerprint: fp, raw, sub });
     }
   }
 
@@ -239,13 +241,16 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const playerList: MatchMovementResult["players"] = [];
   const SUB_KEYS: Array<keyof SubBands> = ["decelLow", "decelMed", "decelHigh", "stride6", "stride7", "stride8", "codHigh", "codMed", "codLow"];
   for (const [pid, prs] of byPlayer) {
+    // The "norm" excludes estimates so an estimate never feeds a player's baseline.
+    const realPrs = prs.filter((r) => !r.estimated);
+    const normPrs = realPrs.length ? realPrs : prs;
     const mean = (key: string): number | null => {
-      const vals = prs.map((r) => r.fingerprint[key]).filter((v): v is number => v != null);
+      const vals = normPrs.map((r) => r.fingerprint[key]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
     };
     playerAverages[pid] = Object.fromEntries(dimKeys.map((k) => [k, mean(k)])) as MovementFingerprint;
     const subMean = (key: keyof SubBands): number | null => {
-      const vals = prs.map((r) => r.sub[key]).filter((v): v is number => v != null);
+      const vals = normPrs.map((r) => r.sub[key]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
     };
     subAverages[pid] = Object.fromEntries(SUB_KEYS.map((k) => [k, subMean(k)])) as SubBands;

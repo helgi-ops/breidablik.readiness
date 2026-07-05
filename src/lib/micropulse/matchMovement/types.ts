@@ -147,6 +147,7 @@ export type MatchMovementRow = {
   position: string | null;
   match_date: string;
   minutes: number;
+  estimated?: boolean;
   fingerprint: MovementFingerprint;
   raw: { imaTotal: number | null; codTotal: number | null; codLeft: number | null; codRight: number | null; hiCadence: number | null };
   sub: SubBands;

@@ -616,7 +616,7 @@ export default function MatchMovementComparison() {
                 <tbody>
                   {squadRows.map((r) => (
                     <tr key={r.player_id} className="border-t align-top">
-                      <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}</td>
+                      <td className="py-1 pr-2 font-medium text-slate-800">{r.name}{r.position ? <span className="ml-1 text-slate-400">{r.position}</span> : null}{r.estimated ? <span className="ml-1 rounded-full border border-amber-300 px-1 py-0.5 text-[8px] font-semibold uppercase text-amber-600" title={is ? "Áætlað — ekki raunmæling" : "Estimated — not a pod measurement"}>{is ? "áætl." : "est."}</span> : null}</td>
                       <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.minutes}′</td>
                       {DIMS.map((d) => <td key={d.key} className="py-1 pr-2 text-right tabular-nums text-slate-700">{fmtDim(d.key, r.fingerprint[d.key])}</td>)}
                     </tr>

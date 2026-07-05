@@ -19,6 +19,9 @@ const COPY = {
     empty: "No players for this team — or no scheduled match yet.",
     footer: "STARTER ≥ 60 min · NON-STARTER < 60 min",
     footerCite: "60-min threshold: Carling 2018; Nédélec 2012; Helsen 2018",
+    pod: "Pod", estimate: "Forgot pod? Estimate", estimated: "est.", estRemove: "Remove estimate",
+    estimateAll: "Estimate all missing", needMinutes: "Enter minutes first", podReal: "pod",
+    estTip: "Estimated from this player's match average, pro-rated by minutes — not a pod measurement.",
   },
   IS: {
     title: "MD+1 mínútur",
@@ -30,6 +33,9 @@ const COPY = {
     empty: "Engir leikmenn fyrir þetta lið — eða enginn skráður leikur enn.",
     footer: "STARTER ≥ 60 mín · NON-STARTER < 60 mín",
     footerCite: "60-mín þröskuldur: Carling 2018; Nédélec 2012; Helsen 2018",
+    pod: "Mælir", estimate: "Gleymdi mæli? Áætla", estimated: "áætl.", estRemove: "Fjarlægja áætlun",
+    estimateAll: "Áætla alla sem vantar", needMinutes: "Skráðu mínútur fyrst", podReal: "mælir",
+    estTip: "Áætlað út frá leikja-meðaltali leikmannsins, hlutfallað eftir mínútum — ekki raunmæling.",
   },
 } as const;
 
@@ -82,7 +88,89 @@ export default function CoachMatchMinutesPage() {
   // table will mix players from multiple clubs together.
   const [teamId, setTeamId] = useState<string | null>(null);
 
+  // Pod status per player for the current match date: "real" (measured),
+  // "estimated" (a "forgot pod?" estimate), or absent (nothing → offer Estimate).
+  const [podStatus, setPodStatus] = useState<Record<string, "real" | "estimated">>({});
+  const [podPending, setPodPending] = useState<string | null>(null);
+
   const supabase = useMemo(() => getSupabaseClient(), []);
+
+  const effectiveMatchDate = useMemo(
+    () => (matchDate || rows.find((r) => r.last_match_date)?.last_match_date || ""),
+    [matchDate, rows],
+  );
+
+  async function getToken(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }
+
+  async function loadPodStatus(tid: string | null, date: string) {
+    if (!tid || !date) { setPodStatus({}); return; }
+    const { data } = await supabase
+      .from("player_external_load_daily")
+      .select("player_id, raw_payload_json")
+      .eq("team_id", tid).eq("date", date).eq("source", "catapult");
+    const map: Record<string, "real" | "estimated"> = {};
+    for (const r of (data ?? []) as Array<{ player_id: string; raw_payload_json?: { estimated?: boolean } | null }>) {
+      map[r.player_id] = r.raw_payload_json?.estimated ? "estimated" : "real";
+    }
+    setPodStatus(map);
+  }
+
+  useEffect(() => {
+    if (teamId && effectiveMatchDate) void loadPodStatus(teamId, effectiveMatchDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, effectiveMatchDate]);
+
+  async function postEstimate(playerId: string, minutes: number): Promise<string | null> {
+    const token = await getToken();
+    const res = await fetch("/api/coach/estimate-pod", {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+      body: JSON.stringify({ teamId, playerId, matchDate: effectiveMatchDate, minutes }),
+    });
+    if (!res.ok) return (await res.json().catch(() => ({}))).error ?? "Failed";
+    return null;
+  }
+
+  async function estimateOne(r: Row) {
+    if (!teamId || !effectiveMatchDate || podPending) return;
+    const minutes = r.is_dnp ? 0 : r.minutes_played;
+    if (!minutes || minutes <= 0) { setError(t.needMinutes); return; }
+    setPodPending(r.player_id); setError("");
+    const err = await postEstimate(r.player_id, minutes);
+    if (err) setError(err); else await loadPodStatus(teamId, effectiveMatchDate);
+    setPodPending(null);
+  }
+
+  async function removeEstimate(r: Row) {
+    if (!teamId || !effectiveMatchDate || podPending) return;
+    setPodPending(r.player_id); setError("");
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/coach/estimate-pod", {
+        method: "DELETE",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({ teamId, playerId: r.player_id, matchDate: effectiveMatchDate }),
+      });
+      if (!res.ok) setError((await res.json().catch(() => ({}))).error ?? "Failed");
+      else await loadPodStatus(teamId, effectiveMatchDate);
+    } finally { setPodPending(null); }
+  }
+
+  async function estimateAllMissing() {
+    if (!teamId || !effectiveMatchDate || podPending) return;
+    const missing = rows.filter((r) => !podStatus[r.player_id] && !r.is_dnp && r.minutes_played > 0);
+    if (missing.length === 0) return;
+    setPodPending("__all__"); setError("");
+    for (const r of missing) {
+      const err = await postEstimate(r.player_id, r.minutes_played);
+      if (err) { setError(err); break; }
+    }
+    await loadPodStatus(teamId, effectiveMatchDate);
+    setPodPending(null);
+  }
 
   async function load(teamIdParam: string | null) {
     setLoading(true);
@@ -242,6 +330,7 @@ export default function CoachMatchMinutesPage() {
     setMatchDateDirty(false);
     setIsHomeDirty(false);
     await load(teamId);
+    if (teamId && effectiveMatchDate) await loadPodStatus(teamId, effectiveMatchDate);
     setSaving(false);
   }
 
@@ -272,6 +361,11 @@ export default function CoachMatchMinutesPage() {
             </div>
 
             <div className="flex gap-2">
+              {rows.some((r) => !podStatus[r.player_id] && !r.is_dnp && r.minutes_played > 0) && (
+                <Button variant="outline" onClick={estimateAllMissing} disabled={loading || saving || !!podPending}>
+                  {podPending === "__all__" ? t.saving : t.estimateAll}
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => load(teamId)} disabled={loading || saving}>
                 {t.refresh}
               </Button>
@@ -366,6 +460,7 @@ export default function CoachMatchMinutesPage() {
                     <th className="p-3">{t.matchDayCol}</th>
                     <th className="p-3 w-32">{t.minutes}</th>
                     <th className="p-3 w-24">{t.dnp}</th>
+                    <th className="p-3 w-40">{t.pod}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -395,6 +490,24 @@ export default function CoachMatchMinutesPage() {
                           }
                           disabled={!r.last_match_date || saving}
                         />
+                      </td>
+                      <td className="p-3">
+                        {podStatus[r.player_id] === "real" ? (
+                          <span className="text-xs text-muted-foreground">✓ {t.podReal}</span>
+                        ) : podStatus[r.player_id] === "estimated" ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className="border-amber-300 text-amber-600" title={t.estTip}>{t.estimated}</Badge>
+                            <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs" title={t.estRemove}
+                              disabled={podPending === r.player_id} onClick={() => removeEstimate(r)}>✕</Button>
+                          </span>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-7 text-xs"
+                            title={r.minutes_played <= 0 || r.is_dnp ? t.needMinutes : t.estimate}
+                            disabled={!r.last_match_date || r.is_dnp || r.minutes_played <= 0 || saving || !!podPending}
+                            onClick={() => estimateOne(r)}>
+                            {podPending === r.player_id ? "…" : t.estimate}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
