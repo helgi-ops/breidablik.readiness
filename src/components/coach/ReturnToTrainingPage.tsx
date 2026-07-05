@@ -12,15 +12,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
-type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "cod";
-const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "cod"];
+type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod";
+const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
 const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
-  volume: { en: "Player load", is: "Álag", unit: "" },
-  distance: { en: "Distance", is: "Vegalengd", unit: "m" },
-  hsr: { en: "High-speed running", is: "Háhraðahlaup", unit: "m" },
-  sprint: { en: "Sprinting", is: "Sprettur", unit: "m" },
+  volume: { en: "Weekly player load", is: "Vikuálag", unit: "" },
+  distance: { en: "Weekly distance", is: "Vikuvegalengd", unit: "m" },
+  hsr: { en: "Weekly high-speed running", is: "Vikuháhraðahlaup", unit: "m" },
+  sprint: { en: "Weekly sprinting", is: "Vikusprettur", unit: "m" },
   accel: { en: "Accelerations (IMA)", is: "Hröðun (IMA)", unit: "" },
   decel: { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "" },
+  decelHigh: { en: "High-intensity braking (IMA)", is: "Háákefðar hemlun (IMA)", unit: "" },
   cod: { en: "Change of direction (IMA)", is: "Stefnubreytingar (IMA)", unit: "" },
 };
 
@@ -37,9 +38,9 @@ type Resp = {
   injuryProfile?: InjuryProfile;
   currentlyInjured: boolean;
   rttStartDate: string | null;
-  baseline: Record<Quality, number> & { builtFromHealthySessions: number; topSpeed: number };
+  baseline: Record<Quality, number> & { builtFromHealthyWeeks: number; topSpeed: number };
   floor: Record<Quality, number> & { topSpeed: number };
-  matchDemand: Record<Quality, number> & { topSpeed: number };
+  asymmetry: { healthyLeftPct: number | null; currentLeftPct: number | null; imbalanced: boolean };
   plan: { verdict: string; weeks: WeekTarget[] } | null;
   confidence: "high" | "medium" | "low";
   error?: string;
@@ -101,8 +102,8 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{is ? "Aftur í æfingar" : "Return-to-training"}</span>
             {data.currentlyInjured && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-700">{is ? "Meiddur núna" : "Currently injured"}</span>}
           </div>
-          <div className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${confColor}`} title={is ? "Þroski grunnlínu — fjöldi heilbrigðra æfinga sem loftið er byggt á" : "Baseline maturity — how many healthy sessions the ceiling is built from"}>
-            {is ? "Vissa" : "Confidence"}: {conf} · {data.baseline.builtFromHealthySessions} {is ? "heilbrigðar æfingar" : "healthy sessions"}
+          <div className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${confColor}`} title={is ? "Þroski grunnlínu — fjöldi heilbrigðra vikna sem loftið er byggt á" : "Baseline maturity — how many healthy weeks the ceiling is built from"}>
+            {is ? "Vissa" : "Confidence"}: {conf} · {data.baseline.builtFromHealthyWeeks} {is ? "heilbrigðar vikur" : "healthy weeks"}
           </div>
         </div>
       </div>
@@ -145,6 +146,23 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-3 bg-sky-500" /> {is ? "Hæsti hraði" : "Top speed"}</span>
         </div>
       </div>
+
+      {/* L/R change-of-direction asymmetry — monitor (not ramp), key after a one-sided injury. */}
+      {data.asymmetry.currentLeftPct != null && (
+        <div className={`rounded-xl border p-4 shadow-sm ${data.asymmetry.imbalanced ? "border-rose-200 bg-rose-50/60" : "border-slate-200 bg-white"}`}>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-800">{is ? "Vinstri / hægri stefnubreytingar (jafnvægi)" : "Change-of-direction L / R balance"}</div>
+            {data.asymmetry.imbalanced && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">{is ? "ójafnvægi" : "imbalanced"}</span>}
+          </div>
+          <div className="mt-2 flex items-center gap-4 text-sm">
+            <div><span className="text-slate-400">{is ? "Núna" : "Now"}:</span> <span className="font-semibold text-slate-800">{data.asymmetry.currentLeftPct}% {is ? "vinstri" : "left"} / {100 - (data.asymmetry.currentLeftPct ?? 0)}% {is ? "hægri" : "right"}</span></div>
+            {data.asymmetry.healthyLeftPct != null && <div className="text-slate-400">{is ? "heilbrigt" : "healthy"}: {data.asymmetry.healthyLeftPct}% {is ? "vinstri" : "left"}</div>}
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">
+            {is ? "Fylgst með — ekki stigmagnað. Eftir einhliða meiðsli getur leikmaður forðast meidda hliðina; markmið er að ná aftur hans eðlilega jafnvægi." : "Monitored, not ramped. After a one-sided injury a player can avoid the injured side; the goal is to restore his normal balance."}
+          </p>
+        </div>
+      )}
 
       {/* Plan */}
       {data.currentlyInjured && !data.rttStartDate ? (

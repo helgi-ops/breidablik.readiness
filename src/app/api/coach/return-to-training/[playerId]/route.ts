@@ -78,13 +78,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     // ── Sessions ───────────────────────────────────────────────────────────
     const { data: load } = await sb
       .from("player_external_load_daily")
-      .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
+      .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
       .eq("player_id", playerId).eq("source", "catapult").gte("date", since).order("date");
 
     const sessions: RttSession[] = ((load ?? []) as Array<Record<string, unknown>>).map((r) => {
       const date = String(r.date);
-      const cod = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
-        num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
+      const codLeft = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low);
+      const codRight = num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
+      const cod = codLeft + codRight;
       return {
         date,
         injured: windows.some((w) => inWindow(date, w)),
@@ -96,7 +97,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
         sprint: num(r.sprint_distance) || num(r.velocity_band6_total_distance),
         accel: num(r.ima_accel),
         decel: num(r.ima_decel),
+        decelHigh: num(r.ima_band3_decel_count),
         cod: cod > 0 ? cod : num(r.accel_decel_efforts),
+        codLeft,
+        codRight,
         topSpeed: clampSpeed(r.max_velocity),
       };
     });
