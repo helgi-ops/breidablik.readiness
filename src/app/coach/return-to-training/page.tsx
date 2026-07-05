@@ -1,7 +1,7 @@
-import ReturnToTrainingIndex from "@/components/coach/ReturnToTrainingIndex";
+import RttEntryRedirect from "@/components/coach/RttEntryRedirect";
 
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-  return <ReturnToTrainingIndex />;
+  return <RttEntryRedirect />;
 }

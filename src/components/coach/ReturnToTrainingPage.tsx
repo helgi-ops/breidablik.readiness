@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import RttPlayerPicker from "./RttPlayerPicker";
 
 type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod";
 const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
@@ -119,7 +120,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900">{data.player.name}</h1>
+            <RttPlayerPicker currentId={playerId} currentName={data.player.name} />
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">{is ? "Aftur í æfingar" : "Return-to-training"}</span>
             {data.currentlyInjured && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-700">{is ? "Meiddur núna" : "Currently injured"}</span>}
           </div>
