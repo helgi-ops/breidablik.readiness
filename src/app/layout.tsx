@@ -1,8 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Archivo } from "next/font/google";
 import "./globals.css";
 import RegisterServiceWorker from "@/components/pwa/RegisterServiceWorker";
 import DynamicManifest from "@/components/pwa/DynamicManifest";
 import PasswordRecoveryGate from "@/components/auth/PasswordRecoveryGate";
+
+// Body / UI text = Geist Sans; mono = Geist Mono; headings + big numbers = Archivo
+// (wired to --font-display, consumed by the heading rule in globals.css).
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const archivo = Archivo({ variable: "--font-archivo", subsets: ["latin"], weight: ["600", "700", "800"] });
 
 export const metadata: Metadata = {
   title: "MicroPulse",
@@ -35,8 +42,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="is">
-      <body className="antialiased">
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable}`}>
+      <body className="font-sans antialiased">
         <RegisterServiceWorker />
         <DynamicManifest />
         <PasswordRecoveryGate />

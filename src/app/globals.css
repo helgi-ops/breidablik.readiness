@@ -8,6 +8,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-archivo);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,37 +49,119 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+
+  /* ── Fasi 1 re-skin: warm "bone" palette ──────────────────────────────────
+     This app is built on hardcoded Tailwind palette utilities (slate/emerald/
+     amber/red…), NOT semantic tokens, so the re-skin is done by REMAPPING those
+     scales below (see the @theme block). These ramps are the single source of
+     truth; keep each ramp's lightness ≈ Tailwind's so contrast/legibility hold,
+     only the hue/chroma shift warm. Cards stay white; cobalt (indigo) stays. */
+
+  /* Warm neutral ("bone") — remaps slate/gray/zinc/neutral app-wide */
+  --bone-50: oklch(0.985 0.004 90);
+  --bone-100: oklch(0.967 0.006 88);
+  --bone-200: oklch(0.922 0.010 86);
+  --bone-300: oklch(0.867 0.012 85);
+  --bone-400: oklch(0.705 0.010 85);
+  --bone-500: oklch(0.600 0.008 86);
+  --bone-600: oklch(0.472 0.008 88);
+  --bone-700: oklch(0.388 0.008 92);
+  --bone-800: oklch(0.285 0.007 96);
+  --bone-900: oklch(0.220 0.006 100);
+  --bone-950: oklch(0.150 0.005 100);
+
+  /* Grass green — remaps emerald/green (Ready / on-plan) → #1c7a4a */
+  --grass-50: oklch(0.965 0.020 155);
+  --grass-100: oklch(0.935 0.040 155);
+  --grass-200: oklch(0.880 0.062 154);
+  --grass-300: oklch(0.800 0.090 153);
+  --grass-400: oklch(0.660 0.110 153);
+  --grass-500: oklch(0.575 0.115 154);
+  --grass-600: oklch(0.520 0.120 155);
+  --grass-700: oklch(0.450 0.100 156);
+  --grass-800: oklch(0.390 0.080 157);
+  --grass-900: oklch(0.330 0.062 158);
+  --grass-950: oklch(0.220 0.040 158);
+
+  /* Terracotta — remaps red/rose (Recovery / destructive / over) → #a83e28 */
+  --clay-50: oklch(0.960 0.018 35);
+  --clay-100: oklch(0.925 0.035 34);
+  --clay-200: oklch(0.870 0.055 33);
+  --clay-300: oklch(0.790 0.080 32);
+  --clay-400: oklch(0.660 0.120 31);
+  --clay-500: oklch(0.575 0.145 31);
+  --clay-600: oklch(0.520 0.150 32);
+  --clay-700: oklch(0.455 0.135 31);
+  --clay-800: oklch(0.395 0.110 30);
+  --clay-900: oklch(0.345 0.090 30);
+  --clay-950: oklch(0.230 0.060 30);
+
+  /* Refined amber — remaps amber/orange (Modified / caution) → #de9328 */
+  --gold-50: oklch(0.975 0.020 88);
+  --gold-100: oklch(0.948 0.045 84);
+  --gold-200: oklch(0.900 0.075 80);
+  --gold-300: oklch(0.850 0.105 76);
+  --gold-400: oklch(0.790 0.130 72);
+  --gold-500: oklch(0.740 0.140 70);
+  --gold-600: oklch(0.670 0.140 67);
+  --gold-700: oklch(0.550 0.120 60);
+  --gold-800: oklch(0.470 0.100 58);
+  --gold-900: oklch(0.400 0.082 58);
+  --gold-950: oklch(0.270 0.050 55);
+
+  /* Semantic tokens (used by the ~27 token-based files + body background) */
+  --background: oklch(0.951 0.006 85);      /* #f4f2ec bone */
+  --foreground: oklch(0.220 0.008 250);     /* #14181c ink */
+  --card: oklch(1 0 0);                       /* white — cards stay white */
+  --card-foreground: oklch(0.220 0.008 250);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.220 0.008 250);
+  --primary: oklch(0.52 0.243 264.376);      /* cobalt — kept */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --secondary: oklch(0.94 0.006 85);
+  --secondary-foreground: oklch(0.28 0.008 250);
+  --muted: oklch(0.94 0.006 85);
+  --muted-foreground: oklch(0.60 0.006 85);  /* #8a8f8c */
+  --accent: oklch(0.94 0.006 85);
+  --accent-foreground: oklch(0.28 0.008 250);
+  --destructive: oklch(0.52 0.15 32);        /* terracotta */
+  --border: oklch(0.90 0.008 85);            /* #e8e4d9 */
+  --input: oklch(0.90 0.008 85);
+  --ring: oklch(0.52 0.243 264.376);
+  --chart-1: oklch(0.52 0.12 155);           /* grass */
+  --chart-2: oklch(0.72 0.14 70);            /* amber */
+  --chart-3: oklch(0.52 0.15 32);            /* terracotta */
+  --chart-4: oklch(0.52 0.243 264.376);      /* cobalt */
+  --chart-5: oklch(0.50 0.13 300);           /* violet (IMA) */
+  --sidebar: oklch(0.985 0.004 90);          /* warm-light (dark rail = fasi 3) */
+  --sidebar-foreground: oklch(0.220 0.008 250);
+  --sidebar-primary: oklch(0.52 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.94 0.006 85);
+  --sidebar-accent-foreground: oklch(0.28 0.008 250);
+  --sidebar-border: oklch(0.90 0.008 85);
+  --sidebar-ring: oklch(0.52 0.243 264.376);
+}
+
+/* Remap the Tailwind palette scales the app actually uses onto the warm ramps
+   above — so every hardcoded `bg-slate-*`, `text-emerald-*`, `border-rose-*`…
+   inherits the new theme centrally, with zero component edits. White, cobalt
+   (indigo), violet and blue are intentionally left as-is. */
+@theme {
+  --color-slate-50: var(--bone-50); --color-slate-100: var(--bone-100); --color-slate-200: var(--bone-200); --color-slate-300: var(--bone-300); --color-slate-400: var(--bone-400); --color-slate-500: var(--bone-500); --color-slate-600: var(--bone-600); --color-slate-700: var(--bone-700); --color-slate-800: var(--bone-800); --color-slate-900: var(--bone-900); --color-slate-950: var(--bone-950);
+  --color-gray-50: var(--bone-50); --color-gray-100: var(--bone-100); --color-gray-200: var(--bone-200); --color-gray-300: var(--bone-300); --color-gray-400: var(--bone-400); --color-gray-500: var(--bone-500); --color-gray-600: var(--bone-600); --color-gray-700: var(--bone-700); --color-gray-800: var(--bone-800); --color-gray-900: var(--bone-900); --color-gray-950: var(--bone-950);
+  --color-zinc-50: var(--bone-50); --color-zinc-100: var(--bone-100); --color-zinc-200: var(--bone-200); --color-zinc-300: var(--bone-300); --color-zinc-400: var(--bone-400); --color-zinc-500: var(--bone-500); --color-zinc-600: var(--bone-600); --color-zinc-700: var(--bone-700); --color-zinc-800: var(--bone-800); --color-zinc-900: var(--bone-900); --color-zinc-950: var(--bone-950);
+  --color-neutral-50: var(--bone-50); --color-neutral-100: var(--bone-100); --color-neutral-200: var(--bone-200); --color-neutral-300: var(--bone-300); --color-neutral-400: var(--bone-400); --color-neutral-500: var(--bone-500); --color-neutral-600: var(--bone-600); --color-neutral-700: var(--bone-700); --color-neutral-800: var(--bone-800); --color-neutral-900: var(--bone-900); --color-neutral-950: var(--bone-950);
+  --color-stone-50: var(--bone-50); --color-stone-100: var(--bone-100); --color-stone-200: var(--bone-200); --color-stone-300: var(--bone-300); --color-stone-400: var(--bone-400); --color-stone-500: var(--bone-500); --color-stone-600: var(--bone-600); --color-stone-700: var(--bone-700); --color-stone-800: var(--bone-800); --color-stone-900: var(--bone-900); --color-stone-950: var(--bone-950);
+
+  --color-emerald-50: var(--grass-50); --color-emerald-100: var(--grass-100); --color-emerald-200: var(--grass-200); --color-emerald-300: var(--grass-300); --color-emerald-400: var(--grass-400); --color-emerald-500: var(--grass-500); --color-emerald-600: var(--grass-600); --color-emerald-700: var(--grass-700); --color-emerald-800: var(--grass-800); --color-emerald-900: var(--grass-900); --color-emerald-950: var(--grass-950);
+  --color-green-50: var(--grass-50); --color-green-100: var(--grass-100); --color-green-200: var(--grass-200); --color-green-300: var(--grass-300); --color-green-400: var(--grass-400); --color-green-500: var(--grass-500); --color-green-600: var(--grass-600); --color-green-700: var(--grass-700); --color-green-800: var(--grass-800); --color-green-900: var(--grass-900); --color-green-950: var(--grass-950);
+
+  --color-red-50: var(--clay-50); --color-red-100: var(--clay-100); --color-red-200: var(--clay-200); --color-red-300: var(--clay-300); --color-red-400: var(--clay-400); --color-red-500: var(--clay-500); --color-red-600: var(--clay-600); --color-red-700: var(--clay-700); --color-red-800: var(--clay-800); --color-red-900: var(--clay-900); --color-red-950: var(--clay-950);
+  --color-rose-50: var(--clay-50); --color-rose-100: var(--clay-100); --color-rose-200: var(--clay-200); --color-rose-300: var(--clay-300); --color-rose-400: var(--clay-400); --color-rose-500: var(--clay-500); --color-rose-600: var(--clay-600); --color-rose-700: var(--clay-700); --color-rose-800: var(--clay-800); --color-rose-900: var(--clay-900); --color-rose-950: var(--clay-950);
+
+  --color-amber-50: var(--gold-50); --color-amber-100: var(--gold-100); --color-amber-200: var(--gold-200); --color-amber-300: var(--gold-300); --color-amber-400: var(--gold-400); --color-amber-500: var(--gold-500); --color-amber-600: var(--gold-600); --color-amber-700: var(--gold-700); --color-amber-800: var(--gold-800); --color-amber-900: var(--gold-900); --color-amber-950: var(--gold-950);
+  --color-orange-50: var(--gold-50); --color-orange-100: var(--gold-100); --color-orange-200: var(--gold-200); --color-orange-300: var(--gold-300); --color-orange-400: var(--gold-400); --color-orange-500: var(--gold-500); --color-orange-600: var(--gold-600); --color-orange-700: var(--gold-700); --color-orange-800: var(--gold-800); --color-orange-900: var(--gold-900); --color-orange-950: var(--gold-950);
 }
 
 .dark {
@@ -88,8 +171,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.58 0.235 264.376);
+  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -99,7 +182,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.58 0.235 264.376);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -112,7 +195,7 @@
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.58 0.235 264.376);
 }
 
 @layer base {
@@ -121,6 +204,11 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Headings + big numbers use the display font (Archivo); body stays Geist.
+     Falls back to Geist/system if Archivo hasn't loaded so nothing breaks. */
+  h1, h2, h3, .stat-number {
+    font-family: var(--font-display), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   }
 }
 
