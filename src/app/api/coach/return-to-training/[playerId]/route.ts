@@ -66,6 +66,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: open });
     }
     const currentlyInjured = windows.some((w) => w.isActive);
+
+    // Active RTP protocol stage/status (from player_injuries — the RTP workflow),
+    // so the load ramp and the clinical stage sit in ONE view. Most-recent open one.
+    const activePi = ((piRes.data ?? []) as Array<{ injury_date: string; status: string | null; rtp_stage: number | null; actual_return_date: string | null }>)
+      .filter((r) => r.status !== "cleared" && !r.actual_return_date)
+      .sort((a, b) => (b.injury_date ?? "").localeCompare(a.injury_date ?? ""))[0];
+    const rtp = activePi ? { status: activePi.status ?? "injured", stage: Number(activePi.rtp_stage ?? 0) } : null;
+
     const headInjury = windows.some((w) => /concuss|head|hia|heilahrist|höfu|hofu|hnakk/i.test(w.type) && (w.isActive || w.end >= since));
     // Surface a source disagreement (e.g. concussion vs sprain) rather than pick one.
     const typesByStart = new Map<string, Set<string>>();
@@ -132,6 +140,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
 
     const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities });
 
+    // ── Apply coach overrides to the computed plan (rules recommend; the coach
+    // can override, and the override is logged). Latest override per (quality,
+    // week) wins; the target is replaced and flagged so the UI shows it + why.
+    const overrides = (Array.isArray((saved as { overrides?: unknown } | null)?.overrides)
+      ? (saved as { overrides: Array<{ quality?: string; week?: number; to?: number; reason?: string }> }).overrides
+      : []);
+    if (result.plan && overrides.length) {
+      const latest = new Map<string, { to: number; reason: string }>();
+      for (const o of overrides) {
+        if (o?.quality == null || o?.week == null || typeof o?.to !== "number") continue;
+        latest.set(`${o.quality}:${o.week}`, { to: o.to, reason: String(o.reason ?? "") });
+      }
+      for (const w of result.plan.weeks) {
+        const ov = latest.get(`${w.quality}:${w.week}`);
+        if (!ov) continue;
+        const ceiling = result.baseline[w.quality] || 0;
+        w.target = ov.to;
+        w.pctOfHealthy = ceiling > 0 ? Math.round((ov.to / ceiling) * 100) : 0;
+        (w as typeof w & { overridden?: boolean; overrideReason?: string }).overridden = true;
+        (w as typeof w & { overridden?: boolean; overrideReason?: string }).overrideReason = ov.reason;
+      }
+    }
+
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
       window: windowDays,
@@ -140,8 +171,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       injuryDiscrepancy,
       headInjury,
       injuryProfile: profile,
+      rtp,
       rttStartDate,
-      overrides: (saved as { overrides?: unknown } | null)?.overrides ?? [],
+      overrides,
       ...result,
     });
   } catch (err) {

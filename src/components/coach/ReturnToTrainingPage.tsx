@@ -26,10 +26,27 @@ const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   cod: { en: "Change of direction (IMA)", is: "Stefnubreytingar (IMA)", unit: "" },
 };
 
+// RTP workflow labels (mirror the Injuries/RTP page vocabulary; kept short).
+const RTP_STATUS: Record<string, { en: string; is: string }> = {
+  injured: { en: "Injured", is: "Meiddur" },
+  rehabilitation: { en: "Rehabilitation", is: "Endurhæfing" },
+  rtp_training: { en: "RTP training", is: "RTP þjálfun" },
+  cleared: { en: "Cleared", is: "Grænljós" },
+};
+const RTP_STAGE_NAME: Record<number, { en: string; is: string }> = {
+  0: { en: "Rest", is: "Hvíld" },
+  1: { en: "Light cardio", is: "Léttur hjartsláttur" },
+  2: { en: "Running", is: "Hlaup" },
+  3: { en: "Non-contact", is: "Án snertingar" },
+  4: { en: "Full training", is: "Full þjálfun" },
+  5: { en: "Match play", is: "Leikur" },
+};
+
 type Session = { date: string; injured: boolean; isMatch: boolean; estimated: boolean; load: number; distance: number; hsr: number; sprint: number; cod: number; topSpeed: number };
 type Win = { start: string; end: string; type: string; source: string; isActive: boolean };
-type WeekTarget = { week: number; quality: Quality; target: number; pctOfHealthy: number; wow: number; acwr: number; locked: boolean; unlockWeek: number; caution: boolean; why: string };
+type WeekTarget = { week: number; quality: Quality; target: number; pctOfHealthy: number; wow: number; acwr: number; locked: boolean; unlockWeek: number; caution: boolean; why: string; overridden?: boolean; overrideReason?: string };
 type InjuryProfile = { category: string; label: { en: string; is: string }; riskQualities: Quality[] };
+type RtpInfo = { status: string; stage: number };
 type Resp = {
   player: { id: string; name: string };
   history: Session[];
@@ -37,6 +54,7 @@ type Resp = {
   injuryDiscrepancy: boolean;
   headInjury: boolean;
   injuryProfile?: InjuryProfile;
+  rtp?: RtpInfo | null;
   currentlyInjured: boolean;
   rttStartDate: string | null;
   baseline: Record<Quality, number> & { builtFromHealthyWeeks: number; topSpeed: number };
@@ -89,6 +107,16 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
     } finally { setBusy(false); }
   }
 
+  // Coach override of a recommended target — logged with a reason (audit trail).
+  const saveOverride = useCallback(async (quality: Quality, week: number, from: number, to: number, reason: string) => {
+    await fetch(`/api/coach/return-to-training/${playerId}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${await token()}` },
+      body: JSON.stringify({ override: { quality, week, from, to, reason } }),
+    });
+    await load();
+  }, [playerId, token, load]);
+
   // The CURRENT plan week (the actionable "this week") — its targets, the actual
   // load he has logged against them, and that week's sessions.
   const curWeek = data?.plan?.currentWeek ?? 1;
@@ -131,6 +159,11 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             {data.layoff?.days != null && (
               <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700" title={is ? "Lengd fjarveru ræður hversu hátt og lengi upptröppunin er — stutt fjarvera heldur mestu álagsþoli (detraining)." : "Layoff length sets how high and long the ramp is — a short layoff keeps most capacity (detraining)."}>
                 {data.layoff.days} {is ? "daga frá" : "day layoff"} · ~{data.layoff.retainedPct}% {is ? "álagsþol eftir" : "capacity"} · {data.layoff.rampWeeks} {is ? "vikna plan" : "wk plan"}
+              </span>
+            )}
+            {data.rtp && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700" title={is ? "Klínískt RTP-stig úr Meiðsli/RTP vinnuflæðinu — sama heimild og RTP-síðan." : "Clinical RTP stage from the Injuries/RTP workflow — same source as the RTP page."}>
+                RTP: {is ? RTP_STATUS[data.rtp.status]?.is ?? data.rtp.status : RTP_STATUS[data.rtp.status]?.en ?? data.rtp.status} · {is ? "stig" : "stage"} {data.rtp.stage}/5{RTP_STAGE_NAME[data.rtp.stage] ? ` · ${is ? RTP_STAGE_NAME[data.rtp.stage].is : RTP_STAGE_NAME[data.rtp.stage].en}` : ""}
               </span>
             )}
           </div>
@@ -218,7 +251,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           {/* This week's per-quality targets — recommended vs actual (layer 1) */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {weekNow.map((w) => (
-              <QualityCard key={w.quality} w={w} floor={data.floor[w.quality]} ceiling={data.baseline[w.quality]} actual={actualByQ.get(w.quality)} is={is} />
+              <QualityCard key={w.quality} w={w} floor={data.floor[w.quality]} ceiling={data.baseline[w.quality]} actual={actualByQ.get(w.quality)} onOverride={saveOverride} is={is} />
             ))}
           </div>
 
@@ -321,15 +354,29 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   );
 }
 
-function QualityCard({ w, floor, ceiling, actual, is }: { w: WeekTarget; floor: number; ceiling: number; actual?: AdherenceCell; is: boolean }) {
+function QualityCard({ w, floor, ceiling, actual, onOverride, is }: { w: WeekTarget; floor: number; ceiling: number; actual?: AdherenceCell; onOverride: (quality: Quality, week: number, from: number, to: number, reason: string) => Promise<void>; is: boolean }) {
   const label = is ? LABEL[w.quality].is : LABEL[w.quality].en;
   const acwrColor = w.acwr > 1.3 ? "bg-red-100 text-red-700" : w.acwr >= 0.8 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600";
+  const [editing, setEditing] = useState(false);
+  const [target, setTarget] = useState(String(Math.round(w.target)));
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    const to = Number(target);
+    if (!Number.isFinite(to) || to < 0 || !reason.trim()) return;
+    setBusy(true);
+    try { await onOverride(w.quality, w.week, w.target, to, reason.trim()); setEditing(false); setReason(""); }
+    finally { setBusy(false); }
+  }
+
   return (
-    <div className={`rounded-xl border p-3 shadow-sm ${w.locked ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}>
+    <div className={`rounded-xl border p-3 shadow-sm ${w.overridden ? "border-violet-200 bg-violet-50/40" : w.locked ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
           {label}
           {w.caution && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-orange-700" title={is ? "Lykil-endurmeiðsla-gæði fyrir þetta meiðsli — hægari aðlögun" : "Key re-injury quality for this injury — slower ramp"}>{is ? "gát" : "caution"}</span>}
+          {w.overridden && <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-violet-700" title={w.overrideReason}>{is ? "aðlagað" : "adjusted"}</span>}
         </div>
         {w.locked ? (
           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">{is ? `læst · vika ${w.unlockWeek}` : `hold · wk ${w.unlockWeek}`}</span>
@@ -356,6 +403,24 @@ function QualityCard({ w, floor, ceiling, actual, is }: { w: WeekTarget; floor: 
                 {actual.status === "over" ? (is ? "yfir" : "over") : actual.status === "under" ? (is ? "undir" : "under") : (is ? "á áætlun" : "on plan")} {actual.deltaPct > 0 ? "+" : ""}{actual.deltaPct}%
               </span>
             </div>
+          )}
+          {w.overridden && w.overrideReason && (
+            <p className="mt-1.5 border-t border-violet-100 pt-1.5 text-[10px] text-violet-700">{is ? "Aðlögun þjálfara" : "Coach adjustment"}: {w.overrideReason}</p>
+          )}
+          {editing ? (
+            <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+              <div className="flex items-center gap-1.5">
+                <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} className="h-7 w-24 rounded border border-slate-300 px-2 text-xs tabular-nums" aria-label={is ? "Nýtt markmið" : "New target"} />
+                <span className="text-[10px] text-slate-400">{LABEL[w.quality].unit || (is ? "markmið" : "target")}</span>
+              </div>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={is ? "Ástæða (skráð)…" : "Reason (logged)…"} className="h-7 w-full rounded border border-slate-300 px-2 text-xs" />
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={submit} disabled={busy || !reason.trim()} className="rounded bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-40">{busy ? "…" : (is ? "Vista" : "Save")}</button>
+                <button type="button" onClick={() => { setEditing(false); setReason(""); setTarget(String(Math.round(w.target))); }} className="text-[11px] text-slate-500 hover:text-slate-700">{is ? "Hætta við" : "Cancel"}</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setEditing(true)} className="mt-1.5 text-[10px] font-semibold text-violet-600 hover:text-violet-800">{is ? "Aðlaga markmið" : "Adjust target"}</button>
           )}
         </>
       ) : (
