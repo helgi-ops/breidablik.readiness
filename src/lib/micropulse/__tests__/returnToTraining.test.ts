@@ -67,6 +67,10 @@ test("injuryRiskProfile maps tissue → key re-injury qualities (incl. high-inte
   const head = injuryRiskProfile(["Concussion"]);
   assert.equal(head.category, "head");
   assert.equal(head.riskQualities.length, 0);
+  // localized labels (this form stores the label as the value) must also count as head
+  for (const label of ["Heilahristingur", "Höfuðáverki (annað)", "Head injury (other)"]) {
+    assert.equal(injuryRiskProfile([label]).category, "head", `${label} → head`);
+  }
   assert.ok(injuryRiskProfile(["ACL / knee"]).riskQualities.includes("decelHigh"));
   assert.ok(injuryRiskProfile(["ankle sprain"]).riskQualities.includes("cod"));
 });

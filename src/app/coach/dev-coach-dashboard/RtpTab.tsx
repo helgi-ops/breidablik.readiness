@@ -53,7 +53,8 @@ const COPY = {
     ],
     injuryTypes: [
       "Tognanir (sprain)", "Tognanir (strain)", "Rifnar líffærataugar", "Brot",
-      "Særindi (contusion)", "Bólga", "Yfirburðarslit", "Annað",
+      "Særindi (contusion)", "Bólga", "Yfirburðarslit",
+      "Heilahristingur", "Höfuðáverki (annað)", "Annað",
     ],
   },
   EN: {
@@ -101,7 +102,8 @@ const COPY = {
     ],
     injuryTypes: [
       "Sprain", "Strain", "Ligament tear", "Fracture",
-      "Contusion", "Inflammation", "Overuse", "Other",
+      "Contusion", "Inflammation", "Overuse",
+      "Concussion", "Head injury (other)", "Other",
     ],
   },
 } as const;

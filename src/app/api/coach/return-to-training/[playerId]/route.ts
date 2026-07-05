@@ -60,7 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: open && end >= now });
     }
     const currentlyInjured = windows.some((w) => w.isActive && (!w.end || w.end >= now));
-    const headInjury = windows.some((w) => /concuss|head/i.test(w.type) && (w.isActive || w.end >= since));
+    const headInjury = windows.some((w) => /concuss|head|hia|heilahrist|höfu|hofu|hnakk/i.test(w.type) && (w.isActive || w.end >= since));
     // Surface a source disagreement (e.g. concussion vs sprain) rather than pick one.
     const typesByStart = new Map<string, Set<string>>();
     for (const w of windows) { const s = typesByStart.get(w.start) ?? new Set(); s.add(w.type.toLowerCase()); typesByStart.set(w.start, s); }

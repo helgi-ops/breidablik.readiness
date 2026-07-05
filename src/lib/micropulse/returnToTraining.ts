@@ -62,7 +62,7 @@ export type RttInput = {
 export function injuryRiskProfile(types: string[]): { category: string; riskQualities: QualityKey[]; label: { en: string; is: string } } {
   const t = types.join(" ").toLowerCase();
   const m = (re: RegExp) => re.test(t);
-  if (m(/concuss|head|hia/)) return { category: "head", riskQualities: [], label: { en: "Head injury — symptom-limited return", is: "Höfuðáverki — einkenna-stýrð endurkoma" } };
+  if (m(/concuss|head|hia|heilahrist|höfu|hofu|hnakk/)) return { category: "head", riskQualities: [], label: { en: "Head injury — symptom-limited return", is: "Höfuðáverki — einkenna-stýrð endurkoma" } };
   if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "decel", "decelHigh"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
   if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
   if (m(/quad|rectus femoris/)) return { category: "quad", riskQualities: ["sprint", "accel"], label: { en: "Quadriceps — sprinting & acceleration ramp slowly", is: "Framlæri — sprettir og hröðun aukast hægt" } };
