@@ -27,8 +27,18 @@
  * a CEILING, not a stage trigger — graded return is symptom-limited.
  */
 
-export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod";
+export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
+// Pro/ELITE (IMA) variant — the movement axis comes from IMA bands.
 export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
+// Core/Lite (GPS) variant — no IMA; the club sends accel_decel_efforts instead,
+// so the movement/agility axis is a single "efforts" quality. See
+// efforts-vs-ima-tier-complementary: Core sends efforts, Pro sends IMA.
+export const QUALITY_ORDER_GPS: QualityKey[] = ["volume", "distance", "hsr", "sprint", "efforts"];
+const ALL_QUALITIES: QualityKey[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod", "efforts"];
+export type RttVariant = "ima" | "gps";
+export function qualityOrderForVariant(variant: RttVariant): QualityKey[] {
+  return variant === "gps" ? QUALITY_ORDER_GPS : QUALITY_ORDER;
+}
 
 export type RttSession = {
   date: string;
@@ -45,6 +55,7 @@ export type RttSession = {
   cod: number;        // change-of-direction load (IMA CoD total)
   codLeft: number;    // IMA CoD to the left (for asymmetry)
   codRight: number;   // IMA CoD to the right
+  efforts: number;    // accel_decel_efforts (Core/Lite GPS agility proxy; no IMA)
   topSpeed: number;   // max_velocity (km/h)
 };
 
@@ -57,6 +68,7 @@ export type RttInput = {
   weeks?: number;               // hard override of the derived plan length
   headInjury?: boolean;
   riskQualities?: QualityKey[];
+  variant?: RttVariant;         // "ima" (Pro) default, or "gps" (Core/Lite — efforts, no IMA)
 };
 
 export function injuryRiskProfile(types: string[]): { category: string; riskQualities: QualityKey[]; label: { en: string; is: string } } {
@@ -96,6 +108,8 @@ export type RttResult = {
   plan: { verdict: string; currentWeek: number; weeks: RttWeekTarget[] } | null;
   adherence: RttAdherenceWeek[]; // actual weekly load vs the recommended ramp, per elapsed plan week
   confidence: "high" | "medium" | "low";
+  variant: RttVariant;           // which data axis this plan is built on
+  qualityOrder: QualityKey[];    // the qualities in play for this variant (render order)
 };
 
 const RAMP = 1.10;
@@ -130,9 +144,10 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   decel:     { en: "Weekly decelerations (IMA)", is: "Hemlun/viku (IMA)", unit: "", dp: 0 },
   decelHigh: { en: "Weekly high-intensity braking (IMA)", is: "Háákefðar hemlun/viku (IMA)", unit: "", dp: 0 },
   cod:       { en: "Weekly change of direction (IMA)", is: "Stefnubreytingar/viku (IMA)", unit: "", dp: 0 },
+  efforts:   { en: "Weekly efforts (accel + decel)", is: "Átök/viku (hröðun + hemlun)", unit: "", dp: 0 },
 };
 
-const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod" };
+const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod", efforts: "efforts" };
 
 function percentile(sortedAsc: number[], p: number): number {
   if (!sortedAsc.length) return 0;
@@ -160,6 +175,9 @@ function addDays(dateIso: string, n: number): string {
 type WeekAgg = { weekStart: string; injured: boolean; count: number; totals: Record<QualityKey, number>; topSpeed: number; codLeft: number; codRight: number };
 
 export function computeReturnToTraining(inp: RttInput): RttResult {
+  // Variant picks the movement axis: IMA (Pro) or efforts (Core/Lite GPS).
+  const variant: RttVariant = inp.variant ?? "ima";
+  const order = qualityOrderForVariant(variant);
   const real = inp.sessions.filter((s) => !s.estimated);
 
   // Aggregate sessions → weeks (MATCHES INCLUDED — a healthy week has a match).
@@ -167,10 +185,10 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   for (const s of real) {
     const wk = weekStart(s.date);
     let a = byWeek.get(wk);
-    if (!a) { a = { weekStart: wk, injured: false, count: 0, totals: Object.fromEntries(QUALITY_ORDER.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
+    if (!a) { a = { weekStart: wk, injured: false, count: 0, totals: Object.fromEntries(ALL_QUALITIES.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
     if (s.injured) a.injured = true;                       // any injured day → not a healthy week
     a.count += 1;
-    for (const q of QUALITY_ORDER) a.totals[q] += s[QFIELD[q]] as number;
+    for (const q of order) a.totals[q] += s[QFIELD[q]] as number;
     if (s.topSpeed > 0 && s.topSpeed <= 45) a.topSpeed = Math.max(a.topSpeed, s.topSpeed);
     a.codLeft += s.codLeft; a.codRight += s.codRight;
   }
@@ -182,7 +200,8 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   // weekly totals. Both are weekly loads the plan ramps between.
   const baseline = { builtFromHealthyWeeks: healthyWeeks.length, topSpeed: 0 } as RttBaseline;
   const floor = { topSpeed: 0 } as RttFloor;
-  for (const q of QUALITY_ORDER) {
+  for (const q of ALL_QUALITIES) { baseline[q] = 0; floor[q] = 0; } // keep the Record complete
+  for (const q of order) {
     const hv = healthyWeeks.map((w) => w.totals[q]).filter((v) => v > 0).sort((a, b) => a - b);
     baseline[q] = round(percentile(hv, P_CEILING), QLABEL[q].dp);
     const rv = recentWeeks.map((w) => w.totals[q]).sort((a, b) => a - b);
@@ -191,11 +210,12 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   baseline.topSpeed = round(percentile(healthyWeeks.map((w) => w.topSpeed).filter((v) => v > 0).sort((a, b) => a - b), P_CEILING), 1);
   floor.topSpeed = round(percentile(recentWeeks.map((w) => w.topSpeed).filter((v) => v > 0).sort((a, b) => a - b), 0.5), 1);
 
-  // Left/right change-of-direction asymmetry (monitor, not ramp).
+  // Left/right change-of-direction asymmetry (monitor, not ramp). IMA-only —
+  // Core/Lite GPS has no directional CoD, so there is nothing to compare.
   const sum = (arr: WeekAgg[], k: "codLeft" | "codRight") => arr.reduce((s, w) => s + w[k], 0);
   const pct = (l: number, r: number) => (l + r > 0 ? round((100 * l) / (l + r), 0) : null);
-  const healthyLeftPct = pct(sum(healthyWeeks, "codLeft"), sum(healthyWeeks, "codRight"));
-  const currentLeftPct = pct(sum(recentWeeks, "codLeft"), sum(recentWeeks, "codRight"));
+  const healthyLeftPct = variant === "gps" ? null : pct(sum(healthyWeeks, "codLeft"), sum(healthyWeeks, "codRight"));
+  const currentLeftPct = variant === "gps" ? null : pct(sum(recentWeeks, "codLeft"), sum(recentWeeks, "codRight"));
   const asymmetry: RttAsymmetry = {
     healthyLeftPct, currentLeftPct,
     imbalanced: currentLeftPct != null && healthyLeftPct != null && Math.abs(currentLeftPct - healthyLeftPct) >= ASYM_TOLERANCE,
@@ -210,13 +230,14 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const hasLayoff = inp.layoffDays != null && Number.isFinite(inp.layoffDays);
   const retained = hasLayoff ? retainedFraction(inp.layoffDays as number) : null;
   const rampFrom = { topSpeed: floor.topSpeed } as RttFloor;
-  for (const q of QUALITY_ORDER) {
+  for (const q of ALL_QUALITIES) rampFrom[q] = 0;
+  for (const q of order) {
     const retainedTarget = retained != null ? round(retained * baseline[q], QLABEL[q].dp) : 0;
     rampFrom[q] = Math.max(floor[q], retainedTarget);
   }
   // Derive plan length from the volume bridge (origin → ceiling under 10%/week),
   // unless the coach hard-overrides. No layoff info → keep the full staged ramp.
-  let weeks = inp.weeks ?? QUALITY_ORDER.length;
+  let weeks = inp.weeks ?? order.length;
   if (inp.weeks == null && hasLayoff) {
     const originVol = rampFrom.volume, ceilVol = baseline.volume;
     const bridge = ceilVol > 0 && originVol > 0 && originVol < ceilVol ? Math.ceil(Math.log(ceilVol / originVol) / Math.log(RAMP)) : 0;
@@ -226,18 +247,24 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const layoff: RttLayoff = { days: hasLayoff ? Math.round(inp.layoffDays as number) : null, retainedPct: retained != null ? Math.round(retained * 100) : null, rampWeeks: weeks };
 
   if (inp.currentlyInjured && !inp.rttStartDate) {
-    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, adherence: [], confidence };
+    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, adherence: [], confidence, variant, qualityOrder: order };
   }
 
-  const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / (QUALITY_ORDER.length - 1)));
-  const targetsByQuality = Object.fromEntries(QUALITY_ORDER.map((q) => [q, [] as number[]])) as Record<QualityKey, number[]>;
+  const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / Math.max(1, order.length - 1)));
+  const targetsByQuality = Object.fromEntries(order.map((q) => [q, [] as number[]])) as Record<QualityKey, number[]>;
   const weekTargets: RttWeekTarget[] = [];
-  const riskSet = new Set(inp.riskQualities ?? []);
+  // Map the injury's key re-injury qualities onto the active variant: on GPS,
+  // IMA-only qualities (accel/decel/decelHigh/cod) fold into "efforts".
+  const riskSet = new Set(
+    (inp.riskQualities ?? [])
+      .map((q) => (order.includes(q) ? q : variant === "gps" ? "efforts" : q))
+      .filter((q) => order.includes(q as QualityKey)) as QualityKey[],
+  );
 
   for (let w = 1; w <= weeks; w++) {
     let weekAcwr = 0; // the week's LOAD acute:chronic — the guardrail, shared by all qualities
-    for (let qi = 0; qi < QUALITY_ORDER.length; qi++) {
-      const q = QUALITY_ORDER[qi];
+    for (let qi = 0; qi < order.length; qi++) {
+      const q = order[qi];
       const uw = unlockWeek(qi);
       const ceiling = baseline[q] || 0;
       const locked = w < uw;
@@ -297,7 +324,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     for (let w = 1; w <= lastWeek; w++) {
       const ws = addDays(anchor, 7 * (w - 1));
       const agg = byWeek.get(ws);
-      const cells: RttAdherenceCell[] = QUALITY_ORDER.map((q) => {
+      const cells: RttAdherenceCell[] = order.map((q) => {
         const target = weekTargets.find((t) => t.week === w && t.quality === q)?.target ?? 0;
         const actual = round(agg?.totals[q] ?? 0, QLABEL[q].dp);
         const deltaPct = target > 0 ? Math.round((actual / target - 1) * 100) : actual > 0 ? 100 : 0;
@@ -309,11 +336,11 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   }
 
   const currentWeek = adherence.length ? adherence[adherence.length - 1].week : 1;
-  const w1 = QUALITY_ORDER.filter((_, qi) => unlockWeek(qi) <= 1).map((q) => QLABEL[q].en.toLowerCase().replace("weekly ", ""));
+  const w1 = order.filter((_, qi) => unlockWeek(qi) <= 1).map((q) => QLABEL[q].en.toLowerCase().replace("weekly ", ""));
   const layoffNote = layoff.days != null ? ` · ${layoff.days}-day layoff (~${layoff.retainedPct}% capacity retained)` : "";
   const verdict = `Week ${currentWeek} of ${weeks} · ${currentWeek === 1 ? "rebuild" : "rebuilding"} ${w1.join(" + ") || "weekly load"}${layoffNote}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
 
-  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, currentWeek, weeks: weekTargets }, adherence, confidence };
+  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, currentWeek, weeks: weekTargets }, adherence, confidence, variant, qualityOrder: order };
 }
 
 export { QLABEL as RTT_QUALITY_LABELS };

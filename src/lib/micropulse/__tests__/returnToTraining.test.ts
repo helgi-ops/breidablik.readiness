@@ -1,9 +1,9 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { computeReturnToTraining, injuryRiskProfile, retainedFraction, QUALITY_ORDER, type RttSession } from "../returnToTraining";
+import { computeReturnToTraining, injuryRiskProfile, retainedFraction, QUALITY_ORDER, QUALITY_ORDER_GPS, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
-  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, topSpeed: 30, ...o };
+  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, efforts: 120, topSpeed: 30, ...o };
 }
 
 // A healthy training block (several weeks, a match included) + an injured rehab block.
@@ -148,4 +148,25 @@ test("every unlocked target carries a why-line with % of healthy weekly baseline
   const unlocked = r.plan!.weeks.filter((w) => !w.locked && w.target > 0);
   assert.ok(unlocked.length > 0);
   for (const w of unlocked) assert.ok(/of healthy weekly baseline/.test(w.why));
+});
+
+// ── Core/Lite GPS variant ──────────────────────────────────────────────────
+test("GPS/Lite variant plans on efforts (no IMA), no CoD asymmetry", () => {
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15", variant: "gps" });
+  assert.equal(r.variant, "gps");
+  assert.deepEqual(r.qualityOrder, QUALITY_ORDER_GPS);
+  const planQualities = new Set(r.plan!.weeks.map((w) => w.quality));
+  for (const q of ["accel", "decel", "decelHigh", "cod"]) assert.ok(!planQualities.has(q as never), `${q} must not be in a GPS plan`);
+  assert.ok(planQualities.has("efforts"));
+  assert.ok(r.baseline.efforts > 0); // built from accel_decel_efforts
+  assert.equal(r.asymmetry.healthyLeftPct, null); // no directional CoD on GPS
+  assert.equal(r.asymmetry.currentLeftPct, null);
+});
+
+test("GPS variant folds a knee injury's IMA risk qualities into efforts", () => {
+  const risk = injuryRiskProfile(["ACL / knee"]).riskQualities; // cod/decel/decelHigh/accel — all IMA
+  const r = computeReturnToTraining({ sessions: fixture(), refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15", variant: "gps", riskQualities: risk });
+  const effortsWeeks = r.plan!.weeks.filter((w) => w.quality === "efforts" && !w.locked);
+  assert.ok(effortsWeeks.length > 0);
+  assert.ok(effortsWeeks.every((w) => w.caution), "efforts should be caution-flagged for a knee injury on GPS");
 });

@@ -112,12 +112,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
         accel: num(r.ima_accel),
         decel: num(r.ima_decel),
         decelHigh: num(r.ima_band3_decel_count),
-        cod: cod > 0 ? cod : num(r.accel_decel_efforts),
+        cod,
         codLeft,
         codRight,
+        efforts: num(r.accel_decel_efforts),
         topSpeed: clampSpeed(r.max_velocity),
       };
     });
+
+    // Variant: Pro/ELITE send IMA (accel/decel/cod); Core/Lite send
+    // accel_decel_efforts and no IMA (tier-complementary). Pick by which axis
+    // this player's own real sessions actually carry.
+    const realSess = sessions.filter((s) => !s.estimated);
+    const imaCount = realSess.filter((s) => s.accel > 0 || s.decel > 0 || s.decelHigh > 0 || s.cod > 0).length;
+    const effortsCount = realSess.filter((s) => s.efforts > 0).length;
+    const variant: "ima" | "gps" = imaCount > 0 && imaCount >= effortsCount ? "ima" : effortsCount > 0 ? "gps" : "ima";
 
     // ── Saved plan (start date + coach overrides) ──────────────────────────
     const { data: saved } = await sb.from("rtt_plans").select("rtt_start_date, weeks, overrides").eq("player_id", playerId).maybeSingle();
@@ -138,7 +147,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     const dayMs = 86400000;
     const layoffDays = governing ? Math.max(0, Math.round((Date.parse(layoffEnd) - Date.parse(governing.start)) / dayMs)) : null;
 
-    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities });
+    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities, variant });
 
     // ── Apply coach overrides to the computed plan (rules recommend; the coach
     // can override, and the override is logged). Latest override per (quality,
@@ -163,6 +172,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       }
     }
 
+    // On the GPS variant fold the injury's IMA-only risk qualities into "efforts"
+    // so the UI (caution banner + re-injury watch) references qualities that
+    // actually exist in this player's plan.
+    const IMA_ONLY = new Set(["accel", "decel", "decelHigh", "cod"]);
+    const riskForVariant = variant === "gps"
+      ? Array.from(new Set(profile.riskQualities.map((q) => (IMA_ONLY.has(q) ? "efforts" : q)))).filter((q) => result.qualityOrder.includes(q as never))
+      : profile.riskQualities;
+
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
       window: windowDays,
@@ -170,7 +187,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       injuryWindows: windows,
       injuryDiscrepancy,
       headInjury,
-      injuryProfile: profile,
+      injuryProfile: { ...profile, riskQualities: riskForVariant },
       rtp,
       rttStartDate,
       overrides,

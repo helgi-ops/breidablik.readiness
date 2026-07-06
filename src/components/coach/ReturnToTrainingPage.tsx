@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import RttPlayerPicker from "./RttPlayerPicker";
 
-type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod";
+type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
 const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
 const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   volume: { en: "Weekly player load", is: "Vikuálag", unit: "" },
@@ -24,6 +24,7 @@ const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   decel: { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "" },
   decelHigh: { en: "High-intensity braking (IMA)", is: "Háákefðar hemlun (IMA)", unit: "" },
   cod: { en: "Change of direction (IMA)", is: "Stefnubreytingar (IMA)", unit: "" },
+  efforts: { en: "Efforts (accel + decel)", is: "Átök (hröðun + hemlun)", unit: "" },
 };
 
 // RTP workflow labels (mirror the Injuries/RTP page vocabulary; kept short).
@@ -65,6 +66,8 @@ type Resp = {
   plan: { verdict: string; currentWeek: number; weeks: WeekTarget[] } | null;
   adherence?: AdherenceWeek[];
   confidence: "high" | "medium" | "low";
+  variant?: "ima" | "gps";
+  qualityOrder?: Quality[];
   error?: string;
 };
 type AdherenceCell = { quality: Quality; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
@@ -149,6 +152,8 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
 
   const conf = data.confidence;
   const confColor = conf === "high" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : conf === "medium" ? "text-amber-700 bg-amber-50 border-amber-200" : "text-slate-600 bg-slate-50 border-slate-200";
+  // Qualities in play for this player's data variant (Pro IMA vs Core/Lite GPS).
+  const order = data.qualityOrder ?? ORDER;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4">
@@ -332,7 +337,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 text-sm font-semibold text-slate-800">{is ? "Framvindu-stigi" : "Progression ladder"}</div>
             <div className="space-y-1.5">
-              {ORDER.map((q, qi) => {
+              {order.map((q, qi) => {
                 const uw = data.plan!.weeks.find((w) => w.quality === q)?.unlockWeek ?? qi + 1;
                 return (
                   <div key={q} className="flex items-center gap-3 text-sm">
@@ -352,14 +357,14 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           {showDetails && (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <table className="w-full text-xs">
-                <thead><tr className="text-left text-slate-500"><th className="py-1 pr-2">{is ? "Vika" : "Week"}</th>{ORDER.map((q) => <th key={q} className="py-1 pr-2">{is ? LABEL[q].is : LABEL[q].en}</th>)}</tr></thead>
+                <thead><tr className="text-left text-slate-500"><th className="py-1 pr-2">{is ? "Vika" : "Week"}</th>{order.map((q) => <th key={q} className="py-1 pr-2">{is ? LABEL[q].is : LABEL[q].en}</th>)}</tr></thead>
                 <tbody>
                   {Array.from(new Set(data.plan.weeks.map((w) => w.week))).map((wk) => {
                     const adh = data.adherence?.find((a) => a.week === wk);
                     return (
                     <tr key={wk} className="border-t">
                       <td className="py-1 pr-2 font-medium text-slate-700">{wk}{adh ? <span className="ml-1 text-[9px] text-slate-400">{adh.inProgress ? (is ? "· nú" : "· now") : "✓"}</span> : null}</td>
-                      {ORDER.map((q) => {
+                      {order.map((q) => {
                         const cell = data.plan!.weeks.find((w) => w.week === wk && w.quality === q)!;
                         const act = adh?.cells.find((c) => c.quality === q);
                         return (
