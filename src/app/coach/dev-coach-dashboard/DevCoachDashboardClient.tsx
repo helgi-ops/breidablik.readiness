@@ -418,6 +418,21 @@ type PostTrainingReportData = {
   };
   /** Planned (pre-session recommendation) vs actual session load — team + per player. */
   plannedVsActual?: PlannedVsActual | null;
+  /** Return-to-training snapshot — how each returning player's ramp is going. */
+  rttSummary?: RttSummaryPlayer[];
+};
+
+type RttSummaryPlayer = {
+  playerId: string;
+  name: string;
+  currentlyInjured: boolean;
+  rtpStatus: string | null;
+  rtpStage: number | null;
+  layoffDays: number | null;
+  started: boolean;
+  rampWeeks: number;
+  currentWeek: number | null;
+  thisWeek: { status: "under" | "on" | "over"; loadActual: number; loadTarget: number; deltaPct: number; inProgress: boolean } | null;
 };
 
 type LoadMetricSummary = {
@@ -1515,6 +1530,11 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
     return parts.join(" ");
   })();
 
+  // Day-summary inputs: who to watch tomorrow + return-to-training status.
+  const watchTomorrow = data.players.filter((p) => p.attentionFlag === "ALERT" || p.attentionFlag === "MONITOR");
+  const rttReturning = (data.rttSummary ?? []).filter((p) => p.currentlyInjured || p.started);
+  const rttOver = rttReturning.filter((p) => p.thisWeek?.status === "over");
+
   return (
     <Document>
       {/* ══ Page 1: Internal Load — RPE ══ */}
@@ -1525,6 +1545,28 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
           <Text style={postStyles.subtitle}>
             {data.teamName} · {data.sessionDate} · {data.mdDay} · {data.players.length} players
           </Text>
+        </View>
+
+        {/* ── Day summary — the whole day in three lines ── */}
+        <View style={[postStyles.section, { backgroundColor: "#eef2ff", border: "1 solid #c7d2fe", borderRadius: 4, padding: 10 }]} wrap={false}>
+          <Text style={postStyles.sectionTitle}>Day summary</Text>
+          <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: 3 }}>
+            <Text style={{ fontWeight: 700 }}>Load vs plan: </Text>
+            {data.plannedVsActual && data.plannedVsActual.hasPlan ? data.plannedVsActual.summary : loadVerdict}
+          </Text>
+          <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5, marginBottom: rttReturning.length > 0 ? 3 : 0 }}>
+            <Text style={{ fontWeight: 700 }}>Watch tomorrow: </Text>
+            {watchTomorrow.length === 0
+              ? "no one flagged — routine recovery."
+              : `${watchTomorrow.length} player${watchTomorrow.length === 1 ? "" : "s"} — ${watchTomorrow.slice(0, 8).map((p) => p.name).join(", ")}${watchTomorrow.length > 8 ? ` +${watchTomorrow.length - 8} more` : ""}.`}
+          </Text>
+          {rttReturning.length > 0 && (
+            <Text style={{ fontSize: 9.5, color: "#565044", lineHeight: 1.5 }}>
+              <Text style={{ fontWeight: 700 }}>Return-to-training: </Text>
+              {`${rttReturning.length} player${rttReturning.length === 1 ? "" : "s"}`}
+              {rttOver.length > 0 ? ` — ${rttOver.length} over their recommended ramp (${rttOver.map((p) => p.name).join(", ")}).` : " — all within their recommended ramp."}
+            </Text>
+          )}
         </View>
 
         {/* ── Explainability — session load overview (top of report) ── */}
@@ -1630,6 +1672,43 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
             </View>
           );
         })()}
+
+        {/* ── Return-to-training — how each returning player's ramp is going ── */}
+        {data.rttSummary && data.rttSummary.length > 0 && (
+          <View style={[postStyles.section, { backgroundColor: "#f7f5ef", border: "1 solid #e6e1d4", borderRadius: 4, padding: 10 }]} wrap={false}>
+            <Text style={postStyles.sectionTitle}>Return-to-training — how the ramp is going</Text>
+            <View style={postStyles.table}>
+              <View style={postStyles.tHead}>
+                <Text style={[{ width: "30%", padding: 4, fontSize: 9 }, postStyles.hdr]}>Player</Text>
+                <Text style={[{ width: "24%", padding: 4, fontSize: 9 }, postStyles.hdr]}>RTP stage</Text>
+                <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Week load</Text>
+                <Text style={[{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>Recommended</Text>
+                <Text style={[{ width: "16%", padding: 4, fontSize: 9, textAlign: "right" }, postStyles.hdr]}>vs ramp</Text>
+              </View>
+              {data.rttSummary.map((p, i) => {
+                const stColor = p.thisWeek?.status === "over" ? "#a83e28" : p.thisWeek?.status === "under" ? "#a9a493" : "#1c7a4a";
+                const vs = !p.thisWeek
+                  ? (p.started ? "—" : "not started")
+                  : p.thisWeek.status === "over" ? `+${p.thisWeek.deltaPct}% over`
+                  : p.thisWeek.status === "under" ? `${p.thisWeek.deltaPct}%${p.thisWeek.inProgress ? " so far" : " under"}`
+                  : "on plan";
+                const stage = p.rtpStatus ? `${p.rtpStatus.replace(/_/g, " ")} · ${p.rtpStage ?? 0}/5` : (p.currentlyInjured ? "injured" : "returned");
+                return (
+                  <View key={p.playerId} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
+                    <Text style={{ width: "30%", padding: 4, fontSize: 9, fontWeight: 700 }}>{p.name}</Text>
+                    <Text style={{ width: "24%", padding: 4, fontSize: 9 }}>{stage}</Text>
+                    <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.thisWeek ? numFmt2(p.thisWeek.loadActual, 0) : "—"}</Text>
+                    <Text style={{ width: "15%", padding: 4, fontSize: 9, textAlign: "right" }}>{p.thisWeek ? numFmt2(p.thisWeek.loadTarget, 0) : "—"}</Text>
+                    <Text style={[{ width: "16%", padding: 4, fontSize: 9, textAlign: "right", fontWeight: 700 }, { color: stColor }]}>{vs}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 5, lineHeight: 1.4 }}>
+              Week load = his actual weekly player load this plan week; Recommended = the graded ramp target. Over the ramp is the signal to ease off; under is usually fine (a partial week reads &quot;so far&quot;). See each player&apos;s return-to-training page for the full plan and the evidence.
+            </Text>
+          </View>
+        )}
 
         {/* Per-player: planned vs actual adherence */}
         {data.plannedVsActual && data.plannedVsActual.hasPlan && data.plannedVsActual.players.length > 0 && (() => {
@@ -6785,6 +6864,19 @@ export default function CoachPage() {
         console.warn("Planned-vs-actual fetch for report failed:", e);
       }
 
+      // Return-to-training snapshot — how each returning player's ramp is going.
+      let rttSummary: RttSummaryPlayer[] = [];
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (token) {
+          const res = await fetch("/api/coach/return-to-training/summary", { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) { const j = await res.json(); rttSummary = (j.players ?? []) as RttSummaryPlayer[]; }
+        }
+      } catch (e) {
+        console.warn("RTT summary fetch for report failed:", e);
+      }
+
       const reportData: PostTrainingReportData = {
         teamName: (rowsWithAdaptive[0] as any)?.team ?? "Team",
         sessionDate,
@@ -6799,6 +6891,7 @@ export default function CoachPage() {
         ima: imaProfile,
         loadSummary,
         plannedVsActual,
+        rttSummary,
       };
 
       if (reportPlayers.length === 0) {
