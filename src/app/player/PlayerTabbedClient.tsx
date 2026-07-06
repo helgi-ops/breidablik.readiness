@@ -724,6 +724,97 @@ function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevP
   return createPortal(<PlayerLastMatchHeroCard lang={lang} onSeeReport={onSeeReport} />, mountNode);
 }
 
+// ── Contextual RPE reminder portal ───────────────────────────────────────────
+//
+// RPE is a time-sensitive daily action (log it right after training), not an
+// analysis — so instead of burying it behind the More-sheet, a prominent nudge
+// appears on Today ONLY when a session is expected today and RPE hasn't been
+// logged yet. It reuses the existing /api/player/session-rpe/status endpoint
+// (state === "REMINDER_DUE_TODAY"); once submitted the card self-hides. Tapping
+// through opens the RPE tab where the full form + history live.
+
+function RpeReminderPortal({ activeTab, lang, onLogRpe }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onLogRpe: () => void }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [due, setDue] = useState(false);
+  const is = lang === "IS";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch("/api/player/session-rpe/status", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        if (!cancelled && json?.ok && json.status?.state === "REMINDER_DUE_TODAY") setDue(true);
+      } catch { /* soft — no reminder if status can't be read */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!due) return;
+    let cancelled = false;
+    let attempts = 0;
+
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      // Anchor just after the ATE command card so the RPE nudge sits directly
+      // under the readiness decision, above the last-match hero.
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) {
+        if (attempts < 25) window.setTimeout(place, 300);
+        return;
+      }
+      let slot = document.getElementById("dev-rpe-reminder-slot");
+      if (!slot) {
+        slot = document.createElement("div");
+        slot.id = "dev-rpe-reminder-slot";
+        slot.className = "mt-3";
+      }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+    };
+
+    place();
+    return () => { cancelled = true; };
+  }, [due]);
+
+  if (!mountNode || activeTab !== "today" || !due) return null;
+
+  return createPortal(
+    <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-xl leading-none">📝</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-primary">
+            {is ? "Skráðu RPE fyrir æfingu dagsins" : "Log today's session RPE"}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-600">
+            {is
+              ? "Skráðu strax eftir æfingu — það heldur álagsþróuninni þinni réttri."
+              : "Log it right after training — it keeps your load trend accurate."}
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onLogRpe}
+        className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+      >
+        {is ? "Skrá RPE →" : "Log RPE →"}
+      </button>
+    </div>,
+    mountNode,
+  );
+}
+
 // ── PWA detection ────────────────────────────────────────────────────────────
 
 function usePwaMode(): boolean {
@@ -844,19 +935,19 @@ function IconMoreH({ active }: { active: boolean }) {
 // text-[9px] was unusable on iPhones — labels ran together. Best-practice
 // mobile nav is 4-5 primary items; the rest go behind More.
 
-// Primary (bottom bar): Today · Game Report · Movement · Dashboard · More.
-// Game Report + Movement were promoted from the More-sheet (June 2026) — the
-// player's own match GPS and movement profile are the daily "wow" content the
-// coach wanted one tap away. RPE + Chat moved into the More-sheet in exchange;
-// no tab was removed. minTier is unchanged so the free/pro/elite locks hold.
+// Primary (bottom bar): Today · Game Report · Dashboard · More (round 14a).
+// Game Report + Dashboard are the frequently-viewed surfaces → primary. Movement
+// is an analysis surface viewed less often, so it lives in the More-sheet
+// alongside RPE history and Chat. Three primary + More keeps the bar readable on
+// a phone. minTier is unchanged so the free/pro/elite locks hold; no tab removed.
 const PWA_PRIMARY_TABS = [
   { key: "today"      as DevPlayerTab, tabKey: "today"      as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
   { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport,   minTier: "free" as const, href: null as string | null },
-  { key: "movement"   as DevPlayerTab, tabKey: "movement"   as const, Icon: IconActivity, minTier: "free" as const, href: null as string | null },
   { key: "dashboard"  as DevPlayerTab, tabKey: "dashboard"  as const, Icon: IconBarChart, minTier: "pro"  as const, href: null as string | null },
 ];
 
 const PWA_SECONDARY_TABS = [
+  { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
   { key: "rpe"      as DevPlayerTab, tabKey: "rpe"      as const, Icon: IconActivity, minTier: "pro"   as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
@@ -1415,6 +1506,10 @@ export default function DevPlayerClient() {
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
       {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />}
+      {/* Contextual RPE nudge — appears on Today only when a session is expected
+          and RPE is unlogged; taps through to the RPE tab (round 14a). Gated to
+          Pro+ since the RPE tab itself is Pro-locked (don't nudge to a locked tab). */}
+      {isAtLeastPro && <RpeReminderPortal activeTab={activeTab} lang={lang as "IS" | "EN"} onLogRpe={() => setTab("rpe")} />}
       {/* NOTE: the player's "why am I this colour?" explanation lives in
           PlayerClient's inline decision-explanation card ("Af hverju er ég
           ekki græn/n?"), not a portal. The earlier PlayerWhyFlaggedCard
