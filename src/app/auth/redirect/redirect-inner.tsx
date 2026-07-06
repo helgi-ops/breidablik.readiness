@@ -103,10 +103,11 @@ export default function RedirectInner() {
       if (isPtClient) return router.replace("/client");
 
       if (role === "player") {
-        // Check-in done → team page, not done → checkin first
+        // Check-in done → the player's own "Today" page, not done → checkin first.
+        // (The /team football page is not the player's home — Today is.)
         const done = await isCheckinDone(user.id);
         if (!mounted) return;
-        return router.replace(done ? "/team" : "/player/checkin");
+        return router.replace(done ? "/player" : "/player/checkin");
       }
 
       setError("Óþekkt role í profiles. Á að vera coach, player eða stjórnandi.");

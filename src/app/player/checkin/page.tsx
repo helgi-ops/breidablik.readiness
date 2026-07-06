@@ -149,9 +149,9 @@ function friendlySupabaseError(e: any, lang: "IS" | "EN" = "IS") {
  *  they land back in the PT shell instead of the football /team surface.
  *  Only same-origin paths are honoured (guards against open-redirect). */
 function checkinReturnPath(): string {
-  if (typeof window === "undefined") return "/team";
+  if (typeof window === "undefined") return "/player";
   const r = new URLSearchParams(window.location.search).get("return");
-  return r && r.startsWith("/") && !r.startsWith("//") ? r : "/team";
+  return r && r.startsWith("/") && !r.startsWith("//") ? r : "/player";
 }
 
 export default function PlayerCheckinPage() {

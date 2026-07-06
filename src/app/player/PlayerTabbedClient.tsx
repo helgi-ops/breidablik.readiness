@@ -497,7 +497,7 @@ function refineLegacyDecisionCard(decision: NormalizedPlayerDailyDecision): void
   }
 }
 
-function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPlayerTab; clubThemeColor?: string | null }) {
+function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: DevPlayerTab; clubThemeColor?: string | null; lang?: "IS" | "EN" }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [dailyDecision, setDailyDecision] = useState<NormalizedPlayerDailyDecision>({
     playerState: "GRAY",
@@ -573,44 +573,33 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
     dailyDecision.playerState === "RED" ? "#b34a30" :
     "#a9a493";
 
-  const stateLabel =
-    dailyDecision.playerState === "GREEN" ? "GREEN" :
-    dailyDecision.playerState === "YELLOW" ? "YELLOW" :
-    dailyDecision.playerState === "RED" ? "RED" :
-    "PENDING";
-
-  // Use the team colour directly as the card background (white text stays readable
-  // on typical dark/medium sports-team colours). Falls back to slate-900 when unset.
-  const cardBg = clubThemeColor ?? "#221f18";
+  // Light "decision of the day" card (round-14a look): cream surface, a
+  // state-coloured dot + "TODAY'S DECISION" kicker, the verdict as a big title,
+  // and the plain reason beneath. A thin team-colour left accent keeps club
+  // identity without the old full dark fill.
+  const kicker = lang === "IS" ? "ÁKVÖRÐUN DAGSINS" : "TODAY'S DECISION";
+  const accent = clubThemeColor ?? chipColor;
 
   return createPortal(
     <div
-      className="mt-3 rounded-xl p-4"
-      style={{ background: cardBg }}
+      className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm"
+      style={{ borderLeft: `3px solid ${accent}` }}
     >
-      <div className="text-[10px] uppercase tracking-[0.1em] text-slate-400">Today</div>
-      <div className="mt-1 text-base font-bold tracking-tight text-white">{copy.title}</div>
-      <div className="mt-1 text-sm leading-relaxed text-slate-300">{copy.body}</div>
-      <div className="mt-1 text-xs text-slate-400">{copy.secondary}</div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-          style={{ background: "rgba(255,255,255,0.10)", color: "white" }}
-        >
-          <span className="h-2 w-2 rounded-full" style={{ background: chipColor }} />
-          {stateLabel}
-        </span>
-        {dailyDecision.sessionMode !== "pending" && (
-          <span
-            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{ background: "rgba(255,255,255,0.10)", color: "#d5cfbe" }}
-          >
-            {dailyDecision.sessionMode === "full" ? "Full session" :
-             dailyDecision.sessionMode === "modified" ? "Modified session" :
-             "Recovery session"}
-          </span>
-        )}
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: chipColor }} />
+        {kicker}
       </div>
+      <div className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">{copy.title}</div>
+      <div className="mt-1 text-sm leading-relaxed text-zinc-600">{copy.body}</div>
+      {dailyDecision.sessionMode !== "pending" && (
+        <div className="mt-3">
+          <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600">
+            {dailyDecision.sessionMode === "full" ? (lang === "IS" ? "Full æfing" : "Full session") :
+             dailyDecision.sessionMode === "modified" ? (lang === "IS" ? "Aðlöguð æfing" : "Modified session") :
+             (lang === "IS" ? "Endurheimt" : "Recovery session")}
+          </span>
+        </div>
+      )}
     </div>,
     mountNode
   );
@@ -1491,7 +1480,7 @@ export default function DevPlayerClient() {
       </div>
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
-      {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} />}
+      {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} lang={lang as "IS" | "EN"} />}
       {/* Contextual RPE nudge — appears on Today only when a session is expected
           and RPE is unlogged; taps through to the RPE tab (round 14a). Gated to
           Pro+ since the RPE tab itself is Pro-locked (don't nudge to a locked tab). */}
