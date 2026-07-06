@@ -4946,6 +4946,53 @@ export default function PlayerClient() {
                     </ul>
                   </div>
                 ) : null}
+
+                {/* Layer 2 (manifesto layered-read): "Behind the numbers" —
+                    how the verdict is computed, the signals used, confidence
+                    and caveats, kept behind a toggle so the plain "why" above
+                    is never buried under the raw method. */}
+                {(() => {
+                  const b = t.decision.behind;
+                  const signalCats = Array.from(new Set(explanationLines.map((l) => l.category)));
+                  const hasBaseline = metrics?.total_score != null;
+                  return (
+                    <details className="mt-3 group/behind">
+                      <summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-700">
+                        <span className="transition group-open/behind:rotate-90">▸</span>
+                        {b.toggle}
+                      </summary>
+                      <div className="mt-2 space-y-2.5 rounded-xl border border-zinc-200 bg-white/70 p-3 text-xs leading-relaxed text-zinc-700">
+                        <div>
+                          <div className="font-semibold text-zinc-800">{b.measuresLabel}</div>
+                          <div>{b.measures}</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-zinc-800">{b.howLabel}</div>
+                          <div>{b.how}</div>
+                        </div>
+                        {signalCats.length > 0 ? (
+                          <div>
+                            <div className="font-semibold text-zinc-800">{b.signalsLabel}</div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {signalCats.map((cat) => (
+                                <span key={cat} className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] text-zinc-600">{cat}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        <div>
+                          <div className="font-semibold text-zinc-800">{b.confidenceLabel}</div>
+                          <div>{hasBaseline ? b.confidenceHasBaseline : b.confidenceNoBaseline}</div>
+                        </div>
+                        <div>
+                          <div className="font-semibold text-zinc-800">{b.caveatLabel}</div>
+                          <div>{b.caveat}</div>
+                          <div className="mt-1 text-[11px] text-zinc-400">{b.cite}</div>
+                        </div>
+                      </div>
+                    </details>
+                  );
+                })()}
               </div>
               );
             })()}

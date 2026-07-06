@@ -20,7 +20,21 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import ChatThread from "@/components/chat/ChatThread";
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+import { useLang } from "@/lib/lang";
+import { PLAYER_COPY } from "../playerCopy";
+type Step = 1 | 2 | 3 | 4 | 5;
+
+/** Per-question "why we ask" explanation — the explainability layer that makes
+ *  the check-in more than a form. Plain language first, light source tag. */
+function WhyBox({ title, why, src }: { title: string; why: string; src: string }) {
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary/80">{title}</div>
+      <p className="mt-1 text-sm leading-relaxed text-foreground/80">{why}</p>
+      <div className="mt-1.5 text-xs text-muted-foreground">{src}</div>
+    </div>
+  );
+}
 
 function todayIsoDateUTC(): string {
   const d = new Date();
@@ -36,21 +50,40 @@ function isIsoDate(s: unknown): s is string {
   return true;
 }
 
+type ScaleOption = { v: number; en: string; is: string; subEN?: string; subIS?: string };
+
+// Selected-state tone by answer value on the 1(worst)→5(best) scale, so the
+// player sees the readiness meaning of their answer: 4–5 good (cobalt), 3
+// middling (gold/amber), 1–2 low (clay/red). Class names stay amber/red — the
+// central theme remap resolves them to the warm palette. See [[theme-is-palette-remap]].
+function optionTone(v: number, active: boolean): string {
+  if (!active) return "border-input bg-background hover:bg-muted";
+  if (v >= 4) return "border-primary bg-primary/10";
+  if (v === 3) return "border-amber-400 bg-amber-50";
+  return "border-red-400 bg-red-50";
+}
+
+// Full-width vertical rows (label + optional sub-hint on the left, value on the
+// right) — the readable one-question-per-line layout from the design spec, not a
+// cramped 5-column grid.
 function PillScale({
   value,
   onChange,
   options,
   ariaLabel,
+  lang,
 }: {
   value: number | null;
   onChange: (v: number) => void;
-  options: { v: number; label: string; hint?: string }[];
+  options: ScaleOption[];
   ariaLabel: string;
+  lang: "IS" | "EN";
 }) {
   return (
-    <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label={ariaLabel}>
+    <div className="grid gap-2" role="radiogroup" aria-label={ariaLabel}>
       {options.map((o) => {
         const active = value === o.v;
+        const sub = lang === "IS" ? o.subIS : o.subEN;
         return (
           <button
             key={o.v}
@@ -59,16 +92,16 @@ function PillScale({
             aria-checked={active}
             onClick={() => onChange(o.v)}
             className={[
-              "rounded-xl border px-3 py-2 text-left transition",
-              "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-              active ? "border-primary bg-primary/10" : "bg-background",
+              "flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition",
+              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+              optionTone(o.v, active),
             ].join(" ")}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold">{o.label}</span>
-              <span className="text-xs text-muted-foreground">{o.v}</span>
-            </div>
-            {o.hint ? <div className="mt-1 text-xs text-muted-foreground">{o.hint}</div> : null}
+            <span className="min-w-0">
+              <span className="text-sm font-semibold">{lang === "IS" ? o.is : o.en}</span>
+              {sub ? <span className="ml-2 text-xs font-normal text-muted-foreground">· {sub}</span> : null}
+            </span>
+            <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{o.v}</span>
           </button>
         );
       })}
@@ -117,6 +150,8 @@ function checkinReturnPath(): string {
 export default function PlayerCheckinPage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const router = useRouter();
+  const [lang] = useLang();
+  const c = PLAYER_COPY[lang].checkin;
 
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -283,18 +318,17 @@ export default function PlayerCheckinPage() {
             sleepDate: ws.sleep_date,
           });
           // Pre-fill sleep duration from wearable (player can override).
-          // Map total_sleep_min to the 6-step sleep_duration scale:
-          //   <5h=1, 5-6h=2, 6-6.5h=3, 6.5-7h=4, 7-8h=5, 8h+=6.
-          // Same evidence-based thresholds as our manual slider.
+          // Map total_sleep_min to the 5-step sleep_duration scale (matching the
+          // pill ranges): <5h=1, 5-6h=2, 6-7h=3, 7-8h=4, 8h+=5.
           const h = ws.total_sleep_min / 60;
-          const durationStep = h < 5 ? 1 : h < 6 ? 2 : h < 6.5 ? 3 : h < 7 ? 4 : h < 8 ? 5 : 6;
+          const durationStep = h < 5 ? 1 : h < 6 ? 2 : h < 7 ? 3 : h < 8 ? 4 : 5;
           setSleepDuration(durationStep);
           // Pre-fill sleep quality from provider's own sleep score when
-          // available (Polar Sleep+ 1-100). Map 1-100 → 1-6: <40=1, 40-55=2,
-          // 55-65=3, 65-75=4, 75-85=5, 85+=6. Conservative mapping.
+          // available (Polar Sleep+ 1-100). Map 1-100 → 1-5: <40=1, 40-55=2,
+          // 55-70=3, 70-85=4, 85+=5. Conservative mapping.
           if (typeof ws.provider_score === "number" && ws.provider_score > 0) {
             const s = ws.provider_score;
-            const qualityStep = s < 40 ? 1 : s < 55 ? 2 : s < 65 ? 3 : s < 75 ? 4 : s < 85 ? 5 : 6;
+            const qualityStep = s < 40 ? 1 : s < 55 ? 2 : s < 70 ? 3 : s < 85 ? 4 : 5;
             setSleepQuality(qualityStep);
           }
         }
@@ -316,7 +350,6 @@ export default function PlayerCheckinPage() {
     if (step === 3) return sleepDuration !== null;
     if (step === 4) return stressMood !== null;
     if (step === 5) return muscleSoreness !== null;
-    if (step === 6) return true; // sore areas = optional
     return true;
   }, [step, fatigueEnergy, sleepQuality, sleepDuration, stressMood, muscleSoreness]);
 
@@ -511,16 +544,16 @@ export default function PlayerCheckinPage() {
     <div className="mx-auto max-w-xl px-4 py-8">
       <div className="mb-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Daglegt check-in</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{lang === "IS" ? "Daglegt check-in" : "Daily check-in"}</h1>
 
           <Badge variant="outline" className="rounded-full">
-            {playerName ? playerName : "Leikmaður"}
+            {playerName ? playerName : (lang === "IS" ? "Leikmaður" : "Player")}
           </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {isGameDay
-            ? "Leikdagur — þú velur að gefa merki. Takk fyrir heiðarleikann."
-            : "30 sek. — skýr merki = betri ákvörðun og læst dagsæfing."}
+            ? (lang === "IS" ? "Leikdagur — þú velur að gefa merki. Takk fyrir heiðarleikann." : "Match day — checking in is your call. Thanks for the honesty.")
+            : c.subtitle}
         </p>
       </div>
 
@@ -528,12 +561,11 @@ export default function PlayerCheckinPage() {
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">
-              {step === 1 && "Fatigue / Energy (1–5)"}
-              {step === 2 && "Sleep quality (1–5)"}
-              {step === 3 && "Sleep duration (1–5)"}
-              {step === 4 && "Stress & mood (1–5)"}
-              {step === 5 && "General muscle soreness (1–5)"}
-              {step === 6 && "Athugasemd (valfrjálst)"}
+              {step === 1 && `${c.q.fatigue.title} (1–5)`}
+              {step === 2 && `${c.q.sleepQuality.title} (1–5)`}
+              {step === 3 && `${c.q.sleepDuration.title} (1–5)`}
+              {step === 4 && `${c.q.stressMood.title} (1–5)`}
+              {step === 5 && `${c.q.soreness.title} (1–5)`}
             </CardTitle>
             <div className="flex items-center gap-2">
               <StepDot active={step >= 1} />
@@ -541,17 +573,15 @@ export default function PlayerCheckinPage() {
               <StepDot active={step >= 3} />
               <StepDot active={step >= 4} />
               <StepDot active={step >= 5} />
-              <StepDot active={step >= 6} />
             </div>
           </div>
 
           <CardDescription>
-            {step === 1 && "Hvernig er orkan/þreytan í dag? 5 = mjög fersk/ur."}
-            {step === 2 && "Hvernig var gæði svefns? 5 = mjög góður svefn."}
-            {step === 3 && "Hversu lengi svafstu? 5 = 8+ klst."}
-            {step === 4 && "Hvernig er stress/skap í dag? 5 = mjög gott."}
-            {step === 5 && "Hvernig er almenn vöðvaeymsli? 5 = feeling great."}
-            {step === 6 && "Ef eitthvað skiptir máli (t.d. meiðsli, veikindi, stress) skrifaðu hér — kerfið sendir þér ráðleggingar."}
+            {step === 1 && c.q.fatigue.desc}
+            {step === 2 && c.q.sleepQuality.desc}
+            {step === 3 && c.q.sleepDuration.desc}
+            {step === 4 && c.q.stressMood.desc}
+            {step === 5 && c.q.soreness.desc}
           </CardDescription>
         </CardHeader>
 
@@ -564,17 +594,18 @@ export default function PlayerCheckinPage() {
 
           {step === 1 ? (
             <div className="space-y-2">
-              <Label>Fatigue / Energy</Label>
+              <Label>{c.q.fatigue.title}</Label>
               <PillScale
                 ariaLabel="Fatigue/Energy val"
+                lang={lang}
                 value={fatigueEnergy}
                 onChange={setFatigueEnergy}
                 options={[
-                  { v: 1, label: "Very tired", hint: "Mikil þreyta" },
-                  { v: 2, label: "Quite tired", hint: "Frekar þreytt/ur" },
-                  { v: 3, label: "Normal", hint: "Góð/ur" },
-                  { v: 4, label: "Fresh", hint: "Fersk/ur" },
-                  { v: 5, label: "Very fresh", hint: "Mjög fersk/ur" },
+                  { v: 1, en: "Very tired", is: "Mikil þreyta" },
+                  { v: 2, en: "Quite tired", is: "Frekar þreytt/ur" },
+                  { v: 3, en: "Normal", is: "Í lagi" },
+                  { v: 4, en: "Fresh", is: "Fersk/ur" },
+                  { v: 5, en: "Very fresh", is: "Mjög fersk/ur" },
                 ]}
               />
             </div>
@@ -582,7 +613,7 @@ export default function PlayerCheckinPage() {
 
           {step === 2 ? (
             <div className="space-y-2">
-              <Label>Sleep quality</Label>
+              <Label>{c.q.sleepQuality.title}</Label>
               {wearableSleepHint && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
                   <span>📱</span>
@@ -595,14 +626,15 @@ export default function PlayerCheckinPage() {
               )}
               <PillScale
                 ariaLabel="Sleep quality val"
+                lang={lang}
                 value={sleepQuality}
                 onChange={setSleepQuality}
                 options={[
-                  { v: 1, label: "Very bad", hint: "Mjög slæmur" },
-                  { v: 2, label: "Bad", hint: "Slæmur" },
-                  { v: 3, label: "Restless", hint: "Órólegur" },
-                  { v: 4, label: "Good", hint: "Góður" },
-                  { v: 5, label: "Very good", hint: "Mjög góður" },
+                  { v: 1, en: "Very bad", is: "Mjög slæmur", subEN: "woke often", subIS: "vaknaði oft" },
+                  { v: 2, en: "Bad", is: "Slæmur" },
+                  { v: 3, en: "Restless", is: "Órólegur", subEN: "broken", subIS: "sundurslitinn" },
+                  { v: 4, en: "Good", is: "Góður", subEN: "slept well", subIS: "svaf vel" },
+                  { v: 5, en: "Very good", is: "Mjög góður" },
                 ]}
               />
             </div>
@@ -610,7 +642,7 @@ export default function PlayerCheckinPage() {
 
           {step === 3 ? (
             <div className="space-y-2">
-              <Label>Sleep duration</Label>
+              <Label>{c.q.sleepDuration.title}</Label>
               {wearableSleepHint && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
                   <span>📱</span>
@@ -622,14 +654,15 @@ export default function PlayerCheckinPage() {
               )}
               <PillScale
                 ariaLabel="Sleep duration val"
+                lang={lang}
                 value={sleepDuration}
                 onChange={setSleepDuration}
                 options={[
-                  { v: 1, label: "< 5 hours", hint: "Mjög stuttur svefn" },
-                  { v: 2, label: "5–6 hours", hint: "Stuttur" },
-                  { v: 3, label: "6–7 hours", hint: "Miðlungs" },
-                  { v: 4, label: "7–8 hours", hint: "Góður" },
-                  { v: 5, label: "8+ hours", hint: "Mjög góður" },
+                  { v: 1, en: "< 5 hours", is: "< 5 klst" },
+                  { v: 2, en: "5–6 hours", is: "5–6 klst" },
+                  { v: 3, en: "6–7 hours", is: "6–7 klst" },
+                  { v: 4, en: "7–8 hours", is: "7–8 klst", subEN: "good", subIS: "gott" },
+                  { v: 5, en: "8+ hours", is: "8+ klst" },
                 ]}
               />
             </div>
@@ -637,17 +670,18 @@ export default function PlayerCheckinPage() {
 
           {step === 4 ? (
             <div className="space-y-2">
-              <Label>Stress & mood</Label>
+              <Label>{c.q.stressMood.title}</Label>
               <PillScale
                 ariaLabel="Stress & mood val"
+                lang={lang}
                 value={stressMood}
                 onChange={setStressMood}
                 options={[
-                  { v: 1, label: "Very stressed", hint: "Mjög stressaður eða mjög mikið álag" },
-                  { v: 2, label: "Stressed", hint: "Stressaður / mikið álag" },
-                  { v: 3, label: "Normal", hint: "Góð/ur" },
-                  { v: 4, label: "Feeling good", hint: "Líður vel" },
-                  { v: 5, label: "Feeling great", hint: "Líður frábærlega" },
+                  { v: 1, en: "Very stressed", is: "Mjög stressuð/aður", subEN: "high load", subIS: "mikið álag" },
+                  { v: 2, en: "Stressed", is: "Stressuð/aður" },
+                  { v: 3, en: "Normal", is: "Í lagi" },
+                  { v: 4, en: "Feeling good", is: "Líður vel" },
+                  { v: 5, en: "Feeling great", is: "Líður frábærlega" },
                 ]}
               />
             </div>
@@ -655,41 +689,59 @@ export default function PlayerCheckinPage() {
 
           {step === 5 ? (
             <div className="space-y-2">
-              <Label>General muscle soreness</Label>
+              <Label>{c.q.soreness.title}</Label>
               <PillScale
                 ariaLabel="General muscle soreness val"
+                lang={lang}
                 value={muscleSoreness}
                 onChange={setMuscleSoreness}
                 options={[
-                  { v: 1, label: "Very sore", hint: "Mjög aum/ur" },
-                  { v: 2, label: "Some soreness", hint: "Frekar aum/ur" },
-                  { v: 3, label: "Normal", hint: "Góð/ur" },
-                  { v: 4, label: "Good", hint: "Fersk/ur" },
-                  { v: 5, label: "Feeling great", hint: "Mjög fersk/ur" },
+                  { v: 1, en: "Very sore", is: "Mjög aum/ur", subEN: "stiff", subIS: "stíft" },
+                  { v: 2, en: "Some soreness", is: "Frekar aum/ur" },
+                  { v: 3, en: "Normal", is: "Í lagi", subEN: "a little", subIS: "smá" },
+                  { v: 4, en: "Good", is: "Lítil eymsli" },
+                  { v: 5, en: "Feeling great", is: "Engin eymsli" },
                 ]}
               />
+              <details className="mt-2">
+                <summary className="cursor-pointer list-none text-xs font-semibold text-primary hover:underline">
+                  {lang === "IS" ? "+ Bæta við athugasemd (valfrjálst)" : "+ Add a note (optional)"}
+                </summary>
+                <div className="mt-2 space-y-1">
+                  <Textarea
+                    id="notes"
+                    aria-label={c.notesTitle}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={lang === "IS"
+                      ? "Skrifaðu ef þú finnur fyrir sárindum (t.d. „mjóhryggur stífur eftir leik“, „hamstring viðkvæmur“), veikindum eða öðru sem skiptir máli…"
+                      : "Note any soreness (e.g. 'lower back tight after the match', 'hamstring tender'), illness or anything else that matters…"}
+                    className="min-h-[100px] rounded-xl"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    {lang === "IS"
+                      ? "Valfrjálst — AI sérstillingakerfið les þetta og getur stungið upp á breytingum á styrktaræfingu þinni."
+                      : "Optional — the AI personalization engine reads this and can suggest changes to your strength session."}
+                  </div>
+                </div>
+              </details>
             </div>
           ) : null}
 
-          {step === 6 ? (
-            <div className="space-y-2">
-              <Label htmlFor="notes">Athugasemd</Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Skrifaðu ef þú finnur fyrir sárindum (t.d. 'mjóhryggur stífur eftir leik', 'hamstring viðkvæmur'), veikindum eða öðru sem skiptir máli…"
-                className="min-h-[120px] rounded-xl"
-              />
-              <div className="text-xs text-muted-foreground">
-                Valfrjálst — AI sérstillingakerfið les þetta og getur stungið upp á breytingum á styrktaræfingu þinni.
-              </div>
-            </div>
-          ) : null}
+          {(() => {
+            const q =
+              step === 1 ? c.q.fatigue
+              : step === 2 ? c.q.sleepQuality
+              : step === 3 ? c.q.sleepDuration
+              : step === 4 ? c.q.stressMood
+              : step === 5 ? c.q.soreness
+              : null;
+            return q ? <WhyBox title={c.explainTitle} why={q.why} src={q.src} /> : null;
+          })()}
 
           <Separator />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Skref {step}/6</span>
+            <span>{lang === "IS" ? "Skref" : "Step"} {step}/5</span>
           </div>
         </CardContent>
 
@@ -701,22 +753,22 @@ export default function PlayerCheckinPage() {
             onClick={() => setStep((s) => (Math.max(1, s - 1) as Step))}
             disabled={step === 1 || saving}
           >
-            Til baka
+            {lang === "IS" ? "Til baka" : "Back"}
           </Button>
 
-          {step < 6 ? (
+          {step < 5 ? (
             <Button
               type="button"
               className="w-2/3 rounded-xl"
-              onClick={() => setStep((s) => (Math.min(6, s + 1) as Step))}
+              onClick={() => setStep((s) => (Math.min(5, s + 1) as Step))}
               disabled={!canGoNext || saving}
             >
-              Áfram
+              {lang === "IS" ? "Áfram →" : "Next →"}
             </Button>
           ) : (
             <Button
               type="button"
-              className="w-2/3 rounded-xl"
+              className="w-2/3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={submit}
               disabled={
                 saving ||
@@ -727,14 +779,16 @@ export default function PlayerCheckinPage() {
                 muscleSoreness === null
               }
             >
-              {saving ? "Vista…" : "Senda check-in"}
+              {saving ? (lang === "IS" ? "Vista…" : "Saving…") : (lang === "IS" ? "Klára skráningu ✓" : "Finish check-in ✓")}
             </Button>
           )}
         </CardFooter>
       </Card>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Ef eitthvað er “off” í líkamanum: skrifaðu athugasemd — það sparar tíma og minnkar áhættu.
+        {lang === "IS"
+          ? "Ef eitthvað er „off“ í líkamanum: skrifaðu athugasemd — það sparar tíma og minnkar áhættu."
+          : "If something feels off in your body, add a note — it saves time and lowers risk."}
       </p>
 
       <EnableRemindersCard />

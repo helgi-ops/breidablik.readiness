@@ -4,6 +4,34 @@ import { useEffect, useState, useCallback } from "react";
 import { SESSION_TYPES, type SessionType, type SessionRpeEntry } from "@/lib/session-rpe/types";
 import { formatSessionTypeLabel, formatLoadBandClass, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+
+// Explainability copy for the post-session RPE surface. The ACWR wording is
+// deliberately spike-size / familiar-range language (NOT "sweet spot" / "high
+// risk") — ACWR frames how big a load change is, not injury probability
+// (Impellizzeri 2020; Gabbett 2016).
+const RPE_L = {
+  EN: {
+    loadWhatLabel: "What this is",
+    loadWhat: "Session load = your RPE × minutes (sRPE). One number for how much the whole session cost you.",
+    loadUsedLabel: "How it's used",
+    loadUsed: "It feeds the training-load trend above — today's 7-day load vs your 28-day normal (ACWR), so you can see when the load jumps away from what your body is used to.",
+    loadCite: "Foster 2001 (sRPE) · Impellizzeri 2020 (load-change context, not injury risk)",
+    acwrExplain: "ACWR = your recent 7-day load ÷ your 28-day normal. It shows the size of a load change, not injury risk.",
+    zones: { optimal: "Familiar range", caution: "Bigger jump", high_risk: "Sharp spike", undertrain: "Below usual" },
+    legend: { below: "Below usual", familiar: "Familiar range", jump: "Bigger jump", spike: "Sharp spike" },
+  },
+  IS: {
+    loadWhatLabel: "Hvað þetta er",
+    loadWhat: "Æfingaálag = RPE × mínútur (sRPE). Ein tala fyrir hversu mikið öll æfingin kostaði þig.",
+    loadUsedLabel: "Hvernig það er notað",
+    loadUsed: "Það fæðir álagsþróunina að ofan — 7-daga álag í dag á móti 28-daga vananum þínum (ACWR), svo þú sérð þegar álagið stökk frá því sem líkaminn er vanur.",
+    loadCite: "Foster 2001 (sRPE) · Impellizzeri 2020 (álagsbreyting, ekki meiðslaáhætta)",
+    acwrExplain: "ACWR = 7-daga álagið þitt ÷ 28-daga vananum. Það sýnir stærð álagsbreytingar, ekki meiðslaáhættu.",
+    zones: { optimal: "Kunnuglegt bil", caution: "Stærra stökk", high_risk: "Snöggt stökk", undertrain: "Undir vanalegu" },
+    legend: { below: "Undir vanalegu", familiar: "Kunnuglegt bil", jump: "Stærra stökk", spike: "Snöggt stökk" },
+  },
+} as const;
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
@@ -52,6 +80,9 @@ const DEFAULT_FORM: FormState = {
 };
 
 export default function DevPlayerRPETab() {
+  const [lang] = useLang();
+  const L = RPE_L[lang];
+
   // Status
   const [status, setStatus] = useState<RpeStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -305,10 +336,10 @@ export default function DevPlayerRPETab() {
                       acwr?.zone === "undertrain" ? "text-blue-600" :
                       "text-zinc-400"
                     )}>
-                      {acwr?.zone === "optimal"    ? "✓ Sweet spot" :
-                       acwr?.zone === "caution"    ? "⚠ Gæta sér" :
-                       acwr?.zone === "high_risk"  ? "⛔ Há áhætta" :
-                       acwr?.zone === "undertrain" ? "↓ Of lítið" :
+                      {acwr?.zone === "optimal"    ? L.zones.optimal :
+                       acwr?.zone === "caution"    ? L.zones.caution :
+                       acwr?.zone === "high_risk"  ? L.zones.high_risk :
+                       acwr?.zone === "undertrain" ? L.zones.undertrain :
                        "—"}
                     </div>
                   </div>
@@ -316,11 +347,12 @@ export default function DevPlayerRPETab() {
 
                 {/* ACWR zone legend */}
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-500">
-                  <span><span className="font-semibold text-blue-600">&lt;0.80</span> Of lítið</span>
-                  <span><span className="font-semibold text-emerald-600">0.80–1.30</span> Sweet spot</span>
-                  <span><span className="font-semibold text-amber-600">1.30–1.50</span> Gæta sér</span>
-                  <span><span className="font-semibold text-red-600">&gt;1.50</span> Há áhætta</span>
+                  <span><span className="font-semibold text-blue-600">&lt;0.80</span> {L.legend.below}</span>
+                  <span><span className="font-semibold text-emerald-600">0.80–1.30</span> {L.legend.familiar}</span>
+                  <span><span className="font-semibold text-amber-600">1.30–1.50</span> {L.legend.jump}</span>
+                  <span><span className="font-semibold text-red-600">&gt;1.50</span> {L.legend.spike}</span>
                 </div>
+                <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">{L.acwrExplain}</div>
               </>
             )}
           </div>
@@ -428,6 +460,19 @@ export default function DevPlayerRPETab() {
                 {getSessionLoadBand(loadPreview)}
               </div>
             )}
+          </div>
+
+          {/* Explainability: what the session-load number is and how it's used */}
+          <div className="mt-2 space-y-2 rounded-xl border border-zinc-200 bg-white p-3 text-xs leading-relaxed text-zinc-700">
+            <div>
+              <div className="font-semibold text-zinc-900">{L.loadWhatLabel}</div>
+              <div>{L.loadWhat}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-zinc-900">{L.loadUsedLabel}</div>
+              <div>{L.loadUsed}</div>
+            </div>
+            <div className="text-[11px] text-zinc-400">{L.loadCite}</div>
           </div>
 
           {/* Submit */}

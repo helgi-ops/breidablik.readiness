@@ -635,10 +635,12 @@ function WeeklyDigestPortal({ activeTab, lang, hideWellness }: { activeTab: DevP
       if (cancelled) return;
       attempts += 1;
 
-      // Anchor directly after the AteCommandCard, or fall back to the header
-      // card if AteCommandCard hasn't mounted yet.
+      // Order on Today: ATE command → last-match hero → weekly digest. Anchor
+      // after the hero (falling back to the ATE card, then the header) so the
+      // digest sits below the celebratory last-match glance.
+      const heroSlot = document.getElementById("dev-last-match-hero-slot");
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = heroSlot ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
@@ -687,11 +689,11 @@ function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevP
       if (cancelled) return;
       attempts += 1;
 
-      // Anchor just after the weekly digest (falling back to the ATE command
-      // card, then the header) so the hero sits high on Today, above the session.
-      const digestSlot = document.getElementById("dev-weekly-digest-card-slot");
+      // Anchor just after the ATE command card (falling back to the header) so
+      // the last-match hero sits high on Today — directly under the readiness
+      // decision and above the weekly digest.
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = digestSlot ?? ateSlot ?? detectHeaderCard();
+      const anchor = ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
@@ -842,21 +844,21 @@ function IconMoreH({ active }: { active: boolean }) {
 // text-[9px] was unusable on iPhones — labels ran together. Best-practice
 // mobile nav is 4-5 primary items; the rest go behind More.
 
+// Primary (bottom bar): Today · Game Report · Movement · Dashboard · More.
+// Game Report + Movement were promoted from the More-sheet (June 2026) — the
+// player's own match GPS and movement profile are the daily "wow" content the
+// coach wanted one tap away. RPE + Chat moved into the More-sheet in exchange;
+// no tab was removed. minTier is unchanged so the free/pro/elite locks hold.
 const PWA_PRIMARY_TABS = [
-  { key: "today"     as DevPlayerTab, tabKey: "today"     as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
-  { key: "rpe"       as DevPlayerTab, tabKey: "rpe"       as const, Icon: IconActivity, minTier: "pro"  as const, href: null as string | null },
-  { key: "chat"      as DevPlayerTab, tabKey: "chat"      as const, Icon: IconChat,     minTier: "free" as const, href: null as string | null },
-  // Dashboard chosen over History for primary: post-training GPS numbers
-  // (distance, sprints, accel/decel) are the daily "wow" content that
-  // engages players. History is a deep-dive used by <10% of players;
-  // moved to the More-sheet. PRO-locked for FREE tier — same pattern
-  // as RPE above; locked state shows up cleanly with a PRO badge.
-  { key: "dashboard" as DevPlayerTab, tabKey: "dashboard" as const, Icon: IconBarChart, minTier: "pro"  as const, href: null as string | null },
+  { key: "today"      as DevPlayerTab, tabKey: "today"      as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
+  { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport,   minTier: "free" as const, href: null as string | null },
+  { key: "movement"   as DevPlayerTab, tabKey: "movement"   as const, Icon: IconActivity, minTier: "free" as const, href: null as string | null },
+  { key: "dashboard"  as DevPlayerTab, tabKey: "dashboard"  as const, Icon: IconBarChart, minTier: "pro"  as const, href: null as string | null },
 ];
 
 const PWA_SECONDARY_TABS = [
-  { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport, minTier: "free"  as const, href: null as string | null },
-  { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
+  { key: "rpe"      as DevPlayerTab, tabKey: "rpe"      as const, Icon: IconActivity, minTier: "pro"   as const, href: null as string | null },
+  { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
@@ -891,9 +893,12 @@ function PWABottomNav({
   const tabs = PLAYER_COPY[lang].tabs;
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const primaryTabs = hideWellness
-    ? PWA_PRIMARY_TABS.filter((t) => t.key !== "rpe")
-    : PWA_PRIMARY_TABS;
+  const primaryTabs = PWA_PRIMARY_TABS;
+  // RPE now lives in the More-sheet; when wellness is hidden for this player,
+  // drop it there (previously it was filtered out of the primary bar).
+  const secondaryTabs = hideWellness
+    ? PWA_SECONDARY_TABS.filter((t) => t.key !== "rpe")
+    : PWA_SECONDARY_TABS;
 
   function isLocked(tier: string) {
     return (tier === "pro" && !isAtLeastPro) || (tier === "elite" && !isElite);
@@ -907,7 +912,7 @@ function PWABottomNav({
   // we highlight the More button in that case so the user knows where they
   // are. Skip entries whose `key` collides with a primary (eg. "team" maps
   // to key:"today" via href:"/team" — that's an href-only entry).
-  const secondaryActive = PWA_SECONDARY_TABS.some(
+  const secondaryActive = secondaryTabs.some(
     (t) => !t.href && t.key === activeTab,
   );
 
@@ -997,7 +1002,7 @@ function PWABottomNav({
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-              {PWA_SECONDARY_TABS.map(({ key, tabKey, Icon, minTier, href }) => {
+              {secondaryTabs.map(({ key, tabKey, Icon, minTier, href }) => {
                 const label = tabs[tabKey] ?? tabKey;
                 const locked = isLocked(minTier);
                 const isActive = tabIsActive(key, href);
