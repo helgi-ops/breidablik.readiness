@@ -143,7 +143,7 @@ export default function TeamSwitcher({ currentTeamId, onSwitch, variant = "defau
               teams (100+ for staff); without a search box and a height cap the
               list runs off-screen and buries teams (a coach reported not seeing
               a team they had access to). */}
-          <div className="absolute top-full left-0 mt-1 z-50 flex max-h-[75vh] w-[280px] flex-col overflow-hidden rounded-lg border bg-white shadow-lg">
+          <div className="absolute top-full left-0 mt-1 z-50 flex max-h-[75vh] w-[280px] flex-col overflow-hidden rounded-lg border bg-white text-slate-900 shadow-lg">
             <div className="border-b p-2">
               <input
                 autoFocus
