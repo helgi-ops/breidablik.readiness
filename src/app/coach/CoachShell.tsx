@@ -312,7 +312,9 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             notesCount={notesCount}
             pendingCount={pendingCount}
             currentTab={currentTab}
+            currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
+            onSwitchTeam={handleSwitchTeam}
             onToggleNav={() => setNavModePersist("list")}
           />
         </aside>

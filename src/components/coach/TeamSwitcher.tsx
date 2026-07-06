@@ -17,6 +17,8 @@ export interface CoachTeam {
 interface TeamSwitcherProps {
   currentTeamId: string | null;
   onSwitch: (team: CoachTeam) => void;
+  /** "compact" renders a square team-initial trigger for the narrow icon rail. */
+  variant?: "default" | "compact";
 }
 
 const LABELS = {
@@ -32,7 +34,7 @@ const LABELS = {
   },
 };
 
-export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherProps) {
+export default function TeamSwitcher({ currentTeamId, onSwitch, variant = "default" }: TeamSwitcherProps) {
   const [lang] = useLang();
   const ct = LABELS[lang as keyof typeof LABELS] ?? LABELS.IS;
 
@@ -110,16 +112,27 @@ export default function TeamSwitcher({ currentTeamId, onSwitch }: TeamSwitcherPr
 
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition-colors"
-      >
-        <span>{current?.teamType === "personal_trainer" ? "👤" : "🏟"}</span>
-        <span className="font-medium max-w-[160px] truncate">{current?.name ?? "—"}</span>
-        <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      {variant === "compact" ? (
+        <button
+          onClick={() => setOpen(!open)}
+          title={current?.name ?? "—"}
+          aria-label={ct.switchTeam}
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-100"
+        >
+          {(current?.name ?? "?").trim().slice(0, 1).toUpperCase()}
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 transition-colors"
+        >
+          <span>{current?.teamType === "personal_trainer" ? "👤" : "🏟"}</span>
+          <span className="font-medium max-w-[160px] truncate">{current?.name ?? "—"}</span>
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
 
       {open && (
         <>

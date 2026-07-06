@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLang } from "@/lib/lang";
+import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, injuryMonitoringLinks, performanceAnalyticsLinks,
@@ -24,14 +25,16 @@ import {
   LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS,
 } from "./CoachSidebar";
 
-type RailSection = { key: string; label: Bi; icon: string; links: SidebarLink[] };
+type RailSection = { key: string; label: Bi; links: SidebarLink[] };
 
 export function CoachIconRail({
   isAdmin,
   notesCount,
   pendingCount,
   currentTab,
+  currentTeamId,
   catapultDataTier,
+  onSwitchTeam,
   onToggleNav,
   onNavigate,
 }: {
@@ -39,7 +42,9 @@ export function CoachIconRail({
   notesCount: number;
   pendingCount: number;
   currentTab: string | null;
+  currentTeamId: string | null;
   catapultDataTier?: "full" | "lite";
+  onSwitchTeam: (team: CoachTeam) => void;
   onToggleNav?: () => void;
   onNavigate?: () => void;
 }) {
@@ -52,16 +57,16 @@ export function CoachIconRail({
     isLite ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href)) : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
 
   const sections = useMemo<RailSection[]>(() => [
-    { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, icon: "Sa", links: communicationLinks },
-    { key: "load", label: { EN: "Load", IS: "Álag" }, icon: "Á", links: filterForTier(loadMonitoringLinks) },
-    { key: "injury", label: { EN: "Injury", IS: "Meiðsli" }, icon: "M", links: filterForTier(injuryMonitoringLinks) },
-    { key: "perf", label: { EN: "Performance", IS: "Frammist." }, icon: "F", links: filterForTier(performanceAnalyticsLinks) },
-    { key: "plan", label: { EN: "Planning", IS: "Skipulag" }, icon: "S", links: teamPlanningLinks },
-    { key: "strength", label: { EN: "Strength", IS: "Styrkur" }, icon: "St", links: strengthPlanningLinks },
-    { key: "admin", label: { EN: "Admin", IS: "Admin" }, icon: "A", links: adminLinks },
-    ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, icon: "MP", links: superAdminLinks }] : []),
+    { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
+    { key: "load", label: { EN: "Load", IS: "Álag" }, links: filterForTier(loadMonitoringLinks) },
+    { key: "injury", label: { EN: "Injury", IS: "Meiðsli" }, links: filterForTier(injuryMonitoringLinks) },
+    { key: "perf", label: { EN: "Performance", IS: "Frammist." }, links: filterForTier(performanceAnalyticsLinks) },
+    { key: "plan", label: { EN: "Planning", IS: "Skipulag" }, links: teamPlanningLinks },
+    { key: "strength", label: { EN: "Strength", IS: "Styrkur" }, links: strengthPlanningLinks },
+    { key: "admin", label: { EN: "Admin", IS: "Admin" }, links: adminLinks },
+    ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, links: superAdminLinks }] : []),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [isLite, isAdmin, lang]);
+  ], [isLite, isAdmin]);
 
   const activeKey = sections.find((s) => s.links.some((l) => isLinkActive(l.href, pathname, currentTab)))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -88,6 +93,8 @@ export function CoachIconRail({
     <div ref={ref} className="relative flex h-full">
       {/* Rail */}
       <div className="flex h-full w-[68px] shrink-0 flex-col items-center gap-1 bg-slate-900 py-3 text-white">
+        {/* Team identity + switcher (compact square initial) */}
+        <div className="mb-1"><TeamSwitcher currentTeamId={currentTeamId} onSwitch={onSwitchTeam} variant="compact" /></div>
         {/* Home / Í dag */}
         <RailButton
           label={lang === "IS" ? "Í dag" : "Today"}
@@ -98,17 +105,23 @@ export function CoachIconRail({
           icon={<svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>}
         />
         <div className="my-1 h-px w-8 bg-white/10" />
-        {sections.filter((s) => s.links.length > 0).map((s) => (
-          <RailButton
-            key={s.key}
-            label={tt(s.label, lang)}
-            active={activeKey === s.key}
-            selected={openKey === s.key}
-            badge={badgeFor(s.key)}
-            onClick={() => setOpenKey((k) => (k === s.key ? null : s.key))}
-            icon={<span className="text-[13px] font-bold">{s.icon}</span>}
-          />
-        ))}
+        {sections.filter((s) => s.links.length > 0).map((s) => {
+          const label = tt(s.label, lang);
+          // Icon = the first 1–2 letters of the CURRENT-language label, so it
+          // follows EN/IS (no hardcoded Icelandic initials).
+          const initial = label.replace(/[^\p{L}]/gu, "").slice(0, 2) || label.slice(0, 2);
+          return (
+            <RailButton
+              key={s.key}
+              label={label}
+              active={activeKey === s.key}
+              selected={openKey === s.key}
+              badge={badgeFor(s.key)}
+              onClick={() => setOpenKey((k) => (k === s.key ? null : s.key))}
+              icon={<span className="text-[13px] font-bold">{initial}</span>}
+            />
+          );
+        })}
         <div className="mt-auto">
           <button
             type="button"
