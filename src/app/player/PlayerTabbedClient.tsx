@@ -24,10 +24,8 @@ import { supabase } from "@/lib/supabaseClient";
 import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
-import WeeklyDigestCard from "@/components/player/WeeklyDigestCard";
 import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
 import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
-import PlayerLastMatchHeroCard from "@/components/player/PlayerLastMatchHeroCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -624,62 +622,18 @@ function AteCommandCardPortal({ activeTab, clubThemeColor }: { activeTab: DevPla
 // Sits directly under the AteCommandCard. Replaces the older StreakCard mount
 // (StreakCard is still used on /team page).
 
-function WeeklyDigestPortal({ activeTab, lang, hideWellness }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; hideWellness?: boolean }) {
-  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let attempts = 0;
-
-    const place = () => {
-      if (cancelled) return;
-      attempts += 1;
-
-      // Order on Today: ATE command → last-match hero → weekly digest. Anchor
-      // after the hero (falling back to the ATE card, then the header) so the
-      // digest sits below the celebratory last-match glance.
-      const heroSlot = document.getElementById("dev-last-match-hero-slot");
-      const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = heroSlot ?? ateSlot ?? detectHeaderCard();
-      if (!anchor?.parentElement) {
-        if (attempts < 25) window.setTimeout(place, 300);
-        return;
-      }
-
-      let slot = document.getElementById("dev-weekly-digest-card-slot");
-      if (!slot) {
-        slot = document.createElement("div");
-        slot.id = "dev-weekly-digest-card-slot";
-        slot.className = "mt-3";
-      }
-
-      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
-        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
-      }
-
-      setMountNode((prev) => (prev === slot ? prev : slot));
-    };
-
-    place();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!mountNode || activeTab !== "today") return null;
-
-  return createPortal(<WeeklyDigestCard lang={lang} hideWellness={hideWellness} />, mountNode);
-}
-
-// ── "Your last match" hero card portal ───────────────────────────────────────
+// ── "See more" (Skoða meira) portal ──────────────────────────────────────────
 //
-// One compact, celebratory glance at the player's most recent GPS match (top
-// speed hero + one sentence + season-best pill), mounted near the top of the
-// Today content. "See full report →" switches to the existing gamereport tab —
-// the deep detail is not stacked on Home. Self-hides when there's no GPS match.
+// Round 14a: the daily content (decision + session) owns the top of Today; the
+// deeper surfaces — Game Report, Movement, Overview — become quiet "See more"
+// link rows at the bottom so they don't compete with the day. Anchored after the
+// explanation card (the last visible Today card). Replaces the earlier last-match
+// hero + weekly-digest portals; that content now lives on its own tabs, one tap
+// away via these links (and the bottom nav).
 
-function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onSeeReport: () => void }) {
+function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; onOpen: (tab: DevPlayerTab) => void }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const is = lang === "IS";
 
   useEffect(() => {
     let cancelled = false;
@@ -689,20 +643,18 @@ function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevP
       if (cancelled) return;
       attempts += 1;
 
-      // Anchor just after the ATE command card (falling back to the header) so
-      // the last-match hero sits high on Today — directly under the readiness
-      // decision and above the weekly digest.
+      const explanation = document.querySelector('[data-player-card="explanation"]') as HTMLElement | null;
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = explanation ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
       }
 
-      let slot = document.getElementById("dev-last-match-hero-slot");
+      let slot = document.getElementById("dev-today-more-slot");
       if (!slot) {
         slot = document.createElement("div");
-        slot.id = "dev-last-match-hero-slot";
+        slot.id = "dev-today-more-slot";
         slot.className = "mt-3";
       }
 
@@ -721,7 +673,38 @@ function LastMatchHeroPortal({ activeTab, lang, onSeeReport }: { activeTab: DevP
 
   if (!mountNode || activeTab !== "today") return null;
 
-  return createPortal(<PlayerLastMatchHeroCard lang={lang} onSeeReport={onSeeReport} />, mountNode);
+  const items: { key: DevPlayerTab; title: string; sub: string; Icon: typeof IconReport }[] = [
+    { key: "gamereport", title: is ? "Leikur" : "Game", sub: is ? "Leikjaskýrslan þín — síðasti leikur" : "Your game report — last match", Icon: IconReport },
+    { key: "movement", title: is ? "Hreyfing" : "Movement", sub: is ? "Match movement — spretta, hröðun, vegalengd" : "Match movement — sprint, accel, distance", Icon: IconActivity },
+    { key: "dashboard", title: is ? "Yfirlit" : "Overview", sub: is ? "Öll gögnin þín — álag, styrkur, saga" : "All your data — load, strength, history", Icon: IconBarChart },
+  ];
+
+  return createPortal(
+    <div className="mt-3">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "Skoða meira" : "See more"}</div>
+      <div className="space-y-2">
+        {items.map((it) => {
+          const Icon = it.Icon;
+          return (
+            <button
+              key={it.key}
+              type="button"
+              onClick={() => onOpen(it.key)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-zinc-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600"><Icon active={false} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-zinc-900">{it.title}</span>
+                <span className="block truncate text-xs text-zinc-500">{it.sub}</span>
+              </span>
+              <span className="text-lg leading-none text-zinc-300">›</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+    mountNode,
+  );
 }
 
 // ── Contextual RPE reminder portal ───────────────────────────────────────────
@@ -943,12 +926,15 @@ function IconMoreH({ active }: { active: boolean }) {
 const PWA_PRIMARY_TABS = [
   { key: "today"      as DevPlayerTab, tabKey: "today"      as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
   { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport,   minTier: "free" as const, href: null as string | null },
+  // RPE is a daily action (log right after training) → give it a primary slot
+  // (per the round-14a note that RPE also belongs in the bottom bar). Movement
+  // stays in the More-sheet and is surfaced on Today via the "See more" section.
+  { key: "rpe"        as DevPlayerTab, tabKey: "rpe"        as const, Icon: IconActivity, minTier: "pro"  as const, href: null as string | null },
   { key: "dashboard"  as DevPlayerTab, tabKey: "dashboard"  as const, Icon: IconBarChart, minTier: "pro"  as const, href: null as string | null },
 ];
 
 const PWA_SECONDARY_TABS = [
   { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
-  { key: "rpe"      as DevPlayerTab, tabKey: "rpe"      as const, Icon: IconActivity, minTier: "pro"   as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
@@ -1516,10 +1502,10 @@ export default function DevPlayerClient() {
           portal was removed 2026-05-28 — it duplicated that inline card and
           (being portal-mounted) sometimes failed to appear. One reliable
           inline explanation surface, mirroring the coach Daily Briefing. */}
-      <WeeklyDigestPortal activeTab={activeTab} lang={lang as "IS" | "EN"} hideWellness={hideWellness} />
-      {/* "Your last match" hero — engagement glance on Home; deep report is one
-          tap away on the gamereport tab (progressive disclosure). */}
-      <LastMatchHeroPortal activeTab={activeTab} lang={lang as "IS" | "EN"} onSeeReport={() => setTab("gamereport")} />
+      {/* "See more" (Skoða meira) — quiet links to Game / Movement / Overview at
+          the bottom of Today, replacing the old last-match + weekly-digest cards
+          (round 14a). Their content lives on their own tabs, one tap away. */}
+      <TodayMorePortal activeTab={activeTab} lang={lang as "IS" | "EN"} onOpen={setTab} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)

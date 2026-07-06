@@ -4748,8 +4748,8 @@ export default function PlayerClient() {
             <div className="p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-xs font-medium text-zinc-500">{t.header.label} · {today}</div>
-                  <div className="mt-1 truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{name}</div>
+                  <div className="truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
+                  <div className="mt-1 text-xs font-medium text-zinc-500">{today}</div>
                   <div className="mt-1 text-sm text-zinc-600">
                     {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
                   </div>
