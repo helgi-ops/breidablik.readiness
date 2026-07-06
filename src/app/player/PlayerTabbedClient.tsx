@@ -632,9 +632,13 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
       if (cancelled) return;
       attempts += 1;
 
-      const explanation = document.querySelector('[data-player-card="explanation"]') as HTMLElement | null;
+      // Anchor after the ATE command card (the proven mount point the old
+      // last-match / weekly-digest portals used) — a sibling of the header,
+      // OUTSIDE the card column whose "hide unknown cards" rule was swallowing
+      // this slot when it was anchored after the explanation card. Falls back to
+      // the header card.
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = explanation ?? ateSlot ?? detectHeaderCard();
+      const anchor = ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
@@ -1341,6 +1345,12 @@ export default function DevPlayerClient() {
           if (valdCard && card === valdCard) {
             // Always hide the old VALD card — new tab has its own component
             card.style.display = "none";
+            continue;
+          }
+          // Our own injected Today portals (See-more links, RPE nudge) must NOT
+          // be caught by the "hide unknown cards" default — show them on Today.
+          if (card.id === "dev-today-more-slot" || card.id === "dev-rpe-reminder-slot") {
+            card.style.display = showToday ? "" : "none";
             continue;
           }
           // Default: hide unknown legacy cards so tabs stay focused.
