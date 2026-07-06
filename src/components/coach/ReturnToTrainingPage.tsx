@@ -83,6 +83,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   const [err, setErr] = useState<string | null>(null);
   const [showMatches, setShowMatches] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showMethod, setShowMethod] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -282,7 +283,56 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
             <div className="text-base font-bold text-indigo-900">{data.plan.verdict}</div>
             <div className="mt-0.5 text-xs text-indigo-700/80">{is ? "Loftið = hans eigin heilbrigða grunnlína. Hvert markmið sýnir % af henni." : "Ceiling = his own healthy baseline. Each target shows its % of it."}</div>
+            <button type="button" onClick={() => setShowMethod((v) => !v)} className="mt-1.5 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900">
+              {showMethod ? (is ? "Fela: á bak við tölurnar ▲" : "Hide: behind the numbers ▲") : (is ? "Á bak við tölurnar — hvernig planið er reiknað ▼" : "Behind the numbers — how the plan is computed ▼")}
+            </button>
           </div>
+
+          {/* Explainability layer — what each number means + the evidence. This is
+              what a coach can't get elsewhere: every signal carries its provenance. */}
+          {showMethod && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+              <div className="space-y-3">
+                <MethodRow term={is ? "Loftið" : "The ceiling"} cite="Gabbett 2016"
+                  body={is
+                    ? `Loftið er HANS eigið heilbrigða vikuálag — robust hundraðshluti (85.) af heilbrigðu vikunum hans, leikir meðtaldir${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} álag/viku)` : ""}. Aldrei liðsmeðaltal, aldrei ein stök æfing. Byggt á ${data.baseline.builtFromHealthyWeeks} heilbrigðum vikum.`
+                    : `The ceiling is HIS own healthy weekly load — a robust percentile (85th) of his healthy weeks, matches included${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} load/week)` : ""}. Never a squad average, never a single session. Built from ${data.baseline.builtFromHealthyWeeks} healthy weeks.`} />
+                <MethodRow term="ACWR" cite="Gabbett 2017 · Impellizzeri 2020"
+                  body={is
+                    ? "Bráða:krónískt álag — hversu stórt stökk vikan er miðað við nýlegt meðaltal. Við höldum vikulegri aukningu hóflegri (~+10%). ACWR lýsir stökk-STÆRÐ / óvönu áreiti — það er EKKI meiðsla-spá."
+                    : "Acute:chronic workload — how big a jump the week is vs his recent average. We keep the weekly increase gradual (~+10%). ACWR describes spike SIZE / unfamiliar load — it is NOT an injury predictor."} />
+                {data.layoff?.days != null && (
+                  <MethodRow term={is ? "Detraining (fjarvera)" : "Detraining (layoff)"} cite="Mujika & Padilla 2000"
+                    body={is
+                      ? `Álagsþol dvínar með fjarveru. Eftir ${data.layoff.days} daga heldur hann ~${data.layoff.retainedPct}% af þolinu, svo planið byrjar þaðan og tekur ${data.layoff.rampWeeks} vikur. Stutt fjarvera → byrjar hátt, fáar vikur.`
+                      : `Capacity fades with time out. After ${data.layoff.days} days he retains ~${data.layoff.retainedPct}%, so the plan starts there and takes ${data.layoff.rampWeeks} weeks. A short layoff → starts high, few weeks.`} />
+                )}
+                <MethodRow term={is ? "Röðin (stigmögnun)" : "The order (staging)"} cite="Taberner 2019 · McBurnie 2022"
+                  body={is
+                    ? "Við byggjum upp rúmmál og þol fyrst; háhraðahlaup og stefnubreytingar SÍÐAST — þau eru mest endurmeiðsla-hætt. Hvert gæði opnast aðeins þegar það á undan er komið."
+                    : "We rebuild volume and aerobic base first; high-speed running and change-of-direction LAST — they are the most re-injury-prone. Each quality unlocks only after the one before it."} />
+                {data.injuryProfile && data.injuryProfile.riskQualities.length > 0 && !data.headInjury && (
+                  <MethodRow term={is ? "Meiðsla-sértækt" : "Injury-specific"} cite=""
+                    body={is
+                      ? `Fyrir þetta meiðsli aukast lykil-endurmeiðsla-gæðin (${data.injuryProfile.riskQualities.map((q) => LABEL[q].is).join(", ")}) HÆGAR (7%/viku) og byrja lægra.`
+                      : `For this injury the key re-injury qualities (${data.injuryProfile.riskQualities.map((q) => LABEL[q].en).join(", ")}) ramp SLOWER (7%/week) and start lower.`} />
+                )}
+                {data.headInjury && (
+                  <MethodRow term={is ? "Höfuðáverki" : "Head injury"} cite="HIA / GRTP"
+                    body={is
+                      ? "Álagið er LOFT, ekki kveikja — endurkoma er einkenna-stýrð (graded return-to-play). Kerfið stigmagnar ekki sjálfkrafa."
+                      : "Load is a CEILING, not a stage trigger — return is symptom-limited (graded return-to-play). The system never auto-advances a stage."} />
+                )}
+                <MethodRow term={is ? "Vissa" : "Confidence"} cite=""
+                  body={is
+                    ? `Byggð á ${data.baseline.builtFromHealthyWeeks} heilbrigðum vikum. Fleiri vikur = traustari grunnlína (${conf}).`
+                    : `Based on ${data.baseline.builtFromHealthyWeeks} healthy weeks. More weeks = a more trustworthy baseline (${conf}).`} />
+              </div>
+              <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+                {is ? "Reglur reikna planið; þetta lag útskýrir. Hvert merki ber sína heimild." : "Rules compute the plan; this layer explains. Every signal carries its citation."}
+              </p>
+            </div>
+          )}
 
           {/* This week's per-quality targets — recommended vs actual (layer 1) */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -390,6 +440,19 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   );
 }
 
+/** One explainability row: term + evidence citation + plain-language meaning. */
+function MethodRow({ term, body, cite }: { term: string; body: string; cite: string }) {
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline gap-1.5">
+        <span className="text-[13px] font-semibold text-slate-800">{term}</span>
+        {cite && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-500">{cite}</span>}
+      </div>
+      <p className="mt-0.5 text-[12px] leading-snug text-slate-600">{body}</p>
+    </div>
+  );
+}
+
 function QualityCard({ w, floor, ceiling, actual, onOverride, is }: { w: WeekTarget; floor: number; ceiling: number; actual?: AdherenceCell; onOverride: (quality: Quality, week: number, from: number, to: number, reason: string) => Promise<void>; is: boolean }) {
   const label = is ? LABEL[w.quality].is : LABEL[w.quality].en;
   const acwrColor = w.acwr > 1.3 ? "bg-red-100 text-red-700" : w.acwr >= 0.8 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600";
@@ -417,7 +480,7 @@ function QualityCard({ w, floor, ceiling, actual, onOverride, is }: { w: WeekTar
         {w.locked ? (
           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">{is ? `læst · vika ${w.unlockWeek}` : `hold · wk ${w.unlockWeek}`}</span>
         ) : (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${acwrColor}`} title="acute:chronic workload ratio">ACWR {w.acwr.toFixed(2)}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${acwrColor}`} title={is ? "Bráða:krónískt álag (Gabbett 2017) — lýsir stökk-stærð vikunnar, ekki meiðsla-spá." : "Acute:chronic workload (Gabbett 2017) — describes the week's spike size, not an injury prediction."}>ACWR {w.acwr.toFixed(2)}</span>
         )}
       </div>
       {!w.locked && ceiling <= 0 ? (
