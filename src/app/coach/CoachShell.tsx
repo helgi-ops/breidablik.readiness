@@ -266,7 +266,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const useRail = navMode === "rail" && !isPt;
 
   return (
-    <div className={`min-h-screen bg-background md:grid ${useRail ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[240px_1fr]"}`}>
+    <div className={`min-h-screen bg-background md:grid ${useRail ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"}`}>
       {/* Usage analytics — one fire-and-forget page_view per route change. */}
       <UsageTracker />
       {/* ── Mobile-only header (drawer trigger) ─────────────────────────── */}
@@ -401,8 +401,8 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
 
       {/* ── Main content column ────────────────────────────────────────── */}
       <div className="flex flex-col min-h-screen">
-        <main className="flex-1 px-4 py-6 md:px-8">
-          <div className="mx-auto max-w-6xl">
+        <main className="flex-1 px-4 py-6 md:px-6">
+          <div className="mx-auto max-w-7xl">
             <div className="mb-4">
               <PWANotificationPrompt />
             </div>
