@@ -1715,32 +1715,28 @@ function PostTrainingReportDocument({ data }: { data: PostTrainingReportData }) 
           const pva = data.plannedVsActual;
           const pvaColor = (st: PvaStatus) =>
             st === "on" ? "#1c7a4a" : st === "over" || st === "under" ? "#b0700f" : st === "well_over" || st === "well_under" ? "#a83e28" : "#a9a493";
-          const pctCell = (kpi: typeof PVA_KPIS[number], pp: typeof pva.players[number]) => {
+          const pctCell = (kpi: typeof PVA_KPIS[number], pp: typeof pva.players[number], w: string) => {
             const c = pp.byKpi[kpi];
-            return <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right", fontWeight: 700 }, { color: pvaColor(c.status) }]}>{c.pctOfPlan != null ? `${c.pctOfPlan}%` : "—"}</Text>;
+            return <Text key={kpi} style={[{ width: w, padding: 3, fontSize: 8, textAlign: "right", fontWeight: 700 }, { color: pvaColor(c.status) }]}>{c.pctOfPlan != null ? `${c.pctOfPlan}%` : "—"}</Text>;
           };
+          // Capability-aware columns: Core/Lite has no IMA (accel/ima) — it sends
+          // the combined "efforts" instead. Show what the club actually captures.
+          const SHORT: Record<string, string> = { playerLoad: "P.Load", totalDistance: "Dist", hsr: "HSR", sprint: "Sprint", accel: "Accel", ima: "IMA", efforts: "Efforts" };
+          const moveKpis: Array<typeof PVA_KPIS[number]> = pva.availableKpis.includes("efforts") ? ["efforts"] : ["accel", "ima"];
+          const ppCols: Array<typeof PVA_KPIS[number]> = ["playerLoad", "totalDistance", "hsr", "sprint", ...moveKpis];
+          const ppColW = `${Math.round(78 / ppCols.length)}%`;
           return (
             <View style={postStyles.section}>
               <Text style={postStyles.sectionTitle}>Planned vs Actual — per player (% of plan)</Text>
               <View style={postStyles.table}>
                 <View style={postStyles.tHead}>
                   <Text style={[{ width: "22%", padding: 3, fontSize: 8 }, postStyles.hdr]}>Player</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>P.Load</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Dist</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>HSR</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Sprint</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>Accel</Text>
-                  <Text style={[{ width: "13%", padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>IMA</Text>
+                  {ppCols.map((k) => <Text key={k} style={[{ width: ppColW, padding: 3, fontSize: 8, textAlign: "right" }, postStyles.hdr]}>{SHORT[k]}</Text>)}
                 </View>
                 {pva.players.map((pp, i) => (
                   <View key={pp.player_id + i} style={i % 2 === 0 ? postStyles.tRow : postStyles.tRowAlt}>
                     <Text style={{ width: "22%", padding: 3, fontSize: 8, fontWeight: 700 }}>{pp.name}</Text>
-                    {pctCell("playerLoad", pp)}
-                    {pctCell("totalDistance", pp)}
-                    {pctCell("hsr", pp)}
-                    {pctCell("sprint", pp)}
-                    {pctCell("accel", pp)}
-                    {pctCell("ima", pp)}
+                    {ppCols.map((k) => pctCell(k, pp, ppColW))}
                   </View>
                 ))}
               </View>

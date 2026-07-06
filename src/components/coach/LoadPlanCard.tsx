@@ -20,7 +20,7 @@ type PlayerPlan = {
   player_id: string; name: string;
   totalDistance: number | null; playerLoad: number | null;
   hsr: number | null; sprint: number | null; accel: number | null; decel: number | null;
-  ima: number | null;
+  efforts: number | null; ima: number | null;
   acwr: number | null; flag: "ok" | "reduce" | "build"; flagReason: string | null;
 };
 type Plan = {

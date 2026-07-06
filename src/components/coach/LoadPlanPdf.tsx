@@ -24,7 +24,8 @@ export type LoadPlanForPdf = {
   readinessAdjustPct: number; readinessNote: string | null;
   targetRpe: number | null; targetDurationMin: number | null; targetSrpe: number | null; srpeSource: "microcycle" | "recent" | "none";
   recentSessions: Array<{ date: string; totalDistance: number | null; playerLoad: number | null; hsr: number | null; isPeak: boolean }>;
-  perPlayer: Array<{ name: string; totalDistance: number | null; playerLoad: number | null; hsr: number | null; sprint: number | null; accel: number | null; decel: number | null; ima: number | null; acwr: number | null; flag: string; flagReason: string | null }>;
+  availableKpis?: string[];
+  perPlayer: Array<{ name: string; totalDistance: number | null; playerLoad: number | null; hsr: number | null; sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null; acwr: number | null; flag: string; flagReason: string | null }>;
   adjustedTargets: KpiTarget[];
   recentAvg?: Record<string, number | null>;
   coverage: { trainingDays: number; matchDays: number; distinctDates: number; playersWithHistory: number; totalPlayers: number; windowDays: number };
@@ -65,6 +66,20 @@ export async function downloadLoadPlanPdf(
   restDay = false,
 ) {
   const p = plan.planned;
+  // Capability-aware movement columns: Core/Lite clubs have no IMA / no accel-decel
+  // split — they send the combined "efforts" instead. Show what the club captures
+  // so Lite teams don't get three empty movement columns.
+  const hasEfforts = (plan.availableKpis ?? []).includes("efforts");
+  const moveCols: Array<{ key: "accel" | "decel" | "ima" | "efforts"; label: string; w: string }> = hasEfforts
+    ? [{ key: "efforts", label: "Efforts", w: "25%" }]
+    : [
+        { key: "accel", label: "Acc B2-3", w: "8%" },
+        { key: "decel", label: "Dec B2-3", w: "8%" },
+        { key: "ima", label: "IMA COD", w: "9%" },
+      ];
+  const moveLegend = hasEfforts
+    ? "Efforts = combined high-intensity accelerations + decelerations (the braking-and-launch load Core/Lite pods capture as one count)."
+    : "Acc/Dec B2-3 = high-intensity accelerations / decelerations (effort bands 2-3); IMA COD = high-intensity change-of-direction distance.";
   // The SAME explainability paragraphs / bottom line the on-screen card renders.
   const narrative = buildLoadPlanNarrative(plan, readiness?.checkedIn ?? null);
   const bottomLine = buildLoadPlanBottomLine(plan, readiness?.red ?? null);
@@ -229,9 +244,7 @@ export async function downloadLoadPlanPdf(
                 <Text style={{ width: "9%", padding: 3, textAlign: "right", fontWeight: 700 }}>HSR VB5</Text>
                 <Text style={{ width: "9%", padding: 3, textAlign: "right", fontWeight: 700 }}>Sprint VB6</Text>
                 <Text style={{ width: "10%", padding: 3, textAlign: "right", fontWeight: 700 }}>P.Load</Text>
-                <Text style={{ width: "8%", padding: 3, textAlign: "right", fontWeight: 700 }}>Acc B2-3</Text>
-                <Text style={{ width: "8%", padding: 3, textAlign: "right", fontWeight: 700 }}>Dec B2-3</Text>
-                <Text style={{ width: "9%", padding: 3, textAlign: "right", fontWeight: 700 }}>IMA COD</Text>
+                {moveCols.map((c) => <Text key={c.key} style={{ width: c.w, padding: 3, textAlign: "right", fontWeight: 700 }}>{c.label}</Text>)}
                 <Text style={{ width: "8%", padding: 3, textAlign: "right", fontWeight: 700 }}>ACWR</Text>
                 <Text style={{ width: "10%", padding: 3, fontWeight: 700 }}>Flag</Text>
               </View>
@@ -242,9 +255,7 @@ export async function downloadLoadPlanPdf(
                   <Text style={{ width: "9%", padding: 3, textAlign: "right" }}>{fmt(pp.hsr)}</Text>
                   <Text style={{ width: "9%", padding: 3, textAlign: "right" }}>{fmt(pp.sprint)}</Text>
                   <Text style={{ width: "10%", padding: 3, textAlign: "right" }}>{fmt(pp.playerLoad)}</Text>
-                  <Text style={{ width: "8%", padding: 3, textAlign: "right" }}>{fmt(pp.accel)}</Text>
-                  <Text style={{ width: "8%", padding: 3, textAlign: "right" }}>{fmt(pp.decel)}</Text>
-                  <Text style={{ width: "9%", padding: 3, textAlign: "right" }}>{fmt(pp.ima)}</Text>
+                  {moveCols.map((c) => <Text key={c.key} style={{ width: c.w, padding: 3, textAlign: "right" }}>{fmt(pp[c.key])}</Text>)}
                   <Text style={[{ width: "8%", padding: 3, textAlign: "right" }, pp.acwr != null && pp.acwr >= 1.3 ? { color: "#a83e28", fontWeight: 700 } : pp.acwr != null && pp.acwr < 0.8 ? { color: "#b0700f" } : {}]}>{pp.acwr != null ? pp.acwr.toFixed(2) : "—"}</Text>
                   <Text style={{ width: "10%", padding: 3 }}>{pp.flag === "reduce" ? "reduce" : pp.flag === "build" ? "build" : "—"}</Text>
                 </View>
@@ -252,7 +263,7 @@ export async function downloadLoadPlanPdf(
             </View>
 
             <Text style={{ fontSize: 8, color: "#a9a493", marginTop: 8, lineHeight: 1.4 }}>
-              HSR VB5 = high-speed running (velocity band 5); Sprint VB6 = sprint distance (band 6); Acc/Dec B2-3 = high-intensity accelerations / decelerations (effort bands 2-3); IMA COD = high-intensity change-of-direction distance. Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
+              HSR VB5 = high-speed running (velocity band 5); Sprint VB6 = sprint distance (band 6); {moveLegend} Targets = match reference × {p.matchPct}% (the microcycle day&apos;s share of match demand) re-weighted by session type. Match reference = the squad&apos;s average on its {plan.matchDaysUsed} highest-load days over the last ~17 weeks. ACWR = acute(7d) ÷ chronic(28d) Player Load; 0.8–1.3 ≈ a load change within the familiar range — a spike-size context for scaling, not an injury predictor (Gabbett 2016; not validated for injury risk — Impellizzeri 2020).
             </Text>
           </>
         )}
