@@ -84,6 +84,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   const [showMatches, setShowMatches] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null); // null = follow the current plan week
   const [startDate, setStartDate] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -123,7 +124,9 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
 
   // The CURRENT plan week (the actionable "this week") — its targets, the actual
   // load he has logged against them, and that week's sessions.
-  const curWeek = data?.plan?.currentWeek ?? 1;
+  const planCurrentWeek = data?.plan?.currentWeek ?? 1;
+  const totalWeeks = data?.plan ? Math.max(1, ...data.plan.weeks.map((w) => w.week)) : 1;
+  const curWeek = Math.min(totalWeeks, Math.max(1, selectedWeek ?? planCurrentWeek));
   const weekNow = useMemo(() => (data?.plan ? data.plan.weeks.filter((w) => w.week === curWeek) : []), [data, curWeek]);
   const curAdh = useMemo(() => data?.adherence?.find((a) => a.week === curWeek) ?? null, [data, curWeek]);
   const actualByQ = useMemo(() => {
@@ -334,7 +337,32 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             </div>
           )}
 
-          {/* This week's per-quality targets — recommended vs actual (layer 1) */}
+          {/* Week navigator — step back through past weeks to see how each went */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setSelectedWeek(Math.max(1, curWeek - 1))} disabled={curWeek <= 1}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label={is ? "Fyrri vika" : "Previous week"}>
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.7 5.3a1 1 0 010 1.4L9.4 10l3.3 3.3a1 1 0 01-1.4 1.4l-4-4a1 1 0 010-1.4l4-4a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
+              </button>
+              <span className="text-sm font-semibold text-slate-800">
+                {is ? "Vika" : "Week"} {curWeek} {is ? "af" : "of"} {totalWeeks}
+                {curWeek < planCurrentWeek ? <span className="ml-1.5 text-[11px] font-normal text-slate-400">({is ? "liðin" : "past"})</span>
+                  : curWeek === planCurrentWeek ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">{is ? "núna" : "now"}</span>
+                  : <span className="ml-1.5 text-[11px] font-normal text-slate-400">({is ? "framundan" : "upcoming"})</span>}
+              </span>
+              <button type="button" onClick={() => setSelectedWeek(Math.min(totalWeeks, curWeek + 1))} disabled={curWeek >= totalWeeks}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label={is ? "Næsta vika" : "Next week"}>
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.3 5.3a1 1 0 011.4 0l4 4a1 1 0 010 1.4l-4 4a1 1 0 01-1.4-1.4l3.3-3.3-3.3-3.3a1 1 0 010-1.4z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            {curWeek !== planCurrentWeek && (
+              <button type="button" onClick={() => setSelectedWeek(null)} className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                {is ? "Fara í núverandi viku" : "Jump to current week"}
+              </button>
+            )}
+          </div>
+
+          {/* Selected week's per-quality targets — recommended vs actual (layer 1) */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {weekNow.map((w) => (
               <QualityCard key={w.quality} w={w} floor={data.floor[w.quality]} ceiling={data.baseline[w.quality]} actual={actualByQ.get(w.quality)} onOverride={saveOverride} is={is} />
