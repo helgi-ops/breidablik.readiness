@@ -17,6 +17,15 @@ import {
 } from "@/lib/micropulse/loadPlan/plannedVsActual";
 
 type Rpe = { rpe: number | null; sessionLoad: number | null; durationMin: number | null; n: number };
+type RttSummaryPlayer = {
+  playerId: string;
+  name: string;
+  currentlyInjured: boolean;
+  rtpStatus: string | null;
+  rtpStage: number | null;
+  started: boolean;
+  thisWeek: { status: "under" | "on" | "over"; loadActual: number; loadTarget: number; deltaPct: number; inProgress: boolean } | null;
+};
 type Resp = {
   ok: boolean;
   sessionDate: string | null;
@@ -50,6 +59,7 @@ const pctTxt = (k: KpiCompare) => (k.pctOfPlan == null ? "—" : `${k.pctOfPlan}
 
 export default function PostTrainingCard({ date }: { date?: string }) {
   const [data, setData] = useState<Resp | null>(null);
+  const [rtt, setRtt] = useState<RttSummaryPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showPlayers, setShowPlayers] = useState(true);
@@ -67,6 +77,11 @@ export default function PostTrainingCard({ date }: { date?: string }) {
       const j = (await res.json()) as Resp;
       if (!res.ok) { setErr(j.error ?? "Failed"); return; }
       setData(j);
+      // Return-to-training snapshot — same source as the PDF, so page == report.
+      try {
+        const rttRes = await fetch("/api/coach/return-to-training/summary", { headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } });
+        if (rttRes.ok) { const rj = await rttRes.json(); setRtt((rj.players ?? []) as RttSummaryPlayer[]); }
+      } catch { /* non-fatal */ }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Network error");
     } finally { setLoading(false); }
@@ -183,6 +198,54 @@ export default function PostTrainingCard({ date }: { date?: string }) {
           <span className="text-slate-400">{data.rpe.n} {data.rpe.n === 1 ? L({ EN: "response", IS: "svar" }) : L({ EN: "responses", IS: "svör" })}</span>
         </div>
       )}
+
+      {/* Return-to-training — how each returning player's ramp is going. Same
+          source as the PDF report (one verdict, visible everywhere). */}
+      {(() => {
+        const returning = rtt.filter((p) => p.currentlyInjured || p.started);
+        if (returning.length === 0) return null;
+        const over = returning.filter((p) => p.thisWeek?.status === "over");
+        return (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-800">{L({ EN: "Return-to-training — how the ramp is going", IS: "Aftur í æfingar — hvernig upptröppun gengur" })}</div>
+              <div className="text-[11px] text-slate-500">{returning.length}{over.length > 0 ? ` · ${over.length} ${L({ EN: "over ramp", IS: "yfir" })}` : ""}</div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-slate-400">
+                  <th className="py-1 pr-2 font-medium">{L({ EN: "Player", IS: "Leikmaður" })}</th>
+                  <th className="py-1 pr-2 font-medium">{L({ EN: "RTP stage", IS: "RTP stig" })}</th>
+                  <th className="py-1 pr-2 text-right font-medium">{L({ EN: "Week load", IS: "Vikuálag" })}</th>
+                  <th className="py-1 pr-2 text-right font-medium">{L({ EN: "Recommended", IS: "Ráðlagt" })}</th>
+                  <th className="py-1 pr-2 text-right font-medium">{L({ EN: "vs ramp", IS: "vs upptröppun" })}</th>
+                </tr></thead>
+                <tbody>
+                  {returning.map((p) => {
+                    const st = p.thisWeek?.status;
+                    const color = st === "over" ? "text-rose-600" : st === "under" ? "text-slate-400" : "text-emerald-600";
+                    const vs = !p.thisWeek ? (p.started ? "—" : L({ EN: "not started", IS: "ekki byrjað" }))
+                      : st === "over" ? `+${p.thisWeek.deltaPct}% ${L({ EN: "over", IS: "yfir" })}`
+                      : st === "under" ? `${p.thisWeek.deltaPct}%${p.thisWeek.inProgress ? ` ${L({ EN: "so far", IS: "hingað til" })}` : ""}`
+                      : L({ EN: "on plan", IS: "á áætlun" });
+                    const stage = p.rtpStatus ? `${p.rtpStatus.replace(/_/g, " ")} · ${p.rtpStage ?? 0}/5` : (p.currentlyInjured ? L({ EN: "injured", IS: "meiddur" }) : L({ EN: "returned", IS: "til baka" }));
+                    return (
+                      <tr key={p.playerId} className="border-t border-slate-100">
+                        <td className="py-1 pr-2 font-medium text-slate-800">{p.name}</td>
+                        <td className="py-1 pr-2 text-slate-600">{stage}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums text-slate-700">{p.thisWeek ? fmt(p.thisWeek.loadActual) : "—"}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums text-slate-700">{p.thisWeek ? fmt(p.thisWeek.loadTarget) : "—"}</td>
+                        <td className={`py-1 pr-2 text-right font-semibold ${color}`}>{vs}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-400">{L({ EN: "Over the ramp = ease off; under is usually fine (a partial week reads “so far”). Same source as the PDF report.", IS: "Yfir upptröppun = draga úr; undir er yfirleitt í lagi (hálf vika sýnir “hingað til”). Sama heimild og PDF-reportíð." })}</p>
+          </div>
+        );
+      })()}
 
       {!pva?.hasPlan ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
