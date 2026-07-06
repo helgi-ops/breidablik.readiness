@@ -71,7 +71,7 @@ type Resp = {
   error?: string;
 };
 type AdherenceCell = { quality: Quality; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
-type AdherenceWeek = { week: number; weekStart: string; sessions: number; inProgress: boolean; cells: AdherenceCell[] };
+type AdherenceWeek = { week: number; weekStart: string; sessions: number; estimatedSessions?: number; inProgress: boolean; cells: AdherenceCell[] };
 
 const f0 = (v: number) => Math.round(v).toLocaleString("en-US");
 
@@ -145,7 +145,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
     const start = curAdh.weekStart;
     const end = new Date(`${start}T00:00:00Z`); end.setUTCDate(end.getUTCDate() + 7);
     const endIso = end.toISOString().slice(0, 10);
-    return (data?.history ?? []).filter((s) => !s.estimated && s.date >= start && s.date < endIso).sort((a, b) => a.date.localeCompare(b.date));
+    return (data?.history ?? []).filter((s) => s.date >= start && s.date < endIso).sort((a, b) => a.date.localeCompare(b.date));
   }, [data, curAdh]);
 
   if (loading) return <div className="p-6 text-sm text-slate-500">{is ? "Hleð…" : "Loading…"}</div>;
@@ -349,7 +349,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                   {is ? `Raunálag · vika ${curAdh.week}` : `Actual load · week ${curAdh.week}`}
                   {curAdh.inProgress && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">{is ? "í gangi" : "in progress"}</span>}
                 </div>
-                <div className="text-[11px] text-slate-500">{curAdh.sessions} {is ? "æfingar/leikir í vikunni" : "sessions this week"}</div>
+                <div className="text-[11px] text-slate-500">{curAdh.sessions} {is ? "æfingar/leikir í vikunni" : "sessions this week"}{(curAdh.estimatedSessions ?? 0) > 0 ? ` · ${curAdh.estimatedSessions} ${is ? "áætluð" : "estimated"}` : ""}</div>
               </div>
               {/* Per-session load */}
               {weekSessions.length ? (
@@ -364,7 +364,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                           <td className="py-1 pr-3 tabular-nums text-slate-600">{f0(s.distance)} m</td>
                           <td className="py-1 pr-3 tabular-nums text-slate-600">{f0(s.hsr)} m</td>
                           <td className="py-1 pr-3 tabular-nums text-slate-600">{f0(s.sprint)} m</td>
-                          <td className="py-1 pr-3 text-slate-500">{s.isMatch ? (is ? "leikur" : "match") : s.injured ? (is ? "meiddur" : "injured") : (is ? "æfing" : "training")}</td>
+                          <td className="py-1 pr-3 text-slate-500">
+                            {s.isMatch ? (is ? "leikur" : "match") : s.injured ? (is ? "meiddur" : "injured") : (is ? "æfing" : "training")}
+                            {s.estimated && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-700" title={is ? "Áætlað (gleymdi kubbnum) — telst með í raunálagi vikunnar en ekki í grunnlínunni." : "Estimated (forgot pod) — counts toward the week's actual load, not the baseline."}>{is ? "áætlað" : "est."}</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -170,3 +170,20 @@ test("GPS variant folds a knee injury's IMA risk qualities into efforts", () => 
   assert.ok(effortsWeeks.length > 0);
   assert.ok(effortsWeeks.every((w) => w.caution), "efforts should be caution-flagged for a knee injury on GPS");
 });
+
+test("a pod-estimated session counts toward the ramp's actual load but NOT the healthy baseline", () => {
+  const base = fixture();
+  // Add an estimated session in the current plan week (06-15 anchor) alongside the real ones.
+  const withEst = [...base, session("2026-06-19", { estimated: true, load: 500, distance: 5000, hsr: 400, sprint: 100 })];
+  const real = computeReturnToTraining({ sessions: base, refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15" });
+  const est = computeReturnToTraining({ sessions: withEst, refDate: "2026-07-04", currentlyInjured: false, rttStartDate: "2026-06-15" });
+  // Healthy ceiling is identical — the estimate must not move his norm.
+  assert.equal(est.baseline.volume, real.baseline.volume);
+  // But week-1 actual load is HIGHER by the estimate, and it's flagged.
+  const w1 = est.adherence.find((a) => a.week === 1)!;
+  const w1real = real.adherence.find((a) => a.week === 1)!;
+  const volEst = w1.cells.find((c) => c.quality === "volume")!.actual;
+  const volReal = w1real.cells.find((c) => c.quality === "volume")!.actual;
+  assert.equal(volEst, volReal + 500);
+  assert.equal(w1.estimatedSessions, 1);
+});

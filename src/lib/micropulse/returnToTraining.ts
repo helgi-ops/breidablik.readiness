@@ -96,7 +96,7 @@ export type RttWeekTarget = {
 };
 export type RttLayoff = { days: number | null; retainedPct: number | null; rampWeeks: number };
 export type RttAdherenceCell = { quality: QualityKey; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
-export type RttAdherenceWeek = { week: number; weekStart: string; sessions: number; inProgress: boolean; cells: RttAdherenceCell[] };
+export type RttAdherenceWeek = { week: number; weekStart: string; sessions: number; estimatedSessions: number; inProgress: boolean; cells: RttAdherenceCell[] };
 export type RttResult = {
   currentlyInjured: boolean;
   unit: "week";
@@ -174,15 +174,10 @@ function addDays(dateIso: string, n: number): string {
 
 type WeekAgg = { weekStart: string; injured: boolean; count: number; totals: Record<QualityKey, number>; topSpeed: number; codLeft: number; codRight: number };
 
-export function computeReturnToTraining(inp: RttInput): RttResult {
-  // Variant picks the movement axis: IMA (Pro) or efforts (Core/Lite GPS).
-  const variant: RttVariant = inp.variant ?? "ima";
-  const order = qualityOrderForVariant(variant);
-  const real = inp.sessions.filter((s) => !s.estimated);
-
-  // Aggregate sessions → weeks (MATCHES INCLUDED — a healthy week has a match).
+/** Aggregate a session list into weekly totals (Monday-based). MATCHES INCLUDED. */
+function aggregateWeeks(sessions: RttSession[], order: QualityKey[]): Map<string, WeekAgg> {
   const byWeek = new Map<string, WeekAgg>();
-  for (const s of real) {
+  for (const s of sessions) {
     const wk = weekStart(s.date);
     let a = byWeek.get(wk);
     if (!a) { a = { weekStart: wk, injured: false, count: 0, totals: Object.fromEntries(ALL_QUALITIES.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
@@ -192,6 +187,21 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     if (s.topSpeed > 0 && s.topSpeed <= 45) a.topSpeed = Math.max(a.topSpeed, s.topSpeed);
     a.codLeft += s.codLeft; a.codRight += s.codRight;
   }
+  return byWeek;
+}
+
+export function computeReturnToTraining(inp: RttInput): RttResult {
+  // Variant picks the movement axis: IMA (Pro) or efforts (Core/Lite GPS).
+  const variant: RttVariant = inp.variant ?? "ima";
+  const order = qualityOrderForVariant(variant);
+  const real = inp.sessions.filter((s) => !s.estimated);
+
+  // Two aggregations: the HEALTHY baseline / floor / asymmetry use REAL sessions
+  // only (a pod-estimate must not define his norm). Adherence — what he ACTUALLY
+  // did this ramp week — uses ALL sessions, so a session he did but forgot his
+  // pod for (estimated from a team-mate) still counts toward his weekly load.
+  const byWeek = aggregateWeeks(real, order);
+  const byWeekAll = aggregateWeeks(inp.sessions, order);
   const allWeeks = [...byWeek.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const healthyWeeks = allWeeks.filter((w) => !w.injured);
   const recentWeeks = allWeeks.slice(-3);
@@ -323,7 +333,8 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     const lastWeek = Math.min(weeks, elapsed + 1);
     for (let w = 1; w <= lastWeek; w++) {
       const ws = addDays(anchor, 7 * (w - 1));
-      const agg = byWeek.get(ws);
+      const agg = byWeekAll.get(ws);                       // actual = everything he did (incl. pod-estimated)
+      const estimatedSessions = (agg?.count ?? 0) - (byWeek.get(ws)?.count ?? 0);
       const cells: RttAdherenceCell[] = order.map((q) => {
         const target = weekTargets.find((t) => t.week === w && t.quality === q)?.target ?? 0;
         const actual = round(agg?.totals[q] ?? 0, QLABEL[q].dp);
@@ -331,7 +342,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
         const status: RttAdherenceCell["status"] = deltaPct > ADHERE_BAND ? "over" : deltaPct < -ADHERE_BAND ? "under" : "on";
         return { quality: q, target, actual, deltaPct, status };
       });
-      adherence.push({ week: w, weekStart: ws, sessions: agg?.count ?? 0, inProgress: ws === refWk, cells });
+      adherence.push({ week: w, weekStart: ws, sessions: agg?.count ?? 0, estimatedSessions, inProgress: ws === refWk, cells });
     }
   }
 
