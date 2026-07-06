@@ -3,25 +3,17 @@
  * PUT  /api/coach/return-to-training/[playerId]   (save start date / overrides)
  *
  * Return-to-training history + injury-aware plan for one player. Team-scoped
- * (requireCoachAccessForTeam). The ceiling is built from HEALTHY-window, non-
- * match, real sessions only — injury windows come from the UNION of
- * injury_events + player_injuries (either table can flag a date injured), and
- * any type mismatch is surfaced, not silently resolved.
+ * (requireCoachAccessForTeam). The heavy computation lives in buildRttForPlayer
+ * (shared with the team-summary endpoint) so the page and the post-training
+ * report can never drift.
  */
 
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { computeReturnToTraining, injuryRiskProfile, type RttSession } from "@/lib/micropulse/returnToTraining";
+import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 
 export const runtime = "nodejs";
-
-type Win = { start: string; end: string; type: string; source: "injury_events" | "player_injuries"; isActive: boolean };
-
-const today = () => new Date().toISOString().slice(0, 10);
-const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-const clampSpeed = (v: unknown) => { const n = num(v); return n > 0 && n <= 45 ? n : 0; };
-const inWindow = (d: string, w: Win) => d >= w.start && d <= w.end;
 
 async function resolve(req: Request, playerId: string) {
   const sb = getSupabaseAdmin();
@@ -39,121 +31,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     const { sb, player, teamId } = await resolve(req, playerId);
     const url = new URL(req.url);
     const windowDays = Math.min(400, Math.max(30, Number(url.searchParams.get("window")) || 180));
-    const since = new Date(Date.now() - windowDays * 86400000).toISOString().slice(0, 10);
-    const now = today();
 
-    // ── Injury windows (union of both tables) ──────────────────────────────
-    const [ieRes, piRes] = await Promise.all([
-      sb.from("injury_events").select("injury_date, injury_type, return_date, is_active").eq("player_id", playerId),
-      sb.from("player_injuries").select("injury_date, injury_type, status, rtp_stage, estimated_return_date, actual_return_date").eq("player_id", playerId),
-    ]);
-    const windows: Win[] = [];
-    // player_injuries (the RTP workflow) is AUTHORITATIVE — same rule as the
-    // Injuries/RTP page: active = status !== "cleared". A passed estimated return
-    // date does NOT close an injury; only "cleared" or an actual return does.
-    // injury_events.is_active can be stale, so it only marks "active" for players
-    // with no RTP record (else it is history-only, still shaded on the timeline).
-    const hasPi = (piRes.data ?? []).length > 0;
-    for (const r of (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
-      if (!r.injury_date) continue;
-      const ieOpen = r.is_active !== false && (!r.return_date || r.return_date >= now);
-      windows.push({ start: r.injury_date, end: ieOpen ? now : (r.return_date ?? now), type: r.injury_type ?? "injury", source: "injury_events", isActive: !hasPi && ieOpen });
-    }
-    for (const r of (piRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; status: string | null; actual_return_date: string | null; estimated_return_date: string | null }>) {
-      if (!r.injury_date) continue;
-      const open = r.status !== "cleared" && !r.actual_return_date;
-      const end = open ? now : (r.actual_return_date ?? r.estimated_return_date ?? now);
-      windows.push({ start: r.injury_date, end, type: r.injury_type ?? "injury", source: "player_injuries", isActive: open });
-    }
-    const currentlyInjured = windows.some((w) => w.isActive);
-
-    // Active RTP protocol stage/status (from player_injuries — the RTP workflow),
-    // so the load ramp and the clinical stage sit in ONE view. Most-recent open one.
-    const activePi = ((piRes.data ?? []) as Array<{ injury_date: string; status: string | null; rtp_stage: number | null; actual_return_date: string | null }>)
-      .filter((r) => r.status !== "cleared" && !r.actual_return_date)
-      .sort((a, b) => (b.injury_date ?? "").localeCompare(a.injury_date ?? ""))[0];
-    const rtp = activePi ? { status: activePi.status ?? "injured", stage: Number(activePi.rtp_stage ?? 0) } : null;
-
-    const headInjury = windows.some((w) => /concuss|head|hia|heilahrist|höfu|hofu|hnakk/i.test(w.type) && (w.isActive || w.end >= since));
-    // Surface a source disagreement (e.g. concussion vs sprain) rather than pick one.
-    const typesByStart = new Map<string, Set<string>>();
-    for (const w of windows) { const s = typesByStart.get(w.start) ?? new Set(); s.add(w.type.toLowerCase()); typesByStart.set(w.start, s); }
-    const injuryDiscrepancy = [...typesByStart.values()].some((s) => s.size > 1);
-
-    // ── Match dates (schedule with an opponent ∪ manual minutes) ───────────
-    const [schedRes, minRes] = await Promise.all([
-      sb.from("match_schedule").select("match_date, opponent").eq("team_id", teamId),
-      sb.from("match_player_minutes").select("match_date").eq("player_id", playerId),
-    ]);
-    const matchDates = new Set<string>();
-    for (const s of (schedRes.data ?? []) as Array<{ match_date: string; opponent: string | null }>) if ((s.opponent ?? "").trim() !== "") matchDates.add(s.match_date);
-    for (const m of (minRes.data ?? []) as Array<{ match_date: string }>) matchDates.add(m.match_date);
-
-    // ── Sessions ───────────────────────────────────────────────────────────
-    const { data: load } = await sb
-      .from("player_external_load_daily")
-      .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
-      .eq("player_id", playerId).eq("source", "catapult").gte("date", since).order("date");
-
-    const sessions: RttSession[] = ((load ?? []) as Array<Record<string, unknown>>).map((r) => {
-      const date = String(r.date);
-      const codLeft = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low);
-      const codRight = num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
-      const cod = codLeft + codRight;
-      return {
-        date,
-        injured: windows.some((w) => inWindow(date, w)),
-        isMatch: matchDates.has(date),
-        estimated: !!(r.raw_payload_json as { estimated?: boolean } | null)?.estimated,
-        load: num(r.total_player_load),
-        distance: num(r.total_distance),
-        hsr: num(r.high_speed_distance),
-        sprint: num(r.sprint_distance) || num(r.velocity_band6_total_distance),
-        accel: num(r.ima_accel),
-        decel: num(r.ima_decel),
-        decelHigh: num(r.ima_band3_decel_count),
-        cod,
-        codLeft,
-        codRight,
-        efforts: num(r.accel_decel_efforts),
-        topSpeed: clampSpeed(r.max_velocity),
-      };
-    });
-
-    // Variant: Pro/ELITE send IMA (accel/decel/cod); Core/Lite send
-    // accel_decel_efforts and no IMA (tier-complementary). Pick by which axis
-    // this player's own real sessions actually carry.
-    const realSess = sessions.filter((s) => !s.estimated);
-    const imaCount = realSess.filter((s) => s.accel > 0 || s.decel > 0 || s.decelHigh > 0 || s.cod > 0).length;
-    const effortsCount = realSess.filter((s) => s.efforts > 0).length;
-    const variant: "ima" | "gps" = imaCount > 0 && imaCount >= effortsCount ? "ima" : effortsCount > 0 ? "gps" : "ima";
-
-    // ── Saved plan (start date + coach overrides) ──────────────────────────
-    const { data: saved } = await sb.from("rtt_plans").select("rtt_start_date, weeks, overrides").eq("player_id", playerId).maybeSingle();
-    const rttStartDate = (saved as { rtt_start_date?: string | null } | null)?.rtt_start_date ?? null;
-
-    // Injury-type awareness: classify from the active injury (else the most
-    // recent) so the plan ramps THAT injury's key re-injury qualities slower.
-    const activeWins = windows.filter((w) => w.isActive);
-    const activeTypes = activeWins.map((w) => w.type);
-    const recentWin = [...windows].sort((a, b) => b.start.localeCompare(a.start))[0];
-    const profile = injuryRiskProfile(activeTypes.length ? activeTypes : recentWin ? [recentWin.type] : []);
-
-    // Layoff = days out for the governing injury (active one, else most recent):
-    // from its start to when training resumes (coach's start date, else today).
-    // Drives how high/long the ramp is — a short layoff barely detrains.
-    const governing = activeWins.sort((a, b) => a.start.localeCompare(b.start))[0] ?? recentWin;
-    const layoffEnd = rttStartDate ?? (governing && !currentlyInjured ? governing.end : now);
-    const dayMs = 86400000;
-    const layoffDays = governing ? Math.max(0, Math.round((Date.parse(layoffEnd) - Date.parse(governing.start)) / dayMs)) : null;
-
-    const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities, variant });
+    const built = await buildRttForPlayer(sb, playerId, teamId, windowDays);
+    const result = built.result;
 
     // ── Apply coach overrides to the computed plan (rules recommend; the coach
     // can override, and the override is logged). Latest override per (quality,
     // week) wins; the target is replaced and flagged so the UI shows it + why.
-    const overrides = (Array.isArray((saved as { overrides?: unknown } | null)?.overrides)
-      ? (saved as { overrides: Array<{ quality?: string; week?: number; to?: number; reason?: string }> }).overrides
+    const overrides = (Array.isArray(built.savedOverrides)
+      ? (built.savedOverrides as Array<{ quality?: string; week?: number; to?: number; reason?: string }>)
       : []);
     if (result.plan && overrides.length) {
       const latest = new Map<string, { to: number; reason: string }>();
@@ -172,24 +58,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       }
     }
 
-    // On the GPS variant fold the injury's IMA-only risk qualities into "efforts"
-    // so the UI (caution banner + re-injury watch) references qualities that
-    // actually exist in this player's plan.
-    const IMA_ONLY = new Set(["accel", "decel", "decelHigh", "cod"]);
-    const riskForVariant = variant === "gps"
-      ? Array.from(new Set(profile.riskQualities.map((q) => (IMA_ONLY.has(q) ? "efforts" : q)))).filter((q) => result.qualityOrder.includes(q as never))
-      : profile.riskQualities;
-
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
       window: windowDays,
-      history: sessions,
-      injuryWindows: windows,
-      injuryDiscrepancy,
-      headInjury,
-      injuryProfile: { ...profile, riskQualities: riskForVariant },
-      rtp,
-      rttStartDate,
+      history: built.sessions,
+      injuryWindows: built.windows,
+      injuryDiscrepancy: built.injuryDiscrepancy,
+      headInjury: built.headInjury,
+      injuryProfile: built.injuryProfile,
+      rtp: built.rtp,
+      rttStartDate: built.rttStartDate,
       overrides,
       ...result,
     });
