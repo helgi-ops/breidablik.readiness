@@ -79,8 +79,8 @@ async function getLandingPath(): Promise<string> {
 
     if (!error) {
       const done = extractCheckinDone(data);
-      // Checkin done → team page, not done → checkin first
-      return done ? "/team" : "/player/checkin";
+      // Checkin done → the player's own "Today" page, not done → checkin first
+      return done ? "/player" : "/player/checkin";
     }
   }
 
