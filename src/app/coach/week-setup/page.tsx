@@ -170,6 +170,10 @@ export default function WeekSetupPage() {
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
   const [seasonPhase, setSeasonPhase] = useState<SeasonPhase | null>(null);
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
+  // Provenance when the match day was auto-detected from the Fixtures schedule
+  // (match_schedule) rather than typed manually. Cleared once a saved Week Setup
+  // exists for the week (the coach's own data takes over).
+  const [scheduleNote, setScheduleNote] = useState<string | null>(null);
 
   // ✅ PRESEASON fix: manual override jafnvel þó 1–2 leikir
   const [manualOverride, setManualOverride] = useState<boolean>(true);
@@ -197,6 +201,8 @@ export default function WeekSetupPage() {
     teamIdHint: "Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.",
     weekStart: "Vikuupphaf (mánudagur)", season: "Tímabil", weekType: "Vikugerð",
     noMatch: "Enginn leikur", oneMatch: "1 leikur", twoMatches: "2 leikir",
+    fromSchedule: "Sótt sjálfkrafa úr Leikjadagatali:",
+    fromScheduleHint: "Þú getur samt breytt vikugerð eða leikupplýsingum að neðan.",
     manualTitle: "Leyfa handvirka vikugerð (eins og NO_MATCH)",
     manualDesc: "Gott í preseason: þú stýrir dag-til-dags áherslum þó það séu 1–2 leikir.",
     next: "Næsta →", back: "← Til baka",
@@ -223,6 +229,8 @@ export default function WeekSetupPage() {
     teamIdHint: "If this is empty, the coach isn't linked to a team in profiles/coach_teams.",
     weekStart: "Week start (Monday)", season: "Season", weekType: "Week type",
     noMatch: "No match", oneMatch: "1 match", twoMatches: "2 matches",
+    fromSchedule: "Auto-detected from Fixtures:",
+    fromScheduleHint: "You can still change the week type or match details below.",
     manualTitle: "Allow manual week setup (like NO_MATCH)",
     manualDesc: "Good in preseason: you control day-to-day intent even with 1–2 matches.",
     next: "Next →", back: "← Back",
@@ -347,6 +355,9 @@ export default function WeekSetupPage() {
       }
 
       if (data) {
+        // Saved Week Setup exists → it's the coach's own data; the Fixtures
+        // schedule no longer drives this week.
+        setScheduleNote(null);
         const row = data as WeekRow;
         const wt = coerceWeekType((row as any).week_type);
         setWeekType(wt);
@@ -380,9 +391,42 @@ export default function WeekSetupPage() {
           },
         ]);
       } else {
-        setWeekType("NO_MATCH");
-        setMatches(DEFAULT_MATCHES);
+        // No saved Week Setup for this week yet → auto-detect the match day from
+        // the Fixtures schedule (match_schedule). Fixtures is the source of truth:
+        // the coach sets the month's games once and the match day flows in here.
+        // Prefilled (not locked) so the coach keeps control — once they save this
+        // week it's theirs and a later schedule edit won't overwrite it.
         setNoMatchIntents(getDefaultNoMatchIntents());
+        const weekEndISO = addDays(weekStart, 6);
+        const { data: sched } = await supabase
+          .from("match_schedule")
+          .select("match_date, opponent, is_home, kickoff_time")
+          .eq("team_id", tid)
+          .gte("match_date", weekStart)
+          .lte("match_date", weekEndISO)
+          .order("match_date", { ascending: true });
+        if (!alive) return;
+        const found = (sched ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null; kickoff_time: string | null }>;
+        if (found.length === 0) {
+          setWeekType("NO_MATCH");
+          setMatches(DEFAULT_MATCHES);
+          setScheduleNote(null);
+        } else {
+          const picks = found.slice(0, 2);
+          const toInput = (p: typeof found[number], id: string): MatchInput => ({
+            match_id: id,
+            date: p.match_date,
+            kickoff_time: p.kickoff_time ? p.kickoff_time.slice(0, 5) : "",
+            home_away: p.is_home === false ? "A" : "H",
+          });
+          setWeekType(picks.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
+          setMatches([toInput(picks[0], "M1"), picks[1] ? toInput(picks[1], "M2") : DEFAULT_MATCHES[1]]);
+          setScheduleNote(
+            picks
+              .map((p) => `${p.match_date}${p.opponent ? ` — ${p.opponent}` : ""} (${p.is_home === false ? "A" : "H"})`)
+              .join(" · "),
+          );
+        }
       }
 
       setLoading(false);
@@ -427,6 +471,7 @@ export default function WeekSetupPage() {
     setWeekType(next);
     setError(null);
     setOk(null);
+    setScheduleNote(null); // coach has taken manual control of the week type
 
     setMatches((prev) => {
       const first = prev[0] ?? DEFAULT_MATCHES[0];
@@ -918,6 +963,12 @@ export default function WeekSetupPage() {
                 {t.twoMatches}
               </Button>
             </div>
+            {scheduleNote && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                <span className="font-semibold">{t.fromSchedule}</span> {scheduleNote}
+                <div className="mt-0.5 text-sky-700">{t.fromScheduleHint}</div>
+              </div>
+            )}
           </div>
 
           {/* Manual override toggle */}

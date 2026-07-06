@@ -105,6 +105,9 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
 // clubs (head coach vs S&C coach) so separating them mirrors how the
 // staff actually splits responsibilities.
 export const teamPlanningLinks: SidebarLink[] = [
+  // Fixtures is the upstream source of match days — Week setup reads the match
+  // day for a week from here, so it sits first in the planning workflow.
+  { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
