@@ -455,14 +455,18 @@ export default function PlayerCheckinPage() {
       <div className="mx-auto max-w-xl px-4 py-8">
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-xl">🏟️ Leikdagur</CardTitle>
+            <CardTitle className="text-xl">{lang === "IS" ? "🏟️ Leikdagur" : "🏟️ Match day"}</CardTitle>
             <CardDescription>
-              Í dag er leikur. Check-in er valkvætt — GPS og RPE eftir leikinn koma sjálfvirkt inn í kerfið og þjálfarinn hefur allar nauðsynlegar upplýsingar.
+              {lang === "IS"
+                ? "Í dag er leikur. Check-in er valkvætt — GPS og RPE eftir leikinn koma sjálfvirkt inn í kerfið og þjálfarinn hefur allar nauðsynlegar upplýsingar."
+                : "There's a match today. Check-in is optional — post-match GPS and RPE flow into the system automatically and the coach has everything needed."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Ef eitthvað er að (meiðsl, veikindi eða sérstök þreyta) — gerðu check-in svo þjálfarinn fái vitneskju áður en leikurinn fer í gang.
+              {lang === "IS"
+                ? "Ef eitthvað er að (meiðsl, veikindi eða sérstök þreyta) — gerðu check-in svo þjálfarinn fái vitneskju áður en leikurinn fer í gang."
+                : "If something's off (injury, illness or unusual fatigue) — check in so the coach knows before kickoff."}
             </p>
           </CardContent>
           <CardFooter className="flex gap-2">
@@ -472,14 +476,14 @@ export default function PlayerCheckinPage() {
               className="w-1/2 rounded-xl"
               onClick={() => router.push(checkinReturnPath())}
             >
-              Sleppa
+              {lang === "IS" ? "Sleppa" : "Skip"}
             </Button>
             <Button
               type="button"
               className="w-1/2 rounded-xl"
               onClick={() => setGameBypass(true)}
             >
-              Gera Check-in
+              {lang === "IS" ? "Gera Check-in" : "Check in"}
             </Button>
           </CardFooter>
         </Card>
@@ -492,24 +496,26 @@ export default function PlayerCheckinPage() {
       <div className="mx-auto max-w-xl px-4 py-8">
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-xl">Check-in móttekið ✅</CardTitle>
+            <CardTitle className="text-xl">{lang === "IS" ? "Check-in móttekið ✅" : "Check-in received ✅"}</CardTitle>
             <CardDescription>
-              Takk{playerName ? `, ${playerName}` : ""}! Dagsæfing er nú uppfærð og læst sjálfvirkt.
+              {lang === "IS"
+                ? `Takk${playerName ? `, ${playerName}` : ""}! Dagsæfing er nú uppfærð og læst sjálfvirkt.`
+                : `Thanks${playerName ? `, ${playerName}` : ""}! Today's session is now updated and locked automatically.`}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">Fatigue/Energy: {fatigueEnergy ?? "-"}</Badge>
-              <Badge variant="secondary">Sleep quality: {sleepQuality ?? "-"}</Badge>
-              <Badge variant="secondary">Sleep duration: {sleepDuration ?? "-"}</Badge>
-              <Badge variant="secondary">Stress/Mood: {stressMood ?? "-"}</Badge>
-              <Badge variant="secondary">Muscle soreness: {muscleSoreness ?? "-"}</Badge>
+              <Badge variant="secondary">{c.q.fatigue.title}: {fatigueEnergy ?? "-"}</Badge>
+              <Badge variant="secondary">{c.q.sleepQuality.title}: {sleepQuality ?? "-"}</Badge>
+              <Badge variant="secondary">{c.q.sleepDuration.title}: {sleepDuration ?? "-"}</Badge>
+              <Badge variant="secondary">{c.q.stressMood.title}: {stressMood ?? "-"}</Badge>
+              <Badge variant="secondary">{c.q.soreness.title}: {muscleSoreness ?? "-"}</Badge>
             </div>
 
             {notes.trim() ? (
               <div className="rounded-xl border bg-muted/30 p-3 text-sm">
-                <div className="mb-1 text-xs font-semibold text-muted-foreground">Athugasemd</div>
+                <div className="mb-1 text-xs font-semibold text-muted-foreground">{lang === "IS" ? "Athugasemd" : "Note"}</div>
                 <div className="whitespace-pre-wrap">{notes.trim()}</div>
               </div>
             ) : null}
@@ -519,20 +525,21 @@ export default function PlayerCheckinPage() {
           {/* Coach-player chat */}
           {playerId && (
             <div className="px-6 pb-4">
-              <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Skilaboð frá þjálfara</div>
+              <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">{lang === "IS" ? "Skilaboð frá þjálfara" : "Message from coach"}</div>
               <ChatThread
                 playerId={playerId}
-                playerName={playerName ?? "Leikmaður"}
+                playerName={playerName ?? (lang === "IS" ? "Leikmaður" : "Player")}
                 entryDate={todayIsoDateUTC()}
                 compact
                 viewerRole="player"
+                lang={lang}
               />
             </div>
           )}
 
           <CardFooter>
             <Button className="w-full rounded-xl" onClick={() => (window.location.href = checkinReturnPath())}>
-              Áfram
+              {lang === "IS" ? "Áfram" : "Continue"}
             </Button>
           </CardFooter>
         </Card>

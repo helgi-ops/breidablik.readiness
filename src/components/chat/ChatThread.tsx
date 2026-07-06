@@ -21,6 +21,7 @@ interface ChatThreadProps {
   compact?: boolean;
   checkinNotes?: string | null;
   viewerRole?: "player" | "coach" | "admin";
+  lang?: "IS" | "EN";
 }
 
 export default function ChatThread({
@@ -30,8 +31,18 @@ export default function ChatThread({
   compact = false,
   checkinNotes,
   viewerRole = "coach",
+  lang = "IS",
 }: ChatThreadProps) {
   const supabase = getSupabaseClient();
+  const isIS = lang === "IS";
+  const tt = {
+    loading: isIS ? "Hleð..." : "Loading...",
+    emptyCoach: isIS ? "Engin skilaboð ennþá. Skrifaðu leikmanninum." : "No messages yet. Write to the player.",
+    emptyPlayer: isIS ? "Engin skilaboð frá þjálfara." : "No messages from the coach.",
+    phCoach: isIS ? "Skrifa skilaboð til leikmanns..." : "Write a message to the player...",
+    phPlayer: isIS ? "Skrifa skilaboð til þjálfara..." : "Write a message to the coach...",
+    send: isIS ? "Senda" : "Send",
+  };
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -208,12 +219,12 @@ export default function ChatThread({
         )}
 
         {loading && messages.length === 0 && (
-          <div className="text-xs text-slate-400 text-center py-4">Hleð...</div>
+          <div className="text-xs text-slate-400 text-center py-4">{tt.loading}</div>
         )}
 
         {!loading && messages.length === 0 && !checkinNotes && (
           <div className="text-xs text-slate-400 text-center py-4">
-            {viewerRole === "coach" ? "Engin skilaboð ennþá. Skrifaðu leikmanninum." : "Engin skilaboð frá þjálfara."}
+            {viewerRole === "coach" ? tt.emptyCoach : tt.emptyPlayer}
           </div>
         )}
 
@@ -253,7 +264,7 @@ export default function ChatThread({
         <div className="flex items-end gap-2">
           <textarea
             className="flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-0"
-            placeholder={viewerRole === "coach" ? "Skrifa skilaboð til leikmanns..." : "Skrifa skilaboð til þjálfara..."}
+            placeholder={viewerRole === "coach" ? tt.phCoach : tt.phPlayer}
             rows={compact ? 1 : 2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -266,7 +277,7 @@ export default function ChatThread({
             disabled={!draft.trim() || sending}
             className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-800 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {sending ? "..." : "Senda"}
+            {sending ? "..." : tt.send}
           </button>
         </div>
       </div>
