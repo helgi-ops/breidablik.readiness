@@ -120,22 +120,29 @@ function StepDot({ active }: { active: boolean }) {
   );
 }
 
-function friendlySupabaseError(e: any) {
+function friendlySupabaseError(e: any, lang: "IS" | "EN" = "IS") {
   const msg = String(e?.message ?? e ?? "");
+  const is = lang === "IS";
 
   if (e?.code === "23505" || msg.toLowerCase().includes("duplicate key")) {
-    return "Þú hefur nú þegar skilað check-in í dag. Ef þarf að breyta, hafðu samband við þjálfara.";
+    return is
+      ? "Þú hefur nú þegar skilað check-in í dag. Ef þarf að breyta, hafðu samband við þjálfara."
+      : "You've already submitted a check-in today. If you need to change it, contact your coach.";
   }
 
   if (e?.code === "22007" || msg.toLowerCase().includes("invalid input syntax for type date")) {
-    return "Villa með dagsetningu í vistun. Við sendum alltaf YYYY-MM-DD — ef þetta heldur áfram er líklegt að trigger/fall í DB sé að reyna að setja '' í einhvern DATE dálk.";
+    return is
+      ? "Villa með dagsetningu í vistun. Við sendum alltaf YYYY-MM-DD — ef þetta heldur áfram er líklegt að trigger/fall í DB sé að reyna að setja '' í einhvern DATE dálk."
+      : "Date error while saving. We always send YYYY-MM-DD — if this persists, a DB trigger/function is likely trying to insert '' into a DATE column.";
   }
 
   if (e?.code === "42501" || msg.toLowerCase().includes("row-level security")) {
-    return "Aðgangsvilla (RLS). Þú hefur ekki heimild til að vista check-in. Hafðu samband við þjálfara.";
+    return is
+      ? "Aðgangsvilla (RLS). Þú hefur ekki heimild til að vista check-in. Hafðu samband við þjálfara."
+      : "Access error (RLS). You don't have permission to save a check-in. Contact your coach.";
   }
 
-  return msg || "Villa kom upp við að vista check-in.";
+  return msg || (is ? "Villa kom upp við að vista check-in." : "Something went wrong saving your check-in.");
 }
 
 /** Where to go after check-in. PT clients open this with ?return=/client so
@@ -265,7 +272,9 @@ export default function PlayerCheckinPage() {
       // ✅ SANITY: ef eitthvað er “off” í mapping (ætti aldrei að gerast ef query eq user_id)
       if (playerRow.user_id && playerRow.user_id !== user.id) {
         setLoading(false);
-        setError("Tenging notanda við leikmann er röng (user_id mismatch). Hafðu samband við þjálfara.");
+        setError(lang === "IS"
+          ? "Tenging notanda við leikmann er röng (user_id mismatch). Hafðu samband við þjálfara."
+          : "User-to-player link is wrong (user_id mismatch). Contact your coach.");
         return;
       }
 
@@ -434,7 +443,7 @@ export default function PlayerCheckinPage() {
       setSuccess(true);
     } catch (e: any) {
       console.error("CHECKIN submit error:", e);
-      setError(friendlySupabaseError(e));
+      setError(friendlySupabaseError(e, lang));
     } finally {
       setSaving(false);
     }
@@ -444,7 +453,7 @@ export default function PlayerCheckinPage() {
     return (
       <div className="mx-auto flex min-h-[70vh] max-w-xl items-center justify-center px-4">
         <div className="w-full rounded-2xl border bg-card p-6 text-center">
-          <div className="text-sm text-muted-foreground">Hleð check-in…</div>
+          <div className="text-sm text-muted-foreground">{lang === "IS" ? "Hleð check-in…" : "Loading check-in…"}</div>
         </div>
       </div>
     );
