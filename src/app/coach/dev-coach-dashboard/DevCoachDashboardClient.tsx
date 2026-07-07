@@ -7525,6 +7525,30 @@ export default function CoachPage() {
       );
     };
 
+    // Layer 1 explainability (manifesto layered read): a plain, one-line "why"
+    // for EVERY player, visible without opening anything. Built from the actual
+    // plain signals on the row — the low wellness sub-scores (1–2 on the 1–5
+    // scale), an elevated load, a neural-load flag — NOT the engine-internal
+    // final_reason string ("abs=RED n=9…"), which is debug jargon. Green players
+    // get a reassuring line; flagged players get their real drivers. No new data.
+    const isReadIS = lang === "IS";
+    const isGreenRow = String(r.final_color ?? "green").toLowerCase() === "green";
+    const whyBits: string[] = [];
+    if (typeof r.sleep_quality === "number" && r.sleep_quality <= 2) whyBits.push(isReadIS ? `svefn ${r.sleep_quality}` : `sleep ${r.sleep_quality}`);
+    if (typeof r.fatigue_energy === "number" && r.fatigue_energy <= 2) whyBits.push(isReadIS ? `orka ${r.fatigue_energy}` : `energy ${r.fatigue_energy}`);
+    if (typeof r.stress_mood === "number" && r.stress_mood <= 2) whyBits.push(isReadIS ? `streita ${r.stress_mood}` : `stress ${r.stress_mood}`);
+    if (typeof r.muscle_soreness === "number" && r.muscle_soreness <= 2) whyBits.push(isReadIS ? `eymsli ${r.muscle_soreness}` : `soreness ${r.muscle_soreness}`);
+    if (r.sore_areas && r.sore_areas.length > 0) whyBits.push(isReadIS ? `sár svæði (${r.sore_areas.length})` : `sore areas (${r.sore_areas.length})`);
+    if (compositeLoad.concernLevel !== "none") whyBits.push(isReadIS ? "álag yfir vananum" : "load above usual");
+    if (neuralBiasApplied) whyBits.push(isReadIS ? "taugaálag hátt" : "neural load high");
+    const whyLine = noCheckinOnGameDay
+      ? null
+      : whyBits.length > 0
+        ? whyBits.join(" · ")
+        : isGreenRow
+          ? (isReadIS ? "Öll merki í hans vanalega bili — leyfður í fulla æfingu." : "All signals in his usual range — cleared for full training.")
+          : (isReadIS ? "Flaggaður af reiknivélinni — smelltu fyrir nánar." : "Flagged by the engine — open for details.");
+
     return (
       <React.Fragment key={r.ui_key ?? r.readiness_entry_id ?? pid}>
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
@@ -7606,6 +7630,12 @@ export default function CoachPage() {
                   </span>
                 ) : null}
               </div>
+              {whyLine ? (
+                <div className="mt-2.5 text-sm leading-snug text-slate-600">
+                  <span className="font-medium text-slate-500">{lang === "IS" ? "Af hverju: " : "Why: "}</span>
+                  {whyLine}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[360px] xl:items-end">
