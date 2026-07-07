@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Download, FileText, ChevronDown } from "lucide-react";
-import { useLang } from "@/lib/lang";
+import { useLang, applyTeamDefaultLanguage } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
 import ChatThread from "@/components/chat/ChatThread";
@@ -3401,8 +3401,11 @@ export default function CoachPage() {
 
     // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
     if (resolvedTeamId) {
-      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type, training_mode_default").eq("id", resolvedTeamId).maybeSingle();
+      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type, training_mode_default, default_language").eq("id", resolvedTeamId).maybeSingle();
       if (teamData) {
+        // Club default language: applies only if the coach hasn't manually picked
+        // one on this browser (a manual toggle always wins). Persists across pages.
+        applyTeamDefaultLanguage(String((teamData as any)?.default_language ?? "") || null);
         setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
         setTeamType(String((teamData as any)?.team_type ?? "club_team"));
         const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
