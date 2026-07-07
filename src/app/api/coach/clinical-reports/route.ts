@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
   let q = ctx.sb
     .from("clinical_reports")
-    .select("id, player_id, player_name_raw, report_date, clinician_name, clinician_licence, clinic, file_name, file_path, extracted_json, status, confirmed_by, confirmed_at, created_at")
+    .select("id, player_id, player_name_raw, report_date, clinician_name, clinician_licence, clinic, file_name, file_path, extracted_json, raw_text, status, confirmed_by, confirmed_at, created_at")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
   if (playerId) q = q.eq("player_id", playerId);

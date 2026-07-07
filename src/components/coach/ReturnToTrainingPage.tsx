@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import RttPlayerPicker from "./RttPlayerPicker";
+import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 
 type Quality = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
 const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
@@ -186,6 +187,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           </div>
         </div>
       </div>
+
+      {/* Confirmed physio note (if any) — the clinician's authoritative read, with
+          the on-pitch L/R cross-check. Renders nothing when there's no note. */}
+      <PhysioNoteCard playerId={playerId} is={is} />
 
       {/* Layer 0 — re-injury watch: actual OVER recommended on a key re-injury quality */}
       {riskOvershoots.length > 0 && (
