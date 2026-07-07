@@ -14,7 +14,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { downloadMatchMovementPdf } from "@/components/coach/MatchMovementPdf";
 import ShowDetails from "@/components/common/ShowDetails";
 import { CompareRadar, ChartZoom } from "@/components/coach/PlayerGameReportCharts";
 import {
@@ -501,7 +500,13 @@ export default function MatchMovementComparison() {
               </select>
               <button
                 type="button"
-                onClick={() => downloadMatchMovementPdf(data, effSquadMatch, is ? "Lið" : "Team", lang)}
+                onClick={async () => {
+                  // Load the PDF module (and @react-pdf/renderer) lazily on click
+                  // so this heavy dependency never enters the match-movement page
+                  // bundle at module-load time.
+                  const { downloadMatchMovementPdf } = await import("@/components/coach/MatchMovementPdf");
+                  await downloadMatchMovementPdf(data, effSquadMatch, is ? "Lið" : "Team", lang);
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 title={is ? "Leikhreyfing liðsins vs venjan — PDF" : "Squad match movement vs norm — PDF"}
               >
