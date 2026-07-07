@@ -41,6 +41,7 @@ export const CLINICAL_EXTRACT_SYSTEM = `You extract structured clinical data fro
 Non-negotiable rules:
 - PRESERVE SIDE. Icelandic: "hægri" = right, "vinstri" = left, "báðum megin" / "beggja vegna" / "tvíhliða" = bilateral. Use "left" | "right" | "bilateral" | null. Never guess a side that isn't stated.
 - You are READING, not diagnosing. Keep the clinician's meaning faithful; do not add findings, diagnoses, or advice that are not in the text.
+- ONLY record injuries the player HAS had. Do NOT create injury_history entries for injuries the report explicitly says are ABSENT or denied (e.g. "no history of knee injury", "engin saga um hnémeiðsli", "engin merki um kviðslit" as a standalone) — a denial is not an injury.
 - If a field is not stated, use null (or an empty array). Do NOT invent values.
 - report_date and any dates as "YYYY-MM-DD".
 - Keep clinical terms; you may add a short plain gloss in parentheses, but do not replace the clinician's term.
