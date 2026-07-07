@@ -123,6 +123,17 @@ export async function POST(req: Request) {
       if (upsertErr) {
         return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 500 });
       }
+      // Same stale-subscription cleanup as the coach path: keep one active
+      // subscription per push host (device family) for this player.
+      try {
+        const host = new URL(endpoint).host;
+        await sb.from("player_push_subscriptions")
+          .update({ is_active: false, updated_at: nowIso })
+          .eq("player_id", playerId)
+          .eq("is_active", true)
+          .neq("endpoint", endpoint)
+          .like("endpoint", `https://${host}/%`);
+      } catch { /* non-fatal — the new subscription is already registered */ }
       return NextResponse.json({ ok: true, kind: "player", playerId });
     }
 
@@ -145,6 +156,21 @@ export async function POST(req: Request) {
       if (upsertErr) {
         return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 500 });
       }
+      // Prevent stale-subscription pile-up: iOS PWA reinstalls / OS updates mint a
+      // NEW endpoint each time but the old one stays is_active, so a coach who
+      // re-added the app accumulated several subscriptions and received every
+      // alert once per stale endpoint. When a device re-subscribes, deactivate
+      // this profile's OTHER active subscriptions on the SAME push host (= same
+      // device family), keeping only the one just registered.
+      try {
+        const host = new URL(endpoint).host;
+        await sb.from("coach_push_subscriptions")
+          .update({ is_active: false, updated_at: nowIso })
+          .eq("profile_id", userId)
+          .eq("is_active", true)
+          .neq("endpoint", endpoint)
+          .like("endpoint", `https://${host}/%`);
+      } catch { /* non-fatal — the new subscription is already registered */ }
       return NextResponse.json({ ok: true, kind: "coach", profileId: userId });
     }
 
