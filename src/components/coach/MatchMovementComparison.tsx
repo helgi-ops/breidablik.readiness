@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { downloadMatchMovementPdf } from "@/components/coach/MatchMovementPdf";
 import ShowDetails from "@/components/common/ShowDetails";
 import { CompareRadar, ChartZoom } from "@/components/coach/PlayerGameReportCharts";
 import {
@@ -498,6 +499,15 @@ export default function MatchMovementComparison() {
                 <option value="">{is ? "— (einn leikur)" : "— (single match)"}</option>
                 {[...data.matchDates].reverse().filter((d) => d !== effSquadMatch).map((d) => <option key={d} value={d}>{fmtDate(d, is)}</option>)}
               </select>
+              <button
+                type="button"
+                onClick={() => downloadMatchMovementPdf(data, effSquadMatch, is ? "Lið" : "Team", lang)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                title={is ? "Leikhreyfing liðsins vs venjan — PDF" : "Squad match movement vs norm — PDF"}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                {is ? "Sækja PDF" : "Download PDF"}
+              </button>
             </>
           )}
         </div>
