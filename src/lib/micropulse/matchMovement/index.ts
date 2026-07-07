@@ -259,5 +259,12 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   }
   playerList.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { teamId, variant, matchDates, rows, playerAverages, subAverages, players: playerList };
+  // Only surface match dates that actually have movement data. A future fixture
+  // (now that Week Setup / Fixtures write ahead-of-time match_schedule rows) or a
+  // past match with no usable GPS must not appear as a selectable-but-empty match
+  // — that was showing an empty squad table when the UI defaulted to the latest
+  // (future) fixture.
+  const matchDatesWithData = matchDates.filter((d) => rows.some((r) => r.match_date === d));
+
+  return { teamId, variant, matchDates: matchDatesWithData, rows, playerAverages, subAverages, players: playerList };
 }
