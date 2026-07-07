@@ -218,19 +218,25 @@ export default function MatchMovementComparison() {
   // AI explanation — the selection signature so a stale narrative never lingers
   // after the coach changes what's shown (only display `ai` if it matches).
   const aiSig = `${mode}|${effPlayerId}|${effMatchA}|${effMatchB}|${effSquadMatch}|${squadMatchB}`;
+  // Pure fetcher (returns the narrative text) so both the on-screen "Explain"
+  // button and the PDF export can reuse the same AI summary.
+  const fetchNarrative = async (): Promise<string | null> => {
+    const sb = getSupabaseClient();
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch("/api/coach/match-movement/narrative", {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+      body: JSON.stringify({ lang, mode, playerId: effPlayerId, matchA: effMatchA, matchB: effMatchB, squadMatch: effSquadMatch, squadMatchB }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error ?? "Failed");
+    return (j.narrative as string) ?? null;
+  };
   const genAi = async () => {
     setAiBusy(true); setAiErr(null);
     try {
-      const sb = getSupabaseClient();
-      const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch("/api/coach/match-movement/narrative", {
-        method: "POST",
-        headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
-        body: JSON.stringify({ lang, mode, playerId: effPlayerId, matchA: effMatchA, matchB: effMatchB, squadMatch: effSquadMatch, squadMatchB }),
-      });
-      const j = await res.json();
-      if (!res.ok) { setAiErr(j.error ?? "Failed"); return; }
-      setAi({ sig: aiSig, text: j.narrative as string });
+      const text = await fetchNarrative();
+      if (text) setAi({ sig: aiSig, text });
     } catch (e) {
       setAiErr(e instanceof Error ? e.message : "Network error");
     } finally {
@@ -480,7 +486,13 @@ export default function MatchMovementComparison() {
                   // so this heavy dependency never enters the match-movement page
                   // bundle at module-load time.
                   const { downloadMatchMovementPdf } = await import("@/components/coach/MatchMovementPdf");
-                  await downloadMatchMovementPdf(data, effSquadMatch, is ? "Lið" : "Team", lang);
+                  // Include the AI summary: reuse it if already generated for this
+                  // selection, otherwise fetch it so the export always carries it.
+                  let summary: string | undefined = ai && ai.sig === aiSig ? ai.text : undefined;
+                  if (!summary) {
+                    try { summary = (await fetchNarrative()) ?? undefined; } catch { /* export still works without it */ }
+                  }
+                  await downloadMatchMovementPdf(data, effSquadMatch, is ? "Lið" : "Team", lang, summary);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 title={is ? "Leikhreyfing liðsins vs venjan — PDF" : "Squad match movement vs norm — PDF"}

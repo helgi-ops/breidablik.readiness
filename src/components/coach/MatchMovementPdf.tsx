@@ -75,6 +75,10 @@ const s = StyleSheet.create({
   cell: { padding: 3, fontSize: 8, fontWeight: 700, textAlign: "right", fontFamily: "Helvetica" },
   nameCell: { padding: 3, fontSize: 8 },
   legend: { marginTop: 10, fontSize: 7.5, color: "#6b6658", lineHeight: 1.4 },
+  aiBox: { marginTop: 10, borderLeft: "3 solid #2740e6", backgroundColor: "#f2f4fd", paddingVertical: 6, paddingHorizontal: 8 },
+  aiLabel: { fontSize: 8, fontWeight: 700, color: "#2740e6", marginBottom: 2 },
+  aiText: { fontSize: 8.5, color: "#221f18", lineHeight: 1.45 },
+  aiNote: { fontSize: 7, color: "#8a8676", marginTop: 3 },
   defRow: { flexDirection: "row", marginBottom: 2.5 },
   defLabel: { width: "26%", fontSize: 8, fontWeight: 700 },
   defText: { width: "74%", fontSize: 8, color: "#4b4638", lineHeight: 1.35 },
@@ -85,6 +89,7 @@ export async function downloadMatchMovementPdf(
   squadMatch: string,
   teamName: string,
   lang: "IS" | "EN",
+  aiSummary?: string,
 ) {
   const is = lang === "IS";
   const dims = movementDimensions(result.variant);
@@ -131,6 +136,16 @@ export async function downloadMatchMovementPdf(
             );
           })}
         </View>
+
+        {/* AI summary — the same narrative the "Explain" button writes on screen.
+            Labelled as AI and written from the numbers above (manifesto). */}
+        {aiSummary ? (
+          <View style={s.aiBox}>
+            <Text style={s.aiLabel}>{is ? "✷ AI-samantekt" : "✷ AI summary"}</Text>
+            <Text style={s.aiText}>{aiSummary}</Text>
+            <Text style={s.aiNote}>{is ? "Skrifað úr tölunum að ofan — ekki læknisfræðilegt mat. Reglur reikna; AI útskýrir." : "Written from the numbers above — not a medical judgement. Rules compute; AI explains."}</Text>
+          </View>
+        ) : null}
 
         {/* Per-player deviation from each player's own norm */}
         <Text style={s.sectionTitle}>{is ? "Hver leikmaður vs sín eigin venja (% frávik)" : "Each player vs own norm (% deviation)"}</Text>
