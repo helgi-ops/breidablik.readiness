@@ -22,6 +22,7 @@ import {
   whyWord,
   dimByKey,
   movementDimensions,
+  DIM_DEFS,
   type DimensionKey,
   type MovementDimension,
   type MovementFingerprint,
@@ -31,32 +32,6 @@ import {
 } from "@/lib/micropulse/matchMovement/types";
 
 type Mode = "norm" | "ab" | "squad";
-
-// Plain, coach-facing definition of each dimension (IMA + GPS variants) — the
-// data is new to many coaches, so this says what the axis IS in one line.
-const DIM_DEFS: Record<DimensionKey, { en: string; is: string }> = {
-  totalPerMin:     { en: "The overall amount of movement work per minute — accelerations, decelerations and turns combined.",
-                     is: "Heildar hreyfi-vinna á mínútu — hröðun, hemlun og snúningar samanlagt." },
-  accelDecelRatio: { en: "The balance of speeding up vs slowing down. Above 1 = more accelerating (front-foot); below 1 = more braking (reactive).",
-                     is: "Jafnvægi milli hröðunar og hemlunar. Yfir 1 = meiri hröðun (sóknar); undir 1 = meiri hemlun (viðbragð)." },
-  codPerMin:       { en: "How often the player changes direction per minute — the agility demand of his game.",
-                     is: "Hversu oft leikmaðurinn skiptir um stefnu á mínútu — lipurðar-krafan í leik hans." },
-  codLeftPct:      { en: "Share of turns to the left vs right. Near 50% is balanced; a big skew flags a one-sided pattern.",
-                     is: "Hlutfall vinstri vs hægri snúninga. Um 50% er jafnt; mikil skekkja bendir á einhliða mynstur." },
-  hiCadencePerMin: { en: "Fast, sprint-type running per minute (stride bands 6-8) — the IMA read on high-speed running.",
-                     is: "Hratt sprett-hlaup á mínútu (skref-bönd 6-8) — IMA-mæling á hröðu hlaupi." },
-  // GPS variant (Core/Lite)
-  workPerMin:      { en: "Overall physical workload per minute (GPS player load) — how hard the game was.",
-                     is: "Heildar líkamlegt álag á mínútu (GPS) — hversu erfiður leikurinn var." },
-  effortsPerMin:   { en: "Sharp accelerations and decelerations per minute — the agility / stop-start demand (the GPS stand-in for change of direction).",
-                     is: "Snöggar hröðunir og hemlanir á mínútu — lipurðar-/stopp-og-fara krafan (GPS-staðgengill fyrir stefnubreytingar)." },
-  hsrPerMin:       { en: "High-speed running metres per minute — how much fast running.",
-                     is: "Háhraðahlaup (metrar) á mínútu — hversu mikið hratt hlaup." },
-  sprintPerMin:    { en: "Sprint-distance metres per minute — top-end running.",
-                     is: "Sprett-vegalengd (metrar) á mínútu — hámarkshraða hlaup." },
-  topSpeed:        { en: "Peak sprint speed reached in the match (km/h).",
-                     is: "Hæsti hraði sem náðist í leiknum (km/klst)." },
-};
 
 function fmtDate(iso: string, is: boolean): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" });

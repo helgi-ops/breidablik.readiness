@@ -13,7 +13,7 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import { movementDimensions } from "@/lib/micropulse/matchMovement/types";
+import { movementDimensions, DIM_DEFS } from "@/lib/micropulse/matchMovement/types";
 import type { MatchMovementResult, MatchMovementRow, MovementDimension, MovementFingerprint } from "@/lib/micropulse/matchMovement/types";
 
 function meanFp(rows: MatchMovementRow[], dims: MovementDimension[]): MovementFingerprint {
@@ -74,7 +74,10 @@ const s = StyleSheet.create({
   hdrCell: { padding: 3, fontSize: 7.5, fontWeight: 700 },
   cell: { padding: 3, fontSize: 8, fontWeight: 700, textAlign: "right", fontFamily: "Helvetica" },
   nameCell: { padding: 3, fontSize: 8 },
-  legend: { marginTop: 12, fontSize: 7.5, color: "#6b6658", lineHeight: 1.4 },
+  legend: { marginTop: 10, fontSize: 7.5, color: "#6b6658", lineHeight: 1.4 },
+  defRow: { flexDirection: "row", marginBottom: 2.5 },
+  defLabel: { width: "26%", fontSize: 8, fontWeight: 700 },
+  defText: { width: "74%", fontSize: 8, color: "#4b4638", lineHeight: 1.35 },
 });
 
 export async function downloadMatchMovementPdf(
@@ -152,13 +155,22 @@ export async function downloadMatchMovementPdf(
           })}
         </View>
 
-        <Text style={s.legend}>
-          {dims.map((d) => `${is ? d.is : d.en} = ${is ? d.moreIS : d.moreEN} / ${is ? d.lessIS : d.lessEN}`).join("  ·  ")}
-        </Text>
+        {/* Explainability — the same plain per-dimension definitions the coach
+            sees on screen, so the export explains its numbers (manifesto). */}
+        <Text style={s.sectionTitle}>{is ? "Hvað mælikvarðarnir þýða" : "What the dimensions mean"}</Text>
+        {dims.map((d) => {
+          const def = DIM_DEFS[d.key];
+          return (
+            <View key={d.key} style={s.defRow}>
+              <Text style={s.defLabel}>{is ? d.is : d.en}</Text>
+              <Text style={s.defText}>{def ? (is ? def.is : def.en) : ""}</Text>
+            </View>
+          );
+        })}
         <Text style={s.legend}>
           {is
-            ? "Frávik = fjarlægð frá venju leikmannsins (eða liðsins), ekki meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig."
-            : "Deviation = distance from the player's (or squad's) usual, not an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move."}
+            ? "Lestur: hver mælikvarði er borinn saman við venju leikmannsins (eða liðsins). Frávik = fjarlægð frá venju, EKKI meiðslaáhætta. Kóbalt = yfir venju, gull = undir venju, dauft = innan venjulegs bils. „Venja“ = meðaltal leikmanns yfir leiki. Engine (GPS) = hversu mikið; Driver (IMA) = hvernig hann hreyfist. Staðlað á mínútu. Reglur reikna — ekki AI. Buchheit 2014 (persónuleg viðmið), di Prampero 2015."
+            : "How to read it: each dimension is compared to the player's (or squad's) usual. Deviation = distance from usual, NOT an injury-risk score. Cobalt = above usual, gold = below usual, muted = within the usual range. \"Norm\" = the player's match average. Engine (GPS) = how much; Driver (IMA) = how they move. Normalised per minute. Rules compute — not AI. Buchheit 2014 (personal norms), di Prampero 2015."}
         </Text>
       </Page>
     </Document>,
