@@ -1149,6 +1149,116 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
   );
 }
 
+// ── Daily-nudge opt-in toggles ───────────────────────────────────────────────
+//
+// Opt-IN toggles for the gentle morning outlook + evening recap push nudges.
+// Off by default; shown only once the player has granted push (so the toggles
+// are meaningful). Sits quietly at the bottom of Today. Easy to turn off.
+
+function NudgeRow({ label, sub, enabled, onToggle }: { label: string; sub: string; enabled: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 py-1.5 text-left">
+      <span className="min-w-0">
+        <span className="block text-sm text-zinc-800">{label}</span>
+        <span className="block text-[11px] text-zinc-400">{sub}</span>
+      </span>
+      <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${enabled ? "bg-emerald-500" : "bg-zinc-300"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${enabled ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+    </button>
+  );
+}
+
+function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean } | null>(null);
+  const [granted, setGranted] = useState(false);
+  const is = lang === "IS";
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { setGranted(false); }
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!granted) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/player/notification-prefs", { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json();
+        if (!cancelled && res.ok && j?.prefs) setPrefs(j.prefs);
+      } catch { /* optional */ }
+    })();
+    return () => { cancelled = true; };
+  }, [granted]);
+
+  useEffect(() => {
+    if (!prefs) return;
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      const anchor = document.getElementById("dev-today-more-slot") ?? document.getElementById("dev-ate-command-card-slot") ?? detectHeaderCard();
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-nudge-prefs-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-nudge-prefs-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-nudge-prefs-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0);
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [prefs]);
+
+  const toggle = async (type: "daily_outlook" | "daily_recap") => {
+    if (!prefs) return;
+    const next = !prefs[type];
+    setPrefs({ ...prefs, [type]: next }); // optimistic
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      await fetch("/api/player/notification-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ notification_type: type, enabled: next }),
+      });
+    } catch { setPrefs((p) => (p ? { ...p, [type]: !next } : p)); /* revert */ }
+  };
+
+  if (!mountNode || activeTab !== "today" || !granted || !prefs) return null;
+
+  return createPortal(
+    <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "DAGLEGAR ÁMINNINGAR" : "DAILY NUDGES"}</div>
+      <div className="mt-1.5 divide-y divide-zinc-100">
+        <NudgeRow label={is ? "Morgunn: áætlun dagsins" : "Morning: today's outlook"} sub={is ? "Stutt yfirsýn yfir daginn" : "A quick look at your day"} enabled={prefs.daily_outlook} onToggle={() => toggle("daily_outlook")} />
+        <NudgeRow label={is ? "Kvöld: hvernig gekk" : "Evening: how it went"} sub={is ? "Samanburður við þinn takt" : "How today compared to your usual"} enabled={prefs.daily_recap} onToggle={() => toggle("daily_recap")} />
+      </div>
+      <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
+    </div>,
+    mountNode,
+  );
+}
+
 // ── Contextual RPE reminder portal ───────────────────────────────────────────
 //
 // RPE is a time-sensitive daily action (log it right after training), not an
@@ -1967,6 +2077,9 @@ export default function DevPlayerClient() {
           the bottom of Today, replacing the old last-match + weekly-digest cards
           (round 14a). Their content lives on their own tabs, one tap away. */}
       <TodayMorePortal activeTab={activeTab} lang={lang as "IS" | "EN"} onOpen={setTab} />
+      {/* Opt-in toggles for the daily nudges — bottom of Today, shown once push
+          is granted. Off by default; easy to turn on/off. */}
+      <PlayerNudgePrefsPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
       {/* Top tabs — hidden in PWA mode (bottom nav used instead) */}
       {!isPwa && tabsMountNode
         ? createPortal(tabsElement, tabsMountNode)

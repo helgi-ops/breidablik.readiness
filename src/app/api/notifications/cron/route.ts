@@ -17,8 +17,24 @@ import { getCurrentScheduledSlot as getCurrentRpeScheduledSlot } from "@/lib/ses
 import { matchReadinessEmailSchedule, matchRpeEmailSchedule } from "@/lib/reminders/emailSchedule";
 import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminders/emailReminders";
 import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
+import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNudge";
 
 export const runtime = "nodejs";
+
+/** Minutes-since-midnight in the operational timezone. */
+function localMinutes(now: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+/** Opt-in daily player nudge windows (±30 min): outlook ~08:00, recap ~19:00. */
+function matchNudgeSlot(now: Date, timeZone: string): { nudgeType: NudgeType; slotKey: string } | null {
+  const mins = localMinutes(now, timeZone);
+  if (Math.abs(mins - 8 * 60) <= 30) return { nudgeType: "daily_outlook", slotKey: "daily_outlook_0800" };
+  if (Math.abs(mins - 19 * 60) <= 30) return { nudgeType: "daily_recap", slotKey: "daily_recap_1900" };
+  return null;
+}
 
 type CronBody = {
   dryRun?: boolean;
@@ -76,8 +92,9 @@ export async function POST(req: Request) {
 
     const anyCheckinSlot = profileSlots.some((p) => p.checkinSlot);
     const anyRpeSlot = profileSlots.some((p) => p.rpeSlot);
+    const nudgeSlot = matchNudgeSlot(now, timeZone);
 
-    if (!anyCheckinSlot && !anyRpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot) {
+    if (!anyCheckinSlot && !anyRpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot && !nudgeSlot) {
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -109,6 +126,7 @@ export async function POST(req: Request) {
           ? { localTime: rpeEmailSlot.localTime, slotKey: rpeEmailSlot.slotKey }
           : null,
         cmj: isCmjSlot ? { slot: "07:00", active: true } : null,
+        nudge: nudgeSlot,
       });
     }
 
@@ -183,10 +201,18 @@ export async function POST(req: Request) {
       );
     }
 
+    // Opt-in daily player nudges (off by default — only reaches players who
+    // enabled the type). Outlook fires on training days; recap only for players
+    // with a session today. Break/off-day-aware, de-duped.
+    const nudgeResult = nudgeSlot
+      ? await sendDailyNudge(sb, { nudgeType: nudgeSlot.nudgeType, dateKey, scheduledSlot: nudgeSlot.slotKey })
+      : null;
+
     return NextResponse.json({
       ok: true,
       dateKey,
       timeZone,
+      nudge: nudgeResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot
