@@ -89,7 +89,9 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
-import DailyBriefingCard from "@/components/coach/DailyBriefingCard";
+import DailyBriefingCard, { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
+import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
+import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
 import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
@@ -1024,19 +1026,6 @@ function computeTeamRisk(signal: TeamSignal | null, lang: "IS" | "EN" = "IS") {
     why: `Impact ${impactScore.toFixed(1)} (RECOVERY ${recoveryPct.toFixed(0)}%, REDUCED ${reducedPct.toFixed(0)}%).`,
     recommendation: rc.stableRec,
   };
-}
-
-function riskUi(level: "UNKNOWN" | "STABLE" | "CAUTION" | "HIGH") {
-  switch (level) {
-    case "HIGH":
-      return { border: "border-red-200", bg: "bg-red-50", text: "text-red-800", pill: "bg-red-600 text-white" };
-    case "CAUTION":
-      return { border: "border-yellow-200", bg: "bg-yellow-50", text: "text-yellow-900", pill: "bg-yellow-600 text-white" };
-    case "STABLE":
-      return { border: "border-green-200", bg: "bg-green-50", text: "text-green-800", pill: "bg-green-600 text-white" };
-    default:
-      return { border: "border-gray-200", bg: "bg-gray-50", text: "text-gray-800", pill: "bg-gray-600 text-white" };
-  }
 }
 
 function titleCaseToken(value: string | null | undefined): string {
@@ -8924,52 +8913,13 @@ export default function CoachPage() {
           />
           {/* Team break / return-to-training banner (declared breaks). */}
           {coachTeamId && <CoachBreakBanner teamId={coachTeamId} lang={lang === "EN" ? "EN" : "IS"} />}
-          {/* Daily briefing — Gabbett (2020) Communicate step. This is now the
-              single "what's the story today" read: it weaves the sharp-spike and
-              post-match recovery signals into its 5-second pulse, and the
-              detailed banners sit directly below it as the drill-down. */}
-          <DailyBriefingCard
-            today={today}
-            lang={lang}
-            rows={rows as any}
-            playerComposites={playerComposites}
-            complianceSummary={complianceSummary as any}
-            mdDayToday={mdDayToday}
-            teamSignal={teamSignal as any}
-            dayStateLabel={dayStateInfo?.label ?? null}
-            recentDayTypes={recentDayTypes}
-            playerBaselines={playerBaselines}
-            playerCounterfactuals={playerCounterfactualsMap}
-            playerInjuries={playerInjuryStatus}
-            playerDeltas={yesterdayDeltas}
-          />
-          {/* Fasi 2 (decision-first): the deep S&C signal layer moves below the
-              briefing under a "Show details" disclosure. These are the drill-down
-              (per-player / per-signal detail), each self-hiding when nothing needs
-              attention — kept, not removed (acceptance #6). Verdict + attention
-              stay at the top; the S&C detail is one click away. */}
-          <details className="group rounded-xl border border-border bg-card/60">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground">
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              {lang === "IS" ? "Sýna nánar — S&C merki" : "Show details — S&C signals"}
-            </summary>
-            <div className="space-y-4 px-4 pb-4">
-              {/* Drill-down for the two signals the briefing names above. */}
-              <UnfamiliarSpikeBanner lang={lang} date={today} />
-              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Calibration context beside the verdict — when a colour is over-sensitive
-                  for this squad AND present today. Rule-derived, cites the 30-day recovery
-                  rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
-              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
-                  the movement axis (IMA), each one plain line linking to its own detail
-                  page. Rules decide, not AI. */}
-              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
-              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
-              {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
-              <UnfamiliarLoadCard lang={lang} date={today} />
-            </div>
-          </details>
+          {/* Lota B / step B3: decision-first order is Command Center →
+              Attention list → group table. The Daily Briefing (rich per-player
+              attention rows: counterfactuals, driver chips, confidence, deltas)
+              and the deep S&C signal layer now live below the group table under
+              a single "Show details" disclosure — kept, not removed (golden rule
+              #4). They stay the drill-down until B4's player drawer hosts that
+              detail on click. */}
           {/* Today Command Center */}
           <Card className={summaryCardClass}>
             <CardHeader className="pb-2">
@@ -9041,7 +8991,6 @@ export default function CoachPage() {
             <CardContent className="space-y-4">
               {(() => {
                 const risk = computeTeamRisk(teamSignal, lang);
-                const ui = riskUi(risk.level);
                 const fatigueSummary = (fatigueSnapshot as { teamFatigueSummary?: { dominantType?: string } } | null)
                   ?.teamFatigueSummary;
                 const fatigueDominant = String(fatigueSummary?.dominantType ?? "—");
@@ -9257,47 +9206,9 @@ export default function CoachPage() {
                 const nFull = teamSignal?.n_full ?? 0;
                 const nReduced = teamSignal?.n_reduced ?? 0;
                 const nRecovery = teamSignal?.n_recovery ?? 0;
-                // Primary tiles — the four counts a head coach reads every
-                // morning to know who can train and how tomorrow looks.
-                // Kept visible by default.
-                const primaryTiles: Array<{ label: string; value: string; sub: string; tone: string; info: string }> = breakToday ? [] : [
-                  {
-                    label: "Ready",
-                    value: String(nFull),
-                    sub: "Cleared for a full session",
-                    tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
-                    info: "Players cleared for full training today — no readiness or load concerns. Hard sessions are safe for these players.",
-                  },
-                  {
-                    label: "Modified",
-                    value: String(nReduced),
-                    sub: "Lighter or adjusted plan",
-                    tone: "border-amber-200 bg-amber-50 text-amber-800",
-                    info: "Players who should still train but with adjustments — lower volume, skip the hardest blocks, or cap movement load around ~60–80% of plan.",
-                  },
-                  {
-                    label: "Recovery",
-                    value: String(nRecovery),
-                    sub: "Needs a rest day",
-                    tone: "border-rose-200 bg-rose-50 text-rose-800",
-                    info: "Players who need a recovery day instead of training — high fatigue, illness, return-to-play, or 60+ match minutes yesterday.",
-                  },
-                  {
-                    label: "Tomorrow",
-                    // Friendlier capitalisation of the forecast band.
-                    value: nextDayRisk === "—" ? "—" : nextDayRisk.charAt(0) + nextDayRisk.slice(1).toLowerCase(),
-                    // Plain meaning instead of the bare word "Forecast".
-                    sub: /low|safe/i.test(nextDayRisk)
-                      ? "Hard session OK"
-                      : /high|elevat|critical/i.test(nextDayRisk)
-                        ? "Expect more tired players"
-                        : nextDayRisk === "—"
-                          ? "Forecast"
-                          : "Plan a moderate day",
-                    tone: "border-slate-200 bg-slate-50 text-slate-800",
-                    info: "How the squad is likely to look tomorrow based on today's load and recent trajectory. Low = safe to plan a hard session tomorrow. Elevated = expect more players in the yellow / red bucket.",
-                  },
-                ];
+                // The Ready / Modified / Recovery / Tomorrow counts a head coach
+                // reads every morning now render inside TodayCommandCenter (B1)
+                // below, fed from these same nFull/nReduced/nRecovery signals.
 
                 // Secondary tiles — S&C / sport-science detail. Hidden by
                 // default behind the "Show team metrics" toggle so the
@@ -9321,7 +9232,27 @@ export default function CoachPage() {
 
                 return (
                   <>
-                    {/* Team outlook pill + Show-details toggle on the same row. */}
+                    {/* Today Command Center (Lota B / step B1) — decision-first
+                        verdict + AI-style summary + Ready / Modified / Recovery /
+                        Tomorrow counts. Fed from the SAME computed narrative and
+                        team signal the old hand-rolled narrative box + tiles used,
+                        so the verdict is computed once and can never diverge
+                        (no new data, no new API — golden rule #1). */}
+                    <TodayCommandCenter
+                      lang={lang === "IS" ? "IS" : "EN"}
+                      zone={(risk.level === "HIGH" ? "HIGH" : risk.level === "CAUTION" ? "CAUTION" : "READY") as CommandZone}
+                      headline={narrative.headline}
+                      aiSummary={narrative.detail}
+                      actions={narrative.bullets}
+                      counts={{ ready: nFull, modified: nReduced, recovery: nRecovery }}
+                      tomorrow={{ label: nextDayRisk === "—" ? "—" : nextDayRisk.charAt(0) + nextDayRisk.slice(1).toLowerCase() }}
+                      checkedIn={complianceSummary?.checkin.submitted ?? nFull}
+                      total={teamSignal?.n_players ?? (nFull + nReduced + nRecovery)}
+                      flaggedCount={nReduced + nRecovery}
+                    />
+
+                    {/* Team outlook + "Show team metrics" toggle. The S&C
+                        drill-down (secondary tiles below) stays one click away. */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                         Team outlook: {teamOutlook.band}
@@ -9334,44 +9265,6 @@ export default function CoachPage() {
                       >
                         {showCommandCenterDetails ? "Hide team metrics" : "Show team metrics"}
                       </button>
-                    </div>
-
-                    {/* Coach narrative box — MOVED UP. This is the answer
-                        to "what's today?". Tiles below are drill-down.
-                        Previously sat at the bottom, forcing the coach
-                        to scroll past 10 tiles to reach the verdict. */}
-                    <div className={`rounded-2xl border p-4 text-sm ${ui.pill}`}>
-                      <div className="text-[10px] uppercase tracking-wide opacity-80">
-                        {isOffDay ? (lang === "IS" ? "Dagurinn í dag" : "Today") : (lang === "IS" ? "Túlkun MicroPulse" : "MicroPulse interpretation")}
-                      </div>
-                      <div className="mt-2 text-base font-semibold text-slate-900">{narrative.headline}</div>
-                      <div className="mt-1.5 text-sm text-slate-700 leading-relaxed">{narrative.detail}</div>
-                      {narrative.bullets.length > 0 && (
-                        <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                          {narrative.bullets.map((b, i) => (
-                            <li key={i} className="flex gap-2">
-                              <span className="mt-0.5 shrink-0 text-slate-500">→</span>
-                              <span>{b}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Primary tiles — 4 counts a head coach reads every
-                        morning. Stays at 4 columns on wide screens so the
-                        coach can scan the row in one glance. */}
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      {primaryTiles.map((tile) => (
-                        <div key={tile.label} className={`${compactTileClass} ${tile.tone}`}>
-                          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
-                            <span className="opacity-80">{tile.label}</span>
-                            <CommandTileInfo title={tile.label} info={tile.info} />
-                          </div>
-                          <div className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</div>
-                          <div className="mt-1 text-xs opacity-75">{tile.sub}</div>
-                        </div>
-                      ))}
                     </div>
 
                     {/* Secondary tiles — S&C drill-down. Hidden by
@@ -9560,6 +9453,62 @@ export default function CoachPage() {
               })()}
             </CardContent>
           </Card>
+
+          {/* Attention list (Lota B / step B2) — one prioritized list built from
+              the SAME buildAttentionList source the Daily Briefing uses, so the
+              two can never disagree (no new data / no new API). ALERT before
+              MONITOR; clicking a row scrolls to that player in the group table
+              below. B4 will swap this click for the per-player decision drawer. */}
+          {rows.length > 0 && (() => {
+            const items: AttentionListItem[] = buildAttentionList(
+              rows as unknown as BriefingRow[],
+              playerComposites,
+              lang === "IS" ? "IS" : "EN",
+              playerBaselines,
+              playerCounterfactualsMap,
+              recentDayTypes,
+              today,
+              playerInjuryStatus,
+              yesterdayDeltas,
+            ).map((it: BriefingAttentionItem): AttentionListItem => {
+              const badges: string[] = [];
+              if (it.injury?.badge) badges.push(it.injury.badge);
+              // Unfamiliar-load badge reuses the Daily Briefing's own alert-level
+              // spike threshold (≥ 1.6× the personal norm) — no new computation.
+              if (it.plSpike != null && it.plSpike >= 1.6) {
+                badges.push(lang === "IS" ? "ÓVANALEGT ÁLAG" : "UNFAMILIAR LOAD");
+              }
+              return {
+                playerId: String(it.playerId),
+                name: it.name,
+                flag: it.level === "alert" ? "ALERT" : "MONITOR",
+                status: it.compactStatus || null,
+                reason: it.reasons[0] ?? it.compactStatus,
+                badges,
+                acwr: it.plSpike ?? null,
+                color: it.injury
+                  ? (it.injury.kind === "rtp" ? "YELLOW" : "RED")
+                  : it.level === "alert" ? "RED" : "YELLOW",
+              };
+            });
+            return (
+              <AttentionList
+                lang={lang === "IS" ? "IS" : "EN"}
+                items={items}
+                onOpenPlayer={(pid) => {
+                  if (typeof document === "undefined") return;
+                  const el = document.querySelector(`[data-player-id="${pid}"]`);
+                  if (!el) return;
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("ring-2", "ring-blue-500", "ring-offset-2");
+                  window.setTimeout(
+                    () => el.classList.remove("ring-2", "ring-blue-500", "ring-offset-2"),
+                    1600,
+                  );
+                }}
+              />
+            );
+          })()}
 
           {/* Decision Summary — per-player today */}
           {rows.length > 0 && (
@@ -9833,6 +9782,56 @@ export default function CoachPage() {
                 })}
               />
             )}
+
+          {/* Lota B / step B3 — "Show details" drill-down below the group table.
+              Holds the rich Daily Briefing (per-player attention rows with
+              counterfactuals, driver chips, confidence and day-over-day deltas)
+              and the deep S&C signal layer. Verdict + one attention list stay at
+              the top; this rich detail is one click away (golden rule #4: moved,
+              not removed). B4's player drawer will host the per-player detail on
+              click; until then the Daily Briefing keeps it reachable. */}
+          <details className="group rounded-xl border border-border bg-card/60">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground">
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              {lang === "IS" ? "Sýna nánar — ítarleg greining & S&C merki" : "Show details — full briefing & S&C signals"}
+            </summary>
+            <div className="space-y-4 px-4 pb-4">
+              {/* Daily briefing — Gabbett (2020) Communicate step. Rich
+                  per-player attention rows: counterfactuals, driver chips,
+                  confidence and day-over-day deltas. */}
+              <DailyBriefingCard
+                today={today}
+                lang={lang}
+                rows={rows as any}
+                playerComposites={playerComposites}
+                complianceSummary={complianceSummary as any}
+                mdDayToday={mdDayToday}
+                teamSignal={teamSignal as any}
+                dayStateLabel={dayStateInfo?.label ?? null}
+                recentDayTypes={recentDayTypes}
+                playerBaselines={playerBaselines}
+                playerCounterfactuals={playerCounterfactualsMap}
+                playerInjuries={playerInjuryStatus}
+                playerDeltas={yesterdayDeltas}
+              />
+              {/* Deep S&C signal layer — each self-hiding when nothing needs
+                  attention (per-player / per-signal drill-down). */}
+              <UnfamiliarSpikeBanner lang={lang} date={today} />
+              <RecoveryWatchBanner lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Calibration context beside the verdict — when a colour is over-sensitive
+                  for this squad AND present today. Rule-derived, cites the 30-day recovery
+                  rate, NEVER changes the colour (CLAUDE.md: distinct signal next to it). */}
+              <CalibrationVerdictNote lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Engine + Driver strip pair (Niklas Virtanen): the load axis (GPS) and
+                  the movement axis (IMA), each one plain line linking to its own detail
+                  page. Rules decide, not AI. */}
+              <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} variant="strip" />
+              <ImaVerdictStrip date={today} lang={lang === "EN" ? "EN" : "IS"} />
+              {/* Unfamiliar Load — Driver-layer "what to look at" (signal-level attention) */}
+              <UnfamiliarLoadCard lang={lang} date={today} />
+            </div>
+          </details>
+
           {/* Planned session load removed from Today: the chip read its day
               type from rows[0].planned_day_type, which does NOT reliably carry
               the Week-setup OFF designation — so on an OFF day it fell back to

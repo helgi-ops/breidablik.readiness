@@ -2399,6 +2399,7 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
 
   return (
     <div
+      data-player-id={row.player_id}
       className={`flex flex-col rounded-lg border-l-4 border ${cfg.cardBorderClass} ${cfg.cardBgClass} overflow-hidden cursor-pointer transition-shadow hover:shadow-md`}
       onClick={onClick}
       role="button"

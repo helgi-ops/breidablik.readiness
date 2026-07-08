@@ -29,7 +29,7 @@ import DecisionTraceModal from "@/components/coach/DecisionTraceModal";
 
 type FinalColor = "red" | "yellow" | "green";
 
-type BriefingRow = {
+export type BriefingRow = {
   player_id: string;
   full_name: string;
   entry_date?: string | null;
@@ -424,7 +424,7 @@ type DriverChip = {
   chronic?: boolean;
 };
 
-type AttentionItem = {
+export type AttentionItem = {
   playerId: string;
   name: string;
   level: AttentionLevel;
@@ -1196,7 +1196,7 @@ function statusSourceHint(item: AttentionItem, lang: "IS" | "EN"): string {
     : "Today's numbers are lower than what he usually reports. Source: Robertson 2017, Buchheit 2024.";
 }
 
-function buildAttentionList(
+export function buildAttentionList(
   rows: BriefingRow[],
   playerComposites: Record<string, PlayerCompositeEntry>,
   lang: "IS" | "EN",
