@@ -858,8 +858,8 @@ type TodayLoad = {
   rationaleEN: string;
   rationaleIS: string;
   personalTarget: number | null;
+  personalN: number;
   flag: "ok" | "build" | "reduce" | null;
-  flagReason: string | null;
   eased: "yellow" | "red" | null;
 };
 
@@ -987,12 +987,17 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
         <span className="text-zinc-400"> · </span>{is ? `~${data.matchPct}% af leik` : `~${data.matchPct}% of a match`}
       </div>
 
-      {/* Personal target (only when the plan has one for this player) */}
+      {/* Personal number — anchored to the SAME session type (your own MD-x usual) */}
       {data.personalTarget != null && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-200/70 pt-2 text-sm">
-          <span className="text-zinc-400">{is ? "Þitt viðmið í dag:" : "Your target today:"}</span>
-          <span className="font-semibold text-zinc-900">~{data.personalTarget}</span>
-          {flag && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${flag.cls}`}>{is ? flag.is : flag.en}</span>}
+        <div className="mt-2 border-t border-zinc-200/70 pt-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-zinc-600">{is ? `Á ${data.mdLabel} dögum ferðu venjulega í` : `On ${data.mdLabel} days you usually do`}</span>
+            <span className="font-semibold text-zinc-900">~{data.personalTarget}</span>
+            {flag && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${flag.cls}`}>{is ? flag.is : flag.en}</span>}
+          </div>
+          {data.personalN > 0 && (
+            <div className="mt-0.5 text-[10px] text-zinc-400">{is ? `úr ${data.personalN} ${data.mdLabel}-æfingum` : `from ${data.personalN} past ${data.mdLabel} sessions`}</div>
+          )}
         </div>
       )}
       {data.eased && (

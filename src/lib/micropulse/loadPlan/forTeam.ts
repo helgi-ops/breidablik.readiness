@@ -39,6 +39,91 @@ function addDaysISO(iso: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// Canonical Week-setup intent → MD mapping (matches the Week setup dropdown).
+const MD_OF: Record<string, string> = {
+  FORCE: "MD-4", NEURAL_VELOCITY: "MD-3", VELOCITY: "MD-2", POLISH_CALM: "MD-2", ACTIVATION: "MD-1",
+};
+
+/** A Week-setup intent token → MD context (mdDay / dayType / focus). */
+export function intentToMd(intentRaw: string | null | undefined): { mdDay: string | null; dayType: string | null; focus: string | null } {
+  const intent = String(intentRaw ?? "").toUpperCase();
+  if (!intent) return { mdDay: null, dayType: null, focus: null };
+  if (intent === "GAME") return { mdDay: "MD", dayType: "GAME", focus: null };
+  if (intent === "OFF" || intent === "RECOVERY") return { mdDay: null, dayType: "OFF", focus: null };
+  if (MD_OF[intent]) return { mdDay: MD_OF[intent], dayType: null, focus: intent };
+  return { mdDay: null, dayType: null, focus: null };
+}
+
+/** Monday of the session week (UTC) + weekday index (Mon=0..Sun=6). */
+function weekStartAndIdx(sessionDate: string): { weekStart: string; idx: number } {
+  const sd = new Date(sessionDate + "T00:00:00Z");
+  const dow = sd.getUTCDay(); // 0=Sun..6=Sat
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(sd); monday.setUTCDate(sd.getUTCDate() + mondayOffset);
+  return { weekStart: monday.toISOString().slice(0, 10), idx: dow === 0 ? 6 : dow - 1 };
+}
+
+/**
+ * Resolve today's MD context for a team/date. PRIMARY: the coach's Week setup
+ * (coach_week_setup.no_match_intents[weekdayIndex]). FALLBACK: the legacy
+ * v_training_day_context. Returns nulls when nothing is set.
+ */
+export async function resolveMdContext(
+  sb: SupabaseClient, teamId: string, sessionDate: string,
+): Promise<{ mdDay: string | null; dayType: string | null; focus: string | null }> {
+  let out: { mdDay: string | null; dayType: string | null; focus: string | null } = { mdDay: null, dayType: null, focus: null };
+  try {
+    const { weekStart, idx } = weekStartAndIdx(sessionDate);
+    const { data: cws } = await sb
+      .from("coach_week_setup").select("no_match_intents")
+      .eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle();
+    const intents = (cws as { no_match_intents: string[] | null } | null)?.no_match_intents;
+    const intent = Array.isArray(intents) && intents.length === 7 ? intents[idx] : null;
+    if (intent) { const m = intentToMd(intent); if (m.mdDay || m.dayType) out = m; }
+  } catch { /* fall through to legacy */ }
+
+  if (!out.mdDay && !out.dayType) {
+    try {
+      const { data: wsIds } = await sb.from("week_setups").select("id").eq("team_id", teamId);
+      const ids = (wsIds ?? []).map((w) => (w as { id: string }).id);
+      if (ids.length > 0) {
+        const { data: ctx } = await sb
+          .from("v_training_day_context").select("md_day, week_setup_id")
+          .in("week_setup_id", ids).eq("date", sessionDate).limit(1).maybeSingle();
+        if (ctx) out = { ...out, mdDay: (ctx as { md_day: string | null }).md_day ?? null };
+      }
+    } catch { /* no MD context */ }
+  }
+  return out;
+}
+
+/**
+ * Historical dates that were the SAME MD-day as `mdLabel` for this team (from
+ * Week-setup history), within `lookbackDays` before `sessionDate`. Used to
+ * anchor a player's "your usual MD-4" number to the same session type.
+ */
+export async function sameMdDayDates(
+  sb: SupabaseClient, teamId: string, mdLabel: string, sessionDate: string, lookbackDays = 180,
+): Promise<string[]> {
+  if (!mdLabel) return [];
+  const since = addDaysISO(sessionDate, -lookbackDays);
+  const { data: rows } = await sb
+    .from("coach_week_setup").select("week_start_date, no_match_intents")
+    .eq("team_id", teamId).gte("week_start_date", addDaysISO(since, -7)).lte("week_start_date", sessionDate);
+  const out: string[] = [];
+  for (const r of (rows ?? []) as Array<{ week_start_date: string | null; no_match_intents: string[] | null }>) {
+    const ws = r.week_start_date;
+    const intents = r.no_match_intents;
+    if (!ws || !Array.isArray(intents) || intents.length !== 7) continue;
+    for (let idx = 0; idx < 7; idx++) {
+      if (intentToMd(intents[idx]).mdDay !== mdLabel) continue;
+      const d = addDaysISO(ws, idx);
+      if (d >= since && d < sessionDate) out.push(d);
+    }
+  }
+  return out;
+}
+
 /**
  * Build the LoadPlan for a team on `sessionDate`. Returns null when the team has
  * no active players. Throws on a GPS read error (callers map to 500). `overrides`
@@ -60,64 +145,14 @@ export async function buildLoadPlanForTeam(
   for (const p of (players ?? []) as Array<{ id: string; full_name: string | null }>) nameById.set(String(p.id), (p.full_name ?? "—").trim());
   if (playerIds.length === 0) return null;
 
-  // MD context for the session date.
-  let mdDay: string | null = null;
-  let dayTypeResolved: string | null = null;
-  let focusResolved: string | null = null;
+  // MD context (shared resolver) — caller overrides win (the dashboard passes
+  // its already-resolved MD via query params).
+  const resolved = await resolveMdContext(sb, teamId, sessionDate);
+  const mdDay = overrides?.mdDay ?? resolved.mdDay;
+  const dayType = overrides?.dayType ?? resolved.dayType;
+  const focus = overrides?.focus ?? resolved.focus;
   const daysSincePrev: number | null = null;
   const daysToNext: number | null = null;
-
-  // ── PRIMARY source: the coach's manual Week setup (coach_week_setup) — the
-  // SAME source the dashboard's "Planned session load" card reads, so the two
-  // never disagree. no_match_intents[weekdayIndex] → MD day, focus, day type.
-  try {
-    const sd = new Date(sessionDate + "T00:00:00Z");
-    const dow = sd.getUTCDay(); // 0=Sun..6=Sat
-    const mondayOffset = dow === 0 ? -6 : 1 - dow;
-    const monday = new Date(sd); monday.setUTCDate(sd.getUTCDate() + mondayOffset);
-    const weekStart = monday.toISOString().slice(0, 10);
-    const idx = dow === 0 ? 6 : dow - 1; // Mon=0..Sun=6
-
-    const { data: cws } = await sb
-      .from("coach_week_setup")
-      .select("no_match_intents")
-      .eq("team_id", teamId)
-      .eq("week_start_date", weekStart)
-      .maybeSingle();
-    const intents = (cws as { no_match_intents: string[] | null } | null)?.no_match_intents;
-    const intent = Array.isArray(intents) && intents.length === 7 ? String(intents[idx] ?? "").toUpperCase() : null;
-    if (intent) {
-      const MD_OF: Record<string, string> = {
-        FORCE: "MD-4", NEURAL_VELOCITY: "MD-3", VELOCITY: "MD-2", POLISH_CALM: "MD-2", ACTIVATION: "MD-1",
-      };
-      if (intent === "GAME") { dayTypeResolved = "GAME"; mdDay = "MD"; }
-      else if (intent === "OFF" || intent === "RECOVERY") { dayTypeResolved = "OFF"; }
-      else if (MD_OF[intent]) { mdDay = MD_OF[intent]; focusResolved = intent; }
-    }
-  } catch { /* fall through to legacy / baseline */ }
-
-  // ── FALLBACK: legacy match-relative day context, only if Week setup gave nothing.
-  if (!mdDay && !dayTypeResolved) {
-    try {
-      const { data: wsIds } = await sb.from("week_setups").select("id").eq("team_id", teamId);
-      const ids = (wsIds ?? []).map((w) => (w as { id: string }).id);
-      if (ids.length > 0) {
-        const { data: ctx } = await sb
-          .from("v_training_day_context")
-          .select("md_day, week_setup_id")
-          .in("week_setup_id", ids)
-          .eq("date", sessionDate)
-          .limit(1)
-          .maybeSingle();
-        if (ctx) mdDay = (ctx as { md_day: string | null }).md_day ?? null;
-      }
-    } catch { /* no MD context — plan falls back gracefully */ }
-  }
-
-  // Caller overrides win (e.g. the dashboard passing its already-resolved MD).
-  mdDay = overrides?.mdDay ?? mdDay;
-  const dayType = overrides?.dayType ?? dayTypeResolved;
-  const focus = overrides?.focus ?? focusResolved;
 
   // GPS over the lookback window (120 days). PostgREST caps a response at 1000
   // rows, so page through with .range() and assemble the full set.
