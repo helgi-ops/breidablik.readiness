@@ -78,7 +78,9 @@ export type PlanForCompare = {
   perPlayer: PlanPlayer[];
 };
 
-function statusOf(planned: number | null, actual: number | null): { pct: number | null; status: PvaStatus } {
+/** Adherence classification for actual-vs-planned. Shared with the player recap
+ *  so its verdict uses the SAME thresholds as the coach planned-vs-actual. */
+export function statusOf(planned: number | null, actual: number | null): { pct: number | null; status: PvaStatus } {
   if (planned == null || planned <= 0 || actual == null) return { pct: null, status: "na" };
   const pct = Math.round((actual / planned) * 100);
   let status: PvaStatus;
