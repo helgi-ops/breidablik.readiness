@@ -2400,7 +2400,11 @@ function TodaySessionPortal({ structure, opts }: { structure: unknown; opts: Tod
     let observer: MutationObserver | null = null;
     const ensure = () => {
       if (cancelled) return false;
-      const anchor = document.getElementById("dev-ate-command-card-slot");
+      // Prefer the decision slot; fall back to the header card so the session is
+      // always placed even when the command-card slot isn't present.
+      const anchor =
+        document.getElementById("dev-ate-command-card-slot") ??
+        (document.querySelector('[data-player-card="header"]') as HTMLElement | null);
       if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-today-session-slot");
       if (!slot) {
@@ -2432,7 +2436,15 @@ function TodaySessionPortal({ structure, opts }: { structure: unknown; opts: Tod
     };
   }, []);
 
-  if (!mountNode) return null;
+  // Fail-safe: until the slot resolves (or if placement never succeeds), render
+  // the card inline so the session is never missing from Today.
+  if (!mountNode) {
+    return (
+      <div className="mt-3">
+        <TodaySessionCard structure={structure} opts={opts} />
+      </div>
+    );
+  }
   return createPortal(
     <div className="mt-3">
       <TodaySessionCard structure={structure} opts={opts} />
