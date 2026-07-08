@@ -2403,7 +2403,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   if (!workBlocks.length) return null;
 
   const themeColor = opts.themeColor ?? null;
-  const accentColor = themeColor || "#3730a3";
+  const accentColor = themeColor || "#2740e6";
   const subtitle = String(opts.headerTitle ?? "").trim();
 
   const primary = pickPrimaryBlock(workBlocks);

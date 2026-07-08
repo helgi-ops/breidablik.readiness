@@ -865,9 +865,9 @@ type TodayLoad = {
 
 const LOAD_BAND: Record<TodayLoad["band"], { pct: number; en: string; is: string; color: string }> = {
   light:     { pct: 30,  en: "Easy",      is: "Létt",        color: "#2b8a54" },
-  moderate:  { pct: 55,  en: "Moderate",  is: "Miðlungs",    color: "#0ea5e9" },
-  high:      { pct: 80,  en: "Hard",      is: "Erfitt",      color: "#d97706" },
-  very_high: { pct: 100, en: "Very hard", is: "Mjög erfitt", color: "#e11d48" },
+  moderate:  { pct: 55,  en: "Moderate",  is: "Miðlungs",    color: "#2740e6" },
+  high:      { pct: 80,  en: "Hard",      is: "Erfitt",      color: "#de9328" },
+  very_high: { pct: 100, en: "Very hard", is: "Mjög erfitt", color: "#a83e28" },
 };
 const LOAD_FOCUS: Record<TodayLoad["loadType"], { en: string; is: string }> = {
   mechanical: { en: "force", is: "kraftur" },
@@ -1035,10 +1035,10 @@ type TodayRecap = {
 
 const RECAP_VERDICT: Record<TodayRecap["status"], { en: string; is: string; dot: string }> = {
   on:         { en: "On plan — you trained like a typical", is: "Á áætlun — þú æfðir eins og venjulegur", dot: "#2b8a54" },
-  under:      { en: "Lighter than your usual", is: "Léttari en venjulegur", dot: "#0ea5e9" },
-  well_under: { en: "Much lighter than your usual", is: "Mun léttari en venjulegur", dot: "#0ea5e9" },
-  over:       { en: "A bigger day than your usual", is: "Stærri dagur en venjulegur", dot: "#d97706" },
-  well_over:  { en: "Much bigger than your usual", is: "Mun stærri en venjulegur", dot: "#e11d48" },
+  under:      { en: "Lighter than your usual", is: "Léttari en venjulegur", dot: "#2740e6" },
+  well_under: { en: "Much lighter than your usual", is: "Mun léttari en venjulegur", dot: "#2740e6" },
+  over:       { en: "A bigger day than your usual", is: "Stærri dagur en venjulegur", dot: "#de9328" },
+  well_over:  { en: "Much bigger than your usual", is: "Mun stærri en venjulegur", dot: "#a83e28" },
 };
 
 function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
