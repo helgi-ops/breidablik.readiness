@@ -278,6 +278,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <p className="mt-1 text-sm text-slate-600">
             {is ? "Áætlunin er verkfæri sem þjálfari/sjúkraþjálfari ræsir — hún keyrir ekki sjálfkrafa á meiddan leikmann. Veldu upphafsdag til að byrja stigaða endurkomu." : "The plan is a tool the coach/physio starts — it never auto-runs on an injured athlete. Pick a start date to begin the graded return."}
           </p>
+          <p className="mt-2 flex items-start gap-1.5 text-[12px] text-slate-500">
+            <span aria-hidden>📱</span>
+            <span>{is ? `Þegar þú ræsir hana sér ${data.player.name.split(" ")[0]} framganginn sinn í leikmanna-appinu — vika fyrir viku.` : `Once you start it, ${data.player.name.split(" ")[0]} can follow his own progress in the player app — week by week.`}</span>
+          </p>
           <div className="mt-3 flex items-center gap-2">
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 rounded-lg border border-slate-300 px-3 text-sm" />
             <button type="button" onClick={startPlan} disabled={!startDate || busy} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
@@ -295,6 +299,16 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
               {showMethod ? (is ? "Fela: á bak við tölurnar ▲" : "Hide: behind the numbers ▲") : (is ? "Á bak við tölurnar — hvernig planið er reiknað ▼" : "Behind the numbers — how the plan is computed ▼")}
             </button>
           </div>
+
+          {/* Player-visibility confirmation — closes the loop: once a plan is
+              started the player sees a simplified, encouraging version of this on
+              their Today view (no raw numbers / re-injury framing). */}
+          {data.rttStartDate && (
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              <span aria-hidden>📱</span>
+              <span>{is ? `${data.player.name.split(" ")[0]} sér þennan framgang í leikmanna-appinu — hvaða vika, fókus vikunnar og hvað opnast næst (einfaldað, án hrátalna).` : `${data.player.name.split(" ")[0]} can see this progress in the player app — which week, this week's focus and what unlocks next (simplified, no raw numbers).`}</span>
+            </div>
+          )}
 
           {/* Explainability layer — what each number means + the evidence. This is
               what a coach can't get elsewhere: every signal carries its provenance. */}
