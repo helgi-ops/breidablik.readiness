@@ -969,7 +969,7 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
   return createPortal(
     <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-        <span className="flex items-center gap-1.5"><span aria-hidden>📋</span>{is ? "ÆFING DAGSINS" : "TODAY'S SESSION"}</span>
+        <span className="flex items-center gap-1.5"><span aria-hidden>📋</span>{is ? "ÁÆTLUN DAGSINS" : "TODAY'S OUTLOOK"}</span>
         {data.mdLabel && <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">{data.mdLabel}{gloss ? ` · ${gloss}` : ""}</span>}
       </div>
 
@@ -1007,6 +1007,143 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
       )}
 
       <div className="mt-2 text-[11px] leading-snug text-zinc-500">{is ? data.rationaleIS : data.rationaleEN}</div>
+    </div>,
+    mountNode,
+  );
+}
+
+// ── Today recap portal (close the loop) ──────────────────────────────────────
+//
+// The evening resolution to the morning outlook: predicted vs actual for today
+// plus one honest, positive insight. Appears only once a real session lands.
+// Health-first framing — plan-adherence, NOT "you topped your load": over-plan
+// is a recovery nudge, never a celebration. Layered read: verdict → planned vs
+// actual → provenance behind "details". Same reliable mount as the other cards.
+
+type TodayRecap = {
+  show: boolean;
+  mdLabel: string | null;
+  plannedTarget: number;
+  plannedN: number;
+  actual: number;
+  adherencePct: number | null;
+  status: "on" | "over" | "well_over" | "under" | "well_under";
+  eased: "yellow" | "red" | null;
+  insightKind: "pb" | "adherence" | "readiness" | null;
+  pb: { exercise: string; deltaKg: number } | null;
+};
+
+const RECAP_VERDICT: Record<TodayRecap["status"], { en: string; is: string; dot: string }> = {
+  on:         { en: "On plan — you trained like a typical", is: "Á áætlun — þú æfðir eins og venjulegur", dot: "#2b8a54" },
+  under:      { en: "Lighter than your usual", is: "Léttari en venjulegur", dot: "#0ea5e9" },
+  well_under: { en: "Much lighter than your usual", is: "Mun léttari en venjulegur", dot: "#0ea5e9" },
+  over:       { en: "A bigger day than your usual", is: "Stærri dagur en venjulegur", dot: "#d97706" },
+  well_over:  { en: "Much bigger than your usual", is: "Mun stærri en venjulegur", dot: "#e11d48" },
+};
+
+function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [data, setData] = useState<TodayRecap | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const is = lang === "IS";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/player/today-recap", { headers: { Authorization: `Bearer ${token}` } });
+        const j = (await res.json()) as TodayRecap;
+        if (!cancelled && res.ok && j?.show) setData(j);
+      } catch { /* optional card — never break Today */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!data?.show) return;
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-today-recap-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-today-recap-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-today-recap-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0);
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [data?.show]);
+
+  if (!mountNode || activeTab !== "today" || !data?.show) return null;
+
+  const accent = clubThemeColor ?? "#2b8a54";
+  const v = RECAP_VERDICT[data.status];
+  const md = data.mdLabel ?? "";
+  const overshoot = data.status === "over" || data.status === "well_over";
+  // Verdict line: base + MD + (recovery nudge on overshoot | eased note on under).
+  const easedNote = data.eased && (data.status === "under" || data.status === "well_under");
+  const verdict = `${is ? v.is : v.en} ${md}`.trim()
+    + (overshoot ? (is ? " — settu endurheimt í forgang." : " — make recovery a priority.")
+      : easedNote ? (is ? " — skynsamlegt miðað við líðan þína í dag." : " — a smart call for how you felt today.")
+      : ".");
+
+  const insight = data.insightKind === "pb" && data.pb
+    ? (is ? `Nýtt PB í ræktinni í dag: ${data.pb.exercise} +${data.pb.deltaKg}kg 💪` : `New gym PB today: ${data.pb.exercise} +${data.pb.deltaKg}kg 💪`)
+    : data.insightKind === "adherence"
+      ? (is ? "Flott stjórn — nákvæmlega í þínum takti." : "Nicely controlled — right in your rhythm.")
+      : data.insightKind === "readiness"
+        ? (is ? "Góð ákvörðun að taka því rólega — þannig heldurðu þér ferskum." : "Good call taking it easy — that's how you stay fresh.")
+        : null;
+
+  return createPortal(
+    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span aria-hidden>✅</span>{is ? "DAGURINN ÞINN" : "YOUR DAY"}
+      </div>
+
+      {/* Layer 0 — verdict */}
+      <div className="mt-1.5 flex items-start gap-2">
+        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: v.dot }} />
+        <span className="text-[15px] font-bold leading-snug tracking-tight text-zinc-900">{verdict}</span>
+      </div>
+
+      {/* Layer 1 — planned vs actual + insight */}
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+        <span><span className="text-zinc-400">{is ? "Venjulega" : "Usual"} </span><span className="font-semibold text-zinc-700">~{data.plannedTarget}</span></span>
+        <span><span className="text-zinc-400">{is ? "Í dag" : "Today"} </span><span className="font-semibold text-zinc-900">~{data.actual}</span></span>
+        {data.adherencePct != null && <span className="text-xs text-zinc-500">({data.adherencePct}%)</span>}
+      </div>
+      {insight && <div className="mt-1.5 text-sm text-zinc-700">{insight}</div>}
+
+      <button type="button" onClick={() => setShowDetails((s) => !s)} className="mt-2 text-[11px] font-semibold text-zinc-500 hover:text-zinc-700">
+        {showDetails ? (is ? "Fela smáatriði ▲" : "Hide details ▲") : (is ? "Smáatriði ▼" : "Details ▼")}
+      </button>
+      {showDetails && (
+        <div className="mt-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
+          {is
+            ? `Í dag = mælt með GPS (áætluð álög undanskilin). Venjulega = þitt ${md} meðaltal úr ${data.plannedN} æfingum. Þetta er samanburður við þinn eigin takt — ekki keppni um hæsta álag.`
+            : `Today = measured by GPS (estimated loads excluded). Usual = your ${md} average from ${data.plannedN} sessions. This compares to your own rhythm — not a contest for the highest load.`}
+        </div>
+      )}
     </div>,
     mountNode,
   );
@@ -1807,6 +1944,10 @@ export default function DevPlayerClient() {
           (effort band, duration, focus, % of a match) + the player's own target.
           Self-hides on off-days / when there's no plan. Not gated by wellness. */}
       <PlayerTodayLoadPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
+      {/* Today recap — the evening "close the loop": predicted vs actual + one
+          honest insight. Appears only once a real session lands (self-hides
+          otherwise). Health-first framing; over-plan is a recovery nudge. */}
+      <PlayerTodayRecapPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
       {/* Return-to-training progress — an encouraging "where am I in my ramp"
           card, shown on Today only while the player has an active graded-return
           plan (self-hides otherwise). Not gated by wellness: an injured player
