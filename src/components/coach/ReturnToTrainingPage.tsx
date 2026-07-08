@@ -583,15 +583,19 @@ function QualityCard({ w, floor, ceiling, actual, onOverride, is }: { w: WeekTar
 function AdherenceBar({ c, inProgress, is }: { c: AdherenceCell; inProgress: boolean; is: boolean }) {
   const label = is ? LABEL[c.quality].is : LABEL[c.quality].en;
   const pct = c.target > 0 ? Math.min(140, Math.round((c.actual / c.target) * 100)) : c.actual > 0 ? 140 : 0;
-  const color = c.status === "over" ? "bg-rose-500" : c.status === "under" ? "bg-slate-300" : "bg-emerald-500";
+  // "under" is sky (in-progress / accumulating — not a problem mid-week), "on"
+  // emerald, "over" rose. Three distinct, high-contrast hues so the fill always
+  // reads against the track.
+  const color = c.status === "over" ? "bg-rose-500" : c.status === "under" ? "bg-sky-500" : "bg-emerald-500";
+  const fillWidth = c.actual > 0 ? Math.max(4, Math.min(100, pct)) : 0; // keep a visible sliver for tiny values
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2">
       <div className="flex items-baseline justify-between text-[11px]">
         <span className="truncate font-medium text-slate-600" title={label}>{label}</span>
-        <span className="tabular-nums text-slate-400">{f0(c.actual)} / {f0(c.target)}</span>
+        <span className="tabular-nums text-slate-500">{f0(c.actual)} / {f0(c.target)}</span>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
+      <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200">
+        <div className={`h-full rounded-full ${color} transition-[width]`} style={{ width: `${fillWidth}%` }} />
       </div>
       <div className="mt-0.5 text-right text-[10px] text-slate-400">
         {c.target > 0 ? <>{c.deltaPct > 0 ? "+" : ""}{c.deltaPct}% {inProgress && c.status === "under" ? (is ? "hingað til" : "so far") : ""}</> : (is ? "engin viðmiðun" : "no target")}
