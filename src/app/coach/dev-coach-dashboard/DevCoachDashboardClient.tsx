@@ -2779,7 +2779,10 @@ export default function CoachPage() {
               .from("player_injuries")
               .select("player_id, status, rtp_stage, body_part, injury_type, estimated_return_date, severity, injury_date, actual_return_date")
               .in("player_id", playerIds)
-              .order("injury_date", { ascending: false }),
+              // Order by updated_at so the LATEST status wins per player — a player
+              // with a stale 'cleared' row and a newer 'rehabilitation' row (same
+              // injury_date) must read as rehabilitation, not cleared.
+              .order("updated_at", { ascending: false }),
             supabase
               .from("injury_events")
               .select("player_id, injury_type, body_side, severity, is_active, return_date, injury_date")
@@ -7536,6 +7539,29 @@ export default function CoachPage() {
     // get a reassuring line; flagged players get their real drivers. No new data.
     const isReadIS = lang === "IS";
     const isGreenRow = String(r.final_color ?? "green").toLowerCase() === "green";
+    // Current injury / return-to-play STATUS (not the predictive injury-RISK band).
+    // A player can be GREEN on readiness yet be injured or mid-ramp — so this must
+    // gate the "cleared for full training" line and surface a chip. Source: the
+    // latest player_injuries row per player (see playerInjuryStatus reduction).
+    const injuryStat = playerInjuryStatus[r.player_id];
+    const injActive = injuryStat && (injuryStat.status === "injured" || injuryStat.status === "rehabilitation" || injuryStat.status === "rtp_training")
+      ? injuryStat
+      : null;
+    const INJ_WORD = {
+      injured: { en: "Out — injury", is: "Frá æfingu" },
+      rehabilitation: { en: "Rehab", is: "Endurhæfing" },
+      rtp_training: { en: "Return-to-play", is: "Endurkoma" },
+    } as const;
+    const injChip = injActive
+      ? `${isReadIS ? INJ_WORD[injActive.status as keyof typeof INJ_WORD].is : INJ_WORD[injActive.status as keyof typeof INJ_WORD].en}${injActive.bodyPart ? ` · ${injActive.bodyPart}` : ""}${typeof injActive.rtpStage === "number" ? ` · ${isReadIS ? "stig" : "stage"} ${injActive.rtpStage}/5` : ""}`
+      : null;
+    const injuryNote = injActive
+      ? injActive.status === "injured"
+        ? (isReadIS ? `Meiddur${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — frá æfingu, ekki full æfing.` : `Injured${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — out, not cleared for full training.`)
+        : injActive.status === "rehabilitation"
+          ? (isReadIS ? `Í endurhæfingu${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — stiguð endurkoma, ekki full æfing.` : `In rehabilitation${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — graded return, not full training.`)
+          : (isReadIS ? `Endurkoma í leik${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — stiguð, ekki full æfing.` : `Return-to-play${injActive.bodyPart ? ` (${injActive.bodyPart})` : ""} — graded, not full training.`)
+      : null;
     const whyBits: string[] = [];
     if (typeof r.sleep_quality === "number" && r.sleep_quality <= 2) whyBits.push(isReadIS ? `svefn ${r.sleep_quality}` : `sleep ${r.sleep_quality}`);
     if (typeof r.fatigue_energy === "number" && r.fatigue_energy <= 2) whyBits.push(isReadIS ? `orka ${r.fatigue_energy}` : `energy ${r.fatigue_energy}`);
@@ -7546,11 +7572,15 @@ export default function CoachPage() {
     if (neuralBiasApplied) whyBits.push(isReadIS ? "taugaálag hátt" : "neural load high");
     const whyLine = noCheckinOnGameDay
       ? null
-      : whyBits.length > 0
-        ? whyBits.join(" · ")
-        : isGreenRow
-          ? (isReadIS ? "Öll merki í hans vanalega bili — leyfður í fulla æfingu." : "All signals in his usual range — cleared for full training.")
-          : (isReadIS ? "Flaggaður af reiknivélinni — smelltu fyrir nánar." : "Flagged by the engine — open for details.");
+      : injuryNote
+        // Injury status leads — a GREEN readiness never reads as "cleared for full
+        // training" for an injured/mid-ramp player. Real drivers append if present.
+        ? (whyBits.length > 0 ? `${injuryNote} · ${whyBits.join(" · ")}` : injuryNote)
+        : whyBits.length > 0
+          ? whyBits.join(" · ")
+          : isGreenRow
+            ? (isReadIS ? "Öll merki í hans vanalega bili — leyfður í fulla æfingu." : "All signals in his usual range — cleared for full training.")
+            : (isReadIS ? "Flaggaður af reiknivélinni — smelltu fyrir nánar." : "Flagged by the engine — open for details.");
 
     return (
       <React.Fragment key={r.ui_key ?? r.readiness_entry_id ?? pid}>
@@ -7566,6 +7596,21 @@ export default function CoachPage() {
                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
                   {mdText}
                 </span>
+                {injActive ? (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                      injActive.status === "injured"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : injActive.status === "rehabilitation"
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-sky-200 bg-sky-50 text-sky-700"
+                    }`}
+                    title={isReadIS ? "Núverandi meiðsla-/endurkomu-staða (ekki áhættuspá)" : "Current injury / return-to-play status (not the risk forecast)"}
+                  >
+                    <span aria-hidden>🏥</span>
+                    <span>{injChip}</span>
+                  </span>
+                ) : null}
                 {r.is_locked ? (
                   <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                     Locked
