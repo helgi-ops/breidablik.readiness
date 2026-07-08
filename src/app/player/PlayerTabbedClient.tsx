@@ -638,7 +638,7 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
       // this slot when it was anchored after the explanation card. Falls back to
       // the header card.
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = document.getElementById("dev-today-session-slot") ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
@@ -768,7 +768,7 @@ function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTa
     const ensure = () => {
       if (cancelled) return false;
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = document.getElementById("dev-today-session-slot") ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-rtt-progress-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-rtt-progress-slot"; }
@@ -920,7 +920,7 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
     const ensure = () => {
       if (cancelled) return false;
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = document.getElementById("dev-today-session-slot") ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-today-load-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-today-load-slot"; }
@@ -1070,7 +1070,7 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
     const ensure = () => {
       if (cancelled) return false;
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = document.getElementById("dev-today-session-slot") ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-today-recap-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-today-recap-slot"; }
@@ -1300,7 +1300,7 @@ function RpeReminderPortal({ activeTab, lang, onLogRpe }: { activeTab: DevPlayer
       // Anchor just after the ATE command card so the RPE nudge sits directly
       // under the readiness decision, above the last-match hero.
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
-      const anchor = ateSlot ?? detectHeaderCard();
+      const anchor = document.getElementById("dev-today-session-slot") ?? ateSlot ?? detectHeaderCard();
       if (!anchor?.parentElement) {
         if (attempts < 25) window.setTimeout(place, 300);
         return;
@@ -1854,6 +1854,10 @@ export default function DevPlayerClient() {
       const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport || showMovement;
 
       decisionCard.style.display = showToday ? "" : "none";
+      // Session card is a portal-injected slot (rendered by PlayerClient) that
+      // lives outside the left/right columns, so toggle it here like the decision.
+      const sessionSlot = document.getElementById("dev-today-session-slot");
+      if (sessionSlot) sessionSlot.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
       if (riskCard) riskCard.style.display = showRisk ? "" : "none";
       if (rpeCard) rpeCard.style.display = showRpe ? "" : "none";

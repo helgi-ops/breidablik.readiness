@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useLang } from "@/lib/lang";
 import type { Lang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
@@ -2380,6 +2381,63 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
         />
       ) : null}
     </div>
+  );
+}
+
+/* ---- Places the Today session card directly under the decision card ----
+   Mirrors the hardened portal pattern used by the Today-load / RTT cards
+   (PlayerTabbedClient): create a slot right after `dev-ate-command-card-slot`,
+   keep it there via a MutationObserver, and render the card into it. The other
+   Today portals are re-pointed to anchor AFTER this slot so nothing wedges
+   between the decision and the session. Visibility per tab is handled by
+   PlayerTabbedClient toggling the slot's display. */
+function TodaySessionPortal({ structure, opts }: { structure: unknown; opts: TodaySessionOpts }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      const anchor = document.getElementById("dev-ate-command-card-slot");
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-today-session-slot");
+      if (!slot) {
+        slot = document.createElement("div");
+        slot.id = "dev-today-session-slot";
+      }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => {
+          if (!document.getElementById("dev-today-session-slot")?.isConnected) ensure();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+      observer?.disconnect();
+    };
+  }, []);
+
+  if (!mountNode) return null;
+  return createPortal(
+    <div className="mt-3">
+      <TodaySessionCard structure={structure} opts={opts} />
+    </div>,
+    mountNode
   );
 }
 
@@ -5755,7 +5813,7 @@ export default function PlayerClient() {
               </div>
             ) : null}
 
-            <TodaySessionCard
+            <TodaySessionPortal
               structure={planStructureForRender}
               opts={{
                 headerTitle: sessionHeaderTitle,
