@@ -755,26 +755,42 @@ function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTa
   }, []);
 
   // Anchor after the ATE command card slot (falls back to the header card).
+  // Gated on `data.active` — matching RpeReminderPortal — so placement only runs
+  // once there's content AND the Today DOM has settled (the mount-time `[]` variant
+  // raced the anchor before it existed and then stopped retrying, so the card
+  // silently never appeared). A MutationObserver re-inserts the slot if a React
+  // re-render of the Today column drops our manually-injected node.
   useEffect(() => {
+    if (!data?.active) return;
     let cancelled = false;
     let attempts = 0;
-    const place = () => {
-      if (cancelled) return;
-      attempts += 1;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
       const ateSlot = document.getElementById("dev-ate-command-card-slot");
       const anchor = ateSlot ?? detectHeaderCard();
-      if (!anchor?.parentElement) { if (attempts < 25) window.setTimeout(place, 300); return; }
+      if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-rtt-progress-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-rtt-progress-slot"; }
       if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
-        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
       }
       setMountNode((prev) => (prev === slot ? prev : slot));
-      if (attempts < 6) window.setTimeout(place, 300);
+      return true;
     };
-    place();
-    return () => { cancelled = true; };
-  }, []);
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        // Keep the slot alive across Today re-renders.
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-rtt-progress-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0); // defer so setState isn't synchronous in the effect body
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [data?.active]);
 
   if (!mountNode || activeTab !== "today" || !data?.active) return null;
 
