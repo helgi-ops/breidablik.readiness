@@ -65,6 +65,7 @@ import {
 import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
 import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
+import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 
 type ProfileRow = {
   id: string;
@@ -2038,6 +2039,39 @@ function rebalanceSupportedExerciseBlocks(rawBlocks: any[]): any[] {
   return blocks.filter((block) => safeStringList(block?.items).length > 0);
 }
 
+// Readiness-adjusted "Æfing dagsins": derive the session adjustment from the
+// plan's own readiness_level (native — the old DOM-scraping path in
+// PlayerTabbedClient no longer matches this markup, so nothing was being
+// adjusted). Reuses the canonical buildEnforcedSessionPlan enforcement so the
+// numbers match the rest of the system: GREEN → full, YELLOW → one set off each
+// lift, RED → recovery (hardest blocks dropped).
+type TodayAdjust = { state: "GREEN" | "YELLOW" | "RED" | "GRAY"; setReduction: number; hideHighOutput: boolean };
+const HIGH_OUTPUT_BLOCK = /(primer|ballistic|plyo|explosive|contrast|main force)/i;
+
+function reduceSetsInLine(line: string, by: number): string {
+  if (by <= 0) return line;
+  const fromPair = line.replace(/(\d+)\s*[x×]\s*(\d+)/i, (_, sets, reps) => `${Math.max(1, Number(sets) - by)}×${reps}`);
+  return fromPair.replace(/(\d+)\s*sets?/i, (_, sets) => `${Math.max(1, Number(sets) - by)} set`);
+}
+
+function computeTodayAdjust(readinessLevel: string | null): TodayAdjust {
+  const l = String(readinessLevel ?? "").toUpperCase();
+  const ateState = l === "GREEN_PLUS" ? "GREEN_PLUS" : l === "GREEN" ? "GREEN" : l === "YELLOW" ? "YELLOW" : l === "RED" ? "RED" : null;
+  const enforced = buildEnforcedSessionPlan({
+    ateState,
+    modifiers: ateState === "YELLOW" ? { reduceSetsBy: 1 } : null,
+    fallbackSessionMode: "full",
+    hasCheckIn: ateState != null,
+  });
+  const adj = enforced.adjustments;
+  const state = enforced.state === "GREEN" ? "GREEN" : enforced.state === "YELLOW" ? "YELLOW" : enforced.state === "RED" ? "RED" : "GRAY";
+  return {
+    state,
+    setReduction: Math.min(1, Math.max(0, adj.setReduction ?? 0)),
+    hideHighOutput: enforced.sessionMode === "recovery" || !!adj.disablePlyo || !!adj.disableBallistic,
+  };
+}
+
 function renderStructureBlocks(
   structure: any,
   opts?: {
@@ -2047,6 +2081,7 @@ function renderStructureBlocks(
     t?: (typeof PLAYER_COPY)["IS"];
     recommendationContext?: ExerciseRecommendationContext | null;
     themeColor?: string | null;
+    adjust?: TodayAdjust | null;
   }
 ) {
   const rawBlocks = Array.isArray(structure) ? structure : [];
@@ -2094,6 +2129,21 @@ function renderStructureBlocks(
   const headerDesc = String(opts?.headerDesc ?? "").trim();
   const lockLabel = opts?.lockLabel ?? "";
   const t = opts?.t ?? PLAYER_COPY.IS;
+  const isIS = t === PLAYER_COPY.IS;
+
+  // Readiness adjustment (native). GRAY / no check-in → no banner, no change.
+  const adjust = opts?.adjust ?? null;
+  const renderBlocks = adjust?.hideHighOutput
+    ? blocks.filter((b: Record<string, unknown>) => !HIGH_OUTPUT_BLOCK.test(String(b?.block ?? "")))
+    : blocks;
+  const hiddenCount = blocks.length - renderBlocks.length;
+  const banner = adjust && adjust.state !== "GRAY"
+    ? adjust.state === "GREEN"
+      ? { bg: "#eef7f0", fg: "#146c40", text: isIS ? "Full æfing — ekkert tekið af" : "Full session — nothing removed" }
+      : adjust.state === "YELLOW"
+        ? { bg: "#faf1de", fg: "#9a6410", text: isIS ? "Aðlöguð — eitt sett tekið af hverri lyftu" : "Adjusted — one set off each lift" }
+        : { bg: "#f8e9e3", fg: "#a83e28", text: isIS ? "Létt/valfrjáls — hörðustu blokkir felldar niður" : "Light/optional — hardest blocks dropped" }
+    : null;
 
   return (
     <div className="space-y-3">
@@ -2117,15 +2167,30 @@ function renderStructureBlocks(
         </div>
       </CardShell>
 
+      {banner ? (
+        <div className="rounded-2xl px-4 py-2.5 text-sm font-semibold" style={{ background: banner.bg, color: banner.fg }}>
+          {banner.text}
+          {hiddenCount > 0 ? (
+            <span className="ml-1 font-normal opacity-80">· {isIS ? `${hiddenCount} blokk felld niður` : `${hiddenCount} block${hiddenCount === 1 ? "" : "s"} dropped`}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="space-y-3">
-        {blocks.map((b: any, idx: number) => {
+        {renderBlocks.map((b: Record<string, unknown>, idx: number) => {
           const title = String(b?.block ?? `Block ${idx + 1}`);
           const items = safeStringList(b?.items);
           const accent = blockAccent(title, opts?.themeColor);
           const blockPriority = blockSortPriority(title);
           const blockRecommendationContext =
             blockPriority === 1 || blockPriority === 2 ? opts?.recommendationContext ?? null : null;
-          const parsed = items.map(parseExerciseItem);
+          // Apply the readiness set-reduction to the displayed sets×reps natively
+          // (YELLOW → one set off). reduceSetsInLine only touches clean N×M / "N sets".
+          const parsed = items.map(parseExerciseItem).map((ex) =>
+            adjust && adjust.setReduction > 0 && ex.setsReps
+              ? { ...ex, setsReps: reduceSetsInLine(ex.setsReps, adjust.setReduction) }
+              : ex
+          );
           const segments = groupIntoSegments(parsed);
 
           return (
@@ -5558,6 +5623,7 @@ export default function PlayerClient() {
             ? exerciseRecommendationContext
             : null,
               themeColor: clubThemeColor,
+              adjust: computeTodayAdjust(plan?.readiness_level ?? null),
             })}
 
             {renderPostTraining(postTraining, lang)}
