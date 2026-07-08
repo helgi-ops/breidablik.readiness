@@ -133,6 +133,8 @@
   --chart-3: oklch(0.52 0.15 32);            /* terracotta */
   --chart-4: oklch(0.52 0.243 264.376);      /* cobalt */
   --chart-5: oklch(0.50 0.13 300);           /* violet (IMA) */
+  --rtp: oklch(0.56 0.13 295);               /* RTP purple #7a5cc4 (return-to-play — consumed in Lota E4) */
+  --rtp-foreground: oklch(0.985 0 0);
   --sidebar: oklch(0.985 0.004 90);          /* warm-light (dark rail = fasi 3) */
   --sidebar-foreground: oklch(0.220 0.008 250);
   --sidebar-primary: oklch(0.52 0.243 264.376);
