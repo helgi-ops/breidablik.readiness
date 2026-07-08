@@ -700,6 +700,127 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
   );
 }
 
+// ── Return-to-training progress portal ───────────────────────────────────────
+//
+// For a player mid-ramp (graded return started by the coach), an encouraging
+// "where am I" card: which week, a progress bar, this week's focus in plain
+// words, what unlocks next, and a gentle on-track signal. Deliberately plain —
+// no ACWR, no re-injury framing, no raw numbers (that lives on the coach/S&C
+// surface). Self-scoped: /api/player/return-to-training reads the player from
+// their own token. Renders nothing unless there's an active started plan.
+
+const RTT_QUALITY_LABEL: Record<string, { en: string; is: string }> = {
+  volume:    { en: "training volume",    is: "æfingaálag" },
+  distance:  { en: "running distance",   is: "hlaupavegalengd" },
+  hsr:       { en: "high-speed running", is: "hraðahlaup" },
+  sprint:    { en: "sprinting",          is: "sprettir" },
+  accel:     { en: "accelerations",      is: "hröðun" },
+  decel:     { en: "decelerations",      is: "hemlun" },
+  decelHigh: { en: "hard braking",       is: "kröpp hemlun" },
+  cod:       { en: "change of direction", is: "stefnubreytingar" },
+  efforts:   { en: "high-effort actions", is: "átök" },
+};
+
+type RttProgress = {
+  active: boolean;
+  currentWeek: number;
+  totalWeeks: number;
+  finalWeek: boolean;
+  thisWeekFocus: string[];
+  unlocksNext: string[];
+  onTrack: "on" | "over" | null;
+  sessionsThisWeek: number;
+  inProgress: boolean;
+};
+
+function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [data, setData] = useState<RttProgress | null>(null);
+  const is = lang === "IS";
+
+  // Fetch the player's own plan once.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/player/return-to-training", { headers: { Authorization: `Bearer ${token}` } });
+        const j = (await res.json()) as RttProgress;
+        if (!cancelled && res.ok && j?.active) setData(j);
+      } catch { /* optional card — never break Today */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Anchor after the ATE command card slot (falls back to the header card).
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) { if (attempts < 25) window.setTimeout(place, 300); return; }
+      let slot = document.getElementById("dev-rtt-progress-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-rtt-progress-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement!.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      if (attempts < 6) window.setTimeout(place, 300);
+    };
+    place();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!mountNode || activeTab !== "today" || !data?.active) return null;
+
+  const label = (q: string) => (is ? RTT_QUALITY_LABEL[q]?.is : RTT_QUALITY_LABEL[q]?.en) ?? q;
+  const focus = data.thisWeekFocus.map(label);
+  const next = data.unlocksNext.map(label);
+  const pct = Math.max(6, Math.round((data.currentWeek / Math.max(1, data.totalWeeks)) * 100));
+  const accent = clubThemeColor ?? "#2b8a54";
+
+  return createPortal(
+    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span aria-hidden>🏃</span>{is ? "ENDURKOMAN ÞÍN" : "YOUR RETURN TO TRAINING"}
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="text-xl font-bold tracking-tight text-zinc-900">{is ? `Vika ${data.currentWeek} af ${data.totalWeeks}` : `Week ${data.currentWeek} of ${data.totalWeeks}`}</span>
+        {data.finalWeek && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{is ? "lokavika" : "final week"}</span>}
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: accent }} />
+      </div>
+      <div className="mt-2 text-sm leading-relaxed text-zinc-600">
+        {data.finalWeek
+          ? (is ? "Lokavikan — næstum kominn í fulla æfingu. Flott vinna 💪" : "Final week — almost back to full training. Great work 💪")
+          : (is ? "Þú ert að byggja þig upp, skref fyrir skref." : "You're building back up, step by step.")}
+      </div>
+      {focus.length > 0 && (
+        <div className="mt-2 text-sm text-zinc-700"><span className="text-zinc-400">{is ? "Þessa viku: " : "This week: "}</span>{focus.join(", ")}</div>
+      )}
+      {next.length > 0 && !data.finalWeek && (
+        <div className="mt-1 text-sm text-zinc-700"><span className="text-zinc-400">{is ? "Næst: " : "Next up: "}</span>{next.join(", ")}</div>
+      )}
+      {data.onTrack === "on" && (
+        <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{is ? "Á áætlun þessa viku ✓" : "On track this week ✓"}</div>
+      )}
+      {data.onTrack === "over" && (
+        <div className="mt-2 text-xs leading-snug text-amber-700">{is ? "Þú ert kominn fram úr planinu vikunnar — það er í lagi að taka aðeins af. Stigvaxandi upptröppun verndar þig." : "You're ahead of this week's plan — it's okay to ease back a little. The gradual ramp protects you."}</div>
+      )}
+      <div className="mt-3 border-t border-zinc-200/70 pt-2 text-[11px] text-zinc-400">
+        {is ? "Þjálfarinn þinn setti þetta plan með þér." : "Your coach set this plan with you."}
+      </div>
+    </div>,
+    mountNode,
+  );
+}
+
 // ── Contextual RPE reminder portal ───────────────────────────────────────────
 //
 // RPE is a time-sensitive daily action (log it right after training), not an
@@ -1491,6 +1612,11 @@ export default function DevPlayerClient() {
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
       {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} lang={lang as "IS" | "EN"} />}
+      {/* Return-to-training progress — an encouraging "where am I in my ramp"
+          card, shown on Today only while the player has an active graded-return
+          plan (self-hides otherwise). Not gated by wellness: an injured player
+          on a GPS-only team still ramps. */}
+      <PlayerRttProgressPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
       {/* Contextual RPE nudge — appears on Today only when a session is expected
           and RPE is unlogged; taps through to the RPE tab (round 14a). Gated to
           Pro+ since the RPE tab itself is Pro-locked (don't nudge to a locked tab). */}
