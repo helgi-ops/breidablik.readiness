@@ -2072,6 +2072,63 @@ function computeTodayAdjust(readinessLevel: string | null): TodayAdjust {
   };
 }
 
+/** Leading set count from a "N×M" / "N sett" string (already readiness-reduced). */
+function parseSetCount(setsReps: string | null): number {
+  if (!setsReps) return 1;
+  const pair = setsReps.match(/(\d+)\s*[x×]\s*\d+/i);
+  if (pair) return Math.max(1, Number(pair[1]));
+  const sets = setsReps.match(/(\d+)\s*(?:sett|sets?)/i);
+  if (sets) return Math.max(1, Number(sets[1]));
+  return 1;
+}
+
+// One prepared block for rendering — the SINGLE source both the Today card and
+// the "Byrja æfingu" focus screen consume, so what the card shows and what the
+// focus flow walks through can never drift (same sort, same high-output filter,
+// same readiness set-reduction).
+type SessionBlock = {
+  title: string;
+  accent: BlockAccentResult;
+  priority: number;
+  segments: ExSegment[];
+};
+
+function buildSessionBlocks(
+  structure: unknown,
+  adjust: TodayAdjust | null,
+  themeColor: string | null
+): { blocks: SessionBlock[]; hiddenCount: number; totalBlocks: number } {
+  const rawBlocks = Array.isArray(structure) ? structure : [];
+  if (!rawBlocks.length) return { blocks: [], hiddenCount: 0, totalBlocks: 0 };
+
+  const normalizedBlocks = rebalanceRulesBlocks(rawBlocks);
+  const sorted = [...normalizedBlocks].sort(
+    (a, b) => blockSortPriority(String(a?.block ?? "")) - blockSortPriority(String(b?.block ?? ""))
+  );
+  const kept = adjust?.hideHighOutput
+    ? sorted.filter((b: Record<string, unknown>) => !HIGH_OUTPUT_BLOCK.test(String(b?.block ?? "")))
+    : sorted;
+  const hiddenCount = sorted.length - kept.length;
+
+  const blocks: SessionBlock[] = kept.map((b: Record<string, unknown>, idx: number) => {
+    const title = String(b?.block ?? `Block ${idx + 1}`);
+    const items = safeStringList(b?.items);
+    const accent = blockAccent(title, themeColor);
+    const priority = blockSortPriority(title);
+    // Apply the readiness set-reduction to the displayed sets×reps natively
+    // (YELLOW → one set off). reduceSetsInLine only touches clean N×M / "N sets".
+    const parsed = items.map(parseExerciseItem).map((ex) =>
+      adjust && adjust.setReduction > 0 && ex.setsReps
+        ? { ...ex, setsReps: reduceSetsInLine(ex.setsReps, adjust.setReduction) }
+        : ex
+    );
+    const segments = groupIntoSegments(parsed);
+    return { title, accent, priority, segments };
+  });
+
+  return { blocks, hiddenCount, totalBlocks: sorted.length };
+}
+
 function renderStructureBlocks(
   structure: any,
   opts?: {
@@ -2084,19 +2141,14 @@ function renderStructureBlocks(
     adjust?: TodayAdjust | null;
   }
 ) {
-  const rawBlocks = Array.isArray(structure) ? structure : [];
-  if (!rawBlocks.length) return null;
+  if (!Array.isArray(structure) || !structure.length) return null;
 
-  // Keep the published microdose template block order intact and only lift
-  // supported explosive items out of generic Rules blocks.
-  const normalizedBlocks = rebalanceRulesBlocks(rawBlocks);
-
-  // Sort blocks by canonical session order (warm-up → primer/ballistic → contrast/strength → accessory).
-  // Uses a stable sort so blocks within the same priority category keep their original template order.
-  const blocks = [...normalizedBlocks].sort(
-    (a, b) =>
-      blockSortPriority(String(a?.block ?? "")) -
-      blockSortPriority(String(b?.block ?? ""))
+  // Prepare blocks via the shared builder (sort + high-output filter + readiness
+  // set-reduction) so this card and the focus screen render identical content.
+  const { blocks: displayBlocks, hiddenCount } = buildSessionBlocks(
+    structure,
+    opts?.adjust ?? null,
+    opts?.themeColor ?? null
   );
 
   const headerTitle = String(opts?.headerTitle ?? "").trim();
@@ -2133,10 +2185,6 @@ function renderStructureBlocks(
 
   // Readiness adjustment (native). GRAY / no check-in → no banner, no change.
   const adjust = opts?.adjust ?? null;
-  const renderBlocks = adjust?.hideHighOutput
-    ? blocks.filter((b: Record<string, unknown>) => !HIGH_OUTPUT_BLOCK.test(String(b?.block ?? "")))
-    : blocks;
-  const hiddenCount = blocks.length - renderBlocks.length;
   const banner = adjust && adjust.state !== "GRAY"
     ? adjust.state === "GREEN"
       ? { bg: "#eef7f0", fg: "#146c40", text: isIS ? "Full æfing — ekkert tekið af" : "Full session — nothing removed" }
@@ -2177,21 +2225,10 @@ function renderStructureBlocks(
       ) : null}
 
       <div className="space-y-3">
-        {renderBlocks.map((b: Record<string, unknown>, idx: number) => {
-          const title = String(b?.block ?? `Block ${idx + 1}`);
-          const items = safeStringList(b?.items);
-          const accent = blockAccent(title, opts?.themeColor);
-          const blockPriority = blockSortPriority(title);
+        {displayBlocks.map((db: SessionBlock, idx: number) => {
+          const { title, accent, priority: blockPriority, segments } = db;
           const blockRecommendationContext =
             blockPriority === 1 || blockPriority === 2 ? opts?.recommendationContext ?? null : null;
-          // Apply the readiness set-reduction to the displayed sets×reps natively
-          // (YELLOW → one set off). reduceSetsInLine only touches clean N×M / "N sets".
-          const parsed = items.map(parseExerciseItem).map((ex) =>
-            adjust && adjust.setReduction > 0 && ex.setsReps
-              ? { ...ex, setsReps: reduceSetsInLine(ex.setsReps, adjust.setReduction) }
-              : ex
-          );
-          const segments = groupIntoSegments(parsed);
 
           return (
             <div key={`${title}-${idx}`} className={cx("rounded-2xl border overflow-hidden", accent.wrap)} style={accent.wrapStyle}>
@@ -2238,6 +2275,342 @@ function renderStructureBlocks(
           );
         })}
       </div>
+    </div>
+  );
+}
+
+type RenderStructureOpts = NonNullable<Parameters<typeof renderStructureBlocks>[1]>;
+
+/* ---- Method-guide lookup, matching the ExerciseInfoModal upgrade rule ---- */
+function methodGuideForExercise(ex: ParsedExercise, rawTitle: string) {
+  const effective =
+    ex.method === "CLUSTER" && /potentiation/i.test(rawTitle) ? "POTENTIATION_CLUSTER" : ex.method;
+  return { method: effective, guide: effective ? METHOD_GUIDE[effective] ?? null : null };
+}
+
+/* ---- One exercise inside the focus flow: sets tracker + plain "how" ---- */
+function FocusExerciseRow({
+  ex,
+  accent,
+  rawTitle,
+  isIS,
+  done,
+  onCompleteSet,
+}: {
+  ex: ParsedExercise;
+  accent: BlockAccentResult;
+  rawTitle: string;
+  isIS: boolean;
+  done: number;
+  onCompleteSet: () => void;
+}) {
+  const [showHow, setShowHow] = useState(false);
+  const total = parseSetCount(ex.setsReps);
+  const { method, guide } = methodGuideForExercise(ex, rawTitle);
+  const complete = done >= total;
+
+  return (
+    <div className={cx("rounded-2xl border px-4 py-3.5", accent.itemBorder, accent.itemBg)} style={accent.itemBorderStyle}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold text-zinc-900 leading-snug">{ex.name}</div>
+          {ex.setsReps ? <div className="mt-0.5 text-sm font-medium text-zinc-500">{ex.setsReps}</div> : null}
+          {ex.note ? <div className="mt-0.5 text-xs text-zinc-500">{ex.note}</div> : null}
+        </div>
+        {method ? (
+          <span className={cx("shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold", accent.methodBadge)} style={accent.methodBadgeStyle}>
+            {method === "POTENTIATION_CLUSTER" ? "POT. CLUSTER" : method}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Set tracker */}
+      <div className="mt-3 flex items-center gap-1.5" aria-hidden>
+        {Array.from({ length: total }).map((_, i) => (
+          <span
+            key={i}
+            className={cx("h-2.5 flex-1 rounded-full transition-colors", i < done ? accent.dot : "bg-zinc-200")}
+            style={i < done ? accent.dotStyle : undefined}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-zinc-500">
+          {complete
+            ? isIS ? "Öll sett kláruð ✓" : "All sets done ✓"
+            : isIS ? `Sett ${done}/${total} · næst: sett ${done + 1}` : `Set ${done}/${total} · next: set ${done + 1}`}
+        </div>
+        {complete ? (
+          <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-700">✓ {isIS ? "Lokið" : "Done"}</span>
+        ) : (
+          <button
+            type="button"
+            onClick={onCompleteSet}
+            className="rounded-full bg-zinc-900 px-3.5 py-1.5 text-xs font-bold text-white active:bg-zinc-700"
+          >
+            {isIS ? "Sett lokið ✓" : "Set done ✓"}
+          </button>
+        )}
+      </div>
+
+      {/* Plain "how" — reuses METHOD_GUIDE, no new copy */}
+      {guide ? (
+        <div className="mt-3 border-t border-zinc-100 pt-2.5">
+          <button
+            type="button"
+            onClick={() => setShowHow((v) => !v)}
+            className="flex w-full items-center justify-between text-left text-xs font-semibold text-zinc-600"
+          >
+            <span>⚙ {isIS ? "Hvernig á að framkvæma" : "How to perform"}</span>
+            <span className="text-zinc-400">{showHow ? "▲" : "▼"}</span>
+          </button>
+          {showHow ? (
+            <div className="mt-2 space-y-1">
+              {(isIS ? guide.IS : guide.EN).split("\n").map((line, i) =>
+                line.trim() === "" ? (
+                  <div key={i} className="h-1.5" />
+                ) : (
+                  <div key={i} className="text-[13px] leading-relaxed text-zinc-700">{line}</div>
+                )
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---- "Byrja æfingu" focus screen (one block at a time) ---- */
+function SessionFocusScreen({
+  blocks,
+  t,
+  onClose,
+}: {
+  blocks: SessionBlock[];
+  t: (typeof PLAYER_COPY)["IS"];
+  onClose: () => void;
+}) {
+  const isIS = t === PLAYER_COPY.IS;
+  const total = blocks.length;
+  const [blockIdx, setBlockIdx] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const [choiceSel, setChoiceSel] = useState<Record<string, number>>({});
+  const [setsDone, setSetsDone] = useState<Record<string, number>>({});
+
+  const clampedIdx = Math.min(blockIdx, Math.max(0, total - 1));
+  const block = blocks[clampedIdx] ?? null;
+
+  // Resolve this block's segments into a flat exercise list (choice → selected).
+  const resolved: Array<{ key: string; ex: ParsedExercise; choice?: { header: string; options: ParsedExercise[]; selKey: string; sel: number } }> =
+    [];
+  if (block) {
+    block.segments.forEach((seg, sIdx) => {
+      if (seg.kind === "choice") {
+        if (!seg.options.length) return;
+        const selKey = `${clampedIdx}:${sIdx}`;
+        const sel = choiceSel[selKey] ?? 0;
+        const chosen = seg.options[Math.min(sel, seg.options.length - 1)];
+        resolved.push({
+          key: `${clampedIdx}:${sIdx}:${chosen.name}`,
+          ex: chosen,
+          choice: { header: seg.header, options: seg.options, selKey, sel },
+        });
+      } else {
+        resolved.push({ key: `${clampedIdx}:${sIdx}:${seg.ex.name}`, ex: seg.ex });
+      }
+    });
+  }
+
+  const blockComplete = resolved.length > 0 && resolved.every((r) => (setsDone[r.key] ?? 0) >= parseSetCount(r.ex.setsReps));
+  const isLast = clampedIdx >= total - 1;
+  const blockGoal = block ? BLOCK_GOAL[block.accent.label] ?? null : null;
+  const accentBar = block?.accent;
+
+  const localizeTitle = (title: string) => {
+    const lo = title.toLowerCase();
+    if (!isIS) {
+      if (lo === "upphitun") return "Warm-up";
+      if (lo === "reglur") return "Section";
+      return title.replace(/\(veldu\s+(\d+)(?:\s+leið\w*)?\)/gi, "(choose $1)");
+    }
+    return title;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header + progress */}
+      <div className="shrink-0 border-b border-zinc-100 px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-bold text-zinc-900">
+            {finished
+              ? isIS ? "Æfing dagsins" : "Today's session"
+              : isIS ? `Blokk ${clampedIdx + 1} af ${total}` : `Block ${clampedIdx + 1} of ${total}`}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 active:bg-zinc-200"
+            aria-label={isIS ? "Loka" : "Close"}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+          <div
+            className="h-full rounded-full bg-zinc-900 transition-all"
+            style={{ width: `${finished ? 100 : Math.round(((clampedIdx + (blockComplete ? 1 : 0)) / total) * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {finished ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">✓</div>
+            <div className="mt-4 text-xl font-bold text-zinc-900">{isIS ? "Æfingu lokið" : "Session complete"}</div>
+            <div className="mt-1 max-w-xs text-sm text-zinc-500">
+              {isIS ? "Vel gert. Mundu að skrá RPE eftir æfinguna." : "Nice work. Remember to log your RPE after the session."}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-6 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-bold text-white active:bg-zinc-700"
+            >
+              {isIS ? "Loka" : "Close"}
+            </button>
+          </div>
+        ) : block ? (
+          <div className="mx-auto max-w-lg space-y-4">
+            {/* Block title */}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={cx("h-2.5 w-2.5 rounded-full", accentBar?.dot)} style={accentBar?.dotStyle} />
+                <div className="text-lg font-bold text-zinc-900">{localizeTitle(block.title)}</div>
+              </div>
+              {blockGoal ? (
+                <div className="mt-2 rounded-xl bg-zinc-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-zinc-600">
+                  {isIS ? blockGoal.IS : blockGoal.EN}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Exercises */}
+            <div className="space-y-3">
+              {resolved.map((r) => (
+                <div key={r.key} className="space-y-2">
+                  {r.choice ? (
+                    <div className="flex flex-wrap gap-2">
+                      {r.choice.options.map((opt, oi) => {
+                        const active = r.choice!.sel === oi;
+                        return (
+                          <button
+                            key={oi}
+                            type="button"
+                            onClick={() => setChoiceSel((prev) => ({ ...prev, [r.choice!.selKey]: oi }))}
+                            className={cx(
+                              "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                              active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600"
+                            )}
+                          >
+                            {opt.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  <FocusExerciseRow
+                    ex={r.ex}
+                    accent={block.accent}
+                    rawTitle={block.accent.rawTitle}
+                    isIS={isIS}
+                    done={setsDone[r.key] ?? 0}
+                    onCompleteSet={() =>
+                      setSetsDone((prev) => ({
+                        ...prev,
+                        [r.key]: Math.min(parseSetCount(r.ex.setsReps), (prev[r.key] ?? 0) + 1),
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+              {!resolved.length ? (
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                  {t.training.noItems}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Footer nav */}
+      {!finished ? (
+        <div className="shrink-0 border-t border-zinc-100 px-4 py-3">
+          <div className="mx-auto flex max-w-lg items-center gap-3">
+            <button
+              type="button"
+              disabled={clampedIdx === 0}
+              onClick={() => setBlockIdx((i) => Math.max(0, i - 1))}
+              className={cx(
+                "rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors",
+                clampedIdx === 0 ? "border-zinc-100 text-zinc-300" : "border-zinc-200 text-zinc-700 active:bg-zinc-100"
+              )}
+            >
+              ← {isIS ? "Til baka" : "Back"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (isLast) setFinished(true);
+                else setBlockIdx((i) => Math.min(total - 1, i + 1));
+              }}
+              className={cx(
+                "flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition-colors",
+                blockComplete ? "bg-emerald-600 active:bg-emerald-700" : "bg-zinc-900 active:bg-zinc-700"
+              )}
+            >
+              {isLast
+                ? isIS ? "Klára æfingu ✓" : "Finish session ✓"
+                : isIS ? "Næsta blokk →" : "Next block →"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---- Today session card = block list + "Byrja æfingu" launcher ---- */
+function TodaySessionCard({ structure, opts }: { structure: unknown; opts: RenderStructureOpts }) {
+  const [focusOpen, setFocusOpen] = useState(false);
+  const t = opts.t ?? PLAYER_COPY.IS;
+  const isIS = t === PLAYER_COPY.IS;
+  const { blocks } = useMemo(
+    () => buildSessionBlocks(structure, opts.adjust ?? null, opts.themeColor ?? null),
+    [structure, opts.adjust, opts.themeColor]
+  );
+  const workBlocks = useMemo(() => blocks.filter((b) => b.segments.length > 0), [blocks]);
+
+  const card = renderStructureBlocks(structure, opts);
+  if (!card) return null;
+
+  return (
+    <div className="space-y-3">
+      {card}
+      {workBlocks.length ? (
+        <button
+          type="button"
+          onClick={() => setFocusOpen(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 py-3.5 text-sm font-bold text-white active:bg-zinc-700"
+        >
+          {isIS ? "Byrja æfingu" : "Start session"} <span aria-hidden>→</span>
+        </button>
+      ) : null}
+      {focusOpen ? (
+        <SessionFocusScreen blocks={workBlocks} t={t} onClose={() => setFocusOpen(false)} />
+      ) : null}
     </div>
   );
 }
@@ -5614,17 +5987,20 @@ export default function PlayerClient() {
               </div>
             ) : null}
 
-            {renderStructureBlocks(planStructureForRender, {
-              headerTitle: sessionHeaderTitle,
-              headerDesc: sessionHeaderDesc,
-              lockLabel,
-              t,
-              recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
-            ? exerciseRecommendationContext
-            : null,
-              themeColor: clubThemeColor,
-              adjust: computeTodayAdjust(plan?.readiness_level ?? null),
-            })}
+            <TodaySessionCard
+              structure={planStructureForRender}
+              opts={{
+                headerTitle: sessionHeaderTitle,
+                headerDesc: sessionHeaderDesc,
+                lockLabel,
+                t,
+                recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
+                  ? exerciseRecommendationContext
+                  : null,
+                themeColor: clubThemeColor,
+                adjust: computeTodayAdjust(plan?.readiness_level ?? null),
+              }}
+            />
 
             {renderPostTraining(postTraining, lang)}
 
