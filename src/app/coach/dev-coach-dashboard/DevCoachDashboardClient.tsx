@@ -8769,16 +8769,30 @@ export default function CoachPage() {
                     links land directly on the right view. */}
               </div>
 
-              {/* Language toggle */}
-              <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px mr-1">
-                <button
-                  onClick={() => setLang("IS")}
-                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
-                >IS</button>
-                <button
-                  onClick={() => setLang("EN")}
-                  className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
-                >EN</button>
+              {/* Right-side actions: TV view (locker-room / TV display) + language
+                  toggle. The TV view previously had no visible entry on the
+                  dashboard — only a buried sidebar-footer link — so surface it here. */}
+              <div className="flex items-center gap-2 mr-1">
+                <a
+                  href="/coach/display?refresh=15"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-px inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                  title={lang === "IS" ? "Opna leikmanna-skjá fyrir búningsklefa / sjónvarp" : "Open the player display for the locker room / TV"}
+                >
+                  <span aria-hidden>📺</span>{lang === "IS" ? "Skjár" : "TV view"}<span aria-hidden>↗</span>
+                </a>
+                {/* Language toggle */}
+                <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold mb-px">
+                  <button
+                    onClick={() => setLang("IS")}
+                    className={`rounded-full px-2.5 py-1 transition-colors ${lang === "IS" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                  >IS</button>
+                  <button
+                    onClick={() => setLang("EN")}
+                    className={`rounded-full px-2.5 py-1 transition-colors ${lang === "EN" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                  >EN</button>
+                </div>
               </div>
             </nav>
           </div>
