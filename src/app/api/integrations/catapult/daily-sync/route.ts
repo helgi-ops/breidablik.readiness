@@ -59,6 +59,72 @@ function dateMinusDaysIso(refIso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+type SyncAnomaly = { teamId: string; dates: string[]; unmatched: number; sampleWarning: string | null };
+
+/**
+ * A silent-failure detector for EVERY team, not just the env path: if a team
+ * fetched a session (activities/stats) but stored 0 rows, athlete matching
+ * failed (unmatched athletes, or no source team resolved) and the GPS quietly
+ * never lands. This is exactly the class of bug that hid a missing
+ * CATAPULT_TEAM_ID for days — surface it loudly so it can't recur unnoticed.
+ */
+function detectSyncAnomalies(
+  results: Array<{ teamId: string; date: string; result: unknown; error?: string }>,
+): SyncAnomaly[] {
+  const byTeam = new Map<string, SyncAnomaly>();
+  for (const r of results) {
+    if (r.error) continue;
+    const inner = (r.result ?? {}) as { activitiesFetched?: number; statsFetched?: number; storedCount?: number; unmatchedCount?: number; warnings?: string[] };
+    const fetchedSomething = Number(inner.activitiesFetched ?? 0) > 0 || Number(inner.statsFetched ?? 0) > 0;
+    if (!fetchedSomething || Number(inner.storedCount ?? 0) !== 0) continue; // rest day (0 activities) is NOT an anomaly
+    const cur = byTeam.get(r.teamId) ?? { teamId: r.teamId, dates: [], unmatched: 0, sampleWarning: null };
+    cur.dates.push(r.date);
+    cur.unmatched = Math.max(cur.unmatched, Number(inner.unmatchedCount ?? 0));
+    if (!cur.sampleWarning && Array.isArray(inner.warnings) && inner.warnings.length) cur.sampleWarning = inner.warnings[0];
+    byTeam.set(r.teamId, cur);
+  }
+  return [...byTeam.values()];
+}
+
+/** Loud alarm for a silent GPS-sync failure: server log + a push to all admins. Best-effort. */
+async function alertSyncAnomalies(anomalies: SyncAnomaly[]): Promise<void> {
+  for (const a of anomalies) {
+    console.error(`[catapult daily-sync] ⚠️ ANOMALY team=${a.teamId} dates=${a.dates.join(",")} — fetched a session but stored 0 rows (${a.unmatched} unmatched). ${a.sampleWarning ?? ""}`);
+  }
+  try {
+    const sb = getAdminClient();
+    const { data: admins } = await sb.from("profiles").select("id, role");
+    const adminIds = ((admins ?? []) as Array<{ id: string; role: string | null }>)
+      .filter((p) => String(p.role ?? "").toLowerCase() === "admin")
+      .map((p) => p.id);
+    if (!adminIds.length) return;
+    const { data: subs } = await sb
+      .from("coach_push_subscriptions")
+      .select("id, endpoint, p256dh, auth")
+      .in("profile_id", adminIds)
+      .eq("is_active", true);
+    const subRows = (subs ?? []) as Array<{ id: string; endpoint: string | null; p256dh: string | null; auth: string | null }>;
+    if (!subRows.length) return;
+    const { sendWebPush, isSubscriptionGone } = await import("@/lib/push/webPush");
+    const teams = anomalies.map((a) => (a.teamId === "env-default" ? "env-default" : a.teamId)).join(", ");
+    const payload = {
+      title: "⚠️ GPS sync issue",
+      body: `A Catapult session was found but 0 rows stored (${teams}). Athletes unmatched — check the integration.`,
+      url: "/coach/integrations",
+    };
+    for (const sub of subRows) {
+      if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;
+      try {
+        await sendWebPush({ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth }, payload);
+      } catch (err) {
+        if (isSubscriptionGone(err)) await sb.from("coach_push_subscriptions").update({ is_active: false }).eq("id", sub.id);
+      }
+    }
+  } catch (err) {
+    console.error("[catapult daily-sync] anomaly alert failed", err);
+  }
+}
+
 async function runSync(
   request: Request,
   explicitDate?: string | null,
@@ -143,6 +209,22 @@ async function runSync(
             result: null,
             error: message,
           });
+        }
+      }
+    }
+
+    // ── Silent-failure guard (all teams) ───────────────────────────
+    // Any team that fetched a session but stored 0 rows failed athlete
+    // matching — alert loudly (log + admin push) so a broken sync can never
+    // sit unnoticed for days again (this is what hid the missing
+    // CATAPULT_TEAM_ID). Best-effort; never blocks the sync response.
+    const syncAnomalies = detectSyncAnomalies(results);
+    if (syncAnomalies.length > 0) {
+      if (!skipPush) {
+        await alertSyncAnomalies(syncAnomalies);
+      } else {
+        for (const a of syncAnomalies) {
+          console.error(`[catapult daily-sync] ⚠️ ANOMALY (push suppressed) team=${a.teamId} dates=${a.dates.join(",")} stored 0 (${a.unmatched} unmatched)`);
         }
       }
     }
@@ -248,6 +330,7 @@ async function runSync(
         rpeReminder: rpeReminderResult,
         notified: shouldNotify,
         coachNotifications: notifResults,
+        syncAnomalies,
       });
     }
 
@@ -258,6 +341,7 @@ async function runSync(
       rpeReminder: rpeReminderResult,
       notified: shouldNotify,
       coachNotifications: notifResults,
+      syncAnomalies,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catapult sync failed";
