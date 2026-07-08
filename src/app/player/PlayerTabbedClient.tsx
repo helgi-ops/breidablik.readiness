@@ -837,6 +837,176 @@ function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTa
   );
 }
 
+// ── Today's expected load portal ─────────────────────────────────────────────
+//
+// A forward-looking "what's coming today" card: the microcycle outlook (effort
+// band + intensity meter, ~duration, focus, % of a match, a plain reason) and
+// the player's own target — eased when their own check-in is yellow/red. Plain
+// and anticipatory; the raw target AU is framed with "% of a match". Data from
+// /api/player/today-load (shared source with the coach Pre-session report), so
+// the player's outlook can never disagree with the coach plan. Self-hides on
+// off-days / no plan. Same reliable mount as PlayerRttProgressPortal.
+
+type TodayLoad = {
+  show: boolean;
+  matchDay: boolean;
+  mdLabel: string | null;
+  band: "light" | "moderate" | "high" | "very_high";
+  loadType: "mechanical" | "locomotive" | "mixed";
+  durationMin: number;
+  matchPct: number;
+  rationaleEN: string;
+  rationaleIS: string;
+  personalTarget: number | null;
+  flag: "ok" | "build" | "reduce" | null;
+  flagReason: string | null;
+  eased: "yellow" | "red" | null;
+};
+
+const LOAD_BAND: Record<TodayLoad["band"], { pct: number; en: string; is: string; color: string }> = {
+  light:     { pct: 30,  en: "Easy",      is: "Létt",        color: "#2b8a54" },
+  moderate:  { pct: 55,  en: "Moderate",  is: "Miðlungs",    color: "#0ea5e9" },
+  high:      { pct: 80,  en: "Hard",      is: "Erfitt",      color: "#d97706" },
+  very_high: { pct: 100, en: "Very hard", is: "Mjög erfitt", color: "#e11d48" },
+};
+const LOAD_FOCUS: Record<TodayLoad["loadType"], { en: string; is: string }> = {
+  mechanical: { en: "force", is: "kraftur" },
+  locomotive: { en: "speed", is: "hraði" },
+  mixed:      { en: "mixed", is: "blandað" },
+};
+const LOAD_FLAG: Record<"ok" | "build" | "reduce", { en: string; is: string; cls: string }> = {
+  ok:     { en: "on track",      is: "á áætlun",              cls: "bg-emerald-50 text-emerald-700" },
+  build:  { en: "room to build", is: "svigrúm til að byggja", cls: "bg-sky-50 text-sky-700" },
+  reduce: { en: "ease back",     is: "taktu af",              cls: "bg-amber-50 text-amber-700" },
+};
+
+/** "MD-3" → "3 days to match"; "MD" → "match day"; "MD+1" → "1 day since match". */
+function mdGloss(mdLabel: string | null, is: boolean): string | null {
+  if (!mdLabel) return null;
+  const s = mdLabel.toUpperCase().replace(/\s+/g, "");
+  if (s === "MD" || s === "MD0") return is ? "leikdagur" : "match day";
+  const m = s.match(/^MD([+-])(\d+)$/);
+  if (!m) return null;
+  const n = parseInt(m[2], 10);
+  if (m[1] === "-") return n === 1 ? (is ? "leikur á morgun" : "match tomorrow") : (is ? `${n} dagar í leik` : `${n} days to match`);
+  return n === 1 ? (is ? "1 dagur frá leik" : "1 day since match") : (is ? `${n} dagar frá leik` : `${n} days since match`);
+}
+
+function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [data, setData] = useState<TodayLoad | null>(null);
+  const is = lang === "IS";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/player/today-load", { headers: { Authorization: `Bearer ${token}` } });
+        const j = (await res.json()) as TodayLoad;
+        if (!cancelled && res.ok && j?.show) setData(j);
+      } catch { /* optional card — never break Today */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!data?.show) return;
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      const ateSlot = document.getElementById("dev-ate-command-card-slot");
+      const anchor = ateSlot ?? detectHeaderCard();
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-today-load-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-today-load-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-today-load-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0);
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [data?.show]);
+
+  if (!mountNode || activeTab !== "today" || !data?.show) return null;
+
+  const accent = clubThemeColor ?? "#2b8a54";
+
+  // Match-day: a short celebratory state instead of the load layout.
+  if (data.matchDay) {
+    return createPortal(
+      <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <span aria-hidden>⚽</span>{is ? "ÆFING DAGSINS" : "TODAY'S SESSION"}
+        </div>
+        <div className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">{is ? "Leikdagur! 🔥" : "Match day! 🔥"}</div>
+        <div className="mt-1 text-sm leading-relaxed text-zinc-600">{is ? "Í dag er leikur — engin áætluð æfing. Gefðu allt." : "It's match day — no planned training. Leave it all out there."}</div>
+      </div>,
+      mountNode,
+    );
+  }
+
+  const b = LOAD_BAND[data.band];
+  const focus = LOAD_FOCUS[data.loadType];
+  const gloss = mdGloss(data.mdLabel, is);
+  const flag = data.flag ? LOAD_FLAG[data.flag] : null;
+
+  return createPortal(
+    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
+      <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span className="flex items-center gap-1.5"><span aria-hidden>📋</span>{is ? "ÆFING DAGSINS" : "TODAY'S SESSION"}</span>
+        {data.mdLabel && <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">{data.mdLabel}{gloss ? ` · ${gloss}` : ""}</span>}
+      </div>
+
+      {/* Effort band + intensity meter */}
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="text-xl font-bold tracking-tight text-zinc-900">{is ? b.is : b.en}</span>
+        <span className="text-sm text-zinc-500">· ~{data.durationMin} {is ? "mín" : "min"}</span>
+      </div>
+      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-200">
+        <div className="h-full rounded-full" style={{ width: `${b.pct}%`, background: b.color }} />
+      </div>
+
+      <div className="mt-2 text-sm text-zinc-700">
+        <span className="text-zinc-400">{is ? "Áhersla: " : "Focus: "}</span>{is ? focus.is : focus.en}
+        <span className="text-zinc-400"> · </span>{is ? `~${data.matchPct}% af leik` : `~${data.matchPct}% of a match`}
+      </div>
+
+      {/* Personal target (only when the plan has one for this player) */}
+      {data.personalTarget != null && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-200/70 pt-2 text-sm">
+          <span className="text-zinc-400">{is ? "Þitt viðmið í dag:" : "Your target today:"}</span>
+          <span className="font-semibold text-zinc-900">~{data.personalTarget}</span>
+          {flag && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${flag.cls}`}>{is ? flag.is : flag.en}</span>}
+        </div>
+      )}
+      {data.eased && (
+        <div className="mt-1 text-xs leading-snug text-amber-700">
+          {is ? "Aðeins minnkað miðað við líðan þína í dag." : "Eased a little for how you're feeling today."}
+        </div>
+      )}
+
+      <div className="mt-2 text-[11px] leading-snug text-zinc-500">{is ? data.rationaleIS : data.rationaleEN}</div>
+    </div>,
+    mountNode,
+  );
+}
+
 // ── Contextual RPE reminder portal ───────────────────────────────────────────
 //
 // RPE is a time-sensitive daily action (log it right after training), not an
@@ -1628,6 +1798,10 @@ export default function DevPlayerClient() {
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
       {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} lang={lang as "IS" | "EN"} />}
+      {/* Today's expected load — a forward-looking "what's coming today" outlook
+          (effort band, duration, focus, % of a match) + the player's own target.
+          Self-hides on off-days / when there's no plan. Not gated by wellness. */}
+      <PlayerTodayLoadPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
       {/* Return-to-training progress — an encouraging "where am I in my ramp"
           card, shown on Today only while the player has an active graded-return
           plan (self-hides otherwise). Not gated by wellness: an injured player
