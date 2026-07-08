@@ -92,6 +92,7 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import DailyBriefingCard, { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
+import PlayerDecisionDrawer, { type DecisionDrawerData, type DrawerColor } from "@/components/coach/PlayerDecisionDrawer";
 import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import UnfamiliarLoadCard from "@/components/coach/UnfamiliarLoadCard";
@@ -984,6 +985,83 @@ const TEAM_RISK_COPY = {
     stableRec:   "Run plan as normal: standard session, with individual focus on players flagged REDUCED/RECOVERY.",
   },
 } as const;
+
+// Lota B / B4 — map a rich attention item (buildAttentionList output) onto the
+// head-coach PlayerDecisionDrawer's props. Same source as the Daily Briefing +
+// the attention list, so the drawer can never disagree (no new data / API).
+function buildDrawerDataFromAttention(item: BriefingAttentionItem, lang: "IS" | "EN"): DecisionDrawerData {
+  const isIS = lang === "IS";
+  const color: DrawerColor = item.injury
+    ? item.injury.kind === "rtp" ? "YELLOW" : "RED"
+    : item.level === "alert" ? "RED" : "YELLOW";
+  return {
+    playerId: String(item.playerId),
+    name: item.name,
+    color,
+    verdictLabel: item.compactStatus,
+    why: item.explanation ? (isIS ? item.explanation.is : item.explanation.en) : null,
+    reasons: item.reasons,
+    load:
+      item.plSpike != null || item.loadBreakdown.length > 0
+        ? { spike: item.plSpike ?? null, breakdown: item.loadBreakdown }
+        : null,
+    counterfactual: item.topCounterfactual
+      ? {
+          hypotheticalState: item.topCounterfactual.hypotheticalState as DrawerColor,
+          description: isIS ? item.topCounterfactual.descriptionIS : item.topCounterfactual.descriptionEN,
+        }
+      : null,
+    confidence: item.confidence
+      ? {
+          level: item.confidence.level,
+          signalCount: item.confidence.signalCount,
+          signalTotal: item.confidence.signalTotal,
+          notes: item.confidence.notes,
+        }
+      : null,
+    baselineMaturity: item.baselineMaturity,
+    injury: item.injury,
+    delta: item.delta ? { kind: item.delta.kind, summary: isIS ? item.delta.summaryIS : item.delta.summaryEN } : null,
+  };
+}
+
+// Lota B / B4b — build drawer data for a player who is NOT in the attention
+// list (e.g. a green/cleared player clicked in the group table). Uses the
+// canonical row colour + the player's load spike; no counterfactual/driver
+// detail (there's nothing flagged), but still shows the verdict + the
+// unfamiliar-load banner. Same sources as everywhere else (no new data / API).
+function buildDrawerDataFromRow(
+  row: Row,
+  comp: { playerLoadSpike: number | null } | null | undefined,
+  lang: "IS" | "EN",
+): DecisionDrawerData {
+  const isIS = lang === "IS";
+  const color: DrawerColor =
+    row.final_color === "green" ? "GREEN"
+      : row.final_color === "yellow" ? "YELLOW"
+      : row.final_color === "red" ? "RED"
+      : "GRAY";
+  const verdictLabel =
+    color === "GREEN" ? (isIS ? "Klár í fulla æfingu" : "Cleared for full training")
+      : color === "YELLOW" ? (isIS ? "Breytt plan" : "Modified plan")
+      : color === "RED" ? (isIS ? "Þarf hvíld" : "Needs recovery")
+      : (isIS ? "Engin innskráning" : "No check-in");
+  return {
+    playerId: String(row.player_id),
+    name: row.full_name,
+    position: row.position ?? null,
+    color,
+    verdictLabel,
+    why: row.final_reason ?? (color === "GREEN" ? (isIS ? "Reiðuskor er í takt við venju hans — ekkert sem þarf að fylgjast með." : "Readiness is in line with his usual — nothing to watch today.") : null),
+    reasons: [],
+    load: comp?.playerLoadSpike != null ? { spike: comp.playerLoadSpike } : null,
+    counterfactual: null,
+    confidence: null,
+    baselineMaturity: null,
+    injury: null,
+    delta: null,
+  };
+}
 
 function computeTeamRisk(signal: TeamSignal | null, lang: "IS" | "EN" = "IS") {
   const rc = TEAM_RISK_COPY[lang];
@@ -2455,6 +2533,12 @@ export default function CoachPage() {
   const [preRestDay, setPreRestDay] = useState(false);
   // Optional past-date selector for the Post-Training report (empty = latest session).
   const [postReportDate, setPostReportDate] = useState<string>("");
+  // Lota B / B4: player selected in the Today decision drawer (null = closed).
+  // Opened from the attention list (B4a) and the group table (B4b).
+  const [drawerPlayerId, setDrawerPlayerId] = useState<string | null>(null);
+  // Lota B / B4b: player whose rich S&C modal is open (from the drawer's
+  // "Show details — S&C"). Controlled entry into DecisionSummaryCard's modal.
+  const [scDetailPlayerId, setScDetailPlayerId] = useState<string | null>(null);
 
   // MLI + Metabolic Load per player (for Decision Summary enrichment)
   const [playerMli, setPlayerMli] = useState<Record<string, { mli: number | null; band: string | null }>>({});
@@ -9457,10 +9541,9 @@ export default function CoachPage() {
           {/* Attention list (Lota B / step B2) — one prioritized list built from
               the SAME buildAttentionList source the Daily Briefing uses, so the
               two can never disagree (no new data / no new API). ALERT before
-              MONITOR; clicking a row scrolls to that player in the group table
-              below. B4 will swap this click for the per-player decision drawer. */}
+              MONITOR; clicking a row opens the player decision drawer (B4a). */}
           {rows.length > 0 && (() => {
-            const items: AttentionListItem[] = buildAttentionList(
+            const raw = buildAttentionList(
               rows as unknown as BriefingRow[],
               playerComposites,
               lang === "IS" ? "IS" : "EN",
@@ -9470,7 +9553,11 @@ export default function CoachPage() {
               today,
               playerInjuryStatus,
               yesterdayDeltas,
-            ).map((it: BriefingAttentionItem): AttentionListItem => {
+            );
+            // Lookup so the drawer reads the same rich item the row was built
+            // from — keyed by player id.
+            const byId = new Map<string, BriefingAttentionItem>(raw.map((it) => [String(it.playerId), it]));
+            const items: AttentionListItem[] = raw.map((it): AttentionListItem => {
               const badges: string[] = [];
               if (it.injury?.badge) badges.push(it.injury.badge);
               // Unfamiliar-load badge reuses the Daily Briefing's own alert-level
@@ -9491,22 +9578,35 @@ export default function CoachPage() {
                   : it.level === "alert" ? "RED" : "YELLOW",
               };
             });
+            // Resolve the drawer's data for the selected player: the rich
+            // attention item when flagged, otherwise a row fallback so a green
+            // player (not in the attention list) still opens a full drawer.
+            const dLang = lang === "IS" ? "IS" : "EN";
+            let drawerData: DecisionDrawerData | null = null;
+            if (drawerPlayerId) {
+              const flagged = byId.get(drawerPlayerId);
+              if (flagged) {
+                drawerData = buildDrawerDataFromAttention(flagged, dLang);
+              } else {
+                const r = rows.find((x) => String(x.player_id) === drawerPlayerId);
+                if (r) drawerData = buildDrawerDataFromRow(r, playerComposites[drawerPlayerId], dLang);
+              }
+            }
             return (
-              <AttentionList
-                lang={lang === "IS" ? "IS" : "EN"}
-                items={items}
-                onOpenPlayer={(pid) => {
-                  if (typeof document === "undefined") return;
-                  const el = document.querySelector(`[data-player-id="${pid}"]`);
-                  if (!el) return;
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                  el.classList.add("ring-2", "ring-blue-500", "ring-offset-2");
-                  window.setTimeout(
-                    () => el.classList.remove("ring-2", "ring-blue-500", "ring-offset-2"),
-                    1600,
-                  );
-                }}
-              />
+              <>
+                <AttentionList lang={dLang} items={items} onOpenPlayer={(pid) => setDrawerPlayerId(pid)} />
+                {/* Player decision drawer (B4a/B4b) — head-coach read for the
+                    clicked player, opened from the attention list AND the group
+                    table (green players included). "Show details — S&C" opens
+                    the existing rich modal via DecisionSummaryCard. */}
+                <PlayerDecisionDrawer
+                  lang={dLang}
+                  open={drawerData != null}
+                  data={drawerData}
+                  onClose={() => setDrawerPlayerId(null)}
+                  onShowScDetails={(pid) => { setScDetailPlayerId(pid); setDrawerPlayerId(null); }}
+                />
+              </>
             );
           })()}
 
@@ -9747,7 +9847,11 @@ export default function CoachPage() {
                 _injury_estimated_return: playerInjuryStatus[r.player_id]?.estimatedReturn ?? null,
                 _injury_severity: playerInjuryStatus[r.player_id]?.severity ?? null,
               };
-            }) as any} trainingMode={trainingMode} />
+            }) as any} trainingMode={trainingMode}
+              onPlayerClick={(pid) => setDrawerPlayerId(pid)}
+              scDetailPlayerId={scDetailPlayerId}
+              onScDetailClose={() => setScDetailPlayerId(null)}
+            />
           )}
 
           {/* Indoor Briefing — team-level executive summary.

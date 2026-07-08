@@ -2781,7 +2781,20 @@ const DecisionSummaryCard: FC<{
    * team, useful for season toggles in Iceland football.
    */
   trainingMode?: "auto" | "indoor" | "outdoor";
-}> = ({ rows, trainingMode = "auto" }) => {
+  /**
+   * Lota B / B4b — when provided, a player-card click calls this instead of
+   * opening the internal S&C modal, so the parent can open the head-coach
+   * PlayerDecisionDrawer (works for green players too). Omit to keep the
+   * original behaviour (click → internal modal).
+   */
+  onPlayerClick?: (playerId: string) => void;
+  /**
+   * Controlled entry into the rich S&C modal — set by the parent (from the
+   * drawer's "Show details — S&C") to open the modal for a specific player.
+   */
+  scDetailPlayerId?: string | null;
+  onScDetailClose?: () => void;
+}> = ({ rows, trainingMode = "auto", onPlayerClick, scDetailPlayerId = null, onScDetailClose }) => {
   const [selectedRow, setSelectedRow] = useState<DecisionSummaryRow | null>(null);
   const [lang] = useLang();
   // Smart filter — when ON, hide all green/FULL players and show only
@@ -2968,22 +2981,34 @@ const DecisionSummaryCard: FC<{
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visibleRows.map((row) => (
-              <PlayerCard key={row.player_id} row={row} onClick={() => setSelectedRow(row)} lang={lang} />
+              <PlayerCard
+                key={row.player_id}
+                row={row}
+                onClick={() => (onPlayerClick ? onPlayerClick(row.player_id) : setSelectedRow(row))}
+                lang={lang}
+              />
             ))}
           </div>
         )}
       </CardContent>
 
-      {/* Detail modal — click anywhere outside or press Escape to close */}
-      {selectedRow && (
-        <PlayerModal
-          row={selectedRow}
-          onClose={() => setSelectedRow(null)}
-          lang={lang}
-          trainingMode={trainingMode}
-          foster={fosterByPlayer.get(selectedRow.player_id) ?? null}
-        />
-      )}
+      {/* Detail modal — opens from an internal card click (when no onPlayerClick
+          is wired) OR when the parent sets scDetailPlayerId (the drawer's
+          "Show details — S&C"). Click outside / Escape to close. */}
+      {(() => {
+        const scRow = scDetailPlayerId ? rows.find((r) => r.player_id === scDetailPlayerId) ?? null : null;
+        const modalRow = selectedRow ?? scRow;
+        if (!modalRow) return null;
+        return (
+          <PlayerModal
+            row={modalRow}
+            onClose={() => { setSelectedRow(null); onScDetailClose?.(); }}
+            lang={lang}
+            trainingMode={trainingMode}
+            foster={fosterByPlayer.get(modalRow.player_id) ?? null}
+          />
+        );
+      })()}
     </Card>
   );
 };
