@@ -2179,7 +2179,7 @@ function SessionFocusScreen({
   const blockGoal = block ? BLOCK_GOAL[block.accent.label] ?? null : null;
   const recCtx = block && (block.priority === 1 || block.priority === 2) ? recommendationContext ?? null : null;
 
-  return (
+  const overlay = (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* Header + progress */}
       <div className="shrink-0 border-b border-zinc-100 px-4 pt-4 pb-3">
@@ -2297,6 +2297,11 @@ function SessionFocusScreen({
       ) : null}
     </div>
   );
+
+  // Portal to <body> so the fixed overlay always covers the viewport, even when
+  // the launching card sits inside a transformed/backdrop-filtered ancestor.
+  if (typeof document === "undefined") return overlay;
+  return createPortal(overlay, document.body);
 }
 
 /* ---- Today session card = compact block summary + "Byrja æfingu" launcher ---- */
@@ -2381,75 +2386,6 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
         />
       ) : null}
     </div>
-  );
-}
-
-/* ---- Places the Today session card directly under the decision card ----
-   Mirrors the hardened portal pattern used by the Today-load / RTT cards
-   (PlayerTabbedClient): create a slot right after `dev-ate-command-card-slot`,
-   keep it there via a MutationObserver, and render the card into it. The other
-   Today portals are re-pointed to anchor AFTER this slot so nothing wedges
-   between the decision and the session. Visibility per tab is handled by
-   PlayerTabbedClient toggling the slot's display. */
-function TodaySessionPortal({ structure, opts }: { structure: unknown; opts: TodaySessionOpts }) {
-  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let attempts = 0;
-    let observer: MutationObserver | null = null;
-    const ensure = () => {
-      if (cancelled) return false;
-      // Prefer the decision slot; fall back to the header card so the session is
-      // always placed even when the command-card slot isn't present.
-      const anchor =
-        document.getElementById("dev-ate-command-card-slot") ??
-        (document.querySelector('[data-player-card="header"]') as HTMLElement | null);
-      if (!anchor?.parentElement) return false;
-      let slot = document.getElementById("dev-today-session-slot");
-      if (!slot) {
-        slot = document.createElement("div");
-        slot.id = "dev-today-session-slot";
-      }
-      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
-        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
-      }
-      setMountNode((prev) => (prev === slot ? prev : slot));
-      return true;
-    };
-    const place = () => {
-      if (cancelled) return;
-      attempts += 1;
-      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
-      else if (!observer && document.body) {
-        observer = new MutationObserver(() => {
-          if (!document.getElementById("dev-today-session-slot")?.isConnected) ensure();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-      }
-    };
-    const t = window.setTimeout(place, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-      observer?.disconnect();
-    };
-  }, []);
-
-  // Fail-safe: until the slot resolves (or if placement never succeeds), render
-  // the card inline so the session is never missing from Today.
-  if (!mountNode) {
-    return (
-      <div className="mt-3">
-        <TodaySessionCard structure={structure} opts={opts} />
-      </div>
-    );
-  }
-  return createPortal(
-    <div className="mt-3">
-      <TodaySessionCard structure={structure} opts={opts} />
-    </div>,
-    mountNode
   );
 }
 
@@ -5825,7 +5761,7 @@ export default function PlayerClient() {
               </div>
             ) : null}
 
-            <TodaySessionPortal
+            <TodaySessionCard
               structure={planStructureForRender}
               opts={{
                 headerTitle: sessionHeaderTitle,
