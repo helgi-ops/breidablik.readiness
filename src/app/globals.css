@@ -214,6 +214,12 @@
   }
 }
 
+/* Softer, warmer card shadow (Fasi 1 §4) — applied via the shared Card and the
+   player CardShell so every card picks it up centrally. */
+.shadow-card {
+  box-shadow: 0 1px 2px rgba(20, 24, 28, 0.05), 0 18px 40px -26px rgba(20, 24, 28, 0.28);
+}
+
 /* ── PWA-only layout fixes ─────────────────────────────────────────────────
    Only applies when the app is installed and running in standalone mode.
    The website in a normal browser tab is completely unaffected.

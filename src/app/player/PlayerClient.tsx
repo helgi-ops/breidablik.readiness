@@ -346,7 +346,7 @@ function CardShell({
   ...props
 }: { children: any; className?: string } & ComponentPropsWithoutRef<"div">) {
   return (
-    <div className={cx("rounded-2xl border bg-white shadow-sm", className)} {...props}>
+    <div className={cx("rounded-2xl border bg-white shadow-card", className)} {...props}>
       {children}
     </div>
   );
