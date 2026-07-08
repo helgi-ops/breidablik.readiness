@@ -2106,18 +2106,75 @@ function buildSessionBlocks(
     const items = safeStringList(b?.items);
     const accent = blockAccent(title, themeColor);
     const priority = blockSortPriority(title);
-    // Apply the readiness set-reduction to the displayed sets×reps natively
-    // (YELLOW → one set off). reduceSetsInLine only touches clean N×M / "N sets".
-    const parsed = items.map(parseExerciseItem).map((ex) =>
-      adjust && adjust.setReduction > 0 && ex.setsReps
-        ? { ...ex, setsReps: reduceSetsInLine(ex.setsReps, adjust.setReduction) }
-        : ex
-    );
+    // Keep ORIGINAL sets×reps here; the readiness reduction is applied at render
+    // (card shows struck-original → adjusted; focus screen shows the adjusted
+    // value) via reduceExercise() so the "was 4 → 3" can be surfaced.
+    const parsed = items.map(parseExerciseItem);
     const segments = groupIntoSegments(parsed);
     return { title, accent, priority, segments };
   });
 
   return { blocks, hiddenCount, totalBlocks: sorted.length };
+}
+
+/** Apply the readiness set-reduction to a single exercise's sets×reps. */
+function reduceExercise(ex: ParsedExercise, adjust: TodayAdjust | null): ParsedExercise {
+  if (!adjust || adjust.setReduction <= 0 || !ex.setsReps) return ex;
+  return { ...ex, setsReps: reduceSetsInLine(ex.setsReps, adjust.setReduction) };
+}
+
+/** Split a leading block label ("A.", "B1.", "C)") off the exercise name. */
+function splitExerciseLetter(name: string): { letter: string | null; rest: string } {
+  const m = name.match(/^([A-Ca-c]\d?)[.):]\s*(.*)$/);
+  if (m && m[2].trim()) return { letter: m[1].toUpperCase(), rest: m[2].trim() };
+  return { letter: null, rest: name };
+}
+
+/** Plain one-line descriptor for an exercise = method · note. */
+function exerciseDescriptor(ex: ParsedExercise): string | null {
+  const parts = [ex.method, ex.note].filter((x): x is string => !!x && x.trim().length > 0);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Rough per-session minute estimate from block count + exercise volume. */
+function estimateSessionMinutes(blocks: SessionBlock[]): number {
+  let total = 0;
+  for (const b of blocks) {
+    const exCount = b.segments.length;
+    const perEx = b.priority === 0 ? 1.3 : b.priority === 1 ? 2.5 : b.priority === 2 ? 4 : 2;
+    const base = b.priority === 2 ? 3 : 2;
+    total += base + exCount * perEx;
+  }
+  return Math.max(5, Math.round(total / 5) * 5);
+}
+
+/** Pick the "money" block to feature on the card: main/contrast > primer > first. */
+function pickPrimaryBlock(blocks: SessionBlock[]): SessionBlock | null {
+  return (
+    blocks.find((b) => b.priority === 2) ??
+    blocks.find((b) => b.priority === 1) ??
+    blocks.find((b) => b.priority !== 0) ??
+    blocks[0] ??
+    null
+  );
+}
+
+/** Renders sets×reps with the original set-count struck when reduced. */
+function SetsReps({ ex, adjust }: { ex: ParsedExercise; adjust: TodayAdjust | null }) {
+  const original = ex.setsReps;
+  if (!original) return null;
+  const reduced = adjust && adjust.setReduction > 0 ? reduceSetsInLine(original, adjust.setReduction) : original;
+  if (reduced === original) {
+    return <span className="whitespace-nowrap text-sm font-semibold text-zinc-700">{original}</span>;
+  }
+  // Show the original leading set-count struck, then the adjusted string.
+  const origLead = original.match(/^(\d+)/)?.[1] ?? null;
+  return (
+    <span className="whitespace-nowrap text-sm font-semibold text-zinc-800">
+      {origLead ? <s className="mr-1 font-medium text-rose-400">{origLead}</s> : null}
+      {reduced}
+    </span>
+  );
 }
 
 type TodaySessionOpts = {
@@ -2129,23 +2186,6 @@ type TodaySessionOpts = {
   themeColor?: string | null;
   adjust?: TodayAdjust | null;
 };
-
-/** Localized short name for a block, from its accent label. */
-function localizedBlockName(accentLabel: string, t: (typeof PLAYER_COPY)["IS"]): string {
-  const tb = t.blocks;
-  switch (accentLabel) {
-    case "Upphitun":
-      return tb.warmup;
-    case "Primer":
-      return tb.primer;
-    case "Main":
-      return tb.main;
-    case "Accessory":
-      return tb.accessory;
-    default:
-      return tb.part;
-  }
-}
 
 /** Translate a raw DB block title for display (IS stored → EN when needed). */
 function localizeBlockTitleText(title: string, isIS: boolean): string {
@@ -2161,11 +2201,13 @@ function SessionFocusScreen({
   blocks,
   t,
   recommendationContext,
+  adjust,
   onClose,
 }: {
   blocks: SessionBlock[];
   t: (typeof PLAYER_COPY)["IS"];
   recommendationContext?: ExerciseRecommendationContext | null;
+  adjust?: TodayAdjust | null;
   onClose: () => void;
 }) {
   const isIS = t === PLAYER_COPY.IS;
@@ -2244,7 +2286,7 @@ function SessionFocusScreen({
                     <ChoiceGroup
                       key={i}
                       header={seg.header}
-                      options={seg.options}
+                      options={seg.options.map((o) => reduceExercise(o, adjust ?? null))}
                       accent={block.accent}
                       blockLabel={block.accent.label}
                       recommendationContext={recCtx}
@@ -2252,7 +2294,7 @@ function SessionFocusScreen({
                   ) : (
                     <RecommendedExerciseBlockCard
                       key={i}
-                      ex={seg.ex}
+                      ex={reduceExercise(seg.ex, adjust ?? null)}
                       accent={block.accent}
                       blockLabel={block.accent.label}
                       recommendationContext={recCtx}
@@ -2304,9 +2346,52 @@ function SessionFocusScreen({
   return createPortal(overlay, document.body);
 }
 
-/* ---- Today session card = compact block summary + "Byrja æfingu" launcher ---- */
+/** Adjustment banner copy for the Today session card, per readiness state. */
+function bannerFor(state: "GREEN" | "YELLOW" | "RED", isIS: boolean) {
+  if (state === "YELLOW") {
+    return {
+      bg: "#faf1de",
+      fg: "#9a6410",
+      icon: "↓",
+      title: isIS ? "Aðlöguð — eitt sett tekið af hverri lyftu" : "Adjusted — one set off each lift",
+      why: isIS
+        ? "Reiðuskori er gult í dag, svo við lækkum rúmmálið en höldum gæðunum."
+        : "Readiness is amber today, so we trim the volume but keep the quality.",
+      more: isIS
+        ? "Færri sett halda þér ferskum — full ákefð og góð tækni skila áfram styrk og krafti."
+        : "Fewer sets keep you fresh — full intent and good technique still drive strength and power.",
+    };
+  }
+  if (state === "RED") {
+    return {
+      bg: "#f8e9e3",
+      fg: "#a83e28",
+      icon: "↓",
+      title: isIS ? "Létt/valfrjáls — hörðustu blokkir felldar niður" : "Light/optional — hardest blocks dropped",
+      why: isIS
+        ? "Reiðuskori er rautt í dag — við höldum álaginu lágu til að vernda þig."
+        : "Readiness is red today — we keep the load low to protect you.",
+      more: isIS
+        ? "Hörðustu blokkirnar (sprengikraftur/þungt) eru teknar út; léttar hreyfingar viðhalda án álags."
+        : "The hardest blocks (explosive/heavy) are removed; light movement maintains you without load.",
+    };
+  }
+  return {
+    bg: "#eef7f0",
+    fg: "#146c40",
+    icon: "✓",
+    title: isIS ? "Full æfing — ekkert tekið af" : "Full session — nothing removed",
+    why: isIS
+      ? "Reiðuskori er grænt — kýldu á fulla æfingu með góðri tækni."
+      : "Readiness is green — go full session with good technique.",
+    more: null as string | null,
+  };
+}
+
+/* ---- Today session card = key lifts + readiness banner + "Byrja æfingu" ---- */
 function TodaySessionCard({ structure, opts }: { structure: unknown; opts: TodaySessionOpts }) {
   const [focusOpen, setFocusOpen] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const t = opts.t ?? PLAYER_COPY.IS;
   const isIS = t === PLAYER_COPY.IS;
   const adjust = opts.adjust ?? null;
@@ -2317,71 +2402,101 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const workBlocks = useMemo(() => blocks.filter((b) => b.segments.length > 0), [blocks]);
   if (!workBlocks.length) return null;
 
-  const headerTitle = String(opts.headerTitle ?? "").trim() || t.training.sectionTitle;
-  const lockLabel = opts.lockLabel ?? "";
   const themeColor = opts.themeColor ?? null;
+  const accentColor = themeColor || "#3730a3";
+  const subtitle = String(opts.headerTitle ?? "").trim();
 
-  const badge =
-    adjust && adjust.state !== "GRAY"
-      ? adjust.state === "GREEN"
-        ? { bg: "#eef7f0", fg: "#146c40", text: isIS ? "Full æfing" : "Full session" }
-        : adjust.state === "YELLOW"
-          ? { bg: "#faf1de", fg: "#9a6410", text: isIS ? "Aðlöguð" : "Adjusted" }
-          : { bg: "#f8e9e3", fg: "#a83e28", text: isIS ? "Létt" : "Light" }
-      : null;
+  const primary = pickPrimaryBlock(workBlocks);
+  const keyExercises = (primary?.segments ?? [])
+    .map((seg) => (seg.kind === "choice" ? seg.options[0] ?? null : seg.ex))
+    .filter((ex): ex is ParsedExercise => !!ex)
+    .slice(0, 4);
+  const extraBlocks = Math.max(0, workBlocks.length - 1);
+  const mins = estimateSessionMinutes(workBlocks);
+  const banner = adjust && adjust.state !== "GRAY" ? bannerFor(adjust.state, isIS) : null;
 
   return (
-    <div className="space-y-3">
-      {/* Section header + adjustment badge */}
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div className="text-[13px] font-bold uppercase tracking-wide text-zinc-800">{t.training.sectionTitle}</div>
-        {badge ? (
-          <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: badge.bg, color: badge.fg }}>
-            {badge.text}
-          </span>
+    <div className="space-y-2.5">
+      {/* Section header */}
+      <div className="flex items-baseline justify-between gap-3 px-0.5">
+        <div className="text-lg font-bold tracking-tight text-zinc-900">{isIS ? "Æfing dagsins" : "Today's session"}</div>
+        {subtitle ? (
+          <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{subtitle}</div>
         ) : null}
       </div>
 
-      {/* Compact block summary */}
-      <CardShell>
-        <div className="px-2 py-1.5">
-          <div className="flex items-center justify-between gap-2 px-2 pb-1.5 pt-1">
-            <div className="truncate text-sm font-semibold text-zinc-900">{headerTitle}</div>
-            {lockLabel ? <span className="shrink-0 text-[11px] font-semibold text-zinc-400">{lockLabel}</span> : null}
-          </div>
-          <div className="divide-y divide-zinc-100">
-            {workBlocks.map((b, i) => (
-              <div key={i} className="flex items-center gap-3 px-2 py-3">
-                <span className="w-5 text-xs font-bold tabular-nums text-zinc-300">{String(i + 1).padStart(2, "0")}</span>
-                <span className={cx("h-2 w-2 shrink-0 rounded-full", b.accent.dot)} style={b.accent.dotStyle} />
-                <div className="min-w-0 flex-1 truncate text-[15px] font-semibold text-zinc-900">
-                  {localizedBlockName(b.accent.label, t)}
-                </div>
-                <span className="shrink-0 text-xs font-medium text-zinc-400">
-                  {b.segments.length}{" "}
-                  {b.segments.length === 1 ? (isIS ? "æfing" : "exercise") : (isIS ? "æfingar" : "exercises")}
-                </span>
+      {/* Card */}
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        {/* Adjustment banner */}
+        {banner ? (
+          <div className="px-4 py-3" style={{ background: banner.bg }}>
+            <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: banner.fg }}>
+              <span aria-hidden>{banner.icon}</span>
+              {banner.title}
+            </div>
+            <div className="mt-1 text-[13px] leading-relaxed" style={{ color: banner.fg }}>
+              <span style={{ opacity: 0.9 }}>{banner.why}</span>{" "}
+              {banner.more ? (
+                <button
+                  type="button"
+                  onClick={() => setWhyOpen((v) => !v)}
+                  className="font-semibold underline underline-offset-2"
+                  style={{ color: banner.fg }}
+                >
+                  {isIS ? "Af hverju?" : "Why?"}
+                </button>
+              ) : null}
+            </div>
+            {whyOpen && banner.more ? (
+              <div className="mt-1.5 text-[13px] leading-relaxed" style={{ color: banner.fg, opacity: 0.9 }}>
+                {banner.more}
               </div>
-            ))}
+            ) : null}
           </div>
-        </div>
-      </CardShell>
+        ) : null}
 
-      {/* Byrja æfingu */}
-      <button
-        type="button"
-        onClick={() => setFocusOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-[15px] font-bold text-white transition-opacity active:opacity-90"
-        style={{ background: themeColor || "#18181b" }}
-      >
-        {isIS ? "Byrja æfingu" : "Start session"} <span aria-hidden>→</span>
-      </button>
+        {/* Key lifts */}
+        <div className="divide-y divide-zinc-100">
+          {keyExercises.map((ex, i) => {
+            const { letter, rest } = splitExerciseLetter(ex.name);
+            const desc = exerciseDescriptor(ex);
+            return (
+              <div key={i} className="flex items-start gap-3 px-4 py-3">
+                <span className="mt-0.5 w-6 shrink-0 text-sm font-bold" style={{ color: accentColor }}>
+                  {letter ?? "•"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-semibold leading-snug text-zinc-900">{rest}</div>
+                  {desc ? <div className="mt-0.5 text-xs text-zinc-500">{desc}</div> : null}
+                </div>
+                <SetsReps ex={ex} adjust={adjust} />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <span className="text-xs font-medium text-zinc-500">
+            {extraBlocks > 0 ? `+${extraBlocks} ${isIS ? "blokkir" : "blocks"} · ` : ""}~{mins} {isIS ? "mín" : "min"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFocusOpen(true)}
+            className="rounded-full px-5 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+            style={{ background: accentColor }}
+          >
+            {isIS ? "Byrja æfingu" : "Start session"} →
+          </button>
+        </div>
+      </div>
 
       {focusOpen ? (
         <SessionFocusScreen
           blocks={workBlocks}
           t={t}
           recommendationContext={opts.recommendationContext ?? null}
+          adjust={adjust}
           onClose={() => setFocusOpen(false)}
         />
       ) : null}
