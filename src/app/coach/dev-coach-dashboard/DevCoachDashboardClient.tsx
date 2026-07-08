@@ -592,17 +592,40 @@ function addDaysISO(yyyyMmDd: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function mapNoMatchIntentToGrid(intent: string | null | undefined): { dayTypeFinal: string; doseFinal: string } {
+// Canonical Week-setup intent → MD context. Kept in lockstep with MD_OF in
+// src/lib/micropulse/loadPlan/forTeam.ts so the Today Command Center resolves the
+// same MD day as the shared load-plan engine. Without an mdDay a TRAIN day (e.g.
+// FORCE) fell through to "MD OTHER → rest day" even though Week Setup scheduled it.
+function mapNoMatchIntentToGrid(intent: string | null | undefined): { dayTypeFinal: string; doseFinal: string; mdDay: string | null } {
   const token = String(intent ?? "").trim().toUpperCase();
-  if (token === "OFF") return { dayTypeFinal: "OFF", doseFinal: "OFF" };
-  if (token === "GAME") return { dayTypeFinal: "GAME", doseFinal: "GAME" };
-  if (token === "RECOVERY") return { dayTypeFinal: "RECOVERY", doseFinal: "RECOVERY" };
-  if (token === "FORCE") return { dayTypeFinal: "TRAIN", doseFinal: "FORCE" };
-  if (token === "VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "VELOCITY" };
-  if (token === "NEURAL_VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "NEURAL / VELOCITY" };
-  if (token === "POLISH_CALM") return { dayTypeFinal: "TRAIN", doseFinal: "POLISH / CALM" };
-  if (token === "ACTIVATION") return { dayTypeFinal: "TRAIN", doseFinal: "ACTIVATION" };
-  return { dayTypeFinal: "TRAIN", doseFinal: "TRAIN" };
+  if (token === "OFF") return { dayTypeFinal: "OFF", doseFinal: "OFF", mdDay: null };
+  if (token === "GAME") return { dayTypeFinal: "GAME", doseFinal: "GAME", mdDay: "MD" };
+  if (token === "RECOVERY") return { dayTypeFinal: "RECOVERY", doseFinal: "RECOVERY", mdDay: null };
+  if (token === "FORCE") return { dayTypeFinal: "TRAIN", doseFinal: "FORCE", mdDay: "MD-4" };
+  if (token === "VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "VELOCITY", mdDay: "MD-2" };
+  if (token === "NEURAL_VELOCITY") return { dayTypeFinal: "TRAIN", doseFinal: "NEURAL / VELOCITY", mdDay: "MD-3" };
+  if (token === "POLISH_CALM") return { dayTypeFinal: "TRAIN", doseFinal: "POLISH / CALM", mdDay: "MD-2" };
+  if (token === "ACTIVATION") return { dayTypeFinal: "TRAIN", doseFinal: "ACTIVATION", mdDay: "MD-1" };
+  return { dayTypeFinal: "TRAIN", doseFinal: "TRAIN", mdDay: null };
+}
+
+// Map a Week-setup grid row to the dashboard's coarse intensity vocabulary —
+// the SAME classification the shared load-plan engine implies (forTeam.ts
+// intentToMd / MD_OF), so the Command Center verdict can't read a scheduled
+// training day as OFF. OFF/RECOVERY → OFF; FORCE/GAME → HIGH; VELOCITY family
+// → MEDIUM; POLISH_CALM/ACTIVATION → LOW. Empty when the row has no day type.
+function gridRowIntensity(
+  row: { day_type_final?: string | null; dose_final?: string | null } | null,
+): "LOW" | "MEDIUM" | "HIGH" | "OFF" | "" {
+  if (!row) return "";
+  const dt = String(row.day_type_final ?? "").trim().toUpperCase();
+  if (dt === "OFF" || dt === "RECOVERY") return "OFF";
+  if (!dt) return "";
+  const dose = String(row.dose_final ?? "").trim().toUpperCase();
+  if (dt === "GAME" || dose.includes("FORCE")) return "HIGH";
+  if (dose.includes("VELOCITY")) return "MEDIUM";
+  if (dose.includes("POLISH") || dose.includes("CALM") || dose.includes("ACTIVATION")) return "LOW";
+  return "MEDIUM";
 }
 
 function toNum(x: any): number | null {
@@ -2496,6 +2519,10 @@ export default function CoachPage() {
   const [ctxVmax, setCtxVmax] = useState<string>("");
   const [ctxDuration, setCtxDuration] = useState<string>("");
   const [ctxIntensity, setCtxIntensity] = useState<"LOW" | "MEDIUM" | "HIGH" | "OFF" | "">("");
+  // Week Setup intents (coach_week_setup.no_match_intents) for the current
+  // week, Mon→Sun. When present they are the coach's explicit, latest plan and
+  // WIN over the legacy v_training_day_context for today's verdict context.
+  const [noMatchIntents, setNoMatchIntents] = useState<string[] | null>(null);
   // GPS-specific yesterday metrics (from Catapult)
   const [ctxVelB5, setCtxVelB5] = useState<string>("");
   const [ctxVelB6, setCtxVelB6] = useState<string>("");
@@ -2979,12 +3006,40 @@ export default function CoachPage() {
   }, [postReportDate, today]);
 
   // Header MD-day (team display)
+  // Today's context resolved from the coach's Week Setup intents — the same
+  // source the shared load-plan engine uses (forTeam.ts). When present it is
+  // authoritative for the Command Center verdict (MD / day-type / intensity),
+  // so a scheduled FORCE day can't be read as a rest day. Null when the week
+  // has no intents → the legacy v_training_day_context path stands.
+  const todayPlanContext = useMemo(() => {
+    if (!noMatchIntents || noMatchIntents.length !== 7) return null;
+    const t = dateKey(todayISO());
+    const row = (weekGrid ?? []).find((x) => dateKey(x?.day_date) === t) ?? null;
+    if (!row) return null;
+    const dayType = String(row.day_type_final ?? "").trim().toUpperCase() || null;
+    return { mdDay: row.md_day ?? null, dayType, intensity: gridRowIntensity(row) };
+  }, [noMatchIntents, weekGrid]);
+
   const mdDayToday = useMemo(() => {
     const t = dateKey(todayISO());
-    const row = (weekGrid ?? []).find((x: any) => dateKey(x.day_date) === t) ?? null;
-    const src = mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
+    const row = (weekGrid ?? []).find((x) => dateKey(x?.day_date) === t) ?? null;
+    // Precedence (fix): a valid week-grid MD (resolved from Week Setup intents)
+    // WINS over a null/"OTHER" legacy mdContextToday — the previous order let
+    // the legacy view blank out a real "MD-4". Falls back to the legacy
+    // context, then the plan preview, when the grid has no MD.
+    const gridMd = row?.md_day != null ? String(row.md_day).trim() : "";
+    const gridMdValid = /^md/i.test(gridMd) || gridMd.toUpperCase() === "GAME";
+    const src = (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
     return prettyMd(src).md;
   }, [weekGrid, planPreview?.md_day, mdContextToday]);
+
+  // Today's day-type — the Week Setup plan WINS over the legacy week_plans.day_type
+  // so a stale/absent week_plans row can't re-introduce a false OFF for a
+  // scheduled training day. Falls back to week_plans when no intents.
+  const effectiveTeamDayType = useMemo(
+    () => todayPlanContext?.dayType ?? teamDayType,
+    [todayPlanContext, teamDayType],
+  );
 
   // Recent day types indexed by ISO date — used by DailyBriefingCard to
   // render the "after OFF" context badge when yesterday had no real data.
@@ -3571,12 +3626,15 @@ export default function CoachPage() {
         .maybeSingle();
 
       const intents = Array.isArray((coachWeekSetup as any)?.no_match_intents) ? ((coachWeekSetup as any).no_match_intents as string[]) : null;
+      // Record the raw intents so today's verdict context resolves from the
+      // coach's Week Setup (the single source of truth), not the legacy view.
+      setNoMatchIntents(intents && intents.length === 7 ? intents : null);
       if (intents && intents.length === 7) {
         const derivedGrid = intents.map((intent, idx) => {
           const mapped = mapNoMatchIntentToGrid(intent);
           return {
             day_date: addDaysISO(weekStartDate, idx),
-            md_day: null,
+            md_day: mapped.mdDay,
             day_type_final: mapped.dayTypeFinal,
             dose_final: mapped.doseFinal,
           };
@@ -6995,16 +7053,25 @@ export default function CoachPage() {
   const totalPages = Math.max(1, Math.ceil((total || 0) / PAGE_SIZE));
   const tm = teamStatusMeta(teamIntel?.team_status);
   const dayStateInfo = useMemo(() => {
+    // When Week Setup has an intent for today, its plan is authoritative for
+    // the verdict: the day-type comes from the plan (so a FORCE/TRAIN day is
+    // never read as OFF from stale per-player rows) and the intensity from the
+    // plan (not yesterday's GPS, which reads "OFF" after a rest day). Falls
+    // back to the legacy per-player day-types + ctxIntensity otherwise.
+    const plannedDayType = todayPlanContext?.dayType
+      ? [todayPlanContext.dayType]
+      : rowsWithAdaptive.map((r) => r.planned_day_type ?? null);
+    const intensity = todayPlanContext?.intensity || ctxIntensity;
     const resolved = getDayState({
       readinessCount: rowsWithAdaptive.length,
       mdDay: mdDayToday,
-      plannedDayType: rowsWithAdaptive.map((r) => r.planned_day_type ?? null),
+      plannedDayType,
       complianceCounts: {
         totalPlayers: reminderStatus?.totalPlayers ?? teamSignal?.n_players ?? 0,
         missing: reminderStatus?.missing ?? null,
       },
       teamContext: {
-        intensity: ctxIntensity,
+        intensity,
       },
     });
 
@@ -7013,7 +7080,7 @@ export default function CoachPage() {
       ...dayStateMeta(resolved.state),
       reason: resolved.reason,
     };
-  }, [mdDayToday, rowsWithAdaptive, ctxIntensity, reminderStatus, teamSignal?.n_players]);
+  }, [mdDayToday, rowsWithAdaptive, ctxIntensity, todayPlanContext, reminderStatus, teamSignal?.n_players]);
 
   const teamIntelEmptyMessage =
     dayStateInfo.state === "OFF_DAY"
@@ -9082,7 +9149,7 @@ export default function CoachPage() {
                 const nextDayRisk = String(teamNeuralSummary?.nextDayRiskSummary ?? "—");
                 // OFF day detection — drives both the narrative builder
                 // and which secondary lines we surface below.
-                const isOffDay = teamDayType === "OFF" || dayStateInfo.state === "OFF_DAY";
+                const isOffDay = effectiveTeamDayType === "OFF" || dayStateInfo.state === "OFF_DAY";
 
                 // ── Coach narrative builder ─────────────────────────────
                 // Reads every tile in Today Command Center and stitches a
@@ -9140,7 +9207,7 @@ export default function CoachPage() {
                     // coherent message instead of two cards saying "rest day".
                     const offPlan = planSessionLoad({
                       mdDay: mdDayToday,
-                      dayType: teamDayType,
+                      dayType: effectiveTeamDayType,
                       focus: (rows[0] as { planned_focus?: string | null } | undefined)?.planned_focus ?? null,
                       daysSincePrev: daysSincePrevToday,
                       daysToNext: daysToNextToday,
@@ -9619,8 +9686,9 @@ export default function CoachPage() {
                 _yesterday_match_minutes: matchMin?.minutes_played ?? null,
                 _yesterday_match_date: matchMin?.match_date ?? null,
                 // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
-                // Drives the OFF_DAY verdict override in the modal.
-                _team_day_type: teamDayType,
+                // Drives the OFF_DAY verdict override in the modal. Week Setup
+                // plan wins over the legacy week_plans value.
+                _team_day_type: effectiveTeamDayType,
                 // Bishop 2020 high-tier L/R CoD asymmetry % over 14d.
                 // Only set when ≥ 15% (concern + high zones); informational
                 // chip only — does NOT modify the verdict.
