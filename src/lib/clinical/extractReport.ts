@@ -77,6 +77,57 @@ function strArr(v: unknown): string[] {
   return v.map((x) => str(x)).filter((x): x is string => x != null);
 }
 
+/**
+ * The `injury_type` DB enum. The AI extracts a free-text (often Icelandic)
+ * description into `type`, so the confirm step must map it onto one of these
+ * before writing to `injury_events` — otherwise Postgres rejects the enum.
+ * The rich original text is preserved separately in the injury notes.
+ */
+export const INJURY_TYPE_ENUM = [
+  "hamstring", "calf", "groin", "quad", "hip", "knee_acl", "knee_mcl",
+  "knee_meniscus", "knee_other", "ankle_sprain", "ankle_other", "foot",
+  "achilles", "lower_back", "upper_body", "concussion", "illness", "other",
+] as const;
+export type InjuryTypeEnum = (typeof INJURY_TYPE_ENUM)[number];
+
+// Ordered most-specific-first — the first pattern that matches the combined
+// type + body-part text wins. IS + EN keywords. Falls back to "other" (always
+// a valid enum), so an unmapped description degrades gracefully, never errors.
+const INJURY_TYPE_PATTERNS: Array<[InjuryTypeEnum, RegExp]> = [
+  ["concussion", /concussion|heilahrist|höfuðáverk|head injur/],
+  ["achilles", /achilles|hásin|hælsin/],
+  ["knee_acl", /\bacl\b|krossband|anterior cruciate|fremra kross/],
+  ["knee_mcl", /\bmcl\b|medial collateral|innri hlið|innra hlið/],
+  ["knee_meniscus", /meniscus|liðþóf/],
+  ["knee_other", /\bknee\b|hné|hnjá|patell|hnéskel/],
+  ["ankle_sprain", /ankle sprain|sprained ankle|tognun[^.]*ökkl|ökkl[^.]*tognun/],
+  ["ankle_other", /ankle|ökkl/],
+  ["hamstring", /hamstring|aftanlær|aftan lær|ischio|biceps femoris|semitendin|semimembran/],
+  ["groin", /groin|nára|nári|kviðslit|pubic|lífbein|adduct|symphys|kvið/],
+  ["quad", /quad|framanlær|framlær|rectus femoris|vastus/],
+  ["calf", /calf|kálf|gastrocnem|soleus/],
+  ["hip", /\bhip\b|mjaðm|mjöðm/],
+  ["foot", /foot|fótur|fótar|plantar|metatars|táber|il\b/],
+  ["lower_back", /lower back|mjóbak|lumbar|hryggjar|\bl[45]\b|\bs1\b/],
+  ["upper_body", /shoulder|öxl|handlegg|\barm\b|wrist|úlnlið|elbow|olnbog|neck|háls\b|thorax|brjóst|\brib\b|rifbein/],
+  ["illness", /illness|veikind|flensa|sjúkdóm|sýking|fever|hiti\b/],
+];
+
+/**
+ * Map an AI-extracted free-text injury description onto a valid `injury_type`
+ * enum. `type` is the primary signal, `bodyPart` a secondary hint. Returns
+ * "other" when nothing matches (so a confirm never fails on an unknown value).
+ */
+export function coerceInjuryType(type: string | null | undefined, bodyPart?: string | null): InjuryTypeEnum {
+  const raw = `${type ?? ""} ${bodyPart ?? ""}`.toLowerCase().trim();
+  if (!raw) return "other";
+  // Exact enum passthrough (already a valid value from a prior confirm / edit).
+  const exact = raw.replace(/\s+/g, "_");
+  if ((INJURY_TYPE_ENUM as readonly string[]).includes(exact)) return exact as InjuryTypeEnum;
+  for (const [value, re] of INJURY_TYPE_PATTERNS) if (re.test(raw)) return value;
+  return "other";
+}
+
 /** Coerce/validate the model's JSON into the strict shape (no zod dependency). */
 export function validateExtractedReport(raw: unknown): ExtractedClinicalReport {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { validateExtractedReport } from "@/lib/clinical/extractReport";
+import { validateExtractedReport, coerceInjuryType, INJURY_TYPE_ENUM } from "@/lib/clinical/extractReport";
 
 export const runtime = "nodejs";
 
@@ -59,17 +59,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await sb.from("injury_events").delete().eq("source_clinical_report_id", id);
   await sb.from("player_risk_flags").delete().eq("source_report_id", id);
 
-  const injuryRows = extracted.injury_history.map((h) => ({
-    player_id: playerId,
-    team_id: report.team_id,
-    injury_date: report.report_date ?? extracted.report_date ?? null,
-    injury_type: h.type ?? h.body_part,
-    body_side: h.side,
-    is_active: ACTIVE_RE.test(`${h.status ?? ""} ${h.type ?? ""}`),
-    notes: [h.body_part, h.approx_duration, h.status].filter(Boolean).join(" · "),
-    source_clinical_report_id: id,
-    recorded_by: uid,
-  }));
+  const injuryRows = extracted.injury_history.map((h) => {
+    // injury_type is a strict DB enum; the AI's free-text description must be
+    // mapped onto it (fallback "other"). Keep the original wording in notes so
+    // no clinical detail is lost — unless it was already a bare enum value.
+    const injuryType = coerceInjuryType(h.type, h.body_part);
+    const rawType = (h.type ?? "").trim();
+    const keepTypeNote = rawType && !(INJURY_TYPE_ENUM as readonly string[]).includes(rawType.toLowerCase());
+    return {
+      player_id: playerId,
+      team_id: report.team_id,
+      injury_date: report.report_date ?? extracted.report_date ?? null,
+      injury_type: injuryType,
+      body_side: h.side ?? "na", // body_side enum has no null — "na" = unspecified
+      is_active: ACTIVE_RE.test(`${h.status ?? ""} ${h.type ?? ""}`),
+      notes: [keepTypeNote ? rawType : null, h.body_part, h.approx_duration, h.status].filter(Boolean).join(" · "),
+      source_clinical_report_id: id,
+      recorded_by: uid,
+    };
+  });
   if (injuryRows.length) {
     const { error } = await sb.from("injury_events").insert(injuryRows);
     if (error) return NextResponse.json({ error: `injury_events: ${error.message}` }, { status: 500 });
