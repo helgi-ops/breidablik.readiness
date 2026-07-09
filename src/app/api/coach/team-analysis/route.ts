@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
-import { EXCLUDE_PREV_CLUB_NOT } from "@/lib/micropulse/load/previousClub";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -135,7 +135,7 @@ async function gatherTeamFacts(
       .from("player_external_load_daily")
       .select("date, total_player_load")
       .in("player_id", playerIds)
-      .not(...EXCLUDE_PREV_CLUB_NOT)
+      .or(EXCLUDE_PREV_CLUB_OR)
       .gte("date", start28).lte("date", today);
     const dayBuckets = new Map<string, number[]>();
     for (const r of (ext ?? []) as Array<{ date: string; total_player_load: number | null }>) {
