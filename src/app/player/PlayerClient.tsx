@@ -2330,7 +2330,7 @@ function SessionFocusScreen({
                 if (isLast) setFinished(true);
                 else setBlockIdx((i) => Math.min(total - 1, i + 1));
               }}
-              className="flex-1 rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white active:bg-zinc-700"
+              className="flex-1 rounded-full bg-[#2740e6] px-4 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
             >
               {isLast ? (isIS ? "Klára æfingu ✓" : "Finish session ✓") : (isIS ? "Næsta blokk →" : "Next block →")}
             </button>
@@ -2404,6 +2404,10 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
 
   const themeColor = opts.themeColor ?? null;
   const accentColor = themeColor || "#2740e6";
+  // CTA colour follows readiness (design spec 21a/22a): green on a green day,
+  // cobalt by default on yellow/red/unknown. Distinct from the structural
+  // accent used for the block letters (which stays the club/cobalt accent).
+  const ctaColor = adjust?.state === "GREEN" ? "#1c7a4a" : "#2740e6";
   const subtitle = String(opts.headerTitle ?? "").trim();
 
   const primary = pickPrimaryBlock(workBlocks);
@@ -2484,7 +2488,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
             type="button"
             onClick={() => setFocusOpen(true)}
             className="rounded-full px-5 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-            style={{ background: accentColor }}
+            style={{ background: ctaColor }}
           >
             {isIS ? "Byrja æfingu" : "Start session"} →
           </button>
