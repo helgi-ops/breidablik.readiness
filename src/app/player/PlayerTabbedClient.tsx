@@ -1213,10 +1213,23 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     let observer: MutationObserver | null = null;
     const ensure = () => {
       if (cancelled) return false;
-      const anchor = document.getElementById("dev-today-more-slot") ?? document.getElementById("dev-ate-command-card-slot") ?? detectHeaderCard();
-      if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-nudge-prefs-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-nudge-prefs-slot"; }
+      // Lota E / E3 — nudges belong at the very BOTTOM, below the session. The
+      // session / after-session cards live in the main-grid left column, while
+      // the header portals (outlook, RTP) sit above it; appending nudges to the
+      // end of that column puts them below everything. Fall back to the old
+      // header-portal anchor only until the main grid is detected.
+      const leftColumn = detectDecisionHeroCard()?.parentElement ?? null;
+      if (leftColumn) {
+        if (slot.parentElement !== leftColumn || slot !== leftColumn.lastElementChild) {
+          leftColumn.appendChild(slot);
+        }
+        setMountNode((prev) => (prev === slot ? prev : slot));
+        return true;
+      }
+      const anchor = document.getElementById("dev-today-more-slot") ?? document.getElementById("dev-ate-command-card-slot") ?? detectHeaderCard();
+      if (!anchor?.parentElement) return false;
       if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
         anchor.parentElement.insertBefore(slot, anchor.nextSibling);
       }
@@ -1932,9 +1945,11 @@ export default function DevPlayerClient() {
             card.style.display = "none";
             continue;
           }
-          // Our own injected Today portals (See-more links, RPE nudge) must NOT
-          // be caught by the "hide unknown cards" default — show them on Today.
-          if (card.id === "dev-today-more-slot" || card.id === "dev-rpe-reminder-slot") {
+          // Our own injected Today portals (See-more links, RPE nudge, nudge
+          // prefs) must NOT be caught by the "hide unknown cards" default —
+          // show them on Today. Nudge-prefs is now anchored to the bottom of
+          // this left column (Lota E / E3) so it sits below the session.
+          if (card.id === "dev-today-more-slot" || card.id === "dev-rpe-reminder-slot" || card.id === "dev-nudge-prefs-slot") {
             card.style.display = showToday ? "" : "none";
             continue;
           }
@@ -1965,13 +1980,15 @@ export default function DevPlayerClient() {
         const chainParent = ateSlot?.parentElement ?? null;
         if (ateSlot && chainParent) {
           let prevSlot: HTMLElement = ateSlot;
+          // Note: nudge-prefs is intentionally NOT here — it is anchored to the
+          // bottom of the main-grid left column (below the session), a different
+          // container than these header portals (Lota E / E3).
           for (const id of [
             "dev-rtt-progress-slot",
             "dev-today-load-slot",
             "dev-today-recap-slot",
             "dev-rpe-reminder-slot",
             "dev-today-more-slot",
-            "dev-nudge-prefs-slot",
           ]) {
             const el = document.getElementById(id);
             if (!el || el.parentElement !== chainParent) continue;
