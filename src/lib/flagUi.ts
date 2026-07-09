@@ -33,7 +33,7 @@ export function flagUi(flag: Flag, lang: Lang = "IS") {
     case "GREEN":
       return {
         label: "FULL",
-        title: isEN ? "Full session — go at intensity" : "Full æfing — sæktu í þig",
+        title: isEN ? "Full session — go at full intensity" : "Full æfing — sæktu í þig af fullum krafti",
         pill: "bg-green-100 text-green-800 border-green-200",
         dot: "bg-green-500",
         panel: "border-green-200",
