@@ -1952,6 +1952,35 @@ export default function DevPlayerClient() {
         }
       }
 
+      // Lota E / E3 — deterministic Today order. Each portal inserts its slot
+      // right after the SAME ate-command slot and places once (its observer
+      // only re-fires when its own slot is removed), so the visual order races.
+      // Re-chain the existing slots here — this effect re-runs on DOM mutations,
+      // so the order converges and stays stable: decision → RTP → session →
+      // after-session → RPE → more → nudges (session is always above nudges).
+      // Only reorders slots that share the ate-slot's parent; it never removes
+      // anything, so the worst case is a no-op.
+      if (showToday) {
+        const ateSlot = document.getElementById("dev-ate-command-card-slot");
+        const chainParent = ateSlot?.parentElement ?? null;
+        if (ateSlot && chainParent) {
+          let prevSlot: HTMLElement = ateSlot;
+          for (const id of [
+            "dev-rtt-progress-slot",
+            "dev-today-load-slot",
+            "dev-today-recap-slot",
+            "dev-rpe-reminder-slot",
+            "dev-today-more-slot",
+            "dev-nudge-prefs-slot",
+          ]) {
+            const el = document.getElementById(id);
+            if (!el || el.parentElement !== chainParent) continue;
+            if (el.previousElementSibling !== prevSlot) chainParent.insertBefore(el, prevSlot.nextSibling);
+            prevSlot = el;
+          }
+        }
+      }
+
       refineLegacyDecisionCard(nextDecision);
       enforceRenderedWorkoutBlocks(nextDecision);
       setLayoutReady(true);
