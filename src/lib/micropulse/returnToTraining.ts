@@ -57,6 +57,10 @@ export type RttSession = {
   codRight: number;   // IMA CoD to the right
   efforts: number;    // accel_decel_efforts (Core/Lite GPS agility proxy; no IMA)
   topSpeed: number;   // max_velocity (km/h)
+  /** Did the pod get a GPS lock this session? An indoor/gym session logs valid
+   *  PlayerLoad + IMA but ~0 GPS distance/speed — those rows must NOT contribute
+   *  their near-zero distance/HSR/sprint to the ramp. Undefined = treat as valid. */
+  gpsValid?: boolean;
 };
 
 export type RttInput = {
@@ -148,6 +152,9 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
 };
 
 const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod", efforts: "efforts" };
+// GPS-derived qualities — invalid (must be skipped) when the pod got no GPS lock.
+// PlayerLoad + IMA (volume/accel/decel/decelHigh/cod) stay valid indoors.
+const GPS_DERIVED = new Set<QualityKey>(["distance", "hsr", "sprint", "efforts"]);
 
 function percentile(sortedAsc: number[], p: number): number {
   if (!sortedAsc.length) return 0;
@@ -183,8 +190,9 @@ function aggregateWeeks(sessions: RttSession[], order: QualityKey[]): Map<string
     if (!a) { a = { weekStart: wk, injured: false, count: 0, totals: Object.fromEntries(ALL_QUALITIES.map((q) => [q, 0])) as Record<QualityKey, number>, topSpeed: 0, codLeft: 0, codRight: 0 }; byWeek.set(wk, a); }
     if (s.injured) a.injured = true;                       // any injured day → not a healthy week
     a.count += 1;
-    for (const q of order) a.totals[q] += s[QFIELD[q]] as number;
-    if (s.topSpeed > 0 && s.topSpeed <= 45) a.topSpeed = Math.max(a.topSpeed, s.topSpeed);
+    const gpsOk = s.gpsValid !== false; // no GPS lock → skip GPS-derived qualities (keep PlayerLoad/IMA)
+    for (const q of order) { if (GPS_DERIVED.has(q) && !gpsOk) continue; a.totals[q] += s[QFIELD[q]] as number; }
+    if (gpsOk && s.topSpeed > 0 && s.topSpeed <= 45) a.topSpeed = Math.max(a.topSpeed, s.topSpeed);
     a.codLeft += s.codLeft; a.codRight += s.codRight;
   }
   return byWeek;

@@ -108,6 +108,10 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
       codRight,
       efforts: num(r.accel_decel_efforts),
       topSpeed: clampSpeed(r.max_velocity),
+      // A pod that logged PlayerLoad but got no GPS lock (indoor/gym) reads ~0 m.
+      // Mark it so the ramp ignores its bogus distance/HSR/sprint (~1 m) — the
+      // PlayerLoad/IMA still count. 50 m = well below any real running session.
+      gpsValid: num(r.total_distance) >= 50,
     };
   });
 
