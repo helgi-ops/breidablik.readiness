@@ -34,8 +34,6 @@ async function requireReport(req: NextRequest, id: string) {
   return { sb, uid, report: r } as const;
 }
 
-const ACTIVE_RE = /ongoing|chronic|viðvarandi|langvinn|einkenn|áfram/i;
-
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const a = await requireReport(req, id);
@@ -72,7 +70,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       injury_date: report.report_date ?? extracted.report_date ?? null,
       injury_type: injuryType,
       body_side: h.side ?? "na", // body_side enum has no null — "na" = unspecified
-      is_active: ACTIVE_RE.test(`${h.status ?? ""} ${h.type ?? ""}`),
+      // A clinical report records injury HISTORY — it must never mark the player
+      // as currently injured / unavailable. Only a coach does that explicitly
+      // (via the injuries workflow). So report-derived injuries are always
+      // is_active=false; the "ongoing/chronic" nuance stays in notes + status.
+      is_active: false,
       notes: [keepTypeNote ? rawType : null, h.body_part, h.approx_duration, h.status].filter(Boolean).join(" · "),
       source_clinical_report_id: id,
       recorded_by: uid,
