@@ -415,33 +415,26 @@ function ensureTabSlot(id: string, anchor: HTMLElement | null): HTMLElement | nu
   return slot;
 }
 
-function ateCardCopy(state: AteCardState): { title: string; body: string; secondary: string } {
+function ateCardCopy(state: AteCardState, lang: "IS" | "EN" = "EN"): { title: string; body: string; secondary: string } {
+  const isIS = lang === "IS";
   if (state === "GREEN") {
-    return {
-      title: "Ready to Train",
-      body: "You are cleared for full training today.",
-      secondary: "Follow today’s planned session.",
-    };
+    return isIS
+      ? { title: "Tilbúin/n til æfingar", body: "Þú ert leyfð/ur í fulla þjálfun í dag.", secondary: "Fylgdu áætlaðri æfingu." }
+      : { title: "Ready to Train", body: "You are cleared for full training today.", secondary: "Follow today’s planned session." };
   }
   if (state === "YELLOW") {
-    return {
-      title: "Modified Training",
-      body: "Train today with reduced intensity and tighter control.",
-      secondary: "Focus on quality, pacing, and clean execution.",
-    };
+    return isIS
+      ? { title: "Aðlöguð þjálfun", body: "Æfðu í dag með minni ákefð og þéttari stjórn.", secondary: "Einbeittu þér að gæðum og hreinni framkvæmd." }
+      : { title: "Modified Training", body: "Train today with reduced intensity and tighter control.", secondary: "Focus on quality, pacing, and clean execution." };
   }
   if (state === "RED") {
-    return {
-      title: "Recovery Focus",
-      body: "Recovery is prioritized today. Keep work light and restorative.",
-      secondary: "Prioritize mobility, light movement, and recovery work.",
-    };
+    return isIS
+      ? { title: "Endurheimtar-fókus", body: "Endurheimt er í forgangi í dag. Haltu vinnu léttri og uppbyggjandi.", secondary: "Forgangsraðaðu hreyfanleika, léttri hreyfingu og endurheimt." }
+      : { title: "Recovery Focus", body: "Recovery is prioritized today. Keep work light and restorative.", secondary: "Prioritize mobility, light movement, and recovery work." };
   }
-  return {
-    title: "Check-In Required",
-    body: "Complete your readiness check before training.",
-    secondary: "Submit your check-in to unlock today’s guidance.",
-  };
+  return isIS
+    ? { title: "Innskráning vantar", body: "Kláraðu reiðu-innskráningu fyrir æfingu.", secondary: "Skráðu líðan til að opna leiðbeiningar dagsins." }
+    : { title: "Check-In Required", body: "Complete your readiness check before training.", secondary: "Submit your check-in to unlock today’s guidance." };
 }
 
 function sessionModeLabel(mode: SessionMode): string {
@@ -565,7 +558,12 @@ function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: 
 
   if (!mountNode || activeTab !== "today") return null;
 
-  const copy = ateCardCopy(dailyDecision.playerState);
+  const copy = ateCardCopy(dailyDecision.playerState, lang === "IS" ? "IS" : "EN");
+  // Matchday chip label — "MD4" → "MD-4" to match the design; other tokens
+  // (e.g. "MD", game day) pass through unchanged.
+  const mdChipLabel = dailyDecision.mdContext
+    ? dailyDecision.mdContext.replace(/^MD(\d)$/, "MD-$1")
+    : null;
 
   const chipColor =
     dailyDecision.playerState === "GREEN" ? "#2b8a54" :
@@ -591,13 +589,23 @@ function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: 
       </div>
       <div className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">{copy.title}</div>
       <div className="mt-1 text-sm leading-relaxed text-zinc-600">{copy.body}</div>
-      {dailyDecision.sessionMode !== "pending" && (
-        <div className="mt-3">
-          <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600">
-            {dailyDecision.sessionMode === "full" ? (lang === "IS" ? "Full æfing" : "Full session") :
-             dailyDecision.sessionMode === "modified" ? (lang === "IS" ? "Aðlöguð æfing" : "Modified session") :
-             (lang === "IS" ? "Endurheimt" : "Recovery session")}
-          </span>
+      {/* Matchday + session chips — the readiness block now carries the MD
+          context (E2) so today's colour, verdict, "why" line and MD live in
+          one block. */}
+      {(mdChipLabel || dailyDecision.sessionMode !== "pending") && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {mdChipLabel && (
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700">
+              {mdChipLabel}
+            </span>
+          )}
+          {dailyDecision.sessionMode !== "pending" && (
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600">
+              {dailyDecision.sessionMode === "full" ? (lang === "IS" ? "Full æfing" : "Full session") :
+               dailyDecision.sessionMode === "modified" ? (lang === "IS" ? "Aðlöguð æfing" : "Modified session") :
+               (lang === "IS" ? "Endurheimt" : "Recovery session")}
+            </span>
+          )}
         </div>
       )}
     </div>,
@@ -1664,6 +1672,19 @@ function PWABottomNav({
                 );
               })}
             </div>
+            {/* Integrations / Settings — moved here from the Today header
+                (Lota E / E1) so the PWA Today stays free of dev chips. */}
+            <div className="px-3 pb-2">
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  router.push("/player/settings/integrations");
+                }}
+                className="w-full rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+              >
+                {lang === "IS" ? "Tengingar" : "Integrations"}
+              </button>
+            </div>
             {/* Sign out — always reachable here in the mobile shell (the
                 desktop header's sign-out isn't shown in the PWA layout). */}
             <div className="px-3 pb-3">
@@ -1837,6 +1858,11 @@ export default function DevPlayerClient() {
 
       // PWA: hide top tabs slot (bottom nav handles navigation), add body padding
       if (tabsSlot) tabsSlot.style.display = isPwa ? "none" : "";
+      // PWA: hide the header's dev/account chips (Integrations · lock · decision
+      // · Sign out) — they move to the bottom-nav "More" sheet (Lota E / E1).
+      // On desktop (no More sheet) they stay reachable in the header.
+      const devChips = header.querySelector("[data-player-devchips]") as HTMLElement | null;
+      if (devChips) devChips.style.display = isPwa ? "none" : "";
       const pageRoot = mainGrid?.closest(".min-h-screen") as HTMLElement | null;
       if (pageRoot) pageRoot.style.paddingBottom = isPwa ? "calc(68px + env(safe-area-inset-bottom))" : "";
 

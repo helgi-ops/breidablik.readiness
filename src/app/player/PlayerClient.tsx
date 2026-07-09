@@ -5112,7 +5112,9 @@ export default function PlayerClient() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Language toggle */}
+                  {/* Language toggle — the only control kept on the Today
+                      header (Lota E / E1). The MD + readiness chips stay too
+                      (E2 folds them into the single readiness block). */}
                   <div className="flex items-center rounded-full border border-zinc-200 bg-white p-0.5 text-xs font-semibold">
                     <button
                       onClick={() => setLang("IS")}
@@ -5123,14 +5125,6 @@ export default function PlayerClient() {
                       className={cx("rounded-full px-2.5 py-1 transition-colors", lang === "EN" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-700")}
                     >EN</button>
                   </div>
-                  <Link
-                    href="/player/settings/integrations"
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                  >
-                    Integrations
-                  </Link>
-                  <Chip>{lockLabel}</Chip>
-                  <Chip className="border-zinc-200">{decisionType}</Chip>
                   <Chip>{mdLabel}</Chip>
 
                   {String(stage4Final?.final_source ?? "").toUpperCase() === "COACH" ? (
@@ -5142,15 +5136,30 @@ export default function PlayerClient() {
                     {flag}
                   </Chip>
 
-                  <button
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      window.location.href = "/login";
-                    }}
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                  >
-                    {lang === "IS" ? "Útskrá" : "Sign out"}
-                  </button>
+                  {/* Dev / account chips — Integrations · lock state · decision
+                      · Sign out. Hidden on the PWA Today (they move to the
+                      bottom-nav "More" sheet, Lota E / E1) but kept on desktop,
+                      which has no More sheet. The PlayerTabbedClient layout
+                      effect toggles this wrapper by data-player-devchips. */}
+                  <div data-player-devchips className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href="/player/settings/integrations"
+                      className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                    >
+                      Integrations
+                    </Link>
+                    <Chip>{lockLabel}</Chip>
+                    <Chip className="border-zinc-200">{decisionType}</Chip>
+                    <button
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        window.location.href = "/login";
+                      }}
+                      className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                    >
+                      {lang === "IS" ? "Útskrá" : "Sign out"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5175,23 +5184,22 @@ export default function PlayerClient() {
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
           {/* LEFT */}
           <div className="space-y-6">
-            {/* Decision hero */}
-            <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
+            {/* Decision hero → coach note only. The readiness verdict is now
+                stated ONCE, in the Today decision block (AteCommandCard) at the
+                top (Lota E / E2): colour + heading + "why" line + MD chip. This
+                card no longer restates the generic readiness message (baseMsg);
+                it shows only the coach's own note when there is one. The div
+                stays as the layout anchor (data-player-card="decision") even
+                when empty, so the portal-injection layout keeps working. */}
+            <div data-player-card="decision" className={coachMsg ? cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone) : ""}>
               {coachMsg ? (
-                <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
-                  {t.decision.coachMsg}
-                </div>
+                <>
+                  <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                    {t.decision.coachMsg}
+                  </div>
+                  <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
+                </>
               ) : null}
-
-              <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
-
-              {/* The vague template "Why" (e.g. "Mild signs of fatigue are
-                  visible in recent measurements") was removed 2026-05-28 —
-                  it duplicated, and was less specific than, the detailed
-                  "Af hverju er ég ekki græn/n?" driver card directly below,
-                  which cites the actual sub-scores. Keeping both showed the
-                  player two "why" sections, one vague one detailed. The
-                  detailed card is the single explanation surface now. */}
             </div>
 
             {/* Explanation card — shows on ALL colours now. GREEN gets a
