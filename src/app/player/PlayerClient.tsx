@@ -839,6 +839,24 @@ type BlockAccentResult = {
 /** =========
  *  Block accents — uses team brand colour when available, falls back to default palette
  *  ========= */
+// Classify a block by its title into a canonical type. Content keywords take
+// priority over the A/B/C letter prefix, because a plan can label its main
+// contrast lift "A." — the letter is just sequence, not block type. Contrast/
+// strength is checked before explosive so "A. Contrast: … explosive …" resolves
+// to Main (not Primer), which drives the correct goal text + accent colour.
+function classifyBlockLabel(titleLower: string): "Upphitun" | "Primer" | "Main" | "Accessory" | "Partur" {
+  const t = titleLower;
+  if (t.includes("warm") || t.includes("upphit")) return "Upphitun";
+  if (t.includes("contrast") || t.includes("strength")) return "Main";
+  if (t.includes("iso") || t.includes("isometric")) return "Accessory";
+  if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive")) return "Primer";
+  if (t.startsWith("0.")) return "Upphitun";
+  if (t.startsWith("a.")) return "Primer";
+  if (t.startsWith("b.")) return "Main";
+  if (t.startsWith("c.")) return "Accessory";
+  return "Partur";
+}
+
 function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentResult {
   const t = (titleRaw ?? "").toLowerCase();
 
@@ -853,14 +871,6 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       const dg = Math.round(g * 0.45);
       const db = Math.round(b * 0.45);
       const darkText = `rgb(${dr},${dg},${db})`;
-
-      const getLabel = () => {
-        if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) return "Upphitun";
-        if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) return "Primer";
-        if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) return "Main";
-        if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) return "Accessory";
-        return "Partur";
-      };
 
       return {
         wrap: "",
@@ -878,13 +888,16 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
         methodBadgeStyle: { backgroundColor: a(0.10), color: darkText, borderColor: a(0.22) },
         choiceHeader: "",
         choiceHeaderStyle: { backgroundColor: a(0.08), borderColor: a(0.18), color: darkText },
-        label: getLabel(),
+        label: classifyBlockLabel(t),
         rawTitle: titleRaw,
       };
     }
   }
 
-  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) {
+  // Same classification as the themed branch, so block type (and thus goal
+  // text) is consistent regardless of whether a club colour is set.
+  const label = classifyBlockLabel(t);
+  if (label === "Upphitun") {
     return {
       wrap: "border-amber-200 bg-amber-50/70",
       badge: "bg-amber-100 text-amber-800 border-amber-200",
@@ -898,7 +911,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       rawTitle: titleRaw,
     };
   }
-  if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) {
+  if (label === "Primer") {
     return {
       wrap: "border-violet-200 bg-violet-50/70",
       badge: "bg-violet-100 text-violet-800 border-violet-200",
@@ -912,7 +925,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       rawTitle: titleRaw,
     };
   }
-  if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) {
+  if (label === "Main") {
     return {
       wrap: "border-blue-200 bg-blue-50/70",
       badge: "bg-blue-100 text-blue-800 border-blue-200",
@@ -926,7 +939,7 @@ function blockAccent(titleRaw: string, themeColor?: string | null): BlockAccentR
       rawTitle: titleRaw,
     };
   }
-  if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) {
+  if (label === "Accessory") {
     return {
       wrap: "border-emerald-200 bg-emerald-50/70",
       badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -2189,11 +2202,19 @@ type TodaySessionOpts = {
 
 /** Translate a raw DB block title for display (IS stored → EN when needed). */
 function localizeBlockTitleText(title: string, isIS: boolean): string {
-  const lo = title.toLowerCase();
-  if (isIS) return title;
+  // Strip a long descriptive tail after a colon so the heading stays short —
+  // e.g. "A. Contrast: Do a heavy lift, rest shortly, …" → "A. Contrast".
+  // The full method explanation lives in the goal box below the heading.
+  let head = title;
+  const colonIdx = head.indexOf(":");
+  if (colonIdx > 0 && head.slice(colonIdx + 1).trim().split(/\s+/).length > 3) {
+    head = head.slice(0, colonIdx).trim();
+  }
+  const lo = head.toLowerCase();
+  if (isIS) return head;
   if (lo === "upphitun") return "Warm-up";
   if (lo === "reglur") return "Section";
-  return title.replace(/\(veldu\s+(\d+)(?:\s+leið\w*)?\)/gi, "(choose $1)");
+  return head.replace(/\(veldu\s+(\d+)(?:\s+leið\w*)?\)/gi, "(choose $1)");
 }
 
 /* ---- Focus screen: the full session, one block at a time ---- */
@@ -2848,14 +2869,15 @@ function renderPostTraining(templates: PostTrainingTemplateRow[], lang: Lang = "
   const cleanTitle = (t?: string | null) => String(t ?? "").replace(/^\s*\d+[\)\.\-]\s*/g, "").trim();
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <SectionTitle
-          kicker={pt.kicker}
-          title={pt.title}
-          sub={pt.sub}
-        />
-        <div className="text-xs font-semibold text-zinc-500">{count ? pt.count(count) : ""}</div>
+    <div className="space-y-2.5">
+      {/* Compact header (design spec 22a) — a single label line instead of a
+          full SectionTitle + descriptor, so "After session" stays a small
+          section under the session rather than a hero block. */}
+      <div className="flex items-baseline justify-between gap-3 px-0.5">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          {pt.kicker}{pt.title ? ` · ${pt.title}` : ""}
+        </div>
+        <div className="text-[11px] font-medium text-zinc-400">{count ? pt.count(count) : ""}</div>
       </div>
 
       {!orderedTemplates.length ? (
@@ -2873,11 +2895,11 @@ function renderPostTraining(templates: PostTrainingTemplateRow[], lang: Lang = "
               <div key={t.id} className={cx("rounded-2xl border", accent.wrap)}>
                 {/* ✅ Default closed */}
                 <details className="group">
-                  <summary className="cursor-pointer select-none p-4 sm:p-5">
-                    <div className="flex items-start justify-between gap-3">
+                  <summary className="cursor-pointer select-none px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-base font-semibold text-zinc-900">{t.title}</div>
-                        <div className="mt-1 text-xs text-zinc-500">{t.duration_min ? pt.durationMin(t.duration_min) : ""}</div>
+                        <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
+                        <div className="mt-0.5 text-xs text-zinc-500">{t.duration_min ? pt.durationMin(t.duration_min) : ""}</div>
                       </div>
 
                       {/* ✅ Mobile: hide tags (keeps cards compact). Desktop: show tags */}
