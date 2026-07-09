@@ -977,6 +977,9 @@ type ParsedExercise = {
   method: string | null;
   setsReps: string | null;
   note: string | null;
+  /** Contrast/complex category ("heavy" | "explosive" | "strength" | "plyo")
+   *  captured from a "B1. Heavy: <exercise>" line — drives the swap options. */
+  category?: string | null;
 };
 
 type ExerciseRecommendationContext = Omit<ExerciseRecommendationInput, "originalExerciseName">;
@@ -1026,6 +1029,7 @@ function parseExerciseItem(raw: string): ParsedExercise {
 
   // Extract name: everything before "—", ":", or the sets info
   let name = working;
+  let exerciseCategory: string | null = null;
   if (name.includes("—")) {
     name = name.split("—")[0].trim();
   } else if (name.includes(":")) {
@@ -1036,7 +1040,9 @@ function parseExerciseItem(raw: string): ParsedExercise {
     // Contrast/complex items are "<label>. <category>: <real exercise>", so the
     // REAL exercise is AFTER the colon (e.g. "B1. Heavy: Trap-bar deadlift" →
     // "B1. Trap-bar deadlift"). Keep the letter label so complex grouping still
-    // detects the pair. Any other "Name: notes" keeps the part before the colon.
+    // detects the pair, and keep the category so the exercise can be swapped for
+    // another in the same category. Any other "Name: notes" keeps the part
+    // before the colon.
     if (after && /^(heavy|explosive|strength|plyo|ballistic|þung|sprengi)/i.test(category)) {
       const labelPrefix = before.match(/^[A-Ca-c]\d?\s*[.):]/i)?.[0] ?? "";
       let real = after;
@@ -1046,6 +1052,7 @@ function parseExerciseItem(raw: string): ParsedExercise {
       }
       real = real.replace(/[×xX*\s—:,\-]+$/, "").trim();
       name = `${labelPrefix} ${real}`.replace(/\s+/g, " ").trim();
+      exerciseCategory = category.toLowerCase().split(/\s+/)[0];
     } else {
       name = before;
     }
@@ -1063,7 +1070,7 @@ function parseExerciseItem(raw: string): ParsedExercise {
     /\bveldu\b/i.test(s) ||
     /^(strength|plyo)\b/i.test(name);
 
-  return { isHeader: isChoiceHeader, name, method, setsReps, note };
+  return { isHeader: isChoiceHeader, name, method, setsReps, note, category: exerciseCategory };
 }
 
 function stripVelocityQualifier(value: string | null) {
@@ -2361,6 +2368,76 @@ function buildFocusSteps(blocks: SessionBlock[]): FocusStep[] {
   return steps;
 }
 
+// Curated swap options per contrast/complex category — lets a player pick a
+// different lift within the same category (Heavy / Explosive). Session-local;
+// no dependency on the narrow adaptive-engine exercise set.
+const CONTRAST_SWAP_OPTIONS: Record<string, string[]> = {
+  heavy: ["Trap-bar deadlift", "Back squat", "Front squat", "Romanian deadlift", "Hip thrust", "Split-stance trap bar deadlift"],
+  strength: ["Trap-bar deadlift", "Back squat", "Front squat", "Romanian deadlift", "Hip thrust", "Split-stance trap bar deadlift"],
+  explosive: ["Box jump", "Broad jump", "Trap-bar jump", "Jump squat", "Hurdle hops", "Depth jump"],
+  plyo: ["Box jump", "Broad jump", "Trap-bar jump", "Jump squat", "Hurdle hops", "Depth jump"],
+  ballistic: ["Box jump", "Broad jump", "Trap-bar jump", "Jump squat", "Hurdle hops", "Depth jump"],
+};
+function contrastSwapOptions(category: string | null | undefined, current: string): string[] {
+  if (!category) return [];
+  return (CONTRAST_SWAP_OPTIONS[category.toLowerCase()] ?? []).filter((o) => o.toLowerCase() !== current.toLowerCase());
+}
+
+// One member of a contrast/complex step: the full exercise card + a session-local
+// "Swap exercise" picker sourced from the member's category.
+function ContrastMember({
+  index,
+  ex,
+  accent,
+  blockLabel,
+  recommendationContext,
+  adjust,
+  isIS,
+}: {
+  index: number;
+  ex: ParsedExercise;
+  accent: ReturnType<typeof blockAccent>;
+  blockLabel?: string;
+  recommendationContext?: ExerciseRecommendationContext | null;
+  adjust?: TodayAdjust | null;
+  isIS: boolean;
+}) {
+  const [swapName, setSwapName] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const { letter } = splitExerciseLetter(ex.name);
+  const opts = contrastSwapOptions(ex.category, focusExName(ex.name));
+  const shownEx: ParsedExercise = swapName ? { ...ex, name: `${letter ? `${letter}. ` : ""}${swapName}` } : ex;
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{index + 1}</span>
+      <div className="min-w-0 flex-1">
+        <RecommendedExerciseBlockCard ex={reduceExercise(shownEx, adjust ?? null)} accent={accent} blockLabel={blockLabel} recommendationContext={recommendationContext} />
+        {opts.length ? (
+          <div className="mt-1.5">
+            <button type="button" onClick={() => setOpen((v) => !v)} className="text-[11px] font-semibold text-[#2740e6]">
+              {swapName ? (isIS ? "Skipta aftur" : "Change") : isIS ? "Skipta um æfingu" : "Swap exercise"} {open ? "▲" : "▾"}
+            </button>
+            {open ? (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {swapName ? (
+                  <button type="button" onClick={() => { setSwapName(null); setOpen(false); }} className="rounded-full border border-[#2740e6]/40 bg-[#eef0ff] px-2.5 py-1 text-[11px] font-medium text-[#2740e6]">
+                    {isIS ? "Upprunaleg" : "Original"}
+                  </button>
+                ) : null}
+                {opts.map((o) => (
+                  <button key={o} type="button" onClick={() => { setSwapName(o); setOpen(false); }} className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50">
+                    {o}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /* ---- Focus screen: the full session, one exercise at a time (design 21b) ---- */
 function SessionFocusScreen({
   blocks,
@@ -2559,20 +2636,19 @@ function SessionFocusScreen({
                     : "Do the exercises in order — one round through = one set."}
                 </div>
 
-                {/* Member list (in order) — each a full, swappable exercise card */}
+                {/* Member list (in order) — each a full card + category swap */}
                 <div className="space-y-2.5">
                   {cur.members.map((m, k) => (
-                    <div key={k} className="flex items-start gap-2.5">
-                      <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{k + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <RecommendedExerciseBlockCard
-                          ex={reduceExercise(m, adjust ?? null)}
-                          accent={block!.accent}
-                          blockLabel={block!.accent.label}
-                          recommendationContext={recCtx}
-                        />
-                      </div>
-                    </div>
+                    <ContrastMember
+                      key={k}
+                      index={k}
+                      ex={m}
+                      accent={block!.accent}
+                      blockLabel={block!.accent.label}
+                      recommendationContext={recCtx}
+                      adjust={adjust}
+                      isIS={isIS}
+                    />
                   ))}
                 </div>
                 {cur.restNote ? <div className="text-xs text-zinc-400">{cur.restNote}</div> : null}
