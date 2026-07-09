@@ -200,6 +200,7 @@ export default function CoachDecelIntelligencePage() {
       const { data: mpeRows } = await sb
         .from("player_external_load_daily")
         .select("player_id, date, mpe_recovery_avg_s")
+        .in("player_id", players.map((p) => p.id)) // scope to THIS team's roster — was reading every club's data
         .gte("date", since28iso)
         .not("mpe_recovery_avg_s", "is", null);
       const mpeByPlayer = new Map<string, { all: number[]; recent: number[] }>();
