@@ -801,12 +801,16 @@ function selectTemplateOverrideCandidate(
  * stores them in a different order.
  */
 function blockSortPriority(titleRaw: string): number {
-  const t = (titleRaw ?? "").toLowerCase();
-  if (t.includes("warm") || t.includes("upphit") || t.startsWith("0.")) return 0;
-  if (t.includes("primer") || t.includes("ballistic") || t.includes("explosive") || t.startsWith("a.")) return 1;
-  if (t.includes("contrast") || t.includes("strength") || t.startsWith("b.")) return 2;
-  if (t.includes("iso") || t.includes("isometric") || t.startsWith("c.")) return 3;
-  return 9;
+  // Reuse the shared classifier so content keywords beat the A/B/C letter prefix
+  // (an "A. Contrast" block is Main/priority 2, not primer/1) — otherwise the
+  // Today card featured the primer (ISO) instead of the main strength lifts.
+  switch (classifyBlockLabel((titleRaw ?? "").toLowerCase())) {
+    case "Upphitun": return 0;
+    case "Primer": return 1;
+    case "Main": return 2;
+    case "Accessory": return 3;
+    default: return 9;
+  }
 }
 
 /** Converts a 6-digit hex colour (e.g. "#005a2b") to { r, g, b }. Returns null if invalid. */
@@ -2728,7 +2732,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const primary = pickPrimaryBlock(workBlocks);
   const keyExercises = (primary?.segments ?? [])
     .map((seg) => (seg.kind === "choice" ? seg.options[0] ?? null : seg.ex))
-    .filter((ex): ex is ParsedExercise => !!ex)
+    .filter((ex): ex is ParsedExercise => !!ex && !isRestInstruction(ex))
     .slice(0, 4);
   const extraBlocks = Math.max(0, workBlocks.length - 1);
   const mins = estimateSessionMinutes(workBlocks);
