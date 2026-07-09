@@ -3433,14 +3433,28 @@ function PostTrainingReloadFocus({ steps, lang, onClose }: { steps: ReloadStep[]
   return createPortal(overlay, document.body);
 }
 
+const RELOAD_WINDOW_MIN = 30; // minutes the Reload is "ready" after RPE is logged
+const RELOAD_ZINC = "#71717a"; // muted accent once the best window has passed
+
 /** The redesigned "after session" Reload hero: a single time-gated card whose
- *  CTA opens the step-by-step focus flow. Renders nothing when no routine is
- *  recommended (so it is never a card sitting idle). */
-function PostTrainingReload({ templates, lang }: { templates: PostTrainingTemplateRow[]; lang: Lang }) {
+ *  CTA opens the step-by-step focus flow. `sessionDoneAt` (the player's real RPE
+ *  submission time) opens a 30-min "ready" window; before it the card is a soft
+ *  "after your session" prompt, after it a muted "window passed" state that is
+ *  still openable. Renders nothing when no routine is recommended (so it is
+ *  never a card sitting idle). */
+function PostTrainingReload({ templates, lang, sessionDoneAt }: { templates: PostTrainingTemplateRow[]; lang: Lang; sessionDoneAt: string | null }) {
   const pt = PLAYER_COPY[lang].postTraining;
   const [focusOpen, setFocusOpen] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const ordered = useMemo(() => orderedReloadTemplates(templates), [templates]);
   const steps = useMemo(() => buildReloadSteps(ordered), [ordered]);
+
+  // Tick while a window is open so "ready" flips to "passed" live (no reload).
+  useEffect(() => {
+    if (!sessionDoneAt) return;
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [sessionDoneAt]);
 
   if (!ordered.length || !steps.length) return null;
 
@@ -3448,20 +3462,31 @@ function PostTrainingReload({ templates, lang }: { templates: PostTrainingTempla
   const hasTendon = ordered.some(isTendonReloadTemplate);
   const hasNeural = ordered.some((t) => !isTendonReloadTemplate(t));
 
+  const doneMs = sessionDoneAt ? Date.parse(sessionDoneAt) : NaN;
+  const hasWindow = Number.isFinite(doneMs);
+  const elapsedMin = hasWindow ? (nowMs - doneMs) / 60_000 : Infinity;
+  const state: "pending" | "ready" | "passed" = !hasWindow ? "pending" : elapsedMin <= RELOAD_WINDOW_MIN ? "ready" : "passed";
+  const minsLeft = state === "ready" ? Math.max(1, Math.ceil(RELOAD_WINDOW_MIN - elapsedMin)) : null;
+
+  const accentColor = state === "passed" ? RELOAD_ZINC : RELOAD_GREEN;
+  const kickerSuffix = state === "ready" ? pt.statusReady : state === "passed" ? pt.statusPassed : null;
+  const badgeLabel = state === "ready" ? pt.readyNow : state === "passed" ? pt.passedLabel : pt.pendingLabel;
+  const whenLine = state === "ready" ? pt.whenReady : state === "passed" ? pt.whenPassed : pt.whenPending;
+
   return (
     <div className="space-y-2.5">
-      {/* Kicker: "EFTIR ÆFINGU — TILBÚIÐ" */}
+      {/* Kicker: "EFTIR ÆFINGU — TILBÚIÐ" / "— LIÐIÐ HJÁ" / (plain when pending) */}
       <div className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 font-mono">
-        {pt.kicker} — {pt.statusReady}
+        {pt.kicker}{kickerSuffix ? ` — ${kickerSuffix}` : ""}
       </div>
 
-      <div className="rounded-2xl border border-[#1c7a4a]/25 bg-[#1c7a4a]/[0.04] p-4 sm:p-5">
+      <div className={cx("rounded-2xl border p-4 sm:p-5", state === "passed" ? "border-zinc-200 bg-zinc-50/60" : "border-[#1c7a4a]/25 bg-[#1c7a4a]/[0.04]")}>
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg text-white" style={{ background: RELOAD_GREEN }} aria-hidden>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg text-white" style={{ background: accentColor }} aria-hidden>
             ▶
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] font-mono" style={{ color: RELOAD_GREEN }}>{pt.readyNow}</div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] font-mono" style={{ color: accentColor }}>{badgeLabel}</div>
             <div className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900 font-display">
               {pt.reloadName}{totalMin > 0 ? ` · ${pt.durationMin(totalMin)}` : ""}
             </div>
@@ -3484,6 +3509,9 @@ function PostTrainingReload({ templates, lang }: { templates: PostTrainingTempla
         ) : null}
 
         <p className="mt-3 text-sm leading-relaxed text-zinc-600">{pt.reloadDesc}</p>
+        <p className="mt-1.5 text-[13px] font-medium leading-relaxed" style={{ color: state === "passed" ? "#a1a1aa" : RELOAD_GREEN }}>
+          {whenLine}{minsLeft != null ? ` · ${pt.minsLeft(minsLeft)}` : ""}
+        </p>
 
         <button
           type="button"
@@ -3566,6 +3594,9 @@ export default function PlayerClient() {
 
   const [postTraining, setPostTraining] = useState<PostTrainingTemplateRow[]>([]);
   const [postTrainingErr, setPostTrainingErr] = useState<string>("");
+  // Timestamp the player logged today's REAL session RPE — the "session done"
+  // signal that opens the Reload 30-min window. null until RPE is submitted.
+  const [rpeDoneAt, setRpeDoneAt] = useState<string | null>(null);
 
   const [fixRow, setFixRow] = useState<FixRow | null>(null);
   const [fixErr, setFixErr] = useState<string>("");
@@ -5265,6 +5296,30 @@ export default function PlayerClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan?.md_day, session?.session_type, session?.md_day_resolved, lang]);
 
+  // "Session done" signal for the Reload window: the latest REAL (non-imputed)
+  // session-RPE submission for the viewed day. Only meaningful for today — on a
+  // past day there is no live 30-min window, so leave it null.
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      const playerId = profile?.player_id ?? selectedPlayerId;
+      if (!playerId || day !== todayISO()) { setRpeDoneAt(null); return; }
+      const { data } = await supabase
+        .from("session_rpe_entries")
+        .select("submitted_at, created_at, is_imputed")
+        .eq("player_id", playerId)
+        .eq("session_date", day)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (!alive) return;
+      const real = ((data ?? []) as Array<{ submitted_at: string | null; created_at: string | null; is_imputed: boolean | null }>)
+        .find((r) => !r.is_imputed);
+      setRpeDoneAt(real ? (real.submitted_at ?? real.created_at ?? null) : null);
+    };
+    run();
+    return () => { alive = false; };
+  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+
   useEffect(() => {
     const run = async () => {
       if (!plan) {
@@ -6456,7 +6511,7 @@ export default function PlayerClient() {
               }}
             />
 
-            <PostTrainingReload templates={postTraining} lang={lang} />
+            <PostTrainingReload templates={postTraining} lang={lang} sessionDoneAt={rpeDoneAt} />
 
             {/* Recovery routines (post-match VST Reset, MD+1 morning bundle,
                 coach-assigned protocols) — a post-/next-session recovery block,
