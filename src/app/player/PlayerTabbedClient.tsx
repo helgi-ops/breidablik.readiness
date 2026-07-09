@@ -534,10 +534,17 @@ function AteCommandCardPortal({ activeTab, clubThemeColor, lang }: { activeTab: 
         slot.id = "dev-ate-command-card-slot";
       }
 
-      if (slot.parentElement !== header.parentElement) {
-        header.parentElement.insertBefore(slot, header.nextSibling);
-      } else if (slot.previousElementSibling !== header) {
-        header.parentElement.insertBefore(slot, header.nextSibling);
+      // Lota E / E3 — the readiness/decision card must lead the Today view.
+      // Every Today portal (RTP, outlook, recap, RPE, more) anchors off this
+      // slot, so placing the slot right AFTER the decision card pulls the whole
+      // chain below the verdict. Fall back to the header only until the decision
+      // card has mounted (early hydration); a later pass self-corrects.
+      const decisionAnchor = detectDecisionHeroCard() ?? header;
+      if (
+        decisionAnchor.parentElement &&
+        (slot.parentElement !== decisionAnchor.parentElement || slot.previousElementSibling !== decisionAnchor)
+      ) {
+        decisionAnchor.parentElement.insertBefore(slot, decisionAnchor.nextSibling);
       }
 
       const nextDecision = buildNormalizedDailyDecision();
@@ -1959,11 +1966,19 @@ export default function DevPlayerClient() {
             card.style.display = "none";
             continue;
           }
-          // Our own injected Today portals (See-more links, RPE nudge, nudge
-          // prefs) must NOT be caught by the "hide unknown cards" default —
-          // show them on Today. Nudge-prefs is now anchored to the bottom of
-          // this left column (Lota E / E3) so it sits below the session.
-          if (card.id === "dev-today-more-slot" || card.id === "dev-rpe-reminder-slot" || card.id === "dev-nudge-prefs-slot") {
+          // Our own injected Today portals must NOT be caught by the "hide
+          // unknown cards" default — show them on Today. Since the ate-command
+          // anchor now sits after the decision card (Lota E / E3), the RTP /
+          // outlook / recap slots live in this left column too, so they are
+          // whitelisted here alongside the more / RPE / nudge slots.
+          if (
+            card.id === "dev-rtt-progress-slot" ||
+            card.id === "dev-today-load-slot" ||
+            card.id === "dev-today-recap-slot" ||
+            card.id === "dev-today-more-slot" ||
+            card.id === "dev-rpe-reminder-slot" ||
+            card.id === "dev-nudge-prefs-slot"
+          ) {
             card.style.display = showToday ? "" : "none";
             continue;
           }
@@ -1995,8 +2010,8 @@ export default function DevPlayerClient() {
         if (ateSlot && chainParent) {
           let prevSlot: HTMLElement = ateSlot;
           // Note: nudge-prefs is intentionally NOT here — it is anchored to the
-          // bottom of the main-grid left column (below the session), a different
-          // container than these header portals (Lota E / E3).
+          // bottom of the page content wrapper (below the whole grid) so it sits
+          // under the session (Lota E / E3).
           for (const id of [
             "dev-rtt-progress-slot",
             "dev-today-load-slot",
@@ -2005,8 +2020,14 @@ export default function DevPlayerClient() {
             "dev-today-more-slot",
           ]) {
             const el = document.getElementById(id);
-            if (!el || el.parentElement !== chainParent) continue;
-            if (el.previousElementSibling !== prevSlot) chainParent.insertBefore(el, prevSlot.nextSibling);
+            if (!el) continue;
+            // Heal: a portal's own placement may have dropped its slot in a
+            // different container (e.g. the header parent, before the anchor
+            // moved under the decision card). Pull it into the chain container
+            // so the order can never scatter across containers.
+            if (el.parentElement !== chainParent || el.previousElementSibling !== prevSlot) {
+              chainParent.insertBefore(el, prevSlot.nextSibling);
+            }
             prevSlot = el;
           }
         }
