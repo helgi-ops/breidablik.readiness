@@ -134,7 +134,7 @@ export default function PlayerMatchMovementCard() {
   const compareAxes = ORDER.map((k) => (is ? LABELS[k].is : LABELS[k].en));
   const compareSeries = fpA && fpB && effA !== effB
     ? [
-        { label: labelFor(effA), values: ORDER.map((k) => fpA[k]), color: "#4f46e5" },
+        { label: labelFor(effA), values: ORDER.map((k) => fpA[k]), color: "#2740e6" },
         { label: labelFor(effB), values: ORDER.map((k) => fpB[k]), color: "#a9a493" },
       ]
     : [];
