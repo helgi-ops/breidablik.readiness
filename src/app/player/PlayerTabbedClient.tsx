@@ -1198,6 +1198,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean } | null>(null);
   const [granted, setGranted] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const is = lang === "IS";
 
   useEffect(() => {
@@ -1288,14 +1289,38 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
 
   if (!mountNode || activeTab !== "today" || !granted || !prefs) return null;
 
+  // Design spec: nudges collapse to ONE muted line by default (state + a
+  // "Manage" affordance). Tapping expands the toggles inline so no reminder
+  // control is removed — it just stops being a hero card on Today.
+  const anyOn = prefs.daily_outlook || prefs.daily_recap;
+  const stateText = is
+    ? (anyOn ? "Daglegar áminningar eru á" : "Daglegar áminningar eru af")
+    : (anyOn ? "Daily reminders are on" : "Daily reminders are off");
+
   return createPortal(
-    <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "DAGLEGAR ÁMINNINGAR" : "DAILY NUDGES"}</div>
-      <div className="mt-1.5 divide-y divide-zinc-100">
-        <NudgeRow label={is ? "Morgunn: áætlun dagsins" : "Morning: today's outlook"} sub={is ? "Stutt yfirsýn yfir daginn" : "A quick look at your day"} enabled={prefs.daily_outlook} onToggle={() => toggle("daily_outlook")} />
-        <NudgeRow label={is ? "Kvöld: hvernig gekk" : "Evening: how it went"} sub={is ? "Samanburður við þinn takt" : "How today compared to your usual"} enabled={prefs.daily_recap} onToggle={() => toggle("daily_recap")} />
-      </div>
-      <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
+    <div className="mt-3">
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center justify-between gap-2 px-1 py-2 text-left"
+        >
+          <span className="text-xs text-zinc-400">{stateText}</span>
+          <span className="text-xs font-medium text-primary">{is ? "Stjórna ›" : "Manage ›"}</span>
+        </button>
+      ) : (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "DAGLEGAR ÁMINNINGAR" : "DAILY NUDGES"}</div>
+            <button type="button" onClick={() => setExpanded(false)} className="text-xs text-zinc-400 hover:text-zinc-600">{is ? "Fela" : "Hide"}</button>
+          </div>
+          <div className="mt-1.5 divide-y divide-zinc-100">
+            <NudgeRow label={is ? "Morgunn: áætlun dagsins" : "Morning: today's outlook"} sub={is ? "Stutt yfirsýn yfir daginn" : "A quick look at your day"} enabled={prefs.daily_outlook} onToggle={() => toggle("daily_outlook")} />
+            <NudgeRow label={is ? "Kvöld: hvernig gekk" : "Evening: how it went"} sub={is ? "Samanburður við þinn takt" : "How today compared to your usual"} enabled={prefs.daily_recap} onToggle={() => toggle("daily_recap")} />
+          </div>
+          <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
+        </div>
+      )}
     </div>,
     mountNode,
   );
@@ -1365,29 +1390,27 @@ function RpeReminderPortal({ activeTab, lang, onLogRpe }: { activeTab: DevPlayer
 
   if (!mountNode || activeTab !== "today" || !due) return null;
 
+  // Compact tappable row (design spec 22a): [RPE badge] title · subtitle · ›.
+  // It sits under the session — a quick action, not a hero card.
   return createPortal(
-    <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-      <div className="flex items-start gap-3">
-        <span className="text-xl leading-none">📝</span>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold text-primary">
-            {is ? "Skráðu RPE fyrir æfingu dagsins" : "Log today's session RPE"}
-          </div>
-          <div className="mt-0.5 text-xs text-slate-600">
-            {is
-              ? "Skráðu strax eftir æfingu — það heldur álagsþróuninni þinni réttri."
-              : "Log it right after training — it keeps your load trend accurate."}
-          </div>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onLogRpe}
-        className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-      >
-        {is ? "Skrá RPE →" : "Log RPE →"}
-      </button>
-    </div>,
+    <button
+      type="button"
+      onClick={onLogRpe}
+      className="mt-3 flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-left transition hover:bg-primary/10"
+    >
+      <span className="inline-flex shrink-0 items-center rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-primary">
+        RPE
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-primary">
+          {is ? "Skráðu RPE fyrir æfingu dagsins" : "Log today's session RPE"}
+        </span>
+        <span className="block text-xs text-slate-600">
+          {is ? "30 sek — stillir áætlun morgundagsins" : "30 sec — tunes tomorrow's plan"}
+        </span>
+      </span>
+      <span aria-hidden className="shrink-0 text-lg leading-none text-slate-400">›</span>
+    </button>,
     mountNode,
   );
 }
