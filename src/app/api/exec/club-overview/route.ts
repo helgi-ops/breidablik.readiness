@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { EXCLUDE_PREV_CLUB_NOT } from "@/lib/micropulse/load/previousClub";
 import {
   availabilityVerdict as verdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory,
   recoveryNarrative,
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
     supabase.from("players").select("id, team_id, full_name").in("team_id", teamIds).eq("is_active", true),
     supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag, player_id").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
-    supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).gte("date", loadFrom).lte("date", today).limit(20000),
+    supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).not(...EXCLUDE_PREV_CLUB_NOT).gte("date", loadFrom).lte("date", today).limit(20000),
     // Injuries — availability level. player_id (to name who's OUT) + status/dates +
     // estimated_return_date (for expected returns), but NEVER body_part /
     // injury_type / severity / notes — that medical detail stays with the staff.
