@@ -825,11 +825,21 @@ function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTa
           ? (is ? "Lokavikan — næstum kominn í fulla æfingu. Flott vinna 💪" : "Final week — almost back to full training. Great work 💪")
           : (is ? "Þú ert að byggja þig upp, skref fyrir skref." : "You're building back up, step by step.")}
       </div>
-      {focus.length > 0 && (
-        <div className="mt-2 text-sm text-zinc-700"><span className="text-zinc-400">{is ? "Þessa viku: " : "This week: "}</span>{focus.join(", ")}</div>
+      {/* Lota E / E5 — a plain count instead of an 8-item comma pile
+          ("training volume, running distance, high-speed running, …"). On the
+          final week it's redundant with "almost back to full training" above,
+          so it's dropped entirely. */}
+      {focus.length > 0 && !data.finalWeek && (
+        <div className="mt-2 text-sm text-zinc-700">
+          <span className="text-zinc-400">{is ? "Þessa viku: " : "This week: "}</span>
+          {is ? `${focus.length} álagsþættir komnir aftur inn` : `${focus.length} training loads back in play`}
+        </div>
       )}
       {next.length > 0 && !data.finalWeek && (
-        <div className="mt-1 text-sm text-zinc-700"><span className="text-zinc-400">{is ? "Næst: " : "Next up: "}</span>{next.join(", ")}</div>
+        <div className="mt-1 text-sm text-zinc-700">
+          <span className="text-zinc-400">{is ? "Næst: " : "Next up: "}</span>
+          {is ? `${next.length} til viðbótar á næstunni` : `${next.length} more coming soon`}
+        </div>
       )}
       {data.onTrack === "on" && (
         <div className="mt-2 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{is ? "Á áætlun þessa viku ✓" : "On track this week ✓"}</div>
@@ -1216,14 +1226,18 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
       let slot = document.getElementById("dev-nudge-prefs-slot");
       if (!slot) { slot = document.createElement("div"); slot.id = "dev-nudge-prefs-slot"; }
       // Lota E / E3 — nudges belong at the very BOTTOM, below the session. The
-      // session / after-session cards live in the main-grid left column, while
-      // the header portals (outlook, RTP) sit above it; appending nudges to the
-      // end of that column puts them below everything. Fall back to the old
-      // header-portal anchor only until the main grid is detected.
+      // decision card is in the main-grid LEFT column, but the session /
+      // after-session live in the RIGHT column (which stacks below on mobile),
+      // so appending to the left column still left nudges above the session.
+      // Append after the whole main grid instead (its parent = the page content
+      // wrapper) so nudges sit below everything. The portal self-hides off-Today
+      // (activeTab guard), so it needs no per-tab visibility handling here.
       const leftColumn = detectDecisionHeroCard()?.parentElement ?? null;
-      if (leftColumn) {
-        if (slot.parentElement !== leftColumn || slot !== leftColumn.lastElementChild) {
-          leftColumn.appendChild(slot);
+      const mainGrid = leftColumn?.parentElement ?? null;
+      const contentWrapper = mainGrid?.parentElement ?? null;
+      if (contentWrapper && mainGrid) {
+        if (slot.parentElement !== contentWrapper || slot !== contentWrapper.lastElementChild) {
+          contentWrapper.appendChild(slot);
         }
         setMountNode((prev) => (prev === slot ? prev : slot));
         return true;
