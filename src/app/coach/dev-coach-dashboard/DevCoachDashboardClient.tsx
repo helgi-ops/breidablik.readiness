@@ -181,6 +181,7 @@ import {
 } from "@/lib/integrations/catapult/metricCatalog";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 /** -----------------------------
  * Types
@@ -3371,6 +3372,7 @@ export default function CoachPage() {
       .select("hir_dist, tot_as, tot_ds, total_distance, max_vel, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2")
       .eq("team_id", teamId)
       .eq("date", yday)
+      .or(EXCLUDE_PREV_CLUB_OR) // squad avg/max for yesterday — exclude a just-transferred player's pre-transfer row
       .in("source", ["catapult", "manual"]);
 
     if (error) {

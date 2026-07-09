@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DIMENSIONS, REGISTRY_KEYS, metricsForDimension, type Dimension } from "./registry";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 export const AVAILABILITY_THRESHOLD = 0.5;
 
@@ -89,6 +90,7 @@ export async function resolveCapabilities(
     .select(["date", ...REGISTRY_KEYS].join(", "))
     .eq("source", "catapult")
     .eq("team_id", teamId)
+    .or(EXCLUDE_PREV_CLUB_OR) // team capability sample — a transferred player's prev-club pod must not define team tier
     .gte("date", window.from)
     .lte("date", window.to)
     .limit(5000);

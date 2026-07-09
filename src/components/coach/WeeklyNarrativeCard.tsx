@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { buildWeeklyNarrative, type WeeklyNarrativeInput } from "@/lib/micropulse/weeklyNarrative";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 /**
  * WeeklyNarrativeCard — strategic 7-day overview at the top of the
@@ -72,6 +73,7 @@ export const WeeklyNarrativeCard: FC<{ teamId?: string | null }> = ({ teamId }) 
           .from("player_external_load_daily")
           .select("player_id, date, total_player_load")
           .in("player_id", playerIds)
+          .or(EXCLUDE_PREV_CLUB_OR) // team chronic/acute rolls players by date — exclude pre-transfer rows
           .gte("date", start28)
           .lte("date", today);
         if (!alive) return;

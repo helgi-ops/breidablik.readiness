@@ -34,6 +34,7 @@ import type {
 } from "./weeklyLoadTypes";
 
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -198,7 +199,10 @@ export async function computeWeeklyLoad(args: {
     .gte("date", weekMonday)
     .lte("date", today)
     .in("source", ["catapult", "manual"]);
+  // Team branch rolls players together by date → exclude pre-transfer rows. The
+  // single-player branch keeps them (his own weekly view includes his history).
   if (playerId) currentQuery = currentQuery.eq("player_id", playerId);
+  else currentQuery = currentQuery.or(EXCLUDE_PREV_CLUB_OR);
   const { data: currentRows } = await currentQuery;
 
   // 3. Build per-day averages for current week (team avg or single player)
@@ -259,6 +263,7 @@ export async function computeWeeklyLoad(args: {
     .lte("date", histEnd)
     .in("source", ["catapult", "manual"]);
   if (playerId) histQuery = histQuery.eq("player_id", playerId);
+  else histQuery = histQuery.or(EXCLUDE_PREV_CLUB_OR); // team weekly baseline — exclude pre-transfer rows
   const { data: histRows } = await histQuery;
 
   // Optionally discover match dates within the historical window so we can

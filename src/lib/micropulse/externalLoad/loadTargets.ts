@@ -30,6 +30,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -375,6 +376,7 @@ async function findRecentMatchDates(args: {
       .from("player_external_load_daily")
       .select(`date, ${fallbackCol}${indoor ? `, ${plFallbackCol}` : ""}`)
       .eq("team_id", teamId)
+      .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (match-date detection) — exclude pre-transfer rows
       .gte("date", fromDate)
       .lte("date", toDate)
       .in("source", ["catapult", "manual"]);
@@ -456,6 +458,7 @@ async function computeMatchDemandAverage(args: {
     .from("player_external_load_daily")
     .select(MATCH_DEMAND_SELECT_COLS)
     .eq("team_id", teamId)
+    .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (team match demand) — exclude pre-transfer rows
     .in("date", matchDates)
     .in("source", ["catapult", "manual"]);
 

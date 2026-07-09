@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 export const runtime = "nodejs";
 
@@ -83,6 +84,7 @@ export async function GET(req: NextRequest) {
     )
     .eq("source", "catapult")
     .eq("players.team_id", ctx.teamId)
+    .or(EXCLUDE_PREV_CLUB_OR) // federation report = load accrued at THIS club — exclude pre-transfer rows
     .gte("date", from)
     .lte("date", to)
     .order("date", { ascending: true });

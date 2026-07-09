@@ -19,6 +19,7 @@ export type { MdDay, MdMetricKey, MdMetricScore, PlayerMdComparison, MdCompariso
 export { MD_COMPARISON_METRICS, MD_METRIC_LABELS } from "./mdComparisonTypes";
 
 import { MD_COMPARISON_METRICS, MD_METRIC_LABELS, type MdDay, type MdMetricKey, type MdMetricScore, type PlayerMdComparison, type MdComparisonResult, type MdPlanningMetric, type MdPlanningResult } from "./mdComparisonTypes";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 // ─── MD Day Resolution ───────────────────────────────────────────────────────
 
@@ -376,6 +377,7 @@ export async function computeMdPlanning(args: {
       .from("player_external_load_daily")
       .select(SELECT_COLS)
       .eq("team_id", teamId)
+      .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg → team MD-day planning stats — exclude pre-transfer rows
       .in("date", candidateDates)
       .in("source", ["catapult", "manual"]);
     historicalRows = (data ?? []) as unknown as RawLoadRow[];
