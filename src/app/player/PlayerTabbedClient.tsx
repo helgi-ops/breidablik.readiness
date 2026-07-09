@@ -2036,11 +2036,27 @@ export default function DevPlayerClient() {
       // DOM mutations, so the order converges and stays stable. It only moves
       // known slots and never removes anything, so the worst case is a no-op.
       if (showToday) {
-        // (1) Left column, after the decision card: RTP → outlook → recap. The
-        // ate-command slot is anchored right after the decision card, and each
-        // of these portals anchors off it, so re-chain them here to hold order.
-        const ateSlot = document.getElementById("dev-ate-command-card-slot");
-        const chainParent = ateSlot?.parentElement ?? null;
+        // (0) Force the ate-command anchor to sit right after the decision card.
+        // The portal's own placement only retries for ~2s, so if the decision
+        // card stabilises later the slot can get stuck after the header — which
+        // left RTP/outlook rendering ABOVE the verdict. apply() reruns on every
+        // DOM mutation, so re-asserting it here reliably keeps the decision on
+        // top. decisionCard is guaranteed non-null past the early-return guard.
+        let ateSlot = document.getElementById("dev-ate-command-card-slot");
+        if (!ateSlot) {
+          ateSlot = document.createElement("div");
+          ateSlot.id = "dev-ate-command-card-slot";
+        }
+        if (
+          decisionCard.parentElement &&
+          (ateSlot.parentElement !== decisionCard.parentElement || ateSlot.previousElementSibling !== decisionCard)
+        ) {
+          decisionCard.parentElement.insertBefore(ateSlot, decisionCard.nextSibling);
+        }
+
+        // (1) Left column, after the decision card: RTP → outlook → recap. Each
+        // of these portals anchors off the ate-slot, so re-chain them here.
+        const chainParent = ateSlot.parentElement ?? null;
         if (ateSlot && chainParent) {
           let prevSlot: HTMLElement = ateSlot;
           for (const id of [
