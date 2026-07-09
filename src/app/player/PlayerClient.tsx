@@ -1025,7 +1025,26 @@ function parseExerciseItem(raw: string): ParsedExercise {
   if (name.includes("—")) {
     name = name.split("—")[0].trim();
   } else if (name.includes(":")) {
-    name = name.split(":")[0].trim();
+    const colonIdx = name.indexOf(":");
+    const before = name.slice(0, colonIdx).trim();
+    const after = name.slice(colonIdx + 1).trim();
+    const category = before.replace(/^[A-Ca-c]\d?\s*[.):]\s*/i, "").trim();
+    // Contrast/complex items are "<label>. <category>: <real exercise>", so the
+    // REAL exercise is AFTER the colon (e.g. "B1. Heavy: Trap-bar deadlift" →
+    // "B1. Trap-bar deadlift"). Keep the letter label so complex grouping still
+    // detects the pair. Any other "Name: notes" keeps the part before the colon.
+    if (after && /^(heavy|explosive|strength|plyo|ballistic|þung|sprengi)/i.test(category)) {
+      const labelPrefix = before.match(/^[A-Ca-c]\d?\s*[.):]/i)?.[0] ?? "";
+      let real = after;
+      if (setsReps) {
+        const si = real.indexOf(setsReps);
+        if (si > 0) real = real.slice(0, si);
+      }
+      real = real.replace(/[×xX*\s—:,\-]+$/, "").trim();
+      name = `${labelPrefix} ${real}`.replace(/\s+/g, " ").trim();
+    } else {
+      name = before;
+    }
   } else if (setsReps) {
     const idx = name.indexOf(setsReps);
     if (idx > 0) name = name.slice(0, idx).trim().replace(/[-—:,]+$/, "").trim();
@@ -2260,7 +2279,8 @@ function focusExName(raw: string): string {
 type FocusStep =
   | { kind: "single"; block: SessionBlock; ex: ParsedExercise }
   | { kind: "choice"; block: SessionBlock; header: string; options: ParsedExercise[] }
-  | { kind: "complex"; block: SessionBlock; members: ParsedExercise[]; restNote: string | null };
+  | { kind: "complex"; block: SessionBlock; members: ParsedExercise[]; restNote: string | null }
+  | { kind: "list"; block: SessionBlock; items: ParsedExercise[] };
 
 // A loose "rest / N sets between pairs" instruction line, not a real exercise.
 function isRestInstruction(ex: ParsedExercise): boolean {
@@ -2287,6 +2307,17 @@ function parseComplexSets(members: ParsedExercise[], restNote: string | null): n
 function buildFocusSteps(blocks: SessionBlock[]): FocusStep[] {
   const steps: FocusStep[] = [];
   for (const block of blocks) {
+    // Warm-up is a quick sequential checklist — show every move on ONE page
+    // instead of clicking through each one.
+    if (block.accent.label === "Upphitun") {
+      const items: ParsedExercise[] = [];
+      for (const seg of block.segments) {
+        if (seg.kind === "exercise") items.push(seg.ex);
+        else items.push(...seg.options);
+      }
+      if (items.length) steps.push({ kind: "list", block, items });
+      continue;
+    }
     const segs = block.segments;
     let i = 0;
     while (i < segs.length) {
@@ -2373,7 +2404,15 @@ function SessionFocusScreen({
 
   const nextStep = steps[clampedIdx + 1] ?? null;
   const nextName = nextStep
-    ? focusExName(nextStep.kind === "choice" ? nextStep.header : nextStep.kind === "complex" ? nextStep.members[0].name : nextStep.ex.name)
+    ? focusExName(
+        nextStep.kind === "choice"
+          ? nextStep.header
+          : nextStep.kind === "complex"
+            ? nextStep.members[0].name
+            : nextStep.kind === "list"
+              ? (localizeBlockTitleText(nextStep.block.title, isIS))
+              : nextStep.ex.name
+      )
     : null;
   const onLastSet = !setCount || setCount <= 1 || doneSets + 1 >= setCount;
 
@@ -2467,7 +2506,27 @@ function SessionFocusScreen({
               {kicker}
             </div>
 
-            {cur.kind === "choice" ? (
+            {cur.kind === "list" ? (
+              <div className="space-y-2">
+                {(() => {
+                  const goal = block ? BLOCK_GOAL[block.accent.label] ?? null : null;
+                  return goal ? (
+                    <div className="mb-1 rounded-xl bg-zinc-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-zinc-600">
+                      {isIS ? goal.IS : goal.EN}
+                    </div>
+                  ) : null;
+                })()}
+                {cur.items.map((m, k) => {
+                  const rm = reduceExercise(m, adjust ?? null);
+                  return (
+                    <div key={k} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3.5 py-3">
+                      <span className="min-w-0 truncate text-sm font-semibold text-zinc-900">{focusExName(m.name)}</span>
+                      {rm.setsReps ? <span className="shrink-0 text-sm font-medium text-zinc-500">{rm.setsReps}</span> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : cur.kind === "choice" ? (
               <ChoiceGroup
                 header={cur.header}
                 options={cur.options.map((o) => reduceExercise(o, adjust ?? null))}
