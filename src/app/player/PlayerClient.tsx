@@ -1333,6 +1333,9 @@ function recommendationPanelClass(accent: BlockAccentResult): { cls: string; sty
 
 function exerciseMethodForId(id: SupportedExerciseId | null, fallbackMethod: string | null): string | null {
   if (id === "ISO_MID_THIGH_PULL" || id === "ISOMETRIC_SPLIT_SQUAT_HOLD") return "ISO";
+  // A supported exercise that ISN'T isometric must NOT inherit the plan line's
+  // method — e.g. an ISO plan swapped for DB Snatch is explosive, not ISO.
+  if (id) return null;
   return fallbackMethod;
 }
 
@@ -1360,6 +1363,18 @@ function applySupportedExerciseDisplayOverride(
       setsReps: "3-5 sec x 3 reps each leg",
       note: null,
     };
+  }
+
+  // Explosive-accessory alternatives are rep-based (not ISO holds), so give them
+  // their own reps unit instead of inheriting an ISO plan line's "sek".
+  if (id === "DB_SNATCH") {
+    return { ...exercise, name: "DB Snatch", method: null, setsReps: "3-5 reps", note: null };
+  }
+  if (id === "JUMP_SHRUGS") {
+    return { ...exercise, name: "Jump Shrugs", method: null, setsReps: "3-5 reps", note: null };
+  }
+  if (id === "MID_THIGH_PULL") {
+    return { ...exercise, name: "Mid-Thigh Pull", method: null, setsReps: "3-5 reps", note: null };
   }
 
   return exercise;
@@ -2679,8 +2694,11 @@ function SessionFocusScreen({
                   recommendationContext={recCtx}
                 />
 
-                {/* Method explainer (reuses METHOD_GUIDE) */}
-                {guide ? (
+                {/* Method explainer — only when this exercise is NOT
+                    recommendation-swappable. The plan line's method (e.g. ISO)
+                    doesn't apply once the engine swaps it (e.g. for DB Snatch),
+                    and the card's ⓘ already explains the shown exercise. */}
+                {guide && !recCtx ? (
                   <div className="rounded-xl bg-[#f4f6ff] px-4 py-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2740e6]">
                       {isIS ? `Hvað er ${methodDisplay}?` : `What is ${methodDisplay}?`}
@@ -2689,7 +2707,7 @@ function SessionFocusScreen({
                       {(isIS ? guide.IS : guide.EN).split("\n\n")[0]}
                     </div>
                   </div>
-                ) : baseEx.note ? (
+                ) : !recCtx && baseEx.note ? (
                   <div className="rounded-xl bg-zinc-50 px-4 py-3 text-[13px] leading-relaxed text-zinc-600">{baseEx.note}</div>
                 ) : null}
 
