@@ -3028,13 +3028,6 @@ function renderFixModules(mods: FixModule[]) {
 /** =========
  *  ✅ Post-training accents (ALLT GRÁTT / NEUTRAL)
  *  ========= */
-function postTrainingAccent(_templateId: string, _tags: string[]) {
-  return {
-    wrap: "border-zinc-200 bg-zinc-50/60",
-    chip: "bg-zinc-50 text-zinc-700 border-zinc-200",
-  };
-}
-
 /** =========
  *  ✅ Post-training structure parser (unchanged)
  *  ========= */
@@ -3235,165 +3228,276 @@ function extractPostTrainingSections(structure: any): PTSection[] {
   return [];
 }
 
-function renderPostTraining(templates: PostTrainingTemplateRow[], lang: Lang = "IS") {
+/** =========
+ *  Post-training "Reload" — time-gated recovery hero + step-by-step focus flow.
+ *  A tendon-load routine (held while still warm) chained into a neural reset,
+ *  surfaced as ONE "Reload" after the session. The focus screen reads the SAME
+ *  extractPostTrainingSections() output the card summarises, so they can't drift
+ *  (the same one-source rule as buildSessionBlocks for the strength session).
+ *  ========= */
+const RELOAD_GREEN = "#1c7a4a"; // traffic-light green / ready (design token)
+const RELOAD_PURPLE = "#7a5cc4"; // rtp purple — neural-reset steps
+
+function isTendonReloadTemplate(t: PostTrainingTemplateRow) {
+  const id = (t?.id ?? "").toLowerCase();
+  const tags = (t?.tags ?? []).map((x) => String(x).toLowerCase());
+  return id.includes("tendon") || tags.includes("tendon_health") || tags.includes("achilles") || tags.includes("patellar");
+}
+
+function isMdRotationReloadTemplate(t: PostTrainingTemplateRow) {
+  const id = (t?.id ?? "").toLowerCase();
+  return (
+    id.startsWith("md1_") || id.startsWith("md2_") || id.startsWith("md3_") ||
+    id.startsWith("md4_") || id.startsWith("md_") || id.startsWith("mdplus_") || id.startsWith("md_plus")
+  );
+}
+
+function isDailyNeuralResetTemplate(t: PostTrainingTemplateRow) {
+  return (t?.id ?? "").toLowerCase() === "daily_neural_reset";
+}
+
+/** Recommended reload routines, tendon first (held warm), neural reset after. */
+function orderedReloadTemplates(templates: PostTrainingTemplateRow[]) {
+  const filtered = templates.filter((t) => !isDailyNeuralResetTemplate(t) && (isTendonReloadTemplate(t) || isMdRotationReloadTemplate(t)));
+  return [...filtered].sort((a, b) => (isTendonReloadTemplate(a) ? 0 : 1) - (isTendonReloadTemplate(b) ? 0 : 1));
+}
+
+const cleanReloadTitle = (t?: string | null) => String(t ?? "").replace(/^\s*\d+[)\.\-]\s*/g, "").trim();
+
+type ReloadStep = {
+  key: string;
+  name: string;
+  instructions: string[];
+  meta: NonNullable<PTExercise["meta"]>;
+  timeSec: number | null;
+  kind: "tendon" | "neural";
+};
+
+/** Flatten every recommended routine's sections into one ordered step list. */
+function buildReloadSteps(templates: PostTrainingTemplateRow[]): ReloadStep[] {
+  const steps: ReloadStep[] = [];
+  for (const t of templates) {
+    const kind: ReloadStep["kind"] = isTendonReloadTemplate(t) ? "tendon" : "neural";
+    for (const sec of extractPostTrainingSections(t?.structure)) {
+      for (const ex of sec.exercises) {
+        steps.push({
+          key: `${t.id}-${steps.length}`,
+          name: cleanReloadTitle(ex.name),
+          instructions: (ex.instructions ?? []).filter(Boolean),
+          meta: ex.meta ?? {},
+          timeSec: ex.timeSec ?? null,
+          kind,
+        });
+      }
+    }
+  }
+  return steps;
+}
+
+/** Full-screen step-by-step Reload walkthrough (portal, same chrome as the
+ *  strength session focus screen, in recovery green / neural purple). */
+function PostTrainingReloadFocus({ steps, lang, onClose }: { steps: ReloadStep[]; lang: Lang; onClose: () => void }) {
   const pt = PLAYER_COPY[lang].postTraining;
-  function isTendonTemplate(t: PostTrainingTemplateRow) {
-    const id = (t?.id ?? "").toLowerCase();
-    const tags = (t?.tags ?? []).map((x) => String(x).toLowerCase());
-    return id.includes("tendon") || tags.includes("tendon_health") || tags.includes("achilles") || tags.includes("patellar");
-  }
+  const total = steps.length;
+  const [idx, setIdx] = useState(0);
+  const [finished, setFinished] = useState(false);
 
-  function isMdRotationTemplate(t: PostTrainingTemplateRow) {
-    const id = (t?.id ?? "").toLowerCase();
-    return (
-      id.startsWith("md1_") ||
-      id.startsWith("md2_") ||
-      id.startsWith("md3_") ||
-      id.startsWith("md4_") ||
-      id.startsWith("md_") ||
-      id.startsWith("mdplus_") ||
-      id.startsWith("md_plus")
-    );
-  }
+  const clamped = Math.min(idx, Math.max(0, total - 1));
+  const cur = steps[clamped] ?? null;
+  const isLast = clamped >= total - 1;
+  const nextStep = steps[clamped + 1] ?? null;
+  const advance = () => { if (isLast) setFinished(true); else setIdx((i) => Math.min(total - 1, i + 1)); };
+  const goBack = () => setIdx((i) => Math.max(0, i - 1));
+  const accent = cur?.kind === "neural" ? RELOAD_PURPLE : RELOAD_GREEN;
+  const meta = cur?.meta ?? {};
 
-  function isDailyNeuralReset(t: PostTrainingTemplateRow) {
-    return (t?.id ?? "").toLowerCase() === "daily_neural_reset";
-  }
+  const overlay = (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header + segmented progress (one segment per step) */}
+      <div className="shrink-0 border-b border-zinc-100 px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-bold text-zinc-900 font-display">{pt.focusTitle}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 active:bg-zinc-200"
+            aria-label={pt.finishClose}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="mt-3 flex gap-1">
+          {steps.map((_, i) => (
+            <div key={i} className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
+              <div className="h-full rounded-full" style={{ width: finished || i <= clamped ? "100%" : "0%", background: RELOAD_GREEN }} />
+            </div>
+          ))}
+        </div>
+      </div>
 
-  const filtered = templates.filter((t) => !isDailyNeuralReset(t) && (isTendonTemplate(t) || isMdRotationTemplate(t)));
-  const orderedTemplates = [...filtered].sort((a, b) => {
-    const rank = (t: PostTrainingTemplateRow) => (isTendonTemplate(t) ? 0 : 1);
-    return rank(a) - rank(b);
-  });
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {finished ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full text-3xl text-white" style={{ background: RELOAD_GREEN }}>✓</div>
+            <div className="mt-4 text-xl font-bold text-zinc-900 font-display">{pt.finishTitle}</div>
+            <div className="mt-1 max-w-xs text-sm text-zinc-500">{pt.finishBody}</div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-6 rounded-full px-6 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+              style={{ background: RELOAD_GREEN }}
+            >
+              {pt.finishClose}
+            </button>
+          </div>
+        ) : cur ? (
+          <div className="mx-auto max-w-lg space-y-4">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: accent }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+              {(cur.kind === "neural" ? pt.tagNeural : pt.tagTendon)} · {pt.stepOf(clamped + 1, total)}
+            </div>
 
-  const count = orderedTemplates.length;
-  const cleanTitle = (t?: string | null) => String(t ?? "").replace(/^\s*\d+[\)\.\-]\s*/g, "").trim();
+            <div className="text-2xl font-bold tracking-tight text-zinc-900 font-display">{cur.name}</div>
+
+            {(meta.sets || meta.holdSec != null || meta.restSec != null || cur.timeSec != null) ? (
+              <div className="flex flex-wrap gap-2">
+                {meta.sets ? (
+                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">{pt.setsLabel} {meta.sets}</span>
+                ) : null}
+                {meta.holdSec != null ? (
+                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">{pt.holdLabel} {meta.holdSec}s</span>
+                ) : cur.timeSec != null ? (
+                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">{pt.holdLabel} {cur.timeSec}s</span>
+                ) : null}
+                {meta.restSec != null ? (
+                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">{pt.restLabel} {meta.restSec}s</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {meta.notes ? <div className="rounded-xl bg-zinc-50 px-4 py-3 text-[13px] leading-relaxed text-zinc-600">{meta.notes}</div> : null}
+
+            {cur.instructions.length ? (
+              <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-zinc-700">
+                {cur.instructions.map((line, li) => (
+                  <li key={li}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            {meta.alternative ? (
+              <div className="text-sm text-zinc-600">
+                <span className="font-semibold text-zinc-700">{pt.altLabel}:</span> {meta.alternative}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Footer nav */}
+      {!finished ? (
+        <div className="shrink-0 border-t border-zinc-100 px-4 py-3">
+          <div className="mx-auto max-w-lg space-y-2">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={clamped === 0}
+                onClick={goBack}
+                className={cx(
+                  "rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors",
+                  clamped === 0 ? "border-zinc-100 text-zinc-300" : "border-zinc-200 text-zinc-700 active:bg-zinc-100"
+                )}
+              >
+                ← {pt.back}
+              </button>
+              <button
+                type="button"
+                onClick={advance}
+                className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+                style={{ background: RELOAD_GREEN }}
+              >
+                {isLast ? pt.finishCta : pt.continueCta}
+              </button>
+            </div>
+            {nextStep && !isLast ? (
+              <div className="text-center text-xs text-zinc-400">{pt.next}: {nextStep.name} →</div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (typeof document === "undefined") return overlay;
+  return createPortal(overlay, document.body);
+}
+
+/** The redesigned "after session" Reload hero: a single time-gated card whose
+ *  CTA opens the step-by-step focus flow. Renders nothing when no routine is
+ *  recommended (so it is never a card sitting idle). */
+function PostTrainingReload({ templates, lang }: { templates: PostTrainingTemplateRow[]; lang: Lang }) {
+  const pt = PLAYER_COPY[lang].postTraining;
+  const [focusOpen, setFocusOpen] = useState(false);
+  const ordered = useMemo(() => orderedReloadTemplates(templates), [templates]);
+  const steps = useMemo(() => buildReloadSteps(ordered), [ordered]);
+
+  if (!ordered.length || !steps.length) return null;
+
+  const totalMin = ordered.reduce((s, t) => s + (Number(t.duration_min) || 0), 0);
+  const hasTendon = ordered.some(isTendonReloadTemplate);
+  const hasNeural = ordered.some((t) => !isTendonReloadTemplate(t));
 
   return (
     <div className="space-y-2.5">
-      {/* Compact header (design spec 22a) — a single label line instead of a
-          full SectionTitle + descriptor, so "After session" stays a small
-          section under the session rather than a hero block. */}
-      <div className="flex items-baseline justify-between gap-3 px-0.5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-          {pt.kicker}{pt.title ? ` · ${pt.title}` : ""}
-        </div>
-        <div className="text-[11px] font-medium text-zinc-400">{count ? pt.count(count) : ""}</div>
+      {/* Kicker: "EFTIR ÆFINGU — TILBÚIÐ" */}
+      <div className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 font-mono">
+        {pt.kicker} — {pt.statusReady}
       </div>
 
-      {!orderedTemplates.length ? (
-        <CardShell>
-          <div className="p-4 sm:p-5 text-sm text-zinc-600">{pt.empty}</div>
-        </CardShell>
-      ) : (
-        <div className="grid grid-cols-1 gap-3">
-          {orderedTemplates.map((t) => {
-            const accent = postTrainingAccent(t.id, t.tags ?? []);
-            const sections = extractPostTrainingSections(t?.structure);
-            const isTendon = isTendonTemplate(t);
-
-            return (
-              <div key={t.id} className={cx("rounded-2xl border", accent.wrap)}>
-                {/* ✅ Default closed */}
-                <details className="group">
-                  <summary className="cursor-pointer select-none px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-zinc-900">{t.title}</div>
-                        <div className="mt-0.5 text-xs text-zinc-500">{t.duration_min ? pt.durationMin(t.duration_min) : ""}</div>
-                      </div>
-
-                      {/* ✅ Mobile: hide tags (keeps cards compact). Desktop: show tags */}
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="hidden sm:flex flex-wrap justify-end gap-2">
-                          {(t.tags ?? []).slice(0, 5).map((tag) => (
-                            <span key={tag} className={cx("rounded-full border px-2 py-1 text-[11px] font-semibold", accent.chip)}>
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-
-                        <span className="text-xs font-semibold text-zinc-500 group-open:hidden">{pt.open}</span>
-                        <span className="hidden text-xs font-semibold text-zinc-500 group-open:block">{pt.close}</span>
-                      </div>
-                    </div>
-                  </summary>
-
-                  <div className="border-t border-zinc-200/70" />
-
-                  <div className="p-4 sm:p-5">
-                    {!sections.length ? (
-                      <div className="text-sm text-zinc-600">{pt.noSteps}</div>
-                    ) : (
-                      <div className="space-y-3">
-                        {sections.map((sec, si) => (
-                          <div key={si} className="rounded-xl border border-zinc-200 bg-white p-4">
-                            {!isTendon && sec.title ? (
-                              <div className="text-sm font-semibold text-zinc-900">{cleanTitle(sec.title)}</div>
-                            ) : null}
-                            {sec.note ? <div className="mt-1 text-sm text-zinc-600">{sec.note}</div> : null}
-
-                            <div className="mt-3 space-y-3">
-                              {sec.exercises.map((ex, i) => {
-                                const header = cleanTitle(ex.name);
-                                const meta = ex.meta ?? {};
-                                const items = (ex.instructions ?? []).filter(Boolean);
-
-                                return (
-                                  <div key={i} className="rounded-xl border border-zinc-200 bg-white p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="text-sm font-semibold text-zinc-900">{header}</div>
-                                        {meta.notes ? <div className="mt-1 text-sm text-zinc-600">{meta.notes}</div> : null}
-                                      </div>
-
-                                      <div className="flex flex-wrap justify-end gap-2">
-                                        {meta.sets ? (
-                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
-                                            Sets {meta.sets}
-                                          </span>
-                                        ) : null}
-                                        {meta.holdSec != null ? (
-                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
-                                            Hold {meta.holdSec}s
-                                          </span>
-                                        ) : null}
-                                        {meta.restSec != null ? (
-                                          <span className="rounded-full border bg-zinc-50 px-2 py-1 text-[11px] font-semibold text-zinc-700">
-                                            Rest {meta.restSec}s
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    </div>
-
-                                    {!!items.length ? (
-                                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-700">
-                                        {items.map((line, li) => (
-                                          <li key={li}>{line}</li>
-                                        ))}
-                                      </ul>
-                                    ) : null}
-
-                                    {meta.alternative ? (
-                                      <div className="mt-3 text-sm text-zinc-600">
-                                        <span className="font-semibold text-zinc-700">Alternative:</span> {meta.alternative}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              </div>
-            );
-          })}
+      <div className="rounded-2xl border border-[#1c7a4a]/25 bg-[#1c7a4a]/[0.04] p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg text-white" style={{ background: RELOAD_GREEN }} aria-hidden>
+            ▶
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] font-mono" style={{ color: RELOAD_GREEN }}>{pt.readyNow}</div>
+            <div className="mt-0.5 text-lg font-bold tracking-tight text-zinc-900 font-display">
+              {pt.reloadName}{totalMin > 0 ? ` · ${pt.durationMin(totalMin)}` : ""}
+            </div>
+          </div>
         </div>
-      )}
+
+        {(hasTendon || hasNeural) ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {hasTendon ? (
+              <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ color: RELOAD_GREEN, borderColor: `${RELOAD_GREEN}40`, background: `${RELOAD_GREEN}0f` }}>
+                {pt.tagTendon}
+              </span>
+            ) : null}
+            {hasNeural ? (
+              <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ color: RELOAD_PURPLE, borderColor: `${RELOAD_PURPLE}40`, background: `${RELOAD_PURPLE}0f` }}>
+                {pt.tagNeural}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <p className="mt-3 text-sm leading-relaxed text-zinc-600">{pt.reloadDesc}</p>
+
+        <button
+          type="button"
+          onClick={() => setFocusOpen(true)}
+          className="mt-4 w-full rounded-2xl px-5 py-3.5 text-base font-bold text-white transition-opacity active:opacity-90"
+          style={{ background: RELOAD_GREEN }}
+        >
+          {pt.startCta}
+        </button>
+      </div>
+
+      <p className="px-0.5 text-[12px] leading-relaxed text-zinc-400">{pt.footnote}</p>
+
+      {focusOpen ? <PostTrainingReloadFocus steps={steps} lang={lang} onClose={() => setFocusOpen(false)} /> : null}
     </div>
   );
 }
@@ -6352,7 +6456,7 @@ export default function PlayerClient() {
               }}
             />
 
-            {renderPostTraining(postTraining, lang)}
+            <PostTrainingReload templates={postTraining} lang={lang} />
 
             {/* Recovery routines (post-match VST Reset, MD+1 morning bundle,
                 coach-assigned protocols) — a post-/next-session recovery block,
