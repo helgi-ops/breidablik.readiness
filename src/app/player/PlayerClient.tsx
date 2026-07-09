@@ -5406,12 +5406,12 @@ export default function PlayerClient() {
     <div className="min-h-screen bg-zinc-50">
       {/* Sticky header — outside padded container so it sticks flush to top-0 */}
       <div className="sticky top-0 z-20 bg-zinc-50/95 backdrop-blur-sm supports-[backdrop-filter]:bg-zinc-50/80">
-        <div className="mx-auto max-w-6xl px-4 pt-4 sm:pt-5 pb-3">
+        <div className="mx-auto max-w-6xl px-4 pt-4 sm:pt-5 pb-2">
           <div data-player-card="header">
             <div className="px-1 py-1">
               <div className="flex flex-row items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate font-display text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
+                  <div className="truncate font-display text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
                   <div className="mt-1 text-sm text-zinc-500">
                     {niceDate}{team ? ` · ${team}` : ""}{position ? ` · ${position}` : ""}
                   </div>
@@ -5498,7 +5498,7 @@ export default function PlayerClient() {
           </div>
         </div>
       </div>
-      <div className="mx-auto max-w-6xl px-4 pt-3 pb-6 sm:pb-8">
+      <div className="mx-auto max-w-6xl px-4 pt-1 pb-6 sm:pb-8">
 
         {today === todayISO() && !metrics?.created_at ? (
           <div className="mb-5">
@@ -5507,8 +5507,10 @@ export default function PlayerClient() {
         ) : null}
 
         {/* Recovery routines — auto-hidden when no assignments. Shows post-match
-            VST Reset, MD+1 morning bundle, or coach-assigned protocols. */}
-        <div className="mb-5">
+            VST Reset, MD+1 morning bundle, or coach-assigned protocols.
+            empty:hidden collapses the wrapper (no gap) when the card renders
+            nothing, so it doesn't push the decision block down. */}
+        <div className="mb-4 empty:hidden">
           <PlayerRecoveryAssignmentsCard />
         </div>
 
