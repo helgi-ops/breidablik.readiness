@@ -5386,6 +5386,22 @@ export default function PlayerClient() {
       ? "border-amber-200 bg-amber-50/50"
       : "border-rose-200 bg-rose-50/50";
 
+  // Readiness dot + MD chip + a nicely formatted date for the redesigned
+  // "Today's decision" block and the cleaned header (mockup: header carries no
+  // MD/verdict chips — they live in the decision block).
+  const decisionDotClass = flag === "GREEN" ? "bg-emerald-500" : flag === "YELLOW" ? "bg-amber-500" : "bg-rose-500";
+  const mdToMatch = mdLabel.match(/MD\s*-\s*(\d+)/i);
+  const mdChipText = mdLabel && mdLabel !== "—"
+    ? (mdToMatch ? `${mdLabel} · ${mdToMatch[1]} ${lang === "IS" ? "til leiks" : "to match"}` : mdLabel)
+    : null;
+  const niceDate = (() => {
+    try {
+      return new Date(`${today}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "long" });
+    } catch {
+      return today;
+    }
+  })();
+
   return (
     <div className="min-h-screen bg-zinc-50">
       {/* Sticky header — outside padded container so it sticks flush to top-0 */}
@@ -5396,11 +5412,13 @@ export default function PlayerClient() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
-                  <div className="mt-1 text-xs font-medium text-zinc-500">{today}</div>
-                  <div className="mt-1 text-sm text-zinc-600">
-                    {team ? `${team}` : "—"} {position ? `· ${position}` : ""}
+                  <div className="mt-1 text-sm text-zinc-500">
+                    {niceDate}{team ? ` · ${team}` : ""}{position ? ` · ${position}` : ""}
                   </div>
-                  {activeTeams.length > 0 ? (
+                  {/* Extra membership chips only when the player belongs to more
+                      than one team (national team, loan, guest) — the single
+                      club is already in the subtitle above. */}
+                  {activeTeams.length > 1 ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {activeTeams.map((tt) => {
                         const label = tt.short || tt.name;
@@ -5432,9 +5450,9 @@ export default function PlayerClient() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Language toggle — the only control kept on the Today
-                      header (Lota E / E1). The MD + readiness chips stay too
-                      (E2 folds them into the single readiness block). */}
+                  {/* Language toggle — the only verdict-neutral control kept on
+                      the Today header. The MD + readiness chips now live in the
+                      "Today's decision" block below (design mockup). */}
                   <div className="flex items-center rounded-full border border-zinc-200 bg-white p-0.5 text-xs font-semibold">
                     <button
                       onClick={() => setLang("IS")}
@@ -5445,16 +5463,10 @@ export default function PlayerClient() {
                       className={cx("rounded-full px-2.5 py-1 transition-colors", lang === "EN" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-700")}
                     >EN</button>
                   </div>
-                  <Chip>{mdLabel}</Chip>
 
                   {String(stage4Final?.final_source ?? "").toUpperCase() === "COACH" ? (
                     <Chip className="border-amber-200 bg-amber-50 text-amber-800">Override</Chip>
                   ) : null}
-
-                  <Chip className={(ui as any).pill}>
-                    <MiniDot className={(ui as any).dot} />
-                    {flag}
-                  </Chip>
 
                   {/* Dev / account chips — Integrations · lock state · decision
                       · Sign out. Hidden on the PWA Today (they move to the
@@ -5510,12 +5522,36 @@ export default function PlayerClient() {
                 anchor + a visible gap — so the message stays here.) This div is
                 also the layout anchor (data-player-card="decision"). */}
             <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
+              {/* Kicker row: readiness dot + label + MD chip (design mockup) */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full", decisionDotClass)} />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    {lang === "IS" ? "Ákvörðun dagsins" : "Today's decision"}
+                  </span>
+                </div>
+                {mdChipText ? (
+                  <span className="shrink-0 rounded-full border border-zinc-200 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
+                    {mdChipText}
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Verdict headline (Archivo) */}
+              {(ui as any).title ? (
+                <div className="mt-3 text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-zinc-900">
+                  {(ui as any).title}
+                </div>
+              ) : null}
+
               {coachMsg ? (
-                <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                <div className="mt-2 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
                   {t.decision.coachMsg}
                 </div>
               ) : null}
-              <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
+
+              {/* Supporting "why" line */}
+              <div className="mt-2 text-sm leading-relaxed text-zinc-700">{message}</div>
             </div>
 
             {/* Explanation card — shows on ALL colours now. GREEN gets a
