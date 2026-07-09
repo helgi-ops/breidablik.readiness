@@ -22,6 +22,7 @@
  */
 
 import { planSessionLoad, type PlannedSessionLoad, type SessionLoadType } from "@/lib/micropulse/plannedSessionLoad";
+import { isPrevClubRow } from "@/lib/micropulse/load/previousClub";
 
 export type LoadKpi =
   | "totalDistance" | "playerLoad" | "hsr" | "sprint" | "accel" | "decel" | "ima"
@@ -74,6 +75,9 @@ export type LoadRow = {
   high_speed_distance: number | null;
   sprint_distance: number | null;
   accel_decel_efforts: number | null;
+  // Present only when the caller selected it — lets us exclude previous-club
+  // (pre-transfer) rows from TEAM aggregates while keeping them per-player.
+  raw_payload_json?: Record<string, unknown> | null;
 };
 
 const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
@@ -216,9 +220,14 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     daysToNext: input.daysToNext,
   });
 
-  // Per-date, per-player rows grouped.
+  // Per-date, per-player rows grouped. TEAM aggregates (match reference, team
+  // ACWR, squad baseline, recent-session trajectory) roll multiple players
+  // together by date, so they must exclude previous-club (pre-transfer) rows —
+  // a transferred player wasn't on the squad on those dates. His own rows still
+  // count toward HIS per-player target/ACWR below (byPlayer uses input.rows).
+  const teamRows = input.rows.filter((r) => !isPrevClubRow(r));
   const byDate = new Map<string, LoadRow[]>();
-  for (const r of input.rows) {
+  for (const r of teamRows) {
     const list = byDate.get(r.date) ?? [];
     list.push(r);
     byDate.set(r.date, list);
