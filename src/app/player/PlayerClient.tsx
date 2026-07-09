@@ -5613,14 +5613,6 @@ export default function PlayerClient() {
           </div>
         ) : null}
 
-        {/* Recovery routines — auto-hidden when no assignments. Shows post-match
-            VST Reset, MD+1 morning bundle, or coach-assigned protocols.
-            empty:hidden collapses the wrapper (no gap) when the card renders
-            nothing, so it doesn't push the decision block down. */}
-        <div className="mb-4 empty:hidden">
-          <PlayerRecoveryAssignmentsCard />
-        </div>
-
         {/* Main grid */}
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
           {/* LEFT */}
@@ -6361,6 +6353,16 @@ export default function PlayerClient() {
             />
 
             {renderPostTraining(postTraining, lang)}
+
+            {/* Recovery routines (post-match VST Reset, MD+1 morning bundle,
+                coach-assigned protocols) — a post-/next-session recovery block,
+                so it sits with the session in the right column, BELOW the
+                decision (was rendering above the whole grid, pushing the
+                verdict down). empty:hidden collapses it when nothing is
+                assigned. */}
+            <div className="empty:hidden">
+              <PlayerRecoveryAssignmentsCard />
+            </div>
 
             {staffMode ? (
               <CardShell>
