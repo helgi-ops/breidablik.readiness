@@ -1020,11 +1020,13 @@ function parseExerciseItem(raw: string): ParsedExercise {
     .map((pattern) => working.match(pattern))
     .find((match): match is RegExpMatchArray => !!match);
   const rawSetsReps = setsRepsMatch ? setsRepsMatch[0].trim() : null;
-  // Add labels if missing — "2 × 3" → "2 × 3 sett", "2 reps × 3 sett" preserved as-is
+  // Add a unit if missing — an ISO exercise's second number is a HOLD in
+  // seconds ("sek"), everything else is reps. "2 reps × 3 sett" etc. already
+  // carry a unit and are preserved as-is.
   let setsReps = rawSetsReps;
-  if (rawSetsReps && !/sett|sets|reps?/i.test(rawSetsReps)) {
-    // plain "2 × 3" or "2 × 3 / fót" — add sett label
-    setsReps = rawSetsReps.replace(/(\d+\s*[×xX]\s*\d+)/, "$1 sett");
+  if (rawSetsReps && !/sett|sets|reps?|sek|sec|mín|min/i.test(rawSetsReps)) {
+    const unit = method === "ISO" ? "sek" : "reps";
+    setsReps = rawSetsReps.replace(/(\d+\s*[×xX]\s*\d+(?:[–-]\d+)?)/, `$1 ${unit}`);
   }
 
   // Extract name: everything before "—", ":", or the sets info
@@ -2805,12 +2807,16 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const ctaColor = adjust?.state === "GREEN" ? "#1c7a4a" : "#2740e6";
   const subtitle = String(opts.headerTitle ?? "").trim();
 
-  const primary = pickPrimaryBlock(workBlocks);
-  const keyExercises = (primary?.segments ?? [])
+  // Show the day's strength work — EVERY non-warm-up block's exercises (primer,
+  // contrast, accessory), rest lines filtered out. Warm-up stays a "+N blocks"
+  // count in the footer.
+  const strengthBlocks = workBlocks.filter((b) => b.priority !== 0);
+  const keyExercises = strengthBlocks
+    .flatMap((b) => b.segments)
     .map((seg) => (seg.kind === "choice" ? seg.options[0] ?? null : seg.ex))
     .filter((ex): ex is ParsedExercise => !!ex && !isRestInstruction(ex))
-    .slice(0, 4);
-  const extraBlocks = Math.max(0, workBlocks.length - 1);
+    .slice(0, 6);
+  const extraBlocks = Math.max(0, workBlocks.length - strengthBlocks.length);
   const mins = estimateSessionMinutes(workBlocks);
   const banner = adjust && adjust.state !== "GRAY" ? bannerFor(adjust.state, isIS) : null;
 
