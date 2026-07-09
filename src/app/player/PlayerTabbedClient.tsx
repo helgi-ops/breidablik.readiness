@@ -819,11 +819,11 @@ function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
 
   return createPortal(
     <div className="mt-3 overflow-hidden rounded-2xl border border-[#e4dcf5] bg-[#f4f1fb] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+      <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span aria-hidden>🏃</span>{is ? "ENDURKOMAN ÞÍN" : "YOUR RETURN TO TRAINING"}
       </div>
       <div className="mt-1.5 flex items-baseline gap-2">
-        <span className="text-xl font-bold tracking-tight text-zinc-900">{is ? `Vika ${data.currentWeek} af ${data.totalWeeks}` : `Week ${data.currentWeek} of ${data.totalWeeks}`}</span>
+        <span className="font-display text-2xl font-bold tracking-tight text-zinc-900">{is ? `Vika ${data.currentWeek} af ${data.totalWeeks}` : `Week ${data.currentWeek} of ${data.totalWeeks}`}</span>
         {data.finalWeek && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{is ? "lokavika" : "final week"}</span>}
       </div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-200">
@@ -995,14 +995,14 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
 
   return createPortal(
     <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
-      <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+      <div className="flex items-center justify-between gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span className="flex items-center gap-1.5"><span aria-hidden>📋</span>{is ? "ÁÆTLUN DAGSINS" : "TODAY'S OUTLOOK"}</span>
-        {data.mdLabel && <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">{data.mdLabel}{gloss ? ` · ${gloss}` : ""}</span>}
+        {data.mdLabel && <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600">{data.mdLabel}{gloss ? ` · ${gloss}` : ""}</span>}
       </div>
 
       {/* Effort band + intensity meter */}
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-xl font-bold tracking-tight text-zinc-900">{is ? b.is : b.en}</span>
+        <span className="font-display text-2xl font-bold tracking-tight text-zinc-900">{is ? b.is : b.en}</span>
         <span className="text-sm text-zinc-500">· ~{data.durationMin} {is ? "mín" : "min"}</span>
       </div>
       <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-200">

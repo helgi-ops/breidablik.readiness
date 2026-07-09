@@ -5411,7 +5411,7 @@ export default function PlayerClient() {
             <div className="p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="truncate text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
+                  <div className="truncate font-display text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">{lang === "IS" ? "Halló" : "Hi"}, {(name || "").split(" ")[0] || name}</div>
                   <div className="mt-1 text-sm text-zinc-500">
                     {niceDate}{team ? ` · ${team}` : ""}{position ? ` · ${position}` : ""}
                   </div>
@@ -5526,20 +5526,20 @@ export default function PlayerClient() {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full", decisionDotClass)} />
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
                     {lang === "IS" ? "Ákvörðun dagsins" : "Today's decision"}
                   </span>
                 </div>
                 {mdChipText ? (
-                  <span className="shrink-0 rounded-full border border-zinc-200 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
+                  <span className="shrink-0 rounded-full border border-zinc-200 bg-white/70 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-zinc-600">
                     {mdChipText}
                   </span>
                 ) : null}
               </div>
 
-              {/* Verdict headline (Archivo) */}
+              {/* Verdict headline (Archivo display font) */}
               {(ui as any).title ? (
-                <div className="mt-3 text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-zinc-900">
+                <div className="mt-3 font-display text-3xl sm:text-4xl font-bold leading-[1.05] tracking-tight text-zinc-900">
                   {(ui as any).title}
                 </div>
               ) : null}
