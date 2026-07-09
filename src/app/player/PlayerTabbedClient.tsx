@@ -1537,11 +1537,16 @@ function IconMoreH({ active }: { active: boolean }) {
 // text-[9px] was unusable on iPhones — labels ran together. Best-practice
 // mobile nav is 4-5 primary items; the rest go behind More.
 
-// Primary (bottom bar): Today · Game Report · Dashboard · More (round 14a).
-// Game Report + Dashboard are the frequently-viewed surfaces → primary. Movement
-// is an analysis surface viewed less often, so it lives in the More-sheet
-// alongside RPE history and Chat. Three primary + More keeps the bar readable on
-// a phone. minTier is unchanged so the free/pro/elite locks hold; no tab removed.
+// Primary (bottom bar): Today · Match · RPE · Dashboard · More (Lota E / E6).
+// These are the daily / high-value surfaces. Movement is an analysis surface
+// viewed less often, so it lives in the More-sheet alongside Chat and History,
+// and is also surfaced on Today via the "See more" section. Four primary + More
+// keeps the bar readable on a phone (three when wellness/RPE is hidden). minTier
+// is unchanged so the free/pro/elite locks hold; no tab removed.
+// NOTE (deferred): the design spec (21d) swaps one slot for an "Endurhæft" item
+// for RTP-active players. That needs a dedicated player-facing RTP surface,
+// which does not exist yet (the RTP progress lives only in the Today card), so
+// it is intentionally not wired here — no dead nav item.
 const PWA_PRIMARY_TABS = [
   { key: "today"      as DevPlayerTab, tabKey: "today"      as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
   { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport,   minTier: "free" as const, href: null as string | null },
