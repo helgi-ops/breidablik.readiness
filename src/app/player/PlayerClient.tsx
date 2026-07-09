@@ -2362,7 +2362,6 @@ function SessionFocusScreen({
   const baseEx = cur?.kind === "single" ? cur.ex : null;
   const reducedEx = baseEx ? reduceExercise(baseEx, adjust ?? null) : null;
   const stats = reducedEx ? parseFocusStats(reducedEx) : null;
-  const origStats = baseEx && adjust?.setReduction ? parseFocusStats(baseEx) : null;
   const complexSets = cur?.kind === "complex" ? parseComplexSets(cur.members, cur.restNote) : null;
   const setCount = cur?.kind === "complex" ? complexSets : stats?.sets ?? null;
 
@@ -2497,21 +2496,21 @@ function SessionFocusScreen({
                     : "Do the exercises in order — one round through = one set."}
                 </div>
 
-                {/* Member list (in order) */}
-                <div className="space-y-2">
-                  {cur.members.map((m, k) => {
-                    const rm = reduceExercise(m, adjust ?? null);
-                    const { rest: mName } = splitExerciseLetter(m.name);
-                    return (
-                      <div key={k} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3.5 py-2.5">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{k + 1}</span>
-                          <span className="truncate text-sm font-semibold text-zinc-900">{focusExName(mName)}</span>
-                        </div>
-                        {rm.setsReps ? <span className="shrink-0 text-sm font-semibold text-zinc-500">{rm.setsReps}</span> : null}
+                {/* Member list (in order) — each a full, swappable exercise card */}
+                <div className="space-y-2.5">
+                  {cur.members.map((m, k) => (
+                    <div key={k} className="flex items-start gap-2.5">
+                      <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{k + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <RecommendedExerciseBlockCard
+                          ex={reduceExercise(m, adjust ?? null)}
+                          accent={block!.accent}
+                          blockLabel={block!.accent.label}
+                          recommendationContext={recCtx}
+                        />
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
                 {cur.restNote ? <div className="text-xs text-zinc-400">{cur.restNote}</div> : null}
 
@@ -2531,52 +2530,13 @@ function SessionFocusScreen({
               </div>
             ) : baseEx ? (
               <div className="space-y-4">
-                {/* Name + method chip */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-2xl font-bold tracking-tight text-zinc-900">{focusExName(baseEx.name)}</div>
-                  {methodDisplay ? (
-                    <span className="mt-1 shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
-                      {methodDisplay}
-                    </span>
-                  ) : null}
-                </div>
-
-                {/* Stat row (best-effort decomposition; struck original when adapted) */}
-                {stats && (stats.sets || stats.reps || stats.load || stats.rest) ? (
-                  <div className="flex flex-wrap gap-x-7 gap-y-2">
-                    {stats.sets ? (
-                      <div>
-                        <div className="flex items-baseline gap-1 text-3xl font-bold leading-none tracking-tight text-zinc-900">
-                          {origStats?.sets && origStats.sets !== stats.sets ? (
-                            <span className="text-lg font-semibold text-[#a83e28] line-through">{origStats.sets}</span>
-                          ) : null}
-                          {stats.sets}
-                        </div>
-                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "sett" : "sets"}</div>
-                      </div>
-                    ) : null}
-                    {stats.reps ? (
-                      <div>
-                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.reps}</div>
-                        <div className="mt-1 text-[11px] text-zinc-400">reps</div>
-                      </div>
-                    ) : null}
-                    {stats.load ? (
-                      <div>
-                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.load}</div>
-                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "af 1RM" : "of 1RM"}</div>
-                      </div>
-                    ) : null}
-                    {stats.rest ? (
-                      <div>
-                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.rest}</div>
-                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "hvíld" : "rest"}</div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : reducedEx?.setsReps ? (
-                  <div className="text-lg font-bold text-zinc-900">{reducedEx.setsReps}</div>
-                ) : null}
+                {/* Full, swappable exercise card (recommendation + other options + ⓘ) */}
+                <RecommendedExerciseBlockCard
+                  ex={reduceExercise(baseEx, adjust ?? null)}
+                  accent={block!.accent}
+                  blockLabel={block!.accent.label}
+                  recommendationContext={recCtx}
+                />
 
                 {/* Method explainer (reuses METHOD_GUIDE) */}
                 {guide ? (
