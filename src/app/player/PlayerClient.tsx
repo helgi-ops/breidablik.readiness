@@ -2217,7 +2217,43 @@ function localizeBlockTitleText(title: string, isIS: boolean): string {
   return head.replace(/\(veldu\s+(\d+)(?:\s+leið\w*)?\)/gi, "(choose $1)");
 }
 
-/* ---- Focus screen: the full session, one block at a time ---- */
+// Best-effort decomposition of a loosely-structured "sets×reps" string (+ note)
+// into the stat blocks the focus screen shows (design 21b). Only fields that
+// parse cleanly are returned; the caller falls back to the raw string otherwise.
+function parseFocusStats(ex: ParsedExercise): { sets: number | null; reps: string | null; load: string | null; rest: string | null } {
+  const sr = ex.setsReps ?? "";
+  const hay = `${sr} ${ex.note ?? ""}`;
+  let sets: number | null = null;
+  const nx = sr.match(/(\d+)\s*[×xX]\s*\d+/);
+  const nSett = sr.match(/(\d+)\s*(?:sett|sets?)\b/i);
+  if (nx) sets = parseInt(nx[1], 10);
+  else if (nSett) sets = parseInt(nSett[1], 10);
+  let reps: string | null = null;
+  const repsX = sr.match(/[×xX]\s*(\d+(?:[–-]\d+)?)/);
+  const repsW = sr.match(/(\d+(?:[–-]\d+)?)\s*reps?\b/i);
+  if (repsX) reps = repsX[1];
+  else if (repsW) reps = repsW[1];
+  let load: string | null = null;
+  const pct = hay.match(/(\d+(?:[–-]\d+)?)\s*%/);
+  const ms = hay.match(/([\d.]+(?:\s*[–-]\s*[\d.]+)?)\s*m\/s/i);
+  if (pct) load = `${pct[1]}%`;
+  else if (ms) load = `${ms[1].replace(/\s+/g, "")} m/s`;
+  let rest: string | null = null;
+  const restM = hay.match(/(\d+(?:[–-]\d+)?)\s*(sek|sec|mín|min)\b/i);
+  if (restM) rest = `${restM[1]}${/m/i.test(restM[2]) ? "m" : "s"}`;
+  return { sets, reps, load, rest };
+}
+
+// Strip a leading "A. " / "B1. " plan label and a trailing "(...)" note so the
+// exercise name reads cleanly as a focus-screen heading.
+function focusExName(raw: string): string {
+  return (raw ?? "")
+    .replace(/^\s*[A-Za-z]?\d*\s*[\.\)]\s*/, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim() || raw;
+}
+
+/* ---- Focus screen: the full session, one exercise at a time (design 21b) ---- */
 function SessionFocusScreen({
   blocks,
   t,
@@ -2232,26 +2268,69 @@ function SessionFocusScreen({
   onClose: () => void;
 }) {
   const isIS = t === PLAYER_COPY.IS;
-  const total = blocks.length;
-  const [blockIdx, setBlockIdx] = useState(0);
+
+  // Design 21b — walk the session one EXERCISE at a time (not one block), with a
+  // per-exercise set counter. Flatten every block's segments into an ordered
+  // step list; each step is a single exercise (or a choice group).
+  const steps = useMemo(() => {
+    const out: { block: SessionBlock; seg: SessionBlock["segments"][number] }[] = [];
+    for (const b of blocks) for (const seg of b.segments) out.push({ block: b, seg });
+    return out;
+  }, [blocks]);
+  const total = steps.length;
+
+  const [stepIdx, setStepIdx] = useState(0);
+  const [doneSets, setDoneSets] = useState(0);
   const [finished, setFinished] = useState(false);
 
-  const clampedIdx = Math.min(blockIdx, Math.max(0, total - 1));
-  const block = blocks[clampedIdx] ?? null;
-  const isLast = clampedIdx >= total - 1;
-  const blockGoal = block ? BLOCK_GOAL[block.accent.label] ?? null : null;
+  const clampedIdx = Math.min(stepIdx, Math.max(0, total - 1));
+  const cur = steps[clampedIdx] ?? null;
+  const isLastStep = clampedIdx >= total - 1;
+  const block = cur?.block ?? null;
+  const seg = cur?.seg ?? null;
+  const isChoice = seg?.kind === "choice";
   const recCtx = block && (block.priority === 1 || block.priority === 2) ? recommendationContext ?? null : null;
+
+  const baseEx = seg && seg.kind === "exercise" ? seg.ex : null;
+  const reducedEx = baseEx ? reduceExercise(baseEx, adjust ?? null) : null;
+  const stats = reducedEx ? parseFocusStats(reducedEx) : null;
+  const origStats = baseEx && adjust?.setReduction ? parseFocusStats(baseEx) : null;
+  const setCount = stats?.sets ?? null;
+  const method = baseEx?.method ?? null;
+  const methodDisplay = method
+    ? (/^(ISO|EMOM|AMRAP|MET)$/.test(method) ? method : method.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" "))
+    : null;
+  const guide = method ? METHOD_GUIDE[method] ?? null : null;
+
+  const next = steps[clampedIdx + 1] ?? null;
+  const nextName = next ? focusExName(next.seg.kind === "choice" ? next.seg.header : next.seg.ex.name) : null;
+  const onLastSet = !setCount || setCount <= 1 || doneSets + 1 >= setCount;
+
+  const advance = () => {
+    setDoneSets(0);
+    if (isLastStep) setFinished(true);
+    else setStepIdx((i) => Math.min(total - 1, i + 1));
+  };
+  const primaryAction = () => {
+    if (!onLastSet) setDoneSets((s) => s + 1);
+    else advance();
+  };
+  const goBack = () => {
+    setDoneSets(0);
+    setStepIdx((i) => Math.max(0, i - 1));
+  };
+
+  const kicker = block ? `${localizeBlockTitleText(block.title, isIS)} · ${clampedIdx + 1} ${isIS ? "af" : "of"} ${total}` : "";
+  const primaryLabel = onLastSet
+    ? (isLastStep ? (isIS ? "Klára æfingu ✓" : "Finish session ✓") : (isIS ? "Lokið →" : "Done →"))
+    : (isIS ? "Sett lokið ✓" : "Set complete ✓");
 
   const overlay = (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      {/* Header + progress */}
+      {/* Header + segmented progress (one segment per exercise) */}
       <div className="shrink-0 border-b border-zinc-100 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-bold text-zinc-900">
-            {finished
-              ? (isIS ? "Æfing dagsins" : "Today's session")
-              : (isIS ? `Blokk ${clampedIdx + 1} af ${total}` : `Block ${clampedIdx + 1} of ${total}`)}
-          </div>
+          <div className="text-sm font-bold text-zinc-900">{isIS ? "Æfing dagsins" : "Today's session"}</div>
           <button
             type="button"
             onClick={onClose}
@@ -2261,11 +2340,12 @@ function SessionFocusScreen({
             ✕
           </button>
         </div>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-          <div
-            className="h-full rounded-full bg-zinc-900 transition-all"
-            style={{ width: `${finished ? 100 : Math.round(((clampedIdx + 1) / total) * 100)}%` }}
-          />
+        <div className="mt-3 flex gap-1">
+          {steps.map((_, i) => (
+            <div key={i} className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100">
+              <div className="h-full rounded-full bg-[#2740e6]" style={{ width: finished || i <= clampedIdx ? "100%" : "0%" }} />
+            </div>
+          ))}
         </div>
       </div>
 
@@ -2281,51 +2361,121 @@ function SessionFocusScreen({
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-full bg-zinc-900 px-6 py-2.5 text-sm font-bold text-white active:bg-zinc-700"
+              className="mt-6 rounded-full bg-[#2740e6] px-6 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
             >
               {isIS ? "Loka" : "Close"}
             </button>
           </div>
-        ) : block ? (
+        ) : cur ? (
           <div className="mx-auto max-w-lg space-y-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={cx("h-2.5 w-2.5 rounded-full", block.accent.dot)} style={block.accent.dotStyle} />
-                <div className="text-lg font-bold text-zinc-900">{localizeBlockTitleText(block.title, isIS)}</div>
-              </div>
-              {blockGoal ? (
-                <div className="mt-2 rounded-xl bg-zinc-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-zinc-600">
-                  {isIS ? blockGoal.IS : blockGoal.EN}
-                </div>
-              ) : null}
+            {/* Block context line: e.g. "A. CONTRAST · 5 af 12" */}
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2740e6]">
+              <span className={cx("h-2 w-2 rounded-full", block?.accent.dot)} style={block?.accent.dotStyle} />
+              {kicker}
             </div>
 
-            <div className="space-y-2">
-              {block.segments.length ? (
-                block.segments.map((seg, i) =>
-                  seg.kind === "choice" ? (
-                    <ChoiceGroup
-                      key={i}
-                      header={seg.header}
-                      options={seg.options.map((o) => reduceExercise(o, adjust ?? null))}
-                      accent={block.accent}
-                      blockLabel={block.accent.label}
-                      recommendationContext={recCtx}
-                    />
-                  ) : (
-                    <RecommendedExerciseBlockCard
-                      key={i}
-                      ex={reduceExercise(seg.ex, adjust ?? null)}
-                      accent={block.accent}
-                      blockLabel={block.accent.label}
-                      recommendationContext={recCtx}
-                    />
-                  )
-                )
-              ) : (
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">{t.training.noItems}</div>
-              )}
-            </div>
+            {isChoice && seg.kind === "choice" ? (
+              <ChoiceGroup
+                header={seg.header}
+                options={seg.options.map((o) => reduceExercise(o, adjust ?? null))}
+                accent={block!.accent}
+                blockLabel={block!.accent.label}
+                recommendationContext={recCtx}
+              />
+            ) : baseEx ? (
+              <div className="space-y-4">
+                {/* Name + method chip */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-2xl font-bold tracking-tight text-zinc-900">{focusExName(baseEx.name)}</div>
+                  {methodDisplay ? (
+                    <span className="mt-1 shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+                      {methodDisplay}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Stat row (best-effort decomposition; struck original when adapted) */}
+                {stats && (stats.sets || stats.reps || stats.load || stats.rest) ? (
+                  <div className="flex flex-wrap gap-x-7 gap-y-2">
+                    {stats.sets ? (
+                      <div>
+                        <div className="flex items-baseline gap-1 text-3xl font-bold leading-none tracking-tight text-zinc-900">
+                          {origStats?.sets && origStats.sets !== stats.sets ? (
+                            <span className="text-lg font-semibold text-[#a83e28] line-through">{origStats.sets}</span>
+                          ) : null}
+                          {stats.sets}
+                        </div>
+                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "sett" : "sets"}</div>
+                      </div>
+                    ) : null}
+                    {stats.reps ? (
+                      <div>
+                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.reps}</div>
+                        <div className="mt-1 text-[11px] text-zinc-400">reps</div>
+                      </div>
+                    ) : null}
+                    {stats.load ? (
+                      <div>
+                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.load}</div>
+                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "af 1RM" : "of 1RM"}</div>
+                      </div>
+                    ) : null}
+                    {stats.rest ? (
+                      <div>
+                        <div className="text-3xl font-bold leading-none tracking-tight text-zinc-900">{stats.rest}</div>
+                        <div className="mt-1 text-[11px] text-zinc-400">{isIS ? "hvíld" : "rest"}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : reducedEx?.setsReps ? (
+                  <div className="text-lg font-bold text-zinc-900">{reducedEx.setsReps}</div>
+                ) : null}
+
+                {/* Method explainer (reuses METHOD_GUIDE) */}
+                {guide ? (
+                  <div className="rounded-xl bg-[#f4f6ff] px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2740e6]">
+                      {isIS ? `Hvað er ${methodDisplay}?` : `What is ${methodDisplay}?`}
+                    </div>
+                    <div className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-zinc-700">
+                      {(isIS ? guide.IS : guide.EN).split("\n\n")[0]}
+                    </div>
+                  </div>
+                ) : baseEx.note ? (
+                  <div className="rounded-xl bg-zinc-50 px-4 py-3 text-[13px] leading-relaxed text-zinc-600">{baseEx.note}</div>
+                ) : null}
+
+                {/* Set counter chips */}
+                {setCount && setCount > 1 ? (
+                  <div className="grid grid-flow-col auto-cols-fr gap-2">
+                    {Array.from({ length: setCount }, (_, i) => {
+                      const done = i < doneSets;
+                      const now = i === doneSets;
+                      return (
+                        <div
+                          key={i}
+                          className={cx(
+                            "rounded-xl border py-2.5 text-center",
+                            done
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : now
+                                ? "border-[#2740e6]/50 bg-[#eef0ff] text-[#2740e6]"
+                                : "border-zinc-200 text-zinc-400"
+                          )}
+                        >
+                          <div className="text-sm font-bold leading-none">{done ? "✓" : i + 1}</div>
+                          <div className="mt-1 text-[10px] font-medium">
+                            {now ? (isIS ? "Núna" : "Now") : isIS ? `Sett ${i + 1}` : `Set ${i + 1}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">{t.training.noItems}</div>
+            )}
           </div>
         ) : null}
       </div>
@@ -2333,28 +2483,32 @@ function SessionFocusScreen({
       {/* Footer nav */}
       {!finished ? (
         <div className="shrink-0 border-t border-zinc-100 px-4 py-3">
-          <div className="mx-auto flex max-w-lg items-center gap-3">
-            <button
-              type="button"
-              disabled={clampedIdx === 0}
-              onClick={() => setBlockIdx((i) => Math.max(0, i - 1))}
-              className={cx(
-                "rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors",
-                clampedIdx === 0 ? "border-zinc-100 text-zinc-300" : "border-zinc-200 text-zinc-700 active:bg-zinc-100"
-              )}
-            >
-              ← {isIS ? "Til baka" : "Back"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (isLast) setFinished(true);
-                else setBlockIdx((i) => Math.min(total - 1, i + 1));
-              }}
-              className="flex-1 rounded-full bg-[#2740e6] px-4 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-            >
-              {isLast ? (isIS ? "Klára æfingu ✓" : "Finish session ✓") : (isIS ? "Næsta blokk →" : "Next block →")}
-            </button>
+          <div className="mx-auto max-w-lg space-y-2">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={clampedIdx === 0}
+                onClick={goBack}
+                className={cx(
+                  "rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors",
+                  clampedIdx === 0 ? "border-zinc-100 text-zinc-300" : "border-zinc-200 text-zinc-700 active:bg-zinc-100"
+                )}
+              >
+                ← {isIS ? "Til baka" : "Back"}
+              </button>
+              <button
+                type="button"
+                onClick={primaryAction}
+                className="flex-1 rounded-full bg-[#2740e6] px-4 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+              >
+                {primaryLabel}
+              </button>
+            </div>
+            {nextName && onLastSet && !isLastStep ? (
+              <div className="text-center text-xs text-zinc-400">
+                {isIS ? "Næst" : "Next"}: {nextName} →
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
