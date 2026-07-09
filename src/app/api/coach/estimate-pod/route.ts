@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { buildEstimateRow, ESTIMATE_COLS, type LoadRowLike } from "@/lib/micropulse/estimatePod";
+import { isPrevClubRow } from "@/lib/micropulse/load/previousClub";
 
 export const runtime = "nodejs";
 
@@ -79,7 +80,8 @@ export async function POST(req: Request) {
     const { data: squadRaw } = await sb.from("player_external_load_daily").select(SELECT_COLS)
       .eq("team_id", teamId).eq("date", matchDate).eq("source", "catapult");
     const squadRows = rowsOf(squadRaw).filter(
-      (r) => !isEstimated(r) && r.player_id !== playerId && (num(r.total_distance) > 0 || num(r.ima_total) > 0),
+      // Squad average must not include another transferred player's pre-transfer row.
+      (r) => !isEstimated(r) && !isPrevClubRow(r) && r.player_id !== playerId && (num(r.total_distance) > 0 || num(r.ima_total) > 0),
     );
 
     if (personalRows.length === 0 && squadRows.length === 0) {

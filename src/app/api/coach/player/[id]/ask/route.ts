@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { getQuestion, type QuestionDataKey } from "@/lib/coach-qa/questions";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
+import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL      = "claude-haiku-4-5-20251001";
@@ -266,6 +267,7 @@ async function fetchDataForQuestion(
         .from("player_external_load_daily")
         .select("player_id, total_distance, total_player_load, high_metabolic_load_distance_m")
         .in("player_id", playerIds)
+        .or(EXCLUDE_PREV_CLUB_OR) // squad 7d average shown to the AI — exclude pre-transfer rows
         .gte("date", sevenAgoIso);
       const allLoads = (loads ?? []) as Array<{ total_distance: number | null; total_player_load: number | null; high_metabolic_load_distance_m: number | null }>;
       const avg = (key: keyof typeof allLoads[number]) => {
