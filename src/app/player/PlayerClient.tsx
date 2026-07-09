@@ -1490,8 +1490,10 @@ function ExerciseCard({
   const selectedExerciseId =
     forcedExerciseId ??
     overrideExerciseId ??
-    recommendation?.recommendedExerciseId ??
+    // Default to the PLAN exercise; the engine's pick is offered as an option,
+    // so the focus screen matches the Today card and the swap is opt-in.
     recommendation?.originalExerciseId ??
+    recommendation?.recommendedExerciseId ??
     null;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
   const matchedExercise = findParsedExerciseForSupportedId(availableExercises, selectedExerciseId);
@@ -1822,8 +1824,9 @@ function RecommendedExerciseBlockCard({
   const [overrideExerciseId, setOverrideExerciseId] = useState<SupportedExerciseId | null>(null);
   const selectedExerciseId =
     overrideExerciseId ??
-    recommendation?.recommendedExerciseId ??
+    // Default to the PLAN exercise; the engine's pick is offered as an option.
     recommendation?.originalExerciseId ??
+    recommendation?.recommendedExerciseId ??
     null;
   const selectedExerciseLabel = getSupportedExerciseLabel(selectedExerciseId) ?? ex.name;
   const allowedAlternativeIds = (recommendation?.allowedExerciseIds ?? []).filter((id) => id !== selectedExerciseId);
