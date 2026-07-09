@@ -506,6 +506,90 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     ],
   },
 
+  // 6b. Groin / adductor rehab (Copenhagen-based)
+  {
+    id: "groin_adductor",
+    titleIS: "Nára / aðfæru endurhæfing",
+    titleEN: "Groin / Adductor Rehabilitation",
+    category: "rehab",
+    intensity: "moderate",
+    goalIS:
+      "Endurhlaða aðfæruvöðva og nára-sinar smám saman og draga úr endurmeiðsla-hættu við stefnubreytingar og spretti.",
+    goalEN:
+      "Progressively reload the adductors and groin tendons and reduce re-injury risk in change-of-direction and sprinting.",
+    audienceIS:
+      "Fótboltamenn með nára-/aðfæruverki (adductor-tengda) eða beinbjúg í lífbeini.",
+    audienceEN:
+      "Footballers with groin / adductor-related pain or pubic bone stress.",
+    rationaleIS:
+      "Copenhagen aðfærsla hleður aðfæruvöðva í lengdri stöðu; aðfærslu-styrkur er sterkasti breytanlegi áhættuþátturinn fyrir nára-meiðsli. Byrjað er á verkjastýrðri ísómetrík áður en farið er í eccentrísk álag.",
+    rationaleEN:
+      "Copenhagen adduction loads the adductors at length; adductor strength is the strongest modifiable risk factor for groin injury. Start with pain-monitored isometrics before progressing to eccentric load.",
+    phases: [
+      {
+        name: "Phase 1 — Isometric tolerance",
+        timeline: "Weeks 1–2",
+        frequency: "Daily (pain ≤ 3/10)",
+        exercises: [
+          {
+            name: "Adductor squeeze isometric (ball between knees)",
+            setup: "Supine, knees bent ~60°, ball between knees. Squeeze and hold.",
+            sets: 5,
+            holdSeconds: 30,
+            reps: 1,
+            mvcPercent: [50, 70],
+            restSeconds: 60,
+            target: "adductors",
+          },
+        ],
+      },
+      {
+        name: "Phase 2 — Copenhagen progression",
+        timeline: "Weeks 3–6",
+        frequency: "3× per week",
+        exercises: [
+          {
+            name: "Copenhagen adduction (short → long lever)",
+            setup: "Side plank with top leg on bench; start knee-support, progress to foot-support.",
+            sets: 3,
+            holdSeconds: [15, 30],
+            reps: 6,
+            mvcPercent: [70, 85],
+            restSeconds: 90,
+            target: "adductor longus",
+          },
+        ],
+      },
+      {
+        name: "Phase 3 — Return to sport",
+        timeline: "Weeks 7+",
+        frequency: "2–3× per week",
+        exercises: [
+          {
+            name: "Full Copenhagen adduction + change-of-direction loading",
+            sets: 3,
+            holdSeconds: [20, 30],
+            reps: 8,
+            mvcPercent: [80, 90],
+            restSeconds: 120,
+            target: "adductors",
+          },
+        ],
+        progression:
+          "Progress on-pitch change-of-direction and sprint volume slowly (they are the key re-injury qualities); pain-free Copenhagen at full lever before full training.",
+      },
+    ],
+    cautionsIS:
+      "Haltu verkjum ≤ 3/10 á meðan og eftir. Auktu stefnubreytingar og spretti hægt — það eru lykil-endurmeiðsla-gæðin fyrir nára.",
+    cautionsEN:
+      "Keep pain ≤ 3/10 during and after. Ramp change-of-direction and sprint load slowly — they are the key groin re-injury qualities.",
+    references: [
+      "Harøy J, Clarsen B, Wiger EG, et al. (2019). The Adductor Strengthening Programme prevents groin problems among male football players: a cluster-randomised controlled trial. Br J Sports Med 53(3):150-157. → Copenhagen adduction cut groin problems by 41%.",
+      "Ishøi L, Sørensen CN, Kaae NM, et al. (2016). Large eccentric strength increase using the Copenhagen Adduction exercise in football: a randomized controlled trial. Scand J Med Sci Sports 26(11):1334-1342. → +35.7% eccentric adduction strength over 8 weeks.",
+      "Serner A, Weir A, Tol JL, et al. (2020). Return to sport after criteria-based rehabilitation of acute adductor injuries in male athletes. Orthop J Sports Med 8(1). → Criteria-based, isometric-first adductor loading progression.",
+    ],
+  },
+
   // 7. Rotator cuff / shoulder
   {
     id: "rotator_cuff",

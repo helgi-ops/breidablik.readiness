@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExtractedClinicalReport } from "@/lib/clinical/extractReport";
+import { buildRehabRecommendation } from "@/lib/clinical/rehabRecommendations";
 
 export const runtime = "nodejs";
 
@@ -143,6 +144,18 @@ export async function GET(req: NextRequest) {
     crossCheck = { reportedSide: reportedSide as "left" | "right", onPitchLighterSide, consistent: onPitchLighterSide === reportedSide };
   }
 
+  // Rules-based rehab recommendation from the injuries this report recorded
+  // (deterministic; cites the protocol's own references). Prefer ACTIVE/ongoing
+  // injuries so a resolved old strain doesn't outrank what's currently bothering
+  // the player (same is-active heuristic the confirm step uses). Falls back to
+  // all injuries if none read as active. The clinician's note stays authoritative.
+  const injuries = rep?.extracted_json?.injury_history ?? [];
+  const ACTIVE_RE = /ongoing|chronic|viðvarandi|langvinn|einkenn|áfram/i;
+  const activeInjuries = injuries.filter((h) => ACTIVE_RE.test(`${h.status ?? ""} ${h.type ?? ""}`));
+  const chosen = activeInjuries.length > 0 ? activeInjuries : injuries;
+  const injuryTypes = chosen.flatMap((h) => [h.type ?? "", h.body_part ?? ""]).filter((s) => s.trim().length > 0);
+  const recommendedExercises = rep && injuryTypes.length > 0 ? buildRehabRecommendation(injuryTypes) : null;
+
   return NextResponse.json({
     ok: true,
     report,
@@ -152,5 +165,6 @@ export async function GET(req: NextRequest) {
     reportedSide,
     ima,
     crossCheck,
+    recommendedExercises,
   });
 }

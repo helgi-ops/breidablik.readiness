@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import type { RehabRecommendation } from "@/lib/clinical/rehabRecommendations";
 
 type Side = "left" | "right" | "bilateral" | null;
 type Finding = { flag: string; side: Side; location: string | null };
@@ -22,7 +23,12 @@ type Summary = {
   reportedSide: "left" | "right" | null;
   ima: null | { leftPct: number; rightPct: number; asymmetryPct: number; heavierSide: "left" | "right"; imbalanced: boolean; days: number; windowDays: number };
   crossCheck: null | { reportedSide: "left" | "right"; onPitchLighterSide: "left" | "right"; consistent: boolean };
+  recommendedExercises: RehabRecommendation | null;
 };
+
+/** Render a hold/%MVC line for one protocol exercise (number or [lo,hi] range). */
+const rng = (v: number | [number, number] | undefined, suffix = "") =>
+  v == null ? "" : Array.isArray(v) ? `${v[0]}–${v[1]}${suffix}` : `${v}${suffix}`;
 
 const sideLabel = (s: Side, is: boolean) => s === "left" ? (is ? "vinstri" : "left") : s === "right" ? (is ? "hægri" : "right") : s === "bilateral" ? (is ? "báðum megin" : "bilateral") : "";
 
@@ -30,6 +36,7 @@ export default function PhysioNoteCard({ playerId, is }: { playerId: string; is:
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [showProtocol, setShowProtocol] = useState(false);
 
   const token = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? "", []);
   useEffect(() => {
@@ -47,7 +54,7 @@ export default function PhysioNoteCard({ playerId, is }: { playerId: string; is:
   if (loading) return null;
   if (!data || !data.report) return null; // no confirmed physio note — render nothing
 
-  const { report, findings, prevention, returnToPlay, ima, crossCheck } = data;
+  const { report, findings, prevention, returnToPlay, ima, crossCheck, recommendedExercises: rec } = data;
   const verdict = report.current_status || returnToPlay[0] || (is ? "Sjúkraþjálfaraskýrsla skráð" : "Physio note on file");
 
   const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(is ? "is-IS" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -97,6 +104,78 @@ export default function PhysioNoteCard({ playerId, is }: { playerId: string; is:
             <p className="mt-1 text-[11px] leading-snug text-slate-500">
               {is ? "Athugun, ekki greining. Ber saman raun-hreyfingu við hlið sem skýrslan nefnir." : "An observation, not a diagnosis. Compares on-pitch movement to the side the report flags."}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* Layer 1 — rules-based rehab recommendation (verdict + exercises + why) */}
+      {rec && (
+        <div className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+              {is ? "Ráðlagður fókus" : "Recommended focus"}
+            </span>
+            <span className="text-[10px] text-emerald-700/70">{is ? "reglur · þjálfari ákveður" : "rules-based · coach decides"}</span>
+          </div>
+
+          {/* Verdict: the matched rehab protocol (or symptom-limited note) */}
+          {rec.protocol ? (
+            <div className="mt-1.5 text-sm font-semibold text-slate-900">{is ? rec.protocol.titleIS : rec.protocol.titleEN}</div>
+          ) : null}
+          {rec.note ? (
+            <p className="mt-1 text-[12px] leading-snug text-slate-600">{is ? rec.note.is : rec.note.en}</p>
+          ) : null}
+
+          {/* Why / what to protect */}
+          <p className="mt-1 text-[12px] leading-snug text-slate-600">
+            <span className="text-slate-400">{is ? "Vernda: " : "Protect: "}</span>{is ? rec.protectLabel.is : rec.protectLabel.en}
+          </p>
+
+          {/* Key exercises (2–3) with one-line why */}
+          {rec.exercises.length > 0 && (
+            <ul className="mt-1.5 space-y-1">
+              {rec.exercises.map((ex, i) => (
+                <li key={i} className="text-sm text-slate-800">
+                  <span className="font-medium">{is ? ex.name.is : ex.name.en}</span>
+                  <span className="text-slate-500"> — {is ? ex.why.is : ex.why.en}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Layer 2 — full protocol steps + citations behind a toggle */}
+          {rec.protocolFull && (
+            <>
+              <button type="button" onClick={() => setShowProtocol((v) => !v)} className="mt-2 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900">
+                {showProtocol ? (is ? "Fela prótókoll ▲" : "Hide protocol ▲") : (is ? "Sýna prótókoll-skref · heimildir ▼" : "Show protocol steps · citations ▼")}
+              </button>
+              {showProtocol && (
+                <div className="mt-2 space-y-2 border-t border-emerald-100 pt-2">
+                  {rec.protocolFull.phases.map((ph, pi) => (
+                    <div key={pi}>
+                      <div className="text-[12px] font-semibold text-slate-800">{ph.name}{ph.timeline ? <span className="font-normal text-slate-400"> · {ph.timeline}</span> : null}<span className="font-normal text-slate-400"> · {ph.frequency}</span></div>
+                      <ul className="mt-0.5 space-y-0.5">
+                        {ph.exercises.map((e, ei) => (
+                          <li key={ei} className="text-[12px] text-slate-600">
+                            • {e.name} — {e.sets}×{rng(e.holdSeconds, "s")}{e.mvcPercent ? ` @ ${rng(e.mvcPercent, "%")} MVC` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {(rec.protocolFull.cautionsEN || rec.protocolFull.cautionsIS) && (
+                    <p className="text-[11px] leading-snug text-rose-700/80">{is ? rec.protocolFull.cautionsIS : rec.protocolFull.cautionsEN}</p>
+                  )}
+                  {rec.protocol && rec.protocol.references.length > 0 && (
+                    <div className="space-y-0.5 pt-0.5">
+                      {rec.protocol.references.map((r, ri) => (
+                        <p key={ri} className="text-[10px] leading-snug text-slate-400">{r.split(".")[0]}.</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
