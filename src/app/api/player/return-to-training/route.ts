@@ -13,6 +13,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
+import { RTT_QUALITY_LABELS } from "@/lib/micropulse/returnToTraining";
+import type { QualityKey } from "@/lib/micropulse/returnToTraining";
 
 export const runtime = "nodejs";
 
@@ -57,6 +59,24 @@ export async function GET(req: Request) {
     const overCells = adh ? adh.cells.filter((c) => c.status === "over" && c.target > 0) : [];
     const onTrack: "on" | "over" | null = !adh ? null : overCells.length > 0 ? "over" : "on";
 
+    // This week's raw numbers per quality — surfaced only behind the player's
+    // "Show numbers" toggle (layered read), so the default card stays plain.
+    const cells = adh?.cells ?? [];
+    const weekNumbers = thisWeekFocus.map((q) => {
+      const cell = cells.find((c) => c.quality === q) ?? null;
+      const meta = RTT_QUALITY_LABELS[q as QualityKey];
+      const dp = meta?.dp ?? 0;
+      const round = (n: number) => Number(n.toFixed(dp));
+      const planTarget = plan.weeks.find((w) => w.week === currentWeek && w.quality === q)?.target ?? cell?.target ?? 0;
+      return {
+        key: q,
+        target: round(cell?.target ?? planTarget),
+        actual: cell ? round(cell.actual) : null,
+        unit: meta?.unit ?? "",
+        status: cell?.status ?? null,
+      };
+    });
+
     return NextResponse.json({
       active: true,
       currentWeek,
@@ -67,6 +87,7 @@ export async function GET(req: Request) {
       onTrack,
       sessionsThisWeek: adh?.sessions ?? 0,
       inProgress: adh?.inProgress ?? true,
+      weekNumbers,
     });
   } catch (e) {
     // Never break Today over this optional card — just render nothing.

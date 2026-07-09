@@ -746,11 +746,13 @@ type RttProgress = {
   onTrack: "on" | "over" | null;
   sessionsThisWeek: number;
   inProgress: boolean;
+  weekNumbers?: { key: string; target: number; actual: number | null; unit: string; status: string | null }[];
 };
 
 function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<RttProgress | null>(null);
+  const [showNumbers, setShowNumbers] = useState(false);
   const is = lang === "IS";
 
   // Fetch the player's own plan once.
@@ -856,6 +858,38 @@ function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
       {data.onTrack === "over" && (
         <div className="mt-2 text-xs leading-snug text-amber-700">{is ? "Þú ert kominn fram úr planinu vikunnar — það er í lagi að taka aðeins af. Stigvaxandi upptröppun verndar þig." : "You're ahead of this week's plan — it's okay to ease back a little. The gradual ramp protects you."}</div>
       )}
+      {/* Layered read: the numbers live behind a tap so the card stays plain. */}
+      {data.weekNumbers && data.weekNumbers.length > 0 ? (
+        <div className="mt-3 border-t border-zinc-200/70 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowNumbers((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500"
+          >
+            <span>{is ? "Sýna tölur vikunnar" : "Show this week's numbers"}</span>
+            <span aria-hidden style={{ color: accent }}>{showNumbers ? "▲" : "▼"}</span>
+          </button>
+          {showNumbers ? (
+            <div className="mt-2 space-y-1">
+              {data.weekNumbers.map((n) => {
+                const tone = n.status === "over" ? "text-amber-600" : n.status === "under" ? "text-zinc-500" : "text-zinc-800";
+                return (
+                  <div key={n.key} className="flex items-baseline justify-between gap-3 text-[12px]">
+                    <span className="min-w-0 truncate text-zinc-600">{label(n.key)}</span>
+                    <span className={`shrink-0 tabular-nums font-semibold ${tone}`}>
+                      {n.actual != null ? n.actual.toLocaleString() : "—"}
+                      <span className="text-zinc-400"> / {n.target.toLocaleString()}{n.unit ? ` ${n.unit}` : ""}</span>
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="pt-1 text-[10px] text-zinc-400">
+                {is ? "Það sem þú hefur gert / markmið vikunnar." : "What you've done / this week's target."}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-3 border-t border-zinc-200/70 pt-2 text-[11px] text-zinc-400">
         {is ? "Þjálfarinn þinn setti þetta plan með þér." : "Your coach set this plan with you."}
       </div>
