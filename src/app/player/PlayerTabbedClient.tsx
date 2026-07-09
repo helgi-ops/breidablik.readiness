@@ -748,7 +748,7 @@ type RttProgress = {
   inProgress: boolean;
 };
 
-function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
+function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<RttProgress | null>(null);
   const is = lang === "IS";
@@ -813,10 +813,12 @@ function PlayerRttProgressPortal({ activeTab, lang, clubThemeColor }: { activeTa
   const focus = data.thisWeekFocus.map(label);
   const next = data.unlocksNext.map(label);
   const pct = Math.max(6, Math.round((data.currentWeek / Math.max(1, data.totalWeeks)) * 100));
-  const accent = clubThemeColor ?? "#2b8a54";
+  // RTP surfaces are ALWAYS purple in the design system (distinct from the
+  // green/amber/red readiness surfaces) — see the --rtp token in globals.css.
+  const accent = "#7a5cc4";
 
   return createPortal(
-    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
+    <div className="mt-3 overflow-hidden rounded-2xl border border-[#e4dcf5] bg-[#f4f1fb] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span aria-hidden>🏃</span>{is ? "ENDURKOMAN ÞÍN" : "YOUR RETURN TO TRAINING"}
       </div>
