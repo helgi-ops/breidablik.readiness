@@ -2253,6 +2253,79 @@ function focusExName(raw: string): string {
     .trim() || raw;
 }
 
+// A focus-screen step is one of: a single exercise, a choice group, or a
+// COMPLEX (contrast / French contrast) — a set of exercises done together in
+// sequence within each set (e.g. B1 heavy → B2 explosive). Contrast pairs must
+// share ONE screen and ONE set counter, not be split across screens.
+type FocusStep =
+  | { kind: "single"; block: SessionBlock; ex: ParsedExercise }
+  | { kind: "choice"; block: SessionBlock; header: string; options: ParsedExercise[] }
+  | { kind: "complex"; block: SessionBlock; members: ParsedExercise[]; restNote: string | null };
+
+// A loose "rest / N sets between pairs" instruction line, not a real exercise.
+function isRestInstruction(ex: ParsedExercise): boolean {
+  const raw = ex.name ?? "";
+  if (/^[a-c]\d?\s*[.):]/i.test(raw)) return false; // a labelled exercise (A., B1.)
+  return /hv[íi]ld|\brest\b|milli para|between pairs|á milli para/i.test(raw);
+}
+
+// The number of times you cycle the complex = its set count. Prefer the explicit
+// "N sett" on the rest line ("2–3 mín hvíld milli para · 4 sett"); else the first
+// member's parsed set count.
+function parseComplexSets(members: ParsedExercise[], restNote: string | null): number | null {
+  const m = (restNote ?? "").match(/(\d+)\s*(?:sett|sets?)\b/i);
+  if (m) return parseInt(m[1], 10);
+  for (const ex of members) {
+    const s = parseFocusStats(ex).sets;
+    if (s) return s;
+  }
+  return null;
+}
+
+// Flatten blocks → ordered focus steps, grouping same-letter numbered exercises
+// (B1/B2, A1–A4) into one complex step and absorbing the paired-rest line.
+function buildFocusSteps(blocks: SessionBlock[]): FocusStep[] {
+  const steps: FocusStep[] = [];
+  for (const block of blocks) {
+    const segs = block.segments;
+    let i = 0;
+    while (i < segs.length) {
+      const s = segs[i];
+      if (s.kind === "choice") {
+        steps.push({ kind: "choice", block, header: s.header, options: s.options });
+        i++;
+        continue;
+      }
+      const ex = s.ex;
+      const { letter } = splitExerciseLetter(ex.name);
+      const base = letter ? letter.charAt(0) : null;
+      const hasDigit = letter ? /\d/.test(letter) : false;
+      if (base && hasDigit) {
+        // Gather same-base numbered members + any interleaved rest line.
+        const members: ParsedExercise[] = [ex];
+        let restNote: string | null = null;
+        let j = i + 1;
+        while (j < segs.length) {
+          const sj = segs[j];
+          if (sj.kind !== "exercise") break;
+          const nl = splitExerciseLetter(sj.ex.name);
+          if (nl.letter && nl.letter.charAt(0) === base && /\d/.test(nl.letter)) { members.push(sj.ex); j++; continue; }
+          if (isRestInstruction(sj.ex)) { restNote = restNote ?? sj.ex.name; j++; continue; }
+          break;
+        }
+        if (members.length > 1) {
+          steps.push({ kind: "complex", block, members, restNote });
+          i = j;
+          continue;
+        }
+      }
+      steps.push({ kind: "single", block, ex });
+      i++;
+    }
+  }
+  return steps;
+}
+
 /* ---- Focus screen: the full session, one exercise at a time (design 21b) ---- */
 function SessionFocusScreen({
   blocks,
@@ -2272,11 +2345,7 @@ function SessionFocusScreen({
   // Design 21b — walk the session one EXERCISE at a time (not one block), with a
   // per-exercise set counter. Flatten every block's segments into an ordered
   // step list; each step is a single exercise (or a choice group).
-  const steps = useMemo(() => {
-    const out: { block: SessionBlock; seg: SessionBlock["segments"][number] }[] = [];
-    for (const b of blocks) for (const seg of b.segments) out.push({ block: b, seg });
-    return out;
-  }, [blocks]);
+  const steps = useMemo(() => buildFocusSteps(blocks), [blocks]);
   const total = steps.length;
 
   const [stepIdx, setStepIdx] = useState(0);
@@ -2287,23 +2356,26 @@ function SessionFocusScreen({
   const cur = steps[clampedIdx] ?? null;
   const isLastStep = clampedIdx >= total - 1;
   const block = cur?.block ?? null;
-  const seg = cur?.seg ?? null;
-  const isChoice = seg?.kind === "choice";
   const recCtx = block && (block.priority === 1 || block.priority === 2) ? recommendationContext ?? null : null;
 
-  const baseEx = seg && seg.kind === "exercise" ? seg.ex : null;
+  // Single-exercise stat/set derivation (complex uses its shared set count).
+  const baseEx = cur?.kind === "single" ? cur.ex : null;
   const reducedEx = baseEx ? reduceExercise(baseEx, adjust ?? null) : null;
   const stats = reducedEx ? parseFocusStats(reducedEx) : null;
   const origStats = baseEx && adjust?.setReduction ? parseFocusStats(baseEx) : null;
-  const setCount = stats?.sets ?? null;
-  const method = baseEx?.method ?? null;
-  const methodDisplay = method
-    ? (/^(ISO|EMOM|AMRAP|MET)$/.test(method) ? method : method.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" "))
-    : null;
-  const guide = method ? METHOD_GUIDE[method] ?? null : null;
+  const complexSets = cur?.kind === "complex" ? parseComplexSets(cur.members, cur.restNote) : null;
+  const setCount = cur?.kind === "complex" ? complexSets : stats?.sets ?? null;
 
-  const next = steps[clampedIdx + 1] ?? null;
-  const nextName = next ? focusExName(next.seg.kind === "choice" ? next.seg.header : next.seg.ex.name) : null;
+  const primaryMethod = cur?.kind === "single" ? cur.ex.method : cur?.kind === "complex" ? (cur.members.find((m) => m.method)?.method ?? null) : null;
+  const methodDisplay = primaryMethod
+    ? (/^(ISO|EMOM|AMRAP|MET)$/.test(primaryMethod) ? primaryMethod : primaryMethod.split("_").map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(" "))
+    : null;
+  const guide = primaryMethod ? METHOD_GUIDE[primaryMethod] ?? null : null;
+
+  const nextStep = steps[clampedIdx + 1] ?? null;
+  const nextName = nextStep
+    ? focusExName(nextStep.kind === "choice" ? nextStep.header : nextStep.kind === "complex" ? nextStep.members[0].name : nextStep.ex.name)
+    : null;
   const onLastSet = !setCount || setCount <= 1 || doneSets + 1 >= setCount;
 
   const advance = () => {
@@ -2324,6 +2396,28 @@ function SessionFocusScreen({
   const primaryLabel = onLastSet
     ? (isLastStep ? (isIS ? "Klára æfingu ✓" : "Finish session ✓") : (isIS ? "Lokið →" : "Done →"))
     : (isIS ? "Sett lokið ✓" : "Set complete ✓");
+
+  // Shared set-counter chips (single exercise OR one round of a complex).
+  const setCounter = setCount && setCount > 1 ? (
+    <div className="grid grid-flow-col auto-cols-fr gap-2">
+      {Array.from({ length: setCount }, (_, i) => {
+        const done = i < doneSets;
+        const now = i === doneSets;
+        return (
+          <div
+            key={i}
+            className={cx(
+              "rounded-xl border py-2.5 text-center",
+              done ? "border-emerald-200 bg-emerald-50 text-emerald-700" : now ? "border-[#2740e6]/50 bg-[#eef0ff] text-[#2740e6]" : "border-zinc-200 text-zinc-400"
+            )}
+          >
+            <div className="text-sm font-bold leading-none">{done ? "✓" : i + 1}</div>
+            <div className="mt-1 text-[10px] font-medium">{now ? (isIS ? "Núna" : "Now") : isIS ? `Sett ${i + 1}` : `Set ${i + 1}`}</div>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
 
   const overlay = (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
@@ -2374,14 +2468,67 @@ function SessionFocusScreen({
               {kicker}
             </div>
 
-            {isChoice && seg.kind === "choice" ? (
+            {cur.kind === "choice" ? (
               <ChoiceGroup
-                header={seg.header}
-                options={seg.options.map((o) => reduceExercise(o, adjust ?? null))}
+                header={cur.header}
+                options={cur.options.map((o) => reduceExercise(o, adjust ?? null))}
                 accent={block!.accent}
                 blockLabel={block!.accent.label}
                 recommendationContext={recCtx}
               />
+            ) : cur.kind === "complex" ? (
+              <div className="space-y-4">
+                {/* Complex header: N exercises done together as one round */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-2xl font-bold tracking-tight text-zinc-900">
+                    {cur.members.length === 2
+                      ? (isIS ? "Contrast — 2 saman" : "Contrast — 2 together")
+                      : (isIS ? `Complex — ${cur.members.length} saman` : `Complex — ${cur.members.length} together`)}
+                  </div>
+                  {methodDisplay ? (
+                    <span className="mt-1 shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+                      {methodDisplay}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-[13px] leading-relaxed text-zinc-500">
+                  {isIS
+                    ? "Gerðu æfingarnar í röð, hver umferð = eitt sett."
+                    : "Do the exercises in order — one round through = one set."}
+                </div>
+
+                {/* Member list (in order) */}
+                <div className="space-y-2">
+                  {cur.members.map((m, k) => {
+                    const rm = reduceExercise(m, adjust ?? null);
+                    const { rest: mName } = splitExerciseLetter(m.name);
+                    return (
+                      <div key={k} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3.5 py-2.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{k + 1}</span>
+                          <span className="truncate text-sm font-semibold text-zinc-900">{focusExName(mName)}</span>
+                        </div>
+                        {rm.setsReps ? <span className="shrink-0 text-sm font-semibold text-zinc-500">{rm.setsReps}</span> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                {cur.restNote ? <div className="text-xs text-zinc-400">{cur.restNote}</div> : null}
+
+                {/* Method explainer (reuses METHOD_GUIDE) */}
+                {guide ? (
+                  <div className="rounded-xl bg-[#f4f6ff] px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2740e6]">
+                      {isIS ? `Hvað er ${methodDisplay}?` : `What is ${methodDisplay}?`}
+                    </div>
+                    <div className="mt-1.5 whitespace-pre-line text-[13px] leading-relaxed text-zinc-700">
+                      {(isIS ? guide.IS : guide.EN).split("\n\n")[0]}
+                    </div>
+                  </div>
+                ) : null}
+
+                {setCounter}
+              </div>
             ) : baseEx ? (
               <div className="space-y-4">
                 {/* Name + method chip */}
@@ -2445,33 +2592,7 @@ function SessionFocusScreen({
                   <div className="rounded-xl bg-zinc-50 px-4 py-3 text-[13px] leading-relaxed text-zinc-600">{baseEx.note}</div>
                 ) : null}
 
-                {/* Set counter chips */}
-                {setCount && setCount > 1 ? (
-                  <div className="grid grid-flow-col auto-cols-fr gap-2">
-                    {Array.from({ length: setCount }, (_, i) => {
-                      const done = i < doneSets;
-                      const now = i === doneSets;
-                      return (
-                        <div
-                          key={i}
-                          className={cx(
-                            "rounded-xl border py-2.5 text-center",
-                            done
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : now
-                                ? "border-[#2740e6]/50 bg-[#eef0ff] text-[#2740e6]"
-                                : "border-zinc-200 text-zinc-400"
-                          )}
-                        >
-                          <div className="text-sm font-bold leading-none">{done ? "✓" : i + 1}</div>
-                          <div className="mt-1 text-[10px] font-medium">
-                            {now ? (isIS ? "Núna" : "Now") : isIS ? `Sett ${i + 1}` : `Set ${i + 1}`}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                {setCounter}
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">{t.training.noItems}</div>
