@@ -33,15 +33,15 @@ export function flagUi(flag: Flag, lang: Lang = "IS") {
     case "GREEN":
       return {
         label: "FULL",
-        title: isEN ? "Full training" : "Full æfing",
+        title: isEN ? "Full session — go at intensity" : "Full æfing — sæktu í þig",
         pill: "bg-green-100 text-green-800 border-green-200",
         dot: "bg-green-500",
         panel: "border-green-200",
 
-        // 👇 Generic skilaboð til leikmanns
+        // 👇 Generic skilaboð til leikmanns (fallback when no team/DB message)
         playerMessage: isEN
-          ? "You are green today. Follow the training plan and go at full intensity. Warm up well and focus on quality execution."
-          : "Í dag ert þú grænn. Haltu þér í planinu og keyrðu fulla æfingu. Hitaðu vel upp og haltu gæðum í framkvæmd.",
+          ? "Readiness is green across the board. Follow the plan, warm up well, and put quality first."
+          : "Reiðuskori er grænt á öllum sviðum. Fylgdu planinu, hitaðu vel upp og settu gæði í forgang.",
 
         why: isEN
           ? "Signs of good recovery and steady training load. No need to reduce intensity today."
@@ -51,7 +51,7 @@ export function flagUi(flag: Flag, lang: Lang = "IS") {
     case "YELLOW":
       return {
         label: "MODIFIED",
-        title: isEN ? "Modified load" : "Aðlagað álag",
+        title: isEN ? "Lighter day" : "Léttari dagur",
         pill: "bg-yellow-100 text-yellow-800 border-yellow-200",
         dot: "bg-yellow-500",
         panel: "border-yellow-200",
@@ -68,7 +68,7 @@ export function flagUi(flag: Flag, lang: Lang = "IS") {
     case "RED":
       return {
         label: "RECOVERY",
-        title: "Recovery",
+        title: isEN ? "Recovery day" : "Recovery dagur",
         pill: "bg-red-100 text-red-800 border-red-200",
         dot: "bg-red-500",
         panel: "border-red-200",
