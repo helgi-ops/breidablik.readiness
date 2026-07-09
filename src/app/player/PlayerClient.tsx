@@ -5184,22 +5184,18 @@ export default function PlayerClient() {
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
           {/* LEFT */}
           <div className="space-y-6">
-            {/* Decision hero → coach note only. The readiness verdict is now
-                stated ONCE, in the Today decision block (AteCommandCard) at the
-                top (Lota E / E2): colour + heading + "why" line + MD chip. This
-                card no longer restates the generic readiness message (baseMsg);
-                it shows only the coach's own note when there is one. The div
-                stays as the layout anchor (data-player-card="decision") even
-                when empty, so the portal-injection layout keeps working. */}
-            <div data-player-card="decision" className={coachMsg ? cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone) : ""}>
+            {/* Decision hero — the readiness statement + optional coach note.
+                (E2 tried to move this into the AteCommandCard portal, but that
+                portal does not render on this deployment, which left an empty
+                anchor + a visible gap — so the message stays here.) This div is
+                also the layout anchor (data-player-card="decision"). */}
+            <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
               {coachMsg ? (
-                <>
-                  <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
-                    {t.decision.coachMsg}
-                  </div>
-                  <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
-                </>
+                <div className="mb-3 inline-flex items-center rounded-full border bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                  {t.decision.coachMsg}
+                </div>
               ) : null}
+              <div className="text-sm leading-relaxed text-zinc-800">{message}</div>
             </div>
 
             {/* Explanation card — shows on ALL colours now. GREEN gets a
