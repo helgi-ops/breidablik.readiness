@@ -1996,28 +1996,27 @@ export default function DevPlayerClient() {
         }
       }
 
-      // Lota E / E3 — deterministic Today order. Each portal inserts its slot
-      // right after the SAME ate-command slot and places once (its observer
-      // only re-fires when its own slot is removed), so the visual order races.
-      // Re-chain the existing slots here — this effect re-runs on DOM mutations,
-      // so the order converges and stays stable: decision → RTP → session →
-      // after-session → RPE → more → nudges (session is always above nudges).
-      // Only reorders slots that share the ate-slot's parent; it never removes
-      // anything, so the worst case is a no-op.
+      // Lota E / E3 — deterministic Today order matching the design spec:
+      //   header → decision → RTP → session → after-session → RPE → nudges.
+      // The main grid is single-column on mobile, so its RIGHT column (the
+      // Today's-session card) always stacks BELOW the entire LEFT column. So
+      // the split is: decision + the RTP/outlook/recap context cards live in
+      // the left column (before the session); RPE, see-more and nudges are
+      // placed below the whole grid (after the session). This effect re-runs on
+      // DOM mutations, so the order converges and stays stable. It only moves
+      // known slots and never removes anything, so the worst case is a no-op.
       if (showToday) {
+        // (1) Left column, after the decision card: RTP → outlook → recap. The
+        // ate-command slot is anchored right after the decision card, and each
+        // of these portals anchors off it, so re-chain them here to hold order.
         const ateSlot = document.getElementById("dev-ate-command-card-slot");
         const chainParent = ateSlot?.parentElement ?? null;
         if (ateSlot && chainParent) {
           let prevSlot: HTMLElement = ateSlot;
-          // Note: nudge-prefs is intentionally NOT here — it is anchored to the
-          // bottom of the page content wrapper (below the whole grid) so it sits
-          // under the session (Lota E / E3).
           for (const id of [
             "dev-rtt-progress-slot",
             "dev-today-load-slot",
             "dev-today-recap-slot",
-            "dev-rpe-reminder-slot",
-            "dev-today-more-slot",
           ]) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -2029,6 +2028,26 @@ export default function DevPlayerClient() {
               chainParent.insertBefore(el, prevSlot.nextSibling);
             }
             prevSlot = el;
+          }
+        }
+
+        // (2) Below the whole grid (= under the session): RPE → see-more, then
+        // nudge-prefs stays last (it self-appends as the wrapper's lastChild).
+        // This puts the RPE row and reminders under the session, per the spec.
+        const contentWrapper = mainGrid.parentElement;
+        if (contentWrapper) {
+          let prevAfterGrid: ChildNode = mainGrid;
+          for (const id of ["dev-rpe-reminder-slot", "dev-today-more-slot"]) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            if (el.parentElement !== contentWrapper || el.previousSibling !== prevAfterGrid) {
+              contentWrapper.insertBefore(el, prevAfterGrid.nextSibling);
+            }
+            prevAfterGrid = el;
+          }
+          const nudge = document.getElementById("dev-nudge-prefs-slot");
+          if (nudge && nudge.parentElement === contentWrapper && nudge !== contentWrapper.lastElementChild) {
+            contentWrapper.appendChild(nudge);
           }
         }
       }
