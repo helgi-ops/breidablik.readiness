@@ -62,7 +62,7 @@ export default function PlayerSessionsPage() {
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
       >
         <Link
-          href="/team"
+          href="/player"
           className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100"
         >
           <span aria-hidden className="text-base leading-none">←</span> {t.back}

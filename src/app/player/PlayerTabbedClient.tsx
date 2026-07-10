@@ -1770,6 +1770,20 @@ function PWABottomNav({
                 );
               })}
             </div>
+            {/* Published team sessions — primary player content, so it lives
+                here in More (the barely-used /team hub is no longer the way in). */}
+            <div className="px-3 pb-2">
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  router.push("/player/sessions");
+                }}
+                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50"
+              >
+                <span>{lang === "IS" ? "Æfingar liðsins" : "Team sessions"}</span>
+                <span aria-hidden className="text-zinc-400">→</span>
+              </button>
+            </div>
             {/* Integrations / Settings — moved here from the Today header
                 (Lota E / E1) so the PWA Today stays free of dev chips. */}
             <div className="px-3 pb-2">
