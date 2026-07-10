@@ -3750,6 +3750,46 @@ export default function PlayerClient() {
     setGpsDate(safeDay);
   }, [day]);
 
+  // Self-heal the "missing check-in" banner after the app is restored from the
+  // mobile back/forward cache (BFCache). Navigating back into the PWA (e.g. from
+  // a settings sub-page) restores a FROZEN page without re-running the data
+  // effects, so a check-in submitted earlier this session can still look missing
+  // until a full reload — which is exactly the "asked to check in again" trap.
+  // Re-read today's readiness row whenever the page becomes visible again:
+  // pageshow fires on BFCache restore; visibilitychange/focus cover tab and
+  // app-switch returns. We only PROMOTE a found row (never clobber loaded
+  // metrics with a transient null), so this can only clear a false prompt.
+  useEffect(() => {
+    const refreshCheckin = async () => {
+      const playerId = profile?.player_id ?? selectedPlayerId;
+      if (!playerId) return;
+      const safeDay = sanitizeDay(day);
+      const { data: mrow } = await supabase
+        .from("readiness_entries")
+        .select(
+          "fatigue_energy, sleep_quality, sleep_duration, stress_mood, muscle_soreness, total_score, created_at"
+        )
+        .eq("player_id", playerId)
+        .eq("entry_date", safeDay)
+        .maybeSingle();
+      if (mrow) setMetrics(mrow as unknown as MetricsRow);
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void refreshCheckin();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshCheckin();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refreshCheckin);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refreshCheckin);
+    };
+  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+
   // Reload GPS data when gpsDate changes (arrow navigation)
   const reloadGpsForDate = useCallback(async (targetDate: string) => {
     const playerId = profile?.player_id ?? selectedPlayerId;
