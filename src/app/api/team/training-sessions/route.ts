@@ -12,6 +12,8 @@ export const runtime = "nodejs";
  *         ?range=upcoming (default) — sessions with session_date >= today, plus null-date
  *         ?range=today              — only session_date = today
  *         ?range=all                — every published session (recent first)
+ *         ?id=<uuid>                — a single published session by id (team-scoped);
+ *                                     overrides range. Returns it in `sessions[0]`.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -51,6 +53,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "No team" }, { status: 400 });
 
     const range = (req.nextUrl.searchParams.get("range") || "upcoming").toLowerCase();
+    const idParam = req.nextUrl.searchParams.get("id");
     const today = todayIso();
 
     let query = supabase
@@ -62,7 +65,11 @@ export async function GET(req: NextRequest) {
       .is("deleted_at", null)
       .not("published_at", "is", null);
 
-    if (range === "today") {
+    if (idParam) {
+      // Single session by id — still team-scoped + published, so a player can
+      // only ever open a session belonging to their own team.
+      query = query.eq("id", idParam);
+    } else if (range === "today") {
       query = query.eq("session_date", today).order("updated_at", { ascending: false });
     } else if (range === "upcoming") {
       // published sessions dated today or later, plus undated ones (treated as always-available)
@@ -87,7 +94,7 @@ export async function GET(req: NextRequest) {
       for (const it of items) if (it?.drill_id) drillIds.add(String(it.drill_id));
     }
 
-    let drillMap: Record<
+    const drillMap: Record<
       string,
       { id: string; drill_name: string; category: string | null; diagram_url: string | null; description: string | null }
     > = {};
