@@ -837,15 +837,24 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
       ? Math.round(((endT - startT) / 60) * 10) / 10
       : null;
     const sum2 = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+    const nz = (v: number | null | undefined) => (v == null || v === 0 ? null : v); // treat 0 as "not captured" for IMA/metabolic
+    const playerLoad = extractMetric(f, ["total_player_load", "player_load", "playerLoad", "load"]);
+    // Reuse the daily normalizer's IMA + metabolic extraction so the per-drill
+    // set matches the athlete-daily set (Pro/Vector Pro only — 0/absent on Core).
+    const ima = normalizeImaMetrics(f, playerLoad);
+    const met = extractMetabolicMetrics(f);
     out.push({
       periodName,
       order: orderByName.get(norm)!,
       athleteKey: athleteId,
       metrics: {
-        player_load: extractMetric(f, ["total_player_load", "player_load", "playerLoad", "load"]),
+        player_load: playerLoad,
+        player_load_per_min: extractMetric(f, ["player_load_per_minute", "player_load_per_min"]) ?? ima.playerLoadPerMin ?? null,
         distance_m: extractMetric(f, ["total_distance", "distance", "totalDistance"]),
-        hsr: extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]),
-        sprint: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance", "sprintDistance"]),
+        hir_total: extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]),
+        vel_b5: extractMetric(f, ["velocity_band5_total_distance"]),
+        vel_b6: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance"]),
+        max_velocity: extractMetric(f, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]),
         accel_b23: sum2(
           extractMetric(f, ["gen2_acceleration_band2_total_effort_count"]),
           extractMetric(f, ["gen2_acceleration_band3_total_effort_count"]),
@@ -854,7 +863,17 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
           extractMetric(f, ["gen2_deceleration_band2_total_effort_count"]),
           extractMetric(f, ["gen2_deceleration_band3_total_effort_count"]),
         ),
+        accel_total: extractMetric(f, ["tot_as", "total_accelerations", "accelerations"]),
+        decel_total: extractMetric(f, ["tot_ds", "total_decelerations", "decelerations"]),
+        hmld_m: met.highMetabolicLoadDistanceM,
+        metabolic_power_avg: met.metabolicPower,
+        metabolic_power_peak: met.metabolicPowerPeak,
         duration_min: durationMin,
+        ima_accel: nz(ima.imaAccel),
+        ima_decel: nz(ima.imaDecel),
+        ima_cod_total: nz(ima.imaCod),
+        high_ima: nz(sum2(ima.imaCodLeftHigh ?? null, ima.imaCodRightHigh ?? null)),
+        jumps: nz(ima.jumps),
       },
     });
   }

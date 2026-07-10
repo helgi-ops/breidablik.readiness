@@ -15,19 +15,37 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
 
-/** Canonical per-drill metric keys — aligned with saved_sessions.totals / drill_library. */
+/** Canonical per-drill metric keys — aligned with the drill_library columns. */
 export type PeriodMetrics = {
+  // GPS / load (every tier)
   player_load: number | null;
+  player_load_per_min: number | null;
   distance_m: number | null;
-  hsr: number | null;
-  sprint: number | null;
+  hir_total: number | null;          // high-intensity running distance (m)
+  vel_b5: number | null;             // high-speed distance (m)
+  vel_b6: number | null;             // sprint distance (m)
+  max_velocity: number | null;
   accel_b23: number | null;
   decel_b23: number | null;
+  accel_total: number | null;
+  decel_total: number | null;
+  hmld_m: number | null;             // high metabolic load distance (m)
+  metabolic_power_avg: number | null;
+  metabolic_power_peak: number | null;
   duration_min: number | null;
+  // IMA — Pro / Vector Pro only (stay null on Core, which has no IMA)
+  ima_accel: number | null;
+  ima_decel: number | null;
+  ima_cod_total: number | null;
+  high_ima: number | null;           // high-intensity IMA events (≥3.5 m/s²)
+  jumps: number | null;
 };
 
 export const PERIOD_METRIC_KEYS: (keyof PeriodMetrics)[] = [
-  "player_load", "distance_m", "hsr", "sprint", "accel_b23", "decel_b23", "duration_min",
+  "player_load", "player_load_per_min", "distance_m", "hir_total", "vel_b5", "vel_b6",
+  "max_velocity", "accel_b23", "decel_b23", "accel_total", "decel_total", "hmld_m",
+  "metabolic_power_avg", "metabolic_power_peak", "duration_min",
+  "ima_accel", "ima_decel", "ima_cod_total", "high_ima", "jumps",
 ];
 
 /** One athlete's numbers for one period of a performed session. */
@@ -84,20 +102,40 @@ export function isSessionTotalName(name: string | null | undefined): boolean {
   return n === "" || n === "session" || n === "whole session" || n === "total";
 }
 
+/** Null-safe sum of two optional numbers (null when both are null). */
+const sum2 = (a: number | null, b: number | null): number | null => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+const sumN = (...xs: (number | null)[]): number | null => (xs.every((x) => x == null) ? null : xs.reduce((s, x) => (s ?? 0) + (x ?? 0), 0 as number | null));
+
 /**
  * Map a Catapult CSV `raw` metric bag (canonical keys from catalog.ts) to the
- * per-drill metric shape. Sprint prefers the dedicated sprint distance, else the
- * velocity-band-6 distance (same concept, different tier export).
+ * per-drill metric shape. IMA columns are only present on Pro/Vector Pro exports
+ * (Core has none) and stay null there.
  */
 export function csvRawToMetrics(raw: Record<string, string>): PeriodMetrics {
   return {
     player_load: num(raw.playerLoad),
+    player_load_per_min: num(raw.playerLoadPerMinute),
     distance_m: num(raw.totalDistance),
-    hsr: num(raw.highSpeedDistance),
-    sprint: num(raw.sprintDistance) ?? num(raw.velocityBand6Distance),
+    hir_total: num(raw.highSpeedDistance),
+    vel_b5: num(raw.velocityBand5Distance),
+    vel_b6: num(raw.velocityBand6Distance) ?? num(raw.sprintDistance),
+    max_velocity: num(raw.maxVelocity),
     accel_b23: num(raw.accelB23Efforts),
     decel_b23: num(raw.decelB23Efforts),
+    accel_total: num(raw.totalAccelerations),
+    decel_total: num(raw.totalDecelerations),
+    hmld_m: num(raw.hmld),
+    metabolic_power_avg: num(raw.metabolicPower),
+    metabolic_power_peak: null,
     duration_min: num(raw.durationMinutes),
+    ima_accel: sumN(num(raw.imaAccelBand1), num(raw.imaAccelBand2), num(raw.imaAccelBand3)),
+    ima_decel: sumN(num(raw.imaDecelBand1), num(raw.imaDecelBand2), num(raw.imaDecelBand3)),
+    ima_cod_total: sumN(
+      num(raw.imaCodLeftHigh), num(raw.imaCodLeftMedium), num(raw.imaCodLeftLow),
+      num(raw.imaCodRightHigh), num(raw.imaCodRightMedium), num(raw.imaCodRightLow),
+    ),
+    high_ima: sum2(num(raw.imaCodLeftHigh), num(raw.imaCodRightHigh)),
+    jumps: null,
   };
 }
 
@@ -241,15 +279,34 @@ export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem
     const a = it.actual;
     const drillId = it.drill_id;
     if (!a || !drillId) continue;
+    // actual metric key → drill_library column. Only present values are written.
+    const MAP: Array<[keyof PeriodMetrics, string]> = [
+      ["player_load", "player_load"],
+      ["distance_m", "distance_m"],
+      ["duration_min", "duration_min"],
+      ["hir_total", "hir_total"],
+      ["vel_b5", "vel_b5"],
+      ["vel_b6", "vel_b6"],
+      ["max_velocity", "max_velocity"],
+      ["accel_b23", "accel_b23"],
+      ["decel_b23", "decel_b23"],
+      ["accel_total", "accel_total"],
+      ["decel_total", "decel_total"],
+      ["hmld_m", "hmld_m"],
+      ["metabolic_power_avg", "metabolic_power_avg"],
+      ["metabolic_power_peak", "metabolic_power_peak"],
+      ["ima_cod_total", "ima_cod_total"],
+      ["high_ima", "high_ima"],
+      ["jumps", "jump_count"],
+    ];
     const patch: Record<string, number | string | null> = {};
-    if (a.player_load != null) patch.player_load = a.player_load;
-    if (a.distance_m != null) patch.distance_m = a.distance_m;
-    if (a.duration_min != null) patch.duration_min = a.duration_min;
-    if (a.accel_b23 != null) patch.accel_b23 = a.accel_b23;
-    if (a.decel_b23 != null) patch.decel_b23 = a.decel_b23;
-    if (a.hsr != null) patch.hir_total = a.hsr;
-    if (a.sprint != null) patch.vel_b6 = a.sprint;
-    if (a.player_load != null && a.duration_min != null && a.duration_min > 0) {
+    for (const [mk, col] of MAP) {
+      const v = a[mk];
+      if (v != null) patch[col] = v;
+    }
+    // Derive PL/min if we have both but the source didn't provide it.
+    if (a.player_load_per_min != null) patch.player_load_per_min = a.player_load_per_min;
+    else if (a.player_load != null && a.duration_min != null && a.duration_min > 0) {
       patch.player_load_per_min = Math.round((a.player_load / a.duration_min) * 100) / 100;
     }
     if (!Object.keys(patch).length) continue;
