@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type WhoopStatusResponse = {
@@ -30,6 +31,14 @@ function formatDateTime(value: string | null): string {
 
 export default function PlayerIntegrationsSettingsPage() {
   const supabase = getSupabaseClient();
+  const router = useRouter();
+  // Escape hatch: this settings sub-page has no bottom nav, so in the installed
+  // PWA (standalone, no browser back button) the player could get trapped here.
+  // Go back if there's history, otherwise land on Today.
+  const goBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/player");
+  }, [router]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"connecting" | "syncing" | "disconnecting" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +185,25 @@ export default function PlayerIntegrationsSettingsPage() {
         : "Connect your WHOOP account to sync sleep, recovery, HRV and workout data into MicroPulse.";
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
+    <main className="mx-auto max-w-3xl px-4 pb-10">
+      {/* Sticky escape bar: this route has no bottom nav, so in the installed PWA
+          (no browser back button) the only way out is this control. Keep it
+          always visible (sticky) and a large tap target, and clear the notch
+          with safe-area-inset-top so it can never be hidden under the status bar
+          — otherwise the player gets trapped and has to force-quit the app. */}
+      <div
+        className="sticky top-0 z-10 -mx-4 mb-4 border-b border-zinc-200 bg-[var(--surface,#f4f2ec)]/90 px-4 pb-3 backdrop-blur"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
+      >
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label="Back to app"
+          className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 active:bg-zinc-100"
+        >
+          <span aria-hidden className="text-base leading-none">←</span> Back
+        </button>
+      </div>
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Player settings</div>
         <h1 className="mt-1 text-xl font-semibold text-zinc-950">Integrations</h1>
