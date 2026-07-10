@@ -322,6 +322,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
       .from("players")
       .select("id, full_name, position")
       .eq("is_active", true)
+      // Scope to the coach's own team — without this filter the list leaked
+      // every active player across ALL teams into the Trends picker.
+      .eq("team_id", coachTeamId)
       .order("full_name")
       .then(({ data }) => {
         const list = ((data ?? []) as Array<{ id: string; full_name: string; position: string | null }>)
