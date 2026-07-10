@@ -916,16 +916,27 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let tries = 0;
+    const run = async () => {
+      if (cancelled) return;
+      tries += 1;
       try {
+        // At first paint the auth session may still be restoring from storage —
+        // retry a few times so the card isn't lost to a null token (unlike the
+        // /team launcher, this portal mounts immediately with Today).
         const { data: { session: authSession } } = await supabase.auth.getSession();
         const token = authSession?.access_token;
-        if (!token) return;
+        if (!token) { if (tries < 20) window.setTimeout(run, 400); return; }
         const res = await fetch("/api/team/training-sessions?range=upcoming", { headers: { Authorization: `Bearer ${token}` } });
         const j = await res.json();
-        if (!cancelled && res.ok && j?.ok) setSession((j.sessions ?? [])[0] ?? null);
-      } catch { /* optional card — never break Today */ }
-    })();
+        if (cancelled) return;
+        if (res.ok && j?.ok) setSession((j.sessions ?? [])[0] ?? null);
+        else if (tries < 20) window.setTimeout(run, 400);
+      } catch {
+        if (!cancelled && tries < 20) window.setTimeout(run, 400);
+      }
+    };
+    void run();
     return () => { cancelled = true; };
   }, []);
 
