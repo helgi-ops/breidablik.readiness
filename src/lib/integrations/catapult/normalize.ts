@@ -839,6 +839,13 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
     const sum2 = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
     const nz = (v: number | null | undefined) => (v == null || v === 0 ? null : v); // treat 0 as "not captured" for IMA/metabolic
     const playerLoad = extractMetric(f, ["total_player_load", "player_load", "playerLoad", "load"]);
+    // HIR / high-speed running. This org doesn't compute hir_dist (0 everywhere),
+    // and the derived high_speed_distance column isn't a per-period field — but
+    // the daily pipeline defines HSR = velocity band5 + band6, so derive HIR the
+    // same way per drill (fall back only when a direct HIR field is truly present).
+    const velB5 = extractMetric(f, ["velocity_band5_total_distance"]);
+    const velB6 = extractMetric(f, ["velocity_band6_total_distance", "sprint_distance"]);
+    const hirDirect = extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]);
     // Reuse the daily normalizer's IMA + metabolic extraction so the per-drill
     // set matches the athlete-daily set (Pro/Vector Pro only — 0/absent on Core).
     const ima = normalizeImaMetrics(f, playerLoad);
@@ -851,9 +858,9 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         player_load: playerLoad,
         player_load_per_min: extractMetric(f, ["player_load_per_minute", "player_load_per_min"]) ?? ima.playerLoadPerMin ?? null,
         distance_m: extractMetric(f, ["total_distance", "distance", "totalDistance"]),
-        hir_total: extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]),
-        vel_b5: extractMetric(f, ["velocity_band5_total_distance"]),
-        vel_b6: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance"]),
+        hir_total: hirDirect != null && hirDirect > 0 ? hirDirect : sum2(velB5, velB6),
+        vel_b5: velB5,
+        vel_b6: velB6,
         max_velocity: extractMetric(f, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]),
         // Catapult's gen2 scheme encodes BOTH accel and decel efforts under the
         // gen2_acceleration_band* family — there is NO gen2_deceleration_band*
