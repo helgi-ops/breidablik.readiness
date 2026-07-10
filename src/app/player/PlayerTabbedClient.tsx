@@ -936,11 +936,12 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
     let observer: MutationObserver | null = null;
     const ensure = () => {
       if (cancelled) return false;
-      // Sit below the RTT card when present, else the outlook / header — keeps it
-      // high on Today as a daily plan item without fighting those slots.
+      // Anchor right after the readiness DECISION card — a daily plan item
+      // belongs high on Today, directly under the verdict, not buried below the
+      // RTP/outlook cards where it fell below the fold.
       const anchor =
-        document.getElementById("dev-rtt-progress-slot") ??
-        document.getElementById("dev-ate-command-card-slot") ??
+        (document.querySelector('[data-player-card="decision"]') as HTMLElement | null) ??
+        (document.querySelector('[data-player-card="header"]') as HTMLElement | null) ??
         detectHeaderCard();
       if (!anchor?.parentElement) return false;
       let slot = document.getElementById("dev-team-session-slot");
