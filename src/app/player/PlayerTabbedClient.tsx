@@ -1547,6 +1547,17 @@ function IconReport({ active }: { active: boolean }) {
   );
 }
 
+function IconSessions({ active }: { active: boolean }) {
+  // Clipboard + lines — a coach's published session plan.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-3" />
+      <rect x="9" y="2" width="6" height="4" rx="1" />
+      <path d="M8 11h8M8 15h8" />
+    </svg>
+  );
+}
+
 function IconShield({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -1595,7 +1606,7 @@ const PWA_SECONDARY_TABS = [
   { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
-  { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconTeam,     minTier: "free"  as const, href: "/team" as string | null },
+  { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconSessions,  minTier: "free"  as const, href: "/player/sessions" as string | null, labelOverride: { IS: "Æfingar", EN: "Sessions" } as { IS: string; EN: string } | undefined },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
   { key: "vald"     as DevPlayerTab, tabKey: "vald"     as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
   { key: "privacy"  as DevPlayerTab, tabKey: "privacy"  as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
@@ -1737,8 +1748,10 @@ function PWABottomNav({
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-              {secondaryTabs.map(({ key, tabKey, Icon, minTier, href }) => {
-                const label = tabs[tabKey] ?? tabKey;
+              {secondaryTabs.map((entry) => {
+                const { key, tabKey, Icon, minTier, href } = entry;
+                const labelOverride = (entry as { labelOverride?: { IS: string; EN: string } }).labelOverride;
+                const label = labelOverride ? labelOverride[lang] : (tabs[tabKey] ?? tabKey);
                 const locked = isLocked(minTier);
                 const isActive = tabIsActive(key, href);
                 return (
@@ -1769,20 +1782,6 @@ function PWABottomNav({
                   </button>
                 );
               })}
-            </div>
-            {/* Published team sessions — primary player content, so it lives
-                here in More (the barely-used /team hub is no longer the way in). */}
-            <div className="px-3 pb-2">
-              <button
-                onClick={() => {
-                  setMoreOpen(false);
-                  router.push("/player/sessions");
-                }}
-                className="flex w-full items-center justify-between rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50"
-              >
-                <span>{lang === "IS" ? "Æfingar liðsins" : "Team sessions"}</span>
-                <span aria-hidden className="text-zinc-400">→</span>
-              </button>
             </div>
             {/* Integrations / Settings — moved here from the Today header
                 (Lota E / E1) so the PWA Today stays free of dev chips. */}
