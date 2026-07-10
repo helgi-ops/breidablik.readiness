@@ -911,8 +911,29 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
   const router = useRouter();
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [session, setSession] = useState<PublishedSession | null>(null);
+  // When the player is on an active Return-to-Training plan, their session of the
+  // day IS the RTT rehab plan (its own Today card) — so the team session must not
+  // also appear as a competing "today's session". null = still resolving.
+  const [rttActive, setRttActive] = useState<boolean | null>(null);
   const t = SessionCopy[lang === "IS" ? "IS" : "EN"];
   const locale = lang === "IS" ? "is-IS" : "en-GB";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const token = authSession?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/player/return-to-training", { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json();
+        if (!cancelled) setRttActive(res.ok ? !!j?.active : false);
+      } catch {
+        if (!cancelled) setRttActive(false); // never break Today — default to showing the session
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -941,7 +962,11 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    // Wait for RTT to resolve; hide (and tear down any slot) while RTT is active.
+    if (!session || rttActive !== false) {
+      document.getElementById("dev-team-session-slot")?.remove();
+      return;
+    }
     let cancelled = false;
     let attempts = 0;
     let observer: MutationObserver | null = null;
@@ -974,9 +999,9 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
     };
     const tmr = window.setTimeout(place, 0);
     return () => { cancelled = true; window.clearTimeout(tmr); observer?.disconnect(); };
-  }, [session]);
+  }, [session, rttActive]);
 
-  if (!mountNode || activeTab !== "today" || !session) return null;
+  if (!mountNode || activeTab !== "today" || !session || rttActive !== false) return null;
 
   const { drillCount, duration, targetPl } = sessionStats(session);
   const dl = dateLabel(session.session_date, locale, t);
