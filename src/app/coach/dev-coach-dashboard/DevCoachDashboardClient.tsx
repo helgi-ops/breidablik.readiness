@@ -2490,6 +2490,14 @@ export default function CoachPage() {
   const [zHistory, setZHistory] = useState<Record<string, number[]>>({});
   const [recentMonitoringByPlayer, setRecentMonitoringByPlayer] = useState<Record<string, VolatilityDailyPoint[]>>({});
   const [volatilityOpenByPlayer, setVolatilityOpenByPlayer] = useState<Record<string, boolean>>({});
+  // Volatility tab reads the WHOLE squad's last-10-days readiness history,
+  // independent of who has checked in TODAY. (The main dashboard roster is
+  // scoped to today's entries, so before the squad has checked in the roster is
+  // empty — the volatility view must not go blank just because it's early.)
+  const [volatilityData, setVolatilityData] = useState<Record<string, { name: string; points: VolatilityDailyPoint[] }>>({});
+  const [volatilityLoading, setVolatilityLoading] = useState(false);
+  const [volatilityLoaded, setVolatilityLoaded] = useState(false);
+  const [volatilityChartsOpen, setVolatilityChartsOpen] = useState<Record<string, boolean>>({});
   const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
   const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
 
@@ -3769,6 +3777,75 @@ export default function CoachPage() {
       return {};
     }
   }
+
+  // Dedicated loader for the Volatility tab: the WHOLE squad's last-10-days
+  // readiness history, keyed by player, independent of today's roster. Reads
+  // readiness_entries for the coach's team over the window and attaches names.
+  async function loadVolatilityHistory(): Promise<void> {
+    if (!coachTeamId) return;
+    setVolatilityLoading(true);
+    try {
+      const DAYS = 10;
+      const startISO = addDaysISO(today, -(DAYS - 1));
+      const { data, error } = await supabase
+        .from("readiness_entries")
+        .select("player_id, entry_date, training_modifier, total_score, fatigue_energy, sleep_quality, stress_mood, muscle_soreness")
+        .eq("team_id", coachTeamId)
+        .gte("entry_date", startISO)
+        .lte("entry_date", today)
+        .order("entry_date", { ascending: true });
+      if (error) throw error;
+
+      const byPlayer: Record<string, VolatilityDailyPoint[]> = {};
+      const ids = new Set<string>();
+      for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+        const pid = String(r.player_id);
+        ids.add(pid);
+        const z = extractZ(r.training_modifier);
+        const dz = extractYesterdayZ(r.training_modifier);
+        (byPlayer[pid] ??= []).push({
+          date: String(r.entry_date ?? "").slice(0, 10),
+          checkInScore: toNum(r.total_score),
+          zScore: z,
+          deltaZ: z != null && dz != null ? z - dz : null,
+          soreness: toNum(r.muscle_soreness),
+          sleepQuality: toNum(r.sleep_quality),
+          mood: toNum(r.stress_mood),
+          energy: toNum(r.fatigue_energy),
+          stress: toNum(r.stress_mood),
+        });
+      }
+
+      const nameById: Record<string, string> = {};
+      if (ids.size) {
+        const { data: pl } = await supabase.from("players").select("id, full_name").in("id", [...ids]);
+        for (const p of (pl ?? []) as Array<Record<string, unknown>>) nameById[String(p.id)] = String(p.full_name ?? "");
+      }
+
+      const result: Record<string, { name: string; points: VolatilityDailyPoint[] }> = {};
+      for (const pid of Object.keys(byPlayer)) {
+        result[pid] = { name: nameById[pid] || pid, points: byPlayer[pid] };
+      }
+      setVolatilityData(result);
+      setVolatilityLoaded(true);
+    } catch (e) {
+      console.warn("loadVolatilityHistory failed:", e);
+      setVolatilityData({});
+      setVolatilityLoaded(true);
+    } finally {
+      setVolatilityLoading(false);
+    }
+  }
+
+  // Switching teams invalidates the loaded volatility history.
+  useEffect(() => { setVolatilityLoaded(false); }, [coachTeamId]);
+  // Fetch on first visit to the Volatility tab (and after a team switch).
+  useEffect(() => {
+    if (dashTab === "volatility" && coachTeamId && !volatilityLoaded && !volatilityLoading) {
+      void loadVolatilityHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashTab, coachTeamId, volatilityLoaded, volatilityLoading]);
 
   async function hydrateTrainingModifiers(entryDate: string, list: Row[]): Promise<Row[]> {
     const playerIds = list.map((r) => String(r.player_id));
@@ -10973,19 +11050,23 @@ export default function CoachPage() {
         const DAYS = 10;
         const windowStart = addDaysISO(today, -(DAYS - 1));
 
-        // Build player list with their 10-day monitoring history
-        const playerEntries = Object.entries(recentMonitoringByPlayer)
-          .map(([pid, points]) => {
-            // Filter + sort to last 10 days
+        // Build player list with their 10-day monitoring history. Source is the
+        // dedicated squad-wide volatility fetch (NOT today's roster), so the view
+        // is populated even before anyone has checked in today. Attach the
+        // computed volatility summary (level + drivers + confidence) for the
+        // plain-language read.
+        const playerEntries = Object.entries(volatilityData)
+          .map(([pid, { name, points }]) => {
             const window = points
               .filter((p) => p.date >= windowStart && p.date <= today)
               .sort((a, b) => a.date.localeCompare(b.date));
-            // Find player name from current rows
-            const row = rowsWithAdaptive.find((r) => String(r.player_id) === pid);
-            return { pid, name: row?.full_name ?? pid, window };
+            return { pid, name, window, summary: computePlayerVolatilitySummary(window) };
           })
           .filter((e) => e.window.length >= 2)
-          .sort((a, b) => a.name.localeCompare(b.name));
+          // Most volatile first — those are the players a coach should look at.
+          .sort((a, b) => (b.summary.overallScore ?? -1) - (a.summary.overallScore ?? -1) || a.name.localeCompare(b.name));
+        const highCount = playerEntries.filter((e) => e.summary.level === "HIGH").length;
+        const moderateCount = playerEntries.filter((e) => e.summary.level === "MODERATE").length;
 
         // Generate date labels for the window
         const dayLabels: string[] = [];
@@ -11067,10 +11148,27 @@ export default function CoachPage() {
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-                  Readiness Volatility — Síðustu {DAYS} dagar
+                  {lang === "IS" ? `Sveiflur í dagsformi — síðustu ${DAYS} dagar` : `Readiness volatility — last ${DAYS} days`}
                 </CardTitle>
-                <CardDescription className="text-sm text-slate-500">
-                  Sveiflur per leikmann · Check-in · Z-score · Þreyta · Svefn · 0 = slæmt, 100 = frábært
+                {/* Layer 0 — one-sentence verdict, boldest, first. */}
+                {playerEntries.length > 0 && (
+                  <div className="mt-1 text-[15px] font-semibold text-slate-900">
+                    {highCount > 0
+                      ? (lang === "IS"
+                          ? `${highCount} með miklar sveiflur${moderateCount > 0 ? `, ${moderateCount} miðlungs` : ""} — kíktu á þessa fyrst.`
+                          : `${highCount} swinging a lot${moderateCount > 0 ? `, ${moderateCount} moderate` : ""} — look at these first.`)
+                      : moderateCount > 0
+                        ? (lang === "IS"
+                            ? `Enginn með miklar sveiflur; ${moderateCount} með einhverjar.`
+                            : `Nobody swinging hard; ${moderateCount} with some fluctuation.`)
+                        : (lang === "IS" ? "Allur hópurinn stöðugur síðustu daga." : "Whole squad stable over the recent days.")}
+                  </div>
+                )}
+                {/* Layer 1 — the plain "why", visible without a click. */}
+                <CardDescription className="mt-1 text-sm text-slate-500">
+                  {lang === "IS"
+                    ? "Hversu mikið dagsform hvers leikmanns hefur sveiflast milli daga (check-in, Z-skor, eymsli, svefn). Miklar sveiflur benda oft á lélega endurheimt, álag utan vallar eða óreglulegan svefn — verðu í samtal áður en þú hleður hann þungt. Stöðugt er gott. Raðað mest sveiflandi efst."
+                    : "How much each player's daily readiness has swung day-to-day (check-in, Z-score, soreness, sleep). Big swings often flag poor recovery, off-field stress or irregular sleep — worth a word before loading them hard. Stable is good. Sorted most-volatile first."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -11082,40 +11180,59 @@ export default function CoachPage() {
                       {s.label}
                     </span>
                   ))}
-                  <span className="ml-2 text-slate-400">· Soreness er snúin: hærra = minni þreyta</span>
+                  <span className="ml-2 text-slate-400">
+                    {lang === "IS" ? "· Eymsli er snúin: hærra = minni eymsli · 0 = slæmt, 100 = frábært" : "· Soreness is inverted: higher = less sore · 0 = bad, 100 = great"}
+                  </span>
                 </div>
 
-                {playerEntries.length === 0 ? (
+                {volatilityLoading && !volatilityLoaded ? (
                   <div className="py-8 text-center text-sm text-slate-400">
-                    Engin readiness gögn fundust fyrir síðustu {DAYS} daga. Gakktu úr skugga um að leikmenn hafi gert check-in.
+                    {lang === "IS" ? "Sæki readiness-sögu síðustu daga…" : "Loading recent readiness history…"}
+                  </div>
+                ) : playerEntries.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-slate-400">
+                    {lang === "IS"
+                      ? `Engin check-in gögn síðustu ${DAYS} daga fyrir þetta lið. (Leikmenn þurfa a.m.k. 2 check-in til að sveifla reiknist.)`
+                      : `No check-in data in the last ${DAYS} days for this team. (A player needs at least 2 check-ins for volatility to compute.)`}
                   </div>
                 ) : (
                   <div className="grid gap-5 sm:grid-cols-2">
-                    {playerEntries.map(({ pid, name, window: pts }) => {
+                    {playerEntries.map(({ pid, name, window: pts, summary }) => {
                       // Latest composite score (avg of available normalized metrics from latest point)
                       const last = pts[pts.length - 1];
                       const latestVals = [normCI(last?.checkInScore), normZ(last?.zScore), normSor(last?.soreness), normSleep(last?.sleepQuality)].filter((v): v is number => v != null);
                       const latestComposite = latestVals.length ? latestVals.reduce((s, v) => s + v, 0) / latestVals.length : null;
 
-                      // Compute volatility = std dev of check-in scores over window
-                      const ciVals = pts.map((p) => p.checkInScore).filter((v): v is number => v != null);
-                      const ciMean = ciVals.length ? ciVals.reduce((s, v) => s + v, 0) / ciVals.length : null;
-                      const ciStd = ciMean != null && ciVals.length > 1
-                        ? Math.sqrt(ciVals.map((v) => (v - ciMean) ** 2).reduce((s, v) => s + v, 0) / ciVals.length)
-                        : null;
-                      const volLevel = ciStd == null ? null : ciStd > 5 ? "HIGH" : ciStd > 2.5 ? "MODERATE" : "LOW";
+                      // Level + plain read come from the shared volatility engine
+                      // (computePlayerVolatilitySummary) — rules decide, the UI explains.
+                      const level = summary.level;
+                      const badge =
+                        level === "HIGH" ? { txt: lang === "IS" ? "Miklar sveiflur" : "High volatility", cls: "bg-red-100 text-red-700" }
+                        : level === "MODERATE" ? { txt: lang === "IS" ? "Nokkrar sveiflur" : "Moderate", cls: "bg-amber-100 text-amber-700" }
+                        : level === "LOW" ? { txt: lang === "IS" ? "Stöðugur" : "Stable", cls: "bg-green-100 text-green-700" }
+                        : { txt: lang === "IS" ? "Of fá gögn" : "Too little data", cls: "bg-slate-100 text-slate-500" };
+                      const why =
+                        level === "HIGH" ? (lang === "IS" ? "Dagsform sveiflast mikið milli daga." : "Readiness swings markedly day-to-day.")
+                        : level === "MODERATE" ? (lang === "IS" ? "Nokkur sveifla milli daga." : "Some day-to-day fluctuation.")
+                        : level === "LOW" ? (lang === "IS" ? "Stöðugt dagsform." : "Stable day-to-day.")
+                        : (lang === "IS" ? "Of fá check-in til að meta sveiflu." : "Too few check-ins to assess volatility.");
+                      const DRIVER_LABELS: Record<string, { is: string; en: string }> = {
+                        check_in: { is: "Check-in", en: "Check-in" }, z_score: { is: "Z-skor", en: "Z-score" },
+                        delta_z: { is: "Δ Z", en: "ΔZ" }, soreness: { is: "Eymsli", en: "Soreness" },
+                        sleep_quality: { is: "Svefn", en: "Sleep" }, mood: { is: "Skap", en: "Mood" },
+                        energy: { is: "Orka", en: "Energy" }, stress: { is: "Streita", en: "Stress" },
+                      };
+                      const topDrivers = summary.drivers.slice(0, 2).map((d) => (lang === "IS" ? DRIVER_LABELS[d.key]?.is : DRIVER_LABELS[d.key]?.en) ?? d.label);
+                      const lowConfidence = summary.sampleSize < 5;
+                      const isChartOpen = !!volatilityChartsOpen[pid];
 
                       return (
                         <div key={pid} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                          {/* Header */}
-                          <div className="mb-2 flex items-center justify-between">
+                          {/* Header — name + level verdict + latest readiness score */}
+                          <div className="mb-1.5 flex items-center justify-between">
                             <div className="font-semibold text-slate-900 text-sm truncate">{name}</div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              {volLevel && (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${volLevel === "HIGH" ? "bg-red-100 text-red-700" : volLevel === "MODERATE" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
-                                  {volLevel === "HIGH" ? "Há sveifla" : volLevel === "MODERATE" ? "Miðlungs" : "Stöðugur"}
-                                </span>
-                              )}
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>{badge.txt}</span>
                               {latestComposite != null && (
                                 <span className="text-xs font-bold" style={{ color: flagColor(latestComposite) }}>
                                   {Math.round(latestComposite)}
@@ -11124,6 +11241,30 @@ export default function CoachPage() {
                             </div>
                           </div>
 
+                          {/* Plain read (layer 1): why + what's driving it + confidence */}
+                          <div className="mb-2 text-xs text-slate-600">
+                            <span>{why}</span>
+                            {level !== "INSUFFICIENT" && topDrivers.length > 0 && (
+                              <span className="text-slate-500">
+                                {" "}{lang === "IS" ? "Mest drifið af" : "Driven mostly by"}: <span className="font-medium text-slate-700">{topDrivers.join(", ")}</span>.
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-2 text-[10px] text-slate-400">
+                            {lang === "IS" ? `Byggt á ${summary.sampleSize} check-in` : `Based on ${summary.sampleSize} check-in${summary.sampleSize === 1 ? "" : "s"}`}
+                            {lowConfidence && level !== "INSUFFICIENT" ? (lang === "IS" ? " · lítið öryggi" : " · low confidence") : ""}
+                          </div>
+
+                          {/* Layer 2 — raw chart behind a toggle */}
+                          <button
+                            type="button"
+                            onClick={() => setVolatilityChartsOpen((prev) => ({ ...prev, [pid]: !prev[pid] }))}
+                            className="mb-2 text-[11px] font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            {isChartOpen ? (lang === "IS" ? "Fela graf ▲" : "Hide chart ▲") : (lang === "IS" ? "Sýna graf ▼" : "Show chart ▼")}
+                          </button>
+
+                          {isChartOpen && (<>
                           {/* SVG Chart */}
                           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
                             {/* Grid lines */}
@@ -11213,13 +11354,19 @@ export default function CoachPage() {
                             })()}
                           </svg>
 
-                          {/* Latest values */}
+                          {/* Latest values + what each series means (layer 2 detail) */}
                           <div className="mt-1.5 grid grid-cols-4 gap-1 text-[10px] text-slate-500">
                             <div>CI: <span className="font-medium text-slate-700">{last?.checkInScore != null ? Math.round(last.checkInScore) : "—"}</span></div>
                             <div>Z: <span className="font-medium text-slate-700">{last?.zScore != null ? last.zScore.toFixed(1) : "—"}</span></div>
-                            <div>Sor: <span className="font-medium text-slate-700">{last?.soreness != null ? last.soreness : "—"}</span></div>
-                            <div>Svefn: <span className="font-medium text-slate-700">{last?.sleepQuality != null ? last.sleepQuality : "—"}</span></div>
+                            <div>{lang === "IS" ? "Eymsli" : "Sore"}: <span className="font-medium text-slate-700">{last?.soreness != null ? last.soreness : "—"}</span></div>
+                            <div>{lang === "IS" ? "Svefn" : "Sleep"}: <span className="font-medium text-slate-700">{last?.sleepQuality != null ? last.sleepQuality : "—"}</span></div>
                           </div>
+                          <div className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
+                            {lang === "IS"
+                              ? "Check-in = heildar dagsform (0–25). Z-skor = hvernig í dag ber saman við hans eigin venju (0 = venjulegt). Eymsli 1–5 (hærra = minni eymsli). Svefn 1–5. Allt kvarðað í 0–100 fyrir grafið."
+                              : "Check-in = overall readiness (0–25). Z-score = today vs his own norm (0 = usual). Soreness 1–5 (higher = less sore). Sleep 1–5. All scaled to 0–100 for the chart."}
+                          </div>
+                          </>)}
                         </div>
                       );
                     })}
