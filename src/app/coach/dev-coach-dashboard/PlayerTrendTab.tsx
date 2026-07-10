@@ -313,6 +313,7 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
   const [loading, setLoading]       = useState(false);
   const [entries, setEntries]       = useState<DayEntry[]>([]);
   const [showTable, setShowTable]   = useState(false);
+  const [showTrendHelp, setShowTrendHelp] = useState(false);
   const [playerTeams, setPlayerTeams] = useState<TeamMeta[]>([]);
 
   // Fetch player list
@@ -488,6 +489,22 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
   const latestSten  = [...stenEntries].pop()?.sten ?? null;
   const latestLoad  = [...loadValues].reverse().find((v): v is number => v != null) ?? null;
 
+  // ── Trend verdict (recent half vs earlier half of the check-ins) ─────────────
+  // Rules compute this; the card only explains it. Needs enough check-ins to be
+  // meaningful — below that we show "not enough data" rather than a false trend.
+  const trendSummary = (() => {
+    const vals = checkedIn.map((e) => e.readinessScore as number);
+    if (vals.length < 4) return null;
+    const half = Math.floor(vals.length / 2);
+    const mean = (a: number[]) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
+    const earlierAvg = mean(vals.slice(0, half));
+    const recentAvg = mean(vals.slice(half));
+    const delta = recentAvg - earlierAvg;
+    const dir: "up" | "down" | "flat" = delta > 1 ? "up" : delta < -1 ? "down" : "flat";
+    return { earlierAvg, recentAvg, delta, dir, n: vals.length };
+  })();
+  const lowTrendConfidence = checkedIn.length < 8 || checkInRate < 50;
+
   const selectedPlayer = players.find((p) => p.player_id === selectedId);
   // Only show days that have at least one data point
   const tableEntries = [...entries]
@@ -570,6 +587,86 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
         <div className="py-16 text-center text-sm text-slate-400">{ct.noPlayer}</div>
       ) : (
         <>
+          {/* Verdict + plain "why" (explainability layers 0 + 1) */}
+          {(() => {
+            const firstName = selectedPlayer?.full_name?.split(" ")[0] ?? (lang === "IS" ? "Leikmaður" : "Player");
+            const verdict = !trendSummary
+              ? (lang === "IS" ? "Ekki nóg check-in til að meta þróun." : "Not enough check-ins to call a trend.")
+              : trendSummary.dir === "up"
+                ? (lang === "IS" ? `${firstName}: dagsform á uppleið síðustu ${window} daga.` : `${firstName}: readiness trending up over the last ${window} days.`)
+                : trendSummary.dir === "down"
+                  ? (lang === "IS" ? `${firstName}: dagsform á niðurleið síðustu ${window} daga.` : `${firstName}: readiness trending down over the last ${window} days.`)
+                  : (lang === "IS" ? `${firstName}: dagsform stöðugt síðustu ${window} daga.` : `${firstName}: readiness steady over the last ${window} days.`);
+            const badge = !trendSummary ? null
+              : trendSummary.dir === "up" ? { txt: lang === "IS" ? "↑ Uppleið" : "↑ Up", cls: "bg-emerald-100 text-emerald-700" }
+              : trendSummary.dir === "down" ? { txt: lang === "IS" ? "↓ Niðurleið" : "↓ Down", cls: "bg-amber-100 text-amber-700" }
+              : { txt: lang === "IS" ? "→ Stöðugt" : "→ Steady", cls: "bg-slate-100 text-slate-600" };
+            const stenNote = avgSten == null ? null
+              : avgSten >= 6 ? (lang === "IS" ? "yfir eigin venju" : "above his own norm")
+              : avgSten <= 5 ? (lang === "IS" ? "undir eigin venju" : "below his own norm")
+              : (lang === "IS" ? "við eigin venju" : "at his own norm");
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-semibold text-slate-900">{verdict}</div>
+                    {trendSummary && (
+                      <ul className="mt-1.5 space-y-0.5 text-sm text-slate-600">
+                        <li>
+                          {lang === "IS"
+                            ? `Meðal readiness fór úr ${trendSummary.earlierAvg.toFixed(1)} í ${trendSummary.recentAvg.toFixed(1)} (${trendSummary.delta >= 0 ? "+" : ""}${trendSummary.delta.toFixed(1)}) af 25.`
+                            : `Average readiness moved from ${trendSummary.earlierAvg.toFixed(1)} to ${trendSummary.recentAvg.toFixed(1)} (${trendSummary.delta >= 0 ? "+" : ""}${trendSummary.delta.toFixed(1)}) out of 25.`}
+                        </li>
+                        {stenNote && (
+                          <li>
+                            {lang === "IS"
+                              ? `Form ${stenNote} (meðal STEN ${avgSten!.toFixed(1)}, venjulegt 5–6).`
+                              : `Form ${stenNote} (avg STEN ${avgSten!.toFixed(1)}, normal is 5–6).`}
+                          </li>
+                        )}
+                        <li>
+                          {lang === "IS"
+                            ? `Álag minnkað ${daysRecovery + daysReduced}× á tímabilinu (RECOVERY ${daysRecovery}, REDUCED ${daysReduced}).`
+                            : `Load eased ${daysRecovery + daysReduced}× over the period (RECOVERY ${daysRecovery}, REDUCED ${daysReduced}).`}
+                        </li>
+                      </ul>
+                    )}
+                    <div className="mt-1.5 text-[11px] text-slate-400">
+                      {lang === "IS"
+                        ? `Byggt á ${checkedIn.length} check-in af ${entries.length} dögum (${checkInRate}%)`
+                        : `Based on ${checkedIn.length} check-ins across ${entries.length} days (${checkInRate}%)`}
+                      {trendSummary && lowTrendConfidence ? (lang === "IS" ? " · lítið öryggi" : " · low confidence") : ""}
+                    </div>
+                  </div>
+                  {badge && <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badge.cls}`}>{badge.txt}</span>}
+                </div>
+
+                {/* Layer 2 — what the numbers mean + provenance */}
+                <div className="mt-3 border-t border-slate-100 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTrendHelp((v) => !v)}
+                    className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800"
+                  >
+                    {showTrendHelp
+                      ? (lang === "IS" ? "Fela: hvað þýða þessar tölur? ▲" : "Hide: what do these numbers mean? ▲")
+                      : (lang === "IS" ? "Hvað þýða þessar tölur? ▼" : "What do these numbers mean? ▼")}
+                  </button>
+                  {showTrendHelp && (
+                    <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-slate-600">
+                      <p><span className="font-semibold">Readiness (0–25): </span>{lang === "IS" ? "heildar dagsform úr morgun-check-in (svefn, þreyta, eymsli, skap, streita)." : "overall daily readiness from the morning check-in (sleep, fatigue, soreness, mood, stress)."}</p>
+                      <p><span className="font-semibold">STEN (1–10): </span>{lang === "IS" ? "stöðluð einkunn miðað við HANS eigin grunnlínu — 5–6 = venjulegt, hærra = ferskari en vanalega, lægra = þreyttari." : "a standardised score against HIS own baseline — 5–6 = usual, higher = fresher than normal, lower = more fatigued."}</p>
+                      <p><span className="font-semibold">{lang === "IS" ? "Þróun: " : "Trend: "}</span>{lang === "IS" ? "berum saman meðal-readiness í seinni helmingi tímabilsins við þann fyrri; munur yfir 1 stig = upp/niður, annars stöðugt." : "compares average readiness in the recent half of the window to the earlier half; a gap over 1 point = up/down, otherwise steady."}</p>
+                      <p><span className="font-semibold">RECOVERY / REDUCED: </span>{lang === "IS" ? "dagar þar sem kerfið mælti með minnkuðu álagi." : "days the system recommended easing the load."}</p>
+                      <p>{lang === "IS" ? "Af hverju þetta skiptir máli: þróun segir meira en einn dagur — hægt fallandi dagsform eða mörg REDUCED benda á uppsafnaða þreytu. Heimildir: Gabbett 2016, Buchheit 2014 (dagleg vöktun), Saw o.fl. 2016 (sjálfskráð líðan)." : "Why it matters: a trend says more than a single day — slowly falling readiness or many REDUCED days flag accumulating fatigue. Sources: Gabbett 2016, Buchheit 2014 (daily monitoring), Saw et al. 2016 (self-report wellness)."}</p>
+                      <p className="text-slate-400">{lang === "IS" ? "Reglur reikna þetta úr check-in og GPS gögnum — engin gervigreind." : "Rules compute this from check-in and GPS data — no AI."}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <KpiTile
