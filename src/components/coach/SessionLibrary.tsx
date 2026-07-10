@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import type { DrillActual } from "@/lib/micropulse/drillActuals";
 
 const SL_COPY = {
   IS: {
@@ -60,7 +61,8 @@ type SavedSession = {
   session_name: string;
   md_day: string;
   target_pl: number | null;
-  items: Array<{ drill_id: string; drill_name: string; sets: number }>;
+  items: Array<{ drill_id: string; drill_name: string; sets: number; actual?: DrillActual | null }>;
+  actuals_synced_at?: string | null;
   totals: {
     duration_min?: number;
     distance_m?: number;
@@ -391,6 +393,47 @@ export default function SessionLibrary({ teamId }: { teamId: string }) {
                 <MiniStat label="V6" value={n(totals.vel_b6)} className="hidden sm:block" />
                 <MiniStat label="Acc" value={n(totals.accel_b23)} className="hidden sm:block" />
                 <MiniStat label="Dec" value={n(totals.decel_b23)} className="hidden sm:block" />
+              </div>
+            )}
+            {/* Actual load per drill — from OpenField periods matched to the
+                built drills. Mean-per-player; labelled with coverage + how it
+                matched (name vs order) so the coach can trust it. */}
+            {(s.items ?? []).some((it) => it.actual) && (
+              <div className="border-t border-slate-100 bg-white px-4 py-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {lang === "IS" ? "Raun álag per drillu" : "Actual load per drill"}
+                  </span>
+                  {s.actuals_synced_at && (
+                    <span className="text-[10px] text-slate-400">
+                      {lang === "IS" ? "samstillt " : "synced "}
+                      {new Date(s.actuals_synced_at).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB")}
+                      {" · "}{lang === "IS" ? "frá Catapult periods (meðaltal per leikmann)" : "from Catapult periods (mean per player)"}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {(s.items ?? []).map((it, idx) => {
+                    const a = it.actual;
+                    return (
+                      <div key={idx} className="flex items-center gap-2 text-[11px]">
+                        <span className="min-w-0 flex-1 truncate text-slate-700">{it.drill_name}</span>
+                        {a ? (
+                          <>
+                            <span className="tabular-nums text-slate-800"><b>{n(a.player_load)}</b> PL</span>
+                            <span className="tabular-nums text-slate-500">{n(a.distance_m)} m</span>
+                            <span className="text-slate-400">{a.n_players} {lang === "IS" ? "leikm." : "players"}</span>
+                            <span className={`rounded px-1 py-0.5 text-[9px] font-semibold ${a.matched_by === "name" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {a.matched_by === "name" ? (lang === "IS" ? "nafn" : "name") : (lang === "IS" ? "röð" : "order")}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-300">{lang === "IS" ? "engin period-pörun" : "no period match"}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

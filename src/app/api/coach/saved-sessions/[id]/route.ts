@@ -92,7 +92,7 @@ export async function PATCH(
       .update(updates)
       .eq("id", id)
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, actuals_synced_at"
       )
       .single();
 

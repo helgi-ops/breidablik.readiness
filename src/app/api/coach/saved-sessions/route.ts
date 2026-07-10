@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("saved_sessions")
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, actuals_synced_at"
       )
       .eq("team_id", auth.teamId)
       .is("deleted_at", null)

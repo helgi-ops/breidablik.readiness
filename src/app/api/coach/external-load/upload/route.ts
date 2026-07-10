@@ -18,6 +18,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseCatapultCsv } from "@/lib/integrations/catapult-csv/parser";
 import type { CatapultMetricKey } from "@/lib/integrations/catapult-csv/catalog";
 import type { CatapultCsvRow } from "@/lib/integrations/catapult-csv/parser";
+import { aggregatePeriodsPerPlayer, csvRowsToPeriodRows, writeSessionActuals, isSessionTotalName } from "@/lib/micropulse/drillActuals";
 
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -515,6 +516,32 @@ export async function POST(req: NextRequest) {
     committed = dbRows.length;
   }
 
+  // ── Per-drill ACTUAL load from OpenField periods ────────────────────────────
+  // Each non-"Session" period row is a drill the coach split out in OpenField.
+  // Collapse the squad to a mean-per-player per period, match to the drills in
+  // that day's built session (name first, then order) and write the result onto
+  // saved_sessions.items[].actual. Best-effort and additive — the daily
+  // player_external_load_daily rows above are untouched, and a failure here
+  // never fails the upload.
+  let drillActualsMatched = 0;
+  try {
+    const periodRowsByDate = new Map<string, CatapultCsvRow[]>();
+    for (const r of parsed.rows) {
+      if (isSessionTotalName(r.periodName)) continue;
+      const d = overrideDate ?? r.date;
+      if (!d) continue;
+      const list = periodRowsByDate.get(d) ?? [];
+      list.push(r);
+      periodRowsByDate.set(d, list);
+    }
+    for (const [d, rows] of periodRowsByDate) {
+      const groups = aggregatePeriodsPerPlayer(csvRowsToPeriodRows(rows));
+      if (!groups.length) continue;
+      const res = await writeSessionActuals(supabase, auth.teamId, d, groups);
+      if (res.ok) drillActualsMatched += res.matched;
+    }
+  } catch { /* actuals are best-effort */ }
+
   // ── Optional: this upload IS a match → populate match_player_minutes so TLYP
   // and the post-match surfaces recognise it. The OpenField match CSV carries NO
   // reliable playing time (its "Duration" is pod-on time — warmup→cooldown, often
@@ -571,6 +598,7 @@ export async function POST(req: NextRequest) {
     rowsCommitted: committed,
     rowsParsed:    aggregated.length,
     athletesTotal: resolution.length,
+    drillActualsMatched,
     matchMinutesUpserted,
     athletesUnmapped: unmappedCount,
     dateRange,
