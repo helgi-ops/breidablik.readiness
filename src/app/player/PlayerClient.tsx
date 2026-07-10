@@ -17,6 +17,7 @@ import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
 import {
@@ -3823,16 +3824,25 @@ export default function PlayerClient() {
           .eq("date", targetDate),
       ]);
 
-      const normToday = ((todayRows ?? []) as Record<string, unknown>[])
+      // One effective row per date/player-date first: a coach's MANUAL GPS entry
+      // overrides the catapult reading for that day. Dedupe on the raw rows (they
+      // carry `source`) before normalise, which drops the source column.
+      const normToday = oneRowPerDate(
+        (todayRows ?? []) as Array<Record<string, unknown> & { date: string; source?: string | null }>,
+      )
         .map(normalizeCatapultDailyLoadRow)
         .filter((r): r is CatapultDailyLoadRow => r != null)
         .sort((a, b) => a.date.localeCompare(b.date))
         .at(-1) ?? null;
-      const normHistory = ((histRows ?? []) as Record<string, unknown>[])
+      const normHistory = oneRowPerDate(
+        (histRows ?? []) as Array<Record<string, unknown> & { date: string; source?: string | null }>,
+      )
         .map(normalizeCatapultDailyLoadRow)
         .filter((r): r is CatapultDailyLoadRow => r != null)
         .sort((a, b) => a.date.localeCompare(b.date));
-      const normTeam = ((teamRows ?? []) as Record<string, unknown>[])
+      const normTeam = oneRowPerPlayerDate(
+        (teamRows ?? []) as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
+      )
         .map(normalizeCatapultDailyLoadRow)
         .filter((r): r is CatapultDailyLoadRow => r != null);
 
@@ -4832,12 +4842,19 @@ export default function PlayerClient() {
         if (catapultTodayErr) console.error("player catapult today error:", catapultTodayErr.message);
         if (catapultHistoryErr) console.error("player catapult history error:", catapultHistoryErr.message);
 
-        const normalizedPlayerToday = ((catapultTodayRows ?? []) as Record<string, unknown>[])
+        // One effective row per date/player-date: a manual coach entry overrides
+        // the catapult reading for that day. Dedupe on raw rows (they carry
+        // `source`) before normalise, which drops the source column.
+        const normalizedPlayerToday = oneRowPerDate(
+          (catapultTodayRows ?? []) as Array<Record<string, unknown> & { date: string; source?: string | null }>,
+        )
           .map(normalizeCatapultDailyLoadRow)
           .filter((row): row is CatapultDailyLoadRow => row != null)
           .sort((a, b) => a.date.localeCompare(b.date))
           .at(-1) ?? null;
-        const normalizedPlayerHistory = ((catapultHistoryRows ?? []) as Record<string, unknown>[])
+        const normalizedPlayerHistory = oneRowPerDate(
+          (catapultHistoryRows ?? []) as Array<Record<string, unknown> & { date: string; source?: string | null }>,
+        )
           .map(normalizeCatapultDailyLoadRow)
           .filter((row): row is CatapultDailyLoadRow => row != null)
           .sort((a, b) => a.date.localeCompare(b.date));
@@ -4856,7 +4873,9 @@ export default function PlayerClient() {
             setCatapultTeamToday([]);
           } else {
             setCatapultTeamToday(
-              ((catapultTeamRows ?? []) as Record<string, unknown>[])
+              oneRowPerPlayerDate(
+                (catapultTeamRows ?? []) as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
+              )
                 .map(normalizeCatapultDailyLoadRow)
                 .filter((row): row is CatapultDailyLoadRow => row != null),
             );

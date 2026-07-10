@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
+import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const r0 = (v: number) => Math.round(v);
@@ -37,7 +38,7 @@ type MatchMetrics = {
 };
 
 const LOAD_COLUMNS =
-  "player_id, date, total_distance, high_speed_distance, sprint_distance, total_player_load, " +
+  "player_id, date, source, total_distance, high_speed_distance, sprint_distance, total_player_load, " +
   "accelerations, decelerations, max_velocity, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
@@ -201,7 +202,7 @@ export async function computePlayerGameReport(
 
   const { data: loadData, error: loadErr } = matchDates.length
     ? await supabase.from("player_external_load_daily").select(LOAD_COLUMNS)
-        .eq("source", "catapult").in("player_id", playerIds).in("date", matchDates).limit(5000)
+        .in("source", ["catapult", "manual"]).in("player_id", playerIds).in("date", matchDates).limit(5000)
     : { data: [], error: null };
   if (loadErr) return { ok: false, error: loadErr.message, status: 500 };
 
@@ -209,8 +210,12 @@ export async function computePlayerGameReport(
   for (const s of (scheduleRes.data ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_home: boolean | null }>) {
     if (!scheduleByDate.has(s.match_date)) scheduleByDate.set(s.match_date, { opponent: s.opponent, competition: s.competition, is_home: s.is_home });
   }
+  // One effective row per (player, match date): a manual coach entry overrides
+  // the catapult reading for that day.
   const loadByKey = new Map<string, Record<string, unknown>>();
-  for (const r of (loadData ?? []) as unknown as Array<Record<string, unknown>>) loadByKey.set(`${r.player_id}|${r.date}`, r);
+  for (const r of oneRowPerPlayerDate(
+    (loadData ?? []) as unknown as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
+  )) loadByKey.set(`${r.player_id}|${r.date}`, r);
 
   // Manual minutes (authoritative) keyed player|date.
   const manualMin = new Map<string, { minutes: number; dnp: boolean }>();

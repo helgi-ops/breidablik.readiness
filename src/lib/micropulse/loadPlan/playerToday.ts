@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveMdContext, sameMdDayDates } from "@/lib/micropulse/loadPlan/forTeam";
 import { planSessionLoad, type PlannedSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { computePlayerLoadAcwr } from "@/lib/micropulse/playerLoadAcwr";
+import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export type PlayerToday = {
   planned: PlannedSessionLoad;
@@ -48,16 +49,22 @@ export async function computePlayerToday(
   const since = addDaysISO(today, -180);
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("date, total_player_load, raw_payload_json")
+    .select("date, source, total_player_load, raw_payload_json")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual"])
     .gte("date", since)
     .lte("date", today);
+  // One effective row per date: a manual coach entry overrides the pod reading
+  // for that day (a correction can be lower than the bogus pod value, so we must
+  // pick manual explicitly rather than take the max).
+  const dedup = oneRowPerDate(
+    (rows ?? []) as Array<{ date: string; source?: string | null; total_player_load: number | null; raw_payload_json: unknown }>,
+  );
   const loadByDate = new Map<string, number>();
-  for (const r of (rows ?? []) as Array<{ date: string; total_player_load: number | null; raw_payload_json: unknown }>) {
+  for (const r of dedup) {
     if ((r.raw_payload_json as { estimated?: boolean } | null)?.estimated) continue;
     const v = typeof r.total_player_load === "number" ? r.total_player_load : Number(r.total_player_load);
-    if (Number.isFinite(v) && v > 0) loadByDate.set(r.date, Math.max(loadByDate.get(r.date) ?? 0, v));
+    if (Number.isFinite(v) && v > 0) loadByDate.set(r.date, v);
   }
 
   // Personal target = the player's own average on past days of THIS MD-day.

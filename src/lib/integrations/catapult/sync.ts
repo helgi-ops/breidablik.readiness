@@ -354,11 +354,33 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
 
   if (!payload.length) return 0;
 
-  const { error } = await sb.from("player_external_load_daily").upsert(payload, {
+  // Durable manual override: if a coach has entered a MANUAL GPS row for a
+  // (player, date), that is an explicit correction of a forgot/broken pod. The
+  // nightly Catapult sync must NOT overwrite it back to the pod value, so drop
+  // those exact (player, date) pairs from this batch — the manual row stays the
+  // one effective row for the day. Scoped to this batch's players/dates so it
+  // stays a cheap lookup.
+  const batchPlayerIds = Array.from(new Set(payload.map((p) => p.player_id).filter(Boolean)));
+  const batchDates = Array.from(new Set(payload.map((p) => p.date)));
+  const { data: manualRows } = await sb
+    .from("player_external_load_daily")
+    .select("player_id, date")
+    .eq("source", "manual")
+    .in("player_id", batchPlayerIds)
+    .in("date", batchDates);
+  const manualKeys = new Set(
+    ((manualRows ?? []) as Array<{ player_id: string; date: string }>).map((r) => `${r.player_id}|${r.date}`),
+  );
+  const writable = manualKeys.size
+    ? payload.filter((p) => !manualKeys.has(`${p.player_id}|${p.date}`))
+    : payload;
+  if (!writable.length) return 0;
+
+  const { error } = await sb.from("player_external_load_daily").upsert(writable, {
     onConflict: "player_id,date,source",
   });
   if (error) throw new Error(error.message);
-  return payload.length;
+  return writable.length;
 }
 
 export async function syncCatapultDailyMetrics(

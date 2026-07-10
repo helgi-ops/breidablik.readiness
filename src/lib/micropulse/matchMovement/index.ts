@@ -19,6 +19,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands, MovementVariant } from "./types";
 import { EMPTY_SUB, movementDimensions } from "./types";
 
@@ -29,6 +30,7 @@ export * from "./types";
 type RawRow = {
   player_id: string;
   date: string;
+  source?: string | null;
   // IMA (Pro/ELITE)
   ima_total: number | null;
   ima_accel: number | null;
@@ -118,7 +120,7 @@ function gpsHasData(row: RawRow): boolean {
 }
 
 const LOAD_COLS =
-  "player_id, date, ima_total, ima_accel, ima_decel, " +
+  "player_id, date, source, ima_total, ima_accel, ima_decel, " +
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, " +
   "ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, " +
@@ -176,10 +178,12 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const { data: extData } = await sb
     .from("player_external_load_daily")
     .select(LOAD_COLS)
-    .eq("source", "catapult")
+    .in("source", ["catapult", "manual"])
     .in("player_id", playerIds)
     .in("date", matchDates);
-  const ext = ((extData ?? []) as unknown as RawRow[]);
+  // One effective row per (player, match date): a coach's manual GPS entry
+  // overrides the catapult reading for that day.
+  const ext = oneRowPerPlayerDate((extData ?? []) as unknown as RawRow[]);
 
   // Resolve a player's minutes for a match date: a manual entry if present (and
   // not a DNP), otherwise the Catapult session duration. Keep only appearances

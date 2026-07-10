@@ -6,6 +6,7 @@ import {
   type AcwrPayload,
   type DailyLoad,
 } from "./index";
+import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 /**
  * Pull the last 28 days of total_player_load for `playerId` ending on
@@ -27,9 +28,9 @@ export async function loadPlayerLoadAcwr(
 
   const { data, error } = await sb
     .from("player_external_load_daily")
-    .select("date, total_player_load")
+    .select("date, source, total_player_load")
     .eq("player_id", args.playerId)
-    .eq("source", "catapult")
+    .in("source", ["catapult", "manual"])
     .gte("date", startIso)
     .lte("date", args.todayIso)
     .order("date", { ascending: true });
@@ -44,8 +45,10 @@ export async function loadPlayerLoadAcwr(
     };
   }
 
-  const rows: DailyLoad[] = ((data ?? []) as Array<{ date: string; total_player_load: number | null }>)
-    .map((r) => ({ date: r.date, load: r.total_player_load }));
+  // A manual coach entry overrides the pod reading for the same day.
+  const rows: DailyLoad[] = oneRowPerDate(
+    (data ?? []) as Array<{ date: string; source?: string | null; total_player_load: number | null }>,
+  ).map((r) => ({ date: r.date, load: r.total_player_load }));
 
   return computePlayerLoadAcwr(rows, args.todayIso);
 }
@@ -70,9 +73,9 @@ export async function loadPlayerLoadAcwrBatch(
 
   const { data, error } = await sb
     .from("player_external_load_daily")
-    .select("player_id, date, total_player_load")
+    .select("player_id, date, source, total_player_load")
     .in("player_id", args.playerIds as string[])
-    .eq("source", "catapult")
+    .in("source", ["catapult", "manual"])
     .gte("date", startIso)
     .lte("date", args.todayIso)
     .order("date", { ascending: true });
@@ -92,11 +95,11 @@ export async function loadPlayerLoadAcwrBatch(
 
   const byPlayer = new Map<string, DailyLoad[]>();
   for (const id of args.playerIds) byPlayer.set(id, []);
-  for (const row of (data ?? []) as Array<{
-    player_id: string;
-    date: string;
-    total_player_load: number | null;
-  }>) {
+  // Manual coach entries override the pod reading per (player, date) before the
+  // per-player ACWR series is built.
+  for (const row of oneRowPerPlayerDate(
+    (data ?? []) as Array<{ player_id: string; date: string; source?: string | null; total_player_load: number | null }>,
+  )) {
     const arr = byPlayer.get(row.player_id);
     if (arr) arr.push({ date: row.date, load: row.total_player_load });
   }

@@ -23,6 +23,7 @@
 
 import { planSessionLoad, type PlannedSessionLoad, type SessionLoadType } from "@/lib/micropulse/plannedSessionLoad";
 import { isPrevClubRow } from "@/lib/micropulse/load/previousClub";
+import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export type LoadKpi =
   | "totalDistance" | "playerLoad" | "hsr" | "sprint" | "accel" | "decel" | "ima"
@@ -78,6 +79,9 @@ export type LoadRow = {
   // Present only when the caller selected it — lets us exclude previous-club
   // (pre-transfer) rows from TEAM aggregates while keeping them per-player.
   raw_payload_json?: Record<string, unknown> | null;
+  // 'catapult' | 'manual' — a manual coach entry overrides the pod reading for
+  // the same (player, date). Select it so the resolver can collapse duplicates.
+  source?: string | null;
 };
 
 const VAL: Record<LoadKpi, (r: LoadRow) => number> = {
@@ -220,12 +224,18 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     daysToNext: input.daysToNext,
   });
 
+  // One effective row per (player, date) first: a coach's MANUAL GPS entry
+  // corrects a forgot/broken pod and must override the catapult reading for that
+  // day — for both the per-player target/ACWR and the team roll-ups below. This
+  // also stops a two-source date being counted twice.
+  const rows = oneRowPerPlayerDate(input.rows);
+
   // Per-date, per-player rows grouped. TEAM aggregates (match reference, team
   // ACWR, squad baseline, recent-session trajectory) roll multiple players
   // together by date, so they must exclude previous-club (pre-transfer) rows —
   // a transferred player wasn't on the squad on those dates. His own rows still
-  // count toward HIS per-player target/ACWR below (byPlayer uses input.rows).
-  const teamRows = input.rows.filter((r) => !isPrevClubRow(r));
+  // count toward HIS per-player target/ACWR below (byPlayer uses the deduped rows).
+  const teamRows = rows.filter((r) => !isPrevClubRow(r));
   const byDate = new Map<string, LoadRow[]>();
   for (const r of teamRows) {
     const list = byDate.get(r.date) ?? [];
@@ -401,7 +411,7 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
 
   // Per-player targets + flags (their own match average × matchPct).
   const byPlayer = new Map<string, LoadRow[]>();
-  for (const r of input.rows) {
+  for (const r of rows) {
     const list = byPlayer.get(r.player_id) ?? [];
     list.push(r);
     byPlayer.set(r.player_id, list);

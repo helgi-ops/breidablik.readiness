@@ -5,6 +5,7 @@ import { RefreshCw, Download, FileText, ChevronDown } from "lucide-react";
 import { useLang, applyTeamDefaultLanguage } from "@/lib/lang";
 import { COACH_COPY } from "../coachCopy";
 import { PlayerTrendTab } from "./PlayerTrendTab";
+import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import ChatThread from "@/components/chat/ChatThread";
 import BroadcastModal from "@/components/chat/BroadcastModal";
 import { RtpTab } from "./RtpTab";
@@ -5175,7 +5176,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
           .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -5184,8 +5185,13 @@ export default function CoachPage() {
 
         if (!alive) return;
 
+        // One effective row per (player, date): a coach's MANUAL GPS entry
+        // overrides the catapult reading for that day, so the squad table shows
+        // the correction and never counts a two-source date twice.
         const byPlayer = new Map<string, Array<Record<string, unknown>>>();
-        for (const row of ((loadData ?? []) as Array<Record<string, unknown>>)) {
+        for (const row of oneRowPerPlayerDate(
+          (loadData ?? []) as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
+        )) {
           const pid = String(row.player_id);
           const list = byPlayer.get(pid) ?? [];
           list.push(row);

@@ -9,6 +9,7 @@ import "server-only";
  */
 
 import { computeReturnToTraining, injuryRiskProfile, type RttSession, type RttResult } from "./returnToTraining";
+import { oneRowPerDate } from "./load/oneRowPerDate";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
@@ -83,10 +84,18 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
   // ── Sessions ──────────────────────────────────────────────────────────────
   const { data: load } = await sb
     .from("player_external_load_daily")
-    .select("date, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
-    .eq("player_id", playerId).eq("source", "catapult").gte("date", since).order("date");
+    .select("date, source, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
+    .eq("player_id", playerId).in("source", ["catapult", "manual"]).gte("date", since).order("date");
 
-  const sessions: RttSession[] = ((load ?? []) as Array<Record<string, unknown>>).map((r) => {
+  // One row per date: a coach's MANUAL GPS entry (forgot / broken pod) overrides
+  // the catapult reading for the same day, so RTT reflects the correction instead
+  // of the bogus pod value. Without this, manually-entered numbers were dropped
+  // (the query used to read source='catapult' only).
+  const dedupLoad = oneRowPerDate(
+    (load ?? []) as Array<Record<string, unknown> & { date: string; source?: string | null }>,
+  );
+
+  const sessions: RttSession[] = dedupLoad.map((r) => {
     const date = String(r.date);
     const codLeft = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low);
     const codRight = num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);

@@ -1,4 +1,5 @@
 import type { CatapultDailyLoadRow, CatapultExternalLoadBaseline } from "./types";
+import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 type RawExternalLoadRow = Record<string, unknown>;
 
@@ -143,7 +144,12 @@ export async function fetchCatapultDailyLoadRows(args: {
   }
   if (response.error) throw response.error;
 
-  return ((response.data ?? []) as RawExternalLoadRow[])
+  // One effective row per date: a manual coach entry overrides the pod reading
+  // for that day. Dedupe on the raw rows (they carry `source`) before normalise.
+  const deduped = oneRowPerDate(
+    (response.data ?? []) as Array<RawExternalLoadRow & { date: string; source?: string | null }>,
+  );
+  return deduped
     .map(normalizeCatapultDailyLoadRow)
     .filter((row): row is CatapultDailyLoadRow => row != null)
     .filter((row) => hasSameOrEarlierDate(row.date, args.date));
