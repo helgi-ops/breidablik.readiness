@@ -117,6 +117,7 @@ export function computePlayerVolatilitySummary(points: VolatilityDailyPoint[]): 
       dayLabels: toDayLabels(windowPoints.length),
       dailyComposite: [],
       currentVsTrendNote: null,
+      counterfactual: null,
     };
   }
 
@@ -125,7 +126,20 @@ export function computePlayerVolatilitySummary(points: VolatilityDailyPoint[]): 
   const overallNormalized = normalizedDrivers.length ? normalizedDrivers.reduce((acc, v) => acc + v, 0) / normalizedDrivers.length : 0;
   const overallScore = Number((overallNormalized * 100).toFixed(2));
   const level = levelFromScore(overallScore);
-  const sortedDrivers = [...drivers].sort((a, b) => b.normalizedScore - a.normalizedScore).slice(0, 3);
+  const rankedDrivers = [...drivers].sort((a, b) => b.normalizedScore - a.normalizedScore);
+  const sortedDrivers = rankedDrivers.slice(0, 3);
+
+  // Counterfactual: hold the single biggest-contributing signal steady and
+  // recompute the level from the remaining drivers. This is the "if X had been
+  // steady → GREEN/lower" the manifesto requires for every flagged player.
+  let counterfactual: PlayerVolatilitySummary["counterfactual"] = null;
+  if (rankedDrivers.length >= 2) {
+    const top = rankedDrivers[0];
+    const rest = rankedDrivers.slice(1);
+    const restMean = rest.reduce((acc, d) => acc + d.normalizedScore, 0) / rest.length;
+    const newScore = Number((restMean * 100).toFixed(2));
+    counterfactual = { driverKey: top.key, driverLabel: top.label, newScore, newLevel: levelFromScore(newScore) };
+  }
 
   const latest = windowPoints[windowPoints.length - 1];
   const avgZ =
@@ -149,5 +163,6 @@ export function computePlayerVolatilitySummary(points: VolatilityDailyPoint[]): 
     dayLabels: toDayLabels(windowPoints.length),
     dailyComposite: computeDailyComposite(windowPoints),
     currentVsTrendNote: note,
+    counterfactual,
   };
 }

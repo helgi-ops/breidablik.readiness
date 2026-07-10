@@ -2498,6 +2498,7 @@ export default function CoachPage() {
   const [volatilityLoading, setVolatilityLoading] = useState(false);
   const [volatilityLoaded, setVolatilityLoaded] = useState(false);
   const [volatilityChartsOpen, setVolatilityChartsOpen] = useState<Record<string, boolean>>({});
+  const [volatilityMethodOpen, setVolatilityMethodOpen] = useState(false);
   const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
   const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
 
@@ -11185,6 +11186,49 @@ export default function CoachPage() {
                   </span>
                 </div>
 
+                {/* Behind the numbers — how the score is computed + provenance.
+                    Layer 2: hidden by default, plain read comes first. */}
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setVolatilityMethodOpen((v) => !v)}
+                    className="text-[11px] font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    {volatilityMethodOpen
+                      ? (lang === "IS" ? "Fela: hvernig er þetta reiknað? ▲" : "Hide: how is this computed? ▲")
+                      : (lang === "IS" ? "Hvernig er þetta reiknað? ▼" : "How is this computed? ▼")}
+                  </button>
+                  {volatilityMethodOpen && (
+                    <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600">
+                      <p>
+                        {lang === "IS"
+                          ? "Sveifla = hversu mikið dagsformið hoppar milli daga. Fyrir hvert merki (check-in, Z-skor, Δ Z, eymsli, svefn, skap, orka, streita) reiknum við meðaltal af breytingunni frá degi til dags, kvörðum í 0–100 og tökum meðaltal merkjanna. Hærra = meiri sveifla."
+                          : "Volatility = how much readiness bounces day-to-day. For each signal (check-in, Z-score, ΔZ, soreness, sleep, mood, energy, stress) we take the average absolute change between consecutive days, scale it to 0–100, then average the signals. Higher = more volatile."}
+                      </p>
+                      <p>
+                        <span className="font-semibold">{lang === "IS" ? "Þrep: " : "Bands: "}</span>
+                        {lang === "IS" ? "0–33 stöðugur · 33–66 nokkrar sveiflur · 66–100 miklar sveiflur. Þarf a.m.k. 3 daga (2 til að birtast)." : "0–33 stable · 33–66 moderate · 66–100 high. Needs ≥3 days (2 to appear)."}
+                      </p>
+                      <p>
+                        <span className="font-semibold">{lang === "IS" ? "Af hverju þetta skiptir máli: " : "Why it matters: "}</span>
+                        {lang === "IS"
+                          ? "Óstöðug sjálfskráð líðan er tengd verri endurheimt og aukinni meiðslahættu; dagleg vöktun nemur það sem einn dagur missir af."
+                          : "Unstable self-reported wellness tracks poorer recovery and raised injury risk; daily monitoring catches what a single day misses."}
+                      </p>
+                      <p className="text-slate-500">
+                        {lang === "IS"
+                          ? "Heimildir: Saw o.fl. 2016 (sjálfskráð líðan > hlutlægar mælingar fyrir álagssvörun); Thorpe o.fl. 2017 (dagleg vöktun); Jaspers o.fl. 2017 (álag og líðan)."
+                          : "Sources: Saw et al. 2016 (self-report wellness > objective measures for load response); Thorpe et al. 2017 (daily monitoring); Jaspers et al. 2017 (load & wellness)."}
+                      </p>
+                      <p className="text-slate-400">
+                        {lang === "IS"
+                          ? "Reglur reikna þetta úr check-in gögnunum — engin gervigreind, engin ágiskun."
+                          : "Rules compute this from the check-in data — no AI, no guessing."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {volatilityLoading && !volatilityLoaded ? (
                   <div className="py-8 text-center text-sm text-slate-400">
                     {lang === "IS" ? "Sæki readiness-sögu síðustu daga…" : "Loading recent readiness history…"}
@@ -11251,9 +11295,48 @@ export default function CoachPage() {
                             )}
                           </div>
                           <div className="mb-2 text-[10px] text-slate-400">
-                            {lang === "IS" ? `Byggt á ${summary.sampleSize} check-in` : `Based on ${summary.sampleSize} check-in${summary.sampleSize === 1 ? "" : "s"}`}
+                            {lang === "IS" ? `Byggt á ${summary.sampleSize} check-in af ${DAYS}` : `Based on ${summary.sampleSize} of ${DAYS} check-ins`}
                             {lowConfidence && level !== "INSUFFICIENT" ? (lang === "IS" ? " · lítið öryggi" : " · low confidence") : ""}
                           </div>
+
+                          {/* Counterfactual + recommendation (manifesto: every flag
+                              carries a counterfactual + visible reasoning). */}
+                          {(() => {
+                            const levelRank = (l: string) => (l === "LOW" ? 0 : l === "MODERATE" ? 1 : l === "HIGH" ? 2 : -1);
+                            const levelWord = (l: string) =>
+                              l === "HIGH" ? (lang === "IS" ? "miklar sveiflur" : "high")
+                              : l === "MODERATE" ? (lang === "IS" ? "nokkrar sveiflur" : "moderate")
+                              : l === "LOW" ? (lang === "IS" ? "stöðugur" : "stable")
+                              : (lang === "IS" ? "of fá gögn" : "insufficient");
+                            const cf = summary.counterfactual;
+                            const cfLabel = cf ? ((lang === "IS" ? DRIVER_LABELS[cf.driverKey]?.is : DRIVER_LABELS[cf.driverKey]?.en) ?? cf.driverLabel) : null;
+                            const cfHelps = !!cf && level !== "INSUFFICIENT" && levelRank(cf.newLevel) < levelRank(level);
+                            const rec =
+                              level === "HIGH"
+                                ? (lang === "IS"
+                                    ? `Staðfestu með GPS eða CMJ áður en þú hleður þungt — miklar sveiflur fara oft á undan slæmum degi. Íhugaðu stutt samtal um ${(cfLabel ?? (lang === "IS" ? "svefn/álag" : "sleep/stress")).toLowerCase()}.`
+                                    : `Confirm with GPS or a CMJ before loading hard — big swings often precede a bad day. Consider a quick word about ${(cfLabel ?? "sleep/stress").toLowerCase()}.`)
+                                : level === "MODERATE"
+                                  ? (lang === "IS"
+                                      ? "Fylgstu með í dag; ekki ástæða til að draga úr án fleiri merkja."
+                                      : "Keep an eye today; no need to pull back without more signals.")
+                                  : level === "LOW"
+                                    ? (lang === "IS" ? "Óhætt að halda áætlun." : "Safe to proceed as planned.")
+                                    : (lang === "IS" ? "Safnaðu fleiri check-in til að meta." : "Needs more check-ins to assess.");
+                            return (
+                              <div className="mb-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-relaxed">
+                                {cfHelps && cf && (
+                                  <div className="text-slate-600">
+                                    <span className="font-semibold">{lang === "IS" ? "Ef" : "If"} {cfLabel}</span>{" "}
+                                    {lang === "IS" ? "væri stöðugt" : "were steady"} → <span className="font-semibold">{levelWord(cf.newLevel)}</span>.
+                                  </div>
+                                )}
+                                <div className="text-slate-700">
+                                  <span className="font-semibold">{lang === "IS" ? "Tillaga: " : "Suggestion: "}</span>{rec}
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Layer 2 — raw chart behind a toggle */}
                           <button
@@ -11361,7 +11444,30 @@ export default function CoachPage() {
                             <div>{lang === "IS" ? "Eymsli" : "Sore"}: <span className="font-medium text-slate-700">{last?.soreness != null ? last.soreness : "—"}</span></div>
                             <div>{lang === "IS" ? "Svefn" : "Sleep"}: <span className="font-medium text-slate-700">{last?.sleepQuality != null ? last.sleepQuality : "—"}</span></div>
                           </div>
-                          <div className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
+                          {/* Driver breakdown — quantifies "what's driving the swing". */}
+                          {level !== "INSUFFICIENT" && summary.drivers.length > 0 && (
+                            <div className="mt-2">
+                              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                {lang === "IS" ? "Hvað drífur sveifluna" : "What drives the swing"}
+                              </div>
+                              <div className="space-y-1">
+                                {summary.drivers.map((d) => {
+                                  const dl = (lang === "IS" ? DRIVER_LABELS[d.key]?.is : DRIVER_LABELS[d.key]?.en) ?? d.label;
+                                  return (
+                                    <div key={d.key} className="flex items-center gap-2 text-[10px]">
+                                      <span className="w-14 shrink-0 text-slate-500">{dl}</span>
+                                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                        <span className="block h-full rounded-full bg-slate-400" style={{ width: `${Math.round(d.volatilityScore)}%` }} />
+                                      </span>
+                                      <span className="w-6 shrink-0 text-right font-medium text-slate-600">{Math.round(d.volatilityScore)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-2 text-[10px] leading-relaxed text-slate-400">
                             {lang === "IS"
                               ? "Check-in = heildar dagsform (0–25). Z-skor = hvernig í dag ber saman við hans eigin venju (0 = venjulegt). Eymsli 1–5 (hærra = minni eymsli). Svefn 1–5. Allt kvarðað í 0–100 fyrir grafið."
                               : "Check-in = overall readiness (0–25). Z-score = today vs his own norm (0 = usual). Soreness 1–5 (higher = less sore). Sleep 1–5. All scaled to 0–100 for the chart."}

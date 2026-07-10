@@ -18,15 +18,34 @@ export interface VolatilityDriverScore {
   normalizedScore: number;
 }
 
+export type VolatilityLevel = "LOW" | "MODERATE" | "HIGH" | "INSUFFICIENT";
+
+export interface VolatilityCounterfactual {
+  /** The single signal contributing most to the volatility. */
+  driverKey: string;
+  driverLabel: string;
+  /** Overall score with that driver held steady (the other drivers only). */
+  newScore: number;
+  /** Level the player would fall to if that driver were stable. */
+  newLevel: VolatilityLevel;
+}
+
 export interface PlayerVolatilitySummary {
   sampleSize: number;
   windowDays: number;
   hasEnoughData: boolean;
   overallScore: number | null;
-  level: "LOW" | "MODERATE" | "HIGH" | "INSUFFICIENT";
+  level: VolatilityLevel;
   interpretation: string;
+  /** Top contributing drivers (most-volatile first, capped for display). */
   drivers: VolatilityDriverScore[];
   dayLabels: string[];
   dailyComposite: number[];
   currentVsTrendNote?: string | null;
+  /**
+   * "If the biggest driver were steady → this level" — the counterfactual the
+   * manifesto requires for every flagged player. Null when there is too little
+   * data or only one usable driver.
+   */
+  counterfactual?: VolatilityCounterfactual | null;
 }
