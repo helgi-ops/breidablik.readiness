@@ -97,9 +97,19 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
 
   const sessions: RttSession[] = dedupLoad.map((r) => {
     const date = String(r.date);
+    // L/R totals (all bands) — only used for the CoD asymmetry ratio, where a
+    // stable left-vs-right balance wants the full event count.
     const codLeft = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low);
     const codRight = num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
-    const cod = codLeft + codRight;
+    // The RTT change-of-direction QUALITY is the LAST, most re-injury-prone gate,
+    // so it must count only HIGH-INTENSITY cuts — the high + medium bands. The low
+    // band is gentle direction drift that even a jogging session logs in the
+    // thousands (e.g. a rehab jog: high 0, medium 1, low ~2300), which would
+    // otherwise make a player who has only jogged look "done" with CoD. High+medium
+    // is the cutting load that actually re-loads a groin/knee/ankle.
+    const cod =
+      num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) +
+      num(r.ima_cod_right_high) + num(r.ima_cod_right_medium);
     return {
       date,
       injured: windows.some((w) => inWindow(date, w)),

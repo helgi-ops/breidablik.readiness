@@ -52,9 +52,9 @@ export type RttSession = {
   accel: number;      // IMA accelerations (count)
   decel: number;      // IMA decelerations (count)
   decelHigh: number;  // high-intensity braking (ima_band3_decel_count) — injury-critical
-  cod: number;        // change-of-direction load (IMA CoD total)
-  codLeft: number;    // IMA CoD to the left (for asymmetry)
-  codRight: number;   // IMA CoD to the right
+  cod: number;        // high-intensity change-of-direction (IMA CoD high+medium bands) — re-injury-critical; excludes the low/jogging band
+  codLeft: number;    // IMA CoD to the left, all bands (for asymmetry)
+  codRight: number;   // IMA CoD to the right, all bands (for asymmetry)
   efforts: number;    // accel_decel_efforts (Core/Lite GPS agility proxy; no IMA)
   topSpeed: number;   // max_velocity (km/h)
   /** Did the pod get a GPS lock this session? An indoor/gym session logs valid
@@ -147,7 +147,7 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   accel:     { en: "Weekly accelerations (IMA)", is: "Hröðun/viku (IMA)", unit: "", dp: 0 },
   decel:     { en: "Weekly decelerations (IMA)", is: "Hemlun/viku (IMA)", unit: "", dp: 0 },
   decelHigh: { en: "Weekly high-intensity braking (IMA)", is: "Háákefðar hemlun/viku (IMA)", unit: "", dp: 0 },
-  cod:       { en: "Weekly change of direction (IMA)", is: "Stefnubreytingar/viku (IMA)", unit: "", dp: 0 },
+  cod:       { en: "Weekly high-intensity change of direction (IMA)", is: "Háákefðar stefnubreytingar/viku (IMA)", unit: "", dp: 0 },
   efforts:   { en: "Weekly efforts (accel + decel)", is: "Átök/viku (hröðun + hemlun)", unit: "", dp: 0 },
 };
 
