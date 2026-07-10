@@ -916,6 +916,23 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
   return mergedPayload;
 }
 
+/**
+ * Per-PERIOD athlete stats for one session (activity): the same base + IMA
+ * parameters, but grouped by athlete AND period so each period (drill) comes
+ * back as its own row carrying the OpenField period name. Used to populate
+ * per-drill ACTUAL load. Best-effort: whether an org's stats support the
+ * "period" group and return the period name must be confirmed against the live
+ * API — the caller treats a throw / empty result as "no actuals".
+ */
+export async function fetchActivityPeriodStats(activityId: string): Promise<unknown> {
+  return catapultPost("/api/v6/stats", {
+    group_by: ["athlete", "period"],
+    filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+    parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
+    requested_only: false,
+  });
+}
+
 // ── Diagnostic-only: explicit IMA jump-count probe ────────────────────────────
 // Jumps are NOT in any explicitly-requested parameter list (see CATAPULT_IMA_
 // PARAMETERS — accel/decel/CoD/impacts only). They only arrive via the base

@@ -1,10 +1,11 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchCatapultAthletes, setActiveCatapultConfig, getConfigFromEnv } from "./api";
+import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fetchActivityPeriodStats, fetchCatapultAthletes, setActiveCatapultConfig, getConfigFromEnv } from "./api";
 import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
-import { aggregateCatapultMetrics, normalizeCatapultActivityStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
+import { aggregateCatapultMetrics, normalizeCatapultActivityStats, normalizeCatapultPeriodStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
+import { aggregatePeriodsPerPlayer, writeSessionActuals, type PeriodRow } from "@/lib/micropulse/drillActuals";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
 
 function dateKey(input?: string | null): string {
@@ -529,6 +530,30 @@ async function _syncCatapultDailyMetricsInner(
 
   const mergedRows = mergeNormalizedRows(normalizedRows);
   const storedCount = await storeExternalLoadRows(mergedRows);
+
+  // ── Per-drill ACTUAL load from OpenField periods (best-effort) ──────────────
+  // When the coach split this session into periods (one per drill), pull the
+  // per-athlete-per-period stats, collapse to a squad mean-per-player, match each
+  // period to a drill in that day's built session, and write the actuals. Fully
+  // guarded: any failure (incl. the org not supporting period grouping) is
+  // swallowed so it can never affect the daily sync. Verify group-by-period
+  // against the live API before relying on this path.
+  if (sourceTeamId && activities.length) {
+    try {
+      const periodRows: PeriodRow[] = [];
+      for (const activity of activities) {
+        try {
+          const payload = await fetchActivityPeriodStats(activity.id);
+          periodRows.push(...normalizeCatapultPeriodStats({ payload }));
+        } catch { /* this activity has no queryable periods — skip */ }
+      }
+      const groups = aggregatePeriodsPerPlayer(periodRows);
+      if (groups.length) {
+        const sbActuals = getSupabaseAdmin();
+        await writeSessionActuals(sbActuals, sourceTeamId, targetDate, groups);
+      }
+    } catch { /* actuals are best-effort — never fail the sync */ }
+  }
 
   // Log metabolic data quality
   const metabolicValid = mergedRows.filter((r) => r.externalLoad.metabolicDataValid).length;

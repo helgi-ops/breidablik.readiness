@@ -1,4 +1,5 @@
 import type { CatapultSessionMetric, NormalizedExternalLoad, ImaClock } from "./types";
+import type { PeriodRow } from "@/lib/micropulse/drillActuals";
 
 /**
  * Parse the IMA directional ("clock") grid from a flattened Catapult record.
@@ -780,6 +781,71 @@ function normalizeImaMetrics(record: Record<string, unknown>, playerLoad: number
       },
     },
   };
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = record[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+  return null;
+}
+
+/**
+ * Per-PERIOD athlete stats → PeriodRow[]. Used by the API sync path when a
+ * session is queried with group_by ["athlete","period"] so each period (drill)
+ * can be matched to a built drill. Best-effort and defensive: if the org's
+ * stats don't carry period rows / names this returns [] and the caller writes
+ * no actuals. Only the reliably-named core metrics (player load, distance, HSR,
+ * sprint) are extracted from the API rows; accel/decel/duration are left to the
+ * CSV path until the API field names are confirmed against a live org response.
+ * NEEDS LIVE VERIFICATION against the Catapult stats response shape.
+ */
+export function normalizeCatapultPeriodStats(args: { payload: unknown }): PeriodRow[] {
+  const rows = (() => {
+    if (Array.isArray(args.payload)) {
+      return args.payload.flatMap((item) => {
+        const record = asRecord(item);
+        if (!record) return [];
+        const nested = firstNonEmptyArray(record, ["stats", "athletes", "periods", "data", "results", "items"]);
+        return nested.length ? nested : [item];
+      });
+    }
+    const record = asRecord(args.payload);
+    if (!record) return [];
+    return firstNonEmptyArray(record, ["stats", "athletes", "periods", "data", "results", "items"]);
+  })();
+
+  const orderByName = new Map<string, number>();
+  let nextOrder = 0;
+  const out: PeriodRow[] = [];
+  for (const row of rows) {
+    const record = asRecord(row);
+    if (!record) continue;
+    const athleteId = extractAthleteId(record);
+    if (!athleteId) continue;
+    const periodName = firstString(record, ["period_name", "periodName", "period", "name", "tag", "title"]);
+    if (!periodName || /^(session|total|whole session)$/i.test(periodName)) continue;
+    const f = flattenMetricRecord(record);
+    const norm = periodName.toLowerCase();
+    if (!orderByName.has(norm)) orderByName.set(norm, nextOrder++);
+    out.push({
+      periodName,
+      order: orderByName.get(norm)!,
+      athleteKey: athleteId,
+      metrics: {
+        player_load: extractMetric(f, ["total_player_load", "player_load", "playerLoad", "load"]),
+        distance_m: extractMetric(f, ["total_distance", "distance", "totalDistance"]),
+        hsr: extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]),
+        sprint: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance", "sprintDistance"]),
+        accel_b23: null,
+        decel_b23: null,
+        duration_min: null,
+      },
+    });
+  }
+  return out;
 }
 
 export function normalizeCatapultActivityStats(args: { activityId?: string | null; date: string; payload: unknown }): CatapultSessionMetric[] {
