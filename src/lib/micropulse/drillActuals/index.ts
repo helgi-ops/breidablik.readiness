@@ -198,7 +198,7 @@ export async function writeSessionActuals(
   teamId: string,
   dateISO: string,
   groups: PeriodGroup[],
-): Promise<{ ok: boolean; matched: number; sessionId: string | null; reason?: string }> {
+): Promise<{ ok: boolean; matched: number; sessionId: string | null; templatesUpdated?: number; reason?: string }> {
   if (!groups.length) return { ok: false, matched: 0, sessionId: null, reason: "no_periods" };
 
   const { data, error } = await sb
@@ -221,5 +221,41 @@ export async function writeSessionActuals(
     .update({ items, actuals_synced_at: new Date().toISOString() })
     .eq("id", chosen.id);
   if (updErr) return { ok: false, matched: 0, sessionId: chosen.id, reason: updErr.message };
-  return { ok: true, matched: matchedCount, sessionId: chosen.id };
+
+  // Calibrate the drill_library templates from the measured actuals so the
+  // drills themselves carry a real load for the next session they're used in.
+  const templatesUpdated = await updateDrillTemplatesFromActuals(sb, items);
+
+  return { ok: true, matched: matchedCount, sessionId: chosen.id, templatesUpdated };
+}
+
+/**
+ * Write each matched drill's ACTUAL (mean-per-player) load back onto its
+ * drill_library template, so a drill built without numbers gets a real profile
+ * once it's been performed. Maps the actual metric keys onto the template
+ * columns; only writes the values we have. Returns how many templates updated.
+ */
+export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem[]): Promise<number> {
+  let updated = 0;
+  for (const it of items) {
+    const a = it.actual;
+    const drillId = it.drill_id;
+    if (!a || !drillId) continue;
+    const patch: Record<string, number | string | null> = {};
+    if (a.player_load != null) patch.player_load = a.player_load;
+    if (a.distance_m != null) patch.distance_m = a.distance_m;
+    if (a.duration_min != null) patch.duration_min = a.duration_min;
+    if (a.accel_b23 != null) patch.accel_b23 = a.accel_b23;
+    if (a.decel_b23 != null) patch.decel_b23 = a.decel_b23;
+    if (a.hsr != null) patch.hir_total = a.hsr;
+    if (a.sprint != null) patch.vel_b6 = a.sprint;
+    if (a.player_load != null && a.duration_min != null && a.duration_min > 0) {
+      patch.player_load_per_min = Math.round((a.player_load / a.duration_min) * 100) / 100;
+    }
+    if (!Object.keys(patch).length) continue;
+    patch.updated_at = new Date().toISOString();
+    const { error } = await sb.from("drill_library").update(patch).eq("id", drillId);
+    if (!error) updated += 1;
+  }
+  return updated;
 }
