@@ -80,6 +80,31 @@ const CATAPULT_BASE_PARAMETERS = [
   "player_load_per_minute",
 ];
 
+// RAW IMA parameters (snake_case) for the PER-PERIOD query. The display-name IMA
+// params ("IMA Accel High" …) return 0 for this org and, critically, the org's
+// default Reporting_Parameters group is NOT expanded per-period (requested_only
+// only widens at the athlete/session level). So to get real IMA on each drill we
+// must request the raw IMU band-count fields BY NAME — the same fields the daily
+// normalizer reads (ima_band{1-3}_{accel,decel,left,right}_count, jumps). These
+// are accepted as snake_case parameters exactly like the gen2_* base params, and
+// they DO compute per-period. Pro / Vector Pro only — 0/absent on Core.
+export const CATAPULT_PERIOD_IMA_RAW_PARAMETERS = [
+  "ima_band1_accel_count", "ima_band2_accel_count", "ima_band3_accel_count",
+  "ima_band1_decel_count", "ima_band2_decel_count", "ima_band3_decel_count",
+  "ima_band1_left_count", "ima_band2_left_count", "ima_band3_left_count",
+  "ima_band1_right_count", "ima_band2_right_count", "ima_band3_right_count",
+  "ima_band1_jump_count", "ima_band2_jump_count", "ima_band3_jump_count",
+  "ima_band4_jump_count", "ima_band5_jump_count", "ima_band6_jump_count",
+  "ima_band7_jump_count", "ima_band8_jump_count",
+];
+
+// RAW metabolic (FMP) distance for the per-period query — the display-name
+// metabolic params also return 0 here, but the raw fmp_* HMLD field computes
+// per-period. Kept short: only the high-metabolic-load-distance the drill card shows.
+export const CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS = [
+  "fmp_dynamic_high_total_distance",
+];
+
 // Sprint Count parameters — exact display names from Breiðablik OpenField
 // Reporting_Parameters (confirmed 25 Apr 2026 from settings/parameters page).
 // Used for McBurnie 2022 Decel:Sprint coupling.
@@ -931,15 +956,29 @@ export async function fetchActivityPeriodStats(activityId: string): Promise<unkn
     parameters,
     requested_only: false,
   });
-  // Try with metabolic params too (HMLD / metabolic power per drill); if the org
-  // rejects an unknown metabolic param the whole call fails, so fall back to the
-  // base + IMA set. Merging metabolic in a separate call isn't possible here —
-  // mergeStatsPayloads keys by athlete only and each athlete has many periods.
-  try {
-    return await catapultPost("/api/v6/stats", body([...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS]));
-  } catch {
-    return catapultPost("/api/v6/stats", body([...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS]));
+  // A period-grouped request can't be merged after the fact (mergeStatsPayloads
+  // keys by athlete only, and each athlete has many periods) — every parameter
+  // must ride in the SAME call. Catapult rejects the whole request on a single
+  // unknown parameter name, so we cascade from richest → leanest and take the
+  // first that succeeds. The RICH set requests the RAW IMA band counts by name
+  // (the display-name IMA/metabolic params return 0 for this org and the default
+  // group isn't expanded per-period — see CATAPULT_PERIOD_IMA_RAW_PARAMETERS).
+  const attempts: string[][] = [
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS],
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_PERIOD_IMA_RAW_PARAMETERS, ...CATAPULT_PERIOD_METABOLIC_RAW_PARAMETERS],
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS],
+    [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
+    [...CATAPULT_BASE_PARAMETERS],
+  ];
+  let lastErr: unknown = null;
+  for (const params of attempts) {
+    try {
+      return await catapultPost("/api/v6/stats", body(params));
+    } catch (e) {
+      lastErr = e;
+    }
   }
+  throw lastErr ?? new Error("fetchActivityPeriodStats: all parameter sets failed");
 }
 
 // ── Diagnostic-only: explicit IMA jump-count probe ────────────────────────────

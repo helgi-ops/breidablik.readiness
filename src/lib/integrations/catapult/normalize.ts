@@ -863,15 +863,20 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
           extractMetric(f, ["gen2_deceleration_band2_total_effort_count"]),
           extractMetric(f, ["gen2_deceleration_band3_total_effort_count"]),
         ),
-        accel_total: extractMetric(f, ["tot_as", "total_accelerations", "accelerations"]),
-        decel_total: extractMetric(f, ["tot_ds", "total_decelerations", "decelerations"]),
+        // Match the daily normalizer's key lists (gen2 avg-effort keys first) so
+        // per-drill totals fill the same way the athlete-daily totals do.
+        accel_total: extractMetric(f, ["gen2_acceleration_band6plus_average_effort_count", "tot_as", "acceleration_efforts_gen2", "total_accelerations", "accelerations"]),
+        decel_total: extractMetric(f, ["gen2_acceleration_band3plus_average_effort_count", "tot_ds", "deceleration_efforts_gen2", "total_decelerations", "decelerations"]),
         hmld_m: met.highMetabolicLoadDistanceM,
         metabolic_power_avg: met.metabolicPower,
         metabolic_power_peak: met.metabolicPowerPeak,
         duration_min: durationMin,
         ima_accel: nz(ima.imaAccel),
         ima_decel: nz(ima.imaDecel),
-        ima_cod_total: nz(ima.imaCod),
+        // Aggregate imaCod is null for this org (matches the daily path) — the real
+        // change-of-direction data lives in the L/R band counts, so total CoD =
+        // left + right directional events.
+        ima_cod_total: nz(ima.imaCod ?? sum2(ima.imaCodLeft ?? null, ima.imaCodRight ?? null)),
         high_ima: nz(sum2(ima.imaCodLeftHigh ?? null, ima.imaCodRightHigh ?? null)),
         jumps: nz(ima.jumps),
       },

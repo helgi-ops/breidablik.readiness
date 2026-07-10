@@ -892,6 +892,11 @@ export default function CoachDrillLibrary({
                         {isFootball && <Metric label="Dec B2-3 Avg" value={n(d.decel_b23_avg, 0)} />}
                         {isFootball && d.max_velocity != null && <Metric label="Max km/h" value={n(d.max_velocity, 1)} />}
                         {isFootball && <Metric label="MetPwr" value={d.metabolic_power_avg != null ? `${n(d.metabolic_power_avg, 1)}W/kg` : "–"} />}
+                        {/* IMA "Driver" metrics — show for football when present (calibrated
+                            from a performed session). Hidden when absent so the glance stays clean. */}
+                        {isFootball && d.ima_cod_total != null && <Metric label="COD" value={n(d.ima_cod_total, 0)} />}
+                        {isFootball && d.high_ima != null && <Metric label="High-IMA" value={n(d.high_ima, 0)} />}
+                        {isFootball && d.jump_count != null && d.jump_count > 0 && <Metric label="Jumps" value={n(d.jump_count, 0)} />}
                         {!isFootball && <Metric label="IMA Accel" value={n(d.accel_total, 0)} />}
                         {!isFootball && <Metric label="IMA Decel" value={n(d.decel_total, 0)} />}
                         {!isFootball && <Metric label="Jumps" value={n(d.jump_count, 0)} />}
@@ -1260,6 +1265,24 @@ export default function CoachDrillLibrary({
                   </>
                 );
               })()}
+
+              {/* IMA — the "Driver" layer (Niklas Virtanen: GPS is the Engine, IMA
+                  is the Driver). Change-of-direction + high-intensity IMA + jumps
+                  matter most in football, so surface them here too (not only for
+                  indoor sports). Pro / Vector Pro only — stay "–" on Core. */}
+              {isFootball && (
+                <Section title="IMA · Driver (change of direction)">
+                  <DetailRow
+                    label="IMA CoD total"
+                    value={detail.ima_cod_total != null ? n(detail.ima_cod_total, 0) : "–"}
+                  />
+                  <DetailRow
+                    label="High-IMA (≥3.5 m/s²)"
+                    value={detail.high_ima != null ? n(detail.high_ima, 0) : "–"}
+                  />
+                  <DetailRow label="Jumps" value={detail.jump_count != null ? n(detail.jump_count, 0) : "–"} />
+                </Section>
+              )}
 
               {!isFootball && (
                 <Section title="Jumps (Catapult BMP)">
