@@ -855,14 +855,13 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         vel_b5: extractMetric(f, ["velocity_band5_total_distance"]),
         vel_b6: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance"]),
         max_velocity: extractMetric(f, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]),
-        accel_b23: sum2(
-          extractMetric(f, ["gen2_acceleration_band2_total_effort_count"]),
-          extractMetric(f, ["gen2_acceleration_band3_total_effort_count"]),
-        ),
-        decel_b23: sum2(
-          extractMetric(f, ["gen2_deceleration_band2_total_effort_count"]),
-          extractMetric(f, ["gen2_deceleration_band3_total_effort_count"]),
-        ),
+        // Catapult's gen2 scheme encodes BOTH accel and decel efforts under the
+        // gen2_acceleration_band* family — there is NO gen2_deceleration_band*
+        // field. Mirror the daily normalizer EXACTLY (accel B2-3 = band7plus,
+        // decel B2-3 = band2plus) so a drill's Accel/Decel B2-3 means the same as
+        // every squad surface. Both keys are returned per-period.
+        accel_b23: extractMetric(f, ["gen2_acceleration_band7plus_total_effort_count", "accel_b2_3_tot_effs_gen2", "acceleration_band2plus_total_efforts_gen2"]),
+        decel_b23: extractMetric(f, ["gen2_acceleration_band2plus_total_effort_count", "decel_b2_3_tot_effs_gen2", "deceleration_band2plus_total_efforts_gen2"]),
         // Match the daily normalizer's key lists (gen2 avg-effort keys first) so
         // per-drill totals fill the same way the athlete-daily totals do.
         accel_total: extractMetric(f, ["gen2_acceleration_band6plus_average_effort_count", "tot_as", "acceleration_efforts_gen2", "total_accelerations", "accelerations"]),
