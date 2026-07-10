@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { fetchActivitiesForDate, fetchActivityPeriodStats } from "@/lib/integrations/catapult/api";
+import { fetchActivitiesForDate, fetchActivityPeriodStats, getConfigFromEnv } from "@/lib/integrations/catapult/api";
 import { normalizeCatapultPeriodStats } from "@/lib/integrations/catapult/normalize";
+import { aggregatePeriodsPerPlayer, writeSessionActuals } from "@/lib/micropulse/drillActuals";
 
 export const runtime = "nodejs";
 
@@ -89,6 +90,17 @@ export async function GET(request: Request) {
     // Does my normalizer pull any periods out of this real payload?
     const periodRows = normalizeCatapultPeriodStats({ payload });
     const distinctPeriods = Array.from(new Set(periodRows.map((r) => r.periodName)));
+    const groups = aggregatePeriodsPerPlayer(periodRows);
+
+    // ?apply=1 → actually write the actuals onto that day's built session (the
+    // same call the sync makes) so the full flow can be tested from one URL.
+    let applied: unknown = null;
+    if (url.searchParams.get("apply") === "1") {
+      const teamId = getConfigFromEnv().teamId ?? null;
+      applied = teamId
+        ? await writeSessionActuals(getAdminClient(), teamId, date, groups)
+        : { ok: false, reason: "no CATAPULT_TEAM_ID" };
+    }
 
     return NextResponse.json({
       ok: true,
@@ -103,8 +115,10 @@ export async function GET(request: Request) {
       normalizer: {
         periodRowsExtracted: periodRows.length,
         distinctPeriods,
+        aggregatedGroups: groups.map((g) => ({ periodName: g.periodName, nPlayers: g.nPlayers, player_load: g.perPlayer.player_load, distance_m: g.perPlayer.distance_m })),
         sample: periodRows.slice(0, 3),
       },
+      applied,
     });
   } catch (e) {
     return NextResponse.json({ ok: false, date, error: e instanceof Error ? e.message : String(e) }, { status: 500 });

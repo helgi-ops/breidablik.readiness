@@ -830,6 +830,13 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
     const f = flattenMetricRecord(record);
     const norm = periodName.toLowerCase();
     if (!orderByName.has(norm)) orderByName.set(norm, nextOrder++);
+    // Duration from the period's start/end epoch seconds (reliable per period).
+    const startT = Number(record.start_time);
+    const endT = Number(record.end_time);
+    const durationMin = Number.isFinite(startT) && Number.isFinite(endT) && endT > startT
+      ? Math.round(((endT - startT) / 60) * 10) / 10
+      : null;
+    const sum2 = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
     out.push({
       periodName,
       order: orderByName.get(norm)!,
@@ -839,9 +846,15 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         distance_m: extractMetric(f, ["total_distance", "distance", "totalDistance"]),
         hsr: extractMetric(f, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]),
         sprint: extractMetric(f, ["velocity_band6_total_distance", "sprint_distance", "sprintDistance"]),
-        accel_b23: null,
-        decel_b23: null,
-        duration_min: null,
+        accel_b23: sum2(
+          extractMetric(f, ["gen2_acceleration_band2_total_effort_count"]),
+          extractMetric(f, ["gen2_acceleration_band3_total_effort_count"]),
+        ),
+        decel_b23: sum2(
+          extractMetric(f, ["gen2_deceleration_band2_total_effort_count"]),
+          extractMetric(f, ["gen2_deceleration_band3_total_effort_count"]),
+        ),
+        duration_min: durationMin,
       },
     });
   }
