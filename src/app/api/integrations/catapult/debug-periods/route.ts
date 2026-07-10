@@ -26,8 +26,11 @@ function getAdminClient() {
 }
 
 function isAuthorizedByCronSecret(request: Request): boolean {
+  // Dev convenience: on a local dev server (never in production) allow a direct
+  // browser hit so the probe can be run without grabbing a token.
+  if (process.env.NODE_ENV !== "production") return true;
   const expected = process.env.CATAPULT_CRON_SECRET?.trim();
-  if (!expected) return true; // no secret configured (e.g. localhost) → open to a direct URL hit
+  if (!expected) return true;
   const url = new URL(request.url);
   const provided = request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
   return provided === expected;
