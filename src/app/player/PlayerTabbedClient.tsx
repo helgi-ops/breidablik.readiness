@@ -29,6 +29,7 @@ import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
+import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -894,6 +895,104 @@ function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
         {is ? "Þjálfarinn þinn setti þetta plan með þér." : "Your coach set this plan with you."}
       </div>
     </div>,
+    mountNode,
+  );
+}
+
+// ── Published team session portal ────────────────────────────────────────────
+//
+// A compact nudge for the coach's next published team session (the field-drill
+// plan built in the session builder). Shows the next/today session and links to
+// the full detail page. Time-relevant daily content, so it belongs on Today —
+// the browse/overview lives at /player/sessions (also in More). Self-hides when
+// there is no published upcoming session. Same reliable mount as the RTT portal.
+
+function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+  const router = useRouter();
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [session, setSession] = useState<PublishedSession | null>(null);
+  const t = SessionCopy[lang === "IS" ? "IS" : "EN"];
+  const locale = lang === "IS" ? "is-IS" : "en-GB";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const token = authSession?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/team/training-sessions?range=upcoming", { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json();
+        if (!cancelled && res.ok && j?.ok) setSession((j.sessions ?? [])[0] ?? null);
+      } catch { /* optional card — never break Today */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      // Sit below the RTT card when present, else the outlook / header — keeps it
+      // high on Today as a daily plan item without fighting those slots.
+      const anchor =
+        document.getElementById("dev-rtt-progress-slot") ??
+        document.getElementById("dev-ate-command-card-slot") ??
+        detectHeaderCard();
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-team-session-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-team-session-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-team-session-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const tmr = window.setTimeout(place, 0);
+    return () => { cancelled = true; window.clearTimeout(tmr); observer?.disconnect(); };
+  }, [session]);
+
+  if (!mountNode || activeTab !== "today" || !session) return null;
+
+  const { drillCount, duration, targetPl } = sessionStats(session);
+  const dl = dateLabel(session.session_date, locale, t);
+  const isToday = t.today === dl;
+
+  return createPortal(
+    <button
+      type="button"
+      onClick={() => router.push(`/player/sessions/${session.id}`)}
+      className="mt-3 block w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.997]"
+    >
+      <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span aria-hidden>📋</span>{lang === "IS" ? "NÆSTA ÆFING FRÁ ÞJÁLFARA" : "NEXT SESSION FROM YOUR COACH"}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isToday ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}>{dl}</span>
+        {session.md_day && <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">{session.md_day}</span>}
+      </div>
+      <div className="mt-1.5 font-display text-lg font-bold tracking-tight text-zinc-900">{session.session_name || "–"}</div>
+      <div className="mt-0.5 text-[12px] text-zinc-500">
+        {drillCount} {t.drills.toLowerCase()}
+        {duration != null ? ` · ${duration} ${t.min}` : ""}
+        {targetPl != null ? ` · ${t.load} ${targetPl}` : ""}
+      </div>
+      <div className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary,#2740e6)]">
+        {lang === "IS" ? "Opna æfingu" : "Open session"} <span aria-hidden>→</span>
+      </div>
+    </button>,
     mountNode,
   );
 }
@@ -2282,6 +2381,9 @@ export default function DevPlayerClient() {
           plan (self-hides otherwise). Not gated by wellness: an injured player
           on a GPS-only team still ramps. */}
       <PlayerRttProgressPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
+      {/* Next published team session — a daily nudge that taps through to the
+          full session detail. Overview/browse lives at /player/sessions. */}
+      <PlayerTeamSessionPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
       {/* Contextual RPE nudge — appears on Today only when a session is expected
           and RPE is unlogged; taps through to the RPE tab (round 14a). Gated to
           Pro+ since the RPE tab itself is Pro-locked (don't nudge to a locked tab). */}
