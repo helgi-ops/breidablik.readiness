@@ -925,12 +925,21 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
  * API — the caller treats a throw / empty result as "no actuals".
  */
 export async function fetchActivityPeriodStats(activityId: string): Promise<unknown> {
-  return catapultPost("/api/v6/stats", {
+  const body = (parameters: string[]) => ({
     group_by: ["athlete", "period"],
     filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
-    parameters: [...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS],
+    parameters,
     requested_only: false,
   });
+  // Try with metabolic params too (HMLD / metabolic power per drill); if the org
+  // rejects an unknown metabolic param the whole call fails, so fall back to the
+  // base + IMA set. Merging metabolic in a separate call isn't possible here —
+  // mergeStatsPayloads keys by athlete only and each athlete has many periods.
+  try {
+    return await catapultPost("/api/v6/stats", body([...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS, ...CATAPULT_METABOLIC_PARAMETERS]));
+  } catch {
+    return catapultPost("/api/v6/stats", body([...CATAPULT_BASE_PARAMETERS, ...CATAPULT_IMA_PARAMETERS]));
+  }
 }
 
 // ── Diagnostic-only: explicit IMA jump-count probe ────────────────────────────

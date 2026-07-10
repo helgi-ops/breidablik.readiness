@@ -289,7 +289,11 @@ export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem
       ["vel_b6", "vel_b6"],
       ["max_velocity", "max_velocity"],
       ["accel_b23", "accel_b23"],
+      ["accel_b23", "accel_b23_avg"],   // the drill card shows the per-player avg
       ["decel_b23", "decel_b23"],
+      ["decel_b23", "decel_b23_avg"],
+      ["vel_b5", "vel_b5_avg"],
+      ["vel_b6", "vel_b6_avg"],
       ["accel_total", "accel_total"],
       ["decel_total", "decel_total"],
       ["hmld_m", "hmld_m"],
