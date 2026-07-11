@@ -136,6 +136,12 @@ const DETRAIN_TAU = 50;    // days — capacity decay constant of the detraining
 const DETRAIN_FLOOR = 0.35; // never assume <35% retained (he's still a trained athlete)
 const MIN_RAMP_WEEKS = 2;
 const MAX_RAMP_WEEKS = 12;
+// Week 1 must start from where he ACTUALLY is: the ramp origin may sit at most
+// this far above his measured recent load (floor), so the first prescribed week
+// is one ACWR-safe step (~+30%) above current — never a leap to ~baseline just
+// because a short layoff "retained" his fitness. A short layoff raises the
+// CEILING he climbs toward; it does not fast-forward the graded return.
+const MAX_WEEK1_JUMP = 1.30;
 
 /**
  * Fraction of healthy capacity retained after `layoffDays` out. ~1.0 for a few
@@ -168,6 +174,11 @@ const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance:
 // stride/strideTop (IMA Free Running) are deliberately NOT here: they're the
 // high-speed running qualities that still count on an indoor GPS-less rehab session.
 const GPS_DERIVED = new Set<QualityKey>(["distance", "hsr", "sprint", "efforts"]);
+// Running / total-load qualities that drive PLAN LENGTH — the plan runs long
+// enough for the graded 10%/week climb to reach each of these ceilings from his
+// floor-anchored origin. IMA event counts (accel/decel/decelHigh/cod) unlock
+// late and ramp within that length, so they don't extend it.
+const RTT_LOAD_DRIVERS = new Set<QualityKey>(["volume", "distance", "hsr", "sprint", "stride", "strideTop", "efforts"]);
 
 function percentile(sortedAsc: number[], p: number): number {
   if (!sortedAsc.length) return 0;
@@ -264,14 +275,26 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   for (const q of ALL_QUALITIES) rampFrom[q] = 0;
   for (const q of order) {
     const retainedTarget = retained != null ? round(retained * baseline[q], QLABEL[q].dp) : 0;
-    rampFrom[q] = Math.max(floor[q], retainedTarget);
+    // Origin = where the graded ramp STARTS. Anchor it to his MEASURED recent
+    // load: the origin may sit at most MAX_WEEK1_JUMP above the floor (so the
+    // unlock-week target, = origin × ramp, lands ~+30% above current — one
+    // ACWR-safe step), never a leap to the detraining estimate (retained ×
+    // ceiling) which can be ~2× his actual current load. The retained estimate
+    // only applies where there is NO measured floor for the quality.
+    const measuredCap = floor[q] > 0 ? (floor[q] * MAX_WEEK1_JUMP) / RAMP : Infinity;
+    rampFrom[q] = Math.max(floor[q], Math.min(retainedTarget, measuredCap));
   }
-  // Derive plan length from the volume bridge (origin → ceiling under 10%/week),
-  // unless the coach hard-overrides. No layoff info → keep the full staged ramp.
+  // Derive plan length so the graded 10%/week climb reaches the ceiling of every
+  // running/total-load driver from its floor-anchored origin — driven by whichever
+  // has the furthest to climb (usually distance when his floor sits well below a
+  // peak-week baseline). Coach hard-override wins; no layoff info → full staged ramp.
   let weeks = inp.weeks ?? order.length;
   if (inp.weeks == null && hasLayoff) {
-    const originVol = rampFrom.volume, ceilVol = baseline.volume;
-    const bridge = ceilVol > 0 && originVol > 0 && originVol < ceilVol ? Math.ceil(Math.log(ceilVol / originVol) / Math.log(RAMP)) : 0;
+    const bridgeFor = (q: QualityKey) => {
+      const o = rampFrom[q], c = baseline[q];
+      return c > 0 && o > 0 && o < c ? Math.ceil(Math.log(c / o) / Math.log(RAMP)) : 0;
+    };
+    const bridge = Math.max(0, ...order.filter((q) => RTT_LOAD_DRIVERS.has(q)).map(bridgeFor));
     const minWeeks = (inp.riskQualities?.length ?? 0) > 0 ? MIN_RAMP_WEEKS + 1 : MIN_RAMP_WEEKS;
     weeks = Math.min(MAX_RAMP_WEEKS, Math.max(minWeeks, bridge));
   }
