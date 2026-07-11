@@ -59,6 +59,7 @@ type Resp = {
   rtp?: RtpInfo | null;
   currentlyInjured: boolean;
   rttStartDate: string | null;
+  plannedSessionsThisWeek?: number | null;
   baseline: Record<Quality, number> & { builtFromHealthyWeeks: number; topSpeed: number };
   floor: Record<Quality, number> & { topSpeed: number };
   rampFrom?: Record<Quality, number> & { topSpeed: number };
@@ -240,27 +241,46 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
         </div>
       )}
 
-      {/* Today's recommended session load — the WEEKLY graded target sliced
-          evenly across the week's sessions (coach-adjustable). GPS = Engine,
-          IMA = Driver. Locked qualities aren't recommended yet (held). Load is
-          a CEILING — the re-injury watch above fires if actuals exceed it. */}
-      {data.plan && weekNow.length > 0 && (() => {
-        const n = Math.max(1, sessionsPerWeek);
-        const rec = weekNow
+      {/* Today's recommended session load — ADAPTIVE: takes THIS week's graded
+          target, subtracts what he has already logged this week, and divides the
+          remainder by the sessions still to come (planned sessions from Week
+          setup − sessions already done). GPS = Engine, IMA = Driver. Locked
+          qualities are held. Load is a CEILING — the re-injury watch fires on
+          overshoot. Falls back to a manual sessions/week split when no week plan
+          exists for this week. */}
+      {data.plan && (() => {
+        const targets = data.plan!.weeks.filter((w) => w.week === planCurrentWeek);
+        if (!targets.length) return null;
+        const adh = data.adherence?.find((a) => a.week === planCurrentWeek) ?? null;
+        const doneByQ = new Map<Quality, number>((adh?.cells ?? []).map((c) => [c.quality, c.actual]));
+        const sessionsDone = adh?.sessions ?? 0;
+        const planned = data.plannedSessionsThisWeek ?? null;
+        const usingPlan = planned != null;
+        const remainingSessions = usingPlan ? Math.max(1, planned - sessionsDone) : Math.max(1, sessionsPerWeek);
+
+        const rec = targets
           .filter((w) => !w.locked && w.target > 0)
-          .map((w) => ({ q: w.quality, weekly: w.target, today: Math.round(w.target / n), pct: w.pctOfHealthy }));
+          .map((w) => {
+            const done = doneByQ.get(w.quality) ?? 0;
+            const remaining = usingPlan ? Math.max(0, w.target - done) : w.target;
+            return { q: w.quality, weekly: w.target, done, remaining, today: Math.round(remaining / remainingSessions), pct: w.pctOfHealthy };
+          });
         const GPS = new Set<Quality>(["volume", "distance", "hsr", "sprint"]);
         const gps = rec.filter((r) => GPS.has(r.q));
         const ima = rec.filter((r) => !GPS.has(r.q));
-        const held = weekNow.filter((w) => w.locked);
-        const cell = (r: { q: Quality; weekly: number; today: number; pct: number }) => (
+        const held = targets.filter((w) => w.locked);
+        const cell = (r: { q: Quality; weekly: number; done: number; remaining: number; today: number; pct: number }) => (
           <div key={r.q} className="rounded-lg border border-violet-100 bg-white px-3 py-2">
             <div className="text-[11px] font-medium text-slate-500">{is ? LABEL[r.q].is : LABEL[r.q].en}</div>
             <div className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
-              {f0(r.today)}<span className="ml-0.5 text-xs font-medium text-slate-400">{LABEL[r.q].unit}</span>
+              {usingPlan && r.today === 0 ? "—" : f0(r.today)}<span className="ml-0.5 text-xs font-medium text-slate-400">{LABEL[r.q].unit}</span>
             </div>
             <div className="text-[10px] text-slate-400">
-              {is ? "af" : "of"} {f0(r.weekly)}{LABEL[r.q].unit}/{is ? "viku" : "wk"} · {r.pct}% {is ? "af heilbr." : "of healthy"}
+              {usingPlan
+                ? (r.today === 0
+                    ? (is ? "vikumarkmiði náð — hvíl" : "week target met — ease off")
+                    : `${f0(r.done)} ${is ? "búið" : "done"} · ${f0(r.remaining)} ${is ? "eftir" : "left"} ${is ? "af" : "of"} ${f0(r.weekly)}${LABEL[r.q].unit}`)
+                : `${is ? "af" : "of"} ${f0(r.weekly)}${LABEL[r.q].unit}/${is ? "viku" : "wk"} · ${r.pct}% ${is ? "af heilbr." : "of healthy"}`}
             </div>
           </div>
         );
@@ -269,17 +289,25 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-[#5b4794]">{is ? "Ráðlagt álag í dag" : "Today's recommended session load"}</span>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{is ? "Vika" : "Week"} {curWeek}/{totalWeeks}</span>
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{is ? "Vika" : "Week"} {planCurrentWeek}/{totalWeeks}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-600" title={is ? "Fjöldi æfinga í vikunni — deilir vikumarkmiðinu í eina æfingu" : "Sessions this week — divides the weekly target into one session"}>
-                <span>{is ? "Æfingar/viku" : "Sessions/wk"}</span>
-                <button type="button" onClick={() => setSessionsPerWeek((v) => Math.max(1, v - 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">−</button>
-                <span className="w-4 text-center font-bold tabular-nums text-slate-800">{n}</span>
-                <button type="button" onClick={() => setSessionsPerWeek((v) => Math.min(7, v + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
-              </div>
+              {usingPlan ? (
+                <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600" title={is ? "Úr Week setup — æfingar vikunnar" : "From Week setup — this week's planned sessions"}>
+                  {sessionsDone}/{planned} {is ? "æfingar búnar" : "sessions done"} · {remainingSessions} {is ? "eftir" : "left"}
+                </span>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-600" title={is ? "Ekkert vikuplan fannst — stilltu fjölda æfinga" : "No week plan found — set the number of sessions"}>
+                  <span>{is ? "Æfingar/viku" : "Sessions/wk"}</span>
+                  <button type="button" onClick={() => setSessionsPerWeek((v) => Math.max(1, v - 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">−</button>
+                  <span className="w-4 text-center font-bold tabular-nums text-slate-800">{remainingSessions}</span>
+                  <button type="button" onClick={() => setSessionsPerWeek((v) => Math.min(7, v + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
+                </div>
+              )}
             </div>
             <div className="mt-1 text-[11px] text-slate-500">
-              {is ? "Jöfn skipting á vikumarkmiðinu yfir æfingar vikunnar. Álagið er ÞAK — ekki fara yfir." : "This week's graded target split evenly across the week's sessions. Load is a ceiling — don't exceed."}
+              {usingPlan
+                ? (is ? "Það sem eftir er af vikumarkmiðinu, deilt á æfingarnar sem eru eftir (úr Week setup). Álagið er ÞAK — ekki fara yfir." : "What's left of this week's target, split across the sessions still to come (from Week setup). Load is a ceiling — don't exceed.")
+                : (is ? "Ekkert vikuplan fannst fyrir þessa viku — stilltu æfingar/viku. Vikumarkmiði deilt jafnt. Álagið er ÞAK." : "No week plan found for this week — set sessions/week. Weekly target split evenly. Load is a ceiling.")}
             </div>
             {gps.length > 0 && (
               <div className="mt-3">
