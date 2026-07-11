@@ -88,6 +88,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null); // null = follow the current plan week
   const [startDate, setStartDate] = useState("");
   const [busy, setBusy] = useState(false);
+  // Sessions this week — divides the WEEKLY graded target into a per-session
+  // ("today") recommendation. Defaults to 3 field sessions; coach adjusts to
+  // their actual week. Kept client-side (no persistence needed for a live read).
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
 
   const token = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? "", []);
 
@@ -235,6 +239,69 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <span className="ml-1">({data.injuryProfile.riskQualities.map((q) => (is ? LABEL[q].is : LABEL[q].en)).join(", ")})</span>
         </div>
       )}
+
+      {/* Today's recommended session load — the WEEKLY graded target sliced
+          evenly across the week's sessions (coach-adjustable). GPS = Engine,
+          IMA = Driver. Locked qualities aren't recommended yet (held). Load is
+          a CEILING — the re-injury watch above fires if actuals exceed it. */}
+      {data.plan && weekNow.length > 0 && (() => {
+        const n = Math.max(1, sessionsPerWeek);
+        const rec = weekNow
+          .filter((w) => !w.locked && w.target > 0)
+          .map((w) => ({ q: w.quality, weekly: w.target, today: Math.round(w.target / n), pct: w.pctOfHealthy }));
+        const GPS = new Set<Quality>(["volume", "distance", "hsr", "sprint"]);
+        const gps = rec.filter((r) => GPS.has(r.q));
+        const ima = rec.filter((r) => !GPS.has(r.q));
+        const held = weekNow.filter((w) => w.locked);
+        const cell = (r: { q: Quality; weekly: number; today: number; pct: number }) => (
+          <div key={r.q} className="rounded-lg border border-violet-100 bg-white px-3 py-2">
+            <div className="text-[11px] font-medium text-slate-500">{is ? LABEL[r.q].is : LABEL[r.q].en}</div>
+            <div className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
+              {f0(r.today)}<span className="ml-0.5 text-xs font-medium text-slate-400">{LABEL[r.q].unit}</span>
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {is ? "af" : "of"} {f0(r.weekly)}{LABEL[r.q].unit}/{is ? "viku" : "wk"} · {r.pct}% {is ? "af heilbr." : "of healthy"}
+            </div>
+          </div>
+        );
+        return (
+          <div className="rounded-xl border-2 border-violet-200 bg-violet-50/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[#5b4794]">{is ? "Ráðlagt álag í dag" : "Today's recommended session load"}</span>
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{is ? "Vika" : "Week"} {curWeek}/{totalWeeks}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-600" title={is ? "Fjöldi æfinga í vikunni — deilir vikumarkmiðinu í eina æfingu" : "Sessions this week — divides the weekly target into one session"}>
+                <span>{is ? "Æfingar/viku" : "Sessions/wk"}</span>
+                <button type="button" onClick={() => setSessionsPerWeek((v) => Math.max(1, v - 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">−</button>
+                <span className="w-4 text-center font-bold tabular-nums text-slate-800">{n}</span>
+                <button type="button" onClick={() => setSessionsPerWeek((v) => Math.min(7, v + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
+              </div>
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              {is ? "Jöfn skipting á vikumarkmiðinu yfir æfingar vikunnar. Álagið er ÞAK — ekki fara yfir." : "This week's graded target split evenly across the week's sessions. Load is a ceiling — don't exceed."}
+            </div>
+            {gps.length > 0 && (
+              <div className="mt-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{is ? "Vél — GPS álag" : "Engine — GPS load"}</div>
+                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">{gps.map(cell)}</div>
+              </div>
+            )}
+            {ima.length > 0 && (
+              <div className="mt-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{is ? "Drifkraftur — IMA álag" : "Driver — IMA load"}</div>
+                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">{ima.map(cell)}</div>
+              </div>
+            )}
+            {held.length > 0 && (
+              <div className="mt-2.5 text-[11px] text-slate-500">
+                {is ? "Haldið eftir (kemur inn síðar): " : "Held for later: "}
+                {held.map((w) => `${is ? LABEL[w.quality].is : LABEL[w.quality].en}${w.unlockWeek ? ` (${is ? "vika" : "wk"} ${w.unlockWeek})` : ""}`).join(", ")}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Load history timeline */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
