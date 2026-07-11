@@ -89,10 +89,11 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null); // null = follow the current plan week
   const [startDate, setStartDate] = useState("");
   const [busy, setBusy] = useState(false);
-  // Sessions this week — divides the WEEKLY graded target into a per-session
-  // ("today") recommendation. Defaults to 3 field sessions; coach adjusts to
-  // their actual week. Kept client-side (no persistence needed for a live read).
-  const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
+  // Coach's manual override of the planned sessions-this-week count. null =
+  // use the Week-setup count from the server, or an estimate when this week
+  // isn't structured. The per-session ("today") recommendation always divides
+  // the REMAINING weekly budget by the sessions still to come.
+  const [manualSessions, setManualSessions] = useState<number | null>(null);
 
   const token = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? "", []);
 
@@ -243,26 +244,31 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
 
       {/* Today's recommended session load — ADAPTIVE: takes THIS week's graded
           target, subtracts what he has already logged this week, and divides the
-          remainder by the sessions still to come (planned sessions from Week
-          setup − sessions already done). GPS = Engine, IMA = Driver. Locked
-          qualities are held. Load is a CEILING — the re-injury watch fires on
-          overshoot. Falls back to a manual sessions/week split when no week plan
-          exists for this week. */}
+          remainder by the sessions still to come. Planned session count comes
+          from Week setup when the week is structured, else an adjustable
+          estimate. GPS = Engine, IMA = Driver. Locked qualities are held. Load
+          is a CEILING — the re-injury watch fires on overshoot. */}
       {data.plan && (() => {
         const targets = data.plan!.weeks.filter((w) => w.week === planCurrentWeek);
         if (!targets.length) return null;
         const adh = data.adherence?.find((a) => a.week === planCurrentWeek) ?? null;
         const doneByQ = new Map<Quality, number>((adh?.cells ?? []).map((c) => [c.quality, c.actual]));
         const sessionsDone = adh?.sessions ?? 0;
-        const planned = data.plannedSessionsThisWeek ?? null;
-        const usingPlan = planned != null;
-        const remainingSessions = usingPlan ? Math.max(1, planned - sessionsDone) : Math.max(1, sessionsPerWeek);
+        const setupCount = data.plannedSessionsThisWeek ?? null;
+        const DEFAULT_SESSIONS = 4;
+        const planned = manualSessions ?? setupCount ?? DEFAULT_SESSIONS;
+        const remainingSessions = Math.max(1, planned - sessionsDone);
+        const source = manualSessions != null
+          ? (is ? "handvirkt" : "manual")
+          : setupCount != null
+            ? (is ? "úr Week setup" : "from Week setup")
+            : (is ? "áætlað" : "estimated");
 
         const rec = targets
           .filter((w) => !w.locked && w.target > 0)
           .map((w) => {
             const done = doneByQ.get(w.quality) ?? 0;
-            const remaining = usingPlan ? Math.max(0, w.target - done) : w.target;
+            const remaining = Math.max(0, w.target - done);
             return { q: w.quality, weekly: w.target, done, remaining, today: Math.round(remaining / remainingSessions), pct: w.pctOfHealthy };
           });
         const GPS = new Set<Quality>(["volume", "distance", "hsr", "sprint"]);
@@ -273,14 +279,12 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           <div key={r.q} className="rounded-lg border border-violet-100 bg-white px-3 py-2">
             <div className="text-[11px] font-medium text-slate-500">{is ? LABEL[r.q].is : LABEL[r.q].en}</div>
             <div className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
-              {usingPlan && r.today === 0 ? "—" : f0(r.today)}<span className="ml-0.5 text-xs font-medium text-slate-400">{LABEL[r.q].unit}</span>
+              {r.today === 0 ? "—" : f0(r.today)}<span className="ml-0.5 text-xs font-medium text-slate-400">{LABEL[r.q].unit}</span>
             </div>
             <div className="text-[10px] text-slate-400">
-              {usingPlan
-                ? (r.today === 0
-                    ? (is ? "vikumarkmiði náð — hvíl" : "week target met — ease off")
-                    : `${f0(r.done)} ${is ? "búið" : "done"} · ${f0(r.remaining)} ${is ? "eftir" : "left"} ${is ? "af" : "of"} ${f0(r.weekly)}${LABEL[r.q].unit}`)
-                : `${is ? "af" : "of"} ${f0(r.weekly)}${LABEL[r.q].unit}/${is ? "viku" : "wk"} · ${r.pct}% ${is ? "af heilbr." : "of healthy"}`}
+              {r.today === 0
+                ? (is ? "vikumarkmiði náð — hvíl" : "week target met — ease off")
+                : `${f0(r.done)} ${is ? "búið" : "done"} · ${f0(r.remaining)} ${is ? "eftir" : "left"} ${is ? "af" : "of"} ${f0(r.weekly)}${LABEL[r.q].unit}`}
             </div>
           </div>
         );
@@ -291,23 +295,15 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                 <span className="text-sm font-bold text-[#5b4794]">{is ? "Ráðlagt álag í dag" : "Today's recommended session load"}</span>
                 <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">{is ? "Vika" : "Week"} {planCurrentWeek}/{totalWeeks}</span>
               </div>
-              {usingPlan ? (
-                <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600" title={is ? "Úr Week setup — æfingar vikunnar" : "From Week setup — this week's planned sessions"}>
-                  {sessionsDone}/{planned} {is ? "æfingar búnar" : "sessions done"} · {remainingSessions} {is ? "eftir" : "left"}
-                </span>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-600" title={is ? "Ekkert vikuplan fannst — stilltu fjölda æfinga" : "No week plan found — set the number of sessions"}>
-                  <span>{is ? "Æfingar/viku" : "Sessions/wk"}</span>
-                  <button type="button" onClick={() => setSessionsPerWeek((v) => Math.max(1, v - 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">−</button>
-                  <span className="w-4 text-center font-bold tabular-nums text-slate-800">{remainingSessions}</span>
-                  <button type="button" onClick={() => setSessionsPerWeek((v) => Math.min(7, v + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-600" title={is ? "Æfingar vikunnar — úr Week setup eða áætlað. Deilir því sem eftir er á æfingarnar sem eftir eru." : "Sessions this week — from Week setup or estimated. Divides the remaining budget across the sessions still to come."}>
+                <span>{is ? "Æfingar/viku" : "Sessions/wk"}</span>
+                <button type="button" onClick={() => setManualSessions(() => Math.max(1, planned - 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">−</button>
+                <span className="w-4 text-center font-bold tabular-nums text-slate-800">{planned}</span>
+                <button type="button" onClick={() => setManualSessions(() => Math.min(9, planned + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
+              </div>
             </div>
             <div className="mt-1 text-[11px] text-slate-500">
-              {usingPlan
-                ? (is ? "Það sem eftir er af vikumarkmiðinu, deilt á æfingarnar sem eru eftir (úr Week setup). Álagið er ÞAK — ekki fara yfir." : "What's left of this week's target, split across the sessions still to come (from Week setup). Load is a ceiling — don't exceed.")
-                : (is ? "Ekkert vikuplan fannst fyrir þessa viku — stilltu æfingar/viku. Vikumarkmiði deilt jafnt. Álagið er ÞAK." : "No week plan found for this week — set sessions/week. Weekly target split evenly. Load is a ceiling.")}
+              {sessionsDone}/{planned} {is ? "æfingar búnar í viku" : "sessions done this week"} · {remainingSessions} {is ? "eftir" : "left"} <span className="text-slate-400">({source})</span> — {is ? "það sem eftir er af vikumarkmiðinu, deilt á æfingarnar sem eftir eru. Álagið er ÞAK." : "what's left of this week's target, split across the sessions still to come. Load is a ceiling."}
             </div>
             {gps.length > 0 && (
               <div className="mt-3">
