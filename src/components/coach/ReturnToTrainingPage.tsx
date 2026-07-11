@@ -15,14 +15,15 @@ import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/re
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 
-type Quality = "volume" | "distance" | "hsr" | "sprint" | "stride" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
-const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "stride", "accel", "decel", "decelHigh", "cod"];
+type Quality = "volume" | "distance" | "hsr" | "sprint" | "stride" | "strideTop" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
+const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "stride", "strideTop", "accel", "decel", "decelHigh", "cod"];
 const LABEL: Record<Quality, { en: string; is: string; unit: string }> = {
   volume: { en: "Weekly player load", is: "Vikuálag", unit: "" },
   distance: { en: "Weekly distance", is: "Vikuvegalengd", unit: "m" },
   hsr: { en: "Weekly high-speed running", is: "Vikuháhraðahlaup", unit: "m" },
   sprint: { en: "Weekly sprinting", is: "Vikusprettur", unit: "m" },
   stride: { en: "High-cadence strides (IMA)", is: "Hátíðni skref (IMA)", unit: "" },
+  strideTop: { en: "Top-speed strides (IMA)", is: "Topphraða skref (IMA)", unit: "" },
   accel: { en: "Accelerations (IMA)", is: "Hröðun (IMA)", unit: "" },
   decel: { en: "Decelerations (IMA)", is: "Hemlun (IMA)", unit: "" },
   decelHigh: { en: "High-intensity braking (IMA)", is: "Háákefðar hemlun (IMA)", unit: "" },
@@ -276,7 +277,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
         // Session-type steer copy (the math is in buildRttTodayRecommendation).
         // GPS = Engine, IMA = Driver (Niklas Virtanen); mechanical vs locomotor
         // load separation — Vanrenterghem 2017.
-        const LOCO = new Set<Quality>(["distance", "hsr", "sprint", "stride"]);
+        const LOCO = new Set<Quality>(["distance", "hsr", "sprint", "stride", "strideTop"]);
         const MECH = new Set<Quality>(["accel", "decel", "decelHigh", "cod"]);
         const locoAvail = rec.some((r) => LOCO.has(r.q));
         const mechAvail = rec.some((r) => MECH.has(r.q));
