@@ -32,11 +32,20 @@ export function mapWeekSetupDayToMdContext(params: {
   const token = dose || dayType;
   if (!token) return null;
   if (token.includes("OFF") || token.includes("RECOVERY")) return "OFF";
+  // NOTE: GAME is the match day itself (MD). This compact type has no match-day
+  // token, so it falls to MD1 — a known limitation, not part of the periodization
+  // alignment below. Game days normally resolve via the fixture path, not here.
   if (token.includes("GAME")) return "MD1";
-  if (token.includes("FORCE")) return "MD3";
-  if (token.includes("NEURAL") && token.includes("VELOCITY")) return "MD1";
+  // Canonical Week-setup intent → MD mapping. MUST match loadPlan/forTeam.ts
+  // MD_OF (the Week-setup dropdown's own definition): FORCE=MD-4,
+  // NEURAL_VELOCITY=MD-3, VELOCITY=MD-2, POLISH_CALM=MD-2, ACTIVATION=MD-1.
+  // Order matters: NEURAL_VELOCITY before the generic VELOCITY check, and
+  // POLISH/CALM (MD-2) is split from ACTIVATION (MD-1) — they are different days.
+  if (token.includes("FORCE")) return "MD4";
+  if (token.includes("NEURAL") && token.includes("VELOCITY")) return "MD3";
   if (token.includes("VELOCITY")) return "MD2";
-  if (token.includes("ACTIVATION") || token.includes("POLISH") || token.includes("CALM")) return "MD1";
+  if (token.includes("POLISH") || token.includes("CALM")) return "MD2";
+  if (token.includes("ACTIVATION")) return "MD1";
   return null;
 }
 

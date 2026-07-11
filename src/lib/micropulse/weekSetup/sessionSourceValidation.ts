@@ -24,8 +24,29 @@ export function runWeekSetupSessionSourceValidation(): WeekSetupSessionSourceVal
   });
   cases.push({
     id: "WEEK_SETUP_FORCE_OVERRIDES_GENERIC_MD2",
-    pass: forceResult.mdContext === "MD3" && forceResult.source === "WEEK_SETUP",
+    // FORCE = MD-4 (canonical loadPlan mapping), represented as "MD4" here.
+    pass: forceResult.mdContext === "MD4" && forceResult.source === "WEEK_SETUP",
     details: [`mdContext=${forceResult.mdContext}`, `source=${forceResult.source}`],
+  });
+
+  // POLISH/CALM = MD-2 and ACTIVATION = MD-1 are DIFFERENT days (canonical
+  // loadPlan mapping). Regression guard: they must not both collapse to MD-1.
+  const polishResult = resolveSessionMdContextFromSources({
+    weekSetupDay: { day_type_final: "TRAIN", dose_final: "POLISH / CALM" },
+  });
+  cases.push({
+    id: "WEEK_SETUP_POLISH_CALM_IS_MD2",
+    pass: polishResult.mdContext === "MD2" && polishResult.source === "WEEK_SETUP",
+    details: [`mdContext=${polishResult.mdContext}`, `source=${polishResult.source}`],
+  });
+
+  const activationResult = resolveSessionMdContextFromSources({
+    weekSetupDay: { day_type_final: "TRAIN", dose_final: "ACTIVATION" },
+  });
+  cases.push({
+    id: "WEEK_SETUP_ACTIVATION_IS_MD1",
+    pass: activationResult.mdContext === "MD1" && activationResult.source === "WEEK_SETUP",
+    details: [`mdContext=${activationResult.mdContext}`, `source=${activationResult.source}`],
   });
 
   const recoveryWeekDay: WeekSetupDayRow = { day_type_final: "RECOVERY", dose_final: "RECOVERY" };
