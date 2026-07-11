@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/returnToTraining";
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 
@@ -249,56 +250,37 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           estimate. GPS = Engine, IMA = Driver. Locked qualities are held. Load
           is a CEILING — the re-injury watch fires on overshoot. */}
       {data.plan && (() => {
-        const targets = data.plan!.weeks.filter((w) => w.week === planCurrentWeek);
-        if (!targets.length) return null;
-        const adh = data.adherence?.find((a) => a.week === planCurrentWeek) ?? null;
-        const doneByQ = new Map<Quality, number>((adh?.cells ?? []).map((c) => [c.quality, c.actual]));
-        const sessionsDone = adh?.sessions ?? 0;
         const setupCount = data.plannedSessionsThisWeek ?? null;
         const DEFAULT_SESSIONS = 4;
         const planned = manualSessions ?? setupCount ?? DEFAULT_SESSIONS;
-        const remainingSessions = Math.max(1, planned - sessionsDone);
         const source = manualSessions != null
           ? (is ? "handvirkt" : "manual")
           : setupCount != null
             ? (is ? "úr Week setup" : "from Week setup")
             : (is ? "áætlað" : "estimated");
 
-        const rec = targets
-          .filter((w) => !w.locked && w.target > 0)
-          .map((w) => {
-            const done = doneByQ.get(w.quality) ?? 0;
-            const remaining = Math.max(0, w.target - done);
-            return { q: w.quality, weekly: w.target, done, remaining, today: Math.round(remaining / remainingSessions), pct: w.pctOfHealthy };
-          });
+        // Shared engine — the SAME math the player's Today card uses, so the
+        // coach page and the player can never drift (one source). `data` carries
+        // the RttResult fields via the API's `...result` spread.
+        const todayRec = buildRttTodayRecommendation(data as unknown as RttResult, planned);
+        if (!todayRec) return null;
+        const { sessionsDone, remainingSessions, sessionType } = todayRec;
+
+        const rec = todayRec.qualities.map((q) => ({ q: q.key, weekly: q.weekly, done: q.done, remaining: q.remaining, today: q.today, pct: q.pctOfHealthy }));
         const GPS = new Set<Quality>(["volume", "distance", "hsr", "sprint"]);
         const gps = rec.filter((r) => GPS.has(r.q));
         const ima = rec.filter((r) => !GPS.has(r.q));
-        const held = targets.filter((w) => w.locked);
+        const held = todayRec.held;
 
-        // Session-type steer — LOCOMOTIVE (running: distance / HSR / sprint) vs
-        // MECHANICAL (change of direction & braking: accel / decel / high-decel
-        // / CoD). Recommend the axis he's most BEHIND on this week (largest
-        // share still to come), among UNLOCKED qualities; balanced → mixed; if
-        // one axis isn't introduced yet (all held) steer to the other. GPS =
-        // Engine, IMA = Driver (Niklas Virtanen); mechanical vs locomotor load
-        // separation — Vanrenterghem 2017.
+        // Session-type steer copy (the math is in buildRttTodayRecommendation).
+        // GPS = Engine, IMA = Driver (Niklas Virtanen); mechanical vs locomotor
+        // load separation — Vanrenterghem 2017.
         const LOCO = new Set<Quality>(["distance", "hsr", "sprint"]);
         const MECH = new Set<Quality>(["accel", "decel", "decelHigh", "cod"]);
-        const axisStat = (set: Set<Quality>) => {
-          const items = rec.filter((r) => set.has(r.q));
-          const wk = items.reduce((s, r) => s + r.weekly, 0);
-          const rem = items.reduce((s, r) => s + r.remaining, 0);
-          return { available: items.length > 0 && wk > 0, frac: wk > 0 ? rem / wk : 0 };
-        };
-        const loco = axisStat(LOCO);
-        const mech = axisStat(MECH);
+        const locoAvail = rec.some((r) => LOCO.has(r.q));
+        const mechAvail = rec.some((r) => MECH.has(r.q));
         const sType: "loco" | "mech" | "mixed" =
-          loco.available && !mech.available ? "loco"
-          : mech.available && !loco.available ? "mech"
-          : !loco.available && !mech.available ? "mixed"
-          : Math.abs(loco.frac - mech.frac) < 0.12 ? "mixed"
-          : loco.frac > mech.frac ? "loco" : "mech";
+          sessionType === "locomotive" ? "loco" : sessionType === "mechanical" ? "mech" : "mixed";
         const TYPE_META = {
           loco:  { label: is ? "Locomotive" : "Locomotive", sub: is ? "hlaup — lengri & háhraða sprettir" : "running — longer & high-speed", bg: "#e0f2fe", fg: "#0369a1", icon: "🏃" },
           mech:  { label: is ? "Mechanical" : "Mechanical", sub: is ? "stefnubreytingar & hemlun" : "change of direction & braking", bg: "#faf1de", fg: "#9a6410", icon: "🔄" },
@@ -306,11 +288,11 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
         } as const;
         const tm = TYPE_META[sType];
         const sWhy = sType === "loco"
-          ? (mech.available
+          ? (mechAvail
               ? (is ? "Meira af hlaupaálagi vikunnar er eftir — gerðu daginn hlaupamiðaðan (lengri, háhraða)." : "More of this week's running load is still to come — make today locomotive (longer, high-speed).")
               : (is ? "Stefnubreytingar eru ekki komnar inn enn — haltu deginum hlaupamiðuðum." : "Change of direction isn't introduced yet — keep today running-based."))
           : sType === "mech"
-            ? (loco.available
+            ? (locoAvail
                 ? (is ? "Meira af stefnubreytingum & hemlun vikunnar er eftir — gerðu daginn mechanical (klippingar, hemlun)." : "More of this week's change-of-direction & braking is still to come — make today mechanical (cutting, braking).")
                 : (is ? "Hlaupaálag er á áætlun — í dag áhersla á stefnubreytingar & hemlun." : "Running load is on track — today emphasise change of direction & braking."))
             : (is ? "Hlaup og stefnubreytingar eru bæði á áætlun — blönduð æfing hentar í dag." : "Running and change of direction are both on track — a mixed session fits today.");
@@ -370,7 +352,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             {held.length > 0 && (
               <div className="mt-2.5 text-[11px] text-slate-500">
                 {is ? "Haldið eftir (kemur inn síðar): " : "Held for later: "}
-                {held.map((w) => `${is ? LABEL[w.quality].is : LABEL[w.quality].en}${w.unlockWeek ? ` (${is ? "vika" : "wk"} ${w.unlockWeek})` : ""}`).join(", ")}
+                {held.map((w) => `${is ? LABEL[w.key].is : LABEL[w.key].en}${w.unlockWeek ? ` (${is ? "vika" : "wk"} ${w.unlockWeek})` : ""}`).join(", ")}
               </div>
             )}
           </div>
