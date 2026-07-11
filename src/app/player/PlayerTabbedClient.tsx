@@ -748,6 +748,14 @@ type RttProgress = {
   sessionsThisWeek: number;
   inProgress: boolean;
   weekNumbers?: { key: string; target: number; actual: number | null; unit: string; status: string | null }[];
+  todaySession?: {
+    sessionType: "locomotive" | "mechanical" | "mixed";
+    sessionsDone: number;
+    plannedSessions: number;
+    remainingSessions: number;
+    fromWeekSetup: boolean;
+    targets: { key: string; today: number; unit: string }[];
+  } | null;
 };
 
 function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
@@ -837,6 +845,42 @@ function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
           ? (is ? "Lokavikan — næstum kominn í fulla æfingu. Flott vinna 💪" : "Final week — almost back to full training. Great work 💪")
           : (is ? "Þú ert að byggja þig upp, skref fyrir skref." : "You're building back up, step by step.")}
       </div>
+
+      {/* Your session today — the estimated load for ONE session today, plus a
+          plain running / change-of-direction / mixed steer. Same shared engine
+          the coach's Return-to-Training page uses. */}
+      {data.todaySession && data.todaySession.targets.length > 0 && (() => {
+        const ts = data.todaySession!;
+        const TYPE = {
+          locomotive: { is: "Hlaupaáhersla", en: "Running focus", subIs: "lengri, hraðari hlaup", subEn: "longer, higher-speed running", icon: "🏃", bg: "#e0f2fe", fg: "#0369a1" },
+          mechanical: { is: "Stefnubreytingar", en: "Change-of-direction focus", subIs: "klippingar & hemlun", subEn: "cutting & braking", icon: "🔄", bg: "#faf1de", fg: "#9a6410" },
+          mixed:      { is: "Blönduð æfing", en: "Mixed session", subIs: "smá af hvoru", subEn: "a bit of both", icon: "⚖️", bg: "#efe8fb", fg: "#5b4794" },
+        }[ts.sessionType];
+        return (
+          <div className="mt-3 rounded-xl border border-[#e4dcf5] bg-white/70 p-3">
+            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              {is ? "ÆFINGIN ÞÍN Í DAG" : "YOUR SESSION TODAY"}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: TYPE.bg, color: TYPE.fg }}>
+                <span aria-hidden>{TYPE.icon}</span>{is ? TYPE.is : TYPE.en}
+              </span>
+              <span className="text-[11px] text-zinc-500">{is ? TYPE.subIs : TYPE.subEn}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {ts.targets.map((t) => (
+                <div key={t.key} className="flex items-baseline justify-between gap-2 rounded-lg bg-zinc-50 px-2.5 py-1.5">
+                  <span className="min-w-0 truncate text-[11px] text-zinc-500">{label(t.key)}</span>
+                  <span className="shrink-0 text-sm font-bold tabular-nums text-zinc-900">{t.today.toLocaleString()}<span className="ml-0.5 text-[10px] font-medium text-zinc-400">{t.unit}</span></span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5 text-[10px] text-zinc-400">
+              {is ? `Áætlað fyrir eina æfingu í dag · ${ts.remainingSessions} eftir í vikunni.` : `Estimated for one session today · ${ts.remainingSessions} left this week.`}
+            </div>
+          </div>
+        );
+      })()}
       {/* Lota E / E5 — a plain count instead of an 8-item comma pile
           ("training volume, running distance, high-speed running, …"). On the
           final week it's redundant with "almost back to full training" above,

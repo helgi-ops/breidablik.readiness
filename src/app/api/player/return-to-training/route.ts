@@ -12,8 +12,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
-import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
-import { RTT_QUALITY_LABELS } from "@/lib/micropulse/returnToTraining";
+import { buildRttForPlayer, plannedSessionsThisWeek } from "@/lib/micropulse/rttForPlayer";
+import { RTT_QUALITY_LABELS, buildRttTodayRecommendation } from "@/lib/micropulse/returnToTraining";
 import type { QualityKey } from "@/lib/micropulse/returnToTraining";
 
 export const runtime = "nodejs";
@@ -77,6 +77,28 @@ export async function GET(req: Request) {
       };
     });
 
+    // Today's session recommendation — the remaining weekly budget ÷ the
+    // sessions still to come, plus a plain locomotive/mechanical/mixed steer.
+    // Same shared engine the coach RTT page uses (can't drift).
+    const planned = await plannedSessionsThisWeek(sb, teamId).catch(() => null);
+    const todayRec = buildRttTodayRecommendation(r, planned);
+    const todaySession = todayRec
+      ? {
+          sessionType: todayRec.sessionType,
+          sessionsDone: todayRec.sessionsDone,
+          plannedSessions: todayRec.plannedSessions,
+          remainingSessions: todayRec.remainingSessions,
+          fromWeekSetup: planned != null,
+          targets: todayRec.qualities
+            .map((q) => {
+              const meta = RTT_QUALITY_LABELS[q.key];
+              const dp = meta?.dp ?? 0;
+              return { key: q.key, today: Number(q.today.toFixed(dp)), unit: meta?.unit ?? "" };
+            })
+            .filter((t) => t.today > 0),
+        }
+      : null;
+
     return NextResponse.json({
       active: true,
       currentWeek,
@@ -88,6 +110,7 @@ export async function GET(req: Request) {
       sessionsThisWeek: adh?.sessions ?? 0,
       inProgress: adh?.inProgress ?? true,
       weekNumbers,
+      todaySession,
     });
   } catch (e) {
     // Never break Today over this optional card — just render nothing.

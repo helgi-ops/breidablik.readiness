@@ -363,3 +363,79 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
 }
 
 export { QLABEL as RTT_QUALITY_LABELS };
+
+// ── Today's session recommendation ───────────────────────────────────────────
+// Turns the WEEKLY graded plan into a single "today" recommendation, shared by
+// the coach RTT page and the player's own Today card so they can never drift.
+// today[q] = (this week's target − what's already done this week) ÷ sessions
+// still to come. Plus a session-type steer: LOCOMOTIVE (running: distance / HSR
+// / sprint) vs MECHANICAL (change of direction & braking: accel / decel /
+// high-decel / CoD), or MIXED when balanced — pick the axis he's most behind on
+// this week, among UNLOCKED qualities (held qualities aren't introduced yet).
+// GPS = Engine, IMA = Driver (Niklas Virtanen); mechanical vs locomotor load
+// separation — Vanrenterghem 2017.
+
+export type RttSessionType = "locomotive" | "mechanical" | "mixed";
+export type RttTodayQuality = { key: QualityKey; weekly: number; done: number; remaining: number; today: number; pctOfHealthy: number };
+export type RttTodayRecommendation = {
+  currentWeek: number;
+  totalWeeks: number;
+  sessionsDone: number;
+  plannedSessions: number;
+  remainingSessions: number;
+  qualities: RttTodayQuality[];            // unlocked, target > 0
+  held: Array<{ key: QualityKey; unlockWeek: number }>;
+  sessionType: RttSessionType;
+  locoFrac: number;
+  mechFrac: number;
+};
+
+const RTT_LOCO_Q = new Set<QualityKey>(["distance", "hsr", "sprint"]);
+const RTT_MECH_Q = new Set<QualityKey>(["accel", "decel", "decelHigh", "cod"]);
+const RTT_DEFAULT_SESSIONS = 4;
+
+/** `plannedSessions` = the coach's Week-setup session count for this week, or
+ *  null → defaults to RTT_DEFAULT_SESSIONS. Pure. */
+export function buildRttTodayRecommendation(
+  result: RttResult,
+  plannedSessions: number | null,
+): RttTodayRecommendation | null {
+  const plan = result.plan;
+  if (!plan) return null;
+  const currentWeek = plan.currentWeek;
+  const totalWeeks = Math.max(1, ...plan.weeks.map((w) => w.week));
+  const targets = plan.weeks.filter((w) => w.week === currentWeek);
+  if (!targets.length) return null;
+
+  const adh = result.adherence.find((a) => a.week === currentWeek) ?? null;
+  const doneByQ = new Map<QualityKey, number>((adh?.cells ?? []).map((c) => [c.quality, c.actual]));
+  const sessionsDone = adh?.sessions ?? 0;
+  const planned = plannedSessions ?? RTT_DEFAULT_SESSIONS;
+  const remainingSessions = Math.max(1, planned - sessionsDone);
+
+  const qualities: RttTodayQuality[] = targets
+    .filter((w) => !w.locked && w.target > 0)
+    .map((w) => {
+      const done = doneByQ.get(w.quality) ?? 0;
+      const remaining = Math.max(0, w.target - done);
+      return { key: w.quality, weekly: w.target, done, remaining, today: Math.round(remaining / remainingSessions), pctOfHealthy: w.pctOfHealthy };
+    });
+  const held = targets.filter((w) => w.locked).map((w) => ({ key: w.quality, unlockWeek: w.unlockWeek }));
+
+  const axis = (set: Set<QualityKey>) => {
+    const items = qualities.filter((q) => set.has(q.key));
+    const wk = items.reduce((s, q) => s + q.weekly, 0);
+    const rem = items.reduce((s, q) => s + q.remaining, 0);
+    return { available: items.length > 0 && wk > 0, frac: wk > 0 ? rem / wk : 0 };
+  };
+  const loco = axis(RTT_LOCO_Q);
+  const mech = axis(RTT_MECH_Q);
+  const sessionType: RttSessionType =
+    loco.available && !mech.available ? "locomotive"
+    : mech.available && !loco.available ? "mechanical"
+    : !loco.available && !mech.available ? "mixed"
+    : Math.abs(loco.frac - mech.frac) < 0.12 ? "mixed"
+    : loco.frac > mech.frac ? "locomotive" : "mechanical";
+
+  return { currentWeek, totalWeeks, sessionsDone, plannedSessions: planned, remainingSessions, qualities, held, sessionType, locoFrac: loco.frac, mechFrac: mech.frac };
+}

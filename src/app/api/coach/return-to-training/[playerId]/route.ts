@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
+import { buildRttForPlayer, plannedSessionsThisWeek } from "@/lib/micropulse/rttForPlayer";
 
 export const runtime = "nodejs";
 
@@ -23,47 +23,6 @@ async function resolve(req: Request, playerId: string) {
   const { teamId } = await requireCoachAccessForTeam(sb, req, player.team_id);
   if (teamId !== player.team_id) throw new Error("Forbidden");
   return { sb, player, teamId: player.team_id };
-}
-
-/** How many TRAINING sessions the coach has planned for THIS calendar week
- *  (Mon–Sun), read from the team's Week setup (v_week_plan_grid). Excludes
- *  OFF / RECOVERY / GAME days. null when no week plan exists for this week —
- *  the client then falls back to a manual sessions/week input. */
-async function plannedSessionsThisWeek(
-  sb: ReturnType<typeof getSupabaseAdmin>,
-  teamId: string,
-): Promise<number | null> {
-  const now = new Date();
-  const dow = now.getUTCDay(); // 0 Sun … 6 Sat
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - ((dow + 6) % 7));
-  const mondayIso = monday.toISOString().slice(0, 10);
-
-  const { data: ws } = await sb
-    .from("coach_week_setup")
-    .select("id")
-    .eq("team_id", teamId)
-    .eq("week_start_date", mondayIso)
-    .maybeSingle();
-  const wsId = (ws as { id?: string } | null)?.id;
-  if (!wsId) return null;
-
-  const { data: grid } = await sb
-    .from("v_week_plan_grid")
-    .select("day_type_final, dose_final")
-    .eq("week_setup_id", wsId);
-  if (!Array.isArray(grid)) return null;
-
-  const OFFISH = new Set(["OFF", "REST", "RECOVERY", "GAME"]);
-  let n = 0;
-  for (const r of grid as Array<{ day_type_final?: string | null; dose_final?: string | null }>) {
-    const dt = String(r.day_type_final ?? "").trim().toUpperCase();
-    const dose = String(r.dose_final ?? "").trim().toUpperCase();
-    if (OFFISH.has(dt)) continue;
-    if (dt === "TRAIN") { n++; continue; }
-    if (!dt && dose && !OFFISH.has(dose)) { n++; continue; }
-  }
-  return n > 0 ? n : null;
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ playerId: string }> }) {

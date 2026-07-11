@@ -167,3 +167,42 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
     rttStartDate, savedOverrides, variant, layoffDays, result,
   };
 }
+
+/** How many TRAINING sessions the coach has planned for THIS calendar week
+ *  (Mon–Sun), read from Week setup (v_week_plan_grid). Excludes OFF / RECOVERY
+ *  / GAME (and unstructured "Other") days. null when this week isn't structured
+ *  — callers then fall back to an estimate. Shared by the coach + player RTT
+ *  endpoints so both derive "today" the same way. */
+export async function plannedSessionsThisWeek(sb: Sb, teamId: string): Promise<number | null> {
+  const now = new Date();
+  const dow = now.getUTCDay(); // 0 Sun … 6 Sat
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() - ((dow + 6) % 7));
+  const mondayIso = monday.toISOString().slice(0, 10);
+
+  const { data: ws } = await sb
+    .from("coach_week_setup")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("week_start_date", mondayIso)
+    .maybeSingle();
+  const wsId = (ws as { id?: string } | null)?.id;
+  if (!wsId) return null;
+
+  const { data: grid } = await sb
+    .from("v_week_plan_grid")
+    .select("day_type_final, dose_final")
+    .eq("week_setup_id", wsId);
+  if (!Array.isArray(grid)) return null;
+
+  const OFFISH = new Set(["OFF", "REST", "RECOVERY", "GAME"]);
+  let n = 0;
+  for (const r of grid as Array<{ day_type_final?: string | null; dose_final?: string | null }>) {
+    const dt = String(r.day_type_final ?? "").trim().toUpperCase();
+    const dose = String(r.dose_final ?? "").trim().toUpperCase();
+    if (OFFISH.has(dt)) continue;
+    if (dt === "TRAIN") { n++; continue; }
+    if (!dt && dose && !OFFISH.has(dose)) { n++; continue; }
+  }
+  return n > 0 ? n : null;
+}
