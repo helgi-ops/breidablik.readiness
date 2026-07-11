@@ -275,6 +275,46 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
         const gps = rec.filter((r) => GPS.has(r.q));
         const ima = rec.filter((r) => !GPS.has(r.q));
         const held = targets.filter((w) => w.locked);
+
+        // Session-type steer — LOCOMOTIVE (running: distance / HSR / sprint) vs
+        // MECHANICAL (change of direction & braking: accel / decel / high-decel
+        // / CoD). Recommend the axis he's most BEHIND on this week (largest
+        // share still to come), among UNLOCKED qualities; balanced → mixed; if
+        // one axis isn't introduced yet (all held) steer to the other. GPS =
+        // Engine, IMA = Driver (Niklas Virtanen); mechanical vs locomotor load
+        // separation — Vanrenterghem 2017.
+        const LOCO = new Set<Quality>(["distance", "hsr", "sprint"]);
+        const MECH = new Set<Quality>(["accel", "decel", "decelHigh", "cod"]);
+        const axisStat = (set: Set<Quality>) => {
+          const items = rec.filter((r) => set.has(r.q));
+          const wk = items.reduce((s, r) => s + r.weekly, 0);
+          const rem = items.reduce((s, r) => s + r.remaining, 0);
+          return { available: items.length > 0 && wk > 0, frac: wk > 0 ? rem / wk : 0 };
+        };
+        const loco = axisStat(LOCO);
+        const mech = axisStat(MECH);
+        const sType: "loco" | "mech" | "mixed" =
+          loco.available && !mech.available ? "loco"
+          : mech.available && !loco.available ? "mech"
+          : !loco.available && !mech.available ? "mixed"
+          : Math.abs(loco.frac - mech.frac) < 0.12 ? "mixed"
+          : loco.frac > mech.frac ? "loco" : "mech";
+        const TYPE_META = {
+          loco:  { label: is ? "Locomotive" : "Locomotive", sub: is ? "hlaup — lengri & háhraða sprettir" : "running — longer & high-speed", bg: "#e0f2fe", fg: "#0369a1", icon: "🏃" },
+          mech:  { label: is ? "Mechanical" : "Mechanical", sub: is ? "stefnubreytingar & hemlun" : "change of direction & braking", bg: "#faf1de", fg: "#9a6410", icon: "🔄" },
+          mixed: { label: is ? "Blandað (Mixed)" : "Mixed", sub: is ? "jafnvægi hlaups & stefnubreytinga" : "balanced running + change of direction", bg: "#efe8fb", fg: "#5b4794", icon: "⚖️" },
+        } as const;
+        const tm = TYPE_META[sType];
+        const sWhy = sType === "loco"
+          ? (mech.available
+              ? (is ? "Meira af hlaupaálagi vikunnar er eftir — gerðu daginn hlaupamiðaðan (lengri, háhraða)." : "More of this week's running load is still to come — make today locomotive (longer, high-speed).")
+              : (is ? "Stefnubreytingar eru ekki komnar inn enn — haltu deginum hlaupamiðuðum." : "Change of direction isn't introduced yet — keep today running-based."))
+          : sType === "mech"
+            ? (loco.available
+                ? (is ? "Meira af stefnubreytingum & hemlun vikunnar er eftir — gerðu daginn mechanical (klippingar, hemlun)." : "More of this week's change-of-direction & braking is still to come — make today mechanical (cutting, braking).")
+                : (is ? "Hlaupaálag er á áætlun — í dag áhersla á stefnubreytingar & hemlun." : "Running load is on track — today emphasise change of direction & braking."))
+            : (is ? "Hlaup og stefnubreytingar eru bæði á áætlun — blönduð æfing hentar í dag." : "Running and change of direction are both on track — a mixed session fits today.");
+
         const cell = (r: { q: Quality; weekly: number; done: number; remaining: number; today: number; pct: number }) => (
           <div key={r.q} className="rounded-lg border border-violet-100 bg-white px-3 py-2">
             <div className="text-[11px] font-medium text-slate-500">{is ? LABEL[r.q].is : LABEL[r.q].en}</div>
@@ -301,6 +341,16 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                 <span className="w-4 text-center font-bold tabular-nums text-slate-800">{planned}</span>
                 <button type="button" onClick={() => setManualSessions(() => Math.min(9, planned + 1))} className="h-5 w-5 rounded border border-slate-300 bg-white font-bold leading-none text-slate-600 hover:bg-slate-50">+</button>
               </div>
+            </div>
+
+            {/* Session-type steer — locomotive / mechanical / mixed. */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: tm.bg, color: tm.fg }}>
+                <span aria-hidden>{tm.icon}</span>
+                {is ? "Í dag" : "Today"}: {tm.label}
+                <span className="font-medium opacity-80">· {tm.sub}</span>
+              </span>
+              <span className="text-[11px] leading-snug text-slate-500">{sWhy}</span>
             </div>
             <div className="mt-1 text-[11px] text-slate-500">
               {sessionsDone}/{planned} {is ? "æfingar búnar í viku" : "sessions done this week"} · {remainingSessions} {is ? "eftir" : "left"} <span className="text-slate-400">({source})</span> — {is ? "það sem eftir er af vikumarkmiðinu, deilt á æfingarnar sem eftir eru. Álagið er ÞAK." : "what's left of this week's target, split across the sessions still to come. Load is a ceiling."}
