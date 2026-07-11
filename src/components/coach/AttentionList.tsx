@@ -1,42 +1,87 @@
 "use client";
 
 /**
- * AttentionList — Lota B / Fasi 2, step B2.
+ * AttentionList — "Needs attention", design turn 24b (grouped by status).
  *
- * One prioritized list that replaces the separate banners (unfamiliar-spike,
- * recovery-watch, volatility): ALERT before MONITOR, then ACWR descending. Each
- * row shows the player, their reason (attentionReason[0]) and any small flags
- * (e.g. UNFAMILIAR LOAD, HAMSTRING), and opens the player drawer on click.
+ * Players are grouped into status categories (In rehabilitation / Injured —
+ * not training / Watch today / Alert). Each group is a collapsible section
+ * with a count; the coach reads "3 in rehab, 1 injured, 2 to watch" at a
+ * glance without scanning every row. Less-urgent groups are collapsed by
+ * default so the panel height stays short no matter how many players are on
+ * the lists (a collapsed group still shows its members' names on the right).
+ *
+ * Rows are deliberately minimal — avatar + name + ONE right-side signal
+ * (day-over-day delta, or the status/stage) + chevron. The status lives on
+ * the GROUP, not repeated per row: that removes the old "triple information"
+ * (name + ALERT badge + repeated status + tag) that made each row ~80px.
  *
  * Presentational only — the coach dashboard maps its already-computed flagged
- * players onto these props in step B3 (no new data / no new API). Sorting is
- * done here so the caller can pass the flagged set in any order.
+ * players onto these props (no new data / no new API). Clicking a row opens
+ * the player decision drawer.
  */
 
+import { useState } from "react";
+
 export type AttentionFlag = "ALERT" | "MONITOR";
+
+/** Status category — drives which collapsible group the row lands in. */
+export type AttentionCategory = "ALERT" | "REHAB" | "INJURED" | "WATCH";
+
+/** Right-side day-over-day signal on a row (↑↑ better / ↓↓ worse / ● new). */
+export type AttentionDelta = {
+  dir: "up" | "down" | "new" | "same";
+  /** Full localized summary — shown as a tooltip. */
+  full?: string;
+} | null;
 
 export type AttentionItem = {
   playerId: string;
   name: string;
   flag: AttentionFlag;
-  /** Short status label, e.g. "Recovery" / "Modified". Optional. */
+  /** Status group. When absent, derived from color/flag (WATCH fallback). */
+  category?: AttentionCategory;
+  /** Short status / stage label, e.g. "Recovery", "RTP 1/5". Optional. */
   status?: string | null;
-  /** The primary reason — attentionReason[0]. */
-  reason: string;
-  /** Small badges, e.g. ["UNFAMILIAR LOAD", "HAMSTRING"]. */
+  /** The primary reason — kept for the drawer; not shown on the compact row. */
+  reason?: string;
+  /** Small badges — kept for compatibility; not shown on the compact row. */
   badges?: string[];
-  /** Recommended action (one short line). Optional. */
   action?: string | null;
-  /** Used only for sorting within a flag group (ACWR desc). */
+  /** Used only for sorting within a group (ACWR / spike desc). */
   acwr?: number | null;
   /** Status colour for the dot / accents. */
-  color?: "RED" | "YELLOW" | "GRAY";
+  color?: "RED" | "YELLOW" | "GREEN" | "GRAY";
+  /** Day-over-day change — the row's right-side signal when present. */
+  delta?: AttentionDelta;
 };
 
 export type AttentionListProps = {
   lang: "IS" | "EN";
   items: AttentionItem[];
   onOpenPlayer: (playerId: string) => void;
+};
+
+const DOT: Record<NonNullable<AttentionItem["color"]>, string> = {
+  RED: "#a83e28",
+  YELLOW: "#de9328",
+  GREEN: "#1c7a4a",
+  GRAY: "#8a8f8c",
+};
+
+const GROUP_ORDER: AttentionCategory[] = ["ALERT", "REHAB", "INJURED", "WATCH"];
+
+const GROUP_META: Record<
+  AttentionCategory,
+  { is: string; en: string; accent: string; dot: string; defaultOpen: boolean }
+> = {
+  // Non-injury red readiness — most urgent, expanded.
+  ALERT:   { is: "Áríðandi í dag",       en: "Alert today",            accent: "#a83e28", dot: DOT.RED,    defaultOpen: true },
+  // Actively managed today (graded return / stage progression) — expanded.
+  REHAB:   { is: "Í endurhæfingu",       en: "In rehabilitation",      accent: "#a83e28", dot: DOT.RED,    defaultOpen: true },
+  // Out, not training — nothing to action today, so collapsed.
+  INJURED: { is: "Meiddir — ekki æfing", en: "Injured — not training", accent: "#a83e28", dot: DOT.RED,    defaultOpen: false },
+  // Minor readiness watch — collapsed.
+  WATCH:   { is: "Fylgjast með í dag",   en: "Watch today",            accent: "#9a6410", dot: DOT.YELLOW, defaultOpen: false },
 };
 
 function initials(name: string): string {
@@ -46,26 +91,54 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const DOT: Record<NonNullable<AttentionItem["color"]>, string> = {
-  RED: "#a83e28",
-  YELLOW: "#de9328",
-  GRAY: "#8a8f8c",
-};
+/** First two given-name tokens — keeps the collapsed-group summary short. */
+function shortName(name: string): string {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(" ") || name;
+}
 
-function flagRank(f: AttentionFlag): number {
-  return f === "ALERT" ? 0 : 1;
+function categoryOf(it: AttentionItem): AttentionCategory {
+  if (it.category) return it.category;
+  if (it.color === "YELLOW") return "WATCH";
+  return it.flag === "ALERT" ? "ALERT" : "WATCH";
+}
+
+function deltaLabel(dir: NonNullable<AttentionDelta>["dir"], isIS: boolean): { arrow: string; word: string; color: string } | null {
+  switch (dir) {
+    case "up":   return { arrow: "↑↑", word: isIS ? "skárra" : "better", color: "#1c7a4a" };
+    case "down": return { arrow: "↓↓", word: isIS ? "verra" : "worse",  color: "#a83e28" };
+    case "new":  return { arrow: "●",  word: isIS ? "nýtt" : "new",      color: "#a83e28" };
+    default:     return null; // "same" → no delta chip
+  }
 }
 
 export default function AttentionList({ lang, items, onOpenPlayer }: AttentionListProps) {
   const isIS = lang === "IS";
 
-  const sorted = [...items].sort((a, b) => {
-    const r = flagRank(a.flag) - flagRank(b.flag);
-    if (r !== 0) return r;
-    return (b.acwr ?? 0) - (a.acwr ?? 0);
-  });
+  // Group + sort (within a group: ALERT flag first, then spike desc).
+  const grouped: Record<AttentionCategory, AttentionItem[]> = { ALERT: [], REHAB: [], INJURED: [], WATCH: [] };
+  for (const it of items) grouped[categoryOf(it)].push(it);
+  for (const k of GROUP_ORDER) {
+    grouped[k].sort((a, b) => {
+      const r = (a.flag === "ALERT" ? 0 : 1) - (b.flag === "ALERT" ? 0 : 1);
+      if (r !== 0) return r;
+      return (b.acwr ?? 0) - (a.acwr ?? 0);
+    });
+  }
+  const present = GROUP_ORDER.filter((k) => grouped[k].length > 0);
+  const total = items.length;
 
-  if (!sorted.length) {
+  // Default-open per category, with a safeguard: if no present group is
+  // open-by-default, open the first one so the panel is never fully collapsed.
+  const anyDefaultOpen = present.some((k) => GROUP_META[k].defaultOpen);
+  const defaultOpenFor = (k: AttentionCategory) =>
+    GROUP_META[k].defaultOpen || (!anyDefaultOpen && k === present[0]);
+
+  const [openMap, setOpenMap] = useState<Partial<Record<AttentionCategory, boolean>>>({});
+  const isOpen = (k: AttentionCategory) => openMap[k] ?? defaultOpenFor(k);
+  const toggle = (k: AttentionCategory) => setOpenMap((prev) => ({ ...prev, [k]: !(prev[k] ?? defaultOpenFor(k)) }));
+
+  if (!total) {
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 shadow-card">
         <div className="text-sm font-medium text-zinc-500">
@@ -77,60 +150,91 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-card">
-      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
         <div className="text-sm font-bold text-zinc-900">{isIS ? "Þarfnast athygli" : "Needs attention"}</div>
-        <div className="text-[11px] font-semibold text-zinc-400">{sorted.length}</div>
+        <div className="text-[11px] font-semibold text-zinc-400">{total}</div>
       </div>
-      <div className="divide-y divide-zinc-100">
-        {sorted.map((it) => {
-          const dot = DOT[it.color ?? "GRAY"];
-          const isAlert = it.flag === "ALERT";
+
+      <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+        {present.map((k) => {
+          const meta = GROUP_META[k];
+          const rows = grouped[k];
+          const open = isOpen(k);
+          const panelId = `attn-group-${k}`;
+          const summary = rows.map((r) => shortName(r.name)).join(" · ");
           return (
-            <button
-              key={it.playerId}
-              type="button"
-              onClick={() => onOpenPlayer(it.playerId)}
-              className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100"
-            >
-              {/* Avatar */}
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
-                style={{ background: `${dot}1a`, color: dot }}
+            <section key={k}>
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-controls={panelId}
+                onClick={() => toggle(k)}
+                className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left transition-colors hover:bg-zinc-50"
               >
-                {initials(it.name)}
-              </span>
-
-              {/* Body */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
-                  <span className="truncate text-sm font-semibold text-zinc-900">{it.name}</span>
-                  {isAlert ? (
-                    <span className="shrink-0 rounded-full bg-[#f8e9e3] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#a83e28]">
-                      {isIS ? "Áríðandi" : "Alert"}
-                    </span>
-                  ) : null}
-                  {it.status ? <span className="shrink-0 text-[11px] font-medium text-zinc-400">{it.status}</span> : null}
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: meta.dot }} />
+                  <span
+                    className="shrink-0 text-[11px] font-bold uppercase tracking-wide"
+                    style={{ color: meta.accent }}
+                  >
+                    {isIS ? meta.is : meta.en}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600">
+                    {rows.length}
+                  </span>
                 </div>
-                <div className="mt-0.5 truncate text-xs text-zinc-500">{it.reason}</div>
-                {it.badges?.length ? (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {it.badges.map((b, i) => (
-                      <span
-                        key={i}
-                        className="rounded-full border border-[#ead9b4] bg-[#faf1de] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#9a6410]"
-                      >
-                        {b}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {it.action ? <div className="mt-1 text-xs font-medium text-zinc-700">{it.action}</div> : null}
-              </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  {!open ? (
+                    <span className="truncate text-[12px] font-medium text-zinc-400">{summary}</span>
+                  ) : null}
+                  <span
+                    className={`shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`}
+                    aria-hidden
+                  >
+                    ▾
+                  </span>
+                </div>
+              </button>
 
-              {/* Chevron */}
-              <span className="shrink-0 text-zinc-300" aria-hidden>→</span>
-            </button>
+              {open ? (
+                <div id={panelId} className="divide-y divide-zinc-100/70">
+                  {rows.map((it) => {
+                    const dot = DOT[it.color ?? "GRAY"];
+                    const dl = it.delta && it.delta.dir !== "same" ? deltaLabel(it.delta.dir, isIS) : null;
+                    return (
+                      <button
+                        key={it.playerId}
+                        type="button"
+                        onClick={() => onOpenPlayer(it.playerId)}
+                        className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100"
+                      >
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                          style={{ background: `${dot}1a`, color: dot }}
+                        >
+                          {initials(it.name)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+                          {it.name}
+                        </span>
+                        {dl ? (
+                          <span
+                            className="shrink-0 text-[12px] font-semibold tabular-nums"
+                            style={{ color: dl.color }}
+                            title={it.delta?.full ?? undefined}
+                          >
+                            {dl.arrow} {dl.word}
+                          </span>
+                        ) : it.status ? (
+                          <span className="shrink-0 text-[12px] font-medium text-zinc-500">{it.status}</span>
+                        ) : null}
+                        <span className="shrink-0 text-zinc-300" aria-hidden>→</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
           );
         })}
       </div>

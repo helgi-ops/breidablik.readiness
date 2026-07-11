@@ -7,19 +7,33 @@
  * clicks a player (in the attention list or the group table — including a green
  * one). It is the explainability-first layered read for a single athlete:
  *
- *   (0) verdict colour + one-line status at the top,
- *   (1) the plain "why" (2–3 supporting facts + counterfactual) without a click,
+ *   (0) verdict colour + one-line status + score at the top,
+ *   (1) the plain "why" (prose + the wellness sub-scores that moved +
+ *       counterfactual) and the AI summary (drivers/load/trajectory synthesis)
+ *       without a click — so the coach needn't drop to the Daily Briefing,
  *   (2) an Unfamiliar-load banner (today vs the player's own usual, with the
  *       ≥70%-above → RED colour rule), confidence, and injury/delta context.
  *
  * Raw S&C detail stays behind "Show details — S&C" (the existing rich modal,
- * wired by the caller). Presentational only — the dashboard maps its already-
- * computed attention/composite data onto these props (no new data, no new API).
+ * wired by the caller). The dashboard maps its already-computed attention/
+ * composite data onto these props (no new data, no new API); the embedded AI
+ * summary self-fetches (cached, ELITE-gated, self-hiding).
  */
 
 import { useEffect } from "react";
+import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 
 export type DrawerColor = "GREEN" | "YELLOW" | "RED" | "GRAY";
+
+/** One wellness sub-score that drove today's verdict (1–5, 1 = poor). */
+export type DrawerDriver = {
+  kind: "sleep" | "energy" | "stress" | "soreness";
+  value: number;
+  /** Personal-norm mean for this metric, if known (for the tooltip). */
+  norm?: number | null;
+  /** SD from the player's own norm (negative = below usual). */
+  z?: number | null;
+};
 
 export type DecisionDrawerData = {
   playerId: string;
@@ -29,10 +43,14 @@ export type DecisionDrawerData = {
   color: DrawerColor;
   /** One-line coach-friendly status, e.g. "Heavy training load". */
   verdictLabel: string;
+  /** Readiness score (same number the dashboard shows). Small chip by the verdict. */
+  score?: number | null;
   /** The plain "why" — 1–2 sentences, no jargon. */
   why?: string | null;
   /** Supporting facts (attentionReason) — shown as a short list. */
   reasons?: string[];
+  /** The wellness sub-scores that moved today — the concrete "what changed". */
+  drivers?: DrawerDriver[];
   /** Unfamiliar load — today vs the player's own usual. spike is a ratio
    *  (1.7 = +70%). Drives the banner + the ≥70%→RED colour rule. */
   load?: {
@@ -89,6 +107,20 @@ function initials(name: string): string {
   if (!parts.length) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const DRIVER_LABEL: Record<DrawerDriver["kind"], { en: string; is: string }> = {
+  sleep: { en: "Sleep", is: "Svefn" },
+  energy: { en: "Energy", is: "Orka" },
+  stress: { en: "Stress", is: "Streita" },
+  soreness: { en: "Soreness", is: "Eymsli" },
+};
+
+/** 1–5 wellness value → chip colour (1–2 poor = red, 3 = amber, 4–5 = green). */
+function driverTone(value: number): { bg: string; fg: string } {
+  if (value <= 2) return { bg: "#f8e9e3", fg: "#a83e28" };
+  if (value <= 3) return { bg: "#faf1de", fg: "#9a6410" };
+  return { bg: "#eaf3ec", fg: "#1c7a4a" };
 }
 
 /** Unfamiliar-load bander: the ≥70%-above-usual → RED rule (handoff B4).
@@ -189,6 +221,11 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
             {isIS ? c.label.IS : c.label.EN}
           </span>
           <span className="text-sm font-semibold text-zinc-600">{data.verdictLabel}</span>
+          {typeof data.score === "number" ? (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600">
+              {isIS ? "Skor" : "Score"} {data.score}
+            </span>
+          ) : null}
           {data.injury ? (
             <span className="rounded-full bg-[#efe8fb] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#7a5cc4]">
               {data.injury.badge}
@@ -215,6 +252,37 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
               </li>
             ))}
           </ul>
+        ) : null}
+
+        {/* What moved today — the concrete wellness sub-scores behind the verdict.
+            Diagnostic (not prescriptive); hover shows the player's personal norm. */}
+        {data.drivers?.length ? (
+          <div className="mx-5 mt-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+              {isIS ? "MERKI DAGSINS" : "WHAT MOVED TODAY"}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {data.drivers.map((d, i) => {
+                const tone = driverTone(d.value);
+                const lab = DRIVER_LABEL[d.kind];
+                const tip =
+                  d.norm != null
+                    ? `${isIS ? "venja" : "norm"} ${d.norm.toFixed(1)}${d.z != null ? ` · ${d.z > 0 ? "+" : ""}${d.z.toFixed(1)} SD` : ""}`
+                    : undefined;
+                return (
+                  <span
+                    key={i}
+                    title={tip}
+                    className="rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums"
+                    style={{ background: tone.bg, color: tone.fg }}
+                  >
+                    {isIS ? lab.is : lab.en} {d.value}
+                    <span className="opacity-60">/5</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
         ) : null}
 
         {/* Unfamiliar-load banner — its own band, with the ≥70%→RED rule */}
@@ -257,6 +325,21 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
             <p className="mt-1 text-sm leading-relaxed text-zinc-800">{data.counterfactual.description}</p>
           </div>
         ) : null}
+
+        {/* AI summary — the plain-language synthesis (drivers + load + trajectory
+            + pattern) that otherwise lives in the Daily Briefing / S&C modal.
+            Labelled as AI, self-hides when unavailable / non-ELITE. Brings the
+            "why" depth into the drawer so the coach needn't navigate away. */}
+        <div className="mx-5 mt-4">
+          <PlayerSummaryCard
+            playerId={data.playerId}
+            coachVerdict={{
+              state: data.color,
+              headline: data.verdictLabel,
+              why_lines: data.reasons ?? undefined,
+            }}
+          />
+        </div>
 
         {/* Confidence + baseline */}
         {data.confidence ? (

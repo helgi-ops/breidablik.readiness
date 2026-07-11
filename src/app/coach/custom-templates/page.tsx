@@ -2308,6 +2308,9 @@ export default function CustomTemplatesPage() {
   const teamName   = selectedTeam?.name   ?? null;
   const teamSport  = selectedTeam?.sport  ?? null;
   const teamGender = selectedTeam?.gender ?? null;
+  // The pinned "Explosive Power 12w" library belongs to personal training only,
+  // never a club team's programme list.
+  const isPtSelected = String(selectedTeam?.teamType ?? "").toLowerCase() === "personal_trainer";
 
   // Builder state
   const [step, setStep] = useState<Step>(1);
@@ -2766,12 +2769,13 @@ export default function CustomTemplatesPage() {
       {/* Existing sets list */}
       {!showBuilder && (
         <div className="space-y-3">
-          {/* Pinned admin programme — Explosive Power 12w. Shown at the top
-              of the list for site-admin only. It's not a custom_template_sets
-              row (different shape, phase-based blocks live in
-              pt_explosive_programmes) but appears here as a regular card so
-              Helgi can reach it from his own programme library. */}
-          {isAdmin && (
+          {/* Pinned admin programme — Explosive Power 12w. Personal-training
+              library only (site-admin + a personal_trainer team selected) —
+              never on a club team's programme list. It's not a
+              custom_template_sets row (different shape, phase-based blocks live
+              in pt_explosive_programmes) but appears here as a regular card so
+              Helgi can reach it from his own PT programme library. */}
+          {isAdmin && isPtSelected && (
             <Link
               href="/coach/pt-explosive"
               className="block rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 transition-colors hover:from-amber-100 hover:to-orange-100"
@@ -2802,8 +2806,9 @@ export default function CustomTemplatesPage() {
           ) : sets.length === 0 && playerSets.length === 0 ? (
             // Don't show the "no programmes yet" placeholder when the admin
             // sees their pinned Explosive Power card — that IS a programme
-            // they already have, so the message would be misleading.
-            isAdmin ? null : (
+            // they already have, so the message would be misleading. Only
+            // suppress it in the PT context where that card actually renders.
+            (isAdmin && isPtSelected) ? null : (
               <Card>
                 <CardContent className="pt-6 text-center text-sm text-muted-foreground">
                   No training programmes yet. Create your first one above.

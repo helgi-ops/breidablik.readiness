@@ -89,6 +89,7 @@ import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 // MechanicalLoadIndexCard moved to /coach/load-intelligence (was on the GPS Data tab).
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
+import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import DailyBriefingCard, { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
@@ -1024,8 +1025,20 @@ function buildDrawerDataFromAttention(item: BriefingAttentionItem, lang: "IS" | 
     name: item.name,
     color,
     verdictLabel: item.compactStatus,
+    score: item.score,
     why: item.explanation ? (isIS ? item.explanation.is : item.explanation.en) : null,
     reasons: item.reasons,
+    // The wellness sub-scores that moved today — concrete "what changed" for
+    // the drawer (same drivers the Daily Briefing shows). Composite kinds
+    // (dz / total) are dropped — they aren't coach-legible as a chip.
+    drivers: item.drivers
+      .filter((d) => d.kind === "sleep" || d.kind === "energy" || d.kind === "stress" || d.kind === "soreness")
+      .map((d) => ({
+        kind: d.kind as "sleep" | "energy" | "stress" | "soreness",
+        value: d.value,
+        norm: d.baselineMean ?? null,
+        z: d.z ?? null,
+      })),
     load:
       item.plSpike != null || item.loadBreakdown.length > 0
         ? { spike: item.plSpike ?? null, breakdown: item.loadBreakdown }
@@ -8086,6 +8099,20 @@ export default function CoachPage() {
                 </div>
               );
             })()}
+            {/* AI summary — plain-language synthesis of the boxes below, aligned
+                to the canonical verdict the coach sees (final_color). Sits at the
+                top of the detail stack (manifesto layered read); labelled as AI,
+                self-hides when unavailable / non-ELITE. */}
+            <PlayerSummaryCard
+              playerId={pid}
+              coachVerdict={{
+                state:     String(r.final_color ?? "").toUpperCase() || "UNKNOWN",
+                headline:  whyLine ?? undefined,
+                why_lines: whyBits.length ? whyBits : undefined,
+                action:    r.training_action ? String(r.training_action) : undefined,
+              }}
+              className="mb-1"
+            />
             {renderAccordionSection(
               "readinessDecision",
               sectionHeaders.readinessDecision,
@@ -9718,14 +9745,34 @@ export default function CoachPage() {
               if (it.plSpike != null && it.plSpike >= 1.6) {
                 badges.push(lang === "IS" ? "ÓVANALEGT ÁLAG" : "UNFAMILIAR LOAD");
               }
+              // 24b grouping: injured → "Injured — not training", rehab/rtp →
+              // "In rehabilitation", non-injury alert → "Alert today", else Watch.
+              const category: AttentionListItem["category"] =
+                it.injury?.kind === "injured" ? "INJURED"
+                : it.injury ? "REHAB"
+                : it.level === "alert" ? "ALERT"
+                : "WATCH";
+              // Day-over-day change → the row's right-side signal (↑↑/↓↓/●).
+              const delta: AttentionListItem["delta"] = it.delta
+                ? {
+                    dir:
+                      it.delta.kind === "better" ? "up"
+                      : it.delta.kind === "worse" ? "down"
+                      : it.delta.kind === "new" ? "new"
+                      : "same",
+                    full: lang === "IS" ? it.delta.summaryIS : it.delta.summaryEN,
+                  }
+                : null;
               return {
                 playerId: String(it.playerId),
                 name: it.name,
                 flag: it.level === "alert" ? "ALERT" : "MONITOR",
+                category,
                 status: it.compactStatus || null,
                 reason: it.reasons[0] ?? it.compactStatus,
                 badges,
                 acwr: it.plSpike ?? null,
+                delta,
                 color: it.injury
                   ? (it.injury.kind === "rtp" ? "YELLOW" : "RED")
                   : it.level === "alert" ? "RED" : "YELLOW",
