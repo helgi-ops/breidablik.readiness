@@ -2249,6 +2249,10 @@ type TodaySessionOpts = {
   recommendationContext?: ExerciseRecommendationContext | null;
   themeColor?: string | null;
   adjust?: TodayAdjust | null;
+  /** True when this session was manually sent by the coach (overrides the
+   *  default team session for today). Renders a labelled "sent by coach" banner
+   *  and suppresses the readiness auto-adjust (already tuned when built). */
+  sentByCoach?: boolean;
 };
 
 /** Translate a raw DB block title for display (IS stored → EN when needed). */
@@ -2854,8 +2858,23 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
 
       {/* Card */}
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        {/* Coach-sent banner — labelled provenance (this replaces the default
+            team session for today; already tuned to today's signals). */}
+        {opts.sentByCoach ? (
+          <div className="px-4 py-3" style={{ background: "#eef1fe" }}>
+            <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: "#2740e6" }}>
+              <span aria-hidden>✓</span>
+              {isIS ? "Sent af þjálfara" : "Sent by your coach"}
+            </div>
+            <div className="mt-1 text-[13px] leading-relaxed" style={{ color: "#2740e6", opacity: 0.9 }}>
+              {isIS
+                ? "Þessi æfing kemur í stað æfingar dagsins og er stillt að stöðunni þinni í dag."
+                : "This replaces today's default session and is tuned to how you are today."}
+            </div>
+          </div>
+        ) : null}
         {/* Adjustment banner */}
-        {banner ? (
+        {!opts.sentByCoach && banner ? (
           <div className="px-4 py-3" style={{ background: banner.bg }}>
             <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: banner.fg }}>
               <span aria-hidden>{banner.icon}</span>
@@ -4074,6 +4093,54 @@ export default function PlayerClient() {
     const tblName = effectiveTableName ?? templateTableName;
     const sPhase = effectiveSeasonPhase ?? activeSeasonPhase;
     const safeDay = sanitizeDay(dayInput);
+
+    // ── Coach-sent override wins ─────────────────────────────────────────────
+    // If the coach sent a strength session from /coach/strength today, that IS
+    // the player's Today card ("sent = seen"). It's already tuned to today's
+    // signals inside buildStrengthSession, so we render it as-is (no further
+    // readiness set-reduction — see the COACH_SENT check at the render site) and
+    // label it as coach-sent. Absent → fall through to the default template chain.
+    try {
+      const { data: sentOverride } = await supabase
+        .from("player_today_strength_override")
+        .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, created_at")
+        .eq("player_id", playerId)
+        .eq("entry_date", safeDay)
+        .maybeSingle();
+      const ov = (sentOverride ?? null) as {
+        team_id?: string | null;
+        md_context?: string | null;
+        title?: string | null;
+        description?: string | null;
+        structure?: unknown;
+        summary?: string | null;
+      } | null;
+      const ovStructure = ov?.structure;
+      if (ov && Array.isArray(ovStructure) && ovStructure.length) {
+        setPlanIsFallback(false);
+        return {
+          decision_id: null,
+          team_id: ov.team_id ?? fallbackTeamId ?? null,
+          player_id: playerId,
+          entry_date: safeDay,
+          md_day: ov.md_context ?? null,
+          readiness_level: null, // suppress player-side re-adjustment
+          chosen_variant_id: null,
+          locked: true,
+          source: "COACH_SENT",
+          confidence: null,
+          why: ov.summary ?? null,
+          inputs: null,
+          training_system: null,
+          variant: null,
+          title: ov.title ?? null,
+          description: ov.description ?? null,
+          structure: ovStructure,
+        } as Stage4PlanRow;
+      }
+    } catch {
+      // table missing / RLS / transient — fall through to the default chain
+    }
 
     const { data: resolved, error: rErr } = await supabase
       .from("v_player_today_microdose_resolved")
@@ -5386,6 +5453,14 @@ export default function PlayerClient() {
         return;
       }
 
+      // A coach-sent session is authoritative and already tuned to today — do
+      // NOT reconcile it against a microdose template for the live readiness
+      // flag (that would shadow the sent structure at planStructureForRender).
+      if (plan.source === "COACH_SENT") {
+        setPlanTemplateOverride(null);
+        return;
+      }
+
       const mdDay = plan?.md_day ?? session?.md_day_resolved ?? null;
 
       if (!mdDay) {
@@ -6566,7 +6641,10 @@ export default function PlayerClient() {
                   ? exerciseRecommendationContext
                   : null,
                 themeColor: clubThemeColor,
-                adjust: computeTodayAdjust(plan?.readiness_level ?? null),
+                // Coach-sent sessions are already tuned to today inside
+                // buildStrengthSession — don't re-apply the readiness reduction.
+                adjust: plan?.source === "COACH_SENT" ? null : computeTodayAdjust(plan?.readiness_level ?? null),
+                sentByCoach: plan?.source === "COACH_SENT",
               }}
             />
 

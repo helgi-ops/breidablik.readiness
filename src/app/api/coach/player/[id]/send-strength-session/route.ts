@@ -17,6 +17,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
+import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -170,12 +171,24 @@ export async function POST(
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
+  // Make it the player's Today session card too — "sent = seen". The chat
+  // message above is the notification; this override is the actual Today card.
+  const overrideRes = await persistTodayStrengthOverride(supabase, {
+    session,
+    playerId,
+    teamId: (playerRow as { team_id: string }).team_id,
+    dateIso: todayIso,
+    coachId: auth.userId,
+    lang,
+  });
+
   // Fire-and-forget push (player sees the message immediately too)
   void notifyPlayer(supabase, playerId, `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
 
   return NextResponse.json({
     ok: true,
     messageId: (msg as { id: string }).id,
+    todayCardApplied: overrideRes.ok,
     mdContext: session.mdContext,
     durationMin: session.durationMin,
     bodyPreview: messageBody.slice(0, 200),

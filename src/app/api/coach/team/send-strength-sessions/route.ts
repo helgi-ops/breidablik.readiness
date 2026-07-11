@@ -19,6 +19,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
+import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -181,6 +182,16 @@ export async function POST(req: NextRequest) {
         results.push({ playerId: p.id, playerName, status: "failed", reason: insertErr.message });
         continue;
       }
+
+      // Make it the player's Today card too — "sent = seen".
+      await persistTodayStrengthOverride(supabase, {
+        session,
+        playerId: p.id,
+        teamId: p.team_id,
+        dateIso: todayIso,
+        coachId: auth.userId,
+        lang,
+      });
 
       void notifyPlayer(supabase, p.id,
         `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
