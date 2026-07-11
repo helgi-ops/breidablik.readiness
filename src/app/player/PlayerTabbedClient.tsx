@@ -31,6 +31,7 @@ import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
 import SessionDrillList from "./sessions/SessionDrillList";
+import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -1072,9 +1073,12 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
 
       {/* Drills + the player's OWN per-drill load, right here on Today — no
           "open session" tap needed. Compact (no diagram/description); the full
-          page still has those. Same component as the detail page (one source). */}
+          page still has those. Same component as the detail page (one source).
+          Boundary'd so a render error can never blank the whole Today tab. */}
       <div className="mt-3">
-        <SessionDrillList sessionId={session.id} items={session.items} lang={lang === "IS" ? "IS" : "EN"} compact />
+        <ClientErrorBoundary>
+          <SessionDrillList sessionId={session.id} items={session.items} lang={lang === "IS" ? "IS" : "EN"} compact />
+        </ClientErrorBoundary>
       </div>
 
       <button

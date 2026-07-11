@@ -52,7 +52,11 @@ export default function SessionDrillList({
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const toggle = (i: number) => setExpanded((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   const fmt = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString(locale));
-  const maxSets = Math.max(1, ...items.map((d) => d.sets || 1));
+  // Defensive: never assume the caller handed us a populated array — a missing
+  // `items` must render an empty list, never throw (this renders inside the
+  // portal-injected Today card, where a throw would blank the whole page).
+  const list = Array.isArray(items) ? items : [];
+  const maxSets = Math.max(1, ...list.map((d) => d.sets || 1));
 
   useEffect(() => {
     // The player's own per-drill load (self-hides when absent). Best-effort —
@@ -73,7 +77,7 @@ export default function SessionDrillList({
 
   return (
     <ol className="space-y-3">
-      {items.map((d, idx) => (
+      {list.map((d, idx) => (
         <li key={idx} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-900 font-display text-sm font-bold text-white">

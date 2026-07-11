@@ -13,6 +13,7 @@ import {
   sessionStats,
 } from "@/components/team/sessionShared";
 import SessionDrillList from "../SessionDrillList";
+import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 
 export default function PlayerSessionDetailPage() {
   const params = useParams<{ id: string }>();
@@ -115,7 +116,9 @@ export default function PlayerSessionDetailPage() {
           {/* Drills as blocks */}
           <section>
             <h2 className="mb-2 px-1 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{t.drills}</h2>
-            <SessionDrillList sessionId={id} items={session.items} lang={lang} />
+            <ClientErrorBoundary>
+              <SessionDrillList sessionId={id} items={session.items} lang={lang} />
+            </ClientErrorBoundary>
           </section>
         </div>
       )}
