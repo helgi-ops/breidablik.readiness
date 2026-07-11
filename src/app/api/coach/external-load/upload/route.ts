@@ -18,7 +18,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseCatapultCsv } from "@/lib/integrations/catapult-csv/parser";
 import type { CatapultMetricKey } from "@/lib/integrations/catapult-csv/catalog";
 import type { CatapultCsvRow } from "@/lib/integrations/catapult-csv/parser";
-import { aggregatePeriodsPerPlayer, csvRowsToPeriodRows, writeSessionActuals, isSessionTotalName } from "@/lib/micropulse/drillActuals";
+import { aggregatePeriodsPerPlayer, csvRowsToPeriodRows, writeSessionActuals, writePlayerDrillLoad, isSessionTotalName } from "@/lib/micropulse/drillActuals";
 
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -535,10 +535,20 @@ export async function POST(req: NextRequest) {
       periodRowsByDate.set(d, list);
     }
     for (const [d, rows] of periodRowsByDate) {
-      const groups = aggregatePeriodsPerPlayer(csvRowsToPeriodRows(rows));
+      const periodRows = csvRowsToPeriodRows(rows);
+      const groups = aggregatePeriodsPerPlayer(periodRows);
       if (!groups.length) continue;
       const res = await writeSessionActuals(supabase, auth.teamId, d, groups);
       if (res.ok) drillActualsMatched += res.matched;
+      // Per-PLAYER per-drill rows from the same period rows (before the squad
+      // collapse), reusing the period→drill match. finalResolved is keyed by
+      // athleteId ?? athleteName — the same key csvRowsToPeriodRows produces.
+      await writePlayerDrillLoad(
+        supabase,
+        { teamId: auth.teamId, dateISO: d, sessionId: res.sessionId, matchByNorm: res.matchByNorm, source: "catapult" },
+        periodRows,
+        (k) => finalResolved.get(k) ?? null,
+      );
     }
   } catch { /* actuals are best-effort */ }
 

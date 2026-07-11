@@ -5,7 +5,7 @@ import { fetchActivitiesForDate, fetchActivityStats, fetchActivityStatsBatch, fe
 import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, normalizeCatapultPeriodStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
-import { aggregatePeriodsPerPlayer, writeSessionActuals, type PeriodRow } from "@/lib/micropulse/drillActuals";
+import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, type PeriodRow } from "@/lib/micropulse/drillActuals";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
 
 function dateKey(input?: string | null): string {
@@ -484,6 +484,9 @@ async function _syncCatapultDailyMetricsInner(
   const normalizedRows = [];
   const imaDebug: NonNullable<CatapultSyncResult["imaDebug"]> = [];
   let unmatchedCount = 0;
+  // Catapult athlete id → resolved micropulse player id, for the per-player
+  // per-drill write below (period rows carry the same athlete id).
+  const athleteToPlayer = new Map<string, string>();
 
   for (const metric of aggregated) {
     const athlete = athleteDirectory.get(metric.athleteId) ?? {
@@ -508,6 +511,7 @@ async function _syncCatapultDailyMetricsInner(
     }
 
     await upsertCatapultAthleteMapping(mapped);
+    athleteToPlayer.set(metric.athleteId, mapped.micropulsePlayerId);
     normalizedRows.push(toNormalizedExternalLoad(metric, mapped.micropulsePlayerId));
     if (debugImaEnabled && metric.imaDebug) {
       imaDebug.push({
@@ -550,7 +554,15 @@ async function _syncCatapultDailyMetricsInner(
       const groups = aggregatePeriodsPerPlayer(periodRows);
       if (groups.length) {
         const sbActuals = getSupabaseAdmin();
-        await writeSessionActuals(sbActuals, sourceTeamId, targetDate, groups);
+        const res = await writeSessionActuals(sbActuals, sourceTeamId, targetDate, groups);
+        // Per-PLAYER per-drill rows (the raw periodRows before the squad-mean
+        // collapse), reusing the same period→drill match + athlete→player map.
+        await writePlayerDrillLoad(
+          sbActuals,
+          { teamId: sourceTeamId, dateISO: targetDate, sessionId: res.sessionId, matchByNorm: res.matchByNorm, source: "catapult" },
+          periodRows,
+          (k) => athleteToPlayer.get(k) ?? null,
+        );
       }
     } catch { /* actuals are best-effort — never fail the sync */ }
   }

@@ -82,6 +82,10 @@ export type SessionItem = {
   [k: string]: unknown;
 };
 
+/** Which drill (if any) a normalized period matched to — the map that lets the
+ *  per-player write reuse writeSessionActuals's matching, no duplication. */
+export type DrillMatch = { drillId: string | null; matchedBy: "name" | "order" | null; periodName: string };
+
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" ? Number(v) : (v as number);
   return typeof n === "number" && Number.isFinite(n) ? n : null;
@@ -231,13 +235,23 @@ export function matchPeriodsToItems(
  * Prefers a published session, else the most recently updated. No-op when there
  * is no session that day or no periods to apply.
  */
+export type WriteSessionActualsResult = {
+  ok: boolean;
+  matched: number;
+  sessionId: string | null;
+  templatesUpdated?: number;
+  reason?: string;
+  /** norm period name → the drill it matched (for the per-player write). */
+  matchByNorm: Map<string, DrillMatch>;
+};
+
 export async function writeSessionActuals(
   sb: Sb,
   teamId: string,
   dateISO: string,
   groups: PeriodGroup[],
-): Promise<{ ok: boolean; matched: number; sessionId: string | null; templatesUpdated?: number; reason?: string }> {
-  if (!groups.length) return { ok: false, matched: 0, sessionId: null, reason: "no_periods" };
+): Promise<WriteSessionActualsResult> {
+  if (!groups.length) return { ok: false, matched: 0, sessionId: null, reason: "no_periods", matchByNorm: new Map() };
 
   const { data, error } = await sb
     .from("saved_sessions")
@@ -247,24 +261,41 @@ export async function writeSessionActuals(
     .is("deleted_at", null)
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("updated_at", { ascending: false });
-  if (error) return { ok: false, matched: 0, sessionId: null, reason: error.message };
+  if (error) return { ok: false, matched: 0, sessionId: null, reason: error.message, matchByNorm: new Map() };
 
   const sessions = (data ?? []) as Array<{ id: string; items: SessionItem[] | null }>;
-  if (!sessions.length) return { ok: false, matched: 0, sessionId: null, reason: "no_session" };
+  if (!sessions.length) return { ok: false, matched: 0, sessionId: null, reason: "no_session", matchByNorm: new Map() };
 
   const chosen = sessions[0]; // published first (nullsFirst:false), else most recent
-  const { items, matchedCount } = matchPeriodsToItems(chosen.items ?? [], groups);
+  const { items, matchedCount, unmatchedPeriods } = matchPeriodsToItems(chosen.items ?? [], groups);
+
+  // Build the period→drill map the per-player write reuses: matched items carry
+  // the resolved drill_id + how it matched; unmatched periods map to no drill.
+  const matchByNorm = new Map<string, DrillMatch>();
+  for (const it of items) {
+    if (it.actual) {
+      matchByNorm.set(normPeriodName(it.actual.period_name), {
+        drillId: (it.drill_id ?? null) as string | null,
+        matchedBy: it.actual.matched_by,
+        periodName: it.actual.period_name,
+      });
+    }
+  }
+  for (const g of unmatchedPeriods) {
+    if (!matchByNorm.has(g.norm)) matchByNorm.set(g.norm, { drillId: null, matchedBy: null, periodName: g.periodName });
+  }
+
   const { error: updErr } = await sb
     .from("saved_sessions")
     .update({ items, actuals_synced_at: new Date().toISOString() })
     .eq("id", chosen.id);
-  if (updErr) return { ok: false, matched: 0, sessionId: chosen.id, reason: updErr.message };
+  if (updErr) return { ok: false, matched: 0, sessionId: chosen.id, reason: updErr.message, matchByNorm };
 
   // Calibrate the drill_library templates from the measured actuals so the
   // drills themselves carry a real load for the next session they're used in.
   const templatesUpdated = await updateDrillTemplatesFromActuals(sb, items);
 
-  return { ok: true, matched: matchedCount, sessionId: chosen.id, templatesUpdated };
+  return { ok: true, matched: matchedCount, sessionId: chosen.id, templatesUpdated, matchByNorm };
 }
 
 /**
@@ -319,4 +350,69 @@ export async function updateDrillTemplatesFromActuals(sb: Sb, items: SessionItem
     if (!error) updated += 1;
   }
   return updated;
+}
+
+/**
+ * Persist the PER-PLAYER per-drill load into player_drill_load — the raw
+ * per-athlete period rows (before aggregatePeriodsPerPlayer collapses them to a
+ * squad mean). Runs alongside writeSessionActuals: reuses its `matchByNorm` for
+ * the period→drill match and the caller's athlete→player resolver. Idempotent
+ * (upsert on player_id+session_date+period_norm+source). Best-effort — never
+ * throws into the ingest path (callers wrap it, and a failed upsert just returns
+ * ok:false). No-op when nothing resolves.
+ */
+export async function writePlayerDrillLoad(
+  sb: Sb,
+  args: { teamId: string; dateISO: string; sessionId: string | null; matchByNorm: Map<string, DrillMatch>; source?: string },
+  periodRows: PeriodRow[],
+  resolvePlayerId: (athleteKey: string) => string | null,
+): Promise<{ ok: boolean; rows: number; players: number }> {
+  const source = args.source ?? "catapult";
+
+  type Acc = {
+    playerId: string; norm: string; periodName: string; order: number; athleteKey: string;
+    sum: Partial<Record<keyof PeriodMetrics, number>>; has: Set<keyof PeriodMetrics>;
+  };
+  const groups = new Map<string, Acc>();
+  for (const r of periodRows) {
+    const norm = normPeriodName(r.periodName);
+    if (!norm) continue;
+    const playerId = resolvePlayerId(r.athleteKey);
+    if (!playerId) continue; // unmatched athlete — skip (same as the daily path)
+    const key = `${playerId}::${norm}`;
+    let g = groups.get(key);
+    if (!g) { g = { playerId, norm, periodName: r.periodName, order: r.order, athleteKey: r.athleteKey, sum: {}, has: new Set() }; groups.set(key, g); }
+    g.order = Math.min(g.order, r.order);
+    for (const k of PERIOD_METRIC_KEYS) {
+      const v = r.metrics[k];
+      if (v != null) { g.sum[k] = (g.sum[k] ?? 0) + v; g.has.add(k); }
+    }
+  }
+  if (!groups.size) return { ok: true, rows: 0, players: 0 };
+
+  const rows: Record<string, unknown>[] = [];
+  const players = new Set<string>();
+  for (const g of groups.values()) {
+    players.add(g.playerId);
+    const match = args.matchByNorm.get(g.norm);
+    const row: Record<string, unknown> = {
+      player_id: g.playerId,
+      session_date: args.dateISO,
+      period_norm: g.norm,
+      source,
+      team_id: args.teamId,
+      saved_session_id: args.sessionId,
+      drill_id: match?.drillId ?? null,
+      period_name: g.periodName,
+      period_order: g.order,
+      matched_by: match?.matchedBy ?? null,
+      external_athlete_id: g.athleteKey || null,
+    };
+    for (const k of PERIOD_METRIC_KEYS) row[k] = g.has.has(k) ? (g.sum[k] as number) : null;
+    rows.push(row);
+  }
+
+  const { error } = await sb.from("player_drill_load").upsert(rows, { onConflict: "player_id,session_date,period_norm,source" });
+  if (error) return { ok: false, rows: 0, players: 0 };
+  return { ok: true, rows: rows.length, players: players.size };
 }
