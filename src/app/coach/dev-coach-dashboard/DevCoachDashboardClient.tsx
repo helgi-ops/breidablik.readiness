@@ -10095,12 +10095,17 @@ export default function CoachPage() {
               the top; this rich detail is one click away (golden rule #4: moved,
               not removed). B4's player drawer will host the per-player detail on
               click; until then the Daily Briefing keeps it reachable. */}
-          <details className="group rounded-xl border border-border bg-card/60">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground">
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              {lang === "IS" ? "Sýna nánar — ítarleg greining & S&C merki" : "Show details — full briefing & S&C signals"}
+          <details className="group rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] shadow-sm transition-colors hover:border-[#2740e6]/60 open:bg-[#eef1fe]/50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
+              <span className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
+                <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
+                {lang === "IS" ? "Sýna nánar — ítarleg greining & S&C merki" : "Show details — full briefing & S&C signals"}
+              </span>
+              <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]/70 md:inline">
+                {lang === "IS" ? "mótrök · drifkraftar · traust · S&C" : "counterfactuals · drivers · confidence · S&C"}
+              </span>
             </summary>
-            <div className="space-y-4 px-4 pb-4">
+            <div className="space-y-4 px-4 pb-4 pt-1">
               {/* Daily briefing — Gabbett (2020) Communicate step. Rich
                   per-player attention rows: counterfactuals, driver chips,
                   confidence and day-over-day deltas. */}
