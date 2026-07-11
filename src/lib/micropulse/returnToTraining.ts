@@ -27,14 +27,18 @@
  * a CEILING, not a stage trigger — graded return is symptom-limited.
  */
 
-export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
-// Pro/ELITE (IMA) variant — the movement axis comes from IMA bands.
-export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod"];
+export type QualityKey = "volume" | "distance" | "hsr" | "sprint" | "stride" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
+// Pro/ELITE (IMA) variant — the movement axis comes from IMA bands. "stride" =
+// high-cadence running from IMA Free Running bands 6–8 (IMU stride-rate, NOT
+// GPS), so it counts high-speed running even indoors where the pod gets no GPS
+// lock. Placed right after sprint — same top-end running family, unlocks late.
+export const QUALITY_ORDER: QualityKey[] = ["volume", "distance", "hsr", "sprint", "stride", "accel", "decel", "decelHigh", "cod"];
 // Core/Lite (GPS) variant — no IMA; the club sends accel_decel_efforts instead,
-// so the movement/agility axis is a single "efforts" quality. See
-// efforts-vs-ima-tier-complementary: Core sends efforts, Pro sends IMA.
+// so the movement/agility axis is a single "efforts" quality. IMA Free Running
+// (stride) is a Vector S7+ IMU feature Core/Lite pods don't send, so it's absent
+// here too. See efforts-vs-ima-tier-complementary: Core sends efforts, Pro sends IMA.
 export const QUALITY_ORDER_GPS: QualityKey[] = ["volume", "distance", "hsr", "sprint", "efforts"];
-const ALL_QUALITIES: QualityKey[] = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod", "efforts"];
+const ALL_QUALITIES: QualityKey[] = ["volume", "distance", "hsr", "sprint", "stride", "accel", "decel", "decelHigh", "cod", "efforts"];
 export type RttVariant = "ima" | "gps";
 export function qualityOrderForVariant(variant: RttVariant): QualityKey[] {
   return variant === "gps" ? QUALITY_ORDER_GPS : QUALITY_ORDER;
@@ -49,6 +53,7 @@ export type RttSession = {
   distance: number;   // total_distance (m)
   hsr: number;        // high_speed_distance (m)
   sprint: number;     // sprint_distance (m)
+  stride: number;     // high-cadence strides — IMA Free Running bands 6+7+8 stride count (IMU, indoor-capable; NOT GPS)
   accel: number;      // IMA accelerations (count)
   decel: number;      // IMA decelerations (count)
   decelHigh: number;  // high-intensity braking (ima_band3_decel_count) — injury-critical
@@ -79,14 +84,14 @@ export function injuryRiskProfile(types: string[]): { category: string; riskQual
   const t = types.join(" ").toLowerCase();
   const m = (re: RegExp) => re.test(t);
   if (m(/concuss|head|hia|heilahrist|höfu|hofu|hnakk/)) return { category: "head", riskQualities: [], label: { en: "Head injury — symptom-limited return", is: "Höfuðáverki — einkenna-stýrð endurkoma" } };
-  if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "decel", "decelHigh"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
-  if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
+  if (m(/hamstring|ham\b|biceps femoris/)) return { category: "hamstring", riskQualities: ["hsr", "sprint", "stride", "decel", "decelHigh"], label: { en: "Hamstring — high-speed running & braking are the key re-injury qualities", is: "Aftanlæri — háhraðahlaup og hemlun eru lykil-endurmeiðsla-gæðin" } };
+  if (m(/calf|gastroc|soleus|achill/)) return { category: "calf", riskQualities: ["hsr", "sprint", "stride"], label: { en: "Calf/Achilles — high-speed & sprint running ramp slowly", is: "Kálfi/hásin — háhraði og sprettir aukast hægt" } };
   if (m(/quad|rectus femoris/)) return { category: "quad", riskQualities: ["sprint", "accel"], label: { en: "Quadriceps — sprinting & acceleration ramp slowly", is: "Framlæri — sprettir og hröðun aukast hægt" } };
   if (m(/groin|adduct/)) return { category: "groin", riskQualities: ["cod", "sprint"], label: { en: "Groin/adductor — change-of-direction & sprint ramp slowly", is: "Nári — stefnubreytingar og sprettir aukast hægt" } };
   if (m(/acl|knee|mcl|meniscus|patell/)) return { category: "knee", riskQualities: ["cod", "decel", "decelHigh", "accel"], label: { en: "Knee — change-of-direction & braking are the key re-injury qualities", is: "Hné — stefnubreytingar og hemlun eru lykil-endurmeiðsla-gæðin" } };
   if (m(/ankle|lateral ligament|syndesmo/)) return { category: "ankle", riskQualities: ["cod", "decel", "decelHigh"], label: { en: "Ankle — change-of-direction & braking ramp slowly", is: "Ökkli — stefnubreytingar og hemlun aukast hægt" } };
   if (m(/hip|flexor/)) return { category: "hip", riskQualities: ["sprint", "cod"], label: { en: "Hip — sprint & change-of-direction ramp slowly", is: "Mjöðm — sprettir og stefnubreytingar aukast hægt" } };
-  if (m(/muscle|strain|tear/)) return { category: "muscle", riskQualities: ["hsr", "sprint", "decelHigh"], label: { en: "Muscle strain — high-speed running & hard braking ramp slowly", is: "Vöðvatognun — háhraðahlaup og hörð hemlun aukast hægt" } };
+  if (m(/muscle|strain|tear/)) return { category: "muscle", riskQualities: ["hsr", "sprint", "stride", "decelHigh"], label: { en: "Muscle strain — high-speed running & hard braking ramp slowly", is: "Vöðvatognun — háhraðahlaup og hörð hemlun aukast hægt" } };
   return { category: "general", riskQualities: ["sprint", "cod"], label: { en: "Ramping the most re-injury-prone qualities slowly", is: "Aukum þau gæði sem eru mest endurmeiðsla-hætt hægt" } };
 }
 
@@ -144,6 +149,7 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   distance:  { en: "Weekly distance", is: "Vikuvegalengd", unit: "m", dp: 0 },
   hsr:       { en: "Weekly high-speed running", is: "Vikuháhraðahlaup", unit: "m", dp: 0 },
   sprint:    { en: "Weekly sprinting", is: "Vikusprettur", unit: "m", dp: 0 },
+  stride:    { en: "Weekly high-cadence strides (IMA)", is: "Hátíðni skref/viku (IMA)", unit: "", dp: 0 },
   accel:     { en: "Weekly accelerations (IMA)", is: "Hröðun/viku (IMA)", unit: "", dp: 0 },
   decel:     { en: "Weekly decelerations (IMA)", is: "Hemlun/viku (IMA)", unit: "", dp: 0 },
   decelHigh: { en: "Weekly high-intensity braking (IMA)", is: "Háákefðar hemlun/viku (IMA)", unit: "", dp: 0 },
@@ -151,9 +157,11 @@ const QLABEL: Record<QualityKey, { en: string; is: string; unit: string; dp: num
   efforts:   { en: "Weekly efforts (accel + decel)", is: "Átök/viku (hröðun + hemlun)", unit: "", dp: 0 },
 };
 
-const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod", efforts: "efforts" };
+const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance: "distance", hsr: "hsr", sprint: "sprint", stride: "stride", accel: "accel", decel: "decel", decelHigh: "decelHigh", cod: "cod", efforts: "efforts" };
 // GPS-derived qualities — invalid (must be skipped) when the pod got no GPS lock.
-// PlayerLoad + IMA (volume/accel/decel/decelHigh/cod) stay valid indoors.
+// PlayerLoad + IMA (volume/accel/decel/decelHigh/cod) stay valid indoors — and
+// "stride" (IMA Free Running) is deliberately NOT here: it's the one high-speed
+// running quality that still counts on an indoor GPS-less rehab session.
 const GPS_DERIVED = new Set<QualityKey>(["distance", "hsr", "sprint", "efforts"]);
 
 function percentile(sortedAsc: number[], p: number): number {
@@ -390,7 +398,7 @@ export type RttTodayRecommendation = {
   mechFrac: number;
 };
 
-const RTT_LOCO_Q = new Set<QualityKey>(["distance", "hsr", "sprint"]);
+const RTT_LOCO_Q = new Set<QualityKey>(["distance", "hsr", "sprint", "stride"]);
 const RTT_MECH_Q = new Set<QualityKey>(["accel", "decel", "decelHigh", "cod"]);
 const RTT_DEFAULT_SESSIONS = 4;
 

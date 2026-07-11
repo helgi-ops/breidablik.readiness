@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { computeReturnToTraining, injuryRiskProfile, retainedFraction, QUALITY_ORDER, QUALITY_ORDER_GPS, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
-  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, efforts: 120, topSpeed: 30, ...o };
+  return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, stride: 520, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, efforts: 120, topSpeed: 30, ...o };
 }
 
 // A healthy training block (several weeks, a match included) + an injured rehab block.
@@ -13,7 +13,7 @@ function fixture(): RttSession[] {
   );
   const match = session("2026-05-16", { isMatch: true, load: 620, distance: 11000, hsr: 1500, sprint: 480, accel: 70, decel: 65, decelHigh: 28, cod: 300, codLeft: 155, codRight: 145, topSpeed: 32 });
   const injured = ["2026-06-15", "2026-06-17", "2026-06-22", "2026-06-24"].map((d) =>
-    session(d, { injured: true, load: 300, distance: 3500, hsr: 200, sprint: 0, accel: 10, decel: 8, decelHigh: 1, cod: 0, codLeft: 0, codRight: 0, topSpeed: 20 }),
+    session(d, { injured: true, load: 300, distance: 3500, hsr: 200, sprint: 0, stride: 40, accel: 10, decel: 8, decelHigh: 1, cod: 0, codLeft: 0, codRight: 0, topSpeed: 20 }),
   );
   return [...healthy, match, ...injured];
 }
@@ -63,7 +63,7 @@ test("targets never exceed the healthy ceiling and locked qualities hold", () =>
 });
 
 test("injuryRiskProfile maps tissue → key re-injury qualities (incl. high-intensity braking)", () => {
-  assert.deepEqual(new Set(injuryRiskProfile(["hamstring"]).riskQualities), new Set(["hsr", "sprint", "decel", "decelHigh"]));
+  assert.deepEqual(new Set(injuryRiskProfile(["hamstring"]).riskQualities), new Set(["hsr", "sprint", "stride", "decel", "decelHigh"]));
   const head = injuryRiskProfile(["Concussion"]);
   assert.equal(head.category, "head");
   assert.equal(head.riskQualities.length, 0);

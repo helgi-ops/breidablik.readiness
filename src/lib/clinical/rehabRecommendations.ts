@@ -43,6 +43,7 @@ const QUALITY_SHORT: Record<QualityKey, Bi> = {
   distance: { en: "distance", is: "vegalengd" },
   hsr: { en: "high-speed running", is: "háhraðahlaup" },
   sprint: { en: "sprinting", is: "sprettir" },
+  stride: { en: "high-cadence running", is: "hátíðni hlaup" },
   accel: { en: "acceleration", is: "hröðun" },
   decel: { en: "braking", is: "hemlun" },
   decelHigh: { en: "hard braking", is: "hörð hemlun" },

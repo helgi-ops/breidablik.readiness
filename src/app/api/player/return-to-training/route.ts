@@ -18,7 +18,7 @@ import type { QualityKey } from "@/lib/micropulse/returnToTraining";
 
 export const runtime = "nodejs";
 
-const DEFAULT_ORDER = ["volume", "distance", "hsr", "sprint", "accel", "decel", "decelHigh", "cod", "efforts"] as const;
+const DEFAULT_ORDER = ["volume", "distance", "hsr", "sprint", "stride", "accel", "decel", "decelHigh", "cod", "efforts"] as const;
 
 export async function GET(req: Request) {
   const sb = getSupabaseAdmin();

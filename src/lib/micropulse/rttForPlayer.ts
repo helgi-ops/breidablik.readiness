@@ -84,7 +84,7 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
   // ── Sessions ──────────────────────────────────────────────────────────────
   const { data: load } = await sb
     .from("player_external_load_daily")
-    .select("date, source, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
+    .select("date, source, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
     .eq("player_id", playerId).in("source", ["catapult", "manual"]).gte("date", since).order("date");
 
   // One row per date: a coach's MANUAL GPS entry (forgot / broken pod) overrides
@@ -119,6 +119,11 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
       distance: num(r.total_distance),
       hsr: num(r.high_speed_distance),
       sprint: num(r.sprint_distance) || num(r.velocity_band6_total_distance),
+      // High-cadence strides = IMA Free Running bands 6+7+8 (IMU stride-rate).
+      // Stride COUNT (not distance) — band-level distance is only populated on a
+      // minority of rows, count is the robust signal. Indoor-capable, so it stays
+      // valid on GPS-less rehab sessions (not gated by gpsValid).
+      stride: num(r.ima_fr_band6_stride_count) + num(r.ima_fr_band7_stride_count) + num(r.ima_fr_band8_stride_count),
       accel: num(r.ima_accel),
       decel: num(r.ima_decel),
       decelHigh: num(r.ima_band3_decel_count),
@@ -135,7 +140,7 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
   });
 
   const realSess = sessions.filter((s) => !s.estimated);
-  const imaCount = realSess.filter((s) => s.accel > 0 || s.decel > 0 || s.decelHigh > 0 || s.cod > 0).length;
+  const imaCount = realSess.filter((s) => s.accel > 0 || s.decel > 0 || s.decelHigh > 0 || s.cod > 0 || s.stride > 0).length;
   const effortsCount = realSess.filter((s) => s.efforts > 0).length;
   const variant: "ima" | "gps" = imaCount > 0 && imaCount >= effortsCount ? "ima" : effortsCount > 0 ? "gps" : "ima";
 

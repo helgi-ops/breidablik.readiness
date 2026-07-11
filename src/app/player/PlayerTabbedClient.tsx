@@ -730,6 +730,7 @@ const RTT_QUALITY_LABEL: Record<string, { en: string; is: string }> = {
   distance:  { en: "running distance",   is: "hlaupavegalengd" },
   hsr:       { en: "high-speed running", is: "hraðahlaup" },
   sprint:    { en: "sprinting",          is: "sprettir" },
+  stride:    { en: "high-cadence running", is: "hátíðni hlaup" },
   accel:     { en: "accelerations",      is: "hröðun" },
   decel:     { en: "decelerations",      is: "hemlun" },
   decelHigh: { en: "hard braking",       is: "kröpp hemlun" },
