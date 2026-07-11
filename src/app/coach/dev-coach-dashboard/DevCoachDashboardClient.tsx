@@ -10099,10 +10099,10 @@ export default function CoachPage() {
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
               <span className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
                 <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
-                {lang === "IS" ? "Sýna nánar — ítarleg greining & S&C merki" : "Show details — full briefing & S&C signals"}
+                {lang === "IS" ? "Sýna nánar — ítarleg dagleg greining" : "Show details — full daily briefing"}
               </span>
               <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]/70 md:inline">
-                {lang === "IS" ? "mótrök · drifkraftar · traust · S&C" : "counterfactuals · drivers · confidence · S&C"}
+                {lang === "IS" ? "mótrök · drifkraftar · traust" : "counterfactuals · drivers · confidence"}
               </span>
             </summary>
             <div className="space-y-4 px-4 pb-4 pt-1">
@@ -10124,6 +10124,24 @@ export default function CoachPage() {
                 playerInjuries={playerInjuryStatus}
                 playerDeltas={yesterdayDeltas}
               />
+            </div>
+          </details>
+
+          {/* Second, equal-weight box — the Unfamiliar-Load / S&C signal layer
+              gets its own first-class drill-down so it isn't buried under the
+              daily briefing. Each child self-hides when nothing needs
+              attention (per-player / per-signal). */}
+          <details className="group mt-3 rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] shadow-sm transition-colors hover:border-[#2740e6]/60 open:bg-[#eef1fe]/50">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
+              <span className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
+                <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
+                {lang === "IS" ? "Óvanalegt álag & S&C merki" : "Unfamiliar load & S&C signals"}
+              </span>
+              <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]/70 md:inline">
+                {lang === "IS" ? "spikes · endurheimt · Engine/Driver" : "spikes · recovery · engine/driver"}
+              </span>
+            </summary>
+            <div className="space-y-4 px-4 pb-4 pt-1">
               {/* Deep S&C signal layer — each self-hiding when nothing needs
                   attention (per-player / per-signal drill-down). */}
               <UnfamiliarSpikeBanner lang={lang} date={today} />
