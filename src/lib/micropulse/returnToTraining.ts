@@ -174,11 +174,6 @@ const QFIELD: Record<QualityKey, keyof RttSession> = { volume: "load", distance:
 // stride/strideTop (IMA Free Running) are deliberately NOT here: they're the
 // high-speed running qualities that still count on an indoor GPS-less rehab session.
 const GPS_DERIVED = new Set<QualityKey>(["distance", "hsr", "sprint", "efforts"]);
-// Running / total-load qualities that drive PLAN LENGTH — the plan runs long
-// enough for the graded 10%/week climb to reach each of these ceilings from his
-// floor-anchored origin. IMA event counts (accel/decel/decelHigh/cod) unlock
-// late and ramp within that length, so they don't extend it.
-const RTT_LOAD_DRIVERS = new Set<QualityKey>(["volume", "distance", "hsr", "sprint", "stride", "strideTop", "efforts"]);
 
 function percentile(sortedAsc: number[], p: number): number {
   if (!sortedAsc.length) return 0;
@@ -284,17 +279,16 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     const measuredCap = floor[q] > 0 ? (floor[q] * MAX_WEEK1_JUMP) / RAMP : Infinity;
     rampFrom[q] = Math.max(floor[q], Math.min(retainedTarget, measuredCap));
   }
-  // Derive plan length so the graded 10%/week climb reaches the ceiling of every
-  // running/total-load driver from its floor-anchored origin — driven by whichever
-  // has the furthest to climb (usually distance when his floor sits well below a
-  // peak-week baseline). Coach hard-override wins; no layoff info → full staged ramp.
+  // Derive plan length from the VOLUME (player-load) bridge — the aggregate load
+  // is the stable driver, so a short layoff (floor near its ceiling) yields a
+  // short plan and a genuinely detrained one a long plan. Individual running
+  // qualities ramp toward their ceilings WITHIN that length and needn't reach a
+  // peak-week baseline in a short return. Coach hard-override wins; no layoff info
+  // → keep the full staged ramp.
   let weeks = inp.weeks ?? order.length;
   if (inp.weeks == null && hasLayoff) {
-    const bridgeFor = (q: QualityKey) => {
-      const o = rampFrom[q], c = baseline[q];
-      return c > 0 && o > 0 && o < c ? Math.ceil(Math.log(c / o) / Math.log(RAMP)) : 0;
-    };
-    const bridge = Math.max(0, ...order.filter((q) => RTT_LOAD_DRIVERS.has(q)).map(bridgeFor));
+    const originVol = rampFrom.volume, ceilVol = baseline.volume;
+    const bridge = ceilVol > 0 && originVol > 0 && originVol < ceilVol ? Math.ceil(Math.log(ceilVol / originVol) / Math.log(RAMP)) : 0;
     const minWeeks = (inp.riskQualities?.length ?? 0) > 0 ? MIN_RAMP_WEEKS + 1 : MIN_RAMP_WEEKS;
     weeks = Math.min(MAX_RAMP_WEEKS, Math.max(minWeeks, bridge));
   }
