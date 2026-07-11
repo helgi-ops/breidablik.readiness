@@ -30,6 +30,7 @@ import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
+import SessionDrillList from "./sessions/SessionDrillList";
 
 type PlanTier = "FREE" | "PRO" | "ELITE";
 
@@ -1054,11 +1055,7 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
   const isToday = t.today === dl;
 
   return createPortal(
-    <button
-      type="button"
-      onClick={() => router.push(`/player/sessions/${session.id}`)}
-      className="mt-3 block w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.997]"
-    >
+    <div className="mt-3 w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm">
       <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span aria-hidden>📋</span>{lang === "IS" ? "NÆSTA ÆFING FRÁ ÞJÁLFARA" : "NEXT SESSION FROM YOUR COACH"}
       </div>
@@ -1072,10 +1069,22 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
         {duration != null ? ` · ${duration} ${t.min}` : ""}
         {targetPl != null ? ` · ${t.load} ${targetPl}` : ""}
       </div>
-      <div className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary,#2740e6)]">
-        {lang === "IS" ? "Opna æfingu" : "Open session"} <span aria-hidden>→</span>
+
+      {/* Drills + the player's OWN per-drill load, right here on Today — no
+          "open session" tap needed. Compact (no diagram/description); the full
+          page still has those. Same component as the detail page (one source). */}
+      <div className="mt-3">
+        <SessionDrillList sessionId={session.id} items={session.items} lang={lang === "IS" ? "IS" : "EN"} compact />
       </div>
-    </button>,
+
+      <button
+        type="button"
+        onClick={() => router.push(`/player/sessions/${session.id}`)}
+        className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary,#2740e6)]"
+      >
+        {lang === "IS" ? "Sjá heila æfingu" : "See full session"} <span aria-hidden>→</span>
+      </button>
+    </div>,
     mountNode,
   );
 }
