@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -354,13 +354,39 @@ export default function WeekSetupPage() {
         return;
       }
 
+      // Fixtures (match_schedule) are the SOURCE OF TRUTH for the week's games —
+      // always read them for the viewed week, so a game the coach enters later
+      // still surfaces even on a week that was already saved. (Before, this read
+      // only ran when NO saved row existed, so any fixture added after the week
+      // was saved was silently hidden.)
+      const weekEndISO = addDays(weekStart, 6);
+      const { data: sched } = await supabase
+        .from("match_schedule")
+        .select("match_date, opponent, is_home, kickoff_time")
+        .eq("team_id", tid)
+        .gte("match_date", weekStart)
+        .lte("match_date", weekEndISO)
+        .order("match_date", { ascending: true });
+      if (!alive) return;
+      const found = (sched ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null; kickoff_time: string | null }>;
+      const schedPicks = found.slice(0, 2);
+      const toInput = (p: (typeof found)[number], id: string): MatchInput => ({
+        match_id: id,
+        date: p.match_date,
+        kickoff_time: p.kickoff_time ? p.kickoff_time.slice(0, 5) : "",
+        home_away: p.is_home === false ? "A" : "H",
+      });
+      const schedMatches: MatchInput[] = [
+        schedPicks[0] ? toInput(schedPicks[0], "M1") : DEFAULT_MATCHES[0],
+        schedPicks[1] ? toInput(schedPicks[1], "M2") : DEFAULT_MATCHES[1],
+      ];
+      const schedNote = schedPicks.length
+        ? schedPicks.map((p) => `${p.match_date}${p.opponent ? ` — ${p.opponent}` : ""} (${p.is_home === false ? "A" : "H"})`).join(" · ")
+        : null;
+
       if (data) {
-        // Saved Week Setup exists → it's the coach's own data; the Fixtures
-        // schedule no longer drives this week.
-        setScheduleNote(null);
         const row = data as WeekRow;
         const wt = coerceWeekType((row as any).week_type);
-        setWeekType(wt);
 
         // ✅ alltaf hlaða no_match_intents ef til (því við viljum manual override líka á match vikum)
         const arr = (data as any)?.no_match_intents;
@@ -372,60 +398,39 @@ export default function WeekSetupPage() {
         const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
         setSeasonPhase(validPhases.includes(sp) ? (sp as SeasonPhase) : null);
 
-        const safeMatches = row.matches?.length > 0 ? row.matches : DEFAULT_MATCHES;
-        const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
-        const m1 = safeMatches[1] ?? DEFAULT_MATCHES[1];
+        const savedMatches = row.matches ?? [];
+        const savedHasRealMatch = savedMatches.some((m) => (m?.date || "").trim() !== "");
 
-        setMatches([
-          {
-            match_id: (m0.match_id || "M1").trim(),
-            date: (m0.date || "").trim(),
-            kickoff_time: (m0.kickoff_time || "").trim(),
-            home_away: (m0.home_away as any) || "H",
-          },
-          {
-            match_id: (m1.match_id || "M2").trim(),
-            date: (m1.date || "").trim(),
-            kickoff_time: (m1.kickoff_time || "").trim(),
-            home_away: (m1.home_away as any) || "A",
-          },
-        ]);
+        if (!savedHasRealMatch && found.length > 0) {
+          // The week was saved WITHOUT a dated match, but the Fixtures schedule now
+          // has one → adopt it (prefill) instead of showing a stale empty week.
+          setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
+          setMatches(schedMatches);
+          setScheduleNote(schedNote);
+        } else {
+          // The coach's saved matches are the source for this week.
+          setWeekType(wt);
+          const safeMatches = savedMatches.length > 0 ? savedMatches : DEFAULT_MATCHES;
+          const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
+          const m1 = safeMatches[1] ?? DEFAULT_MATCHES[1];
+          setMatches([
+            { match_id: (m0.match_id || "M1").trim(), date: (m0.date || "").trim(), kickoff_time: (m0.kickoff_time || "").trim(), home_away: (m0.home_away as any) || "H" },
+            { match_id: (m1.match_id || "M2").trim(), date: (m1.date || "").trim(), kickoff_time: (m1.kickoff_time || "").trim(), home_away: (m1.home_away as any) || "A" },
+          ]);
+          setScheduleNote(null);
+        }
       } else {
         // No saved Week Setup for this week yet → auto-detect the match day from
-        // the Fixtures schedule (match_schedule). Fixtures is the source of truth:
-        // the coach sets the month's games once and the match day flows in here.
-        // Prefilled (not locked) so the coach keeps control — once they save this
-        // week it's theirs and a later schedule edit won't overwrite it.
+        // the Fixtures schedule. Prefilled (not locked) so the coach keeps control.
         setNoMatchIntents(getDefaultNoMatchIntents());
-        const weekEndISO = addDays(weekStart, 6);
-        const { data: sched } = await supabase
-          .from("match_schedule")
-          .select("match_date, opponent, is_home, kickoff_time")
-          .eq("team_id", tid)
-          .gte("match_date", weekStart)
-          .lte("match_date", weekEndISO)
-          .order("match_date", { ascending: true });
-        if (!alive) return;
-        const found = (sched ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null; kickoff_time: string | null }>;
         if (found.length === 0) {
           setWeekType("NO_MATCH");
           setMatches(DEFAULT_MATCHES);
           setScheduleNote(null);
         } else {
-          const picks = found.slice(0, 2);
-          const toInput = (p: typeof found[number], id: string): MatchInput => ({
-            match_id: id,
-            date: p.match_date,
-            kickoff_time: p.kickoff_time ? p.kickoff_time.slice(0, 5) : "",
-            home_away: p.is_home === false ? "A" : "H",
-          });
-          setWeekType(picks.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
-          setMatches([toInput(picks[0], "M1"), picks[1] ? toInput(picks[1], "M2") : DEFAULT_MATCHES[1]]);
-          setScheduleNote(
-            picks
-              .map((p) => `${p.match_date}${p.opponent ? ` — ${p.opponent}` : ""} (${p.is_home === false ? "A" : "H"})`)
-              .join(" · "),
-          );
+          setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
+          setMatches(schedMatches);
+          setScheduleNote(schedNote);
         }
       }
 
@@ -437,6 +442,36 @@ export default function WeekSetupPage() {
       alive = false;
     };
   }, [weekStart, teamId]);
+
+  // On first open, if the CURRENT week has no fixture, land on the next week that
+  // does — so a coach opening Week Setup on a match-less day (e.g. Sunday, current
+  // week already played) starts on the week they actually need to plan, with its
+  // game pulled straight from the Fixtures schedule. Runs once; the coach can page
+  // back freely afterwards.
+  const didAutoNavRef = useRef(false);
+  useEffect(() => {
+    const tid = (teamId ?? "").trim();
+    if (!tid || didAutoNavRef.current) return;
+    didAutoNavRef.current = true;
+    let alive = true;
+    void (async () => {
+      const curMon = isoMondayOf(new Date());
+      const curEnd = addDays(curMon, 6);
+      // Does the current week already have a fixture? If so, stay put.
+      const { data: cur } = await supabase
+        .from("match_schedule").select("match_date").eq("team_id", tid)
+        .gte("match_date", curMon).lte("match_date", curEnd).limit(1);
+      if (!alive || (cur?.length ?? 0) > 0) return;
+      // No game this week → jump to the next week that has one.
+      const { data: next } = await supabase
+        .from("match_schedule").select("match_date").eq("team_id", tid)
+        .gt("match_date", curEnd).order("match_date", { ascending: true }).limit(1);
+      if (!alive) return;
+      const nextDate = (next?.[0] as { match_date?: string } | undefined)?.match_date;
+      if (nextDate) setWeekStart(isoMondayOfISO(nextDate));
+    })();
+    return () => { alive = false; };
+  }, [teamId]);
 
   // Load declared team breaks for the grid lock.
   useEffect(() => {
