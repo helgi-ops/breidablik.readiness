@@ -160,7 +160,12 @@ function resolveFinalState(input: DecisionInput, baseState: DecisionState, riskF
     riskFlags.includes("high_stress") ||
     riskFlags.includes("low_z") ||
     riskFlags.includes("recent_load_drop") ||
-    riskFlags.includes("missing_load_data") ||
+    // NOTE: `missing_load_data` deliberately does NOT force YELLOW. Absence of a
+    // Catapult "today" row is a data gap (every morning before training, rest
+    // days, and all GPS-less Core/Lite clubs), NOT a readiness signal — forcing
+    // yellow there flipped whole green squads to "-15% reduce volume". If BOTH
+    // load and wellness are missing with no readiness at all, the `missingCore`
+    // branch below still resolves to GRAY.
     riskFlags.includes("missing_wellness") ||
     elevatedInjury ||
     riskFlags.includes("high_accel_decel_exposure")
