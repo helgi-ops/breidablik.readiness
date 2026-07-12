@@ -58,11 +58,14 @@ function magWord(key: DimensionKey, rel: number, is: boolean): string {
   return d.kind === "pct" ? `${m} ${is ? "stig" : "pts"}` : `${m}%`;
 }
 
-/** Squad mean of each dimension across a match's rows (nulls skipped). */
+/** Squad mean of each dimension across a match's rows (nulls skipped). A
+ * warm-up-contaminated appearance (a substitute's touchline row) is not match
+ * movement, so it never feeds the squad mean. */
 function meanFp(rows: MatchMovementRow[], dims: MovementDimension[]): MovementFingerprint {
+  const clean = rows.filter((r) => !r.contaminated);
   const out: MovementFingerprint = {};
   for (const d of dims) {
-    const vals = rows.map((r) => r.fingerprint[d.key]).filter((v): v is number => v != null);
+    const vals = clean.map((r) => r.fingerprint[d.key]).filter((v): v is number => v != null);
     out[d.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }
   return out;
