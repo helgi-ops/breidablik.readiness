@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { positionGroup } from "@/lib/micropulse/positionStyle";
+import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
 export const runtime = "nodejs";
 
@@ -237,10 +238,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // A substitute's warm-up-contaminated match (or an impossible one) must not
+  // define the "match demand" the coach trains toward — drop it from matchRows.
+  const verdicts = await loadMatchVerdicts(supabase, teamId, matchesAsc);
+
   const matchDemandByPlayer = new Map<string, Record<string, number | null>>();
   const out = players.map((p) => {
     const rows = byPlayer.get(p.id) ?? [];
-    const matchRows = rows.filter((r) => matchMinByKey.has(`${p.id}|${String(r.date)}`));
+    const matchRows = rows.filter((r) =>
+      matchMinByKey.has(`${p.id}|${String(r.date)}`) &&
+      !isContaminatedForBenchmark(verdicts.get(verdictKey(p.id, String(r.date)))));
     // Training = non-match catapult days with a real session length (FMP duration
     // for Pro, or Player-Load-derived duration for Core/Lite — see trainDurationSec).
     const trainRows = rows.filter((r) => !matchDates.has(String(r.date)) && trainDurationSec(r) >= MIN_TRAIN_SEC);

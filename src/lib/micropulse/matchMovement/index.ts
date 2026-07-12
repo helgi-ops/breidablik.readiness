@@ -20,6 +20,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 import type { MovementFingerprint, MatchMovementRow, MatchMovementResult, SubBands, MovementVariant } from "./types";
 import { EMPTY_SUB, movementDimensions } from "./types";
 
@@ -174,6 +175,11 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   const matchDates = Array.from(matchDateSet).sort();
   if (matchDates.length === 0) return emptyResult(teamId);
 
+  // Match-running verdict per (player, date): a substitute's touchline-warm-up
+  // match (or an impossible one) is real load but not match movement, so it must
+  // not feed a player's movement "norm".
+  const verdicts = await loadMatchVerdicts(sb, teamId, matchDates);
+
   // Catapult load rows for those match dates.
   const { data: extData } = await sb
     .from("player_external_load_daily")
@@ -221,14 +227,15 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     const meta = nameById.get(row.player_id);
     if (!meta) continue;
     const estimated = !!row.raw_payload_json?.estimated;
+    const contaminated = isContaminatedForBenchmark(verdicts.get(verdictKey(row.player_id, row.date)));
     if (variant === "ima") {
       if (row.ima_total == null) continue; // no IMA captured
       const { fp, raw, sub } = imaFingerprintOf(row, minutes);
-      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, fingerprint: fp, raw, sub });
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, contaminated, fingerprint: fp, raw, sub });
     } else {
       if (!gpsHasData(row)) continue; // no GPS movement signal captured
       const { fp, raw, sub } = gpsFingerprintOf(row, minutes);
-      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, fingerprint: fp, raw, sub });
+      rows.push({ player_id: row.player_id, name: meta.name, position: meta.position, match_date: row.date, minutes, estimated, contaminated, fingerprint: fp, raw, sub });
     }
   }
 
@@ -247,7 +254,10 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   for (const [pid, prs] of byPlayer) {
     // The "norm" excludes estimates so an estimate never feeds a player's baseline.
     const realPrs = prs.filter((r) => !r.estimated);
-    const normPrs = realPrs.length ? realPrs : prs;
+    // …and excludes warm-up-contaminated / impossible matches (no fallback: a
+    // substitute's touchline row must never feed his movement norm, even if it's
+    // his only recorded match).
+    const normPrs = (realPrs.length ? realPrs : prs).filter((r) => !r.contaminated);
     const mean = (key: string): number | null => {
       const vals = normPrs.map((r) => r.fingerprint[key]).filter((v): v is number => v != null);
       return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;

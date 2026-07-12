@@ -17,6 +17,7 @@ import {
 } from "@/lib/micropulse/positionStyle";
 import { sprintDistanceM, isMetricLive } from "@/lib/micropulse/catapultCapability";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
+import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
 export const runtime = "nodejs";
 
@@ -111,6 +112,10 @@ export async function GET(req: NextRequest) {
   const loadByKey = new Map<string, Record<string, unknown>>();
   for (const r of (loadData ?? []) as unknown as Array<Record<string, unknown>>) loadByKey.set(`${r.player_id}|${r.date}`, r);
 
+  // A substitute's warm-up-contaminated match (or an impossible one) is not a
+  // valid position profile — keep it out of the per-90 season profile.
+  const verdicts = await loadMatchVerdicts(supabase, teamId, matchDates);
+
   // Appearances = manual minutes, plus a session-duration fallback on SCHEDULED
   // match dates with no manual entry — lets Lite teams that don't enter minutes
   // by hand still get per-90 position profiles (mirrors the Train-like-you-play
@@ -130,7 +135,9 @@ export async function GET(req: NextRequest) {
   type PlayerAgg = { id: string; name: string; position: string | null; group: string; appearances: number; profile: StyleProfile };
   const perPlayer: PlayerAgg[] = [];
   for (const p of players) {
-    const apps = minutes.filter((m) => m.player_id === p.id)
+    const apps = minutes
+      .filter((m) => m.player_id === p.id)
+      .filter((m) => !isContaminatedForBenchmark(verdicts.get(verdictKey(p.id, m.match_date))))
       .map((m) => { const load = loadByKey.get(`${p.id}|${m.match_date}`); return load ? appearanceProfile(load, m.minutes_played ?? 0) : null; })
       .filter((x): x is NonNullable<typeof x> => x != null);
     if (apps.length < MIN_APPEARANCES) continue;

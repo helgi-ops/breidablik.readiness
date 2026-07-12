@@ -177,6 +177,8 @@ export type MatchMovementRow = {
   match_date: string;
   minutes: number;
   estimated?: boolean;
+  /** Warm-up-contaminated / impossible match running — excluded from the norm, labelled in the table. */
+  contaminated?: boolean;
   fingerprint: MovementFingerprint;
   raw: { imaTotal: number | null; codTotal: number | null; codLeft: number | null; codRight: number | null; hiCadence: number | null };
   sub: SubBands;
