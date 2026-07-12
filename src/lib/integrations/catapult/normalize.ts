@@ -2,6 +2,23 @@ import type { CatapultSessionMetric, NormalizedExternalLoad, ImaClock } from "./
 import type { PeriodRow } from "@/lib/micropulse/drillActuals";
 
 /**
+ * A max-velocity reading above this (km/h) is a GPS spike, not an athlete. The
+ * fastest human ever recorded peaks around 37 km/h over a segment, and football
+ * GPS top-speeds credibly top out in the mid-30s; a value beyond this is a lost
+ * satellite lock or a bad sample, not a sprint. Gate it at ingestion so a spike
+ * never enters a top-speed PB or a per-90 profile. (Observed: Magnús Arnar 59.4,
+ * Arnþór 38.1 — both impossible.)
+ */
+export const MAX_PLAUSIBLE_VELOCITY_KMH = 38;
+
+/** Drop an implausible max-velocity spike (returns null); pass anything sane through. */
+export function clampMaxVelocityKmh(v: number | null | undefined): number | null {
+  if (v == null || !Number.isFinite(Number(v))) return null;
+  const n = Number(v);
+  return n > MAX_PLAUSIBLE_VELOCITY_KMH ? null : n;
+}
+
+/**
  * Parse the IMA directional ("clock") grid from a flattened Catapult record.
  *
  * Catapult does NOT return the "IMA N O'Clock High" display-name params for this
@@ -861,7 +878,7 @@ export function normalizeCatapultPeriodStats(args: { payload: unknown }): Period
         hir_total: hirDirect != null && hirDirect > 0 ? hirDirect : sum2(velB5, velB6),
         vel_b5: velB5,
         vel_b6: velB6,
-        max_velocity: extractMetric(f, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]),
+        max_velocity: clampMaxVelocityKmh(extractMetric(f, ["max_vel", "max_velocity", "maxVelocity", "top_speed"])),
         // Catapult's gen2 scheme encodes BOTH accel and decel efforts under the
         // gen2_acceleration_band* family — there is NO gen2_deceleration_band*
         // field. Mirror the daily normalizer EXACTLY (accel B2-3 = band7plus,
@@ -947,7 +964,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
           ]),
         ) ?? 0,
       playerLoad,
-      maxVelocity: extractMetric(flattenedRecord, ["max_vel", "max_velocity", "maxVelocity", "top_speed"]) ?? 0,
+      maxVelocity: clampMaxVelocityKmh(extractMetric(flattenedRecord, ["max_vel", "max_velocity", "maxVelocity", "top_speed"])) ?? 0,
       velocityBand5TotalDistance: extractMetric(flattenedRecord, ["velocity_band5_total_distance"]),
       velocityBand6TotalDistance: extractMetric(flattenedRecord, ["velocity_band6_total_distance"]),
       velocityBand4TotalEffortsGen2: toInteger(
@@ -986,7 +1003,7 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
         ]),
       ),
       hirDist: extractMetric(flattenedRecord, ["hir_dist"]),
-      maxVel: extractMetric(flattenedRecord, ["max_vel"]),
+      maxVel: clampMaxVelocityKmh(extractMetric(flattenedRecord, ["max_vel"])),
       accelB23TotEffsGen2: toInteger(
         extractMetric(flattenedRecord, [
           "gen2_acceleration_band7plus_total_effort_count",
