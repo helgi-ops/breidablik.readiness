@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import { classifyMatchLoad } from "@/lib/micropulse/matchMinutes";
+import MatchVerdictChip from "@/components/coach/MatchVerdictChip";
 
 const COPY = {
   EN: {
@@ -16,6 +18,7 @@ const COPY = {
     matchDay: "Match day:", opponent: "Opponent:", opponentPh: "e.g. FH, Víkingur, Valur…",
     home: "Home", away: "Away", unsaved: "Unsaved", loading: "Loading…",
     player: "Player", matchDayCol: "Match day", minutes: "Minutes", dnp: "DNP",
+    matchRunning: "Match running",
     empty: "No players for this team — or no scheduled match yet.",
     footer: "STARTER ≥ 60 min · NON-STARTER < 60 min",
     footerCite: "60-min threshold: Carling 2018; Nédélec 2012; Helsen 2018",
@@ -30,6 +33,7 @@ const COPY = {
     matchDay: "Leikdagur:", opponent: "Andstæðingur:", opponentPh: "t.d. FH, Víkingur, Valur…",
     home: "Heima", away: "Úti", unsaved: "Óvistað", loading: "Hleð…",
     player: "Leikmaður", matchDayCol: "Leikdagur", minutes: "Mínútur", dnp: "DNP",
+    matchRunning: "Leikhlaup",
     empty: "Engir leikmenn fyrir þetta lið — eða enginn skráður leikur enn.",
     footer: "STARTER ≥ 60 mín · NON-STARTER < 60 mín",
     footerCite: "60-mín þröskuldur: Carling 2018; Nédélec 2012; Helsen 2018",
@@ -93,6 +97,24 @@ export default function CoachMatchMinutesPage() {
   const [podStatus, setPodStatus] = useState<Record<string, "real" | "estimated">>({});
   const [podPending, setPodPending] = useState<string | null>(null);
 
+  // Per-player match-running context for the current match date: the pod window,
+  // whether he started, and his GPS totals — everything classifyMatchLoad needs
+  // to turn the coach's minutes into a live "matchday load vs match running"
+  // verdict as he types (before he even saves). Sourced from GET
+  // /api/coach/match-minutes, which reads the same match_player_minutes table.
+  type MatchMeta = {
+    podMinutes: number | null;
+    startedMatch: boolean;
+    distanceM: number | null;
+    highSpeedM: number | null;
+    minutesSaved: number | null;
+  };
+  const [matchMeta, setMatchMeta] = useState<Record<string, MatchMeta>>({});
+  // Players whose minutes the coach has touched this session — so an untouched
+  // row with no saved entry reads as "not entered" (verdict "unknown") rather
+  // than a spurious 0 from the view's COALESCE.
+  const [edited, setEdited] = useState<Set<string>>(new Set());
+
   const supabase = useMemo(() => getSupabaseClient(), []);
 
   const effectiveMatchDate = useMemo(
@@ -118,8 +140,37 @@ export default function CoachMatchMinutesPage() {
     setPodStatus(map);
   }
 
+  async function loadMatchMeta(tid: string | null, date: string) {
+    if (!tid || !date) { setMatchMeta({}); return; }
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `/api/coach/match-minutes?teamId=${encodeURIComponent(tid)}&date=${date}`,
+        { headers: { Authorization: `Bearer ${token ?? ""}` } },
+      );
+      if (!res.ok) { setMatchMeta({}); return; }
+      const json = (await res.json()) as {
+        players?: Array<{
+          playerId: string; podMinutes: number | null; startedMatch: boolean;
+          distanceM: number | null; highSpeedM: number | null; minutesPlayed: number | null;
+        }>;
+      };
+      const m: Record<string, MatchMeta> = {};
+      for (const p of json.players ?? []) {
+        m[p.playerId] = {
+          podMinutes: p.podMinutes, startedMatch: p.startedMatch,
+          distanceM: p.distanceM, highSpeedM: p.highSpeedM, minutesSaved: p.minutesPlayed,
+        };
+      }
+      setMatchMeta(m);
+    } catch { setMatchMeta({}); }
+  }
+
   useEffect(() => {
-    if (teamId && effectiveMatchDate) void loadPodStatus(teamId, effectiveMatchDate);
+    if (teamId && effectiveMatchDate) {
+      void loadPodStatus(teamId, effectiveMatchDate);
+      void loadMatchMeta(teamId, effectiveMatchDate);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, effectiveMatchDate]);
 
@@ -246,6 +297,7 @@ export default function CoachMatchMinutesPage() {
 
   function updateMinutes(playerId: string, matchDate: string | null, minutes: number) {
     if (!matchDate) return;
+    setEdited((prev) => new Set(prev).add(playerId));
 
     setRows((prev) =>
       prev.map((r) =>
@@ -262,6 +314,7 @@ export default function CoachMatchMinutesPage() {
 
   function updateDnp(playerId: string, matchDate: string | null, isDnp: boolean) {
     if (!matchDate) return;
+    setEdited((prev) => new Set(prev).add(playerId));
 
     setRows((prev) =>
       prev.map((r) =>
@@ -329,8 +382,12 @@ export default function CoachMatchMinutesPage() {
     setOpponentDirty(false);
     setMatchDateDirty(false);
     setIsHomeDirty(false);
+    setEdited(new Set());
     await load(teamId);
-    if (teamId && effectiveMatchDate) await loadPodStatus(teamId, effectiveMatchDate);
+    if (teamId && effectiveMatchDate) {
+      await loadPodStatus(teamId, effectiveMatchDate);
+      await loadMatchMeta(teamId, effectiveMatchDate);
+    }
     setSaving(false);
   }
 
@@ -461,6 +518,7 @@ export default function CoachMatchMinutesPage() {
                     <th className="p-3 w-32">{t.minutes}</th>
                     <th className="p-3 w-24">{t.dnp}</th>
                     <th className="p-3 w-40">{t.pod}</th>
+                    <th className="p-3 w-56 text-left">{t.matchRunning}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -508,6 +566,27 @@ export default function CoachMatchMinutesPage() {
                             {podPending === r.player_id ? "…" : t.estimate}
                           </Button>
                         )}
+                      </td>
+                      <td className="p-3 align-top">
+                        {(() => {
+                          const md = matchMeta[r.player_id];
+                          // No GPS for this player on the match date → nothing to verify.
+                          if (!md || md.podMinutes == null) {
+                            return <span className="text-xs text-muted-foreground">—</span>;
+                          }
+                          // "Entered" = a saved row exists OR the coach touched it this
+                          // session; otherwise the view's 0 is a default, not a real 0.
+                          const entered = md.minutesSaved != null || edited.has(r.player_id);
+                          const minutesPlayed = entered ? (r.is_dnp ? 0 : r.minutes_played) : null;
+                          const verdict = classifyMatchLoad({
+                            podMinutes: md.podMinutes,
+                            minutesPlayed,
+                            distanceM: md.distanceM,
+                            highSpeedM: md.highSpeedM,
+                            startedMatch: md.startedMatch,
+                          });
+                          return <MatchVerdictChip verdict={verdict} lang={lang === "IS" ? "IS" : "EN"} showReason="flagged" />;
+                        })()}
                       </td>
                     </tr>
                   ))}

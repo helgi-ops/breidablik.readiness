@@ -60,6 +60,7 @@ export interface MatchMinutesPlayer {
   minutesPlayed: number | null;
   minutesSource: string | null;
   distanceM: number | null;
+  highSpeedM: number | null;
   playerLoad: number | null;
   verdict: MatchLoadVerdict;
 }
@@ -127,6 +128,7 @@ export async function GET(req: Request) {
       // No row = not entered (→ "unknown"). A DNP row is 0 min on the pitch.
       const minutesPlayed = row ? (row.is_dnp ? 0 : Number(row.minutes_played)) : null;
       const distanceM = l?.total_distance != null ? Number(l.total_distance) : null;
+      const highSpeedM = l?.high_speed_distance != null ? Number(l.high_speed_distance) : null;
 
       out.push({
         playerId,
@@ -136,14 +138,9 @@ export async function GET(req: Request) {
         minutesPlayed,
         minutesSource: row ? "coach" : null,
         distanceM,
+        highSpeedM,
         playerLoad: l?.total_player_load != null ? Number(l.total_player_load) : null,
-        verdict: classifyMatchLoad({
-          podMinutes,
-          minutesPlayed,
-          distanceM,
-          highSpeedM: l?.high_speed_distance != null ? Number(l.high_speed_distance) : null,
-          startedMatch,
-        }),
+        verdict: classifyMatchLoad({ podMinutes, minutesPlayed, distanceM, highSpeedM, startedMatch }),
       });
     }
 
