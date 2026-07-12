@@ -101,35 +101,36 @@ test("retainedFraction: ~full for a few days off, decays with a long layoff, sta
   assert.ok(retainedFraction(400) >= 0.35 && retainedFraction(10) <= 1);
 });
 
-test("ramp origin is anchored to measured load — no leap to the detraining estimate", () => {
+test("origin leans from the floor toward retained capacity, but never debuts a quality at 100%", () => {
   const s = fixture();
   const shortL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 10 });
   const longL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 70 });
-  // Even a short (10-day) layoff, whose detraining estimate is ~92% of the peak
-  // baseline, must NOT start week 1 near baseline: the origin stays within one
-  // ACWR-safe step (MAX_WEEK1_JUMP / RAMP = 1.30/1.10) of his measured recent
-  // load (floor), never below it.
   for (const q of QUALITY_ORDER) {
-    assert.ok(shortL.rampFrom[q] >= shortL.floor[q], `${q}: origin ${shortL.rampFrom[q]} >= floor ${shortL.floor[q]}`);
-    if (shortL.floor[q] > 0) assert.ok(shortL.rampFrom[q] <= shortL.floor[q] * 1.19, `${q}: origin ${shortL.rampFrom[q]} <= floor*1.19`);
+    // Never below the measured floor…
+    assert.ok(shortL.rampFrom[q] >= shortL.floor[q] - 1, `${q}: origin ${shortL.rampFrom[q]} >= floor ${shortL.floor[q]}`);
+    // …and a short layoff (high retained) leans the origin UP toward capacity, so
+    // its origin sits at or above the long layoff's (which barely leaves the floor).
+    assert.ok(shortL.rampFrom[q] >= longL.rampFrom[q] - 1, `${q}: short origin ${shortL.rampFrom[q]} >= long ${longL.rampFrom[q]}`);
   }
-  // The retained-capacity narrative still reflects the layoff length.
+  // First-exposure cap: no quality's UNLOCK-week target reaches its full ceiling.
+  for (const w of shortL.plan!.weeks) {
+    if (w.week === w.unlockWeek && !w.locked) {
+      const ceil = shortL.baseline[w.quality];
+      if (ceil > 0) assert.ok(w.target <= ceil * 0.95, `${w.quality} debut ${w.target} must be <= 95% of ceiling ${ceil}`);
+    }
+  }
   assert.ok((shortL.layoff.retainedPct ?? 0) > (longL.layoff.retainedPct ?? 0));
   assert.equal(shortL.layoff.rampWeeks, Math.max(...shortL.plan!.weeks.map((w) => w.week)));
 });
 
-test("plan length is driven by the measured gap to baseline — a higher recent floor yields a shorter plan", () => {
-  // Same peak baseline (weeks 0–2), but the last 3 weeks differ: near-full (high
-  // floor) vs deep-rehab (low floor). Less to climb → shorter graded return.
-  const monday = (w: number) => { const d = new Date("2026-05-04T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 7 * w); return d; };
-  const wk = (w: number, o: Partial<RttSession>) => [0, 2, 4].map((off) => { const d = monday(w); d.setUTCDate(d.getUTCDate() + off); return session(d.toISOString().slice(0, 10), o); });
-  const peak = { load: 800, distance: 9000, hsr: 1400, sprint: 450, stride: 200, strideTop: 700 };
-  const build = (recent: Partial<RttSession>) => [...wk(0, peak), ...wk(1, peak), ...wk(2, peak), ...wk(3, recent), ...wk(4, recent), ...wk(5, recent)];
-  const START2 = { refDate: "2026-06-22", currentlyInjured: true, rttStartDate: "2026-06-22", layoffDays: 10 };
-  const hi = computeReturnToTraining({ sessions: build({ load: 560, distance: 6000, hsr: 950, sprint: 300, stride: 140, strideTop: 480 }), ...START2 });
-  const lo = computeReturnToTraining({ sessions: build({ load: 200, distance: 3000, hsr: 300, sprint: 50, stride: 40, strideTop: 120 }), ...START2 });
-  const span = (r: typeof hi) => Math.max(...r.plan!.weeks.map((w) => w.week));
-  assert.ok(span(hi) < span(lo), `high-floor ${span(hi)} < low-floor ${span(lo)}`);
+test("plan length tracks the LAYOFF — a shorter layoff yields a shorter plan for the same athlete", () => {
+  // Same athlete + same (deep-rehab) recent floor; only the layoff differs. The
+  // short layoff barely detrained → rebuild fast → short plan; the long one → long.
+  const s = fixture();
+  const shortL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 10 });
+  const longL = computeReturnToTraining({ sessions: s, ...START, layoffDays: 70 });
+  const span = (r: typeof shortL) => Math.max(...r.plan!.weeks.map((w) => w.week));
+  assert.ok(span(shortL) < span(longL), `short-layoff ${span(shortL)} < long-layoff ${span(longL)}`);
 });
 
 test("ACWR stays capped even when the plan starts high after a short layoff", () => {

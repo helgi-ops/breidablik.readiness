@@ -136,12 +136,12 @@ const DETRAIN_TAU = 50;    // days — capacity decay constant of the detraining
 const DETRAIN_FLOOR = 0.35; // never assume <35% retained (he's still a trained athlete)
 const MIN_RAMP_WEEKS = 2;
 const MAX_RAMP_WEEKS = 12;
-// Week 1 must start from where he ACTUALLY is: the ramp origin may sit at most
-// this far above his measured recent load (floor), so the first prescribed week
-// is one ACWR-safe step (~+30%) above current — never a leap to ~baseline just
-// because a short layoff "retained" his fitness. A short layoff raises the
-// CEILING he climbs toward; it does not fast-forward the graded return.
-const MAX_WEEK1_JUMP = 1.30;
+// A quality never DEBUTS at its full baseline: the unlock-week target is capped
+// at this fraction of the ceiling, so there is always at least one more graded
+// step to 100%. This is what protects the "already near baseline" athlete (a
+// short layoff whose measured floor sits high) from a week-1 jump straight to
+// full — without penalising the plan LENGTH (which the layoff drives).
+const FIRST_WEEK_CEIL_FRAC = 0.90;
 
 /**
  * Fraction of healthy capacity retained after `layoffDays` out. ~1.0 for a few
@@ -261,30 +261,30 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const confidence: RttResult["confidence"] = healthyWeeks.length >= 4 ? "high" : healthyWeeks.length >= 2 ? "medium" : "low";
 
   // ── Detraining-scaled ramp origin & length ─────────────────────────────────
-  // A short layoff keeps most of the ceiling → start high, few weeks. A long one
-  // detrains → start near the measured floor, many weeks. The measured floor is a
-  // hard lower bound (never plan below what he's actually doing now).
+  // Plan length must track the LAYOFF, not how deep in rehab the measured floor
+  // happens to sit: a 13-day layoff (barely detrained) and a 51-day one are both
+  // doing ~rehab-floor load right now, but the short one can safely rebuild far
+  // faster. So the origin LEANS from the measured floor toward the detraining
+  // estimate of retained capacity, in proportion to how much was retained:
+  //   origin = floor + (retained×ceiling − floor) × retained
+  // — a short layoff (high `retained`) starts high → short plan; a long one stays
+  // near the floor → long plan; no layoff info → the floor. A week-1 jump for a
+  // short-layoff athlete is clinically fine (he didn't really detrain), and the
+  // FIRST_WEEK_CEIL_FRAC cap below still stops any quality debuting at 100%.
   const hasLayoff = inp.layoffDays != null && Number.isFinite(inp.layoffDays);
   const retained = hasLayoff ? retainedFraction(inp.layoffDays as number) : null;
   const rampFrom = { topSpeed: floor.topSpeed } as RttFloor;
   for (const q of ALL_QUALITIES) rampFrom[q] = 0;
   for (const q of order) {
     const retainedTarget = retained != null ? round(retained * baseline[q], QLABEL[q].dp) : 0;
-    // Origin = where the graded ramp STARTS. Anchor it to his MEASURED recent
-    // load: the origin may sit at most MAX_WEEK1_JUMP above the floor (so the
-    // unlock-week target, = origin × ramp, lands ~+30% above current — one
-    // ACWR-safe step), never a leap to the detraining estimate (retained ×
-    // ceiling) which can be ~2× his actual current load. The retained estimate
-    // only applies where there is NO measured floor for the quality.
-    const measuredCap = floor[q] > 0 ? (floor[q] * MAX_WEEK1_JUMP) / RAMP : Infinity;
-    rampFrom[q] = Math.max(floor[q], Math.min(retainedTarget, measuredCap));
+    const lean = retained ?? 0; // 0 with no layoff info → origin stays at the floor
+    rampFrom[q] = round(floor[q] + Math.max(0, retainedTarget - floor[q]) * lean, QLABEL[q].dp);
   }
   // Derive plan length from the VOLUME (player-load) bridge — the aggregate load
-  // is the stable driver, so a short layoff (floor near its ceiling) yields a
-  // short plan and a genuinely detrained one a long plan. Individual running
-  // qualities ramp toward their ceilings WITHIN that length and needn't reach a
-  // peak-week baseline in a short return. Coach hard-override wins; no layoff info
-  // → keep the full staged ramp.
+  // is the stable driver. With the layoff-leaned origin above, a short layoff
+  // (origin near its ceiling) yields a short plan and a genuinely detrained one a
+  // long plan. Individual running qualities ramp toward their ceilings WITHIN
+  // that length. Coach hard-override wins; no layoff info → keep the full staged ramp.
   let weeks = inp.weeks ?? order.length;
   if (inp.weeks == null && hasLayoff) {
     const originVol = rampFrom.volume, ceilVol = baseline.volume;
@@ -328,7 +328,12 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
       else if (w === uw) {
         const startFromOrigin = origin * ramp;
         const reintro = ceiling * reintroFrac;
-        target = Math.min(ceiling || startFromOrigin, Math.max(startFromOrigin, origin > 0.05 * ceiling ? startFromOrigin : reintro));
+        // First-exposure cap: a quality never DEBUTS at its full ceiling — leave
+        // at least one graded step to 100%, so a high-floor short-layoff athlete
+        // doesn't jump straight to baseline in his first week of it. Subsequent
+        // weeks still ramp to the ceiling.
+        const firstExposureCap = ceiling > 0 ? ceiling * FIRST_WEEK_CEIL_FRAC : Infinity;
+        target = Math.min(ceiling || startFromOrigin, firstExposureCap, Math.max(startFromOrigin, origin > 0.05 * ceiling ? startFromOrigin : reintro));
       } else target = Math.min(ceiling, prev * ramp);
       target = round(target, QLABEL[q].dp);
       prevArr.push(target);
