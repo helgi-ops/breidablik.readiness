@@ -116,6 +116,68 @@ function diffDays(aYYYYMMDD: string, bYYYYMMDD: string) {
   return Math.round((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// Keep only the dated matches that actually fall inside the viewed week,
+// earliest first — the shared basis for both the MD label and the seed below.
+function matchesInWeek(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): string[] {
+  return matchDates
+    .map((d) => (d || "").trim())
+    .filter((d) => d && d >= weekStart && d <= weekEnd)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+// MD label for a given day relative to the nearest match in the week
+// (e.g. "MD", "MD-4", "MD+1"). Null when there's no match to anchor to, so
+// the manual grid only shows the chip on real match weeks.
+function mdLabelForDay(weekStart: string, weekEnd: string, matchDates: (string | undefined)[], dayIndex: number): string | null {
+  const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
+  if (inWeek.length === 0) return null;
+  const day = addDays(weekStart, dayIndex);
+  if (inWeek.includes(day)) return "MD";
+  const next = inWeek.find((m) => m > day);
+  if (next) return `MD-${Math.abs(diffDays(day, next))}`;
+  let prev: string | null = null;
+  for (let i = inWeek.length - 1; i >= 0; i--) { if (inWeek[i] < day) { prev = inWeek[i]; break; } }
+  if (prev) return `MD+${diffDays(day, prev)}`;
+  return null;
+}
+
+// Seed the 7 daily intents from the match position so the editable grid starts
+// anchored to the game — Force at MD-4, taper at MD-2/MD-1, GAME on match day,
+// Recovery after — instead of the position-blind generic default. The coach can
+// then tweak any day. Mirrors the auto-MD ordering in autoMdDayEdits so the two
+// paths agree. Returns null when the week has no dated match.
+function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
+  const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
+  if (inWeek.length === 0) return null;
+  const set = new Set(inWeek);
+  const nextMatch = (day: string) => inWeek.find((m) => m > day) ?? null;
+  const prevMatch = (day: string) => {
+    for (let i = inWeek.length - 1; i >= 0; i--) if (inWeek[i] < day) return inWeek[i];
+    return null;
+  };
+  return Array.from({ length: 7 }).map((_, i) => {
+    const day = addDays(weekStart, i);
+    if (set.has(day)) return "GAME";
+    const next = nextMatch(day);
+    if (next) {
+      const md = Math.abs(diffDays(day, next));
+      if (md >= 4) return (md - 4) % 2 === 0 ? "FORCE" : "NEURAL_VELOCITY"; // MD-4 force, MD-5 neural…
+      if (md === 3) return "NEURAL_VELOCITY";
+      if (md === 2) return "POLISH_CALM";
+      if (md === 1) return "ACTIVATION";
+    }
+    const prev = prevMatch(day);
+    if (prev && diffDays(day, prev) >= 1 && i !== 6) return "RECOVERY";
+    return i === 6 ? "OFF" : "FORCE";
+  }) as NoMatchIntent[];
+}
+
+function intentsEqualDefault(arr: NoMatchIntent[] | null | undefined): boolean {
+  if (!Array.isArray(arr) || arr.length !== 7) return true; // absent/invalid = never customized
+  const def = getDefaultNoMatchIntents();
+  return arr.every((v, i) => v === def[i]);
+}
+
 function dayBadgeVariant(dayType: DayType): BadgeVariant {
   if (dayType === "GAME") return "destructive";
   if (dayType === "RECOVERY") return "secondary";
@@ -211,7 +273,7 @@ export default function WeekSetupPage() {
     step2manual: "Manual vikustýring: veldu áherslu per dag (virkar líka þó 1–2 leikir).",
     step2auto: "Auto MD: settu inn dagsetningar (kerfið sér um MD röðun).",
     match: "Leikur", date: "Dagsetning", kickoff: "Byrjunartími (valfrjáls)", home: "Heimavöllur", away: "Leikavöllur",
-    dailyIntent: "Dagleg áhersla (mán → sun)", reset: "Endurstilla",
+    dailyIntent: "Dagleg áhersla (mán → sun)", reset: "Endurstilla", fillFromMatch: "Fylla út frá leik (MD)",
     autoActive: "Auto MD er virkt. Ef þú vilt handvirkt eins og preseason: settu Manual override á ON í Skrefi 1.",
     intensityHint: "1 = mjög létt · 10 = mjög erfitt",
     step3: "Skref 3 — Yfirlit & Virkja", step3desc: "Svona mun vikan líta út fyrir leikmenn (þetta er það sem verður sent).",
@@ -239,7 +301,7 @@ export default function WeekSetupPage() {
     step2manual: "Manual week control: pick the intent per day (works even with 1–2 matches).",
     step2auto: "Auto MD: enter the match dates (the system handles MD ordering).",
     match: "Match", date: "Date", kickoff: "Kickoff time (optional)", home: "Home", away: "Away",
-    dailyIntent: "Daily intent (Mon → Sun)", reset: "Reset",
+    dailyIntent: "Daily intent (Mon → Sun)", reset: "Reset", fillFromMatch: "Fill from match (MD)",
     autoActive: "Auto MD is active. For manual control like preseason: set Manual override to ON in Step 1.",
     intensityHint: "1 = very light · 10 = very hard",
     step3: "Step 3 — Review & Activate", step3desc: "This is how the week will look for players (this is what gets sent).",
@@ -267,6 +329,13 @@ export default function WeekSetupPage() {
   // - NO_MATCH: alltaf manual
   // - ONE/TWO: manual ef manualOverride er ON
   const isManualWeek = useMemo(() => weekType === "NO_MATCH" || manualOverride, [weekType, manualOverride]);
+
+  // Is there a dated match inside the viewed week? Gates the MD chips + the
+  // "Fill from match" seed button in the manual grid.
+  const weekHasMatch = useMemo(
+    () => matchesInWeek(weekStart, weekEnd, visibleMatches.map((m) => m.date)).length > 0,
+    [weekStart, weekEnd, visibleMatches]
+  );
 
   // 1) LOAD TEAM ID (robust)
   useEffect(() => {
@@ -389,9 +458,9 @@ export default function WeekSetupPage() {
         const wt = coerceWeekType((row as any).week_type);
 
         // ✅ alltaf hlaða no_match_intents ef til (því við viljum manual override líka á match vikum)
-        const arr = (data as any)?.no_match_intents;
-        if (Array.isArray(arr) && arr.length === 7) setNoMatchIntents(arr as NoMatchIntent[]);
-        else setNoMatchIntents(getDefaultNoMatchIntents());
+        const rawIntents = (data as { no_match_intents?: unknown }).no_match_intents;
+        const savedIntents: NoMatchIntent[] | null =
+          Array.isArray(rawIntents) && rawIntents.length === 7 ? (rawIntents as NoMatchIntent[]) : null;
 
         // Hlaða season_phase
         const sp = (data as any)?.season_phase;
@@ -403,10 +472,14 @@ export default function WeekSetupPage() {
 
         if (!savedHasRealMatch && found.length > 0) {
           // The week was saved WITHOUT a dated match, but the Fixtures schedule now
-          // has one → adopt it (prefill) instead of showing a stale empty week.
+          // has one → adopt it (prefill) instead of showing a stale empty week, and
+          // seed the daily intents from where the game falls (no coach plan to keep).
           setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
           setMatches(schedMatches);
           setScheduleNote(schedNote);
+          setNoMatchIntents(
+            matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date)) ?? getDefaultNoMatchIntents()
+          );
         } else {
           // The coach's saved matches are the source for this week.
           setWeekType(wt);
@@ -418,12 +491,24 @@ export default function WeekSetupPage() {
             { match_id: (m1.match_id || "M2").trim(), date: (m1.date || "").trim(), kickoff_time: (m1.kickoff_time || "").trim(), home_away: (m1.home_away as any) || "A" },
           ]);
           setScheduleNote(null);
+
+          // Anchor the editable daily grid to the match ONLY when the coach hasn't
+          // customized it (saved intents absent or still the generic default). A
+          // real custom plan the coach saved always wins — never overwrite it.
+          const anchored = savedHasRealMatch
+            ? matchAnchoredIntents(weekStart, weekEndISO, savedMatches.map((m) => m?.date))
+            : null;
+          setNoMatchIntents(
+            anchored && intentsEqualDefault(savedIntents)
+              ? anchored
+              : savedIntents ?? getDefaultNoMatchIntents()
+          );
         }
       } else {
         // No saved Week Setup for this week yet → auto-detect the match day from
         // the Fixtures schedule. Prefilled (not locked) so the coach keeps control.
-        setNoMatchIntents(getDefaultNoMatchIntents());
         if (found.length === 0) {
+          setNoMatchIntents(getDefaultNoMatchIntents());
           setWeekType("NO_MATCH");
           setMatches(DEFAULT_MATCHES);
           setScheduleNote(null);
@@ -431,6 +516,10 @@ export default function WeekSetupPage() {
           setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
           setMatches(schedMatches);
           setScheduleNote(schedNote);
+          // Seed the editable daily grid from where the game falls.
+          setNoMatchIntents(
+            matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date)) ?? getDefaultNoMatchIntents()
+          );
         }
       }
 
@@ -1098,9 +1187,24 @@ export default function WeekSetupPage() {
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">{t.dailyIntent}</div>
-                <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
-                  {t.reset}
-                </Button>
+                <div className="flex gap-2">
+                  {weekHasMatch && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const anchored = matchAnchoredIntents(weekStart, weekEnd, visibleMatches.map((m) => m.date));
+                        if (anchored) setNoMatchIntents(anchored);
+                      }}
+                      disabled={loading || saving || applying}
+                    >
+                      {t.fillFromMatch}
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
+                    {t.reset}
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2 md:grid-cols-7">
@@ -1108,10 +1212,18 @@ export default function WeekSetupPage() {
                   const date = addDays(weekStart, i);
                   const value = noMatchIntents[i] ?? "OFF";
                   const onBreak = isDateOnBreak(date);
+                  const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
 
                   return (
                     <div key={date} className={`rounded-xl border p-3 ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                      <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
+                        {mdLabel && !onBreak && (
+                          <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${mdLabel === "MD" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
+                            {mdLabel}
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{date.slice(5)}</div>
 
                       {onBreak ? (
@@ -1202,9 +1314,17 @@ export default function WeekSetupPage() {
             {previewDays.map((d, i) => {
               const date = addDays(weekStart, i);
               const onBreak = isDateOnBreak(date);
+              const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
               return (
                 <div key={d.day_index} title={d.notes ?? ""} className={`rounded-xl border p-3 text-center ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                  <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</span>
+                    {mdLabel && !onBreak && (
+                      <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${mdLabel === "MD" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
+                        {mdLabel}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
                   <div className="mt-2">
                     {onBreak
