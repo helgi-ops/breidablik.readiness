@@ -1321,6 +1321,39 @@ function ExerciseInfoModal({
   );
 }
 
+/**
+ * Render a coach-authored free-text workout (workout_templates.description) with
+ * the structure the coach actually typed. Coaches write these with real line
+ * breaks — a title, blank lines, "Block N (…)" headers, "1a) Exercise — reps"
+ * lines, and "- detail" bullets — but a plain <div> collapses every newline into
+ * a space, turning it into an unreadable wall of text. This keeps the lines and
+ * lightly styles the three shapes it recognises; anything unrecognised falls
+ * through as a plain line, so no coach formatting is ever lost.
+ */
+function CoachWorkoutText({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  return (
+    <div className="mt-1 text-sm leading-relaxed">
+      {lines.map((raw, i) => {
+        const line = raw.trim();
+        if (!line) return <div key={i} className="h-2" aria-hidden />;
+        // "1a) Bench press — 5 reps" / "2a." → an exercise line
+        if (/^\d+[a-z]?[).]/i.test(line)) {
+          return <div key={i} className="mt-1.5 font-medium text-zinc-700">{line}</div>;
+        }
+        // "- Velocity target: 0.75 m/s" / "• …" / "* …" → a detail bullet
+        if (/^[-•*]\s+/.test(line)) {
+          return <div key={i} className="pl-4 text-[13px] text-zinc-500">{line.replace(/^[-•*]\s+/, "· ")}</div>;
+        }
+        // Anything else standing on its own line is a section label — "Block 1
+        // (Contrast / complex)", "Core circuit", the title — so give them all the
+        // same header weight (first line flush; the rest get breathing room).
+        return <div key={i} className={cx("font-semibold text-zinc-800", i > 0 && "mt-2.5")}>{line}</div>;
+      })}
+    </div>
+  );
+}
+
 function recommendationBadgeToneClass(tone: "neutral" | "warning" | "success"): string {
   if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-700";
@@ -6598,7 +6631,7 @@ export default function PlayerClient() {
                   </div>
 
                   {tplToday.template.description ? (
-                    <div className="text-sm opacity-80">{tplToday.template.description}</div>
+                    <CoachWorkoutText text={tplToday.template.description} />
                   ) : null}
 
                   {tplToday.note ? (
