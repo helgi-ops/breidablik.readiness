@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sprintDistanceM } from "@/lib/micropulse/catapultCapability";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const r0 = (v: number) => Math.round(v);
@@ -206,6 +207,12 @@ export async function computePlayerGameReport(
     : { data: [], error: null };
   if (loadErr) return { ok: false, error: loadErr.message, status: 500 };
 
+  // Match-running verdict per (player, date): lets us drop a substitute's
+  // touchline-contaminated appearance from the squad benchmark and season
+  // per-90, and label it in the match list. Never drops "unknown" (no minutes
+  // entered) — that would empty the benchmark for teams that skip minutes.
+  const verdicts = await loadMatchVerdicts(supabase, teamId, matchDates);
+
   const scheduleByDate = new Map<string, { opponent: string | null; competition: string | null; is_home: boolean | null }>();
   for (const s of (scheduleRes.data ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_home: boolean | null }>) {
     if (!scheduleByDate.has(s.match_date)) scheduleByDate.set(s.match_date, { opponent: s.opponent, competition: s.competition, is_home: s.is_home });
@@ -256,6 +263,9 @@ export async function computePlayerGameReport(
     for (const pid of playerIds) {
       const load = loadByKey.get(`${pid}|${date}`);
       if (!load || isEstimated(load)) continue; // squad benchmark needs a REAL GPS row
+      // A substitute's warm-up-contaminated row (or an impossible one) is real
+      // LOAD but not match running — keep it out of the match benchmark.
+      if (isContaminatedForBenchmark(verdicts.get(verdictKey(pid, date)))) continue;
       const minutes = resolveMinutes(pid, date, load);
       if (minutes < MIN_QUALIFY_MINUTES) continue;
       const metrics = loadRowToMetrics(load);
@@ -301,10 +311,15 @@ export async function computePlayerGameReport(
       if (minutes <= 0) return null;
       const sched = scheduleByDate.get(date);
       const metrics = load ? loadRowToMetrics(load) : null;
+      const verdict = verdicts.get(verdictKey(playerId, date)) ?? null;
       return {
         date, opponent: sched?.opponent ?? null, competition: sched?.competition ?? null,
         is_home: sched?.is_home ?? null, minutes: Math.round(minutes), has_gps: !!load,
         estimated: isEstimated(load),
+        // Match-running verdict for the row — the display labels a contaminated /
+        // impossible / not-yet-verified appearance instead of showing it bare.
+        verdict,
+        contaminated: isContaminatedForBenchmark(verdict),
         raw: metrics, p90: metrics ? per90(metrics, minutes) : null,
       };
     })
