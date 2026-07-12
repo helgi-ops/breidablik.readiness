@@ -68,6 +68,7 @@ import {
 } from "@/lib/exercise-recommendations/normalize";
 import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
 import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
+import { coachTemplateToBlocks } from "@/lib/micropulse/strengthProgramming/parseCoachWorkoutText";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
 import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 
@@ -2186,15 +2187,21 @@ type SessionBlock = {
 function buildSessionBlocks(
   structure: unknown,
   adjust: TodayAdjust | null,
-  themeColor: string | null
+  themeColor: string | null,
+  // Coach-authored programmes carry an explicit Block 1→2→3 order the coach
+  // chose; preserve it instead of re-sorting by "money block" priority (which is
+  // right for the auto team session but scrambles a coach's numbered template).
+  preserveOrder = false
 ): { blocks: SessionBlock[]; hiddenCount: number; totalBlocks: number } {
   const rawBlocks = Array.isArray(structure) ? structure : [];
   if (!rawBlocks.length) return { blocks: [], hiddenCount: 0, totalBlocks: 0 };
 
   const normalizedBlocks = rebalanceRulesBlocks(rawBlocks);
-  const sorted = [...normalizedBlocks].sort(
-    (a, b) => blockSortPriority(String(a?.block ?? "")) - blockSortPriority(String(b?.block ?? ""))
-  );
+  const sorted = preserveOrder
+    ? normalizedBlocks
+    : [...normalizedBlocks].sort(
+        (a, b) => blockSortPriority(String(a?.block ?? "")) - blockSortPriority(String(b?.block ?? ""))
+      );
   const kept = adjust?.hideHighOutput
     ? sorted.filter((b: Record<string, unknown>) => !HIGH_OUTPUT_BLOCK.test(String(b?.block ?? "")))
     : sorted;
@@ -2288,6 +2295,14 @@ type TodaySessionOpts = {
    *  default team session for today). Renders a labelled "sent by coach" banner
    *  and suppresses the readiness auto-adjust (already tuned when built). */
   sentByCoach?: boolean;
+  /** Override the big card heading ("Today's session"). Used to distinguish a
+   *  coach-sent template ("Recommended session") from the auto team session. */
+  heading?: string | null;
+  /** Override the "sent by coach" banner subtext (e.g. a coach note, or a
+   *  supplement-appropriate line instead of the default "replaces …"). */
+  coachSentSubtext?: string | null;
+  /** Keep the coach's authored block order (don't re-sort by priority). */
+  preserveOrder?: boolean;
 };
 
 /** Translate a raw DB block title for display (IS stored → EN when needed). */
@@ -2854,8 +2869,8 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const isIS = t === PLAYER_COPY.IS;
   const adjust = opts.adjust ?? null;
   const { blocks } = useMemo(
-    () => buildSessionBlocks(structure, adjust, opts.themeColor ?? null),
-    [structure, adjust, opts.themeColor]
+    () => buildSessionBlocks(structure, adjust, opts.themeColor ?? null, opts.preserveOrder ?? false),
+    [structure, adjust, opts.themeColor, opts.preserveOrder]
   );
   const workBlocks = useMemo(() => blocks.filter((b) => b.segments.length > 0), [blocks]);
   if (!workBlocks.length) return null;
@@ -2885,7 +2900,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
     <div className="space-y-2.5">
       {/* Section header */}
       <div className="flex items-baseline justify-between gap-3 px-0.5">
-        <div className="text-lg font-bold tracking-tight text-zinc-900">{isIS ? "Æfing dagsins" : "Today's session"}</div>
+        <div className="text-lg font-bold tracking-tight text-zinc-900">{opts.heading?.trim() || (isIS ? "Æfing dagsins" : "Today's session")}</div>
         {subtitle ? (
           <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{subtitle}</div>
         ) : null}
@@ -2902,7 +2917,9 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
               {isIS ? "Sent af þjálfara" : "Sent by your coach"}
             </div>
             <div className="mt-1 text-[13px] leading-relaxed" style={{ color: "#2740e6", opacity: 0.9 }}>
-              {isIS
+              {opts.coachSentSubtext?.trim()
+                ? opts.coachSentSubtext
+                : isIS
                 ? "Þessi æfing kemur í stað æfingar dagsins og er stillt að stöðunni þinni í dag."
                 : "This replaces today's default session and is tuned to how you are today."}
             </div>
@@ -6621,57 +6638,51 @@ export default function PlayerClient() {
 
           {/* RIGHT */}
           <div className="space-y-6">
-            {tplToday?.template?.structure ? (
-              <div className="mb-2 rounded-xl border bg-white p-4">
-                <div className="text-sm font-semibold">Ráðlagðar æfingar</div>
-
-                <div className="mt-1 flex flex-col gap-1">
-                  <div className="text-lg font-bold">
-                    {tplToday.template.title ?? tplToday.template.code ?? "Template"}
-                  </div>
-
-                  {tplToday.template.description ? (
-                    <CoachWorkoutText text={tplToday.template.description} />
-                  ) : null}
-
-                  {tplToday.note ? (
-                    <div className="text-sm mt-1">
-                      <span className="font-semibold">Coach note:</span> {tplToday.note}
-                    </div>
-                  ) : null}
-                </div>
-
-                {Array.isArray((tplToday.template as any)?.structure?.blocks) ? (
-                  <div className="mt-3 space-y-3">
-                    {(tplToday.template as any).structure.blocks.map((b: any, idx: number) => (
-                      <div key={idx} className="rounded-lg bg-muted/40 p-2">
-                        <div className="text-sm font-semibold">{b.title ?? b.type ?? `Block ${idx + 1}`}</div>
-
-                        {b.protocol ? (
-                          <div className="text-sm mt-1">
-                            {b.protocol.exercise} — {b.protocol.sets}×{b.protocol.hold_seconds}s, hvíld {b.protocol.rest_seconds}s
-                          </div>
-                        ) : null}
-
-                        {Array.isArray(b.exercises) ? (
-                          <ul className="mt-1 text-sm list-disc pl-5">
-                            {b.exercises.map((ex: any, i: number) => (
-                              <li key={i}>
-                                {ex.name}
-                                {ex.sets ? ` — ${ex.sets}x${ex.reps ?? ""}` : ""}
-                                {typeof ex.velocity_target === "number" ? ` @ ${ex.velocity_target} m/s` : ""}
-                                {typeof ex.vl_threshold === "number" ? ` (VL ≤ ${Math.round(ex.vl_threshold * 100)}%)` : ""}
-                                {ex.tempo ? ` (tempo ${ex.tempo})` : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
+            {tplToday?.template ? (() => {
+              const tpl = tplToday.template;
+              const isIS = lang === "IS";
+              // Turn the coach-sent template into the SAME interactive session the
+              // team session uses (block grouping, sets×reps, "start session"
+              // focus flow) — prefer its structured blocks, else parse the
+              // free-text description. Empty ⇒ nothing structured, plain render.
+              const coachBlocks = coachTemplateToBlocks({ description: tpl.description, structure: tpl.structure });
+              if (coachBlocks.length > 0) {
+                return (
+                  <TodaySessionCard
+                    structure={coachBlocks}
+                    opts={{
+                      heading: isIS ? "Ráðlagðar æfingar" : "Recommended session",
+                      headerTitle: tpl.title ?? tpl.code ?? null,
+                      t,
+                      themeColor: clubThemeColor,
+                      adjust: null,        // coach-authored dose — don't re-apply the readiness reduction
+                      sentByCoach: true,
+                      preserveOrder: true, // keep the coach's Block 1→2→3 order
+                      coachSentSubtext: tplToday.note
+                        ? tplToday.note
+                        : isIS
+                        ? "Þjálfarinn þinn sendi þér þessa æfingu."
+                        : "Your coach sent you this session.",
+                    }}
+                  />
+                );
+              }
+              // Fallback: nothing parseable → keep the plain, formatted read-only card.
+              return (
+                <div className="mb-2 rounded-xl border bg-white p-4">
+                  <div className="text-sm font-semibold">{isIS ? "Ráðlagðar æfingar" : "Recommended session"}</div>
+                  <div className="mt-1 flex flex-col gap-1">
+                    <div className="text-lg font-bold">{tpl.title ?? tpl.code ?? "Template"}</div>
+                    {tpl.description ? <CoachWorkoutText text={tpl.description} /> : null}
+                    {tplToday.note ? (
+                      <div className="text-sm mt-1">
+                        <span className="font-semibold">{isIS ? "Skilaboð frá þjálfara:" : "Coach note:"}</span> {tplToday.note}
                       </div>
-                    ))}
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-            ) : null}
+                </div>
+              );
+            })() : null}
 
             <TodaySessionCard
               structure={planStructureForRender}
