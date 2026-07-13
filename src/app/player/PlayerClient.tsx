@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useLang } from "@/lib/lang";
 import type { Lang } from "@/lib/lang";
@@ -69,6 +69,7 @@ import {
 import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/ui";
 import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
 import { coachTemplateToBlocks } from "@/lib/micropulse/strengthProgramming/parseCoachWorkoutText";
+import PullToRefresh from "@/components/player/PullToRefresh";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
 import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 
@@ -3658,6 +3659,19 @@ export default function PlayerClient() {
   const [gpsDate, setGpsDate] = useState<string>(day);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [tplToday, setTplToday] = useState<PlayerTemplateToday | null>(null);
+  // Bumped on foreground return to softly refetch the coach-sent template (the
+  // data most likely to change while the app is open) WITHOUT the full-screen
+  // reload the main plan effect would cause — so reopening the PWA quietly shows
+  // a newly-sent workout. Wired into the tplToday effect's deps. A full refresh
+  // of everything is the pull-to-refresh gesture (window.location.reload()).
+  const [dataNonce, setDataNonce] = useState(0);
+  const lastRefreshRef = useRef(0);
+  const requestDataRefresh = useCallback((minGapMs = 0) => {
+    const now = Date.now();
+    if (now - lastRefreshRef.current < minGapMs) return;
+    lastRefreshRef.current = now;
+    setDataNonce((n) => n + 1);
+  }, []);
 
   const [decision, setDecision] = useState<DecisionRow>(null);
   const [session, setSession] = useState<PlayerSessionTodayRow>(null);
@@ -3814,7 +3828,7 @@ export default function PlayerClient() {
 
       setTplToday((data as any) ?? null);
     })();
-  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+  }, [profile?.player_id, selectedPlayerId, supabase, day, dataNonce]);
 
   useEffect(() => {
     const safeDay = sanitizeDay(day);
@@ -3846,21 +3860,25 @@ export default function PlayerClient() {
         .maybeSingle();
       if (mrow) setMetrics(mrow as unknown as MetricsRow);
     };
+    // Returning to the app also pulls fresh coach data (template, plan, GPS) —
+    // this is what removes the "close and reopen to see new info" ritual. Guarded
+    // to at most once per 4s so a quick app-switch doesn't refetch repeatedly.
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) void refreshCheckin();
+      if (e.persisted) { void refreshCheckin(); requestDataRefresh(4000); }
     };
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refreshCheckin();
+      if (document.visibilityState === "visible") { void refreshCheckin(); requestDataRefresh(4000); }
     };
+    const onFocus = () => { void refreshCheckin(); requestDataRefresh(4000); };
     window.addEventListener("pageshow", onPageShow);
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", refreshCheckin);
+    window.addEventListener("focus", onFocus);
     return () => {
       window.removeEventListener("pageshow", onPageShow);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", refreshCheckin);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [profile?.player_id, selectedPlayerId, supabase, day]);
+  }, [profile?.player_id, selectedPlayerId, supabase, day, requestDataRefresh]);
 
   // Reload GPS data when gpsDate changes (arrow navigation)
   const reloadGpsForDate = useCallback(async (targetDate: string) => {
@@ -5864,6 +5882,10 @@ export default function PlayerClient() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
+      {/* Pull down from the top to refetch — no need to close and reopen the app.
+          A manual pull does a full reload (gets everything); returning to the app
+          already soft-refreshes coach data via the visibility handler. */}
+      <PullToRefresh onRefresh={() => window.location.reload()} lang={lang === "IS" ? "IS" : "EN"} />
       {/* Sticky header — outside padded container so it sticks flush to top-0 */}
       <div className="sticky top-0 z-20 bg-zinc-50/95 backdrop-blur-sm supports-[backdrop-filter]:bg-zinc-50/80">
         <div className="mx-auto max-w-6xl px-4 pt-4 sm:pt-5 pb-2">
