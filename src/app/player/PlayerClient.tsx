@@ -5872,6 +5872,11 @@ export default function PlayerClient() {
   const mdChipText = mdLabel && mdLabel !== "—"
     ? (mdToMatch ? `${mdLabel} · ${mdToMatch[1]} ${lang === "IS" ? "til leiks" : "to match"}` : mdLabel)
     : null;
+  // Match day (MD, not MD-1/MD+1): the readiness "decision" hero ("Full session —
+  // go at full intensity") is a TRAINING verdict that contradicts the day — it's
+  // match day, there's no planned training. So we suppress the decision hero and
+  // let the dedicated "Match day!" session card carry the message.
+  const isMatchDay = ["MD", "GAME", "MATCH"].includes((mdLabel || "").trim().toUpperCase());
   const niceDate = (() => {
     try {
       return new Date(`${today}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "long" });
@@ -5997,6 +6002,12 @@ export default function PlayerClient() {
                 portal does not render on this deployment, which left an empty
                 anchor + a visible gap — so the message stays here.) This div is
                 also the layout anchor (data-player-card="decision"). */}
+            {/* On match day the training verdict is suppressed (see isMatchDay).
+                The anchor node stays so DOM-injected cards that position relative
+                to "decision" keep their place. */}
+            {isMatchDay ? (
+              <div data-player-card="decision" className="hidden" />
+            ) : (
             <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
               {/* Kicker row: readiness dot + label + MD chip (design mockup) */}
               <div className="flex items-center justify-between gap-3">
@@ -6029,6 +6040,7 @@ export default function PlayerClient() {
               {/* Supporting "why" line */}
               <div className="mt-2 text-sm leading-relaxed text-zinc-700">{message}</div>
             </div>
+            )}
 
             {/* Explanation card — shows on ALL colours now. GREEN gets a
                 reassuring "here's why you're cleared" line; YELLOW/RED get
