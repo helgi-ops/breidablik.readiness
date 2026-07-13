@@ -5766,6 +5766,14 @@ export default function PlayerClient() {
 
   const trainingSystemLabel = plan.training_system ? String(plan.training_system) : "—";
   const planStructureForRender = planTemplateOverride?.structure ?? plan.structure;
+  // A coach-sent template (player_template_assignments) becomes today's session
+  // and REPLACES the auto team session — the coach's explicit choice for the day
+  // wins, so the default "Æfing dagsins" card is suppressed whenever one exists.
+  // Gate on the template's PRESENCE (not parse success) so the team session drops
+  // even when the template only renders as read-only text. Plain calls (cheap),
+  // not hooks — safe below the loading guards.
+  const hasCoachSentTemplate = !!tplToday?.template;
+  const coachTemplateBlocks = coachTemplateToBlocks(tplToday?.template ?? null);
   const sessionHeaderTitle = normalizeSessionHeaderTitleByFlag(planTemplateOverride?.title ?? plan.title, flag);
   const sessionHeaderDesc = planTemplateOverride?.description ?? plan.description;
 
@@ -6645,13 +6653,16 @@ export default function PlayerClient() {
               // team session uses (block grouping, sets×reps, "start session"
               // focus flow) — prefer its structured blocks, else parse the
               // free-text description. Empty ⇒ nothing structured, plain render.
-              const coachBlocks = coachTemplateToBlocks({ description: tpl.description, structure: tpl.structure });
+              const coachBlocks = coachTemplateBlocks;
               if (coachBlocks.length > 0) {
                 return (
                   <TodaySessionCard
                     structure={coachBlocks}
                     opts={{
-                      heading: isIS ? "Ráðlagðar æfingar" : "Recommended session",
+                      // No heading override: this coach session REPLACES the team
+                      // session, so it reads as "Æfing dagsins" (the day's session).
+                      // The template title rides as the subtitle; the banner carries
+                      // the "sent by coach" provenance.
                       headerTitle: tpl.title ?? tpl.code ?? null,
                       t,
                       themeColor: clubThemeColor,
@@ -6661,8 +6672,8 @@ export default function PlayerClient() {
                       coachSentSubtext: tplToday.note
                         ? tplToday.note
                         : isIS
-                        ? "Þjálfarinn þinn sendi þér þessa æfingu."
-                        : "Your coach sent you this session.",
+                        ? "Þjálfarinn þinn sendi þér þessa æfingu og hún kemur í stað æfingar dagsins."
+                        : "Your coach sent you this session — it replaces today's default.",
                     }}
                   />
                 );
@@ -6684,23 +6695,29 @@ export default function PlayerClient() {
               );
             })() : null}
 
-            <TodaySessionCard
-              structure={planStructureForRender}
-              opts={{
-                headerTitle: sessionHeaderTitle,
-                headerDesc: sessionHeaderDesc,
-                lockLabel,
-                t,
-                recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
-                  ? exerciseRecommendationContext
-                  : null,
-                themeColor: clubThemeColor,
-                // Coach-sent sessions are already tuned to today inside
-                // buildStrengthSession — don't re-apply the readiness reduction.
-                adjust: plan?.source === "COACH_SENT" ? null : computeTodayAdjust(plan?.readiness_level ?? null),
-                sentByCoach: plan?.source === "COACH_SENT",
-              }}
-            />
+            {/* The default team session is suppressed when the coach has sent a
+                template for today — that coach session (rendered above) replaces
+                it, so the player sees ONE session, not two. Gated on presence, so
+                it drops even if the template only renders as read-only text. */}
+            {hasCoachSentTemplate ? null : (
+              <TodaySessionCard
+                structure={planStructureForRender}
+                opts={{
+                  headerTitle: sessionHeaderTitle,
+                  headerDesc: sessionHeaderDesc,
+                  lockLabel,
+                  t,
+                  recommendationContext: hasFeature(teamPlanTier, "ADAPTIVE_TRAINING_ENGINE")
+                    ? exerciseRecommendationContext
+                    : null,
+                  themeColor: clubThemeColor,
+                  // Coach-sent sessions are already tuned to today inside
+                  // buildStrengthSession — don't re-apply the readiness reduction.
+                  adjust: plan?.source === "COACH_SENT" ? null : computeTodayAdjust(plan?.readiness_level ?? null),
+                  sentByCoach: plan?.source === "COACH_SENT",
+                }}
+              />
+            )}
 
             <PostTrainingReload templates={postTraining} lang={lang} sessionDoneAt={rpeDoneAt} />
 
