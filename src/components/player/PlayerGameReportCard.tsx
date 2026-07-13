@@ -17,6 +17,8 @@ import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric,
 import { computeForm } from "@/lib/micropulse/playerGameReport";
 import ShareMatchButton from "./ShareMatchButton";
 import type { ShareStats } from "@/lib/micropulse/shareCard/pickHeroStat";
+import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
+import type { StrideResult } from "@/lib/micropulse/strideLength";
 
 type Bench = { player: number; team_avg: number; percentile: number; rank: number; n: number } | null;
 type P90 = Record<string, number>;
@@ -31,6 +33,7 @@ type Report = {
   availableKeys: string[];
   matches: Match[];
   club?: ClubInfo;
+  strideVerdict?: (StrideResult & { date?: string }) | null;
 };
 
 const clampSpeed = (v: number | undefined) => (typeof v === "number" && v > 0 && v <= 45 ? v : 0);
@@ -74,6 +77,7 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showStrideDetails, setShowStrideDetails] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
   const [ai, setAi] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -172,6 +176,11 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
   const shareClub = report.club ?? { name: "", themeColor: null, logoUrl: null };
   const shareAll: ShareStats[] = report.matches.filter((m) => m.has_gps && m.raw && !m.estimated).map(matchStats);
 
+  // Stride-length verdict for his latest match (a DRIVER/IMA signal). Already
+  // filtered server-side to a verdict-worthy session; null ⇒ nothing to show.
+  const sv = report.strideVerdict ?? null;
+  const svBadge = sv ? strideVerdictBadge(sv, isIS ? "IS" : "EN") : null;
+
   return (
     <div className="mx-auto max-w-lg space-y-3 pb-24">
       {/* Header + one-sentence verdict */}
@@ -218,6 +227,48 @@ export default function PlayerGameReportCard({ lang = "IS" }: { lang?: "IS" | "E
                   {verdict.low.label} — {isIS ? `${verdict.low.percentile}. hundraðshluti í liðinu.` : `${verdict.low.percentile}th percentile in the squad.`}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Stride length — last match. "Still pushing, or just turning his legs
+              over?" A DRIVER signal neither distance nor cadence alone can see. */}
+          {sv && svBadge && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">{isIS ? "Hreyfing" : "Driver"}</span>
+                <span className="text-sm font-semibold text-zinc-900">{isIS ? "Skreflengd — síðasti leikur" : "Stride length — last match"}</span>
+              </div>
+              {/* Layer 0 — one-line verdict */}
+              <div className="mt-2 flex items-start gap-2">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: svBadge.dot }} />
+                <span className="text-[15px] font-bold leading-snug tracking-tight text-zinc-900">{svBadge.label}</span>
+              </div>
+              {/* Layer 1 — plain why + the two numbers */}
+              <p className="mt-1 text-sm leading-relaxed text-zinc-700">{isIS ? sv.reasonIs : sv.reason}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                {sv.strideLengthM != null && (
+                  <span><span className="text-zinc-400">{isIS ? "Í leiknum" : "This match"} </span><span className="font-semibold text-zinc-900">{sv.strideLengthM} m</span></span>
+                )}
+                {sv.normM != null && (
+                  <span><span className="text-zinc-400">{isIS ? "Venjulega" : "Usual"} </span><span className="font-semibold text-zinc-700">{sv.normM} m</span></span>
+                )}
+                {sv.provisional && (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500">
+                    {isIS ? `Lítið öryggi · ${sv.historyN} leikir` : `Low confidence · ${sv.historyN} matches`}
+                  </span>
+                )}
+              </div>
+              {/* Layer 2 — behind a toggle: method + citation */}
+              <button type="button" onClick={() => setShowStrideDetails((x) => !x)} className="mt-2 text-[11px] font-semibold text-zinc-500 hover:text-zinc-700">
+                {showStrideDetails ? (isIS ? "Fela smáatriði ▲" : "Hide details ▲") : (isIS ? "Smáatriði ▼" : "Details ▼")}
+              </button>
+              {showStrideDetails && (
+                <div className="mt-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
+                  {isIS
+                    ? `Skreflengd = háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
+                    : `Stride length = high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}
+                </div>
+              )}
             </div>
           )}
 

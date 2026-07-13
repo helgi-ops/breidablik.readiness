@@ -13,8 +13,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { computePlayerToday } from "@/lib/micropulse/loadPlan/playerToday";
-import { statusOf } from "@/lib/micropulse/loadPlan/plannedVsActual";
+import { statusOf, type PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import { computePersonalRecords } from "@/lib/client/personalRecords";
+import { loadStrideVerdict, type StrideVerdictResult } from "@/lib/micropulse/strideLength/loader";
+import { VERDICT_KINDS } from "@/lib/micropulse/strideLength";
 
 export const runtime = "nodejs";
 
@@ -37,43 +39,63 @@ export async function GET(req: Request) {
 
     const plannedTarget = built.personalTarget;
     const actual = built.actualToday;
-    // Nothing to close the loop on: no real session yet, off-day, or no usual.
-    if (!built.planned.applicable || plannedTarget == null || actual == null) {
+    // The planned-vs-actual "close the loop" needs a real session + a usual to
+    // compare against. A match day may carry neither — but still deserves the
+    // stride verdict, so we compute that independently below.
+    const plannedAvailable = built.planned.applicable && plannedTarget != null && actual != null;
+
+    // Post-match stride verdict — "is he still pushing, or just turning his legs
+    // over?" Independent of the planned recap so it shows the evening after a
+    // match even when there's no planned training target. Only surfaced on a
+    // verdict-worthy session (match/big); a light day returns unmeasurable and
+    // is simply omitted (no noise), never shown as a green tick.
+    let strideVerdict: StrideVerdictResult | null = null;
+    try {
+      const sv = await loadStrideVerdict(sb, { playerId, date: today });
+      if (VERDICT_KINDS.includes(sv.kind)) strideVerdict = sv;
+    } catch { /* stride verdict optional — never break the recap */ }
+
+    // Nothing to close the loop on AND no stride verdict → nothing to show.
+    if (!plannedAvailable && !strideVerdict) {
       return NextResponse.json({ show: false });
     }
-
-    const { pct, status } = statusOf(plannedTarget, actual);
 
     // One honest, positive insight — never rewards higher load. A strength PB set
     // TODAY wins (a genuine small win); else an adherence/readiness note. On an
     // over-plan day we surface NO celebratory insight (the verdict carries the
     // recovery nudge instead).
+    let pct: number | null = null;
+    let status: PvaStatus | null = null;
     let insightKind: "pb" | "adherence" | "readiness" | null = null;
     let pb: { exercise: string; deltaKg: number } | null = null;
-    try {
-      const pr = await computePersonalRecords(sb, playerId);
-      const top = pr.recent_prs?.[0];
-      if (top && top.date === today && top.delta_kg > 0) {
-        pb = { exercise: top.exercise, deltaKg: Math.round(top.delta_kg * 10) / 10 };
-        insightKind = "pb";
+    if (plannedAvailable) {
+      ({ pct, status } = statusOf(plannedTarget!, actual!));
+      try {
+        const pr = await computePersonalRecords(sb, playerId);
+        const top = pr.recent_prs?.[0];
+        if (top && top.date === today && top.delta_kg > 0) {
+          pb = { exercise: top.exercise, deltaKg: Math.round(top.delta_kg * 10) / 10 };
+          insightKind = "pb";
+        }
+      } catch { /* PB insight optional */ }
+      if (!insightKind) {
+        if (status === "on") insightKind = "adherence";
+        else if ((status === "under" || status === "well_under") && built.eased) insightKind = "readiness";
       }
-    } catch { /* PB insight optional */ }
-    if (!insightKind) {
-      if (status === "on") insightKind = "adherence";
-      else if ((status === "under" || status === "well_under") && built.eased) insightKind = "readiness";
     }
 
     return NextResponse.json({
       show: true,
       mdLabel: built.planned.mdLabel,
-      plannedTarget,
+      plannedTarget: plannedAvailable ? plannedTarget : null,
       plannedN: built.personalN,
-      actual: Math.round(actual),
+      actual: plannedAvailable ? Math.round(actual!) : null,
       adherencePct: pct,
-      status, // "on" | "over" | "well_over" | "under" | "well_under"
+      status: status === "na" ? null : status, // "on" | "over" | "well_over" | "under" | "well_under" | null
       eased: built.eased,
       insightKind,
       pb,
+      strideVerdict,
     });
   } catch {
     return NextResponse.json({ show: false });

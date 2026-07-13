@@ -14,6 +14,8 @@ import { useLang } from "@/lib/lang";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import type { MatchLoadVerdict } from "@/lib/micropulse/matchMinutes";
 import { matchVerdictBadge } from "@/lib/micropulse/matchMinutesVerdict";
+import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
+import { VERDICT_KINDS, type StrideResult } from "@/lib/micropulse/strideLength";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 import { computeForm } from "@/lib/micropulse/playerGameReport";
 
@@ -59,6 +61,7 @@ export default function PlayerGameReportPage() {
   const [per90, setPer90] = useState(true);
   const [narrative, setNarrative] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [stride, setStride] = useState<StrideResult | null>(null);
 
   const token = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -99,6 +102,27 @@ export default function PlayerGameReportPage() {
   }, []);
 
   useEffect(() => { if (playerId) void load(playerId, season); }, [playerId, season, load]);
+
+  // Stride-length verdict for the player's LATEST match — "still pushing, or
+  // just turning his legs over?" One fetch off the shared engine; null unless
+  // the latest session is verdict-worthy (match/big).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setStride(null);
+      if (!playerId || !report) return;
+      const latest = report.matches.map((m) => m.date).filter(Boolean).sort().at(-1);
+      if (!latest) return;
+      try {
+        const t = await token();
+        if (!t) return;
+        const res = await fetch(`/api/coach/stride-length?playerId=${playerId}&date=${latest}`, { headers: { Authorization: `Bearer ${t}` } });
+        const j = await res.json();
+        if (alive && res.ok && VERDICT_KINDS.includes(j.kind)) setStride(j as StrideResult);
+      } catch { /* stride optional — never break the report */ }
+    })();
+    return () => { alive = false; };
+  }, [playerId, report, token]);
 
   const matches = useMemo(() => report?.matches ?? [], [report]);
   const gpsMatches = useMemo(() => matches.filter((m) => m.has_gps), [matches]);
@@ -456,6 +480,33 @@ export default function PlayerGameReportPage() {
                   })}
                 </div>
               </div>
+
+              {/* Stride length — latest match. "Still pushing, or just turning
+                  his legs over?" A DRIVER signal neither distance nor cadence shows. */}
+              {stride && (() => {
+                const b = strideVerdictBadge(stride, IS ? "IS" : "EN");
+                return (
+                  <div className="pgr-section rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      {IS ? "Skreflengd — síðasti leikur" : "Stride length — last match"}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.dot }} />
+                      <span className="text-sm font-bold text-slate-900">{b.label}</span>
+                      {stride.provisional && (
+                        <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-600">
+                          {IS ? `Lítið öryggi · ${stride.historyN}` : `Low conf · ${stride.historyN}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[12px] leading-snug text-slate-600">{IS ? stride.reasonIs : stride.reason}</div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-[12px] text-slate-500">
+                      {stride.strideLengthM != null && <span>{IS ? "Í leiknum" : "This match"}: <span className="font-semibold text-slate-800">{stride.strideLengthM} m</span></span>}
+                      {stride.normM != null && <span>{IS ? "Venjulega" : "Usual"}: <span className="font-semibold text-slate-700">{stride.normM} m</span></span>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Per-match table */}
               <div className="pgr-section">

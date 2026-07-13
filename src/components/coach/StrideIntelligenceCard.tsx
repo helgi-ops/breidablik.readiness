@@ -15,6 +15,8 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
+import type { StrideResult } from "@/lib/micropulse/strideLength";
 
 type StrideDriverFlag = {
   driver:
@@ -60,6 +62,8 @@ type StrideApiResponse = {
   today: { metrics: StrideMetrics; drivers: StrideDriverFlag[]; reasons: string[] } | null;
   trend: StrideTrendRow[];
   baselines: Record<string, { mean: number | null; sd: number | null; n: number | null; status: string }>;
+  /** Session-classified stride-length verdict — the one stride-length flag. */
+  strideVerdict?: (StrideResult & { date: string }) | null;
 };
 
 function severityClass(s: StrideDriverFlag["severity"]): string {
@@ -357,6 +361,13 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
 
   const t = data.today;
   const m = t.metrics;
+  // The session-classified verdict is THE stride-length flag; drop the pooled
+  // STRIDE_LENGTH_DROP driver (and its reason line) so the card never shows two
+  // disagreeing stride-length reads.
+  const sv = data.strideVerdict ?? null;
+  const svBadge = sv ? strideVerdictBadge(sv, "EN") : null;
+  const drivers = t.drivers.filter((d) => d.driver !== "STRIDE_LENGTH_DROP");
+  const reasons = t.reasons.filter((r) => !/stride length/i.test(r));
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -375,9 +386,9 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
             title="Pick a session date (blank = today)"
             className="rounded-md border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-600"
           />
-          {t.drivers.length > 0 ? (
+          {drivers.length > 0 ? (
             <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-              {t.drivers.length} signal{t.drivers.length === 1 ? "" : "s"}
+              {drivers.length} signal{drivers.length === 1 ? "" : "s"}
             </span>
           ) : (
             <span className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
@@ -387,10 +398,36 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
         </div>
       </div>
 
+      {/* Stride-length verdict — session-classified (match vs his own matches),
+          the one stride-length flag. Layer 0 label + layer 1 plain why. */}
+      {sv && svBadge && (
+        <div
+          className={`mt-3 rounded-md border p-2.5 ${
+            svBadge.tone === "bad" ? "border-red-300 bg-red-50"
+              : svBadge.tone === "info" ? "border-blue-300 bg-blue-50"
+              : svBadge.tone === "good" ? "border-emerald-300 bg-emerald-50"
+              : "border-slate-200 bg-slate-50"
+          }`}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: svBadge.dot }} />
+            <span className="text-sm font-semibold text-slate-900">Stride length: {svBadge.label}</span>
+            {sv.provisional && (
+              <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-500">low conf · {sv.historyN}</span>
+            )}
+          </div>
+          <div className="mt-1 text-[11px] leading-snug text-slate-600">{sv.reason}</div>
+          <div className="mt-1 text-[10px] text-slate-400">
+            {sv.strideLengthM != null && sv.normM != null ? `${sv.strideLengthM} m vs his usual ${sv.normM} m · ` : ""}
+            band 5-8 distance ÷ strides · vs his own {sv.kind === "match" ? "matches" : "big sessions"} · 2.5 SD · Girard/Morin 2011
+          </div>
+        </div>
+      )}
+
       {/* Driver chips */}
-      {t.drivers.length > 0 && (
+      {drivers.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {t.drivers.map((d) => (
+          {drivers.map((d) => (
             <span
               key={d.driver}
               className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${severityClass(d.severity)}`}
@@ -406,9 +443,9 @@ export default function StrideIntelligenceCard({ playerId, date: dateProp }: { p
       )}
 
       {/* Reason text */}
-      {t.reasons.length > 0 && (
+      {reasons.length > 0 && (
         <div className="mt-2 space-y-0.5">
-          {t.reasons.map((r, i) => (
+          {reasons.map((r, i) => (
             <div key={i} className="text-[11px] leading-tight text-slate-700">
               · {r}
             </div>

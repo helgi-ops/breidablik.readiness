@@ -21,6 +21,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadStrideIntelligence } from "@/lib/micropulse/strideIntelligence/loader";
 import { STRIDE_BASELINE_METRIC_KEYS } from "@/lib/micropulse/strideIntelligence";
+import { loadStrideVerdict, type StrideVerdictResult } from "@/lib/micropulse/strideLength/loader";
+import { VERDICT_KINDS } from "@/lib/micropulse/strideLength";
 
 export const runtime = "nodejs";
 
@@ -102,6 +104,15 @@ export async function GET(
 
   // 1. Today's payload
   const today = await loadStrideIntelligence(supabase, { playerId, date: todayIso });
+
+  // 1b. Session-CLASSIFIED stride-length verdict (the one flag) — compares a
+  // match to his own matches, not a pooled all-session baseline. Supersedes the
+  // pooled STRIDE_LENGTH_DROP driver on the card so the two never disagree.
+  let strideVerdict: StrideVerdictResult | null = null;
+  try {
+    const sv = await loadStrideVerdict(supabase, { playerId, date: todayIso });
+    if (VERDICT_KINDS.includes(sv.kind)) strideVerdict = sv;
+  } catch { /* stride verdict optional */ }
 
   // 2. Trend over last `days` days from the stride summary view + base table for decoupling
   const { data: trendRows } = await supabase
@@ -238,5 +249,6 @@ export async function GET(
     today,
     trend,
     baselines,
+    strideVerdict,
   });
 }

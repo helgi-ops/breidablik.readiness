@@ -21,6 +21,7 @@ import {
   type DevPlayerTab,
 } from "@/lib/micropulse/playerDashboard/devPlayerViewModel";
 import { supabase } from "@/lib/supabaseClient";
+import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
@@ -1263,20 +1264,34 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
 // is a recovery nudge, never a celebration. Layered read: verdict → planned vs
 // actual → provenance behind "details". Same reliable mount as the other cards.
 
+type RecapStrideVerdict = {
+  verdict: "normal" | "shortened" | "lengthened" | "unmeasurable";
+  kind: "match" | "big_session" | "light_session";
+  strideLengthM: number | null;
+  normM: number | null;
+  deltaPct: number | null;
+  historyN: number;
+  confidence: number;
+  provisional: boolean;
+  reason: string;
+  reasonIs: string;
+};
+
 type TodayRecap = {
   show: boolean;
   mdLabel: string | null;
-  plannedTarget: number;
+  plannedTarget: number | null;
   plannedN: number;
-  actual: number;
+  actual: number | null;
   adherencePct: number | null;
-  status: "on" | "over" | "well_over" | "under" | "well_under";
+  status: "on" | "over" | "well_over" | "under" | "well_under" | null;
   eased: "yellow" | "red" | null;
   insightKind: "pb" | "adherence" | "readiness" | null;
   pb: { exercise: string; deltaKg: number } | null;
+  strideVerdict?: RecapStrideVerdict | null;
 };
 
-const RECAP_VERDICT: Record<TodayRecap["status"], { en: string; is: string; dot: string }> = {
+const RECAP_VERDICT: Record<"on" | "over" | "well_over" | "under" | "well_under", { en: string; is: string; dot: string }> = {
   on:         { en: "On plan — you trained like a typical", is: "Á áætlun — þú æfðir eins og venjulegur", dot: "#2b8a54" },
   under:      { en: "Lighter than your usual", is: "Léttari en venjulegur", dot: "#2740e6" },
   well_under: { en: "Much lighter than your usual", is: "Mun léttari en venjulegur", dot: "#2740e6" },
@@ -1339,15 +1354,18 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
   if (!mountNode || activeTab !== "today" || !data?.show) return null;
 
   const accent = clubThemeColor ?? "#2b8a54";
-  const v = RECAP_VERDICT[data.status];
   const md = data.mdLabel ?? "";
+  const plannedShown = data.plannedTarget != null && data.actual != null && data.status != null;
+  const v = data.status ? RECAP_VERDICT[data.status] : null;
   const overshoot = data.status === "over" || data.status === "well_over";
   // Verdict line: base + MD + (recovery nudge on overshoot | eased note on under).
   const easedNote = data.eased && (data.status === "under" || data.status === "well_under");
-  const verdict = `${is ? v.is : v.en} ${md}`.trim()
-    + (overshoot ? (is ? " — settu endurheimt í forgang." : " — make recovery a priority.")
-      : easedNote ? (is ? " — skynsamlegt miðað við líðan þína í dag." : " — a smart call for how you felt today.")
-      : ".");
+  const verdict = v
+    ? `${is ? v.is : v.en} ${md}`.trim()
+      + (overshoot ? (is ? " — settu endurheimt í forgang." : " — make recovery a priority.")
+        : easedNote ? (is ? " — skynsamlegt miðað við líðan þína í dag." : " — a smart call for how you felt today.")
+        : ".")
+    : "";
 
   const insight = data.insightKind === "pb" && data.pb
     ? (is ? `Nýtt PB í ræktinni í dag: ${data.pb.exercise} +${data.pb.deltaKg}kg 💪` : `New gym PB today: ${data.pb.exercise} +${data.pb.deltaKg}kg 💪`)
@@ -1357,34 +1375,80 @@ function PlayerTodayRecapPortal({ activeTab, lang, clubThemeColor }: { activeTab
         ? (is ? "Góð ákvörðun að taka því rólega — þannig heldurðu þér ferskum." : "Good call taking it easy — that's how you stay fresh.")
         : null;
 
+  // Post-match stride verdict — "still pushing, or just turning his legs over?"
+  const sv = data.strideVerdict ?? null;
+  const svBadge = sv ? strideVerdictBadge(sv, is ? "IS" : "EN") : null;
+
   return createPortal(
     <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span aria-hidden>✅</span>{is ? "DAGURINN ÞINN" : "YOUR DAY"}
       </div>
 
-      {/* Layer 0 — verdict */}
-      <div className="mt-1.5 flex items-start gap-2">
-        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: v.dot }} />
-        <span className="text-[15px] font-bold leading-snug tracking-tight text-zinc-900">{verdict}</span>
-      </div>
+      {plannedShown && v && (
+        <>
+          {/* Layer 0 — verdict */}
+          <div className="mt-1.5 flex items-start gap-2">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: v.dot }} />
+            <span className="text-[15px] font-bold leading-snug tracking-tight text-zinc-900">{verdict}</span>
+          </div>
 
-      {/* Layer 1 — planned vs actual + insight */}
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-        <span><span className="text-zinc-400">{is ? "Venjulega" : "Usual"} </span><span className="font-semibold text-zinc-700">~{data.plannedTarget}</span></span>
-        <span><span className="text-zinc-400">{is ? "Í dag" : "Today"} </span><span className="font-semibold text-zinc-900">~{data.actual}</span></span>
-        {data.adherencePct != null && <span className="text-xs text-zinc-500">({data.adherencePct}%)</span>}
-      </div>
-      {insight && <div className="mt-1.5 text-sm text-zinc-700">{insight}</div>}
+          {/* Layer 1 — planned vs actual + insight */}
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+            <span><span className="text-zinc-400">{is ? "Venjulega" : "Usual"} </span><span className="font-semibold text-zinc-700">~{data.plannedTarget}</span></span>
+            <span><span className="text-zinc-400">{is ? "Í dag" : "Today"} </span><span className="font-semibold text-zinc-900">~{data.actual}</span></span>
+            {data.adherencePct != null && <span className="text-xs text-zinc-500">({data.adherencePct}%)</span>}
+          </div>
+          {insight && <div className="mt-1.5 text-sm text-zinc-700">{insight}</div>}
+        </>
+      )}
 
-      <button type="button" onClick={() => setShowDetails((s) => !s)} className="mt-2 text-[11px] font-semibold text-zinc-500 hover:text-zinc-700">
-        {showDetails ? (is ? "Fela smáatriði ▲" : "Hide details ▲") : (is ? "Smáatriði ▼" : "Details ▼")}
-      </button>
+      {/* Stride length verdict (post-match) — its own layered read inside the card */}
+      {sv && svBadge && (
+        <div className={`border-zinc-200/70 ${plannedShown ? "mt-3 border-t pt-2.5" : "mt-1.5"}`}>
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            {is ? "SKREFLENGD" : "STRIDE LENGTH"}
+          </div>
+          {/* Layer 0 — one-line verdict */}
+          <div className="mt-1 flex items-start gap-2">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: svBadge.dot }} />
+            <span className="text-[15px] font-bold leading-snug tracking-tight text-zinc-900">{svBadge.label}</span>
+          </div>
+          {/* Layer 1 — the plain why + the two numbers */}
+          <div className="mt-1 text-sm leading-snug text-zinc-700">{is ? sv.reasonIs : sv.reason}</div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {sv.strideLengthM != null && (
+              <span><span className="text-zinc-400">{is ? "Í dag" : "Today"} </span><span className="font-semibold text-zinc-900">{sv.strideLengthM} m</span></span>
+            )}
+            {sv.normM != null && (
+              <span><span className="text-zinc-400">{is ? "Venjulega" : "Usual"} </span><span className="font-semibold text-zinc-700">{sv.normM} m</span></span>
+            )}
+            {sv.provisional && (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500">
+                {is ? `Lítið öryggi · ${sv.historyN} leikir` : `Low confidence · ${sv.historyN} matches`}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(plannedShown || sv) && (
+        <button type="button" onClick={() => setShowDetails((s) => !s)} className="mt-2 text-[11px] font-semibold text-zinc-500 hover:text-zinc-700">
+          {showDetails ? (is ? "Fela smáatriði ▲" : "Hide details ▲") : (is ? "Smáatriði ▼" : "Details ▼")}
+        </button>
+      )}
       {showDetails && (
-        <div className="mt-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
-          {is
-            ? `Í dag = mælt með GPS (áætluð álög undanskilin). Venjulega = þitt ${md} meðaltal úr ${data.plannedN} æfingum. Þetta er samanburður við þinn eigin takt — ekki keppni um hæsta álag.`
-            : `Today = measured by GPS (estimated loads excluded). Usual = your ${md} average from ${data.plannedN} sessions. This compares to your own rhythm — not a contest for the highest load.`}
+        <div className="mt-1.5 space-y-1.5 border-t border-zinc-200/70 pt-2 text-[11px] leading-snug text-zinc-500">
+          {plannedShown && (
+            <div>{is
+              ? `Í dag = mælt með GPS (áætluð álög undanskilin). Venjulega = þitt ${md} meðaltal úr ${data.plannedN} æfingum. Þetta er samanburður við þinn eigin takt — ekki keppni um hæsta álag.`
+              : `Today = measured by GPS (estimated loads excluded). Usual = your ${md} average from ${data.plannedN} sessions. This compares to your own rhythm — not a contest for the highest load.`}</div>
+          )}
+          {sv && (
+            <div>{is
+              ? `Skreflengd = háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8). Borið saman við þína eigin leiki (${sv.historyN}); flaggað við 2,5 staðalfrávik. Girard/Morin 2011.`
+              : `Stride length = high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8). Compared to your own matches (${sv.historyN}); flagged at 2.5 SD. Girard/Morin 2011.`}</div>
+          )}
         </div>
       )}
     </div>,

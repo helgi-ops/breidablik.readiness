@@ -11,6 +11,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { computePlayerGameReport } from "@/lib/micropulse/playerGameReport";
+import { loadStrideVerdict, type StrideVerdictResult } from "@/lib/micropulse/strideLength/loader";
+import { VERDICT_KINDS } from "@/lib/micropulse/strideLength";
 
 export const runtime = "nodejs";
 
@@ -49,10 +51,25 @@ export async function GET(req: Request) {
     sprints: maxOf((m) => (m.raw?.sprint ?? 0)),
   };
 
+  // Stride verdict for his LATEST match — "is he still pushing, or just turning
+  // his legs over?" A DRIVER-side signal neither GPS distance nor cadence shows.
+  let strideVerdict: StrideVerdictResult | null = null;
+  try {
+    const dates = (res.report.matches as Array<{ date?: string }>)
+      .map((m) => m.date)
+      .filter((d): d is string => typeof d === "string");
+    const latest = dates.sort().at(-1);
+    if (latest) {
+      const sv = await loadStrideVerdict(sb, { playerId, date: latest });
+      if (VERDICT_KINDS.includes(sv.kind)) strideVerdict = sv;
+    }
+  } catch { /* stride verdict optional — never break the report */ }
+
   // Player sees ONLY his own report — no squad roster / teammate list.
   return NextResponse.json({
     ...res.report,
     club: { name: t?.name ?? "", themeColor: t?.club_theme_color ?? null, logoUrl: t?.club_logo_url ?? null },
     seasonBests,
+    strideVerdict,
   });
 }
