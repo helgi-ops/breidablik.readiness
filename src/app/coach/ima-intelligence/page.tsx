@@ -33,6 +33,8 @@ import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBan
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
+import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
+import type { StrideResult } from "@/lib/micropulse/strideLength";
 
 const I18N = {
   pageTitle: { EN: "IMA Intelligence", IS: "IMA Intelligence" },
@@ -358,6 +360,7 @@ export default function ImaIntelligencePage() {
           })()}
           <SessionProfileCard profile={profile} lang={lang} />
           <ImaRunDistanceCard date={date} lang={lang} />
+          <ImaStrideVerdictCard date={date} lang={lang} />
           <PerPlayerTable profile={profile} lang={lang} />
           <LegendCard lang={lang} />
         </>
@@ -495,6 +498,107 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Stride-length verdict (per player) ────────────────────────────────────
+// "Is he still pushing, or just turning his legs over?" The session-classified
+// stride-length engine, per player for the selected day. Same verdict the
+// player recap / game report / decel-intelligence show — one shared loader.
+// Only a match or big session earns a verdict; light days are unmeasurable and
+// omitted (the engine refuses to guess, and says so rather than showing green).
+
+type TeamStride = StrideResult & { playerId: string; fullName: string | null; minutesKnown: boolean };
+
+function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
+  const [rows, setRows] = React.useState<TeamStride[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: sess } = await sb.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/coach/stride-length?date=${date}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (alive) setRows((json.players ?? []) as TeamStride[]);
+        }
+      } catch { /* soft */ } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [date]);
+
+  const heading = lang === "IS" ? "Skreflengd — er hann enn að ýta?" : "Stride length — is he still pushing?";
+  const sub = lang === "IS"
+    ? "Háhraða vegalengd ÷ háhraðaskref (bönd 5-8), borið saman við hans eigin leiki/stórar æfingar · flaggað við 2,5 staðalfrávik"
+    : "High-cadence distance ÷ high-cadence strides (bands 5-8), vs his own matches/big sessions · flagged at 2.5 SD";
+
+  // Drop the one risky combination: a "match" verdict inferred from distance
+  // alone (no coach-entered minutes) — a hard training day would be mis-compared
+  // to his match norm and mis-flagged. Big-session verdicts are like-with-like
+  // and need a ~21% drop to fire, so the fallback is safe there.
+  const measured = rows.filter(
+    (r) => r.verdict !== "unmeasurable" && !(r.kind === "match" && !r.minutesKnown),
+  );
+  const shortened = measured.filter((r) => r.verdict === "shortened");
+
+  if (loaded && measured.length === 0) return null; // nothing trustworthy to judge on this day
+
+  return (
+    <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+      <div className="mb-3 text-[11px] text-slate-500">{sub}</div>
+
+      {shortened.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+          <span>⚠</span>
+          <span><b>
+            {lang === "IS"
+              ? `${shortened.length} ${shortened.length === 1 ? "leikmaður" : "leikmenn"} með styttri skref en venjulega — hann ýtir minna þótt fæturnir snúist jafn hratt.`
+              : `${shortened.length} player${shortened.length === 1 ? "" : "s"} striding shorter than usual — pushing less though the legs turn over as fast.`}
+          </b></span>
+        </div>
+      )}
+
+      {!loaded ? (
+        <div className="py-4 text-center text-sm text-slate-500">…</div>
+      ) : (
+        <div className="space-y-2">
+          {measured.map((r) => {
+            const b = strideVerdictBadge(r, lang === "IS" ? "IS" : "EN");
+            return (
+              <div key={r.playerId} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.dot }} />
+                  <span className="text-sm font-semibold text-slate-800">{r.fullName ?? "—"}</span>
+                  <span className="text-sm font-semibold text-slate-900">· {b.label}</span>
+                  {r.strideLengthM != null && r.normM != null && (
+                    <span className="text-[12px] tabular-nums text-slate-500">
+                      {r.strideLengthM} m {lang === "IS" ? "á móti" : "vs"} {r.normM} m
+                    </span>
+                  )}
+                  {r.provisional && (
+                    <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-600">
+                      {lang === "IS" ? `lítið öryggi · ${r.historyN}` : `low conf · ${r.historyN}`}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 pl-4 text-[12px] leading-snug text-slate-600">{lang === "IS" ? r.reasonIs : r.reason}</div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

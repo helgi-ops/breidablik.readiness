@@ -53,7 +53,17 @@ interface MinutesRow {
   is_dnp: boolean | null;
 }
 
-export type StrideVerdictResult = StrideResult & { date: string };
+export type StrideVerdictResult = StrideResult & {
+  date: string;
+  /**
+   * True when coach-entered minutes exist for this date, i.e. the session was
+   * CONFIRMED a match/session by minutes (not merely inferred from distance).
+   * A surface shown on ordinary training days should gate on this — otherwise a
+   * hard training session gets classified "match" by the distance fallback and
+   * mis-flags as "shortened" against his match norm.
+   */
+  minutesKnown: boolean;
+};
 export interface TeamStrideVerdict extends StrideVerdictResult {
   playerId: string;
   fullName: string | null;
@@ -158,7 +168,7 @@ export async function loadStrideVerdict(
   const sessions = buildStrideSessions((loadRows ?? []) as unknown as StrideLoadRow[], minutesByDate);
   const { today, history } = todayAndHistory(sessions, args.date);
   const groupNorm = args.groupNormM ?? null;
-  return { ...assessStrideLength(today, history, groupNorm), date: args.date };
+  return { ...assessStrideLength(today, history, groupNorm), date: args.date, minutesKnown: minutesByDate.has(args.date) };
 }
 
 /**
@@ -239,6 +249,7 @@ export async function loadTeamStrideVerdicts(
       playerId,
       fullName: nameOf.get(playerId) ?? null,
       date: args.date,
+      minutesKnown: minutesByPlayer.get(playerId)?.has(args.date) ?? false,
       ...assessStrideLength(today, history, groupNorm),
     });
   }

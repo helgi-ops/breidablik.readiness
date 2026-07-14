@@ -52,7 +52,12 @@ export async function GET(req: Request) {
     let strideVerdict: StrideVerdictResult | null = null;
     try {
       const sv = await loadStrideVerdict(sb, { playerId, date: today });
-      if (VERDICT_KINDS.includes(sv.kind)) strideVerdict = sv;
+      // Show a verdict only for a genuine match/big session. Drop a "match"
+      // inferred from distance alone (no recorded minutes) — a hard TRAINING day
+      // would otherwise be mis-compared to his match norm and mis-flagged.
+      if (VERDICT_KINDS.includes(sv.kind) && !(sv.kind === "match" && !sv.minutesKnown)) {
+        strideVerdict = sv;
+      }
     } catch { /* stride verdict optional — never break the recap */ }
 
     // Nothing to close the loop on AND no stride verdict → nothing to show.
