@@ -184,14 +184,30 @@ export async function loadTeamStrideVerdicts(
   const lookbackDays = args.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const startIso = startIsoFor(args.date, lookbackDays);
 
-  const [{ data: loadRows }, { data: minuteRows }, { data: players }] = await Promise.all([
-    sb.from("player_external_load_daily")
+  // A whole squad × a 120-day window exceeds PostgREST's server-enforced 1000-row
+  // cap — and `.limit()` does NOT override that cap. Ordered ascending, the first
+  // 1000 rows are the OLDEST, so the most RECENT dates (incl. the target date) get
+  // silently dropped and every verdict collapses to unmeasurable. Page through
+  // with .range() to get the whole window.
+  const PAGE = 1000;
+  const loadRows: StrideLoadRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb.from("player_external_load_daily")
       .select(STRIDE_LOAD_COLS)
       .eq("team_id", args.teamId)
       .in("source", ["catapult", "manual"])
       .gte("date", startIso)
       .lte("date", args.date)
-      .order("date", { ascending: true }),
+      .order("date", { ascending: true })
+      .order("player_id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as unknown as StrideLoadRow[];
+    loadRows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+
+  const [{ data: minuteRows }, { data: players }] = await Promise.all([
     sb.from("match_player_minutes")
       .select("player_id, match_date, minutes_played, is_dnp")
       .eq("team_id", args.teamId)
