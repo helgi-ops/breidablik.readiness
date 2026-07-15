@@ -34,7 +34,7 @@ import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
-import type { StrideResult } from "@/lib/micropulse/strideLength";
+import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
 
 const I18N = {
   pageTitle: { EN: "IMA Intelligence", IS: "IMA Intelligence" },
@@ -516,6 +516,8 @@ type TeamStride = StrideResult & { playerId: string; fullName: string | null; mi
 function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
   const [rows, setRows] = React.useState<TeamStride[]>([]);
   const [loaded, setLoaded] = React.useState(false);
+  const [open, setOpen] = React.useState<Set<string>>(() => new Set());
+  const isIS = lang === "IS";
 
   React.useEffect(() => {
     let alive = true;
@@ -556,16 +558,28 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
 
   if (loaded && measured.length === 0) return null; // nothing trustworthy to judge on this day
 
+  const kindWord = (k: StrideResult["kind"], plural = true) =>
+    isIS
+      ? k === "match" ? (plural ? "leikir" : "leik") : (plural ? "stórar æfingar" : "stórri æfingu")
+      : k === "match" ? (plural ? "matches" : "match") : (plural ? "big sessions" : "big session");
+
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
-      <div className="mb-3 text-[11px] text-slate-500">{sub}</div>
+      <div className="mb-2 text-[11px] text-slate-500">{sub}</div>
+      {/* Why the metric exists (plain language, no click) — the explainability
+          foundation: what "what" this "why" is answering. */}
+      <div className="mb-3 max-w-3xl text-[12px] leading-relaxed text-slate-600">
+        {isIS
+          ? "Undir þreytu heldur leikmaður skreftíðni en skreflengd styttist — hann ýtir minna þótt fæturnir snúist jafn hratt. Hvorki GPS-vegalengd né skreftíðni ein sér sér þetta; hlutfallið gerir það."
+          : "Under fatigue a player keeps his stride frequency but stride length shortens — he pushes less though the legs turn over as fast. Neither GPS distance nor cadence alone sees it; the ratio does."}
+      </div>
 
       {shortened.length > 0 && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
           <span>⚠</span>
           <span><b>
-            {lang === "IS"
+            {isIS
               ? `${shortened.length} ${shortened.length === 1 ? "leikmaður" : "leikmenn"} með styttri skref en venjulega — hann ýtir minna þótt fæturnir snúist jafn hratt.`
               : `${shortened.length} player${shortened.length === 1 ? "" : "s"} striding shorter than usual — pushing less though the legs turn over as fast.`}
           </b></span>
@@ -577,25 +591,83 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
       ) : (
         <div className="space-y-2">
           {measured.map((r) => {
-            const b = strideVerdictBadge(r, lang === "IS" ? "IS" : "EN");
+            const b = strideVerdictBadge(r, isIS ? "IS" : "EN");
+            const isOpen = open.has(r.playerId);
+            // Flag boundaries in absolute stride length (2.5 SD × the kind's CV).
+            const thrPct = FLAG_SD * CV_BY_KIND[r.kind];
+            const lowBound = r.normM != null ? Math.round(r.normM * (1 - thrPct / 100) * 100) / 100 : null;
+            const highBound = r.normM != null ? Math.round(r.normM * (1 + thrPct / 100) * 100) / 100 : null;
             return (
               <div key={r.playerId} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                {/* Layer 0 — verdict */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: b.dot }} />
                   <span className="text-sm font-semibold text-slate-800">{r.fullName ?? "—"}</span>
                   <span className="text-sm font-semibold text-slate-900">· {b.label}</span>
                   {r.strideLengthM != null && r.normM != null && (
                     <span className="text-[12px] tabular-nums text-slate-500">
-                      {r.strideLengthM} m {lang === "IS" ? "á móti" : "vs"} {r.normM} m
+                      {r.strideLengthM} m {isIS ? "á móti" : "vs"} {r.normM} m
                     </span>
                   )}
                   {r.provisional && (
-                    <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-600">
-                      {lang === "IS" ? `lítið öryggi · ${r.historyN}` : `low conf · ${r.historyN}`}
+                    <span
+                      className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-600"
+                      title={isIS
+                        ? "Öryggi vex með fjölda hans eigin leikja/æfinga. Undir 8 er normið enn að hluta úr hópnum."
+                        : "Confidence grows with his own matches/sessions. Under 8, the norm is still part squad."}
+                    >
+                      {isIS ? `lítið öryggi · ${r.historyN}` : `low conf · ${r.historyN}`}
                     </span>
                   )}
                 </div>
-                <div className="mt-0.5 pl-4 text-[12px] leading-snug text-slate-600">{lang === "IS" ? r.reasonIs : r.reason}</div>
+                {/* Layer 1 — plain why (+ counterfactual for a flagged/shortened read) */}
+                <div className="mt-0.5 pl-4 text-[12px] leading-snug text-slate-600">{isIS ? r.reasonIs : r.reason}</div>
+                {r.verdict === "shortened" && lowBound != null && (
+                  <div className="mt-0.5 pl-4 text-[12px] font-medium leading-snug text-slate-700">
+                    {isIS
+                      ? `Til að teljast eðlilegt hefði skreflengd hans þurft að vera ≥ ${lowBound} m.`
+                      : `It would read normal again at a stride length of ≥ ${lowBound} m.`}
+                  </div>
+                )}
+
+                {/* Layer 2 — behind "Details": threshold, confidence, citation */}
+                <button
+                  type="button"
+                  onClick={() => setOpen((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(r.playerId)) next.delete(r.playerId); else next.add(r.playerId);
+                    return next;
+                  })}
+                  className="mt-1 pl-4 text-[11px] font-semibold text-slate-400 hover:text-slate-600"
+                >
+                  {isOpen ? (isIS ? "Fela smáatriði ▲" : "Hide details ▲") : (isIS ? "Nánar ▼" : "Details ▼")}
+                </button>
+                {isOpen && (
+                  <div className="mt-1 space-y-1 border-t border-slate-200/70 pl-4 pt-1.5 text-[11px] leading-snug text-slate-500">
+                    <div>
+                      {isIS ? "Aðferð: " : "Method: "}
+                      {isIS
+                        ? "háhraða vegalengd ÷ háhraðaskref (IMA hlaupabönd 5–8)."
+                        : "high-cadence distance ÷ high-cadence strides (IMA free-running bands 5–8)."}
+                    </div>
+                    {r.normM != null && lowBound != null && highBound != null && (
+                      <div>
+                        {isIS
+                          ? `Flaggað við 2,5 staðalfrávik (±${Math.round(thrPct * 10) / 10}% frá norminu ${r.normM} m fyrir ${kindWord(r.kind)}): stutt < ${lowBound} m, langt > ${highBound} m.`
+                          : `Flagged at 2.5 SD (±${Math.round(thrPct * 10) / 10}% from the ${r.normM} m norm for his ${kindWord(r.kind)}): short < ${lowBound} m, long > ${highBound} m.`}
+                      </div>
+                    )}
+                    <div>
+                      {isIS ? "Áreiðanleiki: " : "Confidence: "}
+                      {r.historyN === 0
+                        ? (isIS ? "engir eigin leikir enn — þetta er norm hópsins, ekki hans." : "no matches of his own yet — this is the squad norm, not his.")
+                        : r.provisional
+                          ? (isIS ? `byggt á ${r.historyN} af hans eigin ${kindWord(r.kind)}; normið er enn að hluta úr hópnum þar til hann nær 8.` : `based on ${r.historyN} of his own ${kindWord(r.kind)}; the norm is still part-squad until he reaches 8.`)
+                          : (isIS ? `byggt á ${r.historyN} af hans eigin ${kindWord(r.kind)} — fullþroskað norm.` : `based on ${r.historyN} of his own ${kindWord(r.kind)} — a mature norm.`)}
+                    </div>
+                    <div className="text-slate-400">Girard, Micallef &amp; Millet 2011; Morin o.fl. 2011.</div>
+                  </div>
+                )}
               </div>
             );
           })}
