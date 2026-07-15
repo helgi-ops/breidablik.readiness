@@ -33,6 +33,13 @@ export default function PlayerPrivacyConsentPrompt() {
   const [dismissed, setDismissed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Guardian form (shown only for a minor — a parent/guardian consents on the
+  // player's device, co-present).
+  const [gRelationship, setGRelationship] = useState<"parent" | "guardian">("parent");
+  const [gName, setGName] = useState("");
+  const [gEmail, setGEmail] = useState("");
+  const [gConfirmed, setGConfirmed] = useState(false);
+  const guardianReady = gName.trim().length > 1 && gConfirmed;
 
   useEffect(() => {
     let alive = true;
@@ -62,11 +69,21 @@ export default function PlayerPrivacyConsentPrompt() {
           return vf <= now && vt >= now && policyVersionSatisfies(row.policy_version);
         });
 
+        // Show the guardian form only for a CONFIRMED minor (DOB present and
+        // under 18). is_minor()'s null-DOB=minor fail-safe is right for
+        // enforcement gates, but here it would wrongly push an adult with a
+        // missing DOB through a parent/guardian form — so we require a real DOB.
         let minor = false;
         try {
-          const { data: m } = await supabase.rpc("is_minor", { p_player_id: pid });
-          minor = m === true;
-        } catch { /* minor check is optional */ }
+          const { data: pl } = await supabase
+            .from("players").select("date_of_birth").eq("id", pid).maybeSingle();
+          const dob = (pl as { date_of_birth?: string | null } | null)?.date_of_birth ?? null;
+          if (dob) {
+            const cutoff = new Date();
+            cutoff.setFullYear(cutoff.getFullYear() - 18);
+            minor = new Date(dob) > cutoff;
+          }
+        } catch { /* DOB read optional — default to adult self-consent */ }
 
         if (!alive) return;
         setPlayerId(pid);
@@ -87,14 +104,25 @@ export default function PlayerPrivacyConsentPrompt() {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id ?? null;
 
+      // For a minor, a parent/guardian consents on their behalf (co-present): we
+      // record who they are (relationship, name, contact) so it's real parental
+      // provenance in the audit, not a self-grant. An adult grants for themselves.
+      const grant = isMinor
+        ? {
+            granted_by_relationship: gRelationship,
+            granted_by_full_name: gName.trim(),
+            granted_by_contact: gEmail.trim() || null,
+          }
+        : { granted_by_relationship: "self" as const };
+
       // Record the fresh consent at the current policy version.
       const { error } = await supabase.from("player_consents").insert({
         player_id: playerId,
         consent_type: "data_processing",
         granted_by_profile_id: userId,
-        granted_by_relationship: "self",
         source: "app_prompt",
         policy_version: CURRENT_POLICY_VERSION,
+        ...grant,
       });
       if (error) throw error;
 
@@ -124,7 +152,7 @@ export default function PlayerPrivacyConsentPrompt() {
     } finally {
       setSaving(false);
     }
-  }, [playerId, isIS]);
+  }, [playerId, isIS, isMinor, gRelationship, gName, gEmail]);
 
   if (status !== "needed" || dismissed) return null;
 
@@ -138,9 +166,13 @@ export default function PlayerPrivacyConsentPrompt() {
           {isIS ? "Samþykki fyrir gagnavinnslu" : "Consent to data processing"}
         </h2>
         <p className="mt-1 text-sm leading-relaxed text-zinc-600">
-          {isIS
-            ? "Áður en þú notar appið biðjum við um samþykki þitt fyrir vinnslu gagnanna þinna. Þú ræður og getur afturkallað hvenær sem er."
-            : "Before you use the app, we ask for your consent to process your data. You're in control and can revoke it at any time."}
+          {isMinor
+            ? (isIS
+                ? "Þessi leikmaður er undir 18 ára. Forráðamaður þarf að samþykkja vinnslu gagnanna fyrir hans hönd. Hægt er að afturkalla hvenær sem er."
+                : "This player is under 18. A parent or guardian needs to consent to the data processing on their behalf. It can be revoked at any time.")
+            : (isIS
+                ? "Áður en þú notar appið biðjum við um samþykki þitt fyrir vinnslu gagnanna þinna. Þú ræður og getur afturkallað hvenær sem er."
+                : "Before you use the app, we ask for your consent to process your data. You're in control and can revoke it at any time.")}
         </p>
 
         <div className="mt-3">
@@ -156,16 +188,69 @@ export default function PlayerPrivacyConsentPrompt() {
           {isIS ? "Sjá fulla útgáfu →" : "Read the full version →"}
         </a>
 
+        {isMinor && (
+          <div className="mt-4 space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+            <div className="text-[12px] font-semibold text-zinc-700">
+              {isIS ? "Forráðamaður staðfestir" : "Parent / guardian confirms"}
+            </div>
+            <div className="flex gap-2">
+              {(["parent", "guardian"] as const).map((rel) => (
+                <button
+                  key={rel}
+                  type="button"
+                  onClick={() => setGRelationship(rel)}
+                  className={`flex-1 rounded-lg border px-3 py-1.5 text-[13px] font-medium ${
+                    gRelationship === rel ? "border-[#2740e6] bg-white text-[#2740e6]" : "border-zinc-200 bg-white text-zinc-500"
+                  }`}
+                >
+                  {rel === "parent" ? (isIS ? "Foreldri" : "Parent") : (isIS ? "Forráðamaður" : "Guardian")}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={gName}
+              onChange={(e) => setGName(e.target.value)}
+              placeholder={isIS ? "Fullt nafn forráðamanns" : "Parent/guardian full name"}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="email"
+              value={gEmail}
+              onChange={(e) => setGEmail(e.target.value)}
+              placeholder={isIS ? "Netfang (til að ná í þig)" : "Email (so we can reach you)"}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            />
+            <label className="flex items-start gap-2 text-[13px] leading-snug text-zinc-700">
+              <input
+                type="checkbox"
+                checked={gConfirmed}
+                onChange={(e) => setGConfirmed(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                {isIS
+                  ? "Ég er forráðamaður leikmannsins og samþykki vinnslu gagnanna fyrir hans hönd."
+                  : "I am this player's parent/guardian and I consent to the data processing on their behalf."}
+              </span>
+            </label>
+          </div>
+        )}
+
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
           <button
             type="button"
             onClick={accept}
-            disabled={saving}
+            disabled={saving || (isMinor && !guardianReady)}
             className="flex-1 rounded-xl bg-[#1c7a4a] px-4 py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-50"
           >
-            {saving ? (isIS ? "Vista…" : "Saving…") : (isIS ? "Ég samþykki" : "I agree")}
+            {saving
+              ? (isIS ? "Vista…" : "Saving…")
+              : isMinor
+                ? (isIS ? "Samþykkja fyrir hönd leikmanns" : "Consent on their behalf")
+                : (isIS ? "Ég samþykki" : "I agree")}
           </button>
           <button
             type="button"
