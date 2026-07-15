@@ -163,6 +163,35 @@ export function assessStrideLength(
     provisional: true,
   };
 
+  // Indoor / no-GPS session FIRST — before the light-session refusal — so an
+  // indoor day is always explained as "outdoor-only" rather than conflated with
+  // light-session noise. He ran (strides present) but there is no running
+  // distance, and stride length in metres is GPS-derived and OUTDOOR-ONLY:
+  // indoors Catapult gives strides and cadence but no free-running distance.
+  // Any high-cadence strides at all + no distance = the indoor signature (don't
+  // require MIN_STRIDES here: an indoor session may have few sprint-band strides,
+  // but the honest reason it's unmeasurable is still "no GPS distance", not
+  // "too few strides").
+  // Indoors Catapult returns 0 (not null) for free-running distance while still
+  // counting strides — so "no distance" means null OR ≤ 0, paired with strides.
+  const ranWithNoDistance =
+    todayLen == null &&
+    (today.highCadenceDistanceM == null || today.highCadenceDistanceM <= 0) &&
+    today.highCadenceStrides != null && today.highCadenceStrides > 0;
+  if (ranWithNoDistance) {
+    return {
+      ...base,
+      verdict: "unmeasurable",
+      unmeasurableReason: "no_distance",
+      reason:
+        `No running distance for this session, so stride length can't be measured — it's derived from GPS ` +
+        `distance and only works outdoors. Indoors Catapult records his strides and cadence but not the distance.`,
+      reasonIs:
+        `Engin hlaupavegalengd í þessari æfingu, svo skreflengd er ekki mælanleg — hún byggir á GPS-vegalengd ` +
+        `og virkar aðeins utandyra. Innandyra skráir Catapult skrefin og skreftíðnina en ekki vegalengdina.`,
+    };
+  }
+
   if (!VERDICT_KINDS.includes(kind)) {
     return {
       ...base,
@@ -180,25 +209,6 @@ export function assessStrideLength(
   }
 
   if (todayLen == null) {
-    // Distinguish "no running distance" (indoor / GPS not captured — he DID run,
-    // we just can't turn it into metres) from "too little running". Stride length
-    // in metres is GPS-derived and OUTDOOR-ONLY; indoors Catapult gives strides
-    // and cadence but no free-running distance.
-    const hasStrides = today.highCadenceStrides != null && today.highCadenceStrides >= MIN_STRIDES;
-    const noDistance = hasStrides && today.highCadenceDistanceM == null;
-    if (noDistance) {
-      return {
-        ...base,
-        verdict: "unmeasurable",
-        unmeasurableReason: "no_distance",
-        reason:
-          `No running distance for this session, so stride length can't be measured — it's derived from GPS ` +
-          `distance and only works outdoors. Indoors Catapult records his strides and cadence but not the distance.`,
-        reasonIs:
-          `Engin hlaupavegalengd í þessari æfingu, svo skreflengd er ekki mælanleg — hún byggir á GPS-vegalengd ` +
-          `og virkar aðeins utandyra. Innandyra skráir Catapult skrefin og skreftíðnina en ekki vegalengdina.`,
-      };
-    }
     return {
       ...base,
       verdict: "unmeasurable",
