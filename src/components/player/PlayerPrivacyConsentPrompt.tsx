@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { DataProcessingSummary } from "@/components/legal/DataProcessingSummary";
+import { CURRENT_POLICY_VERSION, policyVersionSatisfies } from "@/lib/legal/policyVersion";
 
 type Status = "loading" | "needed" | "ok";
 
@@ -47,16 +48,18 @@ export default function PlayerPrivacyConsentPrompt() {
 
         const { data: consents } = await supabase
           .from("player_consents")
-          .select("valid_from, valid_to, revoked_at")
+          .select("valid_from, valid_to, revoked_at, policy_version")
           .eq("player_id", pid)
           .eq("consent_type", "data_processing")
           .is("revoked_at", null);
         const now = Date.now();
+        // Satisfied only by an in-window consent to the CURRENT policy version —
+        // a consent to an older version no longer counts (triggers re-consent).
         const active = (consents ?? []).some((c) => {
-          const row = c as { valid_from: string | null; valid_to: string | null };
+          const row = c as { valid_from: string | null; valid_to: string | null; policy_version: string | null };
           const vf = row.valid_from ? new Date(row.valid_from).getTime() : 0;
           const vt = row.valid_to ? new Date(row.valid_to).getTime() : Number.POSITIVE_INFINITY;
-          return vf <= now && vt >= now;
+          return vf <= now && vt >= now && policyVersionSatisfies(row.policy_version);
         });
 
         let minor = false;
@@ -83,14 +86,38 @@ export default function PlayerPrivacyConsentPrompt() {
     try {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id ?? null;
+
+      // Record the fresh consent at the current policy version.
       const { error } = await supabase.from("player_consents").insert({
         player_id: playerId,
         consent_type: "data_processing",
         granted_by_profile_id: userId,
         granted_by_relationship: "self",
         source: "app_prompt",
+        policy_version: CURRENT_POLICY_VERSION,
       });
       if (error) throw error;
+
+      // Supersede any prior active data_processing consent (an older version, or
+      // a pre-versioning NULL one) so exactly one active row stands — the audit
+      // log keeps the full history. Best-effort: never fail the accept on this.
+      try {
+        const { data: prior } = await supabase
+          .from("player_consents")
+          .select("id, policy_version")
+          .eq("player_id", playerId)
+          .eq("consent_type", "data_processing")
+          .is("revoked_at", null);
+        const staleIds = (prior ?? [])
+          .filter((c) => !policyVersionSatisfies((c as { policy_version: string | null }).policy_version))
+          .map((c) => (c as { id: string }).id);
+        if (staleIds.length > 0) {
+          await supabase.from("player_consents")
+            .update({ revoked_at: new Date().toISOString() })
+            .in("id", staleIds);
+        }
+      } catch { /* superseding is housekeeping — the new consent already stands */ }
+
       setStatus("ok");
     } catch {
       setErr(isIS ? "Gat ekki vistað samþykki. Reyndu aftur." : "Could not save consent. Please try again.");

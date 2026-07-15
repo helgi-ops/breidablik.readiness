@@ -8,6 +8,7 @@
 
 import { useLang } from "@/lib/lang";
 import { DataProcessingSummary } from "@/components/legal/DataProcessingSummary";
+import { CURRENT_POLICY_VERSION } from "@/lib/legal/policyVersion";
 
 export default function PrivacyPage() {
   const [lang, setLang] = useLang();
@@ -22,6 +23,9 @@ export default function PrivacyPage() {
           <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-zinc-900">
             {isIS ? "Persónuvernd og gagnavinnsla" : "Privacy & data processing"}
           </h1>
+          <div className="mt-1 text-[11px] text-zinc-400">
+            {isIS ? "Útgáfa" : "Version"} {CURRENT_POLICY_VERSION}
+          </div>
         </div>
         <button
           type="button"
