@@ -21,6 +21,7 @@ import {
 
 // Checkbox
 import { Checkbox } from "@/components/ui/checkbox";
+import CoachConsentStatusCard from "@/components/coach/CoachConsentStatusCard";
 import TeamInviteLinks from "@/components/coach/TeamInviteLinks";
 import { POSITION_OPTIONS } from "@/lib/micropulse/positionStyle";
 
@@ -383,6 +384,9 @@ export default function CoachPlayersPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
+
+      {/* ── Privacy consent status ── */}
+      <CoachConsentStatusCard />
 
       {/* ── Invite links ── */}
       <TeamInviteLinks />
