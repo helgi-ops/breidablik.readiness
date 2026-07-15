@@ -117,6 +117,13 @@ export interface StrideResult {
   provisional: boolean;
   reason: string;
   reasonIs: string;
+  /**
+   * When verdict === "unmeasurable", WHY — so a surface can explain the absence
+   * instead of hiding it. In particular `no_distance` = the session had
+   * high-cadence strides but no running distance (indoor, or GPS not captured):
+   * stride length in metres is GPS-derived and OUTDOOR-ONLY.
+   */
+  unmeasurableReason?: "no_distance" | "too_few_strides" | "light_session" | "no_history";
 }
 
 const round = (n: number, dp = 2) => {
@@ -160,6 +167,7 @@ export function assessStrideLength(
     return {
       ...base,
       verdict: "unmeasurable",
+      unmeasurableReason: "light_session",
       reason:
         `Stride length varies ${CV_BY_KIND[kind]}% between light sessions for the same player — ` +
         `three times the size of the signal. No verdict is possible here, and pretending otherwise ` +
@@ -172,9 +180,29 @@ export function assessStrideLength(
   }
 
   if (todayLen == null) {
+    // Distinguish "no running distance" (indoor / GPS not captured — he DID run,
+    // we just can't turn it into metres) from "too little running". Stride length
+    // in metres is GPS-derived and OUTDOOR-ONLY; indoors Catapult gives strides
+    // and cadence but no free-running distance.
+    const hasStrides = today.highCadenceStrides != null && today.highCadenceStrides >= MIN_STRIDES;
+    const noDistance = hasStrides && today.highCadenceDistanceM == null;
+    if (noDistance) {
+      return {
+        ...base,
+        verdict: "unmeasurable",
+        unmeasurableReason: "no_distance",
+        reason:
+          `No running distance for this session, so stride length can't be measured — it's derived from GPS ` +
+          `distance and only works outdoors. Indoors Catapult records his strides and cadence but not the distance.`,
+        reasonIs:
+          `Engin hlaupavegalengd í þessari æfingu, svo skreflengd er ekki mælanleg — hún byggir á GPS-vegalengd ` +
+          `og virkar aðeins utandyra. Innandyra skráir Catapult skrefin og skreftíðnina en ekki vegalengdina.`,
+      };
+    }
     return {
       ...base,
       verdict: "unmeasurable",
+      unmeasurableReason: "too_few_strides",
       reason: `Fewer than ${MIN_STRIDES} high-cadence strides — too little running to measure stride length.`,
       reasonIs: `Færri en ${MIN_STRIDES} háhraðaskref — of lítið hlaup til að mæla skreflengd.`,
     };
@@ -197,6 +225,7 @@ export function assessStrideLength(
     return {
       ...base,
       verdict: "unmeasurable",
+      unmeasurableReason: "no_history",
       historyN: n,
       reason: "No same-type history for this player and no squad norm — nothing to compare today against.",
       reasonIs: "Engin saga af sömu tegund og enginn hópur til samanburðar — ekkert til að bera daginn saman við.",

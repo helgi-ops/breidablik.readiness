@@ -555,8 +555,14 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
     (r) => r.verdict !== "unmeasurable" && !(r.kind === "match" && !r.minutesKnown),
   );
   const shortened = measured.filter((r) => r.verdict === "shortened");
+  // Indoor / no-GPS session: he ran (strides present) but there's no distance,
+  // so stride length — which is GPS-derived — can't be measured. Explain it
+  // rather than vanishing (matters for indoor-heavy teams like HK).
+  const indoorOnly = rows.some((r) => r.unmeasurableReason === "no_distance");
 
-  if (loaded && measured.length === 0) return null; // nothing trustworthy to judge on this day
+  // Hide only when there's genuinely nothing to say — not on an indoor day,
+  // where we owe the coach the "outdoor-only" explanation.
+  if (loaded && measured.length === 0 && !indoorOnly) return null;
 
   const kindWord = (k: StrideResult["kind"], plural = true) =>
     isIS
@@ -574,6 +580,17 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
           ? "Undir þreytu heldur leikmaður skreftíðni en skreflengd styttist — hann ýtir minna þótt fæturnir snúist jafn hratt. Hvorki GPS-vegalengd né skreftíðni ein sér sér þetta; hlutfallið gerir það."
           : "Under fatigue a player keeps his stride frequency but stride length shortens — he pushes less though the legs turn over as fast. Neither GPS distance nor cadence alone sees it; the ratio does."}
       </div>
+
+      {indoorOnly && measured.length === 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          <span aria-hidden>🏟️</span>
+          <span>
+            {isIS
+              ? "Innanhúss-æfing — skreflengd mælist ekki. Hún byggir á GPS-hlaupavegalengd (Catapult IMA Free Running) sem virkar aðeins utandyra; innandyra koma skref og skreftíðni en engin vegalengd. Skreflengdar-dómar birtast á útiæfingum og leikjum."
+              : "Indoor session — stride length isn't measurable. It's built on GPS running distance (Catapult IMA Free Running), which only works outdoors; indoors you get strides and cadence but no distance. Stride-length verdicts appear on outdoor sessions and matches."}
+          </span>
+        </div>
+      )}
 
       {shortened.length > 0 && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
@@ -664,6 +681,11 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
                         : r.provisional
                           ? (isIS ? `byggt á ${r.historyN} af hans eigin ${kindWord(r.kind)}; normið er enn að hluta úr hópnum þar til hann nær 8.` : `based on ${r.historyN} of his own ${kindWord(r.kind)}; the norm is still part-squad until he reaches 8.`)
                           : (isIS ? `byggt á ${r.historyN} af hans eigin ${kindWord(r.kind)} — fullþroskað norm.` : `based on ${r.historyN} of his own ${kindWord(r.kind)} — a mature norm.`)}
+                    </div>
+                    <div>
+                      {isIS
+                        ? "Heimild: Catapult IMA Free Running (GPS-vegalengd) — mælist aðeins utandyra; innanhúss birtist enginn dómur."
+                        : "Source: Catapult IMA Free Running (GPS distance) — measured outdoors only; no verdict indoors."}
                     </div>
                     <div className="text-slate-400">Girard, Micallef &amp; Millet 2011; Morin o.fl. 2011.</div>
                   </div>

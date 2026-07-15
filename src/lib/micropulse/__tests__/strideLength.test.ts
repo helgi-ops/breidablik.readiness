@@ -48,6 +48,20 @@ test("a light session is unmeasurable, and says so — never a green tick", () =
   assert.ok(/three times|þrefalt/i.test(`${r.reason} ${r.reasonIs}`));
 });
 
+test("strides but no distance (indoor) → unmeasurable 'no_distance', not 'too few strides'", () => {
+  const indoor: StrideSession = {
+    date: "2026-06-17",
+    kind: "big_session",
+    highCadenceDistanceM: null, // indoor: no GPS distance
+    highCadenceStrides: 300, // but he clearly ran
+  };
+  const r = assessStrideLength(indoor, HISTORY);
+  assert.equal(r.verdict, "unmeasurable");
+  assert.equal(r.unmeasurableReason, "no_distance");
+  assert.ok(/outdoors/i.test(r.reason), r.reason);
+  assert.ok(/utandyra/i.test(r.reasonIs), r.reasonIs);
+});
+
 test("classifySession uses minutes first, distance only as fallback", () => {
   assert.equal(classifySession(90, 8222), "match");
   assert.equal(classifySession(88, null), "match");
