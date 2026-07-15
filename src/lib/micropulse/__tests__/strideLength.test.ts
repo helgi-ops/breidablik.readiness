@@ -36,6 +36,20 @@ test("the Ágúst Orri 2026-06-16 full match flags shortened at ~-21%", () => {
   assert.ok(/styttri/i.test(r.reasonIs));
 });
 
+test("an impossible stride length is refused as a data problem, not a fatigue verdict", () => {
+  const tiny = match("2026-07-01", 79, 100); // 0.79 m — a toddler's stride
+  const huge = match("2026-07-01", 420, 100); // 4.2 m — impossible
+  for (const s of [tiny, huge]) {
+    const r = assessStrideLength(s, HISTORY);
+    assert.equal(r.verdict, "unmeasurable");
+    assert.equal(r.unmeasurableReason, "implausible");
+    assert.ok(/data problem/i.test(r.reason), r.reason);
+    assert.ok(/gagnavillu/i.test(r.reasonIs), r.reasonIs);
+  }
+  // The real fatigue case (1.90 m) is comfortably inside the envelope and stays a verdict.
+  assert.equal(assessStrideLength(AGUST_0616, HISTORY).verdict, "shortened");
+});
+
 test("a light session is unmeasurable, and says so — never a green tick", () => {
   const light: StrideSession = {
     date: "2026-06-14",

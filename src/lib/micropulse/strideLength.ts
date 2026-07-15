@@ -66,6 +66,19 @@ export const VERDICT_KINDS: SessionKind[] = ["match", "big_session"];
 /** Minimum high-cadence strides for the ratio to be meaningful at all. */
 export const MIN_STRIDES = 50;
 
+/**
+ * Physiologically possible stride length in the high-cadence bands, in metres.
+ * A value outside this is a data-quality artefact — a band or unit mis-config —
+ * not an athlete, and the engine refuses its own number rather than issue a
+ * fatigue verdict from nonsense. Elite match stride length sits ~1.9–2.7 m
+ * (Breiðablik, 331 sessions); 1.0–3.5 m is a generous envelope that only trips
+ * on genuinely broken input, never on a real athlete — including a heavily
+ * fatigued one (Ágúst Orri's real fatigue case was 1.90 m). Same philosophy as
+ * the 37 km/h max-velocity ceiling: reject the impossible number at the source.
+ */
+export const PLAUSIBLE_STRIDE_MIN = 1.0;
+export const PLAUSIBLE_STRIDE_MAX = 3.5;
+
 /** Prior same-type sessions needed before the norm is his rather than the group's. */
 export const MIN_HISTORY = 3;
 export const MATURE_HISTORY = 8;
@@ -123,7 +136,7 @@ export interface StrideResult {
    * high-cadence strides but no running distance (indoor, or GPS not captured):
    * stride length in metres is GPS-derived and OUTDOOR-ONLY.
    */
-  unmeasurableReason?: "no_distance" | "too_few_strides" | "light_session" | "no_history";
+  unmeasurableReason?: "no_distance" | "too_few_strides" | "light_session" | "no_history" | "implausible";
 }
 
 const round = (n: number, dp = 2) => {
@@ -215,6 +228,28 @@ export function assessStrideLength(
       unmeasurableReason: "too_few_strides",
       reason: `Fewer than ${MIN_STRIDES} high-cadence strides — too little running to measure stride length.`,
       reasonIs: `Færri en ${MIN_STRIDES} háhraðaskref — of lítið hlaup til að mæla skreflengd.`,
+    };
+  }
+
+  // Plausibility guard (insurance, not a fix): a stride length outside the
+  // physiologically possible range is a data problem — a mis-configured band or
+  // unit — not the athlete. Refuse it BEFORE comparing to the norm, so the
+  // engine never issues a fatigue verdict from an impossible number. Returns
+  // unmeasurable-with-reason (never a green tick, never a silent drop, never a
+  // "fatigue" flag).
+  if (todayLen < PLAUSIBLE_STRIDE_MIN || todayLen > PLAUSIBLE_STRIDE_MAX) {
+    const xEn = round(todayLen);
+    const xIs = String(xEn).replace(".", ",");
+    return {
+      ...base,
+      verdict: "unmeasurable",
+      unmeasurableReason: "implausible",
+      reason:
+        `Stride length of ${xEn} m is outside the physiologically possible range (1.0–3.5 m). ` +
+        `This points to a data problem — likely a band or unit mis-configuration — not to the athlete. Not used.`,
+      reasonIs:
+        `Skreflengd ${xIs} m er utan þess sem er líffræðilega mögulegt (1,0–3,5 m). ` +
+        `Það bendir til gagnavillu — líklega rangrar banda- eða einingastillingar — ekki til leikmannsins. Ekki notuð.`,
     };
   }
 
