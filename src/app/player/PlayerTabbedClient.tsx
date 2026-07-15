@@ -14,6 +14,7 @@ import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import DevPlayerStrengthTab from "./dev-player-dashboard/DevPlayerStrengthTab";
 import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt";
+import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 import PlayerAccessPanel from "./PlayerAccessPanel";
 import {
   buildDevPlayerRiskViewModel,
@@ -2619,6 +2620,7 @@ export default function DevPlayerClient() {
           Was previously gated to PWA-only which created a chicken-and-egg
           problem and contributed to 17-50% adoption rates on new clubs. */}
       <PWANotificationPrompt />
+      <PlayerPrivacyConsentPrompt />
       {/* PWA bottom navigation bar */}
       {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} />}
     </>

@@ -22,6 +22,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import InstallPrompt from "@/components/client/InstallPrompt";
+import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 
 type Tab = {
   href: string;
@@ -96,6 +97,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
       </div>
 
       <InstallPrompt lang={lang === "EN" ? "EN" : "IS"} />
+      <PlayerPrivacyConsentPrompt />
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-1 py-1.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-2xl grid grid-cols-6">
