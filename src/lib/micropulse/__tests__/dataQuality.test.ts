@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { checkRow } from "../dataQuality";
+import { checkRow, checkConsent } from "../dataQuality";
 import { PLAUSIBLE_STRIDE_MIN, PLAUSIBLE_STRIDE_MAX } from "../strideLength";
 
 /** Only the stride-length fields matter here; the rest are "nothing to check". */
@@ -31,4 +31,35 @@ test("real stride lengths — including the Ágúst Orri fatigue case — are no
 
 test("no stride length to judge → no stride issue (silence, not a false flag)", () => {
   assert.equal(strideIssues(null).length, 0);
+});
+
+// ── Consent gaps ─────────────────────────────────────────────────────────────
+
+test("an under-18 with only a self-consent is REPORTED, never treated as covered", () => {
+  const gap = checkConsent({ isMinor: true, hasActiveConsent: true, grantedByRelationship: "self" });
+  assert.equal(gap?.kind, "minor_self_consent");
+  assert.equal(gap?.actionable, true);
+  assert.ok(/cannot validly consent/i.test(gap!.reason));
+});
+
+test("an under-18 with a guardian consent is covered", () => {
+  for (const rel of ["parent", "guardian"]) {
+    assert.equal(checkConsent({ isMinor: true, hasActiveConsent: true, grantedByRelationship: rel }), null);
+  }
+});
+
+test("unknown DOB is a gap — unknown age is not an adult", () => {
+  const gap = checkConsent({ isMinor: null, hasActiveConsent: true, grantedByRelationship: "self" });
+  assert.equal(gap?.kind, "dob_unknown");
+  assert.ok(/not an adult/i.test(gap!.reason));
+});
+
+test("no consent at all is a gap, whatever the age", () => {
+  for (const m of [true, false, null]) {
+    assert.equal(checkConsent({ isMinor: m, hasActiveConsent: false, grantedByRelationship: null })?.kind, "no_consent");
+  }
+});
+
+test("an adult with their own consent is covered — no noise", () => {
+  assert.equal(checkConsent({ isMinor: false, hasActiveConsent: true, grantedByRelationship: "self" }), null);
 });

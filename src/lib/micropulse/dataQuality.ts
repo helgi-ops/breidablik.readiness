@@ -403,6 +403,88 @@ export function checkRow(inp: RowCheckInput): RowIssue[] {
   return out;
 }
 
+// ── Consent gaps ─────────────────────────────────────────────────────────────
+//
+// A COMPLIANCE gap, not a training gap — but it belongs here for the same reason
+// the feed checks do: the system should say where it is incomplete on day one,
+// not when someone asks. A minor cannot validly consent to health/biometric
+// processing themselves, so an under-18 with only a self-consent is NOT covered,
+// and an unknown DOB means we cannot even tell.
+//
+// This decides nothing: whether to pause processing for a minor without guardian
+// consent is the club's call. It reports.
+
+export type ConsentGapKind =
+  | "dob_unknown"        // cannot tell who may consent
+  | "minor_self_consent" // under 18, but the only consent is their own — invalid
+  | "no_consent";        // no active data-processing consent at all
+
+export interface ConsentGap {
+  kind: ConsentGapKind;
+  /** True when a human needs to act. */
+  actionable: boolean;
+  reason: string;
+  reasonIs: string;
+}
+
+export interface ConsentCheckInput {
+  /** true | false | null — null = DOB unknown (NOT "adult"). */
+  isMinor: boolean | null;
+  /** Is there an active data_processing consent at the current policy version? */
+  hasActiveConsent: boolean;
+  /** Who granted it: 'self' | 'parent' | 'guardian' | 'club_proxy' | null. */
+  grantedByRelationship: string | null;
+}
+
+/**
+ * Pure. The consent gap for ONE player, or null when nothing is wrong.
+ *
+ * Order matters: an under-18 self-consent is reported as the MINOR problem, not
+ * as "consented, fine" — that silent pass is the exact failure the age gate
+ * exists to prevent.
+ */
+export function checkConsent(inp: ConsentCheckInput): ConsentGap | null {
+  const guardianGranted =
+    inp.grantedByRelationship === "parent" || inp.grantedByRelationship === "guardian";
+
+  if (inp.isMinor === true && inp.hasActiveConsent && !guardianGranted) {
+    return {
+      kind: "minor_self_consent",
+      actionable: true,
+      reason:
+        "Under 18, but the consent on file is their own. A minor cannot validly consent to " +
+        "health data processing — a parent or guardian must. This consent is incomplete.",
+      reasonIs:
+        "Undir 18 ára, en samþykkið sem er skráð er þeirra eigið. Ólögráða getur ekki gefið gilt " +
+        "samþykki fyrir vinnslu heilsugagna — foreldri eða forráðamaður þarf að gera það. Þetta samþykki er ófullnægjandi.",
+    };
+  }
+
+  if (!inp.hasActiveConsent) {
+    return {
+      kind: "no_consent",
+      actionable: true,
+      reason: "No active consent to data processing. They are asked each time they open the app.",
+      reasonIs: "Ekkert virkt samþykki fyrir gagnavinnslu. Þau eru spurð í hvert sinn sem appið er opnað.",
+    };
+  }
+
+  if (inp.isMinor == null) {
+    return {
+      kind: "dob_unknown",
+      actionable: true,
+      reason:
+        "Date of birth is missing, so we cannot tell whether they may consent themselves or a " +
+        "guardian must. Unknown age is not an adult.",
+      reasonIs:
+        "Fæðingardag vantar, svo við vitum ekki hvort þau megi samþykkja sjálf eða hvort " +
+        "forráðamaður þarf að gera það. Óþekktur aldur er ekki fullorðinn.",
+    };
+  }
+
+  return null;
+}
+
 /** Worst-first, so the coach reads the thing that matters most. */
 export function sortFeeds(v: FeedVerdict[]): FeedVerdict[] {
   const rank: Record<FeedStatus, number> = {

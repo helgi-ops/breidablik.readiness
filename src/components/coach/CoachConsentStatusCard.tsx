@@ -15,14 +15,15 @@ import { useLang } from "@/lib/lang";
 type Row = {
   playerId: string;
   fullName: string | null;
-  isMinor: boolean;
+  isMinor: boolean | null; // null = DOB unknown, which is NOT "adult"
   hasConsent: boolean;
   relationship: string | null;
   needsGuardian: boolean;
+  dobUnknown: boolean;
 };
 type Payload = {
   players: Row[];
-  summary: { total: number; consented: number; outstanding: number; needsGuardian: number };
+  summary: { total: number; consented: number; outstanding: number; needsGuardian: number; dobUnknown: number };
 };
 
 export default function CoachConsentStatusCard() {
@@ -54,7 +55,8 @@ export default function CoachConsentStatusCard() {
   const { summary, players } = data;
   const outstanding = players.filter((p) => !p.hasConsent);
   const guardianNeeded = players.filter((p) => p.needsGuardian);
-  const allGood = summary.outstanding === 0 && summary.needsGuardian === 0;
+  const dobMissing = players.filter((p) => p.dobUnknown);
+  const allGood = summary.outstanding === 0 && summary.needsGuardian === 0 && summary.dobUnknown === 0;
 
   return (
     <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -74,7 +76,9 @@ export default function CoachConsentStatusCard() {
             allGood ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
           }`}
         >
-          {allGood ? (isIS ? "Allt í lagi" : "All set") : `${summary.outstanding + summary.needsGuardian} ${isIS ? "eftir" : "to do"}`}
+          {allGood
+            ? (isIS ? "Allt í lagi" : "All set")
+            : `${summary.outstanding + summary.needsGuardian + summary.dobUnknown} ${isIS ? "eftir" : "to do"}`}
         </span>
       </div>
 
@@ -106,11 +110,25 @@ export default function CoachConsentStatusCard() {
               {guardianNeeded.length > 0 && (
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
-                    {isIS ? "Ólögráða — vantar samþykki forráðamanns" : "Minors — needs guardian consent"}
+                    {isIS ? "Ólögráða — samþykki forráðamanns vantar (ógilt eins og er)" : "Minors — guardian consent missing (not valid as-is)"}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {guardianNeeded.map((p) => (
                       <span key={p.playerId} className="rounded-full bg-amber-50 px-2 py-0.5 text-[12px] text-amber-800">
+                        {p.fullName ?? "—"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {dobMissing.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {isIS ? "Fæðingardag vantar — vitum ekki hver má samþykkja" : "Date of birth missing — we can't tell who may consent"}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {dobMissing.map((p) => (
+                      <span key={p.playerId} className="rounded-full bg-slate-100 px-2 py-0.5 text-[12px] text-slate-700">
                         {p.fullName ?? "—"}
                       </span>
                     ))}
