@@ -131,7 +131,25 @@ export async function POST(req: Request) {
   const { plan, session } = await resolveNaturalSession(sb, playerId, fromDate);
   if (!plan) return NextResponse.json({ error: "No active plan on that day" }, { status: 400 });
   if (!session) return NextResponse.json({ error: "No session scheduled on that day to move" }, { status: 400 });
-  if (toDate < plan.start_date || toDate > plan.end_date) return NextResponse.json({ error: "New day is outside your plan" }, { status: 400 });
+  // Moving a session EARLIER than the plan begins has no valid context — refuse.
+  if (toDate < plan.start_date) {
+    return NextResponse.json({ error: "New day is before your plan starts" }, { status: 400 });
+  }
+  // Moving a session LATER than the plan currently runs is a normal thing to need,
+  // and blocking it hit the MOST common case rather than an edge one: in the final
+  // week of any plan, every push into next week is by definition past end_date, so
+  // the athlete was offered a Move button that could never succeed. Grow the plan to
+  // cover the new day (same as the trainer path — see
+  // /api/trainer/client/[id]/session-reschedule). The reschedule is stored as an
+  // absolute date the /today resolver honours, so end_date was the only thing the
+  // old guard actually protected. Scoped to this athlete's own plan.
+  if (toDate > plan.end_date) {
+    const { error: extendErr } = await sb
+      .from("individual_training_plans")
+      .update({ end_date: toDate })
+      .eq("id", plan.id);
+    if (extendErr) return NextResponse.json({ error: extendErr.message }, { status: 500 });
+  }
 
   const { error } = await sb
     .from("pt_session_reschedules")
