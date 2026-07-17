@@ -96,7 +96,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { plan, session } = await resolveNaturalSession(sb, clientId, fromDate);
   if (!plan) return NextResponse.json({ error: "No active plan on that day" }, { status: 400 });
   if (!session) return NextResponse.json({ error: "No session scheduled on that day to move" }, { status: 400 });
-  if (toDate < plan.start_date || toDate > plan.end_date) return NextResponse.json({ error: "New day is outside the plan" }, { status: 400 });
+
+  // Moving a session EARLIER than the plan begins has no valid context — refuse.
+  if (toDate < plan.start_date) {
+    return NextResponse.json({ error: "New day is before the plan starts" }, { status: 400 });
+  }
+  // Moving a session LATER than the plan currently runs is a normal coach decision
+  // (e.g. pushing a combo lift into next week). The reschedule is stored as an
+  // absolute date the /today resolver honours, so the only thing the old guard
+  // protected was the plan's end_date field itself. Grow the plan to cover the new
+  // day rather than blocking the move — this is what "out of my plan" was wrongly
+  // rejecting. Trainer path only; the client self-service route keeps its guard,
+  // because extending a plan is a coach decision, not the athlete's.
+  if (toDate > plan.end_date) {
+    const { error: extendErr } = await sb
+      .from("individual_training_plans")
+      .update({ end_date: toDate })
+      .eq("id", plan.id);
+    if (extendErr) return NextResponse.json({ error: extendErr.message }, { status: 500 });
+  }
 
   const { error } = await sb
     .from("pt_session_reschedules")
