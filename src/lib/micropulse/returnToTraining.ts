@@ -1,12 +1,29 @@
 /**
  * Return-to-training engine (pure, testable).
  *
+ * This is a direct implementation of Gabbett's FLOOR / CEILING / TIME framework
+ * (Gabbett, JOSPT 2020, "How Much? How Fast? How Soon?"): safely progress an
+ * athlete from his current capacity (floor) to the capacity his sport demands
+ * (ceiling) over adequate TIME. A large floor→ceiling gap progressed too fast is
+ * the injury risk the paper warns about; too slow leaves him underprepared.
+ *
+ * One honest deviation from the paper, stated so no one mistakes it: Gabbett's
+ * ceiling is the load the SPORT demands. We proxy it with the player's OWN healthy
+ * weekly load (a robust percentile of his healthy weeks). That is a sound, personal
+ * approximation — it asks "get him back to what HE could do", not "to a sport-wide
+ * norm" — but it is not literally the sport-demand ceiling. A player who was
+ * underprepared before injury will be rebuilt only to that prior, possibly modest,
+ * capacity. Raising the ceiling beyond his prior best (Gabbett's "penthouse") is
+ * not modelled here.
+ *
  * Method: aggregate the player's sessions into WEEKS (the natural unit for load
  * accumulation and ACWR), then bridge floor → ceiling week by week.
  *   • Ceiling = his own HEALTHY WEEKLY load — a robust percentile of his healthy
  *     weeks' totals, MATCHES INCLUDED (a normal healthy week has a match), never
  *     injured-window weeks, never a squad average, never a single freak session.
  *   • Floor = his most recent weekly load (may be rehab — that's where he is now).
+ *     A severely deconditioned or freshly injured floor is Gabbett's "basement":
+ *     the detraining curve below models exactly that drop below normal capacity.
  *   • Ramp origin & length scale with the LAYOFF. A player out 10 days barely
  *     detrains — he keeps most of his capacity, so the plan starts high and takes
  *     ~2 weeks; a player out 10 weeks genuinely detrains, so it starts low and
@@ -82,6 +99,8 @@ export type RttInput = {
   headInjury?: boolean;
   riskQualities?: QualityKey[];
   variant?: RttVariant;         // "ima" (Pro) default, or "gps" (Core/Lite — efforts, no IMA)
+  /** Gabbett 2020 tolerance factors — any present ramps the WHOLE plan cautiously. */
+  caution?: RttCautionInput;
 };
 
 export function injuryRiskProfile(types: string[]): { category: string; riskQualities: QualityKey[]; label: { en: string; is: string } } {
@@ -123,10 +142,99 @@ export type RttResult = {
   confidence: "high" | "medium" | "low";
   variant: RttVariant;           // which data axis this plan is built on
   qualityOrder: QualityKey[];    // the qualities in play for this variant (render order)
+  /**
+   * Why this player climbs at the caution rate, if he does — so the ramp is never
+   * silently slower. The coach sees the factor and can override it with a logged
+   * reason if he disagrees.
+   */
+  rampCaution: { active: boolean; rate: number; standardRate: number; factors: RttCautionFactor[] };
 };
 
 const RAMP = 1.10;
 const RAMP_CAUTION = 1.07;
+
+/**
+ * Gabbett 2020's CAUTION, applied per PLAYER (the rates above are per quality):
+ *
+ *   "Very young and older athletes, and those with a long injury history, poor
+ *    training history, musculoskeletal deficiencies, and lower strength and
+ *    aerobic fitness, may have poorer tolerance of rapid increases in training
+ *    load."
+ *
+ * The paper names risk FACTORS, not weights — so this is a flat OR, not a
+ * weighted score. Inventing coefficients the evidence doesn't give would be the
+ * confident-looking guess this system keeps refusing. Any factor present → the
+ * caution rate the engine ALREADY uses; we do not invent a third, slower rate.
+ *
+ * It is a conservative DEFAULT, not a prediction — it never claims who will get
+ * hurt (load describes, it does not predict). Erring slow costs a few days;
+ * erring fast is the risk the paper is about.
+ *
+ * Monotonic by construction: a known factor can only slow the ramp. Unknowns
+ * (e.g. no DOB) are NOT factors — we never guess a player into a slower ramp,
+ * and never assume the unknown is safe either; the gap is reported elsewhere.
+ */
+/** "Very young" / "older" — the paper gives no numbers; confirm with S&C staff. */
+export const CAUTION_YOUNG_AGE = 18;
+export const CAUTION_OLDER_AGE = 30;
+/** "Long injury history", proxied by frequency (we lack career-length history). */
+export const CAUTION_INJURY_COUNT_12M = 2;
+/** Healthy weeks needed before the ceiling rests on enough data. Same bar as "high" confidence. */
+const HEALTHY_WEEKS_HIGH_CONFIDENCE = 4;
+
+export type RttCautionFactorKind = "prior_same_region" | "injury_frequency" | "age" | "thin_history";
+export type RttCautionFactor = { kind: RttCautionFactorKind; en: string; is: string };
+
+export type RttCautionInput = {
+  /** A prior injury to the region THIS return involves — the clearest case. */
+  priorSameRegion?: { when: string; label?: string | null } | null;
+  /** Injuries in the last 12 months (proxy for a long injury history). */
+  injuriesLast12Months?: number | null;
+  /** Age in years. null/undefined = UNKNOWN → not a factor. Never guessed. */
+  ageYears?: number | null;
+};
+
+/**
+ * Pure. Which of Gabbett's factors are present. Empty = ramp at the standard rate.
+ * `healthyWeeks` is the engine's own ceiling evidence: a ceiling built on little
+ * data is itself uncertain, so climb toward it conservatively.
+ */
+export function rampCautionFactors(c: RttCautionInput | undefined, healthyWeeks: number): RttCautionFactor[] {
+  const out: RttCautionFactor[] = [];
+  const prior = c?.priorSameRegion;
+  if (prior) {
+    const what = prior.label ? `${prior.label} ` : "";
+    out.push({
+      kind: "prior_same_region",
+      en: `a prior ${what}injury to the same area (${prior.when})`,
+      is: `fyrri ${what}meiðsli á sama svæði (${prior.when})`,
+    });
+  }
+  const n = c?.injuriesLast12Months ?? 0;
+  if (n >= CAUTION_INJURY_COUNT_12M) {
+    out.push({
+      kind: "injury_frequency",
+      en: `${n} injuries in the last 12 months`,
+      is: `${n} meiðsli á síðustu 12 mánuðum`,
+    });
+  }
+  const age = c?.ageYears; // null/undefined = unknown → not a factor
+  if (age != null && (age < CAUTION_YOUNG_AGE || age > CAUTION_OLDER_AGE)) {
+    out.push({
+      kind: "age",
+      en: age < CAUTION_YOUNG_AGE ? `he is ${age} — very young athletes tolerate fast jumps less well` : `he is ${age} — older athletes tolerate fast jumps less well`,
+      is: age < CAUTION_YOUNG_AGE ? `hann er ${age} ára — mjög ungir leikmenn þola hröð stökk verr` : `hann er ${age} ára — eldri leikmenn þola hröð stökk verr`,
+    });
+  }
+  if (healthyWeeks < HEALTHY_WEEKS_HIGH_CONFIDENCE) {
+    out.push({
+      kind: "thin_history",
+      en: `only ${healthyWeeks} healthy week${healthyWeeks === 1 ? "" : "s"} on record — the ceiling itself is uncertain`,
+      is: `aðeins ${healthyWeeks} heil${healthyWeeks === 1 ? " vika" : "ar vikur"} skráðar — þakið sjálft er óvisst`,
+    });
+  }
+  return out;
+}
 const P_CEILING = 0.85;
 const REINTRO_FRAC = 0.30;
 const REINTRO_CAUTION = 0.20;
@@ -258,7 +366,18 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
     imbalanced: currentLeftPct != null && healthyLeftPct != null && Math.abs(currentLeftPct - healthyLeftPct) >= ASYM_TOLERANCE,
   };
 
-  const confidence: RttResult["confidence"] = healthyWeeks.length >= 4 ? "high" : healthyWeeks.length >= 2 ? "medium" : "low";
+  const confidence: RttResult["confidence"] = healthyWeeks.length >= HEALTHY_WEEKS_HIGH_CONFIDENCE ? "high" : healthyWeeks.length >= 2 ? "medium" : "low";
+
+  // Gabbett 2020: players the evidence flags as less tolerant of rapid increases
+  // climb at the caution rate — the whole plan, not just the injury's qualities.
+  const cautionFactors = rampCautionFactors(inp.caution, healthyWeeks.length);
+  const playerCaution = cautionFactors.length > 0;
+  const rampCaution: RttResult["rampCaution"] = {
+    active: playerCaution,
+    rate: playerCaution ? RAMP_CAUTION : RAMP,
+    standardRate: RAMP,
+    factors: cautionFactors,
+  };
 
   // ── Detraining-scaled ramp origin & length ─────────────────────────────────
   // Plan length must track the LAYOFF, not how deep in rehab the measured floor
@@ -295,7 +414,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const layoff: RttLayoff = { days: hasLayoff ? Math.round(inp.layoffDays as number) : null, retainedPct: retained != null ? Math.round(retained * 100) : null, rampWeeks: weeks };
 
   if (inp.currentlyInjured && !inp.rttStartDate) {
-    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, adherence: [], confidence, variant, qualityOrder: order };
+    return { currentlyInjured: true, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: null, adherence: [], confidence, variant, qualityOrder: order, rampCaution };
   }
 
   const unlockWeek = (qi: number) => Math.max(1, Math.round(1 + (qi * (weeks - 1)) / Math.max(1, order.length - 1)));
@@ -317,7 +436,8 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
       const ceiling = baseline[q] || 0;
       const locked = w < uw;
       const risky = riskSet.has(q);
-      const ramp = risky ? RAMP_CAUTION : RAMP;
+      // Either reason to be careful slows this quality — never speeds it up.
+      const ramp = risky || playerCaution ? RAMP_CAUTION : RAMP;
       const reintroFrac = risky ? REINTRO_CAUTION : REINTRO_FRAC;
       const origin = rampFrom[q];
       const prevArr = targetsByQuality[q];
@@ -335,6 +455,13 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
         const firstExposureCap = ceiling > 0 ? ceiling * FIRST_WEEK_CEIL_FRAC : Infinity;
         target = Math.min(ceiling || startFromOrigin, firstExposureCap, Math.max(startFromOrigin, origin > 0.05 * ceiling ? startFromOrigin : reintro));
       } else target = Math.min(ceiling, prev * ramp);
+      // SAFETY: a return-to-training plan must never prescribe LESS than the player
+      // is already tolerating. Without this, the first-exposure cap (90% of ceiling)
+      // pulled a fully-recovered athlete who is already training AT his ceiling DOWN
+      // to 90% — i.e. the plan would de-train a healthy player. The cap exists to
+      // stop a JUMP to 100%, never to force a reduction. Locked qualities are held
+      // at the floor by design and are unaffected.
+      if (!locked) target = Math.max(target, floor[q]);
       target = round(target, QLABEL[q].dp);
       prevArr.push(target);
 
@@ -394,7 +521,7 @@ export function computeReturnToTraining(inp: RttInput): RttResult {
   const layoffNote = layoff.days != null ? ` · ${layoff.days}-day layoff (~${layoff.retainedPct}% capacity retained)` : "";
   const verdict = `Week ${currentWeek} of ${weeks} · ${currentWeek === 1 ? "rebuild" : "rebuilding"} ${w1.join(" + ") || "weekly load"}${layoffNote}` + (inp.headInjury ? " · load is a ceiling (symptom-limited return)" : "");
 
-  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, currentWeek, weeks: weekTargets }, adherence, confidence, variant, qualityOrder: order };
+  return { currentlyInjured: inp.currentlyInjured, unit: "week", baseline, floor, rampFrom, layoff, asymmetry, plan: { verdict, currentWeek, weeks: weekTargets }, adherence, confidence, variant, qualityOrder: order, rampCaution };
 }
 
 export { QLABEL as RTT_QUALITY_LABELS };

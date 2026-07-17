@@ -9,6 +9,7 @@ import "server-only";
  */
 
 import { computeReturnToTraining, injuryRiskProfile, type RttSession, type RttResult } from "./returnToTraining";
+import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { oneRowPerDate } from "./load/oneRowPerDate";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
@@ -40,16 +41,18 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
   const now = new Date().toISOString().slice(0, 10);
 
   // ── Injury windows (union of both tables) ──────────────────────────────
-  const [ieRes, piRes] = await Promise.all([
-    sb.from("injury_events").select("injury_date, injury_type, return_date, is_active").eq("player_id", playerId),
+  const [ieRes, piRes, playerRes] = await Promise.all([
+    sb.from("injury_events").select("injury_date, injury_type, body_side, return_date, is_active").eq("player_id", playerId),
     sb.from("player_injuries").select("injury_date, injury_type, status, rtp_stage, estimated_return_date, actual_return_date").eq("player_id", playerId),
+    // DOB only, for the age factor. Never logged; only the derived age is used.
+    sb.from("players").select("date_of_birth").eq("id", playerId).maybeSingle(),
   ]);
   const windows: RttWin[] = [];
   // player_injuries (the RTP workflow) is AUTHORITATIVE — active = status !== "cleared".
   // A passed estimated return date does NOT close an injury. injury_events.is_active
   // can be stale, so it only marks "active" for players with no RTP record.
   const hasPi = (piRes.data ?? []).length > 0;
-  for (const r of (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; return_date: string | null; is_active: boolean | null }>) {
+  for (const r of (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; body_side: string | null; return_date: string | null; is_active: boolean | null }>) {
     if (!r.injury_date) continue;
     const ieOpen = r.is_active !== false && (!r.return_date || r.return_date >= now);
     windows.push({ start: r.injury_date, end: ieOpen ? now : (r.return_date ?? now), type: r.injury_type ?? "injury", source: "injury_events", isActive: !hasPi && ieOpen });
@@ -160,7 +163,36 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
   const layoffEnd = rttStartDate ?? (governing && !currentlyInjured ? governing.end : now);
   const layoffDays = governing ? Math.max(0, Math.round((Date.parse(layoffEnd) - Date.parse(governing.start)) / 86400000)) : null;
 
-  const result = computeReturnToTraining({ sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury, riskQualities: profile.riskQualities, variant });
+  // ── Gabbett 2020 tolerance factors ─────────────────────────────────────────
+  // Facts are gathered here (they need the DB); the RULE that turns them into a
+  // ramp rate lives in the pure engine, so it stays one transparent, testable place.
+  const ieRows = (ieRes.data ?? []) as Array<{ injury_date: string; injury_type: string | null; body_side: string | null }>;
+  const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  const injuriesLast12Months = ieRows.filter((r) => r.injury_date && r.injury_date >= yearAgo).length;
+
+  // A prior injury to the SAME region as the one he's returning from — matched by
+  // the engine's own type→category map, so there is no second mapping to drift.
+  const priorSameRegion = (() => {
+    if (profile.category === "general" || profile.category === "head") return null;
+    const priors = ieRows
+      .filter((r) => r.injury_date && r.injury_date !== governing?.start) // not the current one
+      .filter((r) => injuryRiskProfile([r.injury_type ?? ""]).category === profile.category)
+      .sort((a, b) => b.injury_date.localeCompare(a.injury_date));
+    const p = priors[0];
+    if (!p) return null;
+    const side = p.body_side && p.body_side !== "na" ? `${p.body_side} ` : "";
+    return { when: p.injury_date, label: `${side}${profile.category}` };
+  })();
+
+  const ageYears = deriveAgeYears(
+    (playerRes.data as { date_of_birth?: string | null } | null)?.date_of_birth ?? null,
+  ); // null = DOB unknown → not a factor; the gap is reported by data-quality
+
+  const result = computeReturnToTraining({
+    sessions, refDate: now, rttStartDate, currentlyInjured, layoffDays, headInjury,
+    riskQualities: profile.riskQualities, variant,
+    caution: { priorSameRegion, injuriesLast12Months, ageYears },
+  });
 
   // Fold IMA-only risk qualities into "efforts" on the GPS variant so the UI
   // references qualities that exist in the plan.

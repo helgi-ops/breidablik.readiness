@@ -73,6 +73,13 @@ type Resp = {
   confidence: "high" | "medium" | "low";
   variant?: "ima" | "gps";
   qualityOrder?: Quality[];
+  /** Why this player climbs at the caution rate, if he does (Gabbett 2020). */
+  rampCaution?: {
+    active: boolean;
+    rate: number;
+    standardRate: number;
+    factors: Array<{ kind: string; en: string; is: string }>;
+  };
   error?: string;
 };
 type AdherenceCell = { quality: Quality; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
@@ -440,10 +447,10 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           {showMethod && (
             <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
               <div className="space-y-3">
-                <MethodRow term={is ? "Loftið" : "The ceiling"} cite="Gabbett 2016"
+                <MethodRow term={is ? "Loftið" : "The ceiling"} cite="Gabbett 2020 · Gabbett 2016"
                   body={is
-                    ? `Loftið er HANS eigið heilbrigða vikuálag — robust hundraðshluti (85.) af heilbrigðu vikunum hans, leikir meðtaldir${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} álag/viku)` : ""}. Aldrei liðsmeðaltal, aldrei ein stök æfing. Byggt á ${data.baseline.builtFromHealthyWeeks} heilbrigðum vikum.`
-                    : `The ceiling is HIS own healthy weekly load — a robust percentile (85th) of his healthy weeks, matches included${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} load/week)` : ""}. Never a squad average, never a single session. Built from ${data.baseline.builtFromHealthyWeeks} healthy weeks.`} />
+                    ? `Loftið er HANS eigið heilbrigða vikuálag — robust hundraðshluti (85.) af heilbrigðu vikunum hans, leikir meðtaldir${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} álag/viku)` : ""}. Aldrei liðsmeðaltal, aldrei ein stök æfing. Byggt á ${data.baseline.builtFromHealthyWeeks} heilbrigðum vikum. Athugið: Gabbett skilgreinir loftið sem getuna sem íþróttin krefst; við nálgumst það sem hans eigin heilbrigða álag — traust nálgun, en ekki alhliða krafa.`
+                    : `The ceiling is HIS own healthy weekly load — a robust percentile (85th) of his healthy weeks, matches included${data.baseline.volume > 0 ? ` (${f0(data.baseline.volume)} load/week)` : ""}. Never a squad average, never a single session. Built from ${data.baseline.builtFromHealthyWeeks} healthy weeks. Note: Gabbett defines the ceiling as the load the SPORT demands; we proxy it with his own healthy load — a sound approximation, not the sport-wide requirement.`} />
                 <MethodRow term="ACWR" cite="Gabbett 2017 · Impellizzeri 2020"
                   body={is
                     ? "Bráða:krónískt álag — hversu stórt stökk vikan er miðað við nýlegt meðaltal. Við höldum vikulegri aukningu hóflegri (~+10%). ACWR lýsir stökk-STÆRÐ / óvönu áreiti — það er EKKI meiðsla-spá."
@@ -453,6 +460,12 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                     body={is
                       ? `Álagsþol dvínar með fjarveru. Eftir ${data.layoff.days} daga heldur hann ~${data.layoff.retainedPct}% af þolinu, svo planið byrjar þaðan og tekur ${data.layoff.rampWeeks} vikur. Stutt fjarvera → byrjar hátt, fáar vikur.`
                       : `Capacity fades with time out. After ${data.layoff.days} days he retains ~${data.layoff.retainedPct}%, so the plan starts there and takes ${data.layoff.rampWeeks} weeks. A short layoff → starts high, few weeks.`} />
+                )}
+                {data.rampFrom && data.baseline.volume > 0 && (
+                  <MethodRow term={is ? "Vikuálagið — reikningurinn" : "The weekly load — the arithmetic"} cite="Mujika & Padilla 2000 · Gabbett 2016"
+                    body={is
+                      ? `Þak ${f0(data.baseline.volume)} (85. hundraðshluti heilbrigðra vikna) · gólf ${f0(data.floor.volume)} (miðgildi síðustu 3 vikna)${data.layoff?.retainedPct != null ? ` · hélt ${data.layoff.retainedPct}% eftir ${data.layoff.days} daga` : ""} → rampan byrjar á ${f0(data.rampFrom.volume)} (${Math.round((data.rampFrom.volume / data.baseline.volume) * 100)}% af þaki) og klifrar +10% á viku upp í þakið → ${data.layoff?.rampWeeks ?? "—"} vikur. Lykilatriði: rampan byrjar EKKI á gólfinu — hún hallar frá gólfinu í átt að því álagsþoli sem hélst. Þess vegna byggist stutt fjarvera hratt upp og löng hægt, jafnvel þótt báðir séu í sama rehab-álagi í dag. Engin gæði byrja á 100% (fyrsta vika þökuð við 90% af þaki).`
+                      : `Ceiling ${f0(data.baseline.volume)} (85th percentile of his healthy weeks) · floor ${f0(data.floor.volume)} (median of his last 3 weeks)${data.layoff?.retainedPct != null ? ` · retained ${data.layoff.retainedPct}% after ${data.layoff.days} days` : ""} → the ramp starts at ${f0(data.rampFrom.volume)} (${Math.round((data.rampFrom.volume / data.baseline.volume) * 100)}% of the ceiling) and climbs +10%/week to the ceiling → ${data.layoff?.rampWeeks ?? "—"} weeks. Key point: the ramp does NOT start at the floor — it leans from the floor toward the capacity he retained. That is why a short layoff rebuilds fast and a long one slowly, even if both are doing the same rehab load today. No quality debuts at 100% (week 1 is capped at 90% of the ceiling).`} />
                 )}
                 <MethodRow term={is ? "Röðin (stigmögnun)" : "The order (staging)"} cite="Taberner 2019 · McBurnie 2022"
                   body={is
@@ -464,6 +477,17 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
                       ? `Fyrir þetta meiðsli aukast lykil-endurmeiðsla-gæðin (${data.injuryProfile.riskQualities.map((q) => LABEL[q].is).join(", ")}) HÆGAR (7%/viku) og byrja lægra.`
                       : `For this injury the key re-injury qualities (${data.injuryProfile.riskQualities.map((q) => LABEL[q].en).join(", ")}) ramp SLOWER (7%/week) and start lower.`} />
                 )}
+                {/* Ramp rate — never a silently slower climb. If this player is on
+                    the caution rate, the coach sees exactly which factor put him
+                    there, and can override it with a logged reason. */}
+                <MethodRow term={is ? "Hraði stigmögnunar" : "Ramp rate"} cite="Gabbett 2020"
+                  body={data.rampCaution?.active
+                    ? (is
+                        ? `Hækkar um 7%/viku í stað 10% — ${data.rampCaution.factors.map((f) => f.is).join("; ")}. Gabbett 2020 varar við að leikmenn með þessa þætti þoli hröð stökk verr. Þetta er varfærin sjálfgefin stilling, ekki spá um meiðsli.`
+                        : `Climbing at 7%/week rather than 10% — ${data.rampCaution.factors.map((f) => f.en).join("; ")}. Gabbett 2020 cautions that players with these factors tolerate rapid increases less well. This is a conservative default, not a prediction.`)
+                    : (is
+                        ? "Hækkar um 10%/viku — engir þættir sem Gabbett 2020 tengir við verri þol gegn hröðum stökkum (fyrri meiðsli á sama svæði, tíð meiðsli, mjög ungur/eldri, þunn saga)."
+                        : "Climbing at the standard 10%/week — none of the factors Gabbett 2020 links to poorer tolerance of rapid increases are present (prior injury to the same area, frequent injuries, very young/older, thin history).")} />
                 {data.headInjury && (
                   <MethodRow term={is ? "Höfuðáverki" : "Head injury"} cite="HIA / GRTP"
                     body={is

@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { computeReturnToTraining, injuryRiskProfile, retainedFraction, QUALITY_ORDER, QUALITY_ORDER_GPS, type RttSession } from "../returnToTraining";
+import { computeReturnToTraining, injuryRiskProfile, retainedFraction, rampCautionFactors, QUALITY_ORDER, QUALITY_ORDER_GPS, type RttSession } from "../returnToTraining";
 
 function session(date: string, o: Partial<RttSession> = {}): RttSession {
   return { date, injured: false, isMatch: false, estimated: false, load: 480, distance: 6000, hsr: 900, sprint: 300, stride: 120, strideTop: 400, accel: 45, decel: 40, decelHigh: 15, cod: 210, codLeft: 110, codRight: 100, efforts: 120, topSpeed: 30, ...o };
@@ -205,4 +205,79 @@ test("a pod-estimated session counts toward the ramp's actual load but NOT the h
   const volReal = w1real.cells.find((c) => c.quality === "volume")!.actual;
   assert.equal(volEst, volReal + 500);
   assert.equal(w1.estimatedSessions, 1);
+});
+
+// ── Gabbett 2020: individualised ramp rate ───────────────────────────────────
+// A conservative default for players the evidence flags as less tolerant of rapid
+// increases — never a prediction, never a silent slowdown.
+
+test("a matching prior injury ramps at 7%/week instead of 10%, and says why", () => {
+  const r = computeReturnToTraining({
+    sessions: fixture(), ...START, layoffDays: 30,
+    caution: { priorSameRegion: { when: "2026-05-01", label: "left hamstring" }, injuriesLast12Months: 1, ageYears: 24 },
+  });
+  assert.equal(r.rampCaution.active, true);
+  assert.equal(r.rampCaution.rate, 1.07);
+  assert.equal(r.rampCaution.standardRate, 1.10);
+  const f = r.rampCaution.factors.find((x) => x.kind === "prior_same_region");
+  assert.ok(f, "expected the prior-injury factor");
+  assert.ok(/left hamstring/.test(f!.en), f!.en);
+  assert.ok(/2026-05-01/.test(f!.en), f!.en);
+  assert.ok(f!.is.length > 0, "the reason must exist in Icelandic too");
+});
+
+test("a clean 28-year-old with a full history ramps at the standard 10%", () => {
+  const r = computeReturnToTraining({
+    sessions: fixture(), ...START, layoffDays: 30,
+    caution: { priorSameRegion: null, injuriesLast12Months: 1, ageYears: 28 },
+  });
+  assert.equal(r.rampCaution.active, false);
+  assert.equal(r.rampCaution.rate, 1.10);
+  assert.deepEqual(r.rampCaution.factors, []);
+});
+
+test("unknown DOB is NOT a factor — we never guess a player into a slower ramp", () => {
+  const r = computeReturnToTraining({
+    sessions: fixture(), ...START, layoffDays: 30,
+    caution: { priorSameRegion: null, injuriesLast12Months: 0, ageYears: null },
+  });
+  assert.equal(r.rampCaution.active, false);
+  assert.ok(!r.rampCaution.factors.some((f) => f.kind === "age"));
+});
+
+test("the age band flags the very young and the older, not the middle", () => {
+  const flagged = (ageYears: number | null) =>
+    rampCautionFactors({ ageYears, injuriesLast12Months: 0 }, 4).some((f) => f.kind === "age");
+  assert.equal(flagged(17), true);
+  assert.equal(flagged(18), false);
+  assert.equal(flagged(28), false);
+  assert.equal(flagged(30), false);
+  assert.equal(flagged(31), true);
+  assert.equal(flagged(null), false); // unknown ≠ risky
+});
+
+test("two injuries in 12 months is a factor; one is not", () => {
+  const flagged = (n: number) =>
+    rampCautionFactors({ injuriesLast12Months: n, ageYears: 25 }, 4).some((f) => f.kind === "injury_frequency");
+  assert.equal(flagged(1), false);
+  assert.equal(flagged(2), true);
+});
+
+test("a thin healthy history ramps cautiously — the ceiling itself is uncertain", () => {
+  const thin = (weeks: number) =>
+    rampCautionFactors({ ageYears: 25, injuriesLast12Months: 0 }, weeks).some((f) => f.kind === "thin_history");
+  assert.equal(thin(3), true);
+  assert.equal(thin(4), false); // same bar as "high" confidence
+});
+
+test("the caution rate reaches the plan — targets climb slower, never faster", () => {
+  const base = { sessions: fixture(), ...START, layoffDays: 60 };
+  const clean = computeReturnToTraining({ ...base, caution: { ageYears: 25, injuriesLast12Months: 0 } });
+  const cautious = computeReturnToTraining({ ...base, caution: { ageYears: 33, injuriesLast12Months: 0 } });
+  const vol = (r: typeof clean, w: number) =>
+    r.plan!.weeks.find((x) => x.week === w && x.quality === "volume")?.target ?? 0;
+  assert.equal(clean.rampCaution.active, false);
+  assert.equal(cautious.rampCaution.active, true);
+  // Monotonic: a known risk factor can only slow the climb.
+  for (const w of [2, 3, 4]) assert.ok(vol(cautious, w) <= vol(clean, w), `week ${w}: ${vol(cautious, w)} > ${vol(clean, w)}`);
 });
