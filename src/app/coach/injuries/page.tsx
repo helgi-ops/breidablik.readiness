@@ -20,6 +20,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
 import AssignRehabModal from "@/components/coach/AssignRehabModal";
+import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 
 type InjuryType =
   | "hamstring" | "calf" | "groin" | "quad" | "hip"
@@ -658,7 +659,11 @@ function InjuryRow({ injury, playerName, lang, teamId }: { injury: InjuryEvent; 
               Pre-fills player + injury_event_id so the modal lands
               ready to assign with rehab/prehab category preset. */}
           {teamId && (
-            <div className="mb-3 flex justify-end">
+            <div className="mb-3 flex items-center justify-end gap-2">
+              {/* Send a recovery PROTOCOL (e.g. the ramping hamstring) — lands on
+                  the player's /player/recovery-protocols. Separate from the rehab
+                  TEMPLATE assign below (which lands as a Today session). */}
+              <CoachAssignProtocolButton playerId={injury.player_id} />
               <button
                 type="button"
                 onClick={() => setRehabModalOpen(true)}
