@@ -71,11 +71,17 @@ export async function POST(
 
   const { data: protocol } = await supabase
     .from("recovery_protocols")
-    .select("id, category")
+    .select("id, category, team_id")
     .eq("slug", slug)
     .eq("active", true)
     .maybeSingle();
   if (!protocol?.id) return NextResponse.json({ error: "Unknown protocol" }, { status: 404 });
+  // A team-scoped protocol may only be assigned within that team — never assign
+  // another club's protocol by guessing its slug.
+  const scopedTeam = (protocol as { team_id?: string | null }).team_id ?? null;
+  if (scopedTeam && scopedTeam !== playerCheck.team_id) {
+    return NextResponse.json({ error: "Protocol not available for this team" }, { status: 403 });
+  }
 
   // Default dueAt: end of today (local-ish — just +12h from now to land same day)
   const dueAt = body.dueAt ?? new Date(Date.now() + 12 * 3600_000).toISOString();

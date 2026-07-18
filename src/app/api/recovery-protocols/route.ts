@@ -18,6 +18,7 @@ const ALLOWED_CATEGORIES: ReadonlyArray<RecoveryProtocolCategory> = [
   "pre_match",
   "travel",
   "general",
+  "rehab",
 ];
 
 export async function GET(req: NextRequest) {
@@ -34,6 +35,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
+  // A team-scoped protocol (team_id set) is only offered to that team; global
+  // protocols (team_id NULL) are offered to everyone. This mirrors the coach
+  // reference page's Breiðablik gate, enforced at the data layer.
+  const { data: prof } = await supabase
+    .from("profiles").select("team_id").eq("id", userRes.user.id).maybeSingle();
+  const viewerTeamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
+
   const url = new URL(req.url);
   const categoryParam = url.searchParams.get("category");
   const category =
@@ -49,6 +57,11 @@ export async function GET(req: NextRequest) {
     .eq("active", true)
     .order("category", { ascending: true })
     .order("title", { ascending: true });
+
+  // Global protocols, plus this viewer's own team-scoped ones.
+  query = viewerTeamId
+    ? query.or(`team_id.is.null,team_id.eq.${viewerTeamId}`)
+    : query.is("team_id", null);
 
   if (category) query = query.eq("category", category);
 

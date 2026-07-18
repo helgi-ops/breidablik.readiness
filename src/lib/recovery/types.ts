@@ -10,7 +10,8 @@ export type RecoveryProtocolCategory =
   | "md_plus_1"
   | "pre_match"
   | "travel"
-  | "general";
+  | "general"
+  | "rehab";
 
 export type RecoveryEvidenceTier =
   | "strong"
@@ -57,6 +58,7 @@ export const CATEGORY_LABELS: Record<RecoveryProtocolCategory, string> = {
   pre_match: "Pre-match",
   travel: "Travel",
   general: "General",
+  rehab: "Injury rehab",
 };
 
 export const EVIDENCE_LABELS: Record<RecoveryEvidenceTier, string> = {
