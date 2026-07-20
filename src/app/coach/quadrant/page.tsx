@@ -517,6 +517,19 @@ export default function CoachQuadrantPage() {
             }`}>
               {isLite ? "Gabbett 2016 · Volume axis" : "Gabbett 2017 · Full axis"}
             </span>
+            {/* Concept credit, distinct from the axis math above: the quadrant
+                idea of reading load against response ("data everywhere, insight
+                nowhere") is Buchheit 2025. Our axes are ACWR (Gabbett); the
+                tooltip keeps that distinction honest rather than implying we
+                reproduce that paper's exact load-vs-response axes. */}
+            <span
+              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600"
+              title={lang === "IS"
+                ? "Quadrant-vöktunaraðferðin (álag lesið á móti svörun) er Buchheit o.fl. 2025. Ásarnir hér eru ACWR (Gabbett); við endurgerum ekki nákvæmu ásana úr þeirri grein."
+                : "The quadrant monitoring approach (reading load against response) is Buchheit et al. 2025. The axes here are ACWR (Gabbett); we do not reproduce that paper's exact load-vs-response axes."}
+            >
+              Buchheit 2025 · Quadrant model
+            </span>
           </div>
           <PagePurpose
             en="spot who is in a high-load / low-fitness risk zone at a glance"
