@@ -65,14 +65,22 @@ export default function TeamSwitcher({ currentTeamId, onSwitch, variant = "defau
       // every team past ~position 50 (e.g. HK at physical position 79 vanished
       // from the switcher while Keflavík at 17 showed). Small batches keep each
       // URL short so every team comes back regardless of how many there are.
-      const CHUNK = 40;
+      // Smaller batches keep each URL comfortably short (30 UUIDs ≈ 1.2 KB), and a
+      // failed batch must NOT wipe the whole switcher — a staff coach on ~100 teams
+      // saw the switcher vanish entirely because one batch erroring hit `return`
+      // and left `teams` empty (which the render treats as "only one team → hide").
+      // Skip a bad batch and keep whatever resolved so the switcher still shows.
+      const CHUNK = 30;
       const teamRows: Array<{ id: string; name: string; sport: string; team_type: string; gender: string | null }> = [];
       for (let i = 0; i < teamIds.length; i += CHUNK) {
         const { data: batch, error: batchErr } = await supabase
           .from("teams")
           .select("id, name, sport, team_type, gender")
           .in("id", teamIds.slice(i, i + CHUNK));
-        if (batchErr) return;
+        if (batchErr) {
+          console.error("TeamSwitcher batch fetch error (skipping batch):", batchErr);
+          continue;
+        }
         if (batch) teamRows.push(...batch);
       }
       if (teamRows.length === 0) return;
