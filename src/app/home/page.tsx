@@ -794,7 +794,7 @@ export default function HomeLanding() {
             <Link href="/pricing" className="text-neutral-400 hover:text-white">
               {t.footer.pricing}
             </Link>
-            <Link href="/features" className="text-neutral-400 hover:text-white">
+            <Link href="/#platform" className="text-neutral-400 hover:text-white">
               {t.footer.features}
             </Link>
             <Link href="/blog" className="text-neutral-400 hover:text-white">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { MICROPULSE_PRODUCT_IDENTITY } from "@/lib/micropulse/product";
 
 type Lang = "IS" | "EN";
-type PlanKey = "free" | "pro" | "elite";
+type PlanKey = "free" | "lite" | "pro" | "elite";
 
 const COPY = {
   EN: {
@@ -900,6 +900,7 @@ export default function PricingPage() {
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlan(e.target.value as PlanKey)}
                   >
                     <option value="free">Free</option>
+                    <option value="lite">Lite (Club)</option>
                     <option value="pro">Pro</option>
                     <option value="elite">Elite</option>
                   </select>
