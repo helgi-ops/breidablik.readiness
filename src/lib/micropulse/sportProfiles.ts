@@ -133,8 +133,8 @@ export const SPORT_PROFILES: Record<SportId, SportProfile> = {
     ],
     hasSsgCalculator: false,
     hasGpsIntegration: true,
-    notesIS: "Player Load, IMA stefnubreytingar, hröðun/hægðun og Max Velocity frá Catapult innanhúss. Hraðasvið eiga ekki við innanhúss.",
-    notesEN: "Player Load, IMA changes of direction, accel/decel and Max Velocity from Catapult indoor. Velocity bands not applicable indoors.",
+    notesIS: "Virkar án mælitækja: dagleg líðankönnun + sRPE-álag knýja readiness, álagsgreiningu og meiðslavöktun. Bætir þú Catapult IMA við síðar: Player Load, IMA stefnubreytingar, hröðun/hægðun og stökk — sjálfkrafa greint. Hraðasvið eiga ekki við innanhúss.",
+    notesEN: "Works with no wearables: daily check-in + sRPE load drive readiness, load intelligence and injury monitoring. Add Catapult IMA later and it auto-unlocks Player Load, IMA change-of-direction, accel/decel and jumps. Velocity bands don't apply indoors.",
   },
 
 };

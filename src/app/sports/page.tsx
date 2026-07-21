@@ -114,6 +114,90 @@ export default function SportsPage() {
           })}
         </div>
 
+        {/* ── Hardware ladder: no wearables today → add IMA later ── */}
+        {/* Indoor clubs (basketball) have no GPS and usually no IMA. The point
+            here is that MicroPulse starts with zero hardware and the pod metrics
+            are an optional, auto-detected upgrade — never a prerequisite. */}
+        <div className="mb-14 rounded-2xl border border-zinc-200 bg-white p-6">
+          <h2 className="text-xl font-bold text-zinc-900 mb-1">
+            {lang === "IS" ? "Byrjaðu án mælitækja — bættu IMA við síðar" : "Start with no wearables — add IMA later"}
+          </h2>
+          <p className="text-sm text-zinc-500 mb-5">
+            {lang === "IS"
+              ? "Sérstaklega fyrir innanhússíþróttir: engin GPS, engin mælitæki — en full readiness- og álagsgreining frá fyrsta degi."
+              : "Built for indoor sports: no GPS, no wearables — yet full readiness and load intelligence from day one."}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Step 1 — phones only */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold rounded-full bg-emerald-600 text-white px-2 py-0.5">
+                  {lang === "IS" ? "Í DAG" : "TODAY"}
+                </span>
+                <span className="text-sm font-semibold text-zinc-900">
+                  {lang === "IS" ? "Aðeins símar" : "Phones only"}
+                </span>
+              </div>
+              <ul className="space-y-1.5 text-sm text-zinc-600">
+                {(lang === "IS"
+                  ? [
+                      "Dagleg líðankönnun — grænt / gult / rautt readiness",
+                      "sRPE-álag: Foster monotony/strain, ACWR, form-vs-þreyta reitur",
+                      "Meiðsli / afturkoma í leik + vikuskipulag",
+                      "Hver niðurstaða útskýrð á mannamáli — með heimild, án sérfræðings",
+                    ]
+                  : [
+                      "Daily check-in — green / amber / red readiness",
+                      "sRPE load: Foster monotony/strain, ACWR, fitness-vs-fatigue quadrant",
+                      "Injury / return-to-play + week planning",
+                      "Every verdict explained in plain language — cited, no analyst needed",
+                    ]
+                ).map((t) => (
+                  <li key={t} className="flex gap-2">
+                    <span className="text-emerald-600 font-semibold">&#10003;</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* Step 2 — add IMA */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold rounded-full bg-blue-600 text-white px-2 py-0.5">
+                  {lang === "IS" ? "SÍÐAR" : "LATER"}
+                </span>
+                <span className="text-sm font-semibold text-zinc-900">
+                  {lang === "IS" ? "Bættu Catapult IMA við" : "Add Catapult IMA"}
+                </span>
+              </div>
+              <ul className="space-y-1.5 text-sm text-zinc-600">
+                {(lang === "IS"
+                  ? [
+                      "Innanhúss-álag (FMP), Decel Intelligence, IMA-greining",
+                      "Player Load, IMA stefnubreytingar, hröðun/hægðun, stökk",
+                      "MicroPulse skynjar gögnin sjálfkrafa og opnar flötina — við stillum ekkert upp á nýtt",
+                    ]
+                  : [
+                      "Indoor Load (FMP), Decel Intelligence, IMA Intelligence",
+                      "Player Load, IMA change-of-direction, accel/decel, jumps",
+                      "MicroPulse auto-detects the data and unlocks the pages — we reconfigure nothing",
+                    ]
+                ).map((t) => (
+                  <li key={t} className="flex gap-2">
+                    <span className="text-blue-600 font-semibold">&#43;</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
+                {lang === "IS"
+                  ? "Uppsetning einu sinni Catapult-megin: API-aðgangur, IMA- og FMP-mælibreytur í OpenField, og samsvörun leikmannanafna."
+                  : "One-time setup on the Catapult side: API access, IMA & FMP reporting params in OpenField, and matching athlete names."}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* ── Feature comparison table ── */}
         <h2 className="text-xl font-bold text-zinc-900 mb-4">
           {lang === "IS" ? "Eiginleikasamburd" : "Feature Comparison"}

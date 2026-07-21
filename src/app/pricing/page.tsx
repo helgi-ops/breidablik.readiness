@@ -54,7 +54,7 @@ const COPY = {
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Best for clubs on Premium Catapult plans (B2-3 efforts or IMU bands) — any sport",
-        note: "Adds Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery on top of everything in Lite.",
+        note: "Adds Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery on top of everything in Lite. A Lite team auto-upgrades here the moment genuine IMA data starts flowing.",
         bullets: [
           "Everything in Free plus:",
           "Unlimited squad size",
@@ -87,7 +87,7 @@ const COPY = {
         pricePrimary: "€129 / month",
         priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Best for lower-division clubs and indoor sports without IMU vests",
-        note: "Standalone sport-science suite for clubs on standard Catapult Activity Reports — or no GPS at all. Built on Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
+        note: "Standalone sport-science suite for clubs on standard Catapult Activity Reports — or no GPS at all. Built on Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018. Add Catapult IMA later and the team auto-upgrades to Pro — MicroPulse detects the data and unlocks the indoor pages; you just set up Catapult once.",
         bullets: [
           "Everything in Free plus:",
           "Unlimited squad size",
@@ -251,7 +251,7 @@ const COPY = {
         pricePrimary: "€349 / month",
         priceLocal: "49.990 kr / mánuð",
         priceSecondary: "Fyrir lið með Premium Catapult áskrift (B2-3 efforts eða IMU bands) — hvaða íþrótt sem er",
-        note: "Bætir við Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery ofan á allt í Lite.",
+        note: "Bætir við Decel Intelligence, Indoor Load, Quadrant 2017 B2-3 axis, Sharp Cut, MPE Recovery ofan á allt í Lite. Lið á Lite færist sjálfkrafa hingað um leið og raunveruleg IMA-gögn fara að berast.",
         bullets: [
           "Allt í Free +",
           "Ótakmarkaður hópur",
@@ -284,7 +284,7 @@ const COPY = {
         pricePrimary: "€129 / month",
         priceLocal: "18.900 kr / mánuð",
         priceSecondary: "Fyrir neðri-deildar lið og innanhúss íþróttir án IMU vesta",
-        note: "Sjálfstæð sport-science suite fyrir lið með standard Catapult Activity Reports — eða engan GPS yfirleitt. Byggð á Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018.",
+        note: "Sjálfstæð sport-science suite fyrir lið með standard Catapult Activity Reports — eða engan GPS yfirleitt. Byggð á Gabbett 2016, Malone 2017, Foster 1998, Buchheit 2018. Bætir þú Catapult IMA við síðar færist liðið sjálfkrafa upp í Pro — MicroPulse skynjar gögnin og opnar innanhúss-flötina; þú setur Catapult bara upp einu sinni.",
         bullets: [
           "Allt í Free +",
           "Ótakmarkaður hópur",
