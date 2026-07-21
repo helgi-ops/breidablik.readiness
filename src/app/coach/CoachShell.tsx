@@ -94,6 +94,13 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // efforts start arriving via Catapult sync. See migration 20260502170000.
   const [catapultDataTier, setCatapultDataTier] = useState<"full" | "lite">("lite");
 
+  // Indoor / no-hardware teams (e.g. a basketball club with no Catapult) would
+  // otherwise see GPS-only Monitoring pages that are permanently empty. This
+  // flag hides that cluster. Gated on BOTH intent (sport_type basketball /
+  // indoor_mode) AND reality (no GPS distance in the last 30 days) so a football
+  // team is never affected and it self-corrects if GPS ever starts arriving.
+  const [noGpsTeam, setNoGpsTeam] = useState(false);
+
   // Team type drives whether the sidebar renders the football-coach layout
   // (Monitoring / Planning / Admin sections) or the simplified personal-
   // trainer layout (Dashboard + Strength training + Comms + Settings).
@@ -134,6 +141,25 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       } catch {
         if (alive) setCatapultDataTier("lite");
       }
+
+      // No-GPS indoor teams: hide the GPS-only Monitoring cluster (see noGpsTeam).
+      try {
+        const { data: settings } = await supabase
+          .from("team_settings").select("sport_type, indoor_mode").eq("team_id", teamId).maybeSingle();
+        const s = settings as { sport_type?: string | null; indoor_mode?: boolean | null } | null;
+        const indoorIntent =
+          String(s?.sport_type ?? "").toLowerCase() === "basketball" || s?.indoor_mode === true;
+        if (indoorIntent) {
+          const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+          const { count } = await supabase
+            .from("player_external_load_daily")
+            .select("player_id", { count: "exact", head: true })
+            .eq("team_id", teamId)
+            .gte("date", since)
+            .gt("total_distance", 0);
+          if (alive) setNoGpsTeam((count ?? 0) === 0);
+        }
+      } catch { /* leave noGpsTeam false — show everything if the check fails */ }
     }
     void fetchBrand();
     return () => { alive = false; };
@@ -345,6 +371,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTab={currentTab}
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
+            noGpsTeam={noGpsTeam}
             onSwitchTeam={handleSwitchTeam}
             onToggleNav={() => setNavModePersist("list")}
           />
@@ -376,6 +403,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTab={currentTab}
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
+            noGpsTeam={noGpsTeam}
             teamType={teamType}
             onSwitchTeam={handleSwitchTeam}
           />
@@ -424,6 +452,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 currentTab={currentTab}
                 currentTeamId={currentTeamId}
                 catapultDataTier={catapultDataTier}
+                noGpsTeam={noGpsTeam}
                 teamType={teamType}
                 onSwitchTeam={handleSwitchTeam}
                 onNavigate={() => setMobileDrawerOpen(false)}

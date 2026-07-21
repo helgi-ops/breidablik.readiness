@@ -22,7 +22,7 @@ import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, injuryMonitoringLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
-  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS,
+  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS,
 } from "./CoachSidebar";
 
 type RailSection = { key: string; label: Bi; links: SidebarLink[] };
@@ -34,6 +34,7 @@ export function CoachIconRail({
   currentTab,
   currentTeamId,
   catapultDataTier,
+  noGpsTeam,
   onSwitchTeam,
   onToggleNav,
   onNavigate,
@@ -44,6 +45,7 @@ export function CoachIconRail({
   currentTab: string | null;
   currentTeamId: string | null;
   catapultDataTier?: "full" | "lite";
+  noGpsTeam?: boolean;
   onSwitchTeam: (team: CoachTeam) => void;
   onToggleNav?: () => void;
   onNavigate?: () => void;
@@ -54,7 +56,8 @@ export function CoachIconRail({
 
   const isLite = catapultDataTier !== "full";
   const filterForTier = (links: SidebarLink[]) =>
-    isLite ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href)) : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
+    (isLite ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href)) : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href)))
+      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)));
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },

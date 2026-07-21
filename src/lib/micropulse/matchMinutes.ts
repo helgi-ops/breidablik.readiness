@@ -35,6 +35,34 @@
 export const POD_MATCH_TOLERANCE_MIN = 5;
 
 /**
+ * "High match minutes" — the played-minutes threshold above which a match creates
+ * meaningful 24–72h recovery debt (this is what flips MD+1 / MD+2 into a recovery
+ * framing). SPORT-AWARE, because the number does not transfer across game lengths:
+ *
+ *   football   — ≥ 60 min of a 90-min match (Carling 2018, Nédélec 2012, Helsen 2018).
+ *   basketball — ≥ 24 min of a 40-min FIBA game (~60% of the game, mirroring the
+ *                football 60/90 ratio). A 40-min game can NEVER reach 60 min, so
+ *                applying football's cut would mislabel every basketball player as
+ *                low-minutes. We scale to the game rather than invent a citation.
+ */
+export const HIGH_MATCH_MINUTES_FOOTBALL = 60;
+export const HIGH_MATCH_MINUTES_BASKETBALL = 24;
+
+export function highMatchMinutesThreshold(sport: string | null | undefined): number {
+  return String(sport ?? "").toLowerCase() === "basketball"
+    ? HIGH_MATCH_MINUTES_BASKETBALL
+    : HIGH_MATCH_MINUTES_FOOTBALL;
+}
+
+/** Did this player play enough match minutes to carry real recovery debt, for his sport? */
+export function isHighMatchMinutes(
+  minutesPlayed: number,
+  sport: string | null | undefined,
+): boolean {
+  return minutesPlayed >= highMatchMinutesThreshold(sport);
+}
+
+/**
  * For a STARTER, how many minutes short of the pod window his entered minutes may
  * fall and still mean "played to the end". Coaches enter a nominal "90" for a full
  * match while the pod (with stoppage) reads ~101 — that gap is uncounted stoppage,

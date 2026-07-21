@@ -1,6 +1,11 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { classifyMatchLoad, IMPLAUSIBLE_M_PER_MIN } from "../matchMinutes";
+import {
+  classifyMatchLoad,
+  IMPLAUSIBLE_M_PER_MIN,
+  highMatchMinutesThreshold,
+  isHighMatchMinutes,
+} from "../matchMinutes";
 
 // Ground truth: HK vs Ægir, 2026-07-10. Numbers taken from the bug report.
 
@@ -117,4 +122,27 @@ test("high-speed share is computed from distance regardless of verdict", () => {
     startedMatch: false,
   });
   assert.equal(v.highSpeedPct, 12.1);
+});
+
+test("high-match-minutes threshold is sport-aware (basketball ≠ football)", () => {
+  // Football: 60 of 90. Basketball: 24 of a 40-min FIBA game.
+  assert.equal(highMatchMinutesThreshold("football"), 60);
+  assert.equal(highMatchMinutesThreshold("basketball"), 24);
+  assert.equal(highMatchMinutesThreshold("Basketball"), 24, "case-insensitive");
+  // Unknown / null defaults to football so existing behaviour is unchanged.
+  assert.equal(highMatchMinutesThreshold(null), 60);
+  assert.equal(highMatchMinutesThreshold(undefined), 60);
+  assert.equal(highMatchMinutesThreshold("handball"), 60);
+});
+
+test("a 25-min basketball starter carries recovery debt; a 25-min footballer does not", () => {
+  // The bug: football's 60-min cut is impossible in a 40-min game, so every
+  // basketball player was mislabelled low-minutes.
+  assert.equal(isHighMatchMinutes(25, "basketball"), true);
+  assert.equal(isHighMatchMinutes(25, "football"), false);
+  // Boundaries.
+  assert.equal(isHighMatchMinutes(24, "basketball"), true);
+  assert.equal(isHighMatchMinutes(23, "basketball"), false);
+  assert.equal(isHighMatchMinutes(60, "football"), true);
+  assert.equal(isHighMatchMinutes(59, "football"), false);
 });

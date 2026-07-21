@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
-import { classifyMatchLoad } from "@/lib/micropulse/matchMinutes";
+import { classifyMatchLoad, highMatchMinutesThreshold } from "@/lib/micropulse/matchMinutes";
 import MatchVerdictChip from "@/components/coach/MatchVerdictChip";
 
 const COPY = {
@@ -91,6 +91,9 @@ export default function CoachMatchMinutesPage() {
   // all their teams), so we MUST filter on the client by team_id or the
   // table will mix players from multiple clubs together.
   const [teamId, setTeamId] = useState<string | null>(null);
+  // Team sport — drives the sport-aware STARTER threshold (basketball's 40-min
+  // game can never reach football's 60-min cut). Null defaults to football.
+  const [sportType, setSportType] = useState<string | null>(null);
 
   // Pod status per player for the current match date: "real" (measured),
   // "estimated" (a "forgot pod?" estimate), or absent (nothing → offer Estimate).
@@ -283,6 +286,9 @@ export default function CoachMatchMinutesPage() {
         setLoading(false);
         return;
       }
+      const { data: ts } = await supabase
+        .from("team_settings").select("sport_type").eq("team_id", tid).maybeSingle();
+      if (alive) setSportType((ts as { sport_type?: string | null } | null)?.sport_type ?? null);
       await load(tid);
     })();
     return () => { alive = false; };
@@ -597,7 +603,22 @@ export default function CoachMatchMinutesPage() {
         </CardContent>
 
         <CardFooter className="text-xs text-muted-foreground">
-          <span title={t.footerCite} className="cursor-help underline decoration-dotted">{t.footer}</span>
+          {(() => {
+            const starterMin = highMatchMinutesThreshold(sportType);
+            const isBball = String(sportType ?? "").toLowerCase() === "basketball";
+            const unit = lang === "IS" ? "mín" : "min";
+            const footer = lang === "IS"
+              ? `STARTER ≥ ${starterMin} ${unit} · NON-STARTER < ${starterMin} ${unit}`
+              : `STARTER ≥ ${starterMin} ${unit} · NON-STARTER < ${starterMin} ${unit}`;
+            const cite = isBball
+              ? (lang === "IS"
+                  ? `${starterMin}-mín þröskuldur: ~60% af 40-mín leik (aðlagað frá fótbolta 60/90)`
+                  : `${starterMin}-min threshold: ~60% of a 40-min game (scaled from football 60/90)`)
+              : t.footerCite;
+            return (
+              <span title={cite} className="cursor-help underline decoration-dotted">{footer}</span>
+            );
+          })()}
         </CardFooter>
       </Card>
     </div>

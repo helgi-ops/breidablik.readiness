@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import crypto from "node:crypto";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
+import { isHighMatchMinutes } from "@/lib/micropulse/matchMinutes";
 
 const ANTHROPIC_API_URL  = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
@@ -402,11 +403,19 @@ async function buildSummaryInput(
   }
 
   // ── Match minutes lookup for the detected match date ──────────────────
-  // 60+ min played is a well-established threshold for meaningful 24-72h
-  // recovery debt (Carling 2018, Nédélec 2012, Helsen 2018). We pull this
-  // up to the prompt so the AI can frame MD+1 / MD+2 as recovery even when
-  // load looks moderate.
+  // "High minutes" = enough to carry meaningful 24-72h recovery debt (football:
+  // Carling 2018, Nédélec 2012, Helsen 2018). The threshold is SPORT-AWARE — a
+  // 40-min basketball game can never reach football's 60-min cut, so we read the
+  // team's sport and scale (see isHighMatchMinutes). We pull this up to the prompt
+  // so the AI can frame MD+1 / MD+2 as recovery even when load looks moderate.
   if (postMatchContext.match_date) {
+    const tid = (playerInfo.data?.team_id as string | null) ?? null;
+    let teamSportType: string | null = null;
+    if (tid) {
+      const { data: ts } = await supabase
+        .from("team_settings").select("sport_type").eq("team_id", tid).maybeSingle();
+      teamSportType = (ts as { sport_type?: string | null } | null)?.sport_type ?? null;
+    }
     const { data: minutesRow } = await supabase
       .from("match_player_minutes")
       .select("minutes_played, is_dnp")
@@ -417,7 +426,7 @@ async function buildSummaryInput(
       const min = Number(minutesRow.minutes_played ?? 0);
       if (Number.isFinite(min) && min > 0) {
         postMatchContext.match_minutes_played = min;
-        postMatchContext.high_match_minutes = min >= 60;
+        postMatchContext.high_match_minutes = isHighMatchMinutes(min, teamSportType);
       }
     }
   }

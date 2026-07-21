@@ -88,6 +88,7 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
+  { href: "/coach/hamstring-rehab",    label: { EN: "Hamstring Rehab (Ramping Iso)",     IS: "Hamstring endurhæfing" } },
   { href: "/coach/clinical-reports",   label: { EN: "Clinical reports",                 IS: "Klínískar skýrslur" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
@@ -358,6 +359,32 @@ export const FULL_HIDDEN_HREFS = new Set<string>([
   "/coach/hsr-intelligence",
 ]);
 
+// GPS-dependent Monitoring pages that are permanently empty for a team with no
+// external tracking at all (e.g. an indoor basketball club — no GPS indoors, no
+// IMA). Lite tier hides only the IMA-premium pages above and deliberately KEEPS
+// the GPS-volume pages (it was designed for a Core football club that has GPS
+// but no IMA). A no-hardware team has neither, so we additionally drop these.
+// Applied only when CoachShell resolves noGpsTeam (intent + zero GPS in 30d),
+// so a GPS-equipped Lite football team is unaffected. Note /coach/quadrant is
+// listed here even though it's Lite-allowed: its Gabbett-2016 volume axis needs
+// total_distance, which a no-GPS team never has.
+export const NO_GPS_HIDDEN_HREFS = new Set<string>([
+  "/coach/hsr-intelligence",
+  "/coach/quadrant",
+  "/coach/match-movement",
+  "/coach/player-game-report",
+  "/coach/position-comparison",
+  "/coach/train-like-you-play",
+]);
+
+// Club-specific resources — visible ONLY to the listed team_id(s). The
+// hamstring ramping-isometrics rehab protocol was set up for Breiðablik and
+// should not appear (or be reachable) for any other club. A link with no
+// entry here is visible to everyone.
+export const TEAM_RESTRICTED_HREFS: Record<string, string[]> = {
+  "/coach/hamstring-rehab": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
+};
+
 // ─── Public Sidebar ─────────────────────────────────────────────────────────
 export function CoachSidebar({
   isAdmin,
@@ -366,6 +393,7 @@ export function CoachSidebar({
   currentTab,
   currentTeamId,
   catapultDataTier,
+  noGpsTeam,
   teamType,
   onSwitchTeam,
   onNavigate,
@@ -385,6 +413,10 @@ export function CoachSidebar({
    *  features that need B2-3 / IMA bands; 'full' shows everything. Default
    *  'lite' (conservative — show fewer items when undetermined). */
   catapultDataTier?: "full" | "lite";
+  /** True for an indoor / no-hardware team (e.g. basketball with no Catapult):
+   *  additionally hides the GPS-only Monitoring pages that would always be empty
+   *  (see NO_GPS_HIDDEN_HREFS). Resolved by the shell from sport + data presence. */
+  noGpsTeam?: boolean;
   /** Team type from teams.team_type. 'personal_trainer' switches the
    *  sidebar to the PT-mode layout (Dashboard + Strength training +
    *  Settings). Anything else gets the football-coach layout. */
@@ -496,9 +528,20 @@ export function CoachSidebar({
   // only Decel Intelligence + Indoor Load + IMA Intelligence. See
   // migration 20260502170000. Applied per sub-group.
   const isLite = catapultDataTier !== "full";
-  const filterForTier = (links: SidebarLink[]) => isLite
-    ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
-    : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href));
+  // Club-specific pages: drop any link restricted to teams that don't include
+  // the currently-active team.
+  const allowedForTeam = (href: string) => {
+    const teams = TEAM_RESTRICTED_HREFS[href];
+    return !teams || (currentTeamId != null && teams.includes(currentTeamId));
+  };
+  const filterForTier = (links: SidebarLink[]) =>
+    (isLite
+      ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
+      : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href))
+    )
+      // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps.
+      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)))
+      .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
   const performanceAnalyticsForTier = filterForTier(performanceAnalyticsLinks);
