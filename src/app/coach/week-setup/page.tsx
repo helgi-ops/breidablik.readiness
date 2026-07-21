@@ -8,6 +8,10 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
+import { type WeekType, coerceWeekType } from "@/lib/micropulse/weekSetup/weekType";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
+import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +20,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-
-type WeekType = "NO_MATCH" | "ONE_MATCH" | "TWO_MATCHES";
 
 type SeasonPhase = "preseason" | "inseason" | "playoffs" | "offseason";
 
@@ -192,9 +194,15 @@ function preMatchMicrodoseFocus(mdMinus: number) {
   return isForce ? `MD-${mdMinus} FORCE / RESTART` : `MD-${mdMinus} NEURAL / VELOCITY`;
 }
 
-function coerceWeekType(v: any): WeekType {
-  if (v === "NO_MATCH" || v === "ONE_MATCH" || v === "TWO_MATCHES") return v;
-  return "ONE_MATCH";
+// Detect week type from the number of fixtures in the week. THREE_MATCHES only
+// applies to basketball (a week is defined by its game count 0–3); football
+// keeps its existing 0/1/2 mapping exactly — three league games in a week stays
+// TWO_MATCHES, so football behaviour is unchanged.
+function detectWeekType(fixtureCount: number, isBasketball: boolean): WeekType {
+  if (fixtureCount <= 0) return "NO_MATCH";
+  if (fixtureCount === 1) return "ONE_MATCH";
+  if (isBasketball && fixtureCount >= 3) return "THREE_MATCHES";
+  return "TWO_MATCHES";
 }
 
 function intentToDayType(i: NoMatchIntent): DayType {
@@ -242,6 +250,10 @@ export default function WeekSetupPage() {
 
   const [intensityTarget, setIntensityTarget] = useState<number>(6);
   const [teamId, setTeamId] = useState<string | null>(null);
+  // Team sport — drives the game-density week model (basketball) vs the MD-day
+  // model (football). Defaults to football so an unknown team behaves as before.
+  const [sport, setSport] = useState<SportId>("football");
+  const isBasketball = sport === "basketball";
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [noMatchIntents, setNoMatchIntents] = useState<NoMatchIntent[]>(getDefaultNoMatchIntents());
@@ -262,7 +274,7 @@ export default function WeekSetupPage() {
     weekTypePill: "Vikugerð", setupPill: "Uppsetning",
     teamIdHint: "Ef þetta er tómt: þá er coach ekki tengdur liði í profiles/coach_teams.",
     weekStart: "Vikuupphaf (mánudagur)", season: "Tímabil", weekType: "Vikugerð",
-    noMatch: "Enginn leikur", oneMatch: "1 leikur", twoMatches: "2 leikir",
+    noMatch: "Enginn leikur", oneMatch: "1 leikur", twoMatches: "2 leikir", threeMatches: "3 leikir",
     fromSchedule: "Sótt sjálfkrafa úr Leikjadagatali:",
     fromScheduleHint: "Þú getur samt breytt vikugerð eða leikupplýsingum að neðan.",
     manualTitle: "Leyfa handvirka vikugerð (eins og NO_MATCH)",
@@ -290,7 +302,7 @@ export default function WeekSetupPage() {
     weekTypePill: "Week type", setupPill: "Setup",
     teamIdHint: "If this is empty, the coach isn't linked to a team in profiles/coach_teams.",
     weekStart: "Week start (Monday)", season: "Season", weekType: "Week type",
-    noMatch: "No match", oneMatch: "1 match", twoMatches: "2 matches",
+    noMatch: "No match", oneMatch: "1 match", twoMatches: "2 matches", threeMatches: "3 games",
     fromSchedule: "Auto-detected from Fixtures:",
     fromScheduleHint: "You can still change the week type or match details below.",
     manualTitle: "Allow manual week setup (like NO_MATCH)",
@@ -320,7 +332,10 @@ export default function WeekSetupPage() {
 
   const visibleMatches = useMemo(() => {
     if (weekType === "ONE_MATCH") return [matches[0] ?? DEFAULT_MATCHES[0]];
-    if (weekType === "TWO_MATCHES")
+    // THREE_MATCHES (basketball) reuses the two editable slots — the exact third
+    // kickoff isn't needed for the sRPE-driven basketball model; the game-count
+    // shape guidance is what matters.
+    if (weekType === "TWO_MATCHES" || weekType === "THREE_MATCHES")
       return [matches[0] ?? DEFAULT_MATCHES[0], matches[1] ?? DEFAULT_MATCHES[1]];
     return [];
   }, [weekType, matches]);
@@ -390,6 +405,16 @@ export default function WeekSetupPage() {
       alive = false;
     };
   }, []);
+
+  // Resolve the team's sport once we know the team (team-level source only).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const s = teamId ? await resolveTeamSport(supabase, teamId) : "football";
+      if (alive) setSport(s);
+    })();
+    return () => { alive = false; };
+  }, [teamId]);
 
   // 2) LOAD WEEK SETUP (filter by team_id + week_start_date)
   useEffect(() => {
@@ -474,7 +499,7 @@ export default function WeekSetupPage() {
           // The week was saved WITHOUT a dated match, but the Fixtures schedule now
           // has one → adopt it (prefill) instead of showing a stale empty week, and
           // seed the daily intents from where the game falls (no coach plan to keep).
-          setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
+          setWeekType(detectWeekType(found.length, isBasketball));
           setMatches(schedMatches);
           setScheduleNote(schedNote);
           setNoMatchIntents(
@@ -513,7 +538,7 @@ export default function WeekSetupPage() {
           setMatches(DEFAULT_MATCHES);
           setScheduleNote(null);
         } else {
-          setWeekType(found.length >= 2 ? "TWO_MATCHES" : "ONE_MATCH");
+          setWeekType(detectWeekType(found.length, isBasketball));
           setMatches(schedMatches);
           setScheduleNote(schedNote);
           // Seed the editable daily grid from where the game falls.
@@ -530,7 +555,7 @@ export default function WeekSetupPage() {
     return () => {
       alive = false;
     };
-  }, [weekStart, teamId]);
+  }, [weekStart, teamId, isBasketball]);
 
   // On first open, if the CURRENT week has no fixture, land on the next week that
   // does — so a coach opening Week Setup on a match-less day (e.g. Sunday, current
@@ -1018,7 +1043,7 @@ export default function WeekSetupPage() {
               <CardTitle className="text-base">{t.step1}</CardTitle>
               {step !== 1 && (
                 <CardDescription className="mt-0.5">
-                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : t.twoMatches}
+                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : weekType === "THREE_MATCHES" ? t.threeMatches : t.twoMatches}
                   {isManualWeek && weekType !== "NO_MATCH" ? " · Manual" : ""}
                 </CardDescription>
               )}
@@ -1086,6 +1111,13 @@ export default function WeekSetupPage() {
               <Button type="button" variant={weekType === "TWO_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("TWO_MATCHES")} disabled={loading || saving || applying}>
                 {t.twoMatches}
               </Button>
+              {/* Three-game week — basketball only (football has no three-game
+                  league week; keeping the button off preserves the football UI). */}
+              {isBasketball && (
+                <Button type="button" variant={weekType === "THREE_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("THREE_MATCHES")} disabled={loading || saving || applying}>
+                  {t.threeMatches}
+                </Button>
+              )}
             </div>
             {scheduleNote && (
               <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
@@ -1093,6 +1125,21 @@ export default function WeekSetupPage() {
                 <div className="mt-0.5 text-sky-700">{t.fromScheduleHint}</div>
               </div>
             )}
+            {/* Basketball game-density shape — the expected load pattern for the
+                chosen game count. Football returns null (MD-day model is
+                authoritative), so this renders for basketball only. Layered read:
+                headline verdict, then the plain "why", then the citation. */}
+            {(() => {
+              const shape = expectedWeekShape(sport, weekType);
+              if (!shape) return null;
+              return (
+                <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+                  <div className="font-semibold">{isIS ? shape.headline.is : shape.headline.en}</div>
+                  <div className="mt-0.5 text-violet-800">{isIS ? shape.detail.is : shape.detail.en}</div>
+                  <div className="mt-1 text-[10px] uppercase tracking-wide text-violet-500">{shape.citation}</div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Manual override toggle */}

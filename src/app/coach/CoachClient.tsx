@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-
-type WeekType = "ONE_MATCH" | "TWO_MATCHES";
+import type { WeekType } from "@/lib/micropulse/weekSetup/weekType";
 
 type MatchInput = {
   match_id: string;

@@ -31,6 +31,7 @@ import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSum
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
 import { useLang } from "@/lib/lang";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 
 type GpsPlayerInput = {
@@ -44,6 +45,7 @@ export default function LoadIntelligencePage() {
   const [lang] = useLang();
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [teamId, setTeamId] = React.useState<string | null>(null);
+  const [isBasketball, setIsBasketball] = React.useState(false);
   const [players, setPlayers] = React.useState<GpsPlayerInput[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -69,6 +71,8 @@ export default function LoadIntelligencePage() {
         return;
       }
       setTeamId(tid);
+      const s = await resolveTeamSport(supabase, tid);
+      if (alive) setIsBasketball(s === "basketball");
     })();
     return () => { alive = false; };
   }, [supabase, lang]);
@@ -155,6 +159,21 @@ export default function LoadIntelligencePage() {
             ? "External GPS signals + internal load (MLI / MLS) on one page — the Internal:External coupling story. Raw daily numbers and the squad load 7d/28d table still live on the GPS Data tab."
             : "Ytri GPS-merki + innra álag (MLI / MLS) á einum stað — Internal:External coupling sagan. Hráar daglegar tölur og squad-load 7d/28d taflan eru áfram á GPS Data tabbinum."}
         </p>
+        {/* Basketball caveat — one line, verdict first. Indoors there are no GPS
+            signals, so read this squad on sRPE (Foster monotony/strain, ACWR),
+            and the week on game count, not MD-days. Football teams never see it. */}
+        {isBasketball && (
+          <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+            <span className="font-semibold">
+              {lang === "EN"
+                ? "Basketball: read this on internal load, not GPS."
+                : "Körfubolti: lestu þetta á innra álagi, ekki GPS."}
+            </span>{" "}
+            {lang === "EN"
+              ? "Indoors there are no GPS velocity signals — Foster monotony/strain and ACWR from sRPE carry the load story, and the week is defined by its game count (0–3), not MD-days."
+              : "Innandyra eru engin GPS-hraðamerki — Foster monotony/strain og ACWR úr sRPE bera álagssöguna, og vikan ræðst af fjölda leikja (0–3), ekki MD-dögum."}
+          </div>
+        )}
       </div>
 
       {error && (
