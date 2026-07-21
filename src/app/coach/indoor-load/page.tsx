@@ -20,6 +20,8 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import BasketballIndoorLoadView from "@/components/coach/BasketballIndoorLoadView";
 import PagePurpose from "@/components/coach/PagePurpose";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
@@ -428,10 +430,42 @@ export default function CoachIndoorLoadPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  // Count of recent GPS-less stride (indoor-like) session-days that carry NO FMP
+  // data. Lets us tell "no indoor training" apart from "indoor happened but FMP
+  // isn't coming through" — instead of a silent empty dashboard.
+  const [fmpGapDays, setFmpGapDays] = React.useState(0);
+  // Toggle for the "why indoor numbers differ" methodology panel (layered read).
+  const [showMethod, setShowMethod] = React.useState(false);
+  // Sport branch — basketball gets its own PlayerLoad + IMA + jumps view; football
+  // (the default) keeps the FMP path below entirely untouched. We wait until the
+  // sport is resolved before firing the football load, so a basketball team never
+  // triggers the per-player FMP RPC.
+  const [teamId, setTeamId] = React.useState<string | null>(null);
+  const [isBasketball, setIsBasketball] = React.useState(false);
+  const [sportResolved, setSportResolved] = React.useState(false);
 
   React.useEffect(() => {
-    void load();
+    let alive = true;
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: { user } } = await sb.auth.getUser();
+      const uid = user?.id;
+      if (!uid) { if (alive) setSportResolved(true); return; }
+      const { data: prof } = await sb.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+      const tid = (prof as { team_id?: string | null } | null)?.team_id ?? null;
+      const sport = await resolveTeamSport(sb, tid);
+      if (!alive) return;
+      setTeamId(tid);
+      setIsBasketball(sport === "basketball");
+      setSportResolved(true);
+    })();
+    return () => { alive = false; };
   }, []);
+
+  React.useEffect(() => {
+    if (!sportResolved || isBasketball) return; // football only
+    void load();
+  }, [sportResolved, isBasketball]);
 
   async function load() {
     setLoading(true);
@@ -470,6 +504,32 @@ export default function CoachIndoorLoadPage() {
       // Fetch from BOTH player_injuries AND injury_events + recent training data
       // (last for illness auto-promote when player resumes training)
       const playerIds = players.map((p) => p.id);
+
+      // Explainability: does this team have indoor (GPS-less + stride) sessions in
+      // the last 28d that carry NO FMP duration? If so, Indoor Load can't score
+      // them (detection needs fmp_total_duration_s), and we should say that plainly
+      // rather than render an empty dashboard that looks broken. FMP is a per-team
+      // OpenField processing feature — its absence is a data gap, not "no training".
+      {
+        const gapWindow = new Date();
+        gapWindow.setDate(gapWindow.getDate() - 28);
+        const gapResp = await sb
+          .from("player_external_load_daily")
+          .select("date, fmp_total_duration_s, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count")
+          .in("player_id", playerIds)
+          .gte("date", gapWindow.toISOString().slice(0, 10))
+          .lt("total_distance", 50);
+        const gapDays = new Set<string>();
+        for (const g of (gapResp.data ?? []) as Array<Record<string, unknown>>) {
+          const strides =
+            Number(g.ima_fr_band6_stride_count ?? 0) +
+            Number(g.ima_fr_band7_stride_count ?? 0) +
+            Number(g.ima_fr_band8_stride_count ?? 0);
+          if (strides > 0 && g.fmp_total_duration_s == null) gapDays.add(String(g.date));
+        }
+        setFmpGapDays(gapDays.size);
+      }
+
       const todayStr = new Date().toISOString().slice(0, 10);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -760,6 +820,13 @@ export default function CoachIndoorLoadPage() {
     };
   }, [rows]);
 
+  // Basketball uses its own PlayerLoad + IMA + jumps view; all hooks above have
+  // already run, so this early return preserves hook order and leaves the entire
+  // football FMP render below unreached (and unchanged) for basketball.
+  if (sportResolved && isBasketball) {
+    return <BasketballIndoorLoadView teamId={teamId} lang={lang} />;
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <LiteTierBanner
@@ -767,6 +834,19 @@ export default function CoachIndoorLoadPage() {
         reasonIs="Indoor Load reiknar úr FMP IMA-bands gögnum sem eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
         reasonEn="Indoor Load is computed from FMP IMA-band data that's not included in your current Catapult plan."
       />
+      {/* Honest state: indoor sessions exist but carry no FMP → explain, don't show an empty board */}
+      {!loading && teamStats.withIndoor === 0 && fmpGapDays > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>
+            {lang === "IS"
+              ? "Inniæfingar fundust — en FMP-gögn vantar."
+              : "Indoor sessions found — but FMP data is missing."}
+          </strong>{" "}
+          {lang === "IS"
+            ? `Liðið er með ${fmpGapDays} inni-æfingadag(a) síðustu 28 daga (GPS-laust, skref til staðar), en engin FMP-gögn fylgja þeim. Indoor Load metur álag út frá FMP (Football Movement Profile), svo það getur ekki reiknað þessar æfingar. FMP er per-lið vinnsla í OpenField — kveiktu á henni og reprocess-aðu (eða hafðu samband við Catapult), þá fyllist mælaborðið.`
+            : `This team has ${fmpGapDays} indoor session-day(s) in the last 28 days (GPS-less, strides present) with no FMP data attached. Indoor Load scores load from FMP (Football Movement Profile), so it can't compute these sessions. FMP is a per-team OpenField processing feature — enable it and reprocess (or contact Catapult) and the dashboard will populate.`}
+        </div>
+      )}
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -795,6 +875,66 @@ export default function CoachIndoorLoadPage() {
         </button>
       </div>
 
+      {/* ── Explainability: why indoor numbers differ (layered read — plain summary + detail toggle) ── */}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">
+              {lang === "IS" ? "Af hverju líta innan-húss tölur öðruvísi út?" : "Why do indoor numbers look different?"}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              {lang === "IS"
+                ? "Innan-húss virkar GPS ekki. Þess vegna eru vegalengd, háhraðahlaup, sprettir, hámarkshraði og metabolic power sleppt (þau verða óáreiðanleg inni). Álag er í staðinn reiknað eingöngu úr hreyfiskynjurum (IMU): FMP stride-bönd, player load og decel-mynstur. Skorið er borið saman við eigin inni-grunnlínu hvers leikmanns (100 = hans meðaltal) — ekki við útiæfingar né hópinn. Innan-húss skor er því ekki beint samanburðarhæft við útiæfingu."
+                : "Indoors, GPS doesn't work. So distance, high-speed running, sprints, top speed and metabolic power are dropped (they become unreliable indoors). Load is instead computed from inertial sensors (IMU) only: FMP stride bands, player load and deceleration patterns. The score is compared to each player's own indoor baseline (100 = their average) — not to outdoor sessions or the squad. So an indoor score is not directly comparable to an outdoor one."}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowMethod((v) => !v)}
+            className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {showMethod
+              ? (lang === "IS" ? "Fela nánar" : "Hide details")
+              : (lang === "IS" ? "Sýna nánar" : "Show details")}
+          </button>
+        </div>
+        {showMethod && (
+          <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+            <div>
+              <p className="font-medium text-slate-800">{lang === "IS" ? "Hvað er sleppt — og af hverju" : "What's dropped — and why"}</p>
+              <p>{lang === "IS"
+                ? "Vegalengd, HSR, sprettir, hámarkshraði, HMLD og metabolic power eru öll GPS- eða GPS-samhengis-háð. Brown (2016) sýndi að GPS-metabolic power er óáreiðanlegt innan-húss, svo þessir mælar eru útilokaðir úr skorinu (sýndir sem samhengi þar sem við á, en fara aldrei inn í composite)."
+                : "Distance, HSR, sprints, top speed, HMLD and metabolic power are all GPS- or GPS-context-derived. Brown (2016) showed GPS metabolic power is unreliable indoors, so these are excluded from the score (shown as context where relevant, but never fed into the composite)."}</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-800">{lang === "IS" ? "Hvað er notað í staðinn" : "What's used instead"}</p>
+              <p>{lang === "IS"
+                ? "FMP (Football Movement Profile) — 7 stride-hraðabönd frá hreyfiskynjaranum sem virka fullkomlega inni; player load (IMU-hröðun); og decel-intelligence (McBurnie 2022): hlutfall hemlana á hverja mínútu af Dynamic High hreyfingu, sem er næmt fyrir tauga-vöðva þreytu."
+                : "FMP (Football Movement Profile) — 7 stride-velocity bands from the inertial sensor that work fully indoors; player load (IMU acceleration); and decel intelligence (McBurnie 2022): decelerations per minute of Dynamic High movement, sensitive to neuromuscular fatigue."}</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-800">{lang === "IS" ? "Hvernig composite-skorið er reiknað" : "How the composite score is computed"}</p>
+              <p>{lang === "IS"
+                ? "Kvarði 0–150+, þar sem 100 = 28-daga persónulegt inni-meðaltal leikmannsins. Bönd: létt / undir meðaltali / dæmigert / þungt / toppur. Skorið er viljandi án metabolic power (Brown 2016), svo það mælir hreint inni-álag."
+                : "Scale 0–150+, where 100 = the player's own 28-day indoor average. Bands: light / below average / typical / heavy / spike. The score is intentionally metabolic-power-free (Brown 2016), so it measures pure indoor load."}</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-800">{lang === "IS" ? "Hvernig inniæfing er greind sjálfkrafa" : "How an indoor session is auto-detected"}</p>
+              <p>{lang === "IS"
+                ? "Session telst innan-húss ef velocity-band 6 vegalengd < 50m OG FMP heildarlengd > 600s (10 mín). Þetta útilokar útiæfingar sem mæla raunverulegan hámarkshraða, og fangar hallar-æfingar þar sem GPS-mælar segja lítið."
+                : "A session counts as indoor if velocity-band 6 distance < 50m AND FMP total duration > 600s (10 min). This excludes outdoor sessions that capture true max speed, and surfaces hall sessions where GPS metrics are uninformative."}</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-800">{lang === "IS" ? "Áreiðanleiki (confidence)" : "Confidence"}</p>
+              <p>{lang === "IS"
+                ? "Skorið verður áreiðanlegra eftir því sem fleiri inni-session safnast í grunnlínuna. Fáar inni-session = lægra traust; það er sýnt við hvern leikmann svo þú vitir hversu þroskuð grunnlínan er."
+                : "The score gets more reliable as more indoor sessions accumulate in the baseline. Few indoor sessions = lower confidence, shown per player so you know how mature the baseline is."}</p>
+            </div>
+            <p className="text-xs text-slate-500">{lang === "IS"
+              ? "Heimildir: Brown 2016 (GPS-metabolic power innan-húss), McBurnie 2022 (indoor adaptation), Catapult FMP-rammi. Reglur ákveða; útskýringin lýsir."
+              : "References: Brown 2016 (indoor GPS metabolic power), McBurnie 2022 (indoor adaptation), Catapult FMP framework. Rules decide; this explains."}</p>
+          </div>
+        )}
+      </div>
       {/* ── Team Status Banner — single sentence + traffic-light color ── */}
       {!loading && rows.length > 0 && teamStats.withIndoor > 0 && (
         <div
