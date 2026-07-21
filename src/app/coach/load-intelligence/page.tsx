@@ -188,11 +188,23 @@ export default function LoadIntelligencePage() {
         </div>
       )}
 
-      {!loading && !error && players.length === 0 && (
+      {/* GPS empty state — NOT for basketball: an indoor team has no GPS by
+          design, and its load story lives in the sRPE cards below, not here. */}
+      {!loading && !error && players.length === 0 && !isBasketball && (
         <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
           {lang === "EN"
             ? "No Catapult GPS data available for this team yet. Sync Catapult or upload a CSV to start."
             : "Engin Catapult GPS gögn fundust fyrir liðið ennþá. Tengdu Catapult eða hladdu upp CSV."}
+        </div>
+      )}
+
+      {/* Basketball with no GPS: the load story IS the sRPE monotony/strain +
+          readiness verdict, which the GPS-gated player list above would hide.
+          Render them directly so the page isn't a misleading "no data" wall. */}
+      {!loading && !error && teamId && isBasketball && players.length === 0 && (
+        <div className="space-y-6">
+          <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} />
+          <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
         </div>
       )}
 
