@@ -16,6 +16,7 @@ import type { CoachTeam } from "@/components/coach/TeamSwitcher";
 import { CoachSidebar } from "./CoachSidebar";
 import { CoachIconRail } from "./CoachIconRail";
 import UsageTracker from "@/components/coach/UsageTracker";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 
 /**
@@ -143,12 +144,16 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       }
 
       // No-GPS indoor teams: hide the GPS-only Monitoring cluster (see noGpsTeam).
+      // Resolve sport via resolveTeamSport so a basketball team that has no
+      // team_settings row yet (falls back to teams.sport) is still recognised —
+      // otherwise its empty GPS pages leak into the sidebar.
       try {
+        const sport = await resolveTeamSport(supabase, teamId);
         const { data: settings } = await supabase
-          .from("team_settings").select("sport_type, indoor_mode").eq("team_id", teamId).maybeSingle();
-        const s = settings as { sport_type?: string | null; indoor_mode?: boolean | null } | null;
+          .from("team_settings").select("indoor_mode").eq("team_id", teamId).maybeSingle();
         const indoorIntent =
-          String(s?.sport_type ?? "").toLowerCase() === "basketball" || s?.indoor_mode === true;
+          sport === "basketball" ||
+          (settings as { indoor_mode?: boolean | null } | null)?.indoor_mode === true;
         if (indoorIntent) {
           const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
           const { count } = await supabase
