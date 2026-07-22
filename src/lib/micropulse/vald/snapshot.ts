@@ -2,6 +2,31 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { VALD_RUNTIME, VALD_THRESHOLDS } from "@/lib/integrations/vald/config";
 import type { ValdDailySnapshot, ValdFlag, ValdFreshnessStatus } from "./types";
+import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "./trialAggregate";
+import { classifyPhaseChange, worstRealChange, type PhaseMetricKey } from "./phaseChange";
+
+// CMJ metric key → results column. Trial-averaged per test (Claudino 2017) and,
+// for the phase set, CV-gated before it may flag (Gathercole 2015).
+const CMJ_METRIC_COLUMNS: Record<string, string> = {
+  jumpHeight: "jump_height_cm",
+  rsiMod: "rsi_mod",
+  timeToTakeoff: "time_to_takeoff_ms",
+  peakForce: "peak_force_n",
+  concentricImpulse: "concentric_impulse_n_s",
+  eccentricDuration: "eccentric_duration_ms",
+  concentricDuration: "concentric_duration_ms",
+  peakPower: "peak_power_w",
+};
+// The phase metrics surfaced with the CV gate (jump height + RSI keep their own
+// existing read/flag; they are trial-averaged here but not part of the phase set).
+const CMJ_PHASE_KEYS: PhaseMetricKey[] = [
+  "timeToTakeoff",
+  "peakForce",
+  "concentricImpulse",
+  "eccentricDuration",
+  "concentricDuration",
+  "peakPower",
+];
 
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -53,36 +78,65 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const baselineDate = baselineStart.toISOString();
   const snapshotEnd = `${snapshotDate}T23:59:59.999Z`;
 
+  const cmjColumns = ["raw_test_id", "test_timestamp", "rsi_mod_source", ...Object.values(CMJ_METRIC_COLUMNS)].join(", ");
   const [cmjRes, nordRes, ffRes] = await Promise.all([
-    sb.from("vald_forcedecks_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
+    // ALL CMJ trials in the baseline window (not the best 10) — we average the
+    // trials of each test (Claudino 2017) rather than reading a single trial.
+    sb.from("vald_forcedecks_results").select(cmjColumns).eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }),
     sb.from("vald_nordbord_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
     sb.from("vald_forceframe_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
   ]);
 
-  const latestCmj = (cmjRes.data ?? [])[0] as Record<string, unknown> | undefined;
+  // Dynamic column list defeats the typed-client inference; cast through unknown.
+  const cmjRows = (cmjRes.data ?? []) as unknown as Array<Record<string, unknown>>;
   const latestNord = (nordRes.data ?? [])[0] as Record<string, unknown> | undefined;
   const latestForce = (ffRes.data ?? [])[0] as Record<string, unknown> | undefined;
 
-  const [cmjBaselineRes, nordBaselineRes, ffBaselineRes] = await Promise.all([
-    sb.from("vald_forcedecks_results").select("jump_height_cm, rsi_mod").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
-    sb.from("vald_nordbord_results").select("left_peak_force_n,right_peak_force_n,asymmetry_percent").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
-    sb.from("vald_forceframe_results").select("left_peak_force_n,right_peak_force_n,asymmetry_percent,movement_pattern,body_region").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
-  ]);
+  // ── Trial averaging (Claudino 2017): one aggregate per TEST = the mean of its
+  // valid trials. The latest test is compared against the median of the PRIOR
+  // tests' means (excluded from its own baseline). ─────────────────────────────
+  const cmjTrialRows: TrialMetricRow[] = cmjRows.map((row) => ({
+    rawTestId: (row.raw_test_id as string | null) ?? null,
+    testTimestamp: String(row.test_timestamp ?? ""),
+    metrics: Object.fromEntries(
+      Object.entries(CMJ_METRIC_COLUMNS).map(([metric, col]) => [metric, toNumber(row[col])]),
+    ),
+  }));
+  const cmjAggregates = aggregateTrialsByTest(cmjTrialRows, Object.keys(CMJ_METRIC_COLUMNS));
+  const latestCmjAgg = cmjAggregates[0] ?? null;
+  const priorCmjAggs = cmjAggregates.slice(1);
+  const latestCmj = cmjRows[0] as Record<string, unknown> | undefined; // newest trial — freshness + rsi source only
+  const latestCmjTrialCount = latestCmjAgg?.trialCount ?? 0;
 
-  const cmjBaselineValues = (cmjBaselineRes.data ?? []).map((row) => toNumber((row as Record<string, unknown>).jump_height_cm)).filter((n): n is number => n != null);
+  const cmjBaselineValues = metricSeries(priorCmjAggs, "jumpHeight");
   const cmjBaseline = cmjBaselineValues.length >= VALD_THRESHOLDS.baselineMinTests ? median(cmjBaselineValues) : null;
-  const latestCmjValue = toNumber(latestCmj?.jump_height_cm);
+  const latestCmjValue = latestCmjAgg?.metrics.jumpHeight ?? null;
   const cmjDrop = percentDrop(latestCmjValue, cmjBaseline);
   const cmjScored = scoreFromDrop(cmjDrop, VALD_THRESHOLDS.cmjModerateDropPct, VALD_THRESHOLDS.cmjSevereDropPct);
 
   // RSI-modified — surfaced ALONGSIDE jump height (never replacing it, never
   // touching the flag/score above). Jump height "lies" after fatigue while
   // RSI-mod falls; a personal-norm read makes that visible. null (not zero)
-  // when VALD isn't sending it yet. Marques & Buchheit 2026; Gathercole 2015.
-  const cmjRsiBaselineValues = (cmjBaselineRes.data ?? []).map((row) => toNumber((row as Record<string, unknown>).rsi_mod)).filter((n): n is number => n != null);
+  // when VALD isn't sending it yet. Now the trial mean, like jump height.
+  // Marques & Buchheit 2026; Gathercole 2015.
+  const cmjRsiBaselineValues = metricSeries(priorCmjAggs, "rsiMod");
   const cmjRsiBaseline = cmjRsiBaselineValues.length >= VALD_THRESHOLDS.baselineMinTests ? median(cmjRsiBaselineValues) : null;
-  const latestRsiMod = toNumber(latestCmj?.rsi_mod);
+  const latestRsiMod = latestCmjAgg?.metrics.rsiMod ?? null;
   const cmjRsiDrop = percentDrop(latestRsiMod, cmjRsiBaseline);
+
+  // ── CV-gated phase metrics (Gathercole 2015 Table 2). Each phase metric may
+  // only flag a change that exceeds its OWN measurement noise (literature CV,
+  // widened by the player's own CV, never narrowed), so a noisy metric like RFD
+  // needs a far bigger move than jump height to mean anything. ──────────────────
+  const cmjPhaseResults = CMJ_PHASE_KEYS.map((metric) =>
+    classifyPhaseChange({
+      metric,
+      latest: latestCmjAgg?.metrics[metric] ?? null,
+      baselineValues: metricSeries(priorCmjAggs, metric),
+    }),
+  );
+  const cmjPhaseWorst = worstRealChange(cmjPhaseResults);
+  const cmjPhaseHasData = cmjPhaseResults.some((r) => r.status !== "insufficient");
 
   const latestNordAsym = toNumber(latestNord?.asymmetry_percent);
   const nordScored = scoreAsymmetry(
@@ -116,6 +170,8 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
       baseline: cmjBaseline,
       latest: latestCmjValue,
       delta_percent: cmjDrop,
+      // Trials averaged into this test's value (Claudino 2017). Higher = steadier.
+      trial_count: latestCmjTrialCount,
       message:
         cmjDrop == null
           ? "No stable CMJ baseline available."
@@ -142,6 +198,49 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
             : cmjRsiDrop <= -VALD_THRESHOLDS.cmjModerateDropPct
             ? "RSI-modified is moderately below recent baseline."
             : "RSI-modified is within expected recent range.",
+      },
+      // CV-gated phase metrics — HOW the jump was produced. Each metric only
+      // flags a move beyond its own measurement noise (Gathercole 2015 Table 2),
+      // so a noisy metric can't masquerade as fatigue. `available` false = the
+      // phase columns aren't populated yet (VALD result set thin) — the honest
+      // empty state, same as RSI, NOT "athlete fine". Marques & Buchheit 2026.
+      phase: {
+        available: cmjPhaseHasData,
+        trial_count: latestCmjTrialCount,
+        worst_real: cmjPhaseWorst
+          ? {
+              metric: cmjPhaseWorst.metric,
+              label: cmjPhaseWorst.label,
+              delta_percent: cmjPhaseWorst.deltaPct,
+              threshold_percent: cmjPhaseWorst.thresholdPct,
+              cv_percent: cmjPhaseWorst.effectiveCvPct,
+              citation: cmjPhaseWorst.citation,
+            }
+          : null,
+        message_en: cmjPhaseWorst
+          ? cmjPhaseWorst.label.en
+          : cmjPhaseHasData
+          ? "CMJ phase metrics are within normal limits (no change beyond measurement noise)."
+          : "Phase metrics not available yet: VALD isn't returning them in the synced result set.",
+        message_is: cmjPhaseWorst
+          ? cmjPhaseWorst.label.is
+          : cmjPhaseHasData
+          ? "CMJ hreyfifasar eru innan eðlilegra marka (engin breyting umfram mæliskekkju)."
+          : "Fasamælingar ekki tiltækar enn: VALD skilar þeim ekki í samstilltu niðurstöðunum.",
+        metrics: cmjPhaseResults.map((r) => ({
+          metric: r.metric,
+          status: r.status,
+          delta_percent: r.deltaPct,
+          worse: r.worse,
+          baseline: r.baseline,
+          latest: r.latest,
+          test_count: r.testCount,
+          literature_cv_percent: r.literatureCvPct,
+          effective_cv_percent: r.effectiveCvPct,
+          threshold_percent: r.thresholdPct,
+          label: r.label,
+        })),
+        citation: "Gathercole et al. 2015; Marques & Buchheit 2026; Claudino et al. 2017",
       },
     },
     nordbord: {

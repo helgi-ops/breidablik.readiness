@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 
 type Props = {
   teamId: string | null;
@@ -19,6 +20,7 @@ type ValdSnapshotRow = {
   latestCmjAt: string | null;
   cmjScore: number | null;
   cmjBaseline: number | null;  // 42-day median jump height
+  phase: PhaseSummary | null;  // CV-gated force-time phase read
 };
 
 type CmjResult = {
@@ -54,6 +56,55 @@ function median(values: number[]): number | null {
   return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
 }
 
+function num(value: unknown): number | null {
+  return value != null && Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+// ── CV-gated CMJ phase read (from the snapshot's explanation.cmj.phase) ────────
+// Computed server-side in snapshot.ts with the Gathercole-2015 CV gate; the panel
+// only renders it. Never re-classify here — the gate lives in one place.
+type PhaseMetricRead = {
+  metric: string;
+  status: string; // insufficient | noise | worth-watching | real
+  deltaPct: number | null;
+  cvPct: number | null;
+  thresholdPct: number | null;
+  labelEn: string;
+  labelIs: string;
+};
+type PhaseSummary = {
+  available: boolean;
+  worstRealMetric: string | null;
+  messageEn: string;
+  messageIs: string;
+  metrics: PhaseMetricRead[];
+};
+
+function parsePhaseSummary(cmjExpl: Record<string, unknown> | null): PhaseSummary | null {
+  const phase = (cmjExpl?.phase as Record<string, unknown> | null) ?? null;
+  if (!phase) return null;
+  const worst = (phase.worst_real as Record<string, unknown> | null) ?? null;
+  const metricsRaw = Array.isArray(phase.metrics) ? (phase.metrics as Array<Record<string, unknown>>) : [];
+  return {
+    available: phase.available === true,
+    worstRealMetric: worst ? String(worst.metric ?? "") || null : null,
+    messageEn: String(phase.message_en ?? ""),
+    messageIs: String(phase.message_is ?? ""),
+    metrics: metricsRaw.map((m) => {
+      const label = (m.label as Record<string, unknown> | null) ?? null;
+      return {
+        metric: String(m.metric ?? ""),
+        status: String(m.status ?? ""),
+        deltaPct: num(m.delta_percent),
+        cvPct: num(m.effective_cv_percent),
+        thresholdPct: num(m.threshold_percent),
+        labelEn: String(label?.en ?? ""),
+        labelIs: String(label?.is ?? ""),
+      };
+    }),
+  };
+}
+
 type MetricDelta = { pct: number; tone: "good" | "bad" | "flat" };
 
 /** Percentage change of a recent value vs a baseline, classified against the
@@ -75,6 +126,22 @@ const DELTA_TONE_CLASS: Record<MetricDelta["tone"], string> = {
   bad: "text-rose-600",
   flat: "text-slate-400",
 };
+
+const PHASE_METRIC_LABEL: Record<string, string> = {
+  timeToTakeoff: "Contraction time",
+  peakForce: "Peak force",
+  concentricImpulse: "Concentric impulse",
+  eccentricDuration: "Eccentric duration",
+  concentricDuration: "Concentric duration",
+  peakPower: "Peak power",
+  meanRFD: "RFD",
+  fvAuc: "Force–velocity area",
+  meanEccConPower: "Mean power",
+  jumpHeight: "Jump height",
+  rsiMod: "RSI-modified",
+};
+const PHASE_STATUS_LABEL: Record<string, string> = { real: "Real", "worth-watching": "Watch", noise: "Noise" };
+const PHASE_STATUS_CLASS: Record<string, string> = { real: "text-rose-600", "worth-watching": "text-amber-600", noise: "text-slate-400" };
 
 type ActivePlayer = {
   id: string;
@@ -142,20 +209,20 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .eq("team_id", teamId)
         .eq("is_active", true)
         .order("full_name"),
-      // Fetch best CMJ per player for today directly from ForceDecks results
+      // Today's CMJ trials per player — averaged per test below (Claudino 2017).
       supabase
         .from("vald_forcedecks_results")
-        .select("microplayer_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, time_to_takeoff_ms, peak_force_n, asymmetry_percent, asymmetry_side, test_timestamp")
+        .select("microplayer_id, raw_test_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, time_to_takeoff_ms, peak_force_n, asymmetry_percent, asymmetry_side, test_timestamp")
         .eq("team_id", teamId)
         .eq("test_type", "CMJ")
         .gte("test_timestamp", `${date}T00:00:00`)
         .lte("test_timestamp", `${date}T23:59:59`)
         .not("microplayer_id", "is", null)
-        .order("jump_height_cm", { ascending: false }),
+        .order("test_timestamp", { ascending: false }),
       // 42-day baseline window — all CMJ trials before the selected date.
       supabase
         .from("vald_forcedecks_results")
-        .select("microplayer_id, jump_height_cm, rsi_mod, time_to_takeoff_ms, peak_force_n, test_timestamp")
+        .select("microplayer_id, raw_test_id, jump_height_cm, rsi_mod, time_to_takeoff_ms, peak_force_n, test_timestamp")
         .eq("team_id", teamId)
         .eq("test_type", "CMJ")
         .gte("test_timestamp", `${baselineWindowStart}T00:00:00`)
@@ -180,61 +247,79 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         latestCmjAt: row.latest_cmj_at ? String(row.latest_cmj_at) : null,
         cmjScore: row.cmj_score != null ? Number(row.cmj_score) : null,
         cmjBaseline,
+        phase: parsePhaseSummary(cmjExpl),
       };
     });
 
-    // Best jump per player today (first row = highest due to ordering)
-    const bestPerPlayer = new Map<string, CmjResult>();
+    // ── Today: the MEAN of each player's trials, not the best jump ────────
+    // Claudino 2017 (151 studies): the trial mean is more fatigue-sensitive than
+    // the best trial (~10:1), because averaging shrinks measurement error.
+    const todayRowsByPlayer = new Map<string, TrialMetricRow[]>();
+    const sideByPlayer = new Map<string, { side: string | null; mag: number }>();
     for (const row of ((cmjRes.data ?? []) as Array<Record<string, unknown>>)) {
       const pid = String(row.microplayer_id ?? "");
-      if (!pid || bestPerPlayer.has(pid)) continue;
-      bestPerPlayer.set(pid, {
-        playerId: pid,
-        jumpHeightCm: Number(row.jump_height_cm),
-        rsiMod: row.rsi_mod != null ? Number(row.rsi_mod) : null,
-        relativePeakPowerWkg: row.relative_peak_power_w_kg != null ? Number(row.relative_peak_power_w_kg) : null,
-        timeToTakeoffMs: row.time_to_takeoff_ms != null ? Number(row.time_to_takeoff_ms) : null,
-        peakForceN: row.peak_force_n != null ? Number(row.peak_force_n) : null,
-        asymmetryPct: row.asymmetry_percent != null ? Number(row.asymmetry_percent) : null,
-        asymmetrySide: row.asymmetry_side ? String(row.asymmetry_side) : null,
+      if (!pid) continue;
+      const list = todayRowsByPlayer.get(pid) ?? [];
+      list.push({
+        rawTestId: (row.raw_test_id as string | null) ?? null,
         testTimestamp: String(row.test_timestamp ?? ""),
+        metrics: {
+          jh: num(row.jump_height_cm), rsi: num(row.rsi_mod), rpp: num(row.relative_peak_power_w_kg),
+          ttt: num(row.time_to_takeoff_ms), pf: num(row.peak_force_n), asym: num(row.asymmetry_percent),
+        },
       });
-    }
-    setCmjResults(Array.from(bestPerPlayer.values()).sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
-
-    // ── 42-day force-time baselines ──────────────────────────────────────
-    // Per player: keep the best (highest-jump) trial of each test day, then
-    // take the median of each metric across days. Mirrors the "best trial"
-    // convention and reduces single-trial noise.
-    type DayBest = { day: string; jh: number; rsi: number | null; ttt: number | null; pf: number | null };
-    const dayBestByPlayer = new Map<string, Map<string, DayBest>>();
-    for (const row of ((baselineRes.data ?? []) as Array<Record<string, unknown>>)) {
-      const pid = String(row.microplayer_id ?? "");
-      const jh = Number(row.jump_height_cm);
-      if (!pid || !Number.isFinite(jh)) continue;
-      const day = String(row.test_timestamp ?? "").slice(0, 10);
-      if (!day) continue;
-      let days = dayBestByPlayer.get(pid);
-      if (!days) { days = new Map(); dayBestByPlayer.set(pid, days); }
-      const prev = days.get(day);
-      if (!prev || jh > prev.jh) {
-        days.set(day, {
-          day, jh,
-          rsi: row.rsi_mod != null ? Number(row.rsi_mod) : null,
-          ttt: row.time_to_takeoff_ms != null ? Number(row.time_to_takeoff_ms) : null,
-          pf: row.peak_force_n != null ? Number(row.peak_force_n) : null,
-        });
+      todayRowsByPlayer.set(pid, list);
+      const asym = num(row.asymmetry_percent);
+      if (asym != null) {
+        const prev = sideByPlayer.get(pid);
+        if (!prev || Math.abs(asym) > prev.mag) {
+          sideByPlayer.set(pid, { side: row.asymmetry_side ? String(row.asymmetry_side) : null, mag: Math.abs(asym) });
+        }
       }
     }
+    const todayResults: CmjResult[] = [];
+    for (const [pid, rows] of todayRowsByPlayer) {
+      const agg = aggregateTrialsByTest(rows, ["jh", "rsi", "rpp", "ttt", "pf", "asym"])[0];
+      if (!agg || agg.metrics.jh == null) continue;
+      todayResults.push({
+        playerId: pid,
+        jumpHeightCm: agg.metrics.jh,
+        rsiMod: agg.metrics.rsi,
+        relativePeakPowerWkg: agg.metrics.rpp,
+        timeToTakeoffMs: agg.metrics.ttt,
+        peakForceN: agg.metrics.pf,
+        asymmetryPct: agg.metrics.asym,
+        asymmetrySide: sideByPlayer.get(pid)?.side ?? null,
+        testTimestamp: agg.testTimestamp,
+      });
+    }
+    setCmjResults(todayResults.sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
+
+    // ── 42-day force-time baselines ──────────────────────────────────────
+    // Per player: the MEAN of each test's valid trials (Claudino 2017), then the
+    // median of that per-test value across tests. `days` now counts TESTS.
+    const baselineRowsByPlayer = new Map<string, TrialMetricRow[]>();
+    for (const row of ((baselineRes.data ?? []) as Array<Record<string, unknown>>)) {
+      const pid = String(row.microplayer_id ?? "");
+      const jh = num(row.jump_height_cm);
+      if (!pid || jh == null) continue;
+      const list = baselineRowsByPlayer.get(pid) ?? [];
+      list.push({
+        rawTestId: (row.raw_test_id as string | null) ?? null,
+        testTimestamp: String(row.test_timestamp ?? ""),
+        metrics: { jh, rsi: num(row.rsi_mod), ttt: num(row.time_to_takeoff_ms), pf: num(row.peak_force_n) },
+      });
+      baselineRowsByPlayer.set(pid, list);
+    }
     const baselines = new Map<string, CmjBaseline>();
-    for (const [pid, days] of dayBestByPlayer) {
-      const rows = Array.from(days.values());
+    for (const [pid, rows] of baselineRowsByPlayer) {
+      const aggs = aggregateTrialsByTest(rows, ["jh", "rsi", "ttt", "pf"]);
       baselines.set(pid, {
-        jumpHeightCm: median(rows.map((r) => r.jh)),
-        rsiMod: median(rows.flatMap((r) => (r.rsi != null ? [r.rsi] : []))),
-        contractionMs: median(rows.flatMap((r) => (r.ttt != null ? [r.ttt] : []))),
-        peakForceN: median(rows.flatMap((r) => (r.pf != null ? [r.pf] : []))),
-        days: rows.length,
+        jumpHeightCm: median(metricSeries(aggs, "jh")),
+        rsiMod: median(metricSeries(aggs, "rsi")),
+        contractionMs: median(metricSeries(aggs, "ttt")),
+        peakForceN: median(metricSeries(aggs, "pf")),
+        days: aggs.length,
       });
     }
     setCmjBaselines(baselines);
@@ -478,17 +563,20 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                   </table>
                 </div>
                 <p className="mt-1.5 text-[10px] leading-snug text-slate-400">
-                  ⭐ Force-time metrics. Each value is shown vs the player&apos;s own 42-day baseline (median of best daily trials).
-                  Jump height alone can stay flat while force-time metrics — RSI-mod, contraction time, peak force —
-                  reveal residual neuromuscular fatigue 2-4× more sensitively (Marques &amp; Buchheit 2026).
+                  ⭐ Force-time metrics. Each value is the mean of the player&apos;s trials (Claudino 2017), shown vs their own
+                  42-day baseline (median of per-test trial means). Jump height alone can stay flat while force-time metrics —
+                  RSI-mod, contraction time, peak force — reveal residual neuromuscular fatigue 2-4× more sensitively (Marques &amp; Buchheit 2026).
                 </p>
-                {/* Honest RSI state — never a silent row of dashes. */}
+                {/* Honest RSI state — never a silent row of dashes. The blocker is
+                    NOT a VALD HUB toggle (RSI already exists in VALD); the sync now
+                    pulls the full per-trial result set, so RSI fills in on its own. */}
                 {!anyRsi && (
                   <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">
                     <strong>RSI-modified not available yet · RSI-modified ekki tiltækt enn.</strong>{" "}
-                    VALD is not sending RSI-modified or time-to-takeoff in the synced result set, so it can&apos;t be shown or
-                    derived. Configure the ForceDecks test profile in VALD HUB to output them; this fills in automatically once it arrives.
-                    <span className="text-amber-700"> (VALD sendir ekki RSI-modified — stilltu ForceDecks prófílinn í VALD HUB.)</span>
+                    The synced VALD result set isn&apos;t carrying RSI-modified or time-to-takeoff yet, so it can&apos;t be shown or
+                    derived. Nothing to configure — the sync now pulls the full per-trial result set from VALD and this fills in
+                    automatically once those metrics arrive.
+                    <span className="text-amber-700"> (VALD skilar ekki RSI-modified enn — fyllist sjálfkrafa þegar full niðurstaða kemur; ekkert að stilla.)</span>
                   </div>
                 )}
                 {rsiLowConfidence && (
@@ -497,6 +585,14 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                     Read the trend, not a single value, until more tests accrue.
                   </div>
                 )}
+
+                {/* ── CV-gated force-time PHASE read ─────────────────────────────
+                    HOW the jump was produced. Each metric only flags a move beyond
+                    its own measurement noise (Gathercole 2015 CV gate, computed in
+                    snapshot.ts). Headline = worst `real` per player; numbers + CV +
+                    citation behind the toggle. Honest empty state when phase columns
+                    aren't populated. */}
+                <PhaseRead snapshots={snapshots} />
               </div>
             );
           })()}
@@ -627,6 +723,116 @@ function MetricCell({ value, delta, bold }: { value: string; delta: MetricDelta 
         </div>
       )}
     </td>
+  );
+}
+
+/**
+ * CV-gated force-time PHASE read. Layered: (0) headline = players with a `real`
+ * change in plain language; (1) the "within normal limits" / honest empty state;
+ * (2) per-metric numbers, CV gate and citation behind "Show phase details" — the
+ * S&C surface. The gate itself is computed once, server-side, in snapshot.ts.
+ */
+function PhaseRead({ snapshots }: { snapshots: ValdSnapshotRow[] }) {
+  const withPhase = snapshots.filter((s) => s.phase != null);
+  if (withPhase.length === 0) return null; // pre-rebuild snapshots carry no phase block
+
+  const anyAvailable = withPhase.some((s) => s.phase!.available);
+  if (!anyAvailable) {
+    // Honest empty state — same discipline as the RSI banner. Never a fabricated read.
+    return (
+      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-500">
+        <strong>Force-time phase read not available yet.</strong>{" "}
+        Contraction time, phase durations, impulse and RFD aren&apos;t in the synced VALD result set yet, so no phase read is
+        shown or fabricated. Fills in automatically once the full per-trial result set syncs.
+        <span className="text-slate-400"> (Fasamælingar ekki tiltækar enn — fyllast sjálfkrafa þegar full niðurstaða kemur.)</span>
+      </div>
+    );
+  }
+
+  const flagged = withPhase.filter((s) => s.phase!.worstRealMetric);
+  const detailPlayers = withPhase.filter((s) => s.phase!.available);
+
+  return (
+    <div className="mt-2 space-y-2">
+      {flagged.length > 0 ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Force-time change (beyond noise)</span>
+            <span className="ml-1 rounded-full bg-rose-100 px-1.5 py-px text-[10px] font-bold text-rose-700">{flagged.length}</span>
+          </div>
+          <ul className="space-y-1">
+            {flagged.map((s) => (
+              <li key={s.playerId} className="text-[11px] leading-snug text-rose-900">
+                <span className="font-semibold">{s.playerName}:</span> {s.phase!.messageEn}
+                <span className="block text-rose-700/80">{s.phase!.messageIs}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+          <span className="text-[11px] text-emerald-700 font-medium">
+            CMJ force-time phases within normal limits · innan eðlilegra marka (no change beyond measurement noise).
+          </span>
+        </div>
+      )}
+
+      <details className="group">
+        <summary className="flex cursor-pointer select-none list-none items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Show phase details</span>
+          <svg className="ml-auto w-3 h-3 text-slate-300 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+        <div className="mt-2 space-y-2">
+          {detailPlayers.map((s) => {
+            const metrics = s.phase!.metrics.filter((m) => m.status !== "insufficient");
+            if (metrics.length === 0) return null;
+            return (
+              <div key={s.playerId} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                <div className="text-[11px] font-semibold text-slate-700 mb-1">{s.playerName}</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="text-slate-400">
+                        <th className="text-left font-semibold py-0.5">Metric</th>
+                        <th className="text-right font-semibold py-0.5">Δ vs usual</th>
+                        <th className="text-right font-semibold py-0.5">Noise gate</th>
+                        <th className="text-right font-semibold py-0.5">Read</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.map((m) => (
+                        <tr key={m.metric} className="border-t border-slate-50">
+                          <td className="py-0.5 text-slate-600">{PHASE_METRIC_LABEL[m.metric] ?? m.metric}</td>
+                          <td className="py-0.5 text-right tabular-nums text-slate-600">
+                            {m.deltaPct != null ? `${m.deltaPct >= 0 ? "+" : ""}${m.deltaPct.toFixed(1)}%` : "–"}
+                          </td>
+                          <td className="py-0.5 text-right tabular-nums text-slate-400">
+                            {m.thresholdPct != null ? `${m.thresholdPct.toFixed(1)}%` : "–"}
+                            {m.cvPct != null ? ` · CV ${m.cvPct.toFixed(1)}` : ""}
+                          </td>
+                          <td className={`py-0.5 text-right font-semibold ${PHASE_STATUS_CLASS[m.status] ?? "text-slate-400"}`}>
+                            {PHASE_STATUS_LABEL[m.status] ?? m.status}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-[10px] leading-snug text-slate-400">
+            A change only flags when it clears the metric&apos;s own measurement noise — the literature CV (Gathercole 2015),
+            widened by the player&apos;s own CV, ×1.5. Noisy metrics (RFD) need a bigger move than reliable ones (jump height),
+            so a one-off wobble can&apos;t masquerade as fatigue. Marques &amp; Buchheit 2026; Claudino 2017.
+          </p>
+        </div>
+      </details>
+    </div>
   );
 }
 
