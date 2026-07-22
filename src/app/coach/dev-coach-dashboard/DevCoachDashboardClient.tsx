@@ -85,6 +85,7 @@ import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
+import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 // MechanicalLoadIndexCard moved to /coach/load-intelligence (was on the GPS Data tab).
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
@@ -10553,6 +10554,10 @@ export default function CoachPage() {
             <div className="grid gap-4 lg:grid-cols-2">
               <SessionRpeMonitoringCard teamId={coachTeamId} />
               <DailyInternalLoadCard teamId={coachTeamId} />
+            </div>
+            {/* Objective HR internal-load cross-check on the subjective sRPE above. */}
+            <div className="mt-4">
+              <HrLoadCrossCheckCard teamId={coachTeamId} />
             </div>
           </section>
 
