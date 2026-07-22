@@ -68,6 +68,22 @@ test("time-to-takeoff of zero cannot derive RSI (no divide-by-zero → null)", (
   assert.equal(trial.rsiModSource, null);
 });
 
+test("VALD's real keys ECCENTRIC_TIME + CONTRACTION_TIME map to the phase columns", () => {
+  // VALD sends these (not TRIAL_ECCENTRIC_DURATION / TIME_TO_TAKEOFF), and it
+  // MISLABELS the unit as "Millisecond" while the value is actually SECONDS
+  // (0.25 = 0.25 s). The mapper must alias the keys AND the conversion must turn
+  // that into real milliseconds, so the phase CV gate gets its inputs in ms.
+  const [trial] = normalizeForceDecksTrials(
+    cmjPayload([
+      { result: "JUMP_HEIGHT_MO", unit: "Meter", value: 0.3 },
+      { result: "ECCENTRIC_TIME", unit: "Millisecond", value: 0.25 },
+      { result: "CONTRACTION_TIME", unit: "Millisecond", value: 0.6 },
+    ]),
+  );
+  assert.equal(trial.eccentricDurationMs, 250);
+  assert.equal(trial.timeToTakeoffMs, 600);
+});
+
 test("the diagnostic records the result keys VALD actually sent", () => {
   const [trial] = normalizeForceDecksTrials(
     cmjPayload([

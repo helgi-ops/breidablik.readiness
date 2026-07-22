@@ -127,6 +127,12 @@ function buildParamMap(payload: unknown): Map<string, number> {
         let converted = val;
         if (unit === "meter" || unit === "m") converted = val * 100; // m → cm
         else if (unit === "second" || unit === "s") converted = val * 1000; // s → ms
+        // VALD ForceDecks MISLABELS its phase-duration keys (Contraction Time,
+        // Eccentric/Concentric/Braking Duration, Flight Time, Time to Peak Force)
+        // as "Millisecond" but sends SECONDS — e.g. contraction time 0.9 = 0.9 s.
+        // Verified across the whole squad (every "Millisecond" value < 1). Convert
+        // to real ms so the _ms columns hold milliseconds, not seconds.
+        else if (unit === "millisecond" || unit === "ms") converted = val * 1000;
         // Newton, Watt, Centimeter, % — stored as-is
         const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
         const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
@@ -268,7 +274,9 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
   const asym = computeAsymmetry({ left: leftValue, right: rightValue, trustedPercent, trustedSide });
 
   const timeToTakeoffMs =
-    paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]) ??
+    // VALD sends no takeoff-time key; CONTRACTION_TIME ("Contraction Time",
+    // movement-start→takeoff) is the available proxy the phase CV gate uses.
+    paramValue(params, ["TRIAL_TIME_TO_TAKEOFF", "TRIAL_CONTRACTION_TIME"]) ??
     paramValue(params, ["TimeToTakeoff"], 1000) ??
     firstNumber(record.time_to_takeoff_ms, record.timeToTakeoffMs);
   const rsiModFromVald =
@@ -288,8 +296,12 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     rsiModSource,
     resultKeysSeen: [...params.keys()],
     eccentricDurationMs:
-      // TRIAL keys already in ms (unit="Second" converted ×1000 in buildParamMap)
-      paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]) ??
+      // TRIAL keys already in ms (unit="Second" converted ×1000 in buildParamMap).
+      // ECCENTRIC_TIME is VALD's actual key for "Eccentric Duration".
+      // NB: VALD misspells "braking" as "BEAKING" in its ratio keys
+      // (BEAKING_CONCENTRIC_DURATION_RATIO etc.) — match that typo, not "BRAKING",
+      // if those are ever needed. The keys below are spelled correctly.
+      paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_ECCENTRIC_TIME", "TRIAL_BRAKING_DURATION"]) ??
       paramValue(params, ["EccentricDuration"], 1000) ??
       firstNumber(record.eccentric_duration_ms, record.eccentricDurationMs),
     concentricDurationMs:
@@ -441,6 +453,9 @@ function buildTrialParamMap(trialRecord: Record<string, unknown>): Map<string, n
     let converted = val;
     if (unit === "meter" || unit === "m") converted = val * 100;
     else if (unit === "second" || unit === "s") converted = val * 1000;
+    // VALD mislabels ForceDecks phase durations as "Millisecond" but sends
+    // seconds (see buildParamMap note) — convert to real ms.
+    else if (unit === "millisecond" || unit === "ms") converted = val * 1000;
     const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
     const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
     const key = `TRIAL_${resultCode}${suffix}`;
@@ -491,7 +506,8 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
     const trialAsym = computeAsymmetry({ left: leftValue, right: rightValue, trustedPercent });
     const trialTimestamp = firstString(t.recordedUTC as string | undefined) ?? baseTimestamp;
 
-    const timeToTakeoffMs = paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]);
+    // CONTRACTION_TIME (movement-start→takeoff) is VALD's takeoff-time proxy.
+    const timeToTakeoffMs = paramValue(params, ["TRIAL_TIME_TO_TAKEOFF", "TRIAL_CONTRACTION_TIME"]);
     const { rsiMod, rsiModSource } = resolveRsiMod(
       paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]),
       jumpHeightCm,
@@ -507,7 +523,7 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
       rsiMod,
       rsiModSource,
       resultKeysSeen: [...params.keys()],
-      eccentricDurationMs: paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]),
+      eccentricDurationMs: paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_ECCENTRIC_TIME", "TRIAL_BRAKING_DURATION"]),
       concentricDurationMs: paramValue(params, ["TRIAL_CONCENTRIC_DURATION", "TRIAL_PROPULSION_DURATION"]),
       peakPowerW,
       relativePeakPowerWKg:
