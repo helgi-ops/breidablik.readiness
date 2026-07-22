@@ -29,6 +29,7 @@ import { applyCoachRules, type FinalRecommendationDecision } from "@/lib/micropu
 import { buildSessionDraft, type SessionDraft } from "@/lib/micropulse/autoSessionBuilder";
 // Session workflow removed (localStorage-only prototype, not in use)
 import PlayerMovementCard from "@/components/player/PlayerMovementCard";
+import PlayerHrZoneCard from "@/components/player/PlayerHrZoneCard";
 import PlayerDrillLoadCard from "@/components/player/PlayerDrillLoadCard";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 import PlayerRobustnessCard from "@/components/player/PlayerRobustnessCard";
@@ -6344,6 +6345,13 @@ export default function PlayerClient() {
                             the player's own normal — motivating, not a risk
                             score. */}
                         <PlayerMovementCard date={gpsDate} lang={lang === "IS" ? "IS" : "EN"} />
+
+                        {/* The player's own HR-belt session intensity across the 8
+                            HR bands — self-hides when they didn't wear a belt.
+                            Boundary'd so it can never blank the dashboard. */}
+                        <ClientErrorBoundary>
+                          <PlayerHrZoneCard date={gpsDate} lang={lang === "IS" ? "IS" : "EN"} />
+                        </ClientErrorBoundary>
 
                         {/* The player's own load broken down by drill for the
                             selected pager date — follows gpsDate, self-hides when
