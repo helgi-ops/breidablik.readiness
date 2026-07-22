@@ -6,6 +6,7 @@ import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, normalizeCatapultPeriodStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
 import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, type PeriodRow } from "@/lib/micropulse/drillActuals";
+import { boundRawPayload } from "./rawPayloadCapture";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
 
 function dateKey(input?: string | null): string {
@@ -313,23 +314,6 @@ async function enrichWithTeam(rows: AggregatedRow[]) {
   const { data, error } = await sb.from("players").select("id, team_id").in("id", playerIds);
   if (error) throw new Error(error.message);
   return new Map(((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), (row.team_id as string | null) ?? null]));
-}
-
-// Keep raw_payload_json bounded — it's a DIAGNOSTIC sample of one athlete-activity's
-// parameter object (so we can see which OpenField names arrive), never a place for
-// unbounded blobs. If a payload is unexpectedly large, store just the key list so a
-// row can't balloon.
-const RAW_PAYLOAD_MAX_BYTES = 32_000;
-function boundRawPayload(raw: unknown): unknown {
-  if (raw == null) return null;
-  try {
-    const json = JSON.stringify(raw);
-    if (json.length <= RAW_PAYLOAD_MAX_BYTES) return raw;
-    const keys = raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
-    return { _truncated: true, _bytes: json.length, keys };
-  } catch {
-    return { _truncated: true, _unserializable: true };
-  }
 }
 
 async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
