@@ -183,6 +183,9 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                 {reads.map(({ playerId, name, read, dist }) => {
                   const s = read.latest;
                   const present = dist.filter((b) => b.timeS && b.timeS > 0);
+                  // Chips list only bands with a meaningful stay (≥15 s) so a
+                  // 1-second blip into a high band doesn't show as "B6 · 0%".
+                  const labelled = present.filter((b) => (b.timeS ?? 0) >= 15);
                   return (
                     <Fragment key={playerId}>
                       <tr className="border-t align-top">
@@ -213,7 +216,7 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                               ))}
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1">
-                              {present.map((b) => (
+                              {labelled.map((b) => (
                                 <span
                                   key={b.band}
                                   className="rounded px-1 py-px text-[9px] tabular-nums text-slate-600"

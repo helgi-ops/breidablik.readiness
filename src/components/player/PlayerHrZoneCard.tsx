@@ -45,14 +45,19 @@ export default function PlayerHrZoneCard({ date, lang }: { date: string; lang: "
   if (loading) return null;
   if (!data || !data.hasData) return null;
 
+  // The bar shows every band with any time (tiny ones are invisible but keep the
+  // widths honest). The LABEL/headline use only bands with a meaningful stay
+  // (≥15 s) so a 1-second blip into a high band can't read as "reached band 8".
   const present = data.bands.filter((b) => b.timeS && b.timeS > 0);
   if (present.length === 0) return null;
+  const meaningful = present.filter((b) => (b.timeS ?? 0) >= 15);
+  const labelled = meaningful.length ? meaningful : present;
 
-  // Boundary-free, honest framing: the highest band reached and where most time
-  // was spent (we don't know the bands' %HRmax cutoffs, so we don't invent
-  // "high-intensity %"). The peak band IS a real relative-intensity signal.
-  const peakBand = Math.max(...present.map((b) => b.band));
-  const dominant = present.reduce((a, b) => ((b.pct ?? 0) > (a.pct ?? 0) ? b : a));
+  // Boundary-free, honest framing: the highest band genuinely reached and where
+  // most time was spent (we don't know the bands' %HRmax cutoffs, so we don't
+  // invent "high-intensity %"). The peak band IS a real relative-intensity signal.
+  const peakBand = Math.max(...labelled.map((b) => b.band));
+  const dominant = labelled.reduce((a, b) => ((b.pct ?? 0) > (a.pct ?? 0) ? b : a));
   const headline =
     peakBand >= 6
       ? is ? `Hörð æfing — komst upp í band ${peakBand}.` : `Hard session — reached band ${peakBand}.`
@@ -86,7 +91,7 @@ export default function PlayerHrZoneCard({ date, lang }: { date: string; lang: "
       </div>
 
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {present.map((b) => (
+        {labelled.map((b) => (
           <span
             key={b.band}
             className="rounded px-1.5 py-px text-[10px] tabular-nums text-slate-600"
