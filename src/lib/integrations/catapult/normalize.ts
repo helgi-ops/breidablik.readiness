@@ -424,6 +424,10 @@ const METABOLIC_GEN_KEYS = [
 // ─── Heart Rate metric keys ─────────────────────────────────────────────────
 
 const AVG_HEART_RATE_KEYS = [
+  // Catapult OpenField's ACTUAL key (confirmed via the raw-payload capture,
+  // 2026-07-22) — this is the one that was missing, which is why avg HR was null
+  // while max HR mapped.
+  "mean_heart_rate",
   // Catapult OpenField display-name variants
   "Heart Rate Avg",
   "Average Heart Rate",
@@ -457,81 +461,83 @@ const MAX_HEART_RATE_KEYS = [
   "maximumHeartRate",
 ];
 
-const HR_ZONE_KEYS: Record<1 | 2 | 3 | 4 | 5, string[]> = {
-  1: [
-    "Heart Rate Zone 1 Duration",
-    "HR Zone 1 Duration",
-    "HR Zone 1 Time",
-    "heart_rate_zone_1_duration",
-    "hr_zone_1_duration",
-    "hrz_1_duration",
-    "zone1duration",
-    "hr_zone1_s",
-    "heart_rate_z1_duration",
-  ],
-  2: [
-    "Heart Rate Zone 2 Duration",
-    "HR Zone 2 Duration",
-    "HR Zone 2 Time",
-    "heart_rate_zone_2_duration",
-    "hr_zone_2_duration",
-    "hrz_2_duration",
-    "zone2duration",
-    "hr_zone2_s",
-    "heart_rate_z2_duration",
-  ],
-  3: [
-    "Heart Rate Zone 3 Duration",
-    "HR Zone 3 Duration",
-    "HR Zone 3 Time",
-    "heart_rate_zone_3_duration",
-    "hr_zone_3_duration",
-    "hrz_3_duration",
-    "zone3duration",
-    "hr_zone3_s",
-    "heart_rate_z3_duration",
-  ],
-  4: [
-    "Heart Rate Zone 4 Duration",
-    "HR Zone 4 Duration",
-    "HR Zone 4 Time",
-    "heart_rate_zone_4_duration",
-    "hr_zone_4_duration",
-    "hrz_4_duration",
-    "zone4duration",
-    "hr_zone4_s",
-    "heart_rate_z4_duration",
-  ],
-  5: [
-    "Heart Rate Zone 5 Duration",
-    "HR Zone 5 Duration",
-    "HR Zone 5 Time",
-    "heart_rate_zone_5_duration",
-    "hr_zone_5_duration",
-    "hrz_5_duration",
-    "zone5duration",
-    "hr_zone5_s",
-    "heart_rate_z5_duration",
-  ],
+const MIN_HEART_RATE_KEYS = [
+  "min_heart_rate", // Catapult OpenField actual key (raw-payload capture)
+  "minimum_heart_rate",
+  "heart_rate_min",
+  "hr_min",
+  "minHeartRate",
+];
+
+// %HRmax / %HRavg — the submaximal-HR / HRex signal (Buchheit). Session summary
+// percentages of the athlete's HRmax; arriving now under these keys, unmapped.
+const PCT_MAX_HEART_RATE_KEYS = [
+  "percentage_max_heart_rate", // Catapult OpenField actual key
+  "pct_max_heart_rate",
+  "percent_max_heart_rate",
+];
+const PCT_AVG_HEART_RATE_KEYS = [
+  "percentage_avg_heart_rate", // Catapult OpenField actual key
+  "pct_avg_heart_rate",
+  "percent_avg_heart_rate",
+];
+
+// Catapult sends EIGHT HR bands (not five) as heart_rate_bandN_total_duration —
+// a per-band time-in-zone in SECONDS (Catapult's universal duration unit; stored
+// as-is like every other *_duration field). We extend to 8 columns rather than
+// collapse 8→5, which would fabricate zone boundaries. Legacy display-name /
+// zone aliases kept as fallbacks. See migration 20260722120000.
+const HR_ZONE_KEYS: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8, string[]> = {
+  1: ["heart_rate_band1_total_duration", "Heart Rate Zone 1 Duration", "HR Zone 1 Duration", "HR Zone 1 Time", "heart_rate_zone_1_duration", "hr_zone_1_duration", "hrz_1_duration", "zone1duration", "hr_zone1_s", "heart_rate_z1_duration"],
+  2: ["heart_rate_band2_total_duration", "Heart Rate Zone 2 Duration", "HR Zone 2 Duration", "HR Zone 2 Time", "heart_rate_zone_2_duration", "hr_zone_2_duration", "hrz_2_duration", "zone2duration", "hr_zone2_s", "heart_rate_z2_duration"],
+  3: ["heart_rate_band3_total_duration", "Heart Rate Zone 3 Duration", "HR Zone 3 Duration", "HR Zone 3 Time", "heart_rate_zone_3_duration", "hr_zone_3_duration", "hrz_3_duration", "zone3duration", "hr_zone3_s", "heart_rate_z3_duration"],
+  4: ["heart_rate_band4_total_duration", "Heart Rate Zone 4 Duration", "HR Zone 4 Duration", "HR Zone 4 Time", "heart_rate_zone_4_duration", "hr_zone_4_duration", "hrz_4_duration", "zone4duration", "hr_zone4_s", "heart_rate_z4_duration"],
+  5: ["heart_rate_band5_total_duration", "Heart Rate Zone 5 Duration", "HR Zone 5 Duration", "HR Zone 5 Time", "heart_rate_zone_5_duration", "hr_zone_5_duration", "hrz_5_duration", "zone5duration", "hr_zone5_s", "heart_rate_z5_duration"],
+  6: ["heart_rate_band6_total_duration", "Heart Rate Zone 6 Duration", "HR Zone 6 Duration"],
+  7: ["heart_rate_band7_total_duration", "Heart Rate Zone 7 Duration", "HR Zone 7 Duration"],
+  8: ["heart_rate_band8_total_duration", "Heart Rate Zone 8 Duration", "HR Zone 8 Duration"],
 };
 
 export function extractHeartRateMetrics(record: Record<string, unknown>): {
   avgHeartRate: number | null;
   maxHeartRate: number | null;
+  minHeartRate: number | null;
   hrZone1TimeS: number | null;
   hrZone2TimeS: number | null;
   hrZone3TimeS: number | null;
   hrZone4TimeS: number | null;
   hrZone5TimeS: number | null;
+  hrZone6TimeS: number | null;
+  hrZone7TimeS: number | null;
+  hrZone8TimeS: number | null;
+  pctMaxHeartRate: number | null;
+  pctAvgHeartRate: number | null;
 } {
   const avgHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, AVG_HEART_RATE_KEYS), 30, 220));
   const maxHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, MAX_HEART_RATE_KEYS), 30, 230));
-  const hrZone1TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[1]), 0, 14_400));
-  const hrZone2TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[2]), 0, 14_400));
-  const hrZone3TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[3]), 0, 14_400));
-  const hrZone4TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[4]), 0, 14_400));
-  const hrZone5TimeS = nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[5]), 0, 14_400));
-  return { avgHeartRate, maxHeartRate, hrZone1TimeS, hrZone2TimeS, hrZone3TimeS, hrZone4TimeS, hrZone5TimeS };
+  const minHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, MIN_HEART_RATE_KEYS), 25, 220));
+  // Zone durations are Catapult SECONDS, stored as-is (0–14 400 s = 4 h ceiling).
+  const zone = (band: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) =>
+    nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[band]), 0, 14_400));
+  // %HRmax / %HRavg — session summary percentages of the athlete's HRmax. Allow a
+  // little over 100 for HRmax under-estimation; reject the rest as corrupt.
+  const pctMaxHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, PCT_MAX_HEART_RATE_KEYS), 0, 120));
+  const pctAvgHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, PCT_AVG_HEART_RATE_KEYS), 0, 120));
+  return {
+    avgHeartRate,
+    maxHeartRate,
+    minHeartRate,
+    hrZone1TimeS: zone(1),
+    hrZone2TimeS: zone(2),
+    hrZone3TimeS: zone(3),
+    hrZone4TimeS: zone(4),
+    hrZone5TimeS: zone(5),
+    hrZone6TimeS: zone(6),
+    hrZone7TimeS: zone(7),
+    hrZone8TimeS: zone(8),
+    pctMaxHeartRate,
+    pctAvgHeartRate,
+  };
 }
 
 /** Returns the first matching string value for generation tag, else null. */
@@ -1176,11 +1182,17 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       ]),
       avgHeartRate: normalizedHr.avgHeartRate,
       maxHeartRate: normalizedHr.maxHeartRate,
+      minHeartRate: normalizedHr.minHeartRate,
       hrZone1TimeS: normalizedHr.hrZone1TimeS,
       hrZone2TimeS: normalizedHr.hrZone2TimeS,
       hrZone3TimeS: normalizedHr.hrZone3TimeS,
       hrZone4TimeS: normalizedHr.hrZone4TimeS,
       hrZone5TimeS: normalizedHr.hrZone5TimeS,
+      hrZone6TimeS: normalizedHr.hrZone6TimeS,
+      hrZone7TimeS: normalizedHr.hrZone7TimeS,
+      hrZone8TimeS: normalizedHr.hrZone8TimeS,
+      pctMaxHeartRate: normalizedHr.pctMaxHeartRate,
+      pctAvgHeartRate: normalizedHr.pctAvgHeartRate,
       durationMinutes: normalizedIma.durationMinutes,
       // IMA Free Running 8-band pipeline (indoor stride detail)
       ...extractFreeRunningBands(flattenedRecord),
@@ -1286,6 +1298,11 @@ function maxNullable(a: number | null | undefined, b: number | null | undefined)
   return Math.max(a ?? Number.NEGATIVE_INFINITY, b ?? Number.NEGATIVE_INFINITY);
 }
 
+function minNullable(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null && b == null) return null;
+  return Math.min(a ?? Number.POSITIVE_INFINITY, b ?? Number.POSITIVE_INFINITY);
+}
+
 export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): CatapultSessionMetric[] {
   const byAthleteDate = new Map<string, CatapultSessionMetric>();
   const seenActivityAthlete = new Set<string>();
@@ -1372,11 +1389,19 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     // Heart Rate: average HR is averaged across activities, max HR takes max, zones sum
     current.avgHeartRate = maxNullable(current.avgHeartRate, metric.avgHeartRate); // use max as proxy when multi-session
     current.maxHeartRate = maxNullable(current.maxHeartRate, metric.maxHeartRate);
+    current.minHeartRate = minNullable(current.minHeartRate, metric.minHeartRate);
     current.hrZone1TimeS = sumNullable(current.hrZone1TimeS, metric.hrZone1TimeS);
     current.hrZone2TimeS = sumNullable(current.hrZone2TimeS, metric.hrZone2TimeS);
     current.hrZone3TimeS = sumNullable(current.hrZone3TimeS, metric.hrZone3TimeS);
     current.hrZone4TimeS = sumNullable(current.hrZone4TimeS, metric.hrZone4TimeS);
     current.hrZone5TimeS = sumNullable(current.hrZone5TimeS, metric.hrZone5TimeS);
+    current.hrZone6TimeS = sumNullable(current.hrZone6TimeS, metric.hrZone6TimeS);
+    current.hrZone7TimeS = sumNullable(current.hrZone7TimeS, metric.hrZone7TimeS);
+    current.hrZone8TimeS = sumNullable(current.hrZone8TimeS, metric.hrZone8TimeS);
+    // %HRmax/%HRavg are session summaries; take max as the multi-session proxy
+    // (same convention as avg HR above).
+    current.pctMaxHeartRate = maxNullable(current.pctMaxHeartRate, metric.pctMaxHeartRate);
+    current.pctAvgHeartRate = maxNullable(current.pctAvgHeartRate, metric.pctAvgHeartRate);
     // Session duration: sum across activities
     current.durationMinutes = sumNullable(current.durationMinutes, metric.durationMinutes);
     // IMA Free Running 8 bands: stride counts + load sum, stride rate takes max
@@ -1474,11 +1499,17 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaClock: metric.imaClock ?? null,
       avgHeartRate: metric.avgHeartRate ?? null,
       maxHeartRate: metric.maxHeartRate ?? null,
+      minHeartRate: metric.minHeartRate ?? null,
       hrZone1TimeS: metric.hrZone1TimeS ?? null,
       hrZone2TimeS: metric.hrZone2TimeS ?? null,
       hrZone3TimeS: metric.hrZone3TimeS ?? null,
       hrZone4TimeS: metric.hrZone4TimeS ?? null,
       hrZone5TimeS: metric.hrZone5TimeS ?? null,
+      hrZone6TimeS: metric.hrZone6TimeS ?? null,
+      hrZone7TimeS: metric.hrZone7TimeS ?? null,
+      hrZone8TimeS: metric.hrZone8TimeS ?? null,
+      pctMaxHeartRate: metric.pctMaxHeartRate ?? null,
+      pctAvgHeartRate: metric.pctAvgHeartRate ?? null,
       // FMP (Football Movement Profile)
       fmpVeryLowS: metric.fmpVeryLowS ?? null,
       fmpLowIntensityS: metric.fmpLowIntensityS ?? null,

@@ -136,14 +136,21 @@ export type CatapultSessionMetric = {
   fmpDynamicMediumS?: number | null;
   fmpDynamicHighS?: number | null;
   fmpTotalDurationS?: number | null;
-  // Heart Rate
+  // Heart Rate — Catapult sends 8 HR bands (heart_rate_bandN_total_duration, s),
+  // avg = mean_heart_rate, plus min HR and %HRmax/%HRavg (HRex submaximal signal).
   avgHeartRate?: number | null;
   maxHeartRate?: number | null;
+  minHeartRate?: number | null;
   hrZone1TimeS?: number | null;
   hrZone2TimeS?: number | null;
   hrZone3TimeS?: number | null;
   hrZone4TimeS?: number | null;
   hrZone5TimeS?: number | null;
+  hrZone6TimeS?: number | null;
+  hrZone7TimeS?: number | null;
+  hrZone8TimeS?: number | null;
+  pctMaxHeartRate?: number | null;
+  pctAvgHeartRate?: number | null;
   // Session duration in minutes (from Catapult GPS)
   durationMinutes?: number | null;
   // IMA Free Running 8-band pipeline (indoor stride detail, IMU-only, no GPS required)
@@ -257,11 +264,17 @@ export type NormalizedExternalLoad = {
     // Heart Rate
     avgHeartRate?: number | null;
     maxHeartRate?: number | null;
+    minHeartRate?: number | null;
     hrZone1TimeS?: number | null;
     hrZone2TimeS?: number | null;
     hrZone3TimeS?: number | null;
     hrZone4TimeS?: number | null;
     hrZone5TimeS?: number | null;
+    hrZone6TimeS?: number | null;
+    hrZone7TimeS?: number | null;
+    hrZone8TimeS?: number | null;
+    pctMaxHeartRate?: number | null;
+    pctAvgHeartRate?: number | null;
     // Session duration in minutes
     durationMinutes?: number | null;
     // IMA Free Running 8-band pipeline (indoor stride detail, IMU-only)

@@ -16,11 +16,17 @@ export type CatapultMetricKey =
   | "totalPlayerLoad"
   | "avgHeartRate"
   | "maxHeartRate"
+  | "minHeartRate"
   | "hrZone1TimeS"
   | "hrZone2TimeS"
   | "hrZone3TimeS"
   | "hrZone4TimeS"
-  | "hrZone5TimeS";
+  | "hrZone5TimeS"
+  | "hrZone6TimeS"
+  | "hrZone7TimeS"
+  | "hrZone8TimeS"
+  | "pctMaxHeartRate"
+  | "pctAvgHeartRate";
 
 export type CatapultMetricDefinition = {
   key: CatapultMetricKey;
@@ -191,6 +197,42 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     label: "HR Zone 5 (s)",
     digits: 0,
     aliases: ["hr_zone_5_time_s", "hr_zone5_time_s", "hrZone5TimeS", "hrz_5_duration"],
+  },
+  {
+    key: "hrZone6TimeS",
+    label: "HR Zone 6 (s)",
+    digits: 0,
+    aliases: ["hr_zone_6_time_s", "hr_zone6_time_s", "hrZone6TimeS"],
+  },
+  {
+    key: "hrZone7TimeS",
+    label: "HR Zone 7 (s)",
+    digits: 0,
+    aliases: ["hr_zone_7_time_s", "hr_zone7_time_s", "hrZone7TimeS"],
+  },
+  {
+    key: "hrZone8TimeS",
+    label: "HR Zone 8 (s)",
+    digits: 0,
+    aliases: ["hr_zone_8_time_s", "hr_zone8_time_s", "hrZone8TimeS"],
+  },
+  {
+    key: "minHeartRate",
+    label: "Min HR (bpm)",
+    digits: 0,
+    aliases: ["min_heart_rate", "minimum_heart_rate", "heart_rate_min", "minHeartRate"],
+  },
+  {
+    key: "pctMaxHeartRate",
+    label: "% HRmax",
+    digits: 0,
+    aliases: ["pct_max_heart_rate", "percentage_max_heart_rate", "pctMaxHeartRate"],
+  },
+  {
+    key: "pctAvgHeartRate",
+    label: "% HRavg",
+    digits: 0,
+    aliases: ["pct_avg_heart_rate", "percentage_avg_heart_rate", "pctAvgHeartRate"],
   },
 ] as const;
 

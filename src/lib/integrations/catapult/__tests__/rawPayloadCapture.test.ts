@@ -4,6 +4,7 @@ import {
   normalizeCatapultActivityStats,
   aggregateCatapultMetrics,
   toNormalizedExternalLoad,
+  extractHeartRateMetrics,
 } from "../normalize";
 
 // A per-athlete activity record where max HR arrives under a MATCHED name but the
@@ -48,6 +49,42 @@ test("toNormalizedExternalLoad carries rawPayload + paramKeys through to the row
   // Mapped fields still flow.
   assert.equal(row.externalLoad.maxHeartRate, 180);
   assert.equal(row.externalLoad.avgHeartRate ?? null, null);
+});
+
+test("maps Catapult's REAL HR field names: mean_heart_rate, 8 bands, %HRmax, min", () => {
+  const hr = extractHeartRateMetrics({
+    mean_heart_rate: 152, // avg HR — the alias that was missing
+    max_heart_rate: 181, // already worked
+    min_heart_rate: 61,
+    // 8 bands, total_duration in seconds → 1:1 into the _time_s columns
+    heart_rate_band1_total_duration: 300,
+    heart_rate_band2_total_duration: 250,
+    heart_rate_band3_total_duration: 200,
+    heart_rate_band4_total_duration: 150,
+    heart_rate_band5_total_duration: 120,
+    heart_rate_band6_total_duration: 90,
+    heart_rate_band7_total_duration: 60,
+    heart_rate_band8_total_duration: 30,
+    percentage_max_heart_rate: 94,
+    percentage_avg_heart_rate: 79,
+  });
+  assert.equal(hr.avgHeartRate, 152, "mean_heart_rate now maps to avg HR");
+  assert.equal(hr.maxHeartRate, 181, "max HR unchanged");
+  assert.equal(hr.minHeartRate, 61);
+  assert.equal(hr.hrZone1TimeS, 300); // seconds, no conversion
+  assert.equal(hr.hrZone5TimeS, 120);
+  assert.equal(hr.hrZone8TimeS, 30, "band 8 preserved, not collapsed into 5");
+  assert.equal(hr.pctMaxHeartRate, 94);
+  assert.equal(hr.pctAvgHeartRate, 79);
+});
+
+test("missing HR fields stay null, never 0 (null-vs-zero)", () => {
+  const hr = extractHeartRateMetrics({ max_heart_rate: 180 });
+  assert.equal(hr.avgHeartRate, null);
+  assert.equal(hr.hrZone3TimeS, null);
+  assert.equal(hr.hrZone8TimeS, null);
+  assert.equal(hr.pctMaxHeartRate, null);
+  assert.equal(hr.maxHeartRate, 180);
 });
 
 test("aggregate unions paramKeys across a day's activities (HR may live in only one)", () => {
