@@ -469,16 +469,19 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
       }
     }
 
-    // Diagnostic one-liner: does VALD send RSI-modified / time-to-takeoff yet?
-    // The human uses this to confirm their VALD HUB config change worked.
+    // Diagnostic one-liner: which CMJ result keys did the full per-trial fetch
+    // actually pull through? The provider now enriches each ForceDecks test from
+    // the /tests/{testId}/trials endpoint (the complete result set), so this
+    // confirms whether RSI-modified / time-to-takeoff landed. See the
+    // `trials-enrich` line in provider_diagnostics for the enrichment hit-rate.
     if (cmjResultKeys.size > 0) {
       summary.cmj_result_keys = [...cmjResultKeys].sort().join(", ");
       const hasRsi = [...cmjResultKeys].some((k) => /RSI_MOD/i.test(k));
       const hasTtt = [...cmjResultKeys].some((k) => /TIME_TO_TAKEOFF/i.test(k));
       summary.cmj_rsi_status =
         `RSI-modified: ${hasRsi ? "present" : "MISSING"} · time-to-takeoff: ${hasTtt ? "present" : "MISSING"}` +
-        (!hasRsi && hasTtt ? " (RSI will be derived)" : "") +
-        (!hasRsi && !hasTtt ? " — configure the ForceDecks profile in VALD HUB to output them" : "");
+        (!hasRsi && hasTtt ? " (RSI derived from jump height ÷ time-to-takeoff)" : "") +
+        (!hasRsi && !hasTtt ? " — the full per-trial fetch did not return these; check the trials-enrich diagnostic" : "");
     }
 
     await rebuildSnapshots(teamId, impactedPlayers, dateFrom, dateTo);

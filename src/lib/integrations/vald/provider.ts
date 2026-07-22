@@ -117,6 +117,22 @@ function listFromPayload(payload: unknown): unknown[] {
 }
 
 /**
+ * Extracts the trials array from a ForceDecks `/tests/{testId}/trials` response.
+ * The endpoint returns a bare array of TrialResultDTO, but tolerate the common
+ * envelope shapes ({trials}, {data}, {items}, {results}) in case VALD wraps it.
+ */
+function trialsFromPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    for (const key of ["trials", "data", "items", "results"]) {
+      if (Array.isArray(record[key])) return record[key] as unknown[];
+    }
+  }
+  return [];
+}
+
+/**
  * Fetches all tests from the ForceDecks `/tests` endpoint using cursor
  * pagination keyed on `modifiedFromUtc`.
  *
@@ -201,6 +217,64 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
   }
 
   /**
+   * Enriches ForceDecks tests with the FULL per-trial result set.
+   *
+   * The `/tests/detailed/{from}/{to}` listing (and the paged fallback) embeds
+   * only a THIN `trials[].results[]` — ~4 summary metrics (jump height, mean
+   * forces, peak power). RSI-modified, time-to-takeoff, phase durations and
+   * impulses are NOT in that summary. The complete result set lives on the
+   * per-test trials endpoint (verified against VALD's External ForceDecks API
+   * docs, 2026-07-22):
+   *
+   *   GET /v2019q3/teams/{scopeId}/tests/{testId}/trials  →  TrialResultDTO[]
+   *
+   * which returns the SAME `trials[].results[]` shape the normalizer already
+   * consumes (each result carries { value, limb, definition: { result, unit } }).
+   * We replace the thin embedded trials with the full ones so RSI-modified flows
+   * through with no further code change — and the stored raw payload keeps them.
+   *
+   * Fail-safe: any error (404/403/timeout) or empty response leaves the embedded
+   * summary trials intact, so the sync never regresses — the CMJ diagnostic in
+   * sync.ts then simply reports RSI as still MISSING, which is honest.
+   */
+  async function enrichForceDecksTrials(
+    tests: ValdTestSummary[],
+    scopeId: string,
+    base: string,
+    headers: Record<string, string>,
+  ): Promise<void> {
+    let enriched = 0;
+    let failed = 0;
+    for (const test of tests) {
+      const rawRec = test.raw && typeof test.raw === "object" ? (test.raw as Record<string, unknown>) : null;
+      if (!rawRec || !test.testId) continue;
+      try {
+        const url = new URL(
+          `/v2019q3/teams/${encodeURIComponent(scopeId)}/tests/${encodeURIComponent(test.testId)}/trials`,
+          base,
+        );
+        const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+        const fullTrials = trialsFromPayload(payload);
+        if (fullTrials.length > 0) {
+          rawRec.trials = fullTrials;
+          enriched += 1;
+        }
+      } catch (err) {
+        failed += 1;
+        // Keep the embedded thin trials — one bad test can't break the batch.
+        if (failed <= 2) {
+          const msg = err instanceof Error ? err.message : String(err);
+          note(`fetchTests[forcedecks] trials-enrich testId=${test.testId}: error ${msg}`);
+        }
+      }
+    }
+    note(
+      `fetchTests[forcedecks] trials-enrich scope=${scopeId}: ${enriched}/${tests.length} tests pulled the full result set` +
+        (failed ? `, ${failed} fell back to the summary set` : ""),
+    );
+  }
+
+  /**
    * Per-product implementation of fetchTestsByDateRange. ForceDecks uses
    * the v2019q3 path with embedded date range; Nordbord and ForceFrame
    * use modern endpoints that return all team tests (we filter by date
@@ -282,7 +356,9 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
           const batch = listFromPayload(payload);
           if (batch.length > 0) {
             note(`fetchTests[${product}] scope=${scopeId} detailed: ${batch.length} tests`);
-            return batch.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+            const summaries = batch.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+            if (product === "forcedecks") await enrichForceDecksTrials(summaries, scopeId, base, headers);
+            return summaries;
           }
           note(`fetchTests[${product}] scope=${scopeId} detailed: 0 tests`);
         }
@@ -317,7 +393,9 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
       }
       if (all.length > 0) {
         note(`fetchTests[${product}] scope=${scopeId} paged: ${all.length} tests`);
-        return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        const summaries = all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        if (product === "forcedecks") await enrichForceDecksTrials(summaries, scopeId, base, headers);
+        return summaries;
       }
       note(`fetchTests[${product}] scope=${scopeId} paged: 0 tests`);
     }
@@ -371,7 +449,9 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
       }
       if (all.length > 0) {
         note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId}: ${all.length} tests`);
-        return all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        const summaries = all.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+        if (product === "forcedecks") await enrichForceDecksTrials(summaries, scopeId, base, headers);
+        return summaries;
       }
       note(`fetchTestsForAthlete[${product}] scope=${scopeId} athlete=${valdAthleteId}: 0 tests`);
     }
