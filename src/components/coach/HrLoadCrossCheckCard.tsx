@@ -218,11 +218,17 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                                   key={b.band}
                                   className="rounded px-1 py-px text-[9px] tabular-nums text-slate-600"
                                   style={{ backgroundColor: `${BAND_COLOR[b.band - 1]}33` }}
+                                  title={b.avgBpm ? `≈ ${b.avgBpm} bpm` : undefined}
                                 >
-                                  B{b.band}
-                                  {b.avgBpm ? ` ${b.avgBpm}bpm` : ""} · {b.pct}%
+                                  B{b.band} · {b.pct}%
+                                  {b.avgBpm ? <span className="text-slate-400"> ~{b.avgBpm}bpm</span> : null}
                                 </span>
                               ))}
+                            </div>
+                            <div className="mt-0.5 text-[9px] leading-snug text-slate-400">
+                              {IS
+                                ? "Bönd 1–8 = Catapult ákefðarbönd (mörk stillt í OpenField). Röð + % er aðalmerkingin; bpm birt aðeins þar sem það er raunverulegt HR (band-bpm reitur Catapult er óáreiðanlegur á lágum böndum)."
+                                : "Bands 1–8 = Catapult intensity bands (boundaries set in OpenField). Ordinal + % is the label; bpm shown only where it's a real HR (Catapult's per-band bpm field is unreliable on low bands)."}
                             </div>
                           </td>
                         </tr>

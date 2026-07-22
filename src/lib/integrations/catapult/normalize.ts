@@ -498,9 +498,14 @@ const HR_ZONE_KEYS: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8, string[]> = {
   8: ["heart_rate_band8_total_duration", "Heart Rate Zone 8 Duration", "HR Zone 8 Duration"],
 };
 
-// Per-band average bpm — LABEL only, so each time-in-band reads as a real HR range
-// ("Band 8 ≈ 185 bpm") instead of a bare ordinal. Source key:
-// heart_rate_bandN_average_beats_per_minute. Missing → null.
+// Per-band average bpm — LABEL only. Source key:
+// heart_rate_bandN_average_beats_per_minute.
+// CAVEAT (verified on the 22 Jul payload via the HR value-capture): this field is
+// UNRELIABLE on low bands — e.g. a player with 64 min in band 1 (mean HR 79) had a
+// band-1 "avg bpm" of 0.28, while a genuine band-5 value read 173. The 25–230 clamp
+// below therefore nulls the garbage and keeps only plausible HRs, so bands read as a
+// bpm only where it's real; the UI labels by ordinal + %, not by this field. Do NOT
+// trust it as the band's HR boundary.
 const HR_ZONE_AVG_BPM_KEYS: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8, string[]> = {
   1: ["heart_rate_band1_average_beats_per_minute"],
   2: ["heart_rate_band2_average_beats_per_minute"],
