@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeHrLoad,
   summatedHrZoneLoad,
+  hrZoneDistribution,
   DIVERGENCE_GAP,
   MIN_MATURE_HR_SESSIONS,
   type HrLoadRow,
@@ -105,6 +106,31 @@ test("confidence needs a mature HR baseline AND %HRmax (HRmax set)", () => {
 
   const noPct = baselineRows().map((r) => ({ ...r, pctMaxHr: null }));
   assert.equal(computeHrLoad(noPct).confidence, "low"); // HRmax not set → capped low
+});
+
+test("hrZoneDistribution: %-of-session + bpm label per band, null-safe", () => {
+  // 600 + 300 + 100 = 1000 s total → 60 / 30 / 10 %.
+  const dist = hrZoneDistribution(
+    [min(10), null, null, null, min(5), null, null, min(100 / 60)],
+    [120, null, null, null, 165, null, null, 188.4],
+  );
+  assert.equal(dist.length, 8);
+  assert.equal(dist[0].band, 1);
+  assert.equal(dist[0].timeS, 600);
+  assert.equal(dist[0].pct, 60);
+  assert.equal(dist[0].avgBpm, 120);
+  assert.equal(dist[4].pct, 30);
+  assert.equal(dist[4].avgBpm, 165);
+  assert.equal(dist[7].avgBpm, 188); // rounded label
+  // A band with no time → null time + null pct, never 0%.
+  assert.equal(dist[1].timeS, null);
+  assert.equal(dist[1].pct, null);
+});
+
+test("hrZoneDistribution with no HR time → all pct null, never fabricated", () => {
+  const dist = hrZoneDistribution([], []);
+  assert.equal(dist.length, 8);
+  assert.ok(dist.every((b) => b.timeS === null && b.pct === null));
 });
 
 test("empty input is safe", () => {

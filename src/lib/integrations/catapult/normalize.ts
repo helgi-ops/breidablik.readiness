@@ -498,6 +498,20 @@ const HR_ZONE_KEYS: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8, string[]> = {
   8: ["heart_rate_band8_total_duration", "Heart Rate Zone 8 Duration", "HR Zone 8 Duration"],
 };
 
+// Per-band average bpm — LABEL only, so each time-in-band reads as a real HR range
+// ("Band 8 ≈ 185 bpm") instead of a bare ordinal. Source key:
+// heart_rate_bandN_average_beats_per_minute. Missing → null.
+const HR_ZONE_AVG_BPM_KEYS: Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8, string[]> = {
+  1: ["heart_rate_band1_average_beats_per_minute"],
+  2: ["heart_rate_band2_average_beats_per_minute"],
+  3: ["heart_rate_band3_average_beats_per_minute"],
+  4: ["heart_rate_band4_average_beats_per_minute"],
+  5: ["heart_rate_band5_average_beats_per_minute"],
+  6: ["heart_rate_band6_average_beats_per_minute"],
+  7: ["heart_rate_band7_average_beats_per_minute"],
+  8: ["heart_rate_band8_average_beats_per_minute"],
+};
+
 export function extractHeartRateMetrics(record: Record<string, unknown>): {
   avgHeartRate: number | null;
   maxHeartRate: number | null;
@@ -510,6 +524,14 @@ export function extractHeartRateMetrics(record: Record<string, unknown>): {
   hrZone6TimeS: number | null;
   hrZone7TimeS: number | null;
   hrZone8TimeS: number | null;
+  hrZone1AvgBpm: number | null;
+  hrZone2AvgBpm: number | null;
+  hrZone3AvgBpm: number | null;
+  hrZone4AvgBpm: number | null;
+  hrZone5AvgBpm: number | null;
+  hrZone6AvgBpm: number | null;
+  hrZone7AvgBpm: number | null;
+  hrZone8AvgBpm: number | null;
   pctMaxHeartRate: number | null;
   pctAvgHeartRate: number | null;
 } {
@@ -519,6 +541,9 @@ export function extractHeartRateMetrics(record: Record<string, unknown>): {
   // Zone durations are Catapult SECONDS, stored as-is (0–14 400 s = 4 h ceiling).
   const zone = (band: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) =>
     nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_KEYS[band]), 0, 14_400));
+  // Per-band average bpm — label only, plausible HR range 25–230.
+  const bandBpm = (band: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) =>
+    nullIfZero(sanitiseMetabolicValue(extractMetric(record, HR_ZONE_AVG_BPM_KEYS[band]), 25, 230));
   // %HRmax / %HRavg — session summary percentages of the athlete's HRmax. Allow a
   // little over 100 for HRmax under-estimation; reject the rest as corrupt.
   const pctMaxHeartRate = nullIfZero(sanitiseMetabolicValue(extractMetric(record, PCT_MAX_HEART_RATE_KEYS), 0, 120));
@@ -535,6 +560,14 @@ export function extractHeartRateMetrics(record: Record<string, unknown>): {
     hrZone6TimeS: zone(6),
     hrZone7TimeS: zone(7),
     hrZone8TimeS: zone(8),
+    hrZone1AvgBpm: bandBpm(1),
+    hrZone2AvgBpm: bandBpm(2),
+    hrZone3AvgBpm: bandBpm(3),
+    hrZone4AvgBpm: bandBpm(4),
+    hrZone5AvgBpm: bandBpm(5),
+    hrZone6AvgBpm: bandBpm(6),
+    hrZone7AvgBpm: bandBpm(7),
+    hrZone8AvgBpm: bandBpm(8),
     pctMaxHeartRate,
     pctAvgHeartRate,
   };
@@ -1191,6 +1224,14 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       hrZone6TimeS: normalizedHr.hrZone6TimeS,
       hrZone7TimeS: normalizedHr.hrZone7TimeS,
       hrZone8TimeS: normalizedHr.hrZone8TimeS,
+      hrZone1AvgBpm: normalizedHr.hrZone1AvgBpm,
+      hrZone2AvgBpm: normalizedHr.hrZone2AvgBpm,
+      hrZone3AvgBpm: normalizedHr.hrZone3AvgBpm,
+      hrZone4AvgBpm: normalizedHr.hrZone4AvgBpm,
+      hrZone5AvgBpm: normalizedHr.hrZone5AvgBpm,
+      hrZone6AvgBpm: normalizedHr.hrZone6AvgBpm,
+      hrZone7AvgBpm: normalizedHr.hrZone7AvgBpm,
+      hrZone8AvgBpm: normalizedHr.hrZone8AvgBpm,
       pctMaxHeartRate: normalizedHr.pctMaxHeartRate,
       pctAvgHeartRate: normalizedHr.pctAvgHeartRate,
       durationMinutes: normalizedIma.durationMinutes,
@@ -1398,6 +1439,16 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.hrZone6TimeS = sumNullable(current.hrZone6TimeS, metric.hrZone6TimeS);
     current.hrZone7TimeS = sumNullable(current.hrZone7TimeS, metric.hrZone7TimeS);
     current.hrZone8TimeS = sumNullable(current.hrZone8TimeS, metric.hrZone8TimeS);
+    // Per-band avg bpm is a label (a rate), roughly constant per athlete — take
+    // the max across activities as the representative value, like avg HR above.
+    current.hrZone1AvgBpm = maxNullable(current.hrZone1AvgBpm, metric.hrZone1AvgBpm);
+    current.hrZone2AvgBpm = maxNullable(current.hrZone2AvgBpm, metric.hrZone2AvgBpm);
+    current.hrZone3AvgBpm = maxNullable(current.hrZone3AvgBpm, metric.hrZone3AvgBpm);
+    current.hrZone4AvgBpm = maxNullable(current.hrZone4AvgBpm, metric.hrZone4AvgBpm);
+    current.hrZone5AvgBpm = maxNullable(current.hrZone5AvgBpm, metric.hrZone5AvgBpm);
+    current.hrZone6AvgBpm = maxNullable(current.hrZone6AvgBpm, metric.hrZone6AvgBpm);
+    current.hrZone7AvgBpm = maxNullable(current.hrZone7AvgBpm, metric.hrZone7AvgBpm);
+    current.hrZone8AvgBpm = maxNullable(current.hrZone8AvgBpm, metric.hrZone8AvgBpm);
     // %HRmax/%HRavg are session summaries; take max as the multi-session proxy
     // (same convention as avg HR above).
     current.pctMaxHeartRate = maxNullable(current.pctMaxHeartRate, metric.pctMaxHeartRate);
@@ -1508,6 +1559,14 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       hrZone6TimeS: metric.hrZone6TimeS ?? null,
       hrZone7TimeS: metric.hrZone7TimeS ?? null,
       hrZone8TimeS: metric.hrZone8TimeS ?? null,
+      hrZone1AvgBpm: metric.hrZone1AvgBpm ?? null,
+      hrZone2AvgBpm: metric.hrZone2AvgBpm ?? null,
+      hrZone3AvgBpm: metric.hrZone3AvgBpm ?? null,
+      hrZone4AvgBpm: metric.hrZone4AvgBpm ?? null,
+      hrZone5AvgBpm: metric.hrZone5AvgBpm ?? null,
+      hrZone6AvgBpm: metric.hrZone6AvgBpm ?? null,
+      hrZone7AvgBpm: metric.hrZone7AvgBpm ?? null,
+      hrZone8AvgBpm: metric.hrZone8AvgBpm ?? null,
       pctMaxHeartRate: metric.pctMaxHeartRate ?? null,
       pctAvgHeartRate: metric.pctAvgHeartRate ?? null,
       // FMP (Football Movement Profile)

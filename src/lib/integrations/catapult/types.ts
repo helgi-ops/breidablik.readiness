@@ -149,6 +149,15 @@ export type CatapultSessionMetric = {
   hrZone6TimeS?: number | null;
   hrZone7TimeS?: number | null;
   hrZone8TimeS?: number | null;
+  // Per-band average bpm — label so time-in-band reads as an HR range.
+  hrZone1AvgBpm?: number | null;
+  hrZone2AvgBpm?: number | null;
+  hrZone3AvgBpm?: number | null;
+  hrZone4AvgBpm?: number | null;
+  hrZone5AvgBpm?: number | null;
+  hrZone6AvgBpm?: number | null;
+  hrZone7AvgBpm?: number | null;
+  hrZone8AvgBpm?: number | null;
   pctMaxHeartRate?: number | null;
   pctAvgHeartRate?: number | null;
   // Session duration in minutes (from Catapult GPS)
@@ -273,6 +282,14 @@ export type NormalizedExternalLoad = {
     hrZone6TimeS?: number | null;
     hrZone7TimeS?: number | null;
     hrZone8TimeS?: number | null;
+    hrZone1AvgBpm?: number | null;
+    hrZone2AvgBpm?: number | null;
+    hrZone3AvgBpm?: number | null;
+    hrZone4AvgBpm?: number | null;
+    hrZone5AvgBpm?: number | null;
+    hrZone6AvgBpm?: number | null;
+    hrZone7AvgBpm?: number | null;
+    hrZone8AvgBpm?: number | null;
     pctMaxHeartRate?: number | null;
     pctAvgHeartRate?: number | null;
     // Session duration in minutes

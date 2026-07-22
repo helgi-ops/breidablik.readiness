@@ -86,6 +86,40 @@ export function bandWeight(bandIndex1Based: number): number {
   return bandIndex1Based;
 }
 
+/** One HR band in the time-in-zone distribution (for display, not scoring). */
+export interface HrBand {
+  band: number;          // 1..8, higher = higher intensity
+  timeS: number | null;  // seconds in this band
+  pct: number | null;    // % of the session's HR time in this band
+  avgBpm: number | null; // average bpm in this band (the honest label)
+}
+
+/**
+ * Build the time-in-band distribution for one session: per band, the seconds, the
+ * share of the session's total HR time, and the band's average bpm (the label). The
+ * bands are ordinal (1 = lowest intensity … 8 = highest); % is of the summed HR
+ * time so a session with no HR returns all-null pct, never fabricated. Pure.
+ */
+export function hrZoneDistribution(
+  zonesSec: Array<number | null>,
+  avgBpm: Array<number | null> = [],
+): HrBand[] {
+  const times = Array.from({ length: 8 }, (_, i) => {
+    const v = zonesSec[i];
+    return typeof v === "number" && isFinite(v) ? v : null;
+  });
+  const total = times.reduce<number>((a, t) => a + (t ?? 0), 0);
+  return times.map((timeS, i) => {
+    const bpm = avgBpm[i];
+    return {
+      band: i + 1,
+      timeS,
+      pct: timeS !== null && total > 0 ? r1((timeS / total) * 100) : null,
+      avgBpm: typeof bpm === "number" && isFinite(bpm) ? Math.round(bpm) : null,
+    };
+  });
+}
+
 /**
  * Personal-norm gap (in index points) beyond which HR and sRPE are treated as
  * genuinely diverging rather than noise. A quarter of the player's own average —

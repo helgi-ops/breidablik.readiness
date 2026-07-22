@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { computeHrLoad, type HrLoadRow, type HrLoadRead, type LoadAlignment } from "@/lib/micropulse/hrLoad";
+import { computeHrLoad, hrZoneDistribution, type HrLoadRow, type HrLoadRead, type LoadAlignment, type HrBand } from "@/lib/micropulse/hrLoad";
 
 const WINDOW_DAYS = 28;
 
-type PlayerRead = { playerId: string; name: string; read: HrLoadRead };
+type PlayerRead = { playerId: string; name: string; read: HrLoadRead; dist: HrBand[] };
+
+// Ordinal band → colour ramp (low intensity → high). Deliberately generic; the
+// honest label is the bpm on hover, not a made-up zone name.
+const BAND_COLOR = [
+  "#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#f59e0b", "#f97316", "#ef4444", "#b91c1c",
+];
 
 function windowStartISO(): string {
   const d = new Date();
@@ -42,7 +48,7 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
           supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true),
           supabase
             .from("player_external_load_daily")
-            .select("player_id, date, hr_zone_1_time_s, hr_zone_2_time_s, hr_zone_3_time_s, hr_zone_4_time_s, hr_zone_5_time_s, hr_zone_6_time_s, hr_zone_7_time_s, hr_zone_8_time_s, pct_max_heart_rate")
+            .select("player_id, date, hr_zone_1_time_s, hr_zone_2_time_s, hr_zone_3_time_s, hr_zone_4_time_s, hr_zone_5_time_s, hr_zone_6_time_s, hr_zone_7_time_s, hr_zone_8_time_s, hr_zone_1_avg_bpm, hr_zone_2_avg_bpm, hr_zone_3_avg_bpm, hr_zone_4_avg_bpm, hr_zone_5_avg_bpm, hr_zone_6_avg_bpm, hr_zone_7_avg_bpm, hr_zone_8_avg_bpm, pct_max_heart_rate")
             .eq("team_id", teamId)
             .gte("date", start),
           supabase
@@ -68,17 +74,23 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
           return r;
         };
 
+        // Per player, the most recent HR session's zone times + bpm labels, for the
+        // zone distribution strip in the details.
+        const latestHrByPlayer = new Map<string, { date: string; zonesSec: Array<number | null>; bpm: Array<number | null> }>();
+        const numOf = (v: unknown) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
         for (const row of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
           const pid = String(row.player_id ?? "");
           const date = String(row.date ?? "").slice(0, 10);
           if (!pid || !date) continue;
+          const zonesSec = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => numOf(row[`hr_zone_${b}_time_s`]));
+          const bpm = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => numOf(row[`hr_zone_${b}_avg_bpm`]));
           const r = ensure(pid, date);
-          r.hrZonesSec = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => {
-            const v = row[`hr_zone_${b}_time_s`];
-            return v != null && Number.isFinite(Number(v)) ? Number(v) : null;
-          });
-          r.pctMaxHr = row.pct_max_heart_rate != null && Number.isFinite(Number(row.pct_max_heart_rate))
-            ? Number(row.pct_max_heart_rate) : null;
+          r.hrZonesSec = zonesSec;
+          r.pctMaxHr = numOf(row.pct_max_heart_rate);
+          if (zonesSec.some((v) => v !== null)) {
+            const prev = latestHrByPlayer.get(pid);
+            if (!prev || date > prev.date) latestHrByPlayer.set(pid, { date, zonesSec, bpm });
+          }
         }
         // Sum sRPE session_load per player-date (a day can hold multiple sessions).
         for (const row of (rpeRes.data ?? []) as Array<Record<string, unknown>>) {
@@ -94,7 +106,10 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
         const out: PlayerRead[] = [];
         for (const [pid, m] of byPlayerDate) {
           const read = computeHrLoad([...m.values()]);
-          if (read.dataCoverage.hasHr) out.push({ playerId: pid, name: names.get(pid) ?? "Player", read });
+          if (!read.dataCoverage.hasHr) continue;
+          const latest = latestHrByPlayer.get(pid);
+          const dist = latest ? hrZoneDistribution(latest.zonesSec, latest.bpm) : [];
+          out.push({ playerId: pid, name: names.get(pid) ?? "Player", read, dist });
         }
         out.sort((a, b) => a.name.localeCompare(b.name));
         setReads(out);
@@ -165,21 +180,54 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                 </tr>
               </thead>
               <tbody>
-                {reads.map(({ playerId, name, read }) => {
+                {reads.map(({ playerId, name, read, dist }) => {
                   const s = read.latest;
+                  const present = dist.filter((b) => b.timeS && b.timeS > 0);
                   return (
-                    <tr key={playerId} className="border-t align-top">
-                      <td className="py-1 pr-2 font-medium text-slate-800">{name}</td>
-                      <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.hrLoadIndex ?? "—"}</td>
-                      <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.srpeIndex ?? "—"}</td>
-                      <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.gap != null ? `${s.gap >= 0 ? "+" : ""}${s.gap}` : "—"}</td>
-                      <td className={`py-1 ${ALIGN_CLASS[s?.alignment ?? "insufficient"]}`}>
-                        {IS ? s?.verdict.is : s?.verdict.en}
-                        {read.confidence === "low" ? (
-                          <span className="ml-1 text-[10px] text-slate-400">{IS ? "· lítil vissa" : "· low confidence"}</span>
-                        ) : null}
-                      </td>
-                    </tr>
+                    <Fragment key={playerId}>
+                      <tr className="border-t align-top">
+                        <td className="py-1 pr-2 font-medium text-slate-800">{name}</td>
+                        <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.hrLoadIndex ?? "—"}</td>
+                        <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.srpeIndex ?? "—"}</td>
+                        <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.gap != null ? `${s.gap >= 0 ? "+" : ""}${s.gap}` : "—"}</td>
+                        <td className={`py-1 ${ALIGN_CLASS[s?.alignment ?? "insufficient"]}`}>
+                          {IS ? s?.verdict.is : s?.verdict.en}
+                          {read.confidence === "low" ? (
+                            <span className="ml-1 text-[10px] text-slate-400">{IS ? "· lítil vissa" : "· low confidence"}</span>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {present.length > 0 ? (
+                        <tr className="border-0">
+                          <td colSpan={5} className="pb-2 pt-0">
+                            <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                              {IS ? "Zone-dreifing (nýjasta lota)" : "Zone profile (latest session)"}
+                            </div>
+                            <div className="mt-0.5 flex h-2.5 w-full overflow-hidden rounded">
+                              {present.map((b) => (
+                                <div
+                                  key={b.band}
+                                  style={{ width: `${b.pct ?? 0}%`, backgroundColor: BAND_COLOR[b.band - 1] }}
+                                  title={`Band ${b.band}${b.avgBpm ? ` ≈ ${b.avgBpm} bpm` : ""} · ${Math.round((b.timeS ?? 0) / 60)}m (${b.pct ?? 0}%)`}
+                                />
+                              ))}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {present.map((b) => (
+                                <span
+                                  key={b.band}
+                                  className="rounded px-1 py-px text-[9px] tabular-nums text-slate-600"
+                                  style={{ backgroundColor: `${BAND_COLOR[b.band - 1]}33` }}
+                                >
+                                  B{b.band}
+                                  {b.avgBpm ? ` ${b.avgBpm}bpm` : ""} · {b.pct}%
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
