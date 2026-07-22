@@ -117,6 +117,16 @@ export type CatapultSessionMetric = {
     };
   };
   activityId?: string | null;
+  /**
+   * DIAGNOSTIC ONLY — not read by any feature. The source per-athlete parameter
+   * object (`rawParams`, one athlete-activity, bounded) and the flattened key
+   * names the mapper matched against (`paramKeys`). Persisted to
+   * `raw_payload_json` + logged per sync run so we can SEE which OpenField
+   * parameter names actually arrive — e.g. why avg HR / HR zones don't map
+   * despite comprehensive aliases. Capture first, add the right alias second.
+   */
+  rawParams?: Record<string, unknown> | null;
+  paramKeys?: string[] | null;
   // Football Movement Profile (FMP) — inertial sensor, works indoors
   fmpVeryLowS?: number | null;
   fmpLowIntensityS?: number | null;
@@ -161,6 +171,15 @@ export type CatapultSessionMetric = {
   imaFrBand8StrideCount?: number | null;
   imaFrBand8AvgStrideRate?: number | null;
   imaFrBand8TotalPlayerLoad?: number | null;
+
+  /**
+   * Metres run inside each high-cadence band (5-8). Never previously requested
+   * from Catapult, yet read by six features via ima_fr_band58_total_distance.
+   */
+  imaFrBand5TotalDistance?: number | null;
+  imaFrBand6TotalDistance?: number | null;
+  imaFrBand7TotalDistance?: number | null;
+  imaFrBand8TotalDistance?: number | null;
 };
 
 export type NormalizedExternalLoad = {
@@ -270,8 +289,16 @@ export type NormalizedExternalLoad = {
     imaFrBand8StrideCount?: number | null;
     imaFrBand8AvgStrideRate?: number | null;
     imaFrBand8TotalPlayerLoad?: number | null;
+    imaFrBand5TotalDistance?: number | null;
+    imaFrBand6TotalDistance?: number | null;
+    imaFrBand7TotalDistance?: number | null;
+    imaFrBand8TotalDistance?: number | null;
   };
+  // DIAGNOSTIC ONLY — see CatapultSessionMetric.rawParams. rawPayload → the
+  // bounded source param object stored in raw_payload_json; paramKeys → the
+  // flattened parameter names seen, unioned per sync run for the log.
   rawPayload?: unknown;
+  paramKeys?: string[] | null;
   activityCount?: number;
 };
 

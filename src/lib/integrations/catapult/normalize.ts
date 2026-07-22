@@ -940,6 +940,11 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       athleteId,
       date: args.date,
       activityId,
+      // DIAGNOSTIC: keep the source param object + the flattened key names the
+      // mapper matches against, so we can see what OpenField actually sends
+      // (e.g. the real name for avg HR / HR zones). Not read by any feature.
+      rawParams: record,
+      paramKeys: Object.keys(flattenedRecord),
       totalDistance: extractMetric(flattenedRecord, ["total_distance", "distance", "totalDistance"]) ?? 0,
       highSpeedDistance: extractMetric(flattenedRecord, ["hir_dist", "high_speed_distance", "highSpeedDistance", "hsd"]) ?? 0,
       sprintDistance: extractMetric(flattenedRecord, ["velocity_band6_total_distance", "sprint_distance", "sprintDistance"]) ?? 0,
@@ -1251,6 +1256,22 @@ function extractFreeRunningBands(flat: Record<string, unknown>): Record<string, 
     out[`imaFrBand${band}StrideCount`] = toInteger(firstNonZero(strideAliases));
     out[`imaFrBand${band}AvgStrideRate`] = firstNonZero(rateAliases);
     out[`imaFrBand${band}TotalPlayerLoad`] = firstNonZero(loadAliases);
+
+    // Per-band DISTANCE — metres run inside this cadence band. Only bands 5–8 have
+    // storage (the high-cadence / sprint-stride end), so only those are emitted.
+    if (band >= 5) {
+      const distAliases = [
+        `ima_v2_free_run_band${band}_total_distance`,
+        `ima_v1_free_run_band${band}_total_distance`,
+        `imafreerunning_band${band}_total_distance`,
+        // Legacy / display-name fallbacks
+        `IMA Free Running Band ${band} Total Distance`,
+        `ima_free_running_band${band}_total_distance`,
+        `imafreerunningband${band}totaldistance`,
+        `ima_fr_band${band}_total_distance`,
+      ];
+      out[`imaFrBand${band}TotalDistance`] = firstNonZero(distAliases);
+    }
   }
   return out;
 }
@@ -1330,6 +1351,15 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     if (metric.imaDebug?.interestingKeys?.length) {
       current.imaDebug = metric.imaDebug;
     }
+    // DIAGNOSTIC: union the parameter names seen across the day's activities, and
+    // keep the richest single activity's raw params as the sample (HR may live in
+    // only one activity of the day).
+    if ((metric.paramKeys?.length ?? 0) > (current.paramKeys?.length ?? 0) && metric.rawParams) {
+      current.rawParams = metric.rawParams;
+    }
+    if (metric.paramKeys?.length) {
+      current.paramKeys = [...new Set([...(current.paramKeys ?? []), ...metric.paramKeys])];
+    }
     // FMP: durations sum across sessions
     current.fmpVeryLowS = sumNullable(current.fmpVeryLowS, metric.fmpVeryLowS);
     current.fmpLowIntensityS = sumNullable(current.fmpLowIntensityS, metric.fmpLowIntensityS);
@@ -1360,6 +1390,15 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
       current[rk] = maxNullable(current[rk], metric[rk]);
       // @ts-expect-error dynamic key access
       current[lk] = sumNullable(current[lk], metric[lk]);
+
+      // Distance is a VOLUME — metres run in that band — so it sums across the
+      // day's activities, exactly like stride count. (Stride RATE is a cadence and
+      // takes the max instead; summing it would be meaningless.)
+      if (band >= 5) {
+        const dk = `imaFrBand${band}TotalDistance` as const;
+        // @ts-expect-error dynamic key access
+        current[dk] = sumNullable(current[dk], metric[dk]);
+      }
     }
   }
 
@@ -1373,6 +1412,9 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
     source: "catapult",
     externalAthleteId: metric.athleteId,
     activityCount: 1,
+    // DIAGNOSTIC — carried to sync.ts for raw_payload_json + the HR-key log.
+    rawPayload: metric.rawParams ?? null,
+    paramKeys: metric.paramKeys ?? null,
     externalLoad: {
       totalDistance: metric.totalDistance,
       highSpeedDistance: metric.highSpeedDistance,
@@ -1504,6 +1546,10 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       imaFrBand8StrideCount: metric.imaFrBand8StrideCount ?? null,
       imaFrBand8AvgStrideRate: metric.imaFrBand8AvgStrideRate ?? null,
       imaFrBand8TotalPlayerLoad: metric.imaFrBand8TotalPlayerLoad ?? null,
+      imaFrBand5TotalDistance: metric.imaFrBand5TotalDistance ?? null,
+      imaFrBand6TotalDistance: metric.imaFrBand6TotalDistance ?? null,
+      imaFrBand7TotalDistance: metric.imaFrBand7TotalDistance ?? null,
+      imaFrBand8TotalDistance: metric.imaFrBand8TotalDistance ?? null,
     },
   };
 }

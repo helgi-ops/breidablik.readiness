@@ -41,6 +41,94 @@ async function loadAthleteDirectory(): Promise<Map<string, CatapultAthlete>> {
 
 type AggregatedRow = ReturnType<typeof toNormalizedExternalLoad>;
 
+/**
+ * High-cadence running distance: the sum of bands 5-8.
+ *
+ * Returns NULL — not 0 — when no band reported anything. The distinction matters:
+ * 0 asserts "he ran no high-cadence metres", which is a claim about the athlete.
+ * null says "we have no reading", which is a claim about the data. Collapsing the
+ * second into the first is how a broken feed silently becomes a real-looking zero,
+ * and it is exactly what let HK's missing IMA sit unnoticed for three months.
+ */
+/**
+ * One band's free-running DISTANCE, or null when it cannot be measured.
+ *
+ * Free-running distance is GPS-derived: it needs satellite fix to know how far
+ * each stride carried. Free-running STRIDE COUNT is inertial and works anywhere.
+ * The two must not be conflated:
+ *
+ *   - Outdoor, distance > 0                → real reading, keep it.
+ *   - Outdoor, distance 0 but strides > 0  → genuine 0 (ran high-cadence but
+ *                                            covered no measured ground). Rare.
+ *   - INDOOR (no GPS fix), strides present → distance is UNMEASURABLE, not 0.
+ *     Storing 0 here says "he ran no high-cadence metres" when the truth is "we
+ *     had no GPS to measure them". That is the zero-that-lies, and it is exactly
+ *     what an indoor session produces: hundreds of strides, no distance.
+ *   - No strides at all                    → the algorithm did not run → null.
+ *
+ * `gpsActive` is the session-level GPS signal (total_distance > 0). Without it,
+ * an indoor session's inertial strides would fool the "strides ⇒ 0 is genuine"
+ * rule into persisting a false zero.
+ */
+function frDist(
+  distance: number | null | undefined,
+  strides: number | null | undefined,
+  gpsActive: boolean,
+): number | null {
+  if (typeof distance !== "number" || !Number.isFinite(distance)) return null;
+  if (distance > 0) return distance;
+  // Distance is 0. If the pod had no GPS fix this session, distance was never
+  // measurable — null, not 0, no matter how many strides were recorded.
+  if (!gpsActive) return null;
+  const s = typeof strides === "number" && Number.isFinite(strides) ? strides : 0;
+  return s > 0 ? 0 : null;
+}
+
+/**
+ * Did this session have a GPS fix? Free-running DISTANCE is only measurable when
+ * it did. The session's overall total_distance is the reliable signal: any GPS
+ * fix produces metres, an indoor session produces none.
+ */
+function gpsActive(el: AggregatedRow["externalLoad"]): boolean {
+  const d = el.totalDistance;
+  return typeof d === "number" && Number.isFinite(d) && d > 0;
+}
+
+function sumBands58(el: AggregatedRow["externalLoad"]): number | null {
+  // Indoor session (no GPS) → distance is unmeasurable, whatever the strides say.
+  if (!gpsActive(el)) return null;
+  const parts = [
+    el.imaFrBand5TotalDistance,
+    el.imaFrBand6TotalDistance,
+    el.imaFrBand7TotalDistance,
+    el.imaFrBand8TotalDistance,
+  ].filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (!parts.length) return null;
+
+  const total = parts.reduce((a, b) => a + b, 0);
+  if (total > 0) return total;
+
+  // Total is zero. Is that a fact about the ATHLETE or about the DATA?
+  //
+  // If the pod recorded strides in these bands but they covered no ground, zero is
+  // a real (if odd) reading. But if it recorded no strides EITHER, then the free-
+  // running algorithm simply did not run — Catapult returns 0 for every field
+  // rather than an error. That is the state HK has been in since April.
+  //
+  // Storing 0 there would assert "he did no high-cadence running", and ACWR would
+  // faithfully conclude that no HK player ever runs hard. Storing null says "we
+  // have no reading", which is the truth. This is the same distinction the rest of
+  // this module is built on, and it is the easiest one in the world to get wrong.
+  const strides = [
+    el.imaFrBand5StrideCount,
+    el.imaFrBand6StrideCount,
+    el.imaFrBand7StrideCount,
+    el.imaFrBand8StrideCount,
+  ].reduce<number>((a, v) => a + (typeof v === "number" && Number.isFinite(v) ? v : 0), 0);
+
+  return strides > 0 ? 0 : null;
+}
+
 function sumNullable(a?: number | null, b?: number | null): number | null {
   const hasA = typeof a === "number";
   const hasB = typeof b === "number";
@@ -227,6 +315,23 @@ async function enrichWithTeam(rows: AggregatedRow[]) {
   return new Map(((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), (row.team_id as string | null) ?? null]));
 }
 
+// Keep raw_payload_json bounded — it's a DIAGNOSTIC sample of one athlete-activity's
+// parameter object (so we can see which OpenField names arrive), never a place for
+// unbounded blobs. If a payload is unexpectedly large, store just the key list so a
+// row can't balloon.
+const RAW_PAYLOAD_MAX_BYTES = 32_000;
+function boundRawPayload(raw: unknown): unknown {
+  if (raw == null) return null;
+  try {
+    const json = JSON.stringify(raw);
+    if (json.length <= RAW_PAYLOAD_MAX_BYTES) return raw;
+    const keys = raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
+    return { _truncated: true, _bytes: json.length, keys };
+  } catch {
+    return { _truncated: true, _unserializable: true };
+  }
+}
+
 async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
   const sb = getSupabaseAdmin();
   const teamByPlayer = await enrichWithTeam(rows);
@@ -305,7 +410,10 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     source: "catapult",
     external_athlete_id: row.externalAthleteId,
     activity_count: row.activityCount ?? 1,
-    raw_payload_json: row.rawPayload ?? null,
+    // DIAGNOSTIC: bounded raw param sample so we can see the OpenField names
+    // (e.g. why avg HR / HR zones don't map). Follow-up: add the right alias in
+    // metricCatalog.ts / normalize.ts, or confirm the response omits them.
+    raw_payload_json: boundRawPayload(row.rawPayload),
     avg_heart_rate: row.externalLoad.avgHeartRate ?? null,
     max_heart_rate: row.externalLoad.maxHeartRate ?? null,
     hr_zone_1_time_s: row.externalLoad.hrZone1TimeS ?? null,
@@ -351,6 +459,24 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
     ima_fr_band8_stride_count: row.externalLoad.imaFrBand8StrideCount ?? null,
     ima_fr_band8_avg_stride_rate: row.externalLoad.imaFrBand8AvgStrideRate ?? null,
     ima_fr_band8_total_player_load: row.externalLoad.imaFrBand8TotalPlayerLoad ?? null,
+
+    // Per-band DISTANCE (bands 5-8) — the high-cadence / sprint-stride end.
+    // These columns existed and were read by six features, but nothing ever wrote
+    // them: the sync never asked Catapult for the parameter. Every value that was
+    // ever in them came from a one-off CSV import for one team in May.
+    // Per band: a distance of 0 with 0 strides means the algorithm did not run, not
+    // that he covered no ground. Store null so "no reading" never masquerades as a
+    // measured zero. (See sumBands58 below — same rule, same reason.)
+    ima_fr_band5_total_distance: frDist(row.externalLoad.imaFrBand5TotalDistance, row.externalLoad.imaFrBand5StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band6_total_distance: frDist(row.externalLoad.imaFrBand6TotalDistance, row.externalLoad.imaFrBand6StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band7_total_distance: frDist(row.externalLoad.imaFrBand7TotalDistance, row.externalLoad.imaFrBand7StrideCount, gpsActive(row.externalLoad)),
+    ima_fr_band8_total_distance: frDist(row.externalLoad.imaFrBand8TotalDistance, row.externalLoad.imaFrBand8StrideCount, gpsActive(row.externalLoad)),
+    // The 5-8 rollup — the single number loadPlan, estimatePod, playerGameReport,
+    // progressiveOverload, strideIntelligence and the IMA card all read as
+    // "high-intensity running distance". NOT a generated column, so it must be
+    // written explicitly. Null (not 0) when no band reported, so "we have no data"
+    // stays distinguishable from "he ran zero high-cadence metres".
+    ima_fr_band58_total_distance: sumBands58(row.externalLoad),
   }));
 
   if (!payload.length) return 0;
@@ -585,6 +711,34 @@ async function _syncCatapultDailyMetricsInner(
     );
   }
 
+  // ── DIAGNOSTIC (capture-first, mirrors VALD resultKeysSeen): which parameter
+  // names does OpenField actually send? avg HR + HR zones aren't mapping despite
+  // comprehensive aliases — list the HR-ish keys seen so the follow-up can add
+  // the right alias in metricCatalog.ts / normalize.ts, or confirm the response
+  // omits them (the VALD thin-payload pattern). Full per-row params are in
+  // raw_payload_json. ──────────────────────────────────────────────────────────
+  const allParamKeys = new Set<string>();
+  const hrParamKeys = new Set<string>();
+  for (const r of mergedRows) {
+    for (const k of r.paramKeys ?? []) {
+      allParamKeys.add(k);
+      // "heart" / "zone" / a standalone "hr" token (not "threshold", which contains "hr")
+      if (/heart|zone|(?:^|[^a-z])hr(?:[^a-z]|$)/i.test(k)) hrParamKeys.add(k);
+    }
+  }
+  const hrParamKeysSeen = [...hrParamKeys].sort();
+  if (mergedRows.length > 0) {
+    console.info(
+      JSON.stringify({
+        scope: "catapult_sync_hr_debug",
+        date: targetDate,
+        distinctParamKeys: allParamKeys.size,
+        hrParamKeysSeen,
+        paramKeysSample: [...allParamKeys].sort().slice(0, 60),
+      }),
+    );
+  }
+
   if (debugImaEnabled) {
     const sampleDebug = imaDebug.slice(0, 3);
     const noImaFound = sampleDebug.length > 0 && sampleDebug.every((item) => item.matchedFields?.interestingKeys.length === 0);
@@ -625,6 +779,9 @@ async function _syncCatapultDailyMetricsInner(
       metabolicValid,
       metabolicMissing,
       metabolicPartial,
+      // DIAGNOSTIC: parameter names OpenField actually sent (HR focus).
+      distinctParamKeys: allParamKeys.size,
+      hrParamKeysSeen,
     },
   });
 
