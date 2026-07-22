@@ -50,6 +50,11 @@ type SyncSummary = {
   athlete_scope_note?: string | null;
   test_scope_note?: string | null;
   provider_diagnostics?: string | null;
+  /** Diagnostic: the distinct CMJ result keys VALD actually sent this run (comma-
+   *  joined), so the human can confirm whether their VALD HUB config now outputs
+   *  RSI-modified / time-to-takeoff — without a DB spelunk. See cmj_rsi_status. */
+  cmj_result_keys?: string;
+  cmj_rsi_status?: string | null;
 };
 
 function emptySummary(): SyncSummary {
@@ -282,6 +287,7 @@ async function upsertNormalized(args: {
       ...base,
       jump_height_cm: args.normalized.jumpHeightCm ?? null,
       rsi_mod: args.normalized.rsiMod ?? null,
+      rsi_mod_source: args.normalized.rsiModSource ?? null,
       eccentric_duration_ms: args.normalized.eccentricDurationMs ?? null,
       concentric_duration_ms: args.normalized.concentricDurationMs ?? null,
       peak_power_w: args.normalized.peakPowerW ?? null,
@@ -353,6 +359,8 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
   const warnings: string[] = [];
   const errors: string[] = [];
   const impactedPlayers: string[] = [];
+  // Diagnostic: which CMJ result keys VALD actually sent this run (change 1).
+  const cmjResultKeys = new Set<string>();
 
   try {
     const provider = createValdProvider(toConfig(account));
@@ -424,6 +432,7 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
         if (product === "forcedecks") {
           const trials = provider.normalizeForceDecksTrials(test.raw);
           for (const trial of trials) {
+            (trial.resultKeysSeen ?? []).forEach((k) => cmjResultKeys.add(k));
             await upsertNormalized({
               teamId,
               microplayerId,
@@ -458,6 +467,18 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
         summary.invalid_payloads += 1;
         warnings.push(error instanceof Error ? error.message : String(error));
       }
+    }
+
+    // Diagnostic one-liner: does VALD send RSI-modified / time-to-takeoff yet?
+    // The human uses this to confirm their VALD HUB config change worked.
+    if (cmjResultKeys.size > 0) {
+      summary.cmj_result_keys = [...cmjResultKeys].sort().join(", ");
+      const hasRsi = [...cmjResultKeys].some((k) => /RSI_MOD/i.test(k));
+      const hasTtt = [...cmjResultKeys].some((k) => /TIME_TO_TAKEOFF/i.test(k));
+      summary.cmj_rsi_status =
+        `RSI-modified: ${hasRsi ? "present" : "MISSING"} · time-to-takeoff: ${hasTtt ? "present" : "MISSING"}` +
+        (!hasRsi && hasTtt ? " (RSI will be derived)" : "") +
+        (!hasRsi && !hasTtt ? " — configure the ForceDecks profile in VALD HUB to output them" : "");
     }
 
     await rebuildSnapshots(teamId, impactedPlayers, dateFrom, dateTo);

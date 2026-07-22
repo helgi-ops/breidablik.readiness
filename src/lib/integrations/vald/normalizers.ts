@@ -161,6 +161,26 @@ function paramValue(
   return null;
 }
 
+/**
+ * Resolve RSI-modified with honest provenance. Prefer VALD's native value; if it
+ * isn't sent but jump height + time-to-takeoff are, DERIVE it:
+ *   RSI-mod = jump_height(m) ÷ time-to-takeoff(s)
+ *           = (cm/100) ÷ (ms/1000) = cm × 10 ÷ ms
+ * If neither a native value nor the components exist, return null — NEVER zero.
+ * A missing RSI is a claim about the data, not the athlete.
+ */
+function resolveRsiMod(
+  rsiModFromVald: number | null,
+  jumpHeightCm: number | null,
+  timeToTakeoffMs: number | null,
+): { rsiMod: number | null; rsiModSource: "vald" | "derived" | null } {
+  if (rsiModFromVald != null) return { rsiMod: rsiModFromVald, rsiModSource: "vald" };
+  if (jumpHeightCm != null && timeToTakeoffMs != null && timeToTakeoffMs > 0) {
+    return { rsiMod: (jumpHeightCm * 10) / timeToTakeoffMs, rsiModSource: "derived" };
+  }
+  return { rsiMod: null, rsiModSource: null };
+}
+
 // ── Asymmetry ─────────────────────────────────────────────────────────────────
 
 export function computeAsymmetry(args: {
@@ -247,6 +267,16 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
 
   const asym = computeAsymmetry({ left: leftValue, right: rightValue, trustedPercent, trustedSide });
 
+  const timeToTakeoffMs =
+    paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]) ??
+    paramValue(params, ["TimeToTakeoff"], 1000) ??
+    firstNumber(record.time_to_takeoff_ms, record.timeToTakeoffMs);
+  const rsiModFromVald =
+    paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]) ??
+    paramValue(params, ["RSIMod", "RSIModified"]) ??
+    firstNumber(record.rsi_mod, record.rsiMod);
+  const { rsiMod, rsiModSource } = resolveRsiMod(rsiModFromVald, jumpHeightCm, timeToTakeoffMs);
+
   return {
     product: "forcedecks",
     testType: firstString(record.testType, record.test_type, record.protocol, record.name),
@@ -254,10 +284,9 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
       firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
     jumpHeightCm,
-    rsiMod:
-      paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]) ??
-      paramValue(params, ["RSIMod", "RSIModified"]) ??
-      firstNumber(record.rsi_mod, record.rsiMod),
+    rsiMod,
+    rsiModSource,
+    resultKeysSeen: [...params.keys()],
     eccentricDurationMs:
       // TRIAL keys already in ms (unit="Second" converted ×1000 in buildParamMap)
       paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]) ??
@@ -284,10 +313,7 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
       paramValue(params, ["TRIAL_CONCENTRIC_IMPULSE"]) ??
       paramValue(params, ["ConcentricImpulse"]) ??
       firstNumber(record.concentric_impulse_n_s, record.concentricImpulseNS),
-    timeToTakeoffMs:
-      paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]) ??
-      paramValue(params, ["TimeToTakeoff"], 1000) ??
-      firstNumber(record.time_to_takeoff_ms, record.timeToTakeoffMs),
+    timeToTakeoffMs,
     leftValue,
     rightValue,
     asymmetryPercent: asym.percent,
@@ -465,13 +491,22 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
     const trialAsym = computeAsymmetry({ left: leftValue, right: rightValue, trustedPercent });
     const trialTimestamp = firstString(t.recordedUTC as string | undefined) ?? baseTimestamp;
 
+    const timeToTakeoffMs = paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]);
+    const { rsiMod, rsiModSource } = resolveRsiMod(
+      paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]),
+      jumpHeightCm,
+      timeToTakeoffMs,
+    );
+
     expanded.push({
       product: "forcedecks",
       trialNumber: i + 1,
       testType,
       testTimestamp: trialTimestamp,
       jumpHeightCm,
-      rsiMod: paramValue(params, ["TRIAL_RSI_MODIFIED", "TRIAL_RSI_MOD"]),
+      rsiMod,
+      rsiModSource,
+      resultKeysSeen: [...params.keys()],
       eccentricDurationMs: paramValue(params, ["TRIAL_ECCENTRIC_DURATION", "TRIAL_BRAKING_DURATION"]),
       concentricDurationMs: paramValue(params, ["TRIAL_CONCENTRIC_DURATION", "TRIAL_PROPULSION_DURATION"]),
       peakPowerW,
@@ -480,7 +515,7 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
         (peakPowerW != null && bodyWeightKg != null && bodyWeightKg > 0 ? peakPowerW / bodyWeightKg : null),
       peakForceN: paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]),
       concentricImpulseNS: paramValue(params, ["TRIAL_CONCENTRIC_IMPULSE"]),
-      timeToTakeoffMs: paramValue(params, ["TRIAL_TIME_TO_TAKEOFF"]),
+      timeToTakeoffMs,
       leftValue,
       rightValue,
       asymmetryPercent: trialAsym.percent,

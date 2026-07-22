@@ -64,7 +64,7 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const latestForce = (ffRes.data ?? [])[0] as Record<string, unknown> | undefined;
 
   const [cmjBaselineRes, nordBaselineRes, ffBaselineRes] = await Promise.all([
-    sb.from("vald_forcedecks_results").select("jump_height_cm").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
+    sb.from("vald_forcedecks_results").select("jump_height_cm, rsi_mod").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
     sb.from("vald_nordbord_results").select("left_peak_force_n,right_peak_force_n,asymmetry_percent").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
     sb.from("vald_forceframe_results").select("left_peak_force_n,right_peak_force_n,asymmetry_percent,movement_pattern,body_region").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lt("test_timestamp", snapshotEnd),
   ]);
@@ -74,6 +74,15 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const latestCmjValue = toNumber(latestCmj?.jump_height_cm);
   const cmjDrop = percentDrop(latestCmjValue, cmjBaseline);
   const cmjScored = scoreFromDrop(cmjDrop, VALD_THRESHOLDS.cmjModerateDropPct, VALD_THRESHOLDS.cmjSevereDropPct);
+
+  // RSI-modified — surfaced ALONGSIDE jump height (never replacing it, never
+  // touching the flag/score above). Jump height "lies" after fatigue while
+  // RSI-mod falls; a personal-norm read makes that visible. null (not zero)
+  // when VALD isn't sending it yet. Marques & Buchheit 2026; Gathercole 2015.
+  const cmjRsiBaselineValues = (cmjBaselineRes.data ?? []).map((row) => toNumber((row as Record<string, unknown>).rsi_mod)).filter((n): n is number => n != null);
+  const cmjRsiBaseline = cmjRsiBaselineValues.length >= VALD_THRESHOLDS.baselineMinTests ? median(cmjRsiBaselineValues) : null;
+  const latestRsiMod = toNumber(latestCmj?.rsi_mod);
+  const cmjRsiDrop = percentDrop(latestRsiMod, cmjRsiBaseline);
 
   const latestNordAsym = toNumber(latestNord?.asymmetry_percent);
   const nordScored = scoreAsymmetry(
@@ -115,6 +124,25 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
           : cmjDrop <= -VALD_THRESHOLDS.cmjModerateDropPct
           ? "Latest CMJ is moderately below recent baseline."
           : "CMJ output is within expected recent range.",
+      // Surfaced beside jump height; does not drive the flag. null = VALD not
+      // sending RSI-modified yet (the honest empty state), not "athlete fine".
+      rsi_mod: {
+        baseline: cmjRsiBaseline,
+        latest: latestRsiMod,
+        delta_percent: cmjRsiDrop,
+        source: (latestCmj?.rsi_mod_source as string | null) ?? null,
+        available: latestRsiMod != null,
+        message:
+          latestRsiMod == null
+            ? "RSI-modified not available: VALD is not sending it yet."
+            : cmjRsiDrop == null
+            ? "RSI-modified present, but no stable baseline yet."
+            : cmjRsiDrop <= -VALD_THRESHOLDS.cmjSevereDropPct
+            ? "RSI-modified is meaningfully below recent baseline — force produced slower even if jump height held."
+            : cmjRsiDrop <= -VALD_THRESHOLDS.cmjModerateDropPct
+            ? "RSI-modified is moderately below recent baseline."
+            : "RSI-modified is within expected recent range.",
+      },
     },
     nordbord: {
       asymmetry_percent: latestNordAsym,

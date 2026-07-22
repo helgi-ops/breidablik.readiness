@@ -396,6 +396,16 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               far more sensitive to fatigue than jump height. */}
           {!loading && cmjResults.length > 0 && (() => {
             const snapshotMap = new Map(snapshots.map((s) => [s.playerId, s]));
+            // Honesty: RSI-modified is the most fatigue-sensitive CMJ metric, but
+            // VALD isn't sending it yet (0/731 rows). Say so plainly instead of
+            // rows of silent "–". Confidence stays low until a squad's own RSI
+            // baseline matures (< ~14 tests). null RSI ≠ athlete fine.
+            const RSI_MATURE_TESTS = 14;
+            const anyRsi = cmjResults.some((r) => r.rsiMod != null);
+            const rsiBaselineTests = Array.from(cmjBaselines.values())
+              .filter((b) => b.rsiMod != null)
+              .reduce((max, b) => Math.max(max, b.days), 0);
+            const rsiLowConfidence = anyRsi && rsiBaselineTests < RSI_MATURE_TESTS;
             return (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
@@ -472,6 +482,21 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                   Jump height alone can stay flat while force-time metrics — RSI-mod, contraction time, peak force —
                   reveal residual neuromuscular fatigue 2-4× more sensitively (Marques &amp; Buchheit 2026).
                 </p>
+                {/* Honest RSI state — never a silent row of dashes. */}
+                {!anyRsi && (
+                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">
+                    <strong>RSI-modified not available yet · RSI-modified ekki tiltækt enn.</strong>{" "}
+                    VALD is not sending RSI-modified or time-to-takeoff in the synced result set, so it can&apos;t be shown or
+                    derived. Configure the ForceDecks test profile in VALD HUB to output them; this fills in automatically once it arrives.
+                    <span className="text-amber-700"> (VALD sendir ekki RSI-modified — stilltu ForceDecks prófílinn í VALD HUB.)</span>
+                  </div>
+                )}
+                {rsiLowConfidence && (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-500">
+                    <strong>Low confidence</strong> — RSI-modified baseline is still thin (&lt; {RSI_MATURE_TESTS} tests).
+                    Read the trend, not a single value, until more tests accrue.
+                  </div>
+                )}
               </div>
             );
           })()}

@@ -83,6 +83,13 @@ export type ValdForceDecksNormalizedResult = {
   testTimestamp: string;
   jumpHeightCm?: number | null;
   rsiMod?: number | null;
+  /** Provenance of rsiMod: "vald" (native) | "derived" (jump height ÷ time-to-
+   *  takeoff) | null (not available). A derived RSI must never read as native. */
+  rsiModSource?: "vald" | "derived" | null;
+  /** Diagnostic: the distinct TRIAL_* result keys this payload carried, so a sync
+   *  run can answer "is VALD sending RSI-modified / time-to-takeoff yet?" without
+   *  a DB spelunk. Not persisted per-row — aggregated into the sync summary. */
+  resultKeysSeen?: string[];
   eccentricDurationMs?: number | null;
   concentricDurationMs?: number | null;
   peakPowerW?: number | null;
