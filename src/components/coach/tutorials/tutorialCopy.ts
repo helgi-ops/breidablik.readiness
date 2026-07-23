@@ -31,8 +31,11 @@ export type Tutorial = {
   sections: TutorialSection[];
 };
 
-const TODAY_VIDEO =
-  "https://video.pictory.ai/embed/20260722221627557f4b112f19f37476796316acd88f146b9/20260722222727407i0Tiva8ODNDDF5P";
+// Overview video for the Today tutorial. The earlier Pictory embed 404'd; the
+// real how-to video + supporting docs are being produced by Cowork. Drop the
+// final embed URL here (https) when it's ready — the modal renders it automatically,
+// and the completeness test allows `today` (only) to carry it.
+const TODAY_VIDEO: string | undefined = undefined;
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -41,7 +44,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
       en: "You only need the Today page. It reads every signal — check-ins, Catapult load, VALD/CMJ tests, injury status — and returns one answer per player: green, amber or red, with a plain-language action. The rest of the system is there for when you want to go deeper, not every day.",
       is: "Þú þarft bara Today-síðuna. Hún les öll merkin — líðanarskráningar, Catapult-álag, VALD/CMJ-próf, stöðu gagnvart meiðslum — og skilar einu svari á leikmann: grænt, gult eða rautt, með aðgerð á mannamáli. Hitt kerfið er til staðar þegar þú vilt fara dýpra — ekki daglega.",
     },
-    videoEmbedUrl: TODAY_VIDEO,
+    ...(TODAY_VIDEO ? { videoEmbedUrl: TODAY_VIDEO } : {}),
     sections: [
       {
         heading: { en: "Your morning — three minutes", is: "Morgunninn þinn — þrjár mínútur" },
