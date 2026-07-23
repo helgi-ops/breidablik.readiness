@@ -249,6 +249,7 @@ export default function PositionComparisonPage() {
             <PagePurpose
               en="compare a player's physical output against others in the same position"
               is="bera saman afköst leikmanns við aðra í sömu stöðu"
+              tutorial="position-comparison"
             />
             <div className="text-xs text-slate-500">{IS ? "Hreyfimynstur (GPS + IMA, per-90) eftir leikstöðu — með leikstíl." : "Match movement (GPS + IMA, per-90) by position — with playing style."}</div>
           </div>

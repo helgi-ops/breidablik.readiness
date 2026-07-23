@@ -21,7 +21,8 @@ export type TutorialSlug =
   | "indoor-load"
   | "decel-intelligence"
   | "ima-intelligence"
-  | "match-movement";
+  | "match-movement"
+  | "position-comparison";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -63,6 +64,11 @@ const INDOOR_LOAD_VIDEO =
 // docs/load-guides/MicroPulse-Load-Quadrant-guide.pdf.
 const QUADRANT_VIDEO =
   "https://player.vimeo.com/video/1212433865?h=4f2266a7c3&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Position Comparison page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Position-Comparison-full-page-explained.pdf.
+const POSITION_COMPARISON_VIDEO =
+  "https://player.vimeo.com/video/1212444461?h=248ab8e3ff&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -530,6 +536,74 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Same signature, three references (top right). vs norm: this match against his own average — did he change from himself? Match A/B: two specific matches side by side — what differed between them? Squad: him against the team — does he move differently from teammates in the same role? The point of the page: a player's movement signature, game to game, to see when role or tactics change how he moves.",
             is: "Sama undirskrift, þrjú viðmið (efst í hægra horni). vs norm: þessi leikur á móti hans eigin meðaltali — breyttist hann frá sjálfum sér? Match A/B: tveir tilteknir leikir hlið við hlið — hvað var öðruvísi milli þeirra? Squad: hann á móti hópnum — hreyfir hann sig öðruvísi en liðsfélagar í sömu stöðu? Kjarni síðunnar: hreyfi-undirskrift leikmanns, leik fyrir leik, til að sjá þegar hlutverk eða taktík breytir því hvernig hann hreyfir sig.",
+          },
+        ],
+      },
+    ],
+  },
+  "position-comparison": {
+    title: { en: "How to use Position Comparison", is: "Hvernig á að nota Stöðu-samanburð" },
+    intro: {
+      en: "This page steps up from the individual to the role. It asks: how does each position play at THIS club, and how does a player compare to others in the same position? Everything is per-90 (GPS + IMA), each position gets a “Movement DNA” — the style it plays — and auto-assigned style tags. The rules decide the style; the AI only explains it.",
+      is: "Þessi síða stígur upp úr einstaklingnum í hlutverkið. Hún spyr: hvernig spilar hver staða hjá ÞESSU félagi, og hvernig ber leikmaður sig saman við aðra í sömu stöðu? Allt er á 90 mínútur (GPS + IMA), hver staða fær sitt „Movement DNA“ — stílinn sem hún spilar — og sjálfvirk stíl-merki. Reglurnar ákveða stílinn; gervigreindin útskýrir hann bara.",
+    },
+    videoEmbedUrl: POSITION_COMPARISON_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict sentence for the headline. Look at each position's Movement DNA — the largest slice is the style. The style tags give that style a name. The radar cards show the shape, and the standout marker shows who differs within a position. Remember: these are positions versus the squad, and the styles are rule-assigned — the AI only explains them.",
+            is: "Lestu niðurstöðusetninguna fyrir fyrirsögnina. Skoðaðu Movement DNA hverrar stöðu — stærsta sneiðin er stíllinn. Stíl-merkin gefa nafnið á stílnum. Radar-kortin sýna formið, og sker-sig-úr merkið sýnir hverjir skera sig úr innan stöðunnar. Mundu: þetta eru stöður á móti hópnum, og stílarnir eru úthlutaðir af reglum — gervigreindin útskýrir þá bara.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The verdict + compare by metric", is: "Niðurstaðan + samanburður eftir mælikvarða" },
+        body: [
+          {
+            en: "One sentence names which position leads on what — e.g. that attack and wide cover the most sprint distance while central mids change direction the most. Confidence shows how many positions and match-appearances are behind it.",
+            is: "Ein setning nefnir hvaða staða leiðir í hverju — t.d. að sóknar-/kantstöður hlaupi mestan sprettvegalengd og miðjumenn breyti oftast um stefnu. Confidence sýnir hversu margar stöður og leik-viðverur liggja að baki.",
+          },
+          {
+            en: "You pick a metric (Distance/90, HSR/90, Sprint distance/90, Top speed, Accelerations/90, Decelerations/90, Change of direction/90, Jumps/90, Player Load/90, Work rate) and each position gets a bar — a per-match average per 90. The dashed line is the squad average, so you see at once which position is above or below.",
+            is: "Þú velur mælikvarða (Distance/90, HSR/90, Sprint distance/90, Top speed, Accelerations/90, Decelerations/90, Change of direction/90, Jumps/90, Player Load/90, Work rate) og hver staða fær súlu — leikjameðaltal á 90. Punktalínan er hópmeðaltalið, svo þú sérð strax hvaða staða er yfir eða undir.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Movement DNA — the position's signature", is: "Movement DNA — undirskrift stöðunnar" },
+        body: [
+          {
+            en: "Each position's style is shown as relative emphasis across four axes — Speed, Agility, Engine and Aerial — computed from squad percentiles. The largest slice is the position's playing style: a centre back might be aerial-heavy, a central mid agility-heavy, a forward engine/speed-heavy.",
+            is: "Stíll hverrar stöðu er sýndur sem hlutfallsleg áhersla á fjóra ása — Speed (hraði), Agility (lipurð), Engine (vél/úthald) og Aerial (loftbolti) — reiknað úr hundraðshlutum hópsins. Stærsta sneiðin er spilastíll stöðunnar: miðvörður gæti verið aerial-þungur, miðjumaður agility-þungur, sóknarmaður engine/speed-þungur.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Style tags — rules decide, AI explains", is: "Stíl-merkin — reglur ákveða, AI útskýrir" },
+        body: [
+          {
+            en: "Each position gets one or more tags describing its style — “Aerial presence”, “High agility / repeat-effort”, “Engine / box-to-box”, “Speed / vertical threat” — assigned by rules from a z-score versus the other positions. “Driven by” names the metrics that produced the tag. An AI “Squad Style Overview” can then explain the whole in prose, but the rules assign the style, not the AI.",
+            is: "Hver staða fær eitt eða fleiri merki sem lýsa spilastíl — „Aerial presence“, „High agility / repeat-effort“, „Engine / box-to-box“, „Speed / vertical threat“ — úthlutað af reglum út frá z-skori á móti öðrum stöðum. „Driven by“ nefnir mælikvarðana sem ollu merkinu. AI „Squad Style Overview“ getur svo útskýrt heildina í máli, en reglurnar úthluta stílnum, ekki gervigreindin.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Per-position radar cards", is: "Radar-kort á stöðu" },
+        body: [
+          {
+            en: "Each position gets a card with the number of players and matches, the style tags, the “Driven by” metrics, and a radar (Dist, HSR, Sprint, Speed, Acc, Dec, CoD) against the squad median. The shape shows the position's signature. “Show players” expands to the individuals, with a marker on any player who stands out within the position.",
+            is: "Hver staða fær kort með fjölda leikmanna og leikja, stíl-merkjunum, „Driven by“-mælikvörðunum, og radar (Dist, HSR, Sprint, Speed, Acc, Dec, CoD) borinn saman við miðgildi hópsins. Formið sýnir undirskrift stöðunnar. „Show players“ opnar einstaklingana, með merki á hverjum þeim leikmanni sem sker sig úr innan stöðunnar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it's for", is: "Til hvers hún er" },
+        body: [
+          {
+            en: "Three uses: understanding each role's demands (what does a central mid actually have to do here?), judging whether a new signing fits the position's profile (recruitment), and defining the team's tactical identity. Because everything is per-90 and squad-relative, the comparison is fair. The point: the position's fingerprint, not the individual's.",
+            is: "Þrjú not: að skilja kröfur hverrar stöðu (hvað þarf miðjumaður í raun að gera hjá okkur?), að meta hvort nýr leikmaður passi í prófíl stöðunnar (nýliðun), og að skilgreina taktíska sjálfsmynd liðsins. Af því allt er per-90 og afstætt við hópinn er samanburðurinn sanngjarn. Kjarninn: undirskrift stöðunnar, ekki einstaklingsins.",
           },
         ],
       },
