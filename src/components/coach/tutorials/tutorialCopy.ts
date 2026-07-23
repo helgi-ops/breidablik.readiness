@@ -31,11 +31,11 @@ export type Tutorial = {
   sections: TutorialSection[];
 };
 
-// Overview video for the Today tutorial. The earlier Pictory embed 404'd; the
-// real how-to video + supporting docs are being produced by Cowork. Drop the
-// final embed URL here (https) when it's ready — the modal renders it automatically,
-// and the completeness test allows `today` (only) to carry it.
-const TODAY_VIDEO: string | undefined = undefined;
+// Overview video for the Today tutorial (Vimeo embed). Replaced the earlier
+// Pictory URL, which 404'd. The modal renders it in a 16:9 iframe automatically;
+// the completeness test allows `today` (only) to carry it.
+const TODAY_VIDEO: string | undefined =
+  "https://player.vimeo.com/video/1212261552?h=0c3eb76e3d&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
