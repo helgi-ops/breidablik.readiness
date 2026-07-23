@@ -14,6 +14,7 @@ export default function MatchMovementPage() {
         <PagePurpose
           en="compare how a player moved across matches — his movement signature, match to match (IMA driver on Pro, GPS movement on Lite)"
           is="berðu saman hvernig leikmaður hreyfði sig milli leikja — hreyfi-einkenni hans (IMA driver á Pro, GPS-hreyfing á Lite)"
+          tutorial="match-movement"
         />
         <p className="mt-1 text-xs text-slate-500">Buchheit 2014 · McBurnie 2022 · di Prampero 2015</p>
       </div>

@@ -20,7 +20,8 @@ export type TutorialSlug =
   | "quadrant"
   | "indoor-load"
   | "decel-intelligence"
-  | "ima-intelligence";
+  | "ima-intelligence"
+  | "match-movement";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -47,6 +48,11 @@ const DECEL_VIDEO =
 // docs/load-guides/MicroPulse-IMA-Intelligence-full-page-explained.pdf.
 const IMA_VIDEO =
   "https://player.vimeo.com/video/1212270885?h=e7fee7a2f0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Match Movement page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Match-Movement-full-page-explained.pdf.
+const MATCH_MOVEMENT_VIDEO =
+  "https://player.vimeo.com/video/1212417376?h=bffde1c0ce&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -396,6 +402,74 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "One row per player: total strides, the split across band tiers (b1–3 / b4–6 / b7–8), sprint strides, the ratio to his own baseline (vs baseline %), and high-intensity CoD L/R with asymmetry-%. Each player expands to a full CoD breakdown (Low/Medium/High). The point of the whole page: “how” rather than “how much” — all compared to the player himself, and it works indoors where GPS does not.",
             is: "Ein röð á leikmann: heildarskref, skipting í bandaþrep (b1–3 / b4–6 / b7–8), sprettskref, hlutfall gagnvart sinni grunnlínu (vs baseline %), og há-ákefðar CoD L/R með ósamhverfu-%. Hægt að opna hvern leikmann til að sjá fulla CoD-sundurliðun (Low/Medium/High). Kjarni síðunnar: „hvernig“ frekar en „hversu mikið“ — allt borið saman við leikmanninn sjálfan, og virkar innanhúss þar sem GPS gerir það ekki.",
+          },
+        ],
+      },
+    ],
+  },
+  "match-movement": {
+    title: { en: "How to use Match Movement", is: "Hvernig á að nota Match Movement" },
+    intro: {
+      en: "Where the IMA page shows one training day, this page compares how a single player moved across matches — his movement signature, game to game. It is descriptive and tactical — did his role change? — not injury prediction. IMA-driven on Pro, GPS movement on Lite.",
+      is: "Þar sem IMA-síðan sýnir einn æfingadag ber þessi síða saman hvernig einn leikmaður hreyfði sig milli leikja — hreyfi-undirskrift hans, leik fyrir leik. Þetta er lýsandi og taktískt — breyttist hlutverk hans? — ekki meiðslaspá. IMA-drifið á Pro, GPS-hreyfing á Lite.",
+    },
+    videoEmbedUrl: MATCH_MOVEMENT_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict sentence: did he move differently, and how? Check Accel:Decel — was he driving (>1) or reactive (<1)? The radar shape shows the whole signature at a glance. The AI paragraph gives the tactical story in plain language. And remember: this is descriptive — it tells you how the match demanded of him, not whether he is at injury risk.",
+            is: "Lestu niðurstöðusetninguna: hreyfði hann sig öðruvísi, og hvernig? Kíktu á Accel:Decel — var hann drífandi (>1) eða viðbragðssamur (<1)? Radar-formið sýnir heildar-undirskriftina í einni mynd. AI-málsgreinin gefur taktísku söguna á mannamáli. Og mundu: þetta er lýsandi — það segir þér hvernig leikurinn krafðist hans, ekki hvort hann sé í meiðslahættu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The comparison verdict", is: "Samanburðar-niðurstaðan" },
+        body: [
+          {
+            en: "You pick a player, a match and a mode. One plain sentence says how he moved differently from usual (e.g. “moved differently — more high-cadence running, more braking-biased”), with the key percentage shifts. Below it, single lines: IMA load/min (+34%), CoD left% (+10 pts) and so on. Confidence is based on how many of his matches feed the comparison. The rules compute the numbers — not AI.",
+            is: "Þú velur leikmann, leik og ham. Ein setning á mannamáli segir hvernig hann hreyfði sig öðruvísi en venjulega (t.d. „moved differently — more high-cadence running, more braking-biased“), með helstu prósentubreytingum. Undir henni koma stakar línur: IMA-álag/mín (+34%), CoD vinstri% (+10 stig) o.s.frv. Öryggið byggir á hversu margir af hans leikjum fæða samanburðinn. Reglur reikna tölurnar — ekki gervigreind.",
+          },
+        ],
+      },
+      {
+        heading: { en: "AI explains — rules decide", is: "AI útskýrir — reglur ákveða" },
+        body: [
+          {
+            en: "The clearest example of “rules decide, AI explains.” The AI writes a full paragraph interpreting the numbers — that the accel-to-braking ratio fell from 1.39 to 0.52, that left-turn bias rose from 47% to 57%, that sprint strides nearly doubled — and draws a tactical conclusion (a reactive, defence-heavy performance, not an injury concern). But it writes only from the re-computed Catapult numbers and invents nothing. It is labelled as AI.",
+            is: "Skýrasta dæmið um „reglur ákveða, gervigreind útskýrir“. AI skrifar heila málsgrein sem túlkar tölurnar — að hröðunar-á-móti-hemlunar hlutfall hafi fallið úr 1,39 í 0,52, að vinstri-beygju hlutdeild hafi hækkað úr 47% í 57%, að sprettskref hafi nær tvöfaldast — og dregur taktíska ályktun (viðbragðssöm, varnarþung frammistaða, ekki meiðslaáhyggja). En hún skrifar eingöngu úr endurreiknuðu Catapult-tölunum og finnur ekkert upp. Hún er merkt sem gervigreind.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The five movement dimensions", is: "Hreyfivíddirnar fimm" },
+        body: [
+          {
+            en: "Each is shown “this match vs his usual.” IMA load/min = total movement work per minute. Accel:Decel = the balance of speeding up vs slowing down: above 1 = more front-foot (driving), below 1 = more reactive (braking) — this is the key dimension. CoD/min = changes of direction per minute. CoD left% = share of left turns (positional bias). High-cadence strides/min = sprint-type running.",
+            is: "Hver er sýnd „þessi leikur á móti venju hans“. IMA load/min = heildar hreyfivinna á mínútu. Accel:Decel = jafnvægi hröðunar og hemlunar: yfir 1 = meira á framfótinn (drífandi), undir 1 = meira viðbragð (hemlandi) — þetta er lykilvíddin. CoD/min = stefnubreytingar á mínútu. CoD left% = hlutdeild vinstri-beygja (stöðuhalli). High-cadence strides/min = sprett-tegund hlaups.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Movement shape (radar) + S&C breakdown", is: "Hreyfiform (radar) + S&C sundurliðun" },
+        body: [
+          {
+            en: "The radar overlays “this match” (blue) on “his usual” (green) across the five axes, each normalised to the larger value — so the shape itself shows the difference at a glance: is the signature stretched toward sprinting, or toward braking? The by-dimension bars give the actual values.",
+            is: "Radar-línuritið leggur „þennan leik“ (blátt) ofan á „venju hans“ (grænt) á fimm ásunum, hver normaliseraður að stærra gildinu — svo formið sjálft sýnir muninn í einni mynd: er undirskriftin teygð í átt að spretti, eða að hemlun? By-dimension súlurnar gefa raungildin.",
+          },
+          {
+            en: "Because a summary can hide where the difference sits, the S&C breakdown shows raw counts by intensity: deceleration (Low/Medium/High), change of direction (Low/Medium/High), and high-cadence strides (bands 6, 7, 8). The red high-intensity rows are the demanding end — a descriptive read of mechanical demand (McBurnie 2022), not injury prediction.",
+            is: "Þar sem samantekt getur falið hvar munurinn liggur sýnir S&C-sundurliðunin hráar tölur eftir ákefð: hemlun (Low/Medium/High), stefnubreytingar (Low/Medium/High) og háhraðaskref (bönd 6, 7, 8). Rauðu há-ákefðar línurnar eru krefjandi endinn — lýsandi mynd af vélrænni kröfu (McBurnie 2022), ekki meiðslaspá.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Three comparison modes", is: "Þrír samanburðarhamir" },
+        body: [
+          {
+            en: "Same signature, three references (top right). vs norm: this match against his own average — did he change from himself? Match A/B: two specific matches side by side — what differed between them? Squad: him against the team — does he move differently from teammates in the same role? The point of the page: a player's movement signature, game to game, to see when role or tactics change how he moves.",
+            is: "Sama undirskrift, þrjú viðmið (efst í hægra horni). vs norm: þessi leikur á móti hans eigin meðaltali — breyttist hann frá sjálfum sér? Match A/B: tveir tilteknir leikir hlið við hlið — hvað var öðruvísi milli þeirra? Squad: hann á móti hópnum — hreyfir hann sig öðruvísi en liðsfélagar í sömu stöðu? Kjarni síðunnar: hreyfi-undirskrift leikmanns, leik fyrir leik, til að sjá þegar hlutverk eða taktík breytir því hvernig hann hreyfir sig.",
           },
         ],
       },

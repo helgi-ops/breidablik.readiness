@@ -10,6 +10,7 @@ const SLUGS: TutorialSlug[] = [
   "indoor-load",
   "decel-intelligence",
   "ima-intelligence",
+  "match-movement",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision
