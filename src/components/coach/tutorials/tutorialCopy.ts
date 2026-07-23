@@ -22,7 +22,8 @@ export type TutorialSlug =
   | "decel-intelligence"
   | "ima-intelligence"
   | "match-movement"
-  | "position-comparison";
+  | "position-comparison"
+  | "post-match-recovery";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -69,6 +70,12 @@ const QUADRANT_VIDEO =
 // docs/load-guides/MicroPulse-Position-Comparison-full-page-explained.pdf.
 const POSITION_COMPARISON_VIDEO =
   "https://player.vimeo.com/video/1212444461?h=248ab8e3ff&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Post-match Recovery page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Post-match-Recovery-full-page-Pictory.pptx (EN-only
+// source — the Icelandic below is translated, not lifted from the deck).
+const POST_MATCH_RECOVERY_VIDEO =
+  "https://player.vimeo.com/video/1212447762?h=272986f3fd&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -604,6 +611,74 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Three uses: understanding each role's demands (what does a central mid actually have to do here?), judging whether a new signing fits the position's profile (recruitment), and defining the team's tactical identity. Because everything is per-90 and squad-relative, the comparison is fair. The point: the position's fingerprint, not the individual's.",
             is: "Þrjú not: að skilja kröfur hverrar stöðu (hvað þarf miðjumaður í raun að gera hjá okkur?), að meta hvort nýr leikmaður passi í prófíl stöðunnar (nýliðun), og að skilgreina taktíska sjálfsmynd liðsins. Af því allt er per-90 og afstætt við hópinn er samanburðurinn sanngjarn. Kjarninn: undirskrift stöðunnar, ekki einstaklingsins.",
+          },
+        ],
+      },
+    ],
+  },
+  "post-match-recovery": {
+    title: { en: "How to use Post-match Recovery", is: "Hvernig á að nota Endurheimt eftir leik" },
+    intro: {
+      en: "After a match this page answers one question: who has bounced back, and who is still carrying it? The bottom line — feel recovers before the body does. Don't trust a green dot alone if the jump is still down; the gap between the two is the recovery you can't feel.",
+      is: "Eftir leik svarar þessi síða einni spurningu: hver er kominn til baka, og hver ber leikinn enn? Kjarninn — líðanin jafnar sig á undan líkamanum. Ekki treysta grænum punkti einum ef stökkið er enn niðri; bilið þar á milli er endurheimtin sem þú finnur ekki.",
+    },
+    videoEmbedUrl: POST_MATCH_RECOVERY_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read it in 30 seconds", is: "Lestu hana á 30 sekúndum" },
+        body: [
+          {
+            en: "First, the verdict — how many rebounded by MD+2. Second, the recovery curve — is the green growing day by day? Third, the dot versus the jump — a green feel with a down jump means still fatigued. And a heavy echo (high load plus still flagged) is the real one to act on.",
+            is: "Fyrst niðurstaðan — hversu margir voru komnir til baka á MD+2. Svo endurheimtarkúrfan — er græna að vaxa dag frá degi? Loks punkturinn á móti stökkinu — græn líðan með lækkuðu stökki þýðir enn þreyttur. Og „heavy echo“ (mikið álag + enn flaggaður) er sá sem raunverulega þarf að bregðast við.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The recovery timeline", is: "Endurheimtar-tímalínan" },
+        body: [
+          {
+            en: "The whole page rests on a known timeline: fatigue peaks the day after a match (MD+1) and should clear within two to three days (Nédélec 2012). So the page tracks each player across MD+1, MD+2 and MD+3 and asks: has he cleared on schedule, or is he still carrying it?",
+            is: "Öll síðan hvílir á þekktri tímalínu: þreytan nær hámarki daginn eftir leik (MD+1) og á að hverfa innan tveggja til þriggja daga (Nédélec 2012). Síðan fylgir því hverjum leikmanni yfir MD+1, MD+2 og MD+3 og spyr: hreinsaðist hann á áætlun, eða ber hann leikinn enn?",
+          },
+        ],
+      },
+      {
+        heading: { en: "Two reads, side by side — and the gap between them", is: "Tveir lestrar hlið við hlið — og bilið á milli" },
+        body: [
+          {
+            en: "For every player, every day, there are two reads. The coloured dot is subjective — how he feels, from sleep, soreness and energy, versus his own norm. The percentage below it is objective — a countermovement jump (CMJ) test versus his baseline, the neuromuscular truth. Feel above, jump below.",
+            is: "Fyrir hvern leikmann, hvern dag, eru tveir lestrar. Litaði punkturinn er huglægur — hvernig honum líður, út frá svefni, hörku og orku, borið saman við hans eigin venju. Prósentan fyrir neðan er hlutlæg — CMJ-stökkpróf á móti hans grunnlínu, taugavöðva-sannleikurinn. Líðan að ofan, stökk að neðan.",
+          },
+          {
+            en: "Both are shown because a player can self-report green yet have a depressed jump — subjective feel recovers before the neuromuscular system does. When the dot says fine but the jump is still down, believe the jump: that gap is a player who thinks he's ready but isn't, and on Gathercole 2015 it is the single most useful signal on the page.",
+            is: "Báðir eru sýndir því leikmaður getur skráð sig grænan en samt verið með lækkað stökk — huglæg líðan jafnar sig á undan taugavöðvakerfinu. Þegar punkturinn segir í lagi en stökkið er enn niðri, trúðu stökkinu: það bil er leikmaður sem heldur að hann sé klár en er það ekki, og samkvæmt Gathercole 2015 er það gagnlegasta merkið á síðunni.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The squad recovery curve", is: "Endurheimtarkúrfa hópsins" },
+        body: [
+          {
+            en: "Three stacked bars, one per day, each split into red, yellow and green by the readiness verdict — you watch the green grow across the days. Six red on MD+1 becoming eleven green by MD+3 is a healthy rebound. If red lingers at MD+3, recovery is stalling and you have players to look at.",
+            is: "Þrjár stöplasúlur, ein á dag, hver skipt í rautt, gult og grænt eftir niðurstöðunni — þú horfir á græna vaxa yfir dagana. Sex rauðir á MD+1 sem verða ellefu grænir á MD+3 er heilbrigð endurkoma. Ef rautt situr eftir á MD+3 er endurheimtin að stöðvast og þú átt leikmenn til að skoða.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Heavy echo vs likely not post-match", is: "Heavy echo á móti „líklega ekki eftir leik“" },
+        body: [
+          {
+            en: "The page tells real match fatigue apart from noise. A heavy echo is high mechanical match load — decel-weighted, because high-intensity decelerations best predict muscle damage (McBurnie 2022) — plus still flagged at MD+2. That's genuine lingering fatigue: ease his plan or extend recovery. Contrast “likely not post-match”: flagged, but with low load or few minutes, so it probably isn't from the game — look elsewhere.",
+            is: "Síðan greinir raunverulega leikþreytu frá suði. „Heavy echo“ er mikið vélrænt leikálag — vegið eftir hemlun, því háákefðar hemlanir spá best fyrir um vöðvaskemmdir (McBurnie 2022) — auk þess að vera enn flaggaður á MD+2. Það er raunveruleg viðvarandi þreyta: léttu planið hans eða lengdu endurheimtina. Berðu það saman við „líklega ekki eftir leik“: flaggaður, en með lágt álag eða fáar mínútur, svo það kemur líklega ekki úr leiknum — leitaðu annars staðar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Recovery watch — when to escalate", is: "Recovery watch — hvenær á að stigmagna" },
+        body: [
+          {
+            en: "Players still below their own baseline three days after the match get escalated — and the system doesn't just flag them. It names the driver (which subjective axis is dragging, energy or sleep, with the readiness-z) and gives an action: modify training and/or refer to physio, because they are past the expected echo. It's directional — the direction beside the colour, not the colour itself.",
+            is: "Leikmenn sem eru enn undir sinni eigin grunnlínu þremur dögum eftir leik eru stigmagnaðir — og kerfið flaggar þá ekki bara. Það nefnir drifkraftinn (hvaða huglægi ás dregur niður, orka eða svefn, með readiness-z) og gefur aðgerð: breyta æfingu og/eða vísa til sjúkraþjálfara, því þeir eru komnir fram yfir væntanlegt bergmál. Þetta er stefnubundið — stefnan við hliðina á litnum, ekki liturinn sjálfur.",
           },
         ],
       },

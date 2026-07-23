@@ -228,6 +228,7 @@ export default function PostMatchRecoveryPage() {
             <PagePurpose
               en="see who needs recovery after the match and who is ready"
               is="sjá hverjir þurfa endurheimt eftir leik og hverjir eru tilbúnir"
+              tutorial="post-match-recovery"
             />
             <div className="text-xs text-slate-500">{t.intro}</div>
           </div>
