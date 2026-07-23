@@ -54,6 +54,11 @@ const IMA_VIDEO =
 const MATCH_MOVEMENT_VIDEO =
   "https://player.vimeo.com/video/1212417376?h=bffde1c0ce&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Indoor Load page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
+const INDOOR_LOAD_VIDEO =
+  "https://player.vimeo.com/video/1212426403?h=8bfdc0ca29&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
@@ -242,25 +247,66 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "indoor-load": {
     title: { en: "How to use Indoor Load Intelligence", is: "Hvernig á að nota Indoor Load" },
     intro: {
-      en: "Training load in the hall, when there is no GPS.",
-      is: "Álag á innanhússæfingu, þegar enginn GPS er til staðar.",
+      en: "This page exists for one reason: GPS does not work indoors. Rather than show zero, MicroPulse deliberately discards the GPS signals and computes load from the inertial sensors alone (IMU) — Football Movement Profile stride bands, player load and deceleration. It auto-detects indoor sessions and compares each to the player's own indoor baseline (100 = his average). An indoor score is deliberately not comparable to an outdoor one — and the page says so plainly. For an Icelandic club, where much of the year is played indoors, this is not an edge case but the core.",
+      is: "Þessi síða er til af einni ástæðu: GPS virkar ekki innanhúss. Í stað þess að sýna núll hendir MicroPulse GPS-merkjunum viljandi og reiknar álagið úr hröðunarmælunum einum (IMU) — Football Movement Profile stride-böndum, player load og hemlun. Kerfið greinir sjálfkrafa innanhússæfingar og ber hverja saman við eigin innanhúss-grunnlínu leikmannsins (100 = hans meðaltal). Innanhússtala er viljandi ekki samanburðarhæf við útitölu — og síðan segir það hreint út. Fyrir íslenskt félag, þar sem stór hluti ársins fer fram inni, er þetta ekki jaðartilfelli heldur kjarninn.",
     },
+    videoEmbedUrl: INDOOR_LOAD_VIDEO,
     sections: [
       {
-        heading: { en: "How it works", is: "Hvernig hún virkar" },
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
         body: [
           {
-            en: "Computed from the inertial sensors (Pro) — PlayerLoad, high-intensity accelerations/decelerations and change-of-direction — normalised to each player's own recent normal, so an indoor session isn't a blank card.",
-            is: "Reiknað úr hröðunarmælum (Pro) — PlayerLoad, hraðar hröðanir/hægðanir og stefnubreytingar — kvarðað á hvers leikmanns eigin nýlega venju, svo innanhússæfing er ekki tómt kort.",
+            en: "Start with Team Today for the split. Scan Top Concerns: who needs rest, who is in return-to-play? The heatmap shows who has been in the red repeatedly. For one player, the composite score (100 = his average) gives the answer, and “Ready today?” says what to do. Always remember: 100 is HIS indoor usual — never compared to outdoor.",
+            is: "Byrjaðu á Team Today fyrir skiptinguna. Renndu yfir Top Concerns: hver þarf hvíld, hver er í endurkomu? Hitakortið sýnir hverjir hafa verið á rauðu ítrekað. Fyrir einn leikmann gefur samsetta skorið (100 = hans meðaltal) svarið, og „Ready today?“ segir hvað á að gera. Mundu alltaf: 100 er HANS venja innanhúss — aldrei borið saman við úti.",
           },
         ],
       },
       {
-        heading: { en: "The same layered read", is: "Sami lagskipti lesturinn" },
+        heading: { en: "Why indoor numbers look different", is: "Af hverju líta innanhússtölur öðruvísi út" },
         body: [
           {
-            en: "Open it for indoor sessions where GPS distance is zero. It opens with a verdict; the numbers sit behind a click, like every other page.",
-            is: "Opnaðu hana fyrir innanhússæfingar þar sem GPS-vegalengd er núll. Hún byrjar á niðurstöðu; tölurnar liggja á bak við smell, eins og á öllum öðrum síðum.",
+            en: "Indoors, distance, high-speed running, sprints, top speed and metabolic power become unreliable (Brown 2016), so they are dropped. Load comes from IMU only: FMP stride bands, player load and deceleration. The score is compared to the player's own indoor baseline (100 = average), not to outdoor sessions or the squad. This is not a hidden detail — the honesty box sits at the top of the page. Requires Pro.",
+            is: "Innanhúss verða vegalengd, háhraðahlaup, spretti, hámarkshraði og metabolic power óáreiðanleg (Brown 2016), svo þeim er sleppt. Álagið kemur eingöngu úr IMU: FMP stride-bönd, player load og hemlun. Skorið er borið saman við eigin innanhúss-grunnlínu leikmannsins (100 = meðaltal), ekki við útiæfingar eða hópinn. Þetta er ekki falið smáatriði — heiðarleikareiturinn stendur efst á síðunni. Krefst Pro.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Team Today + Top Concerns", is: "Team Today + Top Concerns" },
+        body: [
+          {
+            en: "Team Today is one line splitting the squad into ready, lighter session, rest, and injury/return-to-play — the day's five-second read for a hall session. Top Concerns lists who needs attention, each with a status (e.g. “Hamstring — rehab”, “Head/Neck — RTP stage 4/5”, or “trained much harder than usual + decel:intensity imbalance”) and an action badge: Rehab, Return-to-play or Rest. Injury and RTP status is woven straight into the load view.",
+            is: "Team Today er ein lína sem skiptir hópnum í klár, léttari æfingu, hvíld og meiðsli/endurkomu — fimm sekúndna lestur dagsins fyrir hallaræfingu. Top Concerns listar þá sem þurfa athygli, hvern með stöðu (t.d. „Hamstring — rehab“, „Head/Neck — RTP stage 4/5“, eða „trained much harder than usual + decel:intensity imbalance“) og aðgerðamerki: Rehab, Return-to-play eða Rest. Meiðsla- og endurkomustaða er fléttuð beint inn í álagssýnina.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Summary tiles + heatmap", is: "Samantektarflísar + hitakort" },
+        body: [
+          {
+            en: "Five tiles count across the squad: players with data, heavy/spike, typical, light, and indoor sessions in the last 7 days. The 14-day heatmap is a grid of players × days — each cell one session, coloured by composite score (grey Light, blue Below, green Typical, amber Heavy, red Spike), with an inner red border marking an indoor session. In a second you see who has been in the red repeatedly.",
+            is: "Fimm flísar telja yfir hópinn: leikmenn með gögn, þung/topp, dæmigerð, létt, og innanhússæfingar síðustu 7 daga. 14-daga hitakortið er rist af leikmönnum × dögum — hver reitur ein æfing, lituð eftir samsettu skori (grátt Light, blátt Below, grænt Typical, gult Heavy, rautt Spike), með rauðri innri línu sem merkir innanhússæfingu. Á sekúndu sérðu hverjir hafa verið á rauðu ítrekað.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The per-player list + “Ready today?”", is: "Leikmannalistinn + „Ready today?“" },
+        body: [
+          {
+            en: "Each player row: an action badge (Rehab/RTP/Rest), the share of indoor sessions over 28 days, the composite score (100 = his average), ACWR (acute ÷ chronic) and density (d/min), with an injury line showing type, RTP stage and estimated return date. “Ready today?” turns that into an action: a one-word verdict (Rest / lighter / ready), the reason in plain language (“trained much harder than usual yesterday + ACWR 1.32 outside familiar range”), and coach guidance (“No high-intensity work — focus on mobility, recovery, light technical work”). Verdict → why → what to do.",
+            is: "Hver leikmannaröð: aðgerðamerki (Rehab/RTP/Rest), hlutfall innanhússæfinga af 28 dögum, samsett skor (100 = hans meðaltal), ACWR (bráða ÷ langtíma) og þéttleiki (d/min), með meiðslalínu sem sýnir tegund, RTP-stig og áætlaðan endurkomudag. „Ready today?“ breytir því í aðgerð: niðurstaða í einu orði (Rest / lighter / ready), ástæðan á mannamáli („trained much harder than usual yesterday + ACWR 1.32 outside familiar range“), og þjálfaraleiðsögn („No high-intensity work — focus on mobility, recovery, light technical work“). Niðurstaða → af hverju → hvað á að gera.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Composite score + FMP distribution", is: "Samsett skor + FMP dreifing" },
+        body: [
+          {
+            en: "The composite indoor score sets 100 as his own 28-day indoor average — so 143 is 43% above his usual (a spike), never compared to outdoor or the squad. A 14-day trend chart shows indoor vs outdoor, and three columns sit below: the latest session, the personal baseline (28d) and the last 7 days — Player Load, duration, Dynamic High%, HMLD and IMA side by side.",
+            is: "Samsetta innanhússskorið setur 100 sem hans eigin 28 daga innanhússmeðaltal — svo 143 er 43% yfir hans venju (topp), aldrei borið saman við úti eða hópinn. 14-daga þróunarlínurit sýnir innanhúss á móti úti, og þrír dálkar sitja neðar: nýjasta æfingin, persónuleg grunnlína (28d) og síðustu 7 dagar — Player Load, tímalengd, Dynamic High%, HMLD og IMA hlið við hlið.",
+          },
+          {
+            en: "The FMP movement distribution shows the shape of the session across six tiers (Very Low → Dynamic High). Lots in the low tiers = calm technical work; more in Dynamic High = an intense session. This Football Movement Profile is the heart of the indoor score.",
+            is: "FMP hreyfidreifingin sýnir lögun æfingarinnar í sex þrepum (Very Low → Dynamic High). Mikið í lágum þrepum = róleg tæknivinna; meira í Dynamic High = snörp æfing. Þessi Football Movement Profile er hjartað í innanhússkorinu.",
           },
         ],
       },
