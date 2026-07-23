@@ -25,7 +25,8 @@ export type TutorialSlug =
   | "position-comparison"
   | "post-match-recovery"
   | "train-like-you-play"
-  | "injury-pattern-analysis";
+  | "injury-pattern-analysis"
+  | "hsr-intelligence";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -89,6 +90,11 @@ const TRAIN_LIKE_YOU_PLAY_VIDEO =
 // The page is /coach/injuries (no PagePurpose there — opened via CoachTutorialButton).
 const INJURY_PATTERN_VIDEO =
   "https://player.vimeo.com/video/1212461431?h=51fdcef6e0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// HSR Intelligence page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-HSR-Intelligence-full-page-explained.pdf.
+const HSR_VIDEO =
+  "https://player.vimeo.com/video/1212478746?h=bca1c2d026&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -827,6 +833,74 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "It is a retrospective audit showing whether risk was flagged before an injury — proof the system earns its place. It is not injury prediction (no system predicts injuries reliably), and it is not where injuries are logged — that's the RTP tab. This page is read-only. The point: it's the answer to “is this delivering?”, computed from the club's real history, misses and all, so the number is proof rather than a promise.",
             is: "Hún er eftirámat sem sýnir hvort áhætta var flögguð fyrir meiðsli — sönnun þess að kerfið vinni fyrir sér. Hún er ekki meiðslaspá (ekkert kerfi spáir meiðslum áreiðanlega) og hún er ekki þar sem meiðsli eru skráð — það er gert á RTP-flipanum. Þessi síða er aðeins til aflestrar. Kjarninn: þetta er svarið við „skilar þetta einhverju?“, reiknað úr raunverulegri sögu félagsins, með missunum og öllu, svo talan sé sönnun en ekki loforð.",
+          },
+        ],
+      },
+    ],
+  },
+  "hsr-intelligence": {
+    title: { en: "How to use HSR Intelligence", is: "Hvernig á að nota HSR Intelligence" },
+    intro: {
+      en: "This is the Lite-tier hamstring guard — per-player soft-tissue monitoring built on the GPS metrics every Catapult plan exposes (high-speed running, sprint, max velocity). It's the GPS counterpart to Decel Intelligence: the same published evidence (Malone 2017, Buchheit 2014), different inputs. Its job is to make sure each player gets enough high-speed running before a match — because both too much AND too little are hamstring risks.",
+      is: "Þetta er aftanlærisvörnin á Lite-þrepi — persónulegt eftirlit með mjúkvefjaáhættu byggt á GPS-mælunum sem hver Catapult-áskrift skilar (háhraðahlaup, spretti, hámarkshraði). Hún er GPS-hliðstæða Decel Intelligence: sama ritrýnda sönnun (Malone 2017, Buchheit 2014), önnur inntök. Hlutverk hennar er að tryggja að hver leikmaður fái nóg af háhraðahlaupi fyrir leik — því bæði of mikið OG of lítið er aftanlærisáhætta.",
+    },
+    videoEmbedUrl: HSR_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict: who's flagged and why (ramping up, or dropped off). The table is sorted red → green, so HIGH RISK sits at the top. For a flagged player, see which sub-flag drove it — HSR, Sprint or MaxV. And remember: both too much and too little are risks, and the MaxV exposure is the hamstring's inoculation for match sprints.",
+            is: "Lestu niðurstöðuna: hverjir eru flaggaðir og af hverju (ramping up eða dropped off). Taflan er röðuð rautt → grænt, svo HIGH RISK er efst. Fyrir flaggaðan leikmann sjáðu hvaða undir-flagg olli — HSR, Sprint eða MaxV. Og mundu: bæði of mikið og of lítið er áhætta, og MaxV-áreitið er bólusetning aftanlærisins fyrir spretti leiks.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The verdict", is: "Niðurstaðan" },
+        body: [
+          {
+            en: "One sentence names those carrying elevated high-speed-running load and those to keep an eye on. “Elevated load” means today's running is far above — or far below — the player's normal four-week pattern, or that he rarely reaches top speed. The chips classify it: “load ramping up fast”, “sprinting ramping up fast” or “load dropped off”. Confidence rests on a 4-week baseline, and both directions are flagged.",
+            is: "Ein setning nefnir þá sem bera hækkað háhraðahlaupsálag og þá sem vert er að fylgjast með. „Hækkað álag“ þýðir að hlaup dagsins er langt yfir — eða langt undir — venjulegu fjögurra vikna mynstri leikmannsins, eða að hann nær sjaldan hámarkshraða. Merkin flokka það: „load ramping up fast“, „sprinting ramping up fast“ eða „load dropped off“. Öryggið hvílir á 4-vikna grunnlínu, og báðar áttir eru flaggaðar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Three exposures — the heart of the page", is: "Þrjú áreiti — hjarta síðunnar" },
+        body: [
+          {
+            en: "The page tracks three: HSR (high-speed-running distance above the threshold, with an ACWR of 7d/28d), Sprint (sprint distance, with an ACWR), and MaxV (%MAXV — how close to top speed — plus the count of sessions where ≥95% of max velocity was reached). Each exposure has its own coloured sub-flag in the table (Malone 2017; Buchheit 2014).",
+            is: "Síðan fylgist með þremur: HSR (háhraðahlaupsvegalengd yfir þröskuldi, með ACWR 7d/28d), Sprint (sprettvegalengd, með ACWR), og MaxV (%MAXV — hversu nálægt hámarkshraða — auk fjölda æfinga þar sem ≥95% af hámarkshraða náðist). Hvert áreiti hefur sitt eigið litað undir-flagg í töflunni (Malone 2017; Buchheit 2014).",
+          },
+        ],
+      },
+      {
+        heading: { en: "Both directions are the risk", is: "Báðar áttir eru áhætta" },
+        body: [
+          {
+            en: "Ramping up too fast is a spike risk. But ramping down — or rarely reaching top speed — leaves the hamstring under-prepared for match sprints (Malone 2017). Too little high-speed running is as dangerous as too much. That's why “load dropped off” is flagged alongside “ramping up fast”: this isn't only overload protection, it's under-exposure protection too.",
+            is: "Að rampa upp of hratt er toppáhætta. En að rampa niður — eða ná sjaldan hámarkshraða — skilur aftanlærið eftir vanbúið fyrir spretti leiks (Malone 2017). Of lítið háhraðahlaup er jafn hættulegt og of mikið. Þess vegna er „load dropped off“ flaggað við hliðina á „ramping up fast“: þetta er ekki bara ofálagsvörn heldur líka vörn gegn undir-áreiti.",
+          },
+          {
+            en: "MaxV is the sprint inoculation. Reaching ≥95% of max velocity regularly is what prepares the hamstring for match sprints. The %MAXV over 28 days and the count of ≥95% sessions show whether he has had that exposure — few such sessions means under-prepared for the game's top end, even if total running looks fine.",
+            is: "MaxV er sprett-„bólusetningin“. Að ná ≥95% af hámarkshraða reglulega er það sem býr aftanlærið undir spretti leiks. %MAXV yfir 28 daga og fjöldi ≥95%-æfinga sýnir hvort hann hafi fengið það áreiti — fáar slíkar æfingar þýða vanbúinn fyrir topphraða leiksins, jafnvel þótt heildarhlaup líti vel út.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The table — worst-of-three verdict", is: "Taflan — versta af þremur ræður" },
+        body: [
+          {
+            en: "The table is sorted by risk (red → green). Each value is coloured by its own sub-flag, and the STATUS column on the right is the worst-of-three — the combined verdict from HSR, Sprint and MaxV. So a player's status is driven by whichever exposure is worst, not the average of the three. Columns: HSR 7D/ACWR · Sprint 7D/ACWR · %MAXV · ≥95% sessions.",
+            is: "Taflan er röðuð eftir áhættu (rautt → grænt). Hvert gildi er litað eftir sínu eigin undir-flaggi, og STATUS-dálkurinn lengst til hægri er versta af þremur — samsett niðurstaða úr HSR, Sprint og MaxV. Þannig ræðst staða leikmanns af því áreiti sem er verst, ekki meðaltali þeirra þriggja. Dálkar: HSR 7D/ACWR · Sprint 7D/ACWR · %MAXV · ≥95% sessions.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Lite tier, same evidence", is: "Lite-þrep, sama sönnun" },
+        body: [
+          {
+            en: "HSR Intelligence is the GPS-only equivalent of Decel Intelligence. It's built on what every Catapult plan exposes — no inertial data needed — so a Lite club gets real hamstring monitoring. The evidence is the same as Decel's (Malone 2017, Buchheit 2014, published in BJSM): different inputs, same quality. The point: make sure each player gets enough — but not too much — high-speed running before a match, on the Lite tier with the same science as Pro.",
+            is: "HSR Intelligence er GPS-eingöngu jafngildi Decel Intelligence. Hún byggir á því sem hver Catapult-áskrift skilar — engin hröðunarmælagögn þarf — svo Lite-félag fær raunverulegt aftanlæriseftirlit. Sönnunin er sú sama og hjá Decel (Malone 2017, Buchheit 2014, ritrýnt í BJSM): önnur inntök, sömu gæði. Kjarninn: passaðu að hver leikmaður fái nóg — en ekki of mikið — af háhraðahlaupi fyrir leik, á Lite-þrepi með sömu vísindum og Pro.",
           },
         ],
       },

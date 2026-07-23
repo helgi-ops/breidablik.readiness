@@ -521,6 +521,7 @@ export default function HsrIntelligencePage() {
           <PagePurpose
             en="check each player is getting enough high-speed running before a match"
             is="athuga hvort hver leikmaður fái nóg háhraðahlaup fyrir leik"
+            tutorial="hsr-intelligence"
           />
           <p className="text-sm text-muted-foreground max-w-3xl mt-1">
             {tt("subtitle", lang)}
