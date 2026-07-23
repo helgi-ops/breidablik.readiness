@@ -14,6 +14,7 @@ const SLUGS: TutorialSlug[] = [
   "position-comparison",
   "post-match-recovery",
   "train-like-you-play",
+  "injury-pattern-analysis",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision

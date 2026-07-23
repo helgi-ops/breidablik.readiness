@@ -21,6 +21,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang, type Lang } from "@/lib/lang";
 import AssignRehabModal from "@/components/coach/AssignRehabModal";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type InjuryType =
   | "hamstring" | "calf" | "groin" | "quad" | "hip"
@@ -502,12 +503,15 @@ export default function CoachInjuriesPage() {
             {teamLabel && <> · {teamLabel}</>}
           </p>
         </div>
-        <Link
-          href="/coach?tab=rtp"
-          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          {it("goToRtpTab", lang)}
-        </Link>
+        <div className="flex items-center gap-2">
+          <CoachTutorialButton slug="injury-pattern-analysis" />
+          <Link
+            href="/coach?tab=rtp"
+            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            {it("goToRtpTab", lang)}
+          </Link>
+        </div>
       </div>
 
       {/* Summary */}

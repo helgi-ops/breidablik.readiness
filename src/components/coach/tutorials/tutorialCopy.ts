@@ -24,7 +24,8 @@ export type TutorialSlug =
   | "match-movement"
   | "position-comparison"
   | "post-match-recovery"
-  | "train-like-you-play";
+  | "train-like-you-play"
+  | "injury-pattern-analysis";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -82,6 +83,12 @@ const POST_MATCH_RECOVERY_VIDEO =
 // docs/load-guides/MicroPulse-Train-like-you-Play-full-page-explained.pdf.
 const TRAIN_LIKE_YOU_PLAY_VIDEO =
   "https://player.vimeo.com/video/1212456357?h=78f5d93153&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Injury Pattern Analysis page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Injury-Pattern-Analysis-full-page-explained.pdf.
+// The page is /coach/injuries (no PagePurpose there — opened via CoachTutorialButton).
+const INJURY_PATTERN_VIDEO =
+  "https://player.vimeo.com/video/1212461431?h=51fdcef6e0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -757,6 +764,69 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The point of the page: don't under-prepare the body for what the game asks — and when a gap opens, it says who to train harder, on what, and how, in line with how you want to play.",
             is: "Kjarni síðunnar: ekki vanbúa líkamann fyrir það sem leikurinn krefst — og þegar gap opnast segir hún hvern á að æfa harðar, á hverju, og hvernig, miðað við hvernig þú vilt spila.",
+          },
+        ],
+      },
+    ],
+  },
+  "injury-pattern-analysis": {
+    title: { en: "How to use Injury Pattern Analysis", is: "Hvernig á að nota Meiðsla-munstursgreiningu" },
+    intro: {
+      en: "This is the “proof-of-ROI” page — it answers the question a board asks: is this delivering? For every recorded injury it looks back over the 14 days before and checks whether MicroPulse produced a warning signal — a yellow/red flag, a decoupling alert, or an ACWR spike. The headline is what share of injuries had a preceding warning. It is honest: it includes the ones it missed, and the number can fall as well as rise. This is a retrospective audit, not injury prediction.",
+      is: "Þetta er „proof-of-ROI“ síðan — hún svarar spurningunni sem stjórn spyr: skilar þetta einhverju? Fyrir hverja skráða meiðsli lítur hún til baka yfir 14 dagana á undan og athugar hvort MicroPulse hafi gefið viðvörunarmerki — gult/rautt flagg, ósamræmisviðvörun, eða ACWR-topp. Fyrirsögnin er hvaða hlutfall meiðsla átti sér undanfarandi viðvörun. Hún er heiðarleg: hún tekur með tilvikin sem hún missti af, og talan getur lækkað eins og hún hækkar. Þetta er eftirámat, ekki meiðslaspá.",
+    },
+    videoEmbedUrl: INJURY_PATTERN_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the headline for the ROI story (the share with a warning). Scan the list and note the “no prior signal” cases — the honest misses. Open one injury to see the 14-day reconstruction: when the first warning came, the drivers, the decel pattern. And remember: this is a look-back audit, not a prediction — it shows whether the system warned, not what happens next.",
+            is: "Lestu fyrirsögnina fyrir ROI-söguna (hlutfall með viðvörun). Renndu yfir listann og taktu eftir „no prior signal“ tilvikunum — heiðarlegu missunum. Opnaðu eina meiðsli til að sjá 14 daga endurgerðina: hvenær fyrsta viðvörunin kom, drifþættina, decel-mynstrið. Og mundu: þetta er eftirámat, ekki spá — það sýnir hvort kerfið varaði við, ekki hvað gerist næst.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The headline (proof of ROI)", is: "Fyrirsögnin (proof of ROI)" },
+        body: [
+          {
+            en: "One number over the last 365 days: how many injuries had a warning signal in the days before (e.g. “26 of 31 · 84%”). Beside it: the count with a strong pattern match (≥0.5) and the average pattern score. Split by body part (hamstring, knee, ankle, groin) so you see where the patterns sit. It's computed from the club's real history — so it can fall as well as rise.",
+            is: "Ein tala yfir síðustu 365 daga: hversu margar meiðsli áttu sér viðvörunarmerki dagana á undan (t.d. „26 af 31 · 84%“). Við hliðina: fjöldi með sterkt mynstursamræmi (≥0,5) og meðal-mynsturskor. Skipt eftir líkamshluta (aftanlæri, hné, ökkli, nári) svo þú sérð hvar mynstrin liggja. Reiknað úr raunverulegri sögu félagsins — svo hún getur lækkað jafnt sem hækkað.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Honest by design", is: "Heiðarleg í eðli sínu" },
+        body: [
+          {
+            en: "The list shows each injury with a badge: either “preceded by warning · 100% match” or “no prior signal · 0% match”. The system does not hide the ones it missed — which is exactly why the number is credible. Because it's a retrospective read of real history, it can't flatter itself.",
+            is: "Listinn sýnir hverja meiðsli með merki: annaðhvort „preceded by warning · 100% match“ eða „no prior signal · 0% match“. Kerfið felur ekki tilvikin sem það missti af — það er einmitt þess vegna sem talan er trúverðug. Þar sem hún er eftirámat úr raunverulegri sögu getur hún ekki hrósað sjálfri sér.",
+          },
+          {
+            en: "Each injury gets a 0–1 pattern-match score for how strongly its lead-up matched a warning pattern; 0.5 or above counts as strong. The score aggregates several signals — flags, decoupling, load spikes — rather than relying on one, so it is less sensitive to chance.",
+            is: "Hver meiðsli fær mynstursskor á bilinu 0–1 fyrir hversu sterkt aðdragandinn samræmdist viðvörunarmynstri; 0,5 eða hærra telst sterkt. Skorið safnar saman mörgum merkjum — flöggum, ósamræmi, álagstoppum — frekar en að treysta á eitt, svo það er ekki jafn viðkvæmt fyrir tilviljun.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The per-injury forensics", is: "Réttarrannsóknin á hverri meiðsli" },
+        body: [
+          {
+            en: "Click an injury and you get a full reconstruction of the 14 days before: yellow/red days, decoupling alerts (Akubat 2014), ACWR (7d/28d), prior injuries (180 days), a VALD ForceDecks snapshot, GPS spikes (Buchheit 2010), match congestion (Lago-Peñas 2010), and McBurnie deceleration intelligence. At the top: when the first warning came (“first warning sign N days before”). Every signal carries its own citation — no guesswork.",
+            is: "Smelltu á meiðsli og þú færð fulla endurgerð 14 daganna á undan: gulir/rauðir dagar, ósamræmisviðvaranir (Akubat 2014), ACWR (7d/28d), fyrri meiðsli (180 daga), VALD ForceDecks mynd, GPS-toppa (Buchheit 2010), leikjaþéttleika (Lago-Peñas 2010), og McBurnie decel-mat. Efst stendur hvenær fyrsta viðvörunin kom („first warning sign N days before“). Hvert merki ber sína heimild — engin ágiskun.",
+          },
+          {
+            en: "At the bottom, a day-by-day line over every non-green day in the lead-up, with the score, the z-value and the drivers that produced the flag — e.g. “soreness 2/5”, “energy 2/5”, “acute drop Δz”, “sustained low”, “volatility” (Robertson). So you see exactly how the risk built up before the injury.",
+            is: "Neðst er dag-fyrir-dag lína yfir hvern ekki-grænan dag í aðdragandanum, með skori, z-gildi og drifþáttunum sem ollu flagginu — t.d. „soreness 2/5“, „energy 2/5“, „acute drop Δz“, „sustained low“, „volatility“ (Robertson). Þannig sést nákvæmlega hvernig áhættan byggðist upp fyrir meiðslin.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it is — and isn't", is: "Hvað hún er — og er ekki" },
+        body: [
+          {
+            en: "It is a retrospective audit showing whether risk was flagged before an injury — proof the system earns its place. It is not injury prediction (no system predicts injuries reliably), and it is not where injuries are logged — that's the RTP tab. This page is read-only. The point: it's the answer to “is this delivering?”, computed from the club's real history, misses and all, so the number is proof rather than a promise.",
+            is: "Hún er eftirámat sem sýnir hvort áhætta var flögguð fyrir meiðsli — sönnun þess að kerfið vinni fyrir sér. Hún er ekki meiðslaspá (ekkert kerfi spáir meiðslum áreiðanlega) og hún er ekki þar sem meiðsli eru skráð — það er gert á RTP-flipanum. Þessi síða er aðeins til aflestrar. Kjarninn: þetta er svarið við „skilar þetta einhverju?“, reiknað úr raunverulegri sögu félagsins, með missunum og öllu, svo talan sé sönnun en ekki loforð.",
           },
         ],
       },
