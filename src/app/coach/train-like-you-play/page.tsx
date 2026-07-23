@@ -308,6 +308,7 @@ export default function TrainLikeYouPlayPage() {
             <PagePurpose
               en="compare training demands to match demands per role"
               is="bera þjálfunarkröfur saman við leikkröfur per hlutverk"
+              tutorial="train-like-you-play"
             />
             <div className="text-xs text-slate-500">{IS ? "Besta þjálfunar-exposure vs leik-krafa (IMU — virkar innandyra). Grunnur: FMP (Catapult hreyfi-flokkar) eða hrá IMA (atburðir: hröðun, hemlun, stefnubreytingar, stökk)." : "Best training exposure vs match demand (IMU — works indoors). Basis: FMP (Catapult movement zones) or raw IMA (events: accelerations, decelerations, change-of-direction, jumps)."}</div>
           </div>

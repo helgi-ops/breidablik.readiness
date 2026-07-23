@@ -23,7 +23,8 @@ export type TutorialSlug =
   | "ima-intelligence"
   | "match-movement"
   | "position-comparison"
-  | "post-match-recovery";
+  | "post-match-recovery"
+  | "train-like-you-play";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -76,6 +77,11 @@ const POSITION_COMPARISON_VIDEO =
 // source — the Icelandic below is translated, not lifted from the deck).
 const POST_MATCH_RECOVERY_VIDEO =
   "https://player.vimeo.com/video/1212447762?h=272986f3fd&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Train like you Play page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Train-like-you-Play-full-page-explained.pdf.
+const TRAIN_LIKE_YOU_PLAY_VIDEO =
+  "https://player.vimeo.com/video/1212456357?h=78f5d93153&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -679,6 +685,78 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Players still below their own baseline three days after the match get escalated — and the system doesn't just flag them. It names the driver (which subjective axis is dragging, energy or sleep, with the readiness-z) and gives an action: modify training and/or refer to physio, because they are past the expected echo. It's directional — the direction beside the colour, not the colour itself.",
             is: "Leikmenn sem eru enn undir sinni eigin grunnlínu þremur dögum eftir leik eru stigmagnaðir — og kerfið flaggar þá ekki bara. Það nefnir drifkraftinn (hvaða huglægi ás dregur niður, orka eða svefn, með readiness-z) og gefur aðgerð: breyta æfingu og/eða vísa til sjúkraþjálfara, því þeir eru komnir fram yfir væntanlegt bergmál. Þetta er stefnubundið — stefnan við hliðina á litnum, ekki liturinn sjálfur.",
+          },
+        ],
+      },
+    ],
+  },
+  "train-like-you-play": {
+    title: { en: "How to use Train like you Play", is: "Hvernig á að nota Train like you Play" },
+    intro: {
+      en: "This page compares each role's training to what its matches actually demand. The principle (Gabbett 2016): train at the intensities the game asks, or the body isn't prepared. Crucially it flags under-exposure — not overload. Because movement events pile up in drills, training naturally runs above match intensity, so a high % is expected and fine; the risk is a low one.",
+      is: "Þessi síða ber saman æfingar hverrar stöðu við það sem leikir hennar krefjast í raun. Grunnreglan (Gabbett 2016): æfðu á þeim ákefðum sem leikurinn kallar á, annars er líkaminn ekki undirbúinn. Lykilatriði: hún flaggar undir-áreiti — ekki ofálag. Því hreyfiatburðir hlaðast upp í æfingum keyrir æfingaálag eðlilega yfir leikákefð, svo há prósenta er væntanleg og í lagi; áhættan er lág prósenta.",
+    },
+    videoEmbedUrl: TRAIN_LIKE_YOU_PLAY_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict: any exposure gaps? (it only fires below 50%). Look at the periodization: does the week follow the low-peak-low shape? The exposure table: amber or red cells = who to train harder, and on what. Then “How to develop him”: pick your game model and read each player's top priority. Remember: a high % is expected — the risk is a low %.",
+            is: "Lestu niðurstöðuna: eru einhver exposure gaps? (kviknar aðeins undir 50%). Skoðaðu vikuskipulagið: fylgir vikan lágt-toppur-lágt forminu? Leikmannataflan: gul eða rauð hólf = hvern á að æfa harðar og á hverju. Svo „How to develop him“: veldu leikstílinn þinn og lestu efsta forgang hvers leikmanns. Mundu: há prósenta er væntanleg — áhættan er lág prósenta.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The principle + verdict", is: "Reglan + niðurstaðan" },
+        body: [
+          {
+            en: "The verdict says how high the squad trains relative to match demand and how many have an “exposure gap” (e.g. “254% of match load · 0/11 with an exposure gap”). The gap fires only when best training drops below 50% of match demand (Malone 2017). A high % is not overload — it's expected, because events bunch up in drills.",
+            is: "Niðurstaðan segir hversu hátt hópurinn æfir miðað við leikkröfu og hversu margir eru með „exposure gap“ (t.d. „254% of match load · 0/11 með exposure gap“). Gapið kviknar aðeins þegar besta æfing fer undir 50% af leikkröfu (Malone 2017). Há prósenta þýðir ekki ofálag — hún er væntanleg af því atburðir þéttast í æfingum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Three bases, two comparisons", is: "Þrír grunnar, tveir samanburðir" },
+        body: [
+          {
+            en: "You pick a basis: FMP (Catapult movement zones), IMA (events: accelerations, decelerations, changes of direction, jumps) or GPS. And a comparison: against the player's own match, or against the position's demand. FMP and IMA are inertial, so they work indoors where GPS doesn't. Switch basis to check another set of metrics.",
+            is: "Þú velur grunn: FMP (Catapult hreyfisvæði), IMA (atburðir: hröðun, hemlun, stefnubreytingar, stökk) eða GPS. Og samanburð: við eigin leik leikmannsins eða við leikkröfu stöðunnar. FMP og IMA byggja á hröðunarmælum svo þau virka innanhúss þar sem GPS gerir það ekki. Skiptu um grunn til að athuga annað sett af mælikvörðum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Weekly periodization by MD-day", is: "Vikuskipulag eftir MD-degi" },
+        body: [
+          {
+            en: "Each training day is shown as a share of match demand against a “desirable band” — a typical periodization shape (low MD+1 and MD-1, peak mid-week). It's a reference, not a rule — adjust it to your model (Martín-García 2018; Akenhead 2016). The % is the session's total volume as a share of a full match, not per-90 (which would inflate short sessions).",
+            is: "Hver æfingadagur er sýndur sem hlutfall af leikkröfu, borinn saman við „desirable band“ — dæmigerða skipulagsform (lágt MD+1 og MD-1, toppur um miðja viku). Þetta er viðmið, ekki regla — aðlagaðu að þínu módeli (Martín-García 2018; Akenhead 2016). Prósentan er heildarrúmmál æfingarinnar sem hlutfall af heilum leik, ekki per-90 (sem blési upp stuttar æfingar).",
+          },
+          {
+            en: "On MD+1 and MD+2 the day is split in two: players who played a full shift (≥60 min) are recovering (Recovery), while subs and limited players do a compensatory top-up to replace the match stimulus they missed — each against its own band. This is a nuance most systems miss (Anderson 2016; Hills 2018; Nédélec 2012).",
+            is: "Á MD+1 og MD+2 er dögunum skipt í tvennt: leikmenn sem spiluðu fullan leik (≥60 mín) eru að jafna sig (Recovery), en varamenn og þeir sem spiluðu lítið gera uppbótar-æfingu (Top-up) til að bæta upp leikáreitið sem þeir misstu af — hvor um sig borinn saman við sitt eigið band. Þetta er nákvæmni sem flest kerfi missa af (Anderson 2016; Hills 2018; Nédélec 2012).",
+          },
+        ],
+      },
+      {
+        heading: { en: "The exposure table (per position)", is: "Leikmannataflan (áreiti eftir stöðu)" },
+        body: [
+          {
+            en: "For each metric and each position the table shows best training as a share of match demand, coloured: green = well trained, amber = gap (50–80%), red = under-trained (<50%). So you see at once who to train harder — and on which metric — the moment a gap opens (Malone 2018; Duhig 2016).",
+            is: "Fyrir hverja vídd og hverja stöðu sýnir taflan bestu æfingu sem hlutfall af leikkröfu, lituð: grænt = vel þjálfað, gult = gap (50–80%), rautt = undir-þjálfað (<50%). Þannig sést strax hvern á að æfa harðar — og á hvaða mælikvarða — um leið og gap opnast (Malone 2018; Duhig 2016).",
+          },
+        ],
+      },
+      {
+        heading: { en: "“How to develop him” — game model × movement", is: "„How to develop him“ — leikstíll × hreyfing" },
+        body: [
+          {
+            en: "At the bottom the page gives a development emphasis per player = your game model (High press / Possession / Direct / Low block / Balanced) times how he moves. It prescribes specific work — repeated-sprint, acceleration mechanics, eccentric braking — each with the player's z-score as evidence, a method and a priority (HIGH/MODERATE). Change the game model and the emphasis changes (Buchheit 2024; Morin 2016; Harper 2019; McBurnie 2022).",
+            is: "Neðst gefur síðan þróunaráherslu á hvern leikmann = leikstíll félagsins (High press / Possession / Direct / Low block / Balanced) margfaldaður með því hvernig hann hreyfir sig. Hún ávísar tiltekinni vinnu — repeated-sprint, hröðunartækni, eccentric-hemlun — hverri með z-skori leikmannsins sem sönnun, aðferð og forgangi (HIGH/MODERATE). Breyttu leikstílnum og áherslan breytist (Buchheit 2024; Morin 2016; Harper 2019; McBurnie 2022).",
+          },
+          {
+            en: "The point of the page: don't under-prepare the body for what the game asks — and when a gap opens, it says who to train harder, on what, and how, in line with how you want to play.",
+            is: "Kjarni síðunnar: ekki vanbúa líkamann fyrir það sem leikurinn krefst — og þegar gap opnast segir hún hvern á að æfa harðar, á hverju, og hvernig, miðað við hvernig þú vilt spila.",
           },
         ],
       },
