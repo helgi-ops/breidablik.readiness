@@ -298,6 +298,7 @@ export default function ImaIntelligencePage() {
           <PagePurpose
             en="see change-of-direction and movement load per player"
             is="sjá stefnubreytinga- og hreyfiálag per leikmann"
+            tutorial="ima-intelligence"
           />
           <p className="text-xs text-slate-500">{t("citation", lang)}</p>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">{t("subtitle", lang)}</p>
