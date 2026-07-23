@@ -86,6 +86,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
 // MechanicalLoadIndexCard moved to /coach/load-intelligence (was on the GPS Data tab).
 import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
@@ -9027,6 +9028,7 @@ export default function CoachPage() {
                   toggle. The TV view previously had no visible entry on the
                   dashboard — only a buried sidebar-footer link — so surface it here. */}
               <div className="flex items-center gap-2 mr-1">
+                <CoachTutorialButton slug="today" />
                 <a
                   href="/coach/display?refresh=15"
                   target="_blank"

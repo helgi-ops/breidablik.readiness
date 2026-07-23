@@ -153,6 +153,7 @@ export default function LoadIntelligencePage() {
         <PagePurpose
           en="see the squad's overall training load and who is trending up or down"
           is="sjá heildar-álag liðsins og hverjir eru að stíga upp eða niður"
+          tutorial="load-intelligence"
         />
         <p className="mt-1 text-sm text-slate-600">
           {lang === "EN"

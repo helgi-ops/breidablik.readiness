@@ -534,6 +534,7 @@ export default function CoachQuadrantPage() {
           <PagePurpose
             en="spot who is in a high-load / low-fitness risk zone at a glance"
             is="sjá hverjir eru í hááálags / lág-forms áhættureit í fljótu bragði"
+            tutorial="quadrant"
           />
           <p className="text-sm text-muted-foreground">
             {qt("subtitleA", lang)}

@@ -461,6 +461,7 @@ export default function CoachDecelIntelligencePage() {
           <PagePurpose
             en="see who is absorbing the most braking load and may need eccentric protection"
             is="sjá hver tekur mest bremsuálag og gæti þurft eccentric vörn"
+            tutorial="decel-intelligence"
           />
           <p className="text-sm text-muted-foreground">
             Eccentric deceleration risk profile per player — implementation of the

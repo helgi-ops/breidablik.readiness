@@ -861,6 +861,7 @@ export default function CoachIndoorLoadPage() {
           <PagePurpose
             en="track training load in the hall when GPS is not available"
             is="fylgjast með álagi í höll þegar GPS er ekki til staðar"
+            tutorial="indoor-load"
           />
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             {pt("pageSubtitle", lang)}

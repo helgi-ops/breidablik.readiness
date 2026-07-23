@@ -999,6 +999,7 @@ export default function WeekSetupPage() {
             <PagePurpose
               en="set up the training week and tag each day's match-day context"
               is="setja upp æfingavikuna og merkja leikdags-samhengi hvers dags"
+              tutorial="week-setup"
             />
             <p className="text-sm text-muted-foreground">{t.subtitle}</p>
           </div>
