@@ -40,12 +40,11 @@ test("TUTORIALS has no slugs beyond the declared set", () => {
   assert.deepEqual(Object.keys(TUTORIALS).sort(), [...SLUGS].sort());
 });
 
-// The overview video is optional (the how-to video + docs are being produced by
-// Cowork; the earlier embed 404'd and was pulled). The invariant that must hold:
-// no page other than `today` may carry a video, and any URL present is https.
-test("only the today tutorial may carry an overview video, and it is https", () => {
+// Per-page overview videos are optional (produced by Cowork, added as they land).
+// The invariant that must hold: any video URL present is a real https embed.
+test("any tutorial video is an https embed URL", () => {
   for (const slug of SLUGS) {
-    if (slug !== "today") assert.equal(TUTORIALS[slug].videoEmbedUrl, undefined, `${slug} should not embed a video`);
+    const url = TUTORIALS[slug].videoEmbedUrl;
+    if (url) assert.match(url, /^https:\/\//, `${slug} video should be https`);
   }
-  if (TUTORIALS.today.videoEmbedUrl) assert.match(TUTORIALS.today.videoEmbedUrl, /^https:\/\//);
 });
