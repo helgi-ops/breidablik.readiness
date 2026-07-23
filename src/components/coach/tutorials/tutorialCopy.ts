@@ -59,6 +59,11 @@ const MATCH_MOVEMENT_VIDEO =
 const INDOOR_LOAD_VIDEO =
   "https://player.vimeo.com/video/1212426403?h=8bfdc0ca29&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Quadrant Intelligence page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Load-Quadrant-guide.pdf.
+const QUADRANT_VIDEO =
+  "https://player.vimeo.com/video/1212433865?h=4f2266a7c3&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
@@ -219,25 +224,34 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   quadrant: {
     title: { en: "How to use Quadrant Intelligence", is: "Hvernig á að nota Quadrant" },
     intro: {
-      en: "External load against internal load, at a glance.",
-      is: "Ytra álag á móti innra álagi, í fljótu bragði.",
+      en: "The Quadrant plots external load (how much a player runs) against internal cost (how hard it feels to him). Players in the top right carry a lot of both — the zone to watch. Its job is to spot hidden fatigue before GPS moves. Works on both Pro and Lite.",
+      is: "Quadrant ber ytra álag (hversu mikið leikmaðurinn hleypur) saman við innra álag (hversu erfitt honum finnst það). Leikmenn efst til hægri bera mikið af hvoru tveggja — svæðið sem vert er að fylgjast með. Hlutverk hennar er að sjá falda þreytu áður en GPS breytist. Virkar á bæði Pro og Lite.",
     },
+    videoEmbedUrl: QUADRANT_VIDEO,
     sections: [
       {
-        heading: { en: "What it shows", is: "Hvað hún sýnir" },
+        heading: { en: "How to read it", is: "Hvernig á að lesa hana" },
         body: [
           {
-            en: "Each player sits in a quadrant of external (GPS / running) against internal (how hard it felt). It answers “who runs a lot but finds it easier — or harder — than usual?”",
-            is: "Hver leikmaður situr í reit sem ber saman ytra álag (GPS / hlaup) og innra álag (hversu erfitt það var). Hún svarar „hver hleypur mikið en finnst það léttara — eða þyngra — en venjulega?“",
+            en: "The top-left box, “Decoupled”, is the most telling: the player isn't running more than usual but it feels much harder — an early fatigue signal.",
+            is: "Reiturinn efst til vinstri, „Decoupled“, er sá áhugaverðasti: leikmaðurinn hleypur ekki meira en venjulega en finnst það mun erfiðara — snemmbúið þreytumerki.",
+          },
+          {
+            en: "The dividing lines sit at the squad median, so a player's position is always relative to the day — not a fixed threshold.",
+            is: "Línurnar liggja um miðgildi hópsins, svo staðsetning leikmanns er alltaf afstæð við daginn — ekki fastur þröskuldur.",
           },
         ],
       },
       {
-        heading: { en: "“Decoupled” is the early warning", is: "„Decoupled“ er snemmbúna viðvörunin" },
+        heading: { en: "When to open it", is: "Hvenær á að opna hana" },
         body: [
           {
-            en: "When external and internal pull apart — high running but low internal, or the reverse — a player reads as “Decoupled”. That's an early fatigue signal, often before it shows in the daily verdict.",
-            is: "Þegar ytra og innra álag draga í sundur — mikið hlaup en lágt innra, eða öfugt — les leikmaður sem „Decoupled“. Það er snemmbúið þreytumerki, oft áður en það birtist í daglegu niðurstöðunni.",
+            en: "Open it when the numbers look normal but someone “feels” tired — the decoupled box often shows before any GPS number departs from normal.",
+            is: "Opnaðu hana þegar tölurnar líta eðlilega út en einhver „finnst“ þreyttur — decoupled-reiturinn sést oft áður en nokkur GPS-tala víkur frá venju.",
+          },
+          {
+            en: "The research behind it: Gabbett (2017) — external versus internal load.",
+            is: "Rannsóknin á bak við hana: Gabbett (2017) — ytra á móti innra álagi.",
           },
         ],
       },
