@@ -10181,8 +10181,9 @@ export default function CoachPage() {
       {dashTab === "squad" && isAtLeastPro && (
         <div className="space-y-6">
 
-          {/* Squad actions — add player + broadcast */}
+          {/* Squad actions — how-to + add player + broadcast */}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <CoachTutorialButton slug="squad" />
             <AddPlayerButton
               teamId={coachTeamId}
               lang={lang as "IS" | "EN"}

@@ -5,6 +5,7 @@ import { TUTORIALS, type TutorialSlug } from "../tutorialCopy";
 const SLUGS: TutorialSlug[] = [
   "overview",
   "today",
+  "squad",
   "week-setup",
   "load-intelligence",
   "quadrant",

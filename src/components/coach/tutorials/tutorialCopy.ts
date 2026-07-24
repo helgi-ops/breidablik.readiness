@@ -16,6 +16,7 @@ export type Bi = { en: string; is: string };
 export type TutorialSlug =
   | "overview"
   | "today"
+  | "squad"
   | "week-setup"
   | "load-intelligence"
   | "quadrant"
@@ -127,6 +128,12 @@ const RETURN_TO_TRAINING_VIDEO =
 // docs/load-guides/MicroPulse-Week-Setup-full-page-explained.pdf.
 const WEEK_SETUP_VIDEO =
   "https://player.vimeo.com/video/1212562893?h=4499ed9ccc&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Squad (S&C surface) tab walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Squad-full-page-explained.pdf. The Squad tab lives on
+// the Dashboard (?tab=squad) — opened via CoachTutorialButton in its header.
+const SQUAD_VIDEO =
+  "https://player.vimeo.com/video/1212673411?h=82d20a9d63&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Injury / RTP tab walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Injury-RTP-full-page-explained.pdf. The tab lives on
@@ -291,6 +298,91 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  squad: {
+    title: { en: "How to use the Squad page", is: "Hvernig á að nota Squad-síðuna" },
+    intro: {
+      en: "The Squad page is the S&C surface — the full per-player drill-down behind Today's head-coach verdict. For each player it lays out every engine's output: the readiness decision, injury risk, external load, fatigue & adaptation, the auto-planned session and neural load — each with its own “why”, confidence and coach action. Here the coach (or S&C coach) audits it all and overrides if needed. This is the depth that Today simplifies.",
+      is: "Squad-síðan er S&C-yfirborðið — fulla per-leikmann dýptin á bak við head-coach-niðurstöðu Today. Fyrir hvern leikmann leggur hún fram afurð hverrar vélar: readiness-ákvörðun, meiðslaáhættu, external load, fatigue & adaptation, sjálfvirku æfinguna og neural load — hver með sínu eigin „af hverju“, öryggi og coach action. Hér skoðar þjálfarinn (eða styrktarþjálfarinn) allt og hnekkir ef þarf. Þetta er dýptin sem Today einfaldar.",
+    },
+    videoEmbedUrl: SQUAD_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the player's status and the “why”. Open the readiness decision for the WHY + coach action. If you need it: injury risk, the weekly ACWR flags, and the adapted session. Override with FULL/REDUCED/RECOVERY if you disagree. And remember: every engine shows its reasoning and confidence — the coach decides.",
+            is: "Lestu stöðu leikmannsins og „af hverju“. Opnaðu readiness-ákvörðunina fyrir WHY + coach action. Ef þú þarft: meiðslaáhættu, weekly ACWR flöggin, og aðlöguðu æfinguna. Hnekktu með FULL/REDUCED/RECOVERY ef þú ert ósammála. Og mundu: hver vél sýnir sín rök og öryggi — þjálfarinn ákveður.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Team flags, filters, and override", is: "Hópflögg, síur og yfirtaka" },
+        body: [
+          {
+            en: "At the top are the day's flags (e.g. Low readiness 2, Pain flag 3, Neural bias applied 2), filters by colour (All / Red / Yellow / Green) and a “Re-run engine”. Per player there are FULL / REDUCED / RECOVERY buttons — the coach can override the engine's call, and the override is logged. The engine advises; the coach decides.",
+            is: "Efst eru dagsins flögg (t.d. Low readiness 2, Pain flag 3, Neural bias applied 2), síur eftir lit (All / Red / Yellow / Green) og „Re-run engine“. Fyrir hvern leikmann eru FULL / REDUCED / RECOVERY hnappar — þjálfarinn getur hnekkt ákvörðun vélarinnar, og yfirtakan er skráð. Vélin ráðleggur; þjálfarinn ákveður.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The player card (the 5-second read)", is: "Leikmannakortið (5-sek lesturinn)" },
+        body: [
+          {
+            en: "The status (e.g. “YELLOW · 18”, MD context, Neural bias, ↑ Load) and a plain “why” (“load above usual · neural load high”). Three tiles: Today (z versus his usual), vs yesterday (Δ) and rating (0–10, 5 = squad average). Plus “Open chat”. This is the head-coach read for one player before drilling in — click through for the depth.",
+            is: "Staðan (t.d. „YELLOW · 18“, MD-samhengi, Neural bias, ↑ Load) og einfalt „af hverju“ („load above usual · neural load high“). Þrjár flísar: Today (z gagnvart hans venju), vs yesterday (Δ) og rating (0–10, 5 = hópmeðaltal). Auk „Opna spjall“. Þetta er head-coach lesturinn fyrir einn leikmann áður en kafað er dýpra — smelltu fyrir dýptina.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Readiness decision + injury risk (two engines)", is: "Readiness-ákvörðun + meiðslaáhætta (tvær vélar)" },
+        body: [
+          {
+            en: "The readiness verdict (e.g. RED · high confidence) carries three things: WHY (PlayerLoad elevated vs 28-day baseline, decel/accel load above norm, rising neural load), COACH ACTION (protect painful tissue, reduce external load, cap intensity), and TOMORROW'S OUTLOOK (if improves→yellow / holds→red / declines→red) with the honest caveat “limited history — forecast confidence low”.",
+            is: "Readiness-niðurstaðan (t.d. RED · high confidence) ber þrennt: WHY (PlayerLoad hækkað vs 28-daga grunnlínu, hemlunar/hröðunar-álag yfir venju, rising neural load), COACH ACTION (verndaðu aumt vef, minnkaðu ytra álag, toppaðu ákefð), og TOMORROW'S OUTLOOK (if improves→yellow / holds→red / declines→red) með heiðarlega fyrirvaranum „limited history — forecast confidence low“.",
+          },
+          {
+            en: "Injury risk is a separate engine beside readiness (e.g. MODERATE · high confidence): its own WHY (fatigue remains elevated while recovery markers are below normal) and RECOMMENDATION (control high-speed/explosive volume, modify total load, monitor in warm-up/first block, prioritise recovery). Injury risk is not the same as readiness — two engines, each with its own reasoning.",
+            is: "Meiðslaáhætta er sín eigin vél við hlið readiness (t.d. MODERATE · high confidence): eigin WHY (þreyta enn hækkuð meðan endurheimtarmerki eru undir venju) og RECOMMENDATION (stýrðu háhraða/sprengiálagi, minnkaðu heildarálag, fylgstu með í upphitun/fyrsta blokk, forgangsraðaðu endurheimt). Meiðslaáhætta er ekki það sama og readiness — tvær vélar, hvor með sín rök.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Readiness inputs + external load", is: "Readiness inntök + external load" },
+        body: [
+          {
+            en: "Readiness inputs show the player's actual check-in: fatigue/energy, sleep quality/duration, stress/mood, muscle soreness, the baseline maturity (n), when it was logged, and the supporting metrics (z, Δz). Nothing hidden — the objective input the engine ran on, so you see exactly what drove the verdict.",
+            is: "Readiness inntök sýna raunverulega líðanarskráningu leikmannsins: fatigue/energy, sleep quality/duration, stress/mood, muscle soreness, þroska grunnlínu (n), hvenær skráð, og stuðningsmælikvarða (z, Δz). Ekkert falið — hlutlæga inntakið sem vélin keyrði á, svo þú sérð nákvæmlega hvað dró niðurstöðuna.",
+          },
+          {
+            en: "External load has two views: Today vs team (where his load sits against the squad today — accel/decel, velocity bands, player load, distance, coloured) and Weekly load (7D/28D/ACWR per metric, with spiking ACWRs flagged red, e.g. tot accels 1.90, HIR dist 2.28). So you see both today's snapshot and the rolling ratio — and which dimension is rising.",
+            is: "External load hefur tvær sýnir: Today vs team (hvar álag hans situr gagnvart hópnum í dag — hröðun/hemlun, velocity-bönd, player load, vegalengd, litað) og Weekly load (7D/28D/ACWR á hvern mælikvarða, með toppandi ACWR-um flögguðum rauðum, t.d. tot accels 1,90, HIR dist 2,28). Svo þú sérð bæði dagsins mynd og rúllandi hlutfallið — og hvaða vídd er að rísa.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Fatigue & adaptation + the auto-planned session", is: "Fatigue & adaptation + sjálfvirka æfingin" },
+        body: [
+          {
+            en: "The fatigue type (tissue or neural) and severity, its drivers (high decel/accel load yesterday), and — the key bit — the concrete modifiers it prescribes: −40% volume, recovery bias, swap ballistic elements, add tendon reload, neural bias −8% volume. The engine doesn't just flag fatigue; it turns it into an adapted session.",
+            is: "Þreytutegundin (tissue eða neural) og alvarleiki, drifþættirnir (hátt hemlunar/hröðunar-álag í gær), og — það sem skiptir mestu — áþreifanlegu breytingarnar sem hún ávísar: −40% rúmmál, recovery bias, skipta út ballistic þáttum, bæta við tendon reload, neural bias −8% rúmmál. Vélin flaggar ekki bara þreytu; hún breytir henni í aðlagaða æfingu.",
+          },
+          {
+            en: "The training session shows the auto session decision (e.g. Reset/Recovery) with its confidence (inputs, missing, fallbacks) and the actual plan (warm-up, support isometrics). Neural load is its own engine (rising/declining, next-day risk, score) with the bias it applied (e.g. −8% volume). Both feed the final call — and each states its reasoning.",
+            is: "Training session sýnir sjálfvirku session-ákvörðunina (t.d. Reset/Recovery) með öryggi (inputs, missing, fallbacks) og raunverulega planinu (upphitun, support isometrics). Neural load er sín eigin vél (rising/declining, next-day risk, score) með biasnum sem hún beitti (t.d. −8% rúmmál). Báðar nærar lokaákvörðunina — og hvor um sig segir sín rök.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Two surfaces: Today vs Squad", is: "Tvö yfirborð: Today vs Squad" },
+        body: [
+          {
+            en: "Today is the head-coach surface (the verdict); Squad is the S&C surface (the full audit). Same truth, two depths: the head coach gets the answer on Today, the S&C coach gets the whole workbench here, and both can override with a logged reason. One verdict, visible everywhere; the reasoning lives here.",
+            is: "Today er head-coach yfirborðið (niðurstaðan); Squad er S&C-yfirborðið (fulla endurskoðunin). Sami sannleikur, tvær dýptir: aðalþjálfarinn fær svarið á Today, styrktarþjálfarinn fær allan vinnubekkinn hér, og báðir geta hnekkt með skráðri ástæðu. Ein niðurstaða, sýnileg alls staðar; rökin liggja hér.",
+          },
+        ],
+      },
+    ],
+  },
   "week-setup": {
     title: { en: "How to use Week Setup", is: "Hvernig á að nota Vikuskipulag" },
     intro: {
