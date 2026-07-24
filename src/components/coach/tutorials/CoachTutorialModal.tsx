@@ -58,7 +58,7 @@ export default function CoachTutorialModal({ slug, onClose }: { slug: TutorialSl
         {t.intro ? <p className="mb-4 text-sm leading-relaxed text-slate-600">{pick(t.intro)}</p> : null}
 
         {t.videoEmbedUrl ? (
-          <div className="mb-4 overflow-hidden rounded-lg border border-slate-200" style={{ position: "relative", paddingTop: "56.25%" }}>
+          <div className="mb-4 overflow-hidden rounded-lg border border-slate-200" style={{ position: "relative", paddingTop: t.videoAspectPaddingTop ?? "56.25%" }}>
             <iframe
               src={t.videoEmbedUrl}
               title={pick(t.title)}

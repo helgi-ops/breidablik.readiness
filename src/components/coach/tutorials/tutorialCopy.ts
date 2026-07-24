@@ -26,7 +26,8 @@ export type TutorialSlug =
   | "post-match-recovery"
   | "train-like-you-play"
   | "injury-pattern-analysis"
-  | "hsr-intelligence";
+  | "hsr-intelligence"
+  | "return-to-training";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -35,6 +36,12 @@ export type Tutorial = {
   intro?: Bi;
   /** Third-party embed URL (iframe), overview video for this page (optional). */
   videoEmbedUrl?: string;
+  /**
+   * Responsive-iframe aspect ratio as a padding-top %, taken from the embed's own
+   * wrapper. Defaults to "56.25%" (16:9); set e.g. "75%" for a 4:3 source so the
+   * video fills the frame without letterboxing.
+   */
+  videoAspectPaddingTop?: string;
   sections: TutorialSection[];
 };
 
@@ -95,6 +102,13 @@ const INJURY_PATTERN_VIDEO =
 // docs/load-guides/MicroPulse-HSR-Intelligence-full-page-explained.pdf.
 const HSR_VIDEO =
   "https://player.vimeo.com/video/1212478746?h=bca1c2d026&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Return-to-Training page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Return-to-Training-full-page-explained.pdf.
+// This embed is 4:3 (the deck gave padding-top 75%), so the entry sets
+// videoAspectPaddingTop to fill the frame without letterboxing.
+const RETURN_TO_TRAINING_VIDEO =
+  "https://player.vimeo.com/video/1212559489?h=69dfd294cc&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -901,6 +915,88 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "HSR Intelligence is the GPS-only equivalent of Decel Intelligence. It's built on what every Catapult plan exposes — no inertial data needed — so a Lite club gets real hamstring monitoring. The evidence is the same as Decel's (Malone 2017, Buchheit 2014, published in BJSM): different inputs, same quality. The point: make sure each player gets enough — but not too much — high-speed running before a match, on the Lite tier with the same science as Pro.",
             is: "HSR Intelligence er GPS-eingöngu jafngildi Decel Intelligence. Hún byggir á því sem hver Catapult-áskrift skilar — engin hröðunarmælagögn þarf — svo Lite-félag fær raunverulegt aftanlæriseftirlit. Sönnunin er sú sama og hjá Decel (Malone 2017, Buchheit 2014, ritrýnt í BJSM): önnur inntök, sömu gæði. Kjarninn: passaðu að hver leikmaður fái nóg — en ekki of mikið — af háhraðahlaupi fyrir leik, á Lite-þrepi með sömu vísindum og Pro.",
+          },
+        ],
+      },
+    ],
+  },
+  "return-to-training": {
+    title: { en: "How to use Return-to-Training", is: "Hvernig á að nota Aftur í æfingar" },
+    videoAspectPaddingTop: "75%",
+    intro: {
+      en: "This is the return-to-training engine — an individualized ramp back from injury. It rebuilds a player's load week by week toward a ceiling that is his own healthy baseline, never a generic scale. Qualities unlock in a safe order, and the ones most likely to cause re-injury unlock last and slowest. It splits load into Engine (GPS) and Driver (IMA), controls the ramp with ACWR, monitors L/R balance, and tells the coach today's session type. It is a load framework, not medical clearance to play.",
+      is: "Þetta er endurkomueiningin — einstaklingsmiðuð uppbygging til baka eftir meiðsli. Hún endurbyggir álag leikmannsins viku fyrir viku að þaki sem er hans eigin heilbrigða grunnlína, aldrei almennur kvarði. Eiginleikar opnast í öruggri röð, og þeir sem eru líklegastir til að valda endurmeiðslum opnast síðast og hægast. Hún skiptir álagi í Engine (GPS) og Driver (IMA), stýrir uppbyggingunni með ACWR, fylgist með L/R jafnvægi, og segir þjálfaranum tegund æfingar dagsins. Hún er álagsrammi, ekki læknisfræðileg heimild til að spila.",
+    },
+    videoEmbedUrl: RETURN_TO_TRAINING_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the header for where he is (stage, capacity, plan week). “Today's session” says what to do today — a type plus a load ceiling. The ladder shows what's unlocked and what's still locked. The injury-specific note names the slow-ramp qualities. And remember: it's a ceiling, not a floor, and a framework, not clearance to play.",
+            is: "Lestu hausinn fyrir stöðuna (þrep, geta, vika í áætlun). „Today's session“ segir hvað á að gera í dag — tegund auk álagsþaks. Framvinduröðin sýnir hvað er opið og hvað er enn læst. Meiðsla-sértæka nótan segir hvaða eiginleikar rampa hægt. Og mundu: þetta er þak en ekki gólf, og rammi en ekki heimild til að spila.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The header — where he is", is: "Hausinn — hvar hann er staddur" },
+        body: [
+          {
+            en: "At the top it states the player is “Currently injured / Return-to-training”, with confidence (how many healthy weeks of baseline), the layoff length, how much capacity he retained, the plan length, and the RTP stage (e.g. 3/5 · non-contact). If injury records disagree, the system says so and asks you to confirm the record rather than guessing.",
+            is: "Efst stendur að leikmaðurinn sé „Meiddur núna / Aftur í æfingar“, ásamt vissu (fjöldi heilbrigðra vikna í grunnlínu), lengd fjarveru, hversu miklu getu hann hélt, lengd áætlunar, og RTP-þrepi (t.d. 3/5 · non-contact). Ef meiðslaskráningar stangast á segir kerfið það hreint út og biður þig að staðfesta skráninguna frekar en að giska.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Ceiling = his own healthy baseline", is: "Þakið = eigin heilbrigða grunnlína" },
+        body: [
+          {
+            en: "Every weekly target is a share of his own healthy weekly load, not a generic number. “Load is a ceiling” — the recommended value is the most he should do, not a floor. Each target shows its percentage of the ceiling (e.g. 90% of the healthy baseline), so you see exactly where he stands against full capacity.",
+            is: "Hvert vikumarkmið er hlutfall af hans eigin heilbrigðu vikuálagi, ekki almennri tölu. „Load is a ceiling“ — ráðlagða gildið er það mesta sem hann ætti að gera, ekki lágmark. Hvert markmið sýnir sitt hlutfall af þakinu (t.d. 90% af heilbrigðri grunnlínu), svo þú sérð nákvæmlega hvar hann stendur gagnvart fullri getu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The progression ladder + injury-specific ramp", is: "Framvinduröðin + meiðsla-sértæk uppbygging" },
+        body: [
+          {
+            en: "Qualities unlock across the weeks in a safe order: volume first (player load, distance, HSR in week 1), then sprint/strides/accelerations (week 2), and the ones most likely to cause re-injury — high-intensity braking and change of direction — last (week 3). The risky work is added last, once the base is built.",
+            is: "Eiginleikar opnast yfir vikurnar í öruggri röð: rúmmál fyrst (player load, vegalengd, háhraðahlaup í viku 1), svo spretti/skref/hröðun (viku 2), og þeir sem eru líklegastir til að valda endurmeiðslum — háákefðar hemlun og stefnubreytingar — síðast (viku 3). Áhættusama vinnan er bætt við síðast, þegar grunnurinn er kominn.",
+          },
+          {
+            en: "The qualities most likely to re-injure this player (e.g. weekly sprinting and change of direction) ramp more slowly (about 7%/week) and start lower than the rest. The ramp is tailored to the injury, not one-size-fits-all — a hamstring case and a knee case get a different order and pace.",
+            is: "Eiginleikarnir sem eru líklegastir til að endurmeiða þennan leikmann (t.d. vikuspretti og stefnubreytingar) rampa hægar (um 7%/viku) og byrja lægra en hinir. Uppbyggingin er sérsniðin að meiðslinu, ekki ein stærð fyrir alla — sami tognunarleikmaður og hnémeiðslaleikmaður fá ólíka röð og hraða.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Engine/Driver targets + today's session", is: "Engine/Driver markmið + æfing dagsins" },
+        body: [
+          {
+            en: "“Today's recommended session load” splits what's left of the week evenly across the sessions still to come, and recommends today's type (e.g. “mechanical: cutting, braking”) based on what's still outstanding. Targets split into Engine (GPS: player load, distance, HSR, sprint) and Driver (IMA: strides, accels, braking, change of direction), each with “done · left” — the same Engine/Driver split as the game report.",
+            is: "„Today's recommended session load“ skiptir því sem eftir er af vikunni jafnt á æfingarnar sem eftir eru, og mælir með tegund dagsins (t.d. „mechanical: cutting, braking“) eftir því hvað er enn ókomið. Markmiðin skiptast í Engine (GPS: player load, vegalengd, HSR, spretti) og Driver (IMA: skref, hröðun, hemlun, stefnubreytingar), hvert með „done · left“ — sama Engine/Driver skipting og í leikjaskýrslunni.",
+          },
+        ],
+      },
+      {
+        heading: { en: "ACWR control, L/R balance, actual vs plan", is: "ACWR-stýring, L/R jafnvægi, raun vs plan" },
+        body: [
+          {
+            en: "The week-to-week increase keeps ACWR near 1.04 — small, safe steps rather than jumps. The system states ACWR honestly: “a spike-size descriptor, not an injury predictor” (Gabbett/Williams), so the ramp is controlled without over-claiming.",
+            is: "Aukningin milli vikna heldur ACWR nálægt 1,04 — lítil, örugg skref frekar en stökk. Kerfið orðar ACWR heiðarlega: „a spike-size descriptor, not an injury predictor“ (Gabbett/Williams), svo uppbyggingin er stýrð en ekki oftúlkuð.",
+          },
+          {
+            en: "Left/right change-of-direction balance is monitored, not ramped: after a one-sided injury a player often avoids the injured side, and the goal is to restore his normal balance. Actual load is tracked against recommended week by week — but “under” mid-week doesn't mean he's behind, only that the week is unfinished.",
+            is: "Stefnubreytinga-jafnvægi milli vinstri og hægri er fylgst með, ekki rampað: eftir einhliða meiðsli forðast leikmaður oft meidda hliðina, og markmiðið er að endurheimta eðlilegt jafnvægi. Raunálag er borið saman við ráðlagt viku fyrir viku — en „under“ á miðri viku þýðir ekki að hann sé á eftir, aðeins að vikan er ókláruð.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it is — and isn't", is: "Hvað hún er — og er ekki" },
+        body: [
+          {
+            en: "It is a framework for a safe, individualized ramp back — not medical clearance to play, which is the physiotherapist's call. The player sees a simplified version in the app (which week, this week's focus, what unlocks next — no raw numbers), so he's part of the journey without drowning in detail. The point: a safe road back, tailored to the player and the injury, with the riskiest work last and the ceiling set by himself.",
+            is: "Hún er rammi fyrir örugga, einstaklingsmiðaða uppbyggingu til baka — ekki læknisfræðileg heimild til að spila, það er ákvörðun sjúkraþjálfarans. Leikmaðurinn sér einfaldaða útgáfu í appinu (hvaða viku, áhersla vikunnar, hvað opnast næst — engar hráar tölur), svo hann sé með í ferðinni án þess að drukkna í smáatriðum. Kjarninn: örugg leið til baka, sniðin að leikmanninum og meiðslinu, með áhættusömustu vinnuna síðast og þakið sett af honum sjálfum.",
           },
         ],
       },

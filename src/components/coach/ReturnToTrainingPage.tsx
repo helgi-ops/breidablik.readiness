@@ -14,6 +14,7 @@ import { useLang } from "@/lib/lang";
 import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/returnToTraining";
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Quality = "volume" | "distance" | "hsr" | "sprint" | "stride" | "strideTop" | "accel" | "decel" | "decelHigh" | "cod" | "efforts";
 const ORDER: Quality[] = ["volume", "distance", "hsr", "sprint", "stride", "strideTop", "accel", "decel", "decelHigh", "cod"];
@@ -202,6 +203,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
             )}
           </div>
         </div>
+        <CoachTutorialButton slug="return-to-training" />
       </div>
 
       {/* Confirmed physio note (if any) — the clinician's authoritative read, with
