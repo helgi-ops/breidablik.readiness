@@ -2412,9 +2412,9 @@ export default function CoachPage() {
   const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
   // Catapult data tier — drives Lite-Mode top-tab gating (mirrors the
-  // sidebar filter in CoachShell/CoachSidebar). 'lite' hides Quadrant /
-  // Indoor Load / Decel Intel from the EXTERNAL_TABS row. Defaults to
-  // 'lite' (conservative — show fewer tabs while detecting).
+  // sidebar filter in CoachShell/CoachSidebar). On the EXTERNAL_TABS row only
+  // HSR Intel remains, and it's Lite-only, so 'full' hides that row entirely.
+  // Defaults to 'lite' (conservative — show fewer tabs while detecting).
   const [catapultDataTier, setCatapultDataTier] = useState<"full" | "lite">("lite");
   // Manual override of the indoor-vs-outdoor verdict pipeline. 'auto' lets
   // the per-player heuristic decide; 'indoor' forces the FMP pipeline (höll
@@ -8945,30 +8945,16 @@ export default function CoachPage() {
 
         // Primary in-app tabs — daily monitoring workflow
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
-        // Standalone routes for deeper monitoring analytics — render as Links.
-        // Tier-aware filtering mirrors the sidebar:
-        //   LITE: hides Indoor Load + Decel Intel (need B2-3/IMA bands),
-        //         shows HSR Intelligence (Malone 2017 equivalent for Lite)
-        //   FULL: hides HSR Intelligence (redundant with higher-fidelity
-        //         Decel Intel on Full), shows Indoor + Decel.
-        // Quadrant is shown on both — Gabbett 2016 (volume) on Lite,
-        // Gabbett 2017 (volume + B2-3) on Full.
-        const LITE_HIDDEN_HREFS = new Set<string>([
-          "/coach/indoor-load", "/coach/decel-intelligence",
-        ]);
-        const FULL_HIDDEN_HREFS = new Set<string>([
-          "/coach/hsr-intelligence",
-        ]);
-        const ALL_EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> = [
-          { href: "/coach/quadrant",           label: { EN: "Quadrant",         IS: "Quadrant" } },
-          { href: "/coach/indoor-load",        label: { EN: "Indoor Load",      IS: "Indoor Load" } },
-          { href: "/coach/decel-intelligence", label: { EN: "Decel Intel.",     IS: "Decel Intel." } },
-          { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intel.",       IS: "HSR Intel." } },
-          { href: "/coach/injuries",           label: { EN: "Injury Patterns",  IS: "Meiðsla-munstur" } },
-        ];
-        const EXTERNAL_TABS = catapultDataTier === "full"
-          ? ALL_EXTERNAL_TABS.filter((t) => !FULL_HIDDEN_HREFS.has(t.href))
-          : ALL_EXTERNAL_TABS.filter((t) => !LITE_HIDDEN_HREFS.has(t.href));
+        // Standalone-route quick pills next to the in-app tabs. Quadrant, Indoor
+        // Load, Decel Intel and Injury Patterns were removed from here — they're
+        // occasional "why" deep-dives, not daily workflow, and the sidebar already
+        // lists them, so the tab bar stays focused. Only HSR Intelligence remains:
+        // it's the Lite-tier daily hamstring guard. HSR is Lite-only (redundant with
+        // Decel Intel on Full), so on Full this strip is empty and hidden entirely.
+        const EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> =
+          catapultDataTier === "full"
+            ? []
+            : [{ href: "/coach/hsr-intelligence", label: { EN: "HSR Intel.", IS: "HSR Intel." } }];
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar
         // Monitoring section as first-class links. The ?tab=… URLs still
@@ -9003,10 +8989,11 @@ export default function CoachPage() {
                   <TabBtn key={tabId} tabId={tabId} />
                 ))}
 
-                {/* Visual separator between in-app tabs and route-based tabs */}
-                <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
-
-                {/* Standalone monitoring routes */}
+                {/* Separator + standalone monitoring routes — only when any remain
+                    (empty on Full, where the sole remaining pill, HSR, is hidden) */}
+                {EXTERNAL_TABS.length > 0 && (
+                  <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+                )}
                 {EXTERNAL_TABS.map((t) => (
                   <Link
                     key={t.href}
