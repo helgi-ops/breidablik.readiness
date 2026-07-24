@@ -18,9 +18,15 @@ const DEFAULT_CLASS =
 export default function CoachTutorialButton({
   slug,
   className,
+  label,
+  icon = "❓",
 }: {
   slug: TutorialSlug;
   className?: string;
+  /** Override the default "How to use" label — e.g. "How MicroPulse works". */
+  label?: { en: string; is: string };
+  /** Leading glyph (default ❓). */
+  icon?: string;
 }) {
   const [lang] = useLang();
   const IS = lang === "IS";
@@ -28,8 +34,8 @@ export default function CoachTutorialButton({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className={className ?? DEFAULT_CLASS}>
-        <span aria-hidden>❓</span>
-        {IS ? "Hvernig á að nota" : "How to use"}
+        <span aria-hidden>{icon}</span>
+        {label ? (IS ? label.is : label.en) : IS ? "Hvernig á að nota" : "How to use"}
       </button>
       {open ? <CoachTutorialModal slug={slug} onClose={() => setOpen(false)} /> : null}
     </>

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { TUTORIALS, type TutorialSlug } from "../tutorialCopy";
 
 const SLUGS: TutorialSlug[] = [
+  "overview",
   "today",
   "week-setup",
   "load-intelligence",

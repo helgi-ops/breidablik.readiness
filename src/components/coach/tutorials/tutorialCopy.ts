@@ -14,6 +14,7 @@
 export type Bi = { en: string; is: string };
 
 export type TutorialSlug =
+  | "overview"
   | "today"
   | "week-setup"
   | "load-intelligence"
@@ -58,8 +59,9 @@ const TODAY_VIDEO: string | undefined =
 
 // The whole-system intro ("How to use MicroPulse — the system looks big, you only
 // need Today", a ~4-min overview; source deck docs/MicroPulse-how-to-use-Pictory.pptx).
-// Kept here awaiting its home in the system — see the `overview` slug when wired.
-export const OVERVIEW_VIDEO =
+// Powers the `overview` slug, opened from the "How MicroPulse works" button in the
+// Today tab bar (next to the Today page walkthrough). 16:9.
+const OVERVIEW_VIDEO =
   "https://player.vimeo.com/video/1212261552?h=0c3eb76e3d&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Decel Intelligence page walkthrough (Vimeo). Content mirrors
@@ -133,6 +135,69 @@ const INJURY_RTP_VIDEO =
   "https://player.vimeo.com/video/1212618014?h=5790c4dc6b&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
+  overview: {
+    title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
+    intro: {
+      en: "The system looks big — but you only need one page. MicroPulse does a lot (training load, player wellness, return-to-training, match reports, strength planning, CMJ & force tests), so it looks complex. You don't need all of it every day: there's one page that pulls it together. This is the three-minute daily routine for the head coach.",
+      is: "Kerfið lítur stórt út — en þú þarft bara eina síðu. MicroPulse gerir margt (æfingaálag, líðan leikmanna, endurkomu, leikjaskýrslur, styrktarskipulag, CMJ- og kraftpróf), svo það lítur flókið út. Þú þarft ekki allt af því á hverjum degi: það er ein síða sem dregur það saman. Þetta er þriggja mínútna dagleg rútína aðalþjálfarans.",
+    },
+    videoEmbedUrl: OVERVIEW_VIDEO,
+    sections: [
+      {
+        heading: { en: "Meet Today — your home screen", is: "Kynntu þér Today — heimaskjáinn þinn" },
+        body: [
+          {
+            en: "Today reads every signal and gives one answer per player. Most “pages” are just tabs on Today (trends, volatility, VALD/CMJ, strength, MD comparison, return-to-training) — they open inside Today, not separate places to learn. The standalone “Intelligence” pages (Load, Indoor, Decel, IMA) are optional deep-dives: you open them to answer “why”, not as part of the daily routine.",
+            is: "Today les öll merkin og gefur eitt svar á leikmann. Flestar „síður“ eru bara flipar á Today (þróun, óstöðugleiki, VALD/CMJ, styrkur, MD-samanburður, endurkoma) — þær opnast inni í Today, ekki sérstakir staðir til að læra. Sjálfstæðu „Intelligence“-síðurnar (Load, Indoor, Decel, IMA) eru valkvæðar djúpkafanir: þú opnar þær til að svara „af hverju“, ekki sem hluta af daglegu rútínunni.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Your morning: three minutes", is: "Morgunninn þinn: þrjár mínútur" },
+        body: [
+          {
+            en: "1) Open Today and read the top verdict with the confidence beside it. 2) Read the squad split — ready / modified / recovery; a green squad means carry on. 3) Check the flagged players — each amber or red gets an action and a reason you can act on. If nobody is flagged, you're done.",
+            is: "1) Opnaðu Today og lestu efstu niðurstöðuna með örygginu við hliðina. 2) Lestu skiptingu hópsins — klár / aðlagað / endurheimt; grænn hópur þýðir haltu áfram. 3) Athugaðu flögguðu leikmennina — hver gulur eða rauður fær aðgerð og ástæðu sem þú getur brugðist við. Ef enginn er flaggaður ertu búinn.",
+          },
+          {
+            en: "The layered read lets you choose the depth: the verdict — one colour, one sentence (~5 s); the why — two or three plain facts, no click needed (~15 s); the details — tables, ACWR, jargon, only if you open them. And it tells you when it doesn't know: every verdict shows how much data is behind it, and missing is shown as missing, never as zero.",
+            is: "Lagskipti lesturinn lætur þig velja dýptina: niðurstaðan — einn litur, ein setning (~5 sek); ástæðan — tvær til þrjár einfaldar staðreyndir, enginn smellur (~15 sek); smáatriðin — töflur, ACWR, fagorð, bara ef þú opnar þau. Og það segir þér þegar það veit ekki: hver niðurstaða sýnir hversu mikil gögn eru á bak við hana, og það sem vantar er sýnt sem vantandi, aldrei sem núll.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What you keep fed", is: "Hvað þú þarft að halda við" },
+        body: [
+          {
+            en: "Today reads everything automatically — but only what arrives. Five small inputs keep it accurate: check-ins (players, before training — your job is the reminder), week setup (once a week: matches and day tags), match minutes (after each match), RPE / post-training (one number after a session), and approving players (when a badge shows in Admin). None takes long; skip them and Today just gets more cautious than it needs to be.",
+            is: "Today les allt sjálfkrafa — en aðeins það sem berst. Fimm lítil inntök halda því réttu: check-in (leikmenn, fyrir æfingu — þitt hlutverk er áminningin), vikuskipulag (einu sinni í viku: leikir og dagmerki), leikmínútur (eftir hvern leik), RPE / post-training (ein tala eftir æfingu), og að samþykkja leikmenn (þegar merki birtist í Admin). Ekkert tekur langan tíma; sleppirðu þeim verður Today bara varkárara en það þarf.",
+          },
+          {
+            en: "The reminder is the coach's job. A coach's start-of-day nudge drives more check-ins than automated push notifications — our own club data, not a guess. Check-ins are the core signal behind the colour, and the best compliance we've seen comes from the coach who reminds, not the club with the most automation.",
+            is: "Áminningin er hlutverk þjálfarans. Morgunhvatning frá þjálfara skilar fleiri check-in en sjálfvirkar push-tilkynningar — okkar eigin félagsgögn, ekki ágiskun. Check-in eru kjarnamerkið á bak við litinn, og besta skráningarhlutfallið sem við höfum séð kemur frá þjálfaranum sem minnir á, ekki félaginu með mestu sjálfvirknina.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Go deeper only to answer “why”", is: "Farðu dýpra aðeins til að svara „af hverju“" },
+        body: [
+          {
+            en: "Open a deep page only when you have a question: “Building or easing?” → Load Intelligence. “Runs a lot but feels harder?” → Quadrant. “Indoor load, no GPS?” → Indoor Load. “Under on hard stops?” → Decel Intelligence. “Ramp back after injury?” → Return-to-Training. “Is it delivering? (for the board)” → Injury Pattern Analysis. Same layered read everywhere — even the deep pages open with a one-word verdict.",
+            is: "Opnaðu djúpa síðu aðeins þegar þú hefur spurningu: „Að byggja upp eða létta?“ → Load Intelligence. „Hleypur mikið en finnst þyngra?“ → Quadrant. „Innanhússálag, enginn GPS?“ → Indoor Load. „Undir í hörðum stöðvunum?“ → Decel Intelligence. „Uppbygging eftir meiðsli?“ → Return-to-Training. „Skilar þetta? (fyrir stjórn)“ → Injury Pattern Analysis. Sami lagskipti lesturinn alls staðar — jafnvel djúpu síðurnar opnast með eins-orðs niðurstöðu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "It advises. You decide.", is: "Það ráðleggur. Þú ákveður." },
+        body: [
+          {
+            en: "Daily: open Today, read the split, check any non-green colour, remind players. Weekly: set up the week, enter match minutes, log injuries as they happen. Rules decide, the AI explains — never the other way round. Override anything; it's logged with a reason.",
+            is: "Daglega: opnaðu Today, lestu skiptinguna, athugaðu hvern lit sem er ekki grænn, minntu leikmenn á. Vikulega: settu upp vikuna, sláðu inn leikmínútur, skráðu meiðsli þegar þau verða. Reglurnar ákveða, gervigreindin útskýrir — aldrei öfugt. Hnekktu hverju sem er; það er skráð með ástæðu.",
+          },
+        ],
+      },
+    ],
+  },
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
     videoAspectPaddingTop: "75%",

@@ -9028,6 +9028,11 @@ export default function CoachPage() {
                   toggle. The TV view previously had no visible entry on the
                   dashboard — only a buried sidebar-footer link — so surface it here. */}
               <div className="flex items-center gap-2 mr-1">
+                <CoachTutorialButton
+                  slug="overview"
+                  icon="🎬"
+                  label={{ en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" }}
+                />
                 <CoachTutorialButton slug="today" />
                 <a
                   href="/coach/display?refresh=15"
