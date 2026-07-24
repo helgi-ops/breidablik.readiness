@@ -14,12 +14,8 @@ import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
 
 // shadcn/ui
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 
 type SeasonPhase = "preseason" | "inseason" | "playoffs" | "offseason";
 
@@ -46,7 +42,6 @@ type MatchInput = {
 };
 
 type DayType = "TRAIN" | "RECOVERY" | "GAME" | "OFF";
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
 // Manual intents for NO_MATCH week (coach editable)
 type NoMatchIntent =
@@ -180,13 +175,6 @@ function intentsEqualDefault(arr: NoMatchIntent[] | null | undefined): boolean {
   return arr.every((v, i) => v === def[i]);
 }
 
-function dayBadgeVariant(dayType: DayType): BadgeVariant {
-  if (dayType === "GAME") return "destructive";
-  if (dayType === "RECOVERY") return "secondary";
-  if (dayType === "OFF") return "outline";
-  return "default";
-}
-
 // MD label helper: MD-4 and earlier (MD-5, MD-6...) alternate FORCE ↔ NEURAL
 function preMatchMicrodoseFocus(mdMinus: number) {
   const k = mdMinus - 4; // 0..n from MD-4
@@ -228,7 +216,6 @@ function getDefaultNoMatchIntents(): NoMatchIntent[] {
 }
 
 const WEEKDAYS_SHORT = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
-const WEEKDAYS_LONG  = ["Mánudagur", "Þriðjudagur", "Miðvikudagur", "Fimmtudagur", "Föstudagur", "Laugardagur", "Sunnudagur"];
 
 export default function WeekSetupPage() {
   const { isAtLeastPro } = usePlan();
@@ -245,17 +232,16 @@ export default function WeekSetupPage() {
   // exists for the week (the coach's own data takes over).
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
 
-  // ✅ PRESEASON fix: manual override jafnvel þó 1–2 leikir
-  const [manualOverride, setManualOverride] = useState<boolean>(true);
-
   const [intensityTarget, setIntensityTarget] = useState<number>(6);
+  // Opponent (+ context) per fixture date, read from match_schedule — display-only,
+  // powers the "vs FH" match cards and the provenance pill. Never saved.
+  const [matchOpponents, setMatchOpponents] = useState<Record<string, string>>({});
   const [teamId, setTeamId] = useState<string | null>(null);
   // Team sport — drives the game-density week model (basketball) vs the MD-day
   // model (football). Defaults to football so an unknown team behaves as before.
   const [sport, setSport] = useState<SportId>("football");
   const isBasketball = sport === "basketball";
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [noMatchIntents, setNoMatchIntents] = useState<NoMatchIntent[]>(getDefaultNoMatchIntents());
   // Declared team breaks (read-only here) — days inside a break are auto-locked
   // as "Frí" in the daily grid so you can't schedule training on a break day.
@@ -264,8 +250,6 @@ export default function WeekSetupPage() {
     teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date);
   const [lang] = useLang();
   const isIS = lang === "IS";
-  const vacationLabel = isIS ? "Frí" : "Vacation";
-  const vacationBadge = isIS ? "FRÍ" : "VACATION";
   const weekdaysShort = isIS ? WEEKDAYS_SHORT : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const t = isIS ? {
     subtitle: "Stilltu vikuna. Kerfið sendir leikmönnum réttan æfingadag.",
@@ -340,18 +324,14 @@ export default function WeekSetupPage() {
     return [];
   }, [weekType, matches]);
 
-  // ✅ Manual-week behavior rule:
-  // - NO_MATCH: alltaf manual
-  // - ONE/TWO: manual ef manualOverride er ON
-  const isManualWeek = useMemo(() => weekType === "NO_MATCH" || manualOverride, [weekType, manualOverride]);
+  // The week grid is always directly editable now (the wizard + manual-override
+  // toggle are gone): the MD ordering is only the seed for the daily intents, and
+  // the coach can change any day. So the "manual week" path is always taken — the
+  // preview and apply always read the editable grid (manualNoMatchDayEdits).
+  const isManualWeek = true;
 
   // Is there a dated match inside the viewed week? Gates the MD chips + the
   // "Fill from match" seed button in the manual grid.
-  const weekHasMatch = useMemo(
-    () => matchesInWeek(weekStart, weekEnd, visibleMatches.map((m) => m.date)).length > 0,
-    [weekStart, weekEnd, visibleMatches]
-  );
-
   // 1) LOAD TEAM ID (robust)
   useEffect(() => {
     let alive = true;
@@ -477,6 +457,8 @@ export default function WeekSetupPage() {
       const schedNote = schedPicks.length
         ? schedPicks.map((p) => `${p.match_date}${p.opponent ? ` — ${p.opponent}` : ""} (${p.is_home === false ? "A" : "H"})`).join(" · ")
         : null;
+      // Opponent lookup for the match cards + provenance pill (display-only).
+      setMatchOpponents(Object.fromEntries(found.map((f) => [f.match_date, (f.opponent ?? "").trim()])));
 
       if (data) {
         const row = data as WeekRow;
@@ -614,25 +596,6 @@ export default function WeekSetupPage() {
       if (matchMonday !== weekStart) setWeekStart(matchMonday);
     }
     setMatches((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
-  }
-
-  function applyWeekType(next: WeekType) {
-    setWeekType(next);
-    setError(null);
-    setOk(null);
-    setScheduleNote(null); // coach has taken manual control of the week type
-
-    setMatches((prev) => {
-      const first = prev[0] ?? DEFAULT_MATCHES[0];
-      const second = prev[1] ?? DEFAULT_MATCHES[1];
-      return [first, second];
-    });
-
-    if (!noMatchIntents || noMatchIntents.length !== 7) {
-      setNoMatchIntents(getDefaultNoMatchIntents());
-    }
-
-    setStep(2);
   }
 
   async function handleSave(): Promise<boolean> {
@@ -950,31 +913,6 @@ export default function WeekSetupPage() {
     setApplying(false);
   }
 
-  function StepPill(props: { n: 1 | 2 | 3; label: string; active: boolean; done: boolean; onClick: () => void }) {
-    return (
-      <button
-        type="button"
-        onClick={props.onClick}
-        className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
-          props.active ? "bg-muted border-foreground/20" : "hover:bg-muted/50"
-        }`}
-      >
-        <span
-          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-            props.active
-              ? "bg-foreground text-background"
-              : props.done
-              ? "bg-emerald-500 text-white"
-              : "bg-muted text-foreground"
-          }`}
-        >
-          {props.done && !props.active ? "✓" : props.n}
-        </span>
-        <span className={props.active ? "text-foreground font-medium" : "text-muted-foreground"}>{props.label}</span>
-      </button>
-    );
-  }
-
   if (!isAtLeastPro) {
     return (
       <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
@@ -990,467 +928,310 @@ export default function WeekSetupPage() {
     );
   }
 
+  // ── Single-page render helpers ──────────────────────────────────────────
+  const monthsIS = ["janúar", "febrúar", "mars", "apríl", "maí", "júní", "júlí", "ágúst", "september", "október", "nóvember", "desember"];
+  const monthsEN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const months = isIS ? monthsIS : monthsEN;
+  const dS = new Date(weekStart + "T00:00:00");
+  const dE = new Date(weekEnd + "T00:00:00");
+  const weekLabel = dS.getMonth() === dE.getMonth()
+    ? `${dS.getDate()}.–${dE.getDate()}. ${months[dE.getMonth()]} ${dE.getFullYear()}`
+    : `${dS.getDate()}. ${months[dS.getMonth()]}–${dE.getDate()}. ${months[dE.getMonth()]} ${dE.getFullYear()}`;
+
+  const archivo = { fontFamily: "var(--font-archivo)" } as const;
+  const inWeekMatchDates = matchesInWeek(weekStart, weekEnd, visibleMatches.map((m) => m.date));
+  const matchIdxForDate = (dateIso: string) => matches.findIndex((m) => (m.date || "").trim() === dateIso);
+
+  const weekTypeLabel = weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : weekType === "THREE_MATCHES" ? t.threeMatches : t.twoMatches;
+  const weekTypePills: { key: WeekType; label: string }[] = [
+    { key: "NO_MATCH", label: t.noMatch },
+    { key: "ONE_MATCH", label: t.oneMatch },
+    { key: "TWO_MATCHES", label: t.twoMatches },
+    ...(isBasketball ? ([{ key: "THREE_MATCHES", label: t.threeMatches }] as { key: WeekType; label: string }[]) : []),
+  ];
+  const phaseDot: Record<SeasonPhase, string> = { preseason: "#de9328", inseason: "#1c7a4a", playoffs: "#a83e28", offseason: "#9aa0a6" };
+  const dayColor = (dt: DayType, onBreak: boolean) =>
+    onBreak ? "#1c7a4a" : dt === "GAME" ? "#a83e28" : dt === "RECOVERY" ? "#1c7a4a" : dt === "OFF" ? "#9aa0a6" : "#2740e6";
+  const dayBadgeText = (dt: DayType, onBreak: boolean) =>
+    onBreak ? (isIS ? "FRÍ" : "OFF")
+    : dt === "GAME" ? (isIS ? "LEIKUR" : "MATCH")
+    : dt === "RECOVERY" ? (isIS ? "ENDURHEIMT" : "RECOVERY")
+    : dt === "OFF" ? (isIS ? "FRÍ" : "OFF")
+    : (isIS ? "ÆFING" : "TRAINING");
+  const provenanceText = inWeekMatchDates.map((d) => {
+    const dd = new Date(d + "T00:00:00");
+    const opp = matchOpponents[d];
+    const idx = matchIdxForDate(d);
+    const ha = matches[idx]?.home_away === "A" ? "A" : "H";
+    return `${dd.getDate()}.${dd.getMonth() + 1}. — ${opp || (isIS ? "Leikur" : "Match")} (${ha})`;
+  }).join(" · ");
+  const busy = loading || saving || applying;
+
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
-      <div className="mb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Week setup</h1>
-            <PagePurpose
-              en="set up the training week and tag each day's match-day context"
-              is="setja upp æfingavikuna og merkja leikdags-samhengi hvers dags"
-              tutorial="week-setup"
-            />
-            <p className="text-sm text-muted-foreground">{t.subtitle}</p>
+    <div className="mx-auto w-full max-w-[1160px] px-5 pb-28 pt-6 md:px-7" style={{ color: "#14181c" }}>
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-6">
+        <div>
+          <h1 className="text-[26px] font-bold leading-tight tracking-tight md:text-[28px]" style={archivo}>
+            {isIS ? "Vikuuppsetning" : "Week setup"}
+          </h1>
+          <PagePurpose
+            en="set up the training week and tag each day's match-day context"
+            is="setja upp æfingavikuna og merkja leikdags-samhengi hvers dags"
+            tutorial="week-setup"
+          />
+        </div>
+        <div className="flex flex-col items-end gap-2.5">
+          <div className="flex items-center gap-1 rounded-[10px] border border-[#dcd8cc] bg-white p-1">
+            <button type="button" onClick={() => { setWeekStart(addDays(weekStart, -7)); setOk(null); setError(null); }} disabled={busy}
+              className="flex h-8 w-8 items-center justify-center rounded-[7px] text-[#6b6f76] transition-colors hover:bg-[#f4f2ec] disabled:opacity-40" aria-label="Fyrri vika">‹</button>
+            <span className="min-w-[170px] text-center text-[14px] font-semibold" style={archivo}>{weekLabel}</span>
+            <button type="button" onClick={() => { setWeekStart(addDays(weekStart, 7)); setOk(null); setError(null); }} disabled={busy}
+              className="flex h-8 w-8 items-center justify-center rounded-[7px] text-[#6b6f76] transition-colors hover:bg-[#f4f2ec] disabled:opacity-40" aria-label="Næsta vika">›</button>
           </div>
-          <div className="text-right text-xs text-muted-foreground">
-            <div>
-              {t.week}: <span className="font-medium text-foreground">{weekStart}</span> →{" "}
-              <span className="font-medium text-foreground">{weekEnd}</span>
+          {inWeekMatchDates.length > 0 && (
+            <div className="rounded-full border border-[#dcd8cc] bg-white px-3 py-1 text-[12px] text-[#6b6f76]" title={scheduleNote ?? undefined}>
+              ⚲ {t.fromSchedule}{" "}
+              <a href="/coach/fixtures" className="text-[#2740e6] hover:underline">{isIS ? "Leikjadagatali" : "Fixtures"}</a>:{" "}
+              <span className="font-medium text-[#14181c]">{provenanceText}</span>
             </div>
-            <div className="mt-1 flex justify-end gap-2">
-              <StepPill n={1} label={t.weekTypePill} active={step === 1} done={step > 1} onClick={() => setStep(1)} />
-              <StepPill n={2} label={t.setupPill} active={step === 2} done={step > 2} onClick={() => setStep(2)} />
-              <StepPill n={3} label="Preview" active={step === 3} done={false} onClick={() => setStep(3)} />
+          )}
+        </div>
+      </div>
+
+      {/* OK / error banner */}
+      {error && (
+        <div className="mt-4 rounded-[12px] border px-4 py-2.5 text-[13px] font-medium" style={{ borderColor: "rgba(168,62,40,0.35)", background: "rgba(168,62,40,0.08)", color: "#a83e28" }}>
+          {t.error}: {error}
+        </div>
+      )}
+      {ok && (
+        <div className="mt-4 rounded-[12px] border px-4 py-2.5 text-[13px] font-medium" style={{ borderColor: "rgba(28,122,74,0.35)", background: "rgba(28,122,74,0.08)", color: "#1c7a4a" }}>
+          {ok}
+        </div>
+      )}
+
+      {/* Missing team id (edge) */}
+      {(!teamId || teamId.trim().length === 0) && (
+        <div className="mt-4 grid gap-2 rounded-[14px] border border-[#e3e0d5] bg-white p-4">
+          <Label>Team ID (uuid)</Label>
+          <Input placeholder="Paste team_id (uuid) here" value={teamId ?? ""} onChange={(e) => setTeamId(e.target.value)} />
+          <p className="text-xs text-[#6b6f76]">{t.teamIdHint}</p>
+        </div>
+      )}
+
+      {/* Context bar */}
+      <div className="mt-5 grid grid-cols-1 gap-7 rounded-[14px] border border-[#e3e0d5] bg-white p-5 md:grid-cols-[1.2fr_1.3fr_1fr]">
+        {/* Season */}
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9aa0a6]">{isIS ? "Tímabil" : "Season"}</div>
+          <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+            {SEASON_PHASES.map((phase) => {
+              const active = seasonPhase === phase.id;
+              return (
+                <button key={phase.id} type="button" disabled={busy}
+                  onClick={() => setSeasonPhase((p) => (p === phase.id ? null : phase.id))}
+                  className={`flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-50 ${active ? "border-[#14181c] bg-[#14181c] text-white" : "border-[#e3e0d5] bg-white text-[#14181c] hover:bg-[#faf9f4]"}`}>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: phaseDot[phase.id] }} />
+                  {phase.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Week type (read-only) */}
+        <div className="md:border-l md:border-[#eeece3] md:pl-7">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9aa0a6]">{isIS ? "Vikugerð" : "Week type"}</div>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {weekTypePills.map((p) => {
+              const active = weekType === p.key;
+              return (
+                <span key={p.key} className={`cursor-default rounded-full border px-3 py-1.5 text-[12px] font-medium ${active ? "border-[#2740e6] text-[#2740e6]" : "border-[#e3e0d5] text-[#9aa0a6]"}`} style={active ? { background: "rgba(39,64,230,0.08)" } : { background: "#fff" }}>
+                  {p.label}
+                </span>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[12px] text-[#6b6f76]">
+            {inWeekMatchDates.length > 0
+              ? (isIS ? "Ræðst sjálfkrafa af fjölda leikja í Leikjadagatali — bættu við eða fjarlægðu leiki þar." : "Set automatically from the number of games in Fixtures — add or remove games there.")
+              : (isIS ? "Engir leikir fundust í vikunni — vikan er handvirk uppbyggingarvika." : "No games found this week — the week is a manual build week.")}
+          </p>
+        </div>
+        {/* Intensity */}
+        <div className="md:border-l md:border-[#eeece3] md:pl-7">
+          <div className="flex items-baseline justify-between">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9aa0a6]">{isIS ? "Álagsmarkmið" : "Intensity target"}</div>
+            <div className="text-[30px] font-bold leading-none tabular-nums" style={archivo}>{intensityTarget}</div>
+          </div>
+          <input type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))}
+            className="mt-3 w-full" style={{ accentColor: "#2740e6" }} />
+          <div className="mt-1 text-[11px] text-[#9aa0a6]">{t.intensityHint}</div>
+        </div>
+      </div>
+
+      {/* Week grid */}
+      <div className="mt-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-[17px] font-semibold" style={archivo}>{isIS ? "Vikan — dagleg áhersla" : "The week — daily focus"}</div>
+            <div className="mt-0.5 text-[12px] text-[#6b6f76]">{isIS ? "MD-röðunin er sjálfgefin út frá leiknum — þú getur breytt hverjum degi beint." : "The MD ordering is seeded from the match — you can change any day directly."}</div>
+          </div>
+          <div className="flex gap-2">
+            {inWeekMatchDates.length > 0 && (
+              <button type="button" disabled={busy}
+                onClick={() => { const a = matchAnchoredIntents(weekStart, weekEnd, visibleMatches.map((m) => m.date)); if (a) { setNoMatchIntents(a); setOk(null); } }}
+                className="rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
+                {isIS ? "Fylla frá leik (MD)" : "Fill from match (MD)"}
+              </button>
+            )}
+            <button type="button" disabled={busy}
+              onClick={() => { setNoMatchIntents(getDefaultNoMatchIntents()); setOk(null); }}
+              className="rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
+              {isIS ? "Endurstilla" : "Reset"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
+          {Array.from({ length: 7 }).map((_, i) => {
+            const date = addDays(weekStart, i);
+            const dd = new Date(date + "T00:00:00");
+            const onBreak = isDateOnBreak(date);
+            const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
+            const isMatchDay = mdLabel === "MD";
+            const dType = previewDays[i]?.day_type ?? "TRAIN";
+            const stripe = dayColor(dType, onBreak);
+            const badgeColor = dayColor(dType, onBreak);
+            const badgeText = dayBadgeText(dType, onBreak);
+            const mIdx = isMatchDay ? matchIdxForDate(date) : -1;
+            const opp = matchOpponents[date];
+            return (
+              <div key={date} className="flex flex-col overflow-hidden rounded-[12px] border border-[#e3e0d5] bg-white">
+                <div className="h-1" style={{ background: stripe }} />
+                <div className="flex flex-1 flex-col gap-2 px-2.5 pb-3 pt-2.5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[13px] font-semibold" style={archivo}>{weekdaysShort[i]}</div>
+                      <div className="text-[11px] text-[#9aa0a6]">{dd.getDate()}.{dd.getMonth() + 1}.</div>
+                    </div>
+                    {mdLabel && !onBreak && (
+                      <span className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-bold" style={mdLabel === "MD" ? { background: "rgba(168,62,40,0.12)", color: "#a83e28", ...archivo } : { background: "#f0eee6", color: "#6b6f76", ...archivo }}>{mdLabel}</span>
+                    )}
+                  </div>
+
+                  {onBreak ? (
+                    <div className="flex flex-col items-center justify-center rounded-[9px] border border-dashed px-2 py-3 text-center" style={{ borderColor: "rgba(28,122,74,0.4)", background: "rgba(28,122,74,0.06)" }}>
+                      <div className="text-[12px] font-semibold text-[#1c7a4a]">{isIS ? "FRÍ" : "OFF"}</div>
+                      <div className="mt-0.5 text-[10px] text-[#1c7a4a]">{isIS ? "Skráð frí liðsins — læst" : "Team break — locked"}</div>
+                    </div>
+                  ) : isMatchDay ? (
+                    <div className="flex flex-col gap-1.5 rounded-[9px] border p-2" style={{ borderColor: "rgba(168,62,40,0.35)", background: "rgba(168,62,40,0.06)" }}>
+                      <div className="text-[12px] font-bold text-[#a83e28]" style={archivo}>
+                        {matches[mIdx]?.home_away === "A" ? "@" : "vs"} {opp || (isIS ? "Leikur" : "Match")}
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input value={matches[mIdx]?.kickoff_time ?? ""} placeholder="19:15" disabled={mIdx < 0}
+                          onChange={(e) => setMatch(mIdx, { kickoff_time: e.target.value })}
+                          className="w-full rounded-[6px] border border-[#e3e0d5] px-1.5 py-1 text-[11px] disabled:opacity-50" />
+                        <select value={matches[mIdx]?.home_away ?? "H"} disabled={mIdx < 0}
+                          onChange={(e) => setMatch(mIdx, { home_away: e.target.value as "H" | "A" })}
+                          className="rounded-[6px] border border-[#e3e0d5] px-1 py-1 text-[11px] disabled:opacity-50">
+                          <option value="H">H</option>
+                          <option value="A">{isIS ? "Ú" : "A"}</option>
+                        </select>
+                      </div>
+                      <div className="text-[9px] text-[#9aa0a6]">{isIS ? "úr Leikjadagatali" : "from Fixtures"}</div>
+                    </div>
+                  ) : (
+                    <select className="w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px]"
+                      value={noMatchIntents[i] ?? "OFF"}
+                      onChange={(e) => { const v = e.target.value as NoMatchIntent; setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; }); setOk(null); }}>
+                      {NO_MATCH_OPTIONS.filter((o) => o.value !== "GAME").map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.value === "OFF" ? (isIS ? "Frí" : "Off") : opt.label}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  <div className="mt-auto flex justify-center pt-1">
+                    <span className="rounded-full px-2.5 py-0.5 text-[9.5px] font-bold tracking-[0.05em]" style={{ color: badgeColor, background: `${badgeColor}1a`, ...archivo }}>{badgeText}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Insight row */}
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[1.5fr_1fr] md:items-start">
+        {/* Microcycle review */}
+        <div className="rounded-[14px] border border-[#e3e0d5] bg-white p-4 md:px-[18px]">
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-semibold" style={archivo}>{t.microTitle}</span>
+            {microcycleChecks.length === 0 ? (
+              <span className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style={{ background: "rgba(28,122,74,0.1)", color: "#1c7a4a" }}>{t.microOk}</span>
+            ) : (
+              <span className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold" style={{ background: "rgba(222,147,40,0.14)", color: "#9a6a14" }}>{microcycleChecks.length} {t.microNote}</span>
+            )}
+          </div>
+          <p className="mt-1 text-[12px] text-[#6b6f76]">{t.microDesc}</p>
+          {microcycleChecks.length === 0 ? (
+            <p className="mt-2 text-[12px] text-[#1c7a4a]">{t.microNone}</p>
+          ) : (
+            <div className="mt-2 grid gap-2">
+              {microcycleChecks.map((c) => (
+                <div key={c.id} className="rounded-[10px] border px-3 py-2.5"
+                  style={c.tone === "warn" ? { borderColor: "rgba(222,147,40,0.45)", background: "rgba(222,147,40,0.08)", color: "#7a5210" } : { borderColor: "rgba(39,64,230,0.3)", background: "rgba(39,64,230,0.05)", color: "#1c2a80" }}>
+                  <div className="text-[12.5px] font-semibold">{c.title}</div>
+                  <p className="mt-0.5 text-[11.5px] leading-relaxed">{c.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div className="grid gap-4">
+          {(() => {
+            const shape = expectedWeekShape(sport, weekType);
+            if (!shape) return null;
+            return (
+              <div className="rounded-[14px] border bg-white p-4" style={{ borderColor: "rgba(122,92,196,0.4)" }}>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: "#7a5cc4" }}>{isIS ? "Vikulögun — Karfa" : "Week shape — Basketball"}</div>
+                <div className="mt-1 text-[14px] font-semibold" style={archivo}>{isIS ? shape.headline.is : shape.headline.en}</div>
+                <div className="mt-0.5 text-[12px] text-[#6b6f76]">{isIS ? shape.detail.is : shape.detail.en}</div>
+                <div className="mt-1 text-[10px] uppercase tracking-wide" style={{ color: "#7a5cc4" }}>{shape.citation}</div>
+              </div>
+            );
+          })()}
+
+          <div className="rounded-[14px] border border-[#e3e0d5] bg-white p-4">
+            <div className="text-[15px] font-semibold" style={archivo}>{isIS ? "Frídagar liðsins" : "Team breaks"}</div>
+            <p className="mt-1 text-[12px] text-[#6b6f76]">{isIS ? "Dagar innan skráðs frís læsast sem FRÍ í vikunni — engin æfing send, áminningar í pásu." : "Days inside a declared break lock as OFF for the week — no session sent, reminders paused."}</p>
+            <div className="mt-3">
+              <TeamBreaksManager teamId={teamId} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Declared team breaks — suppress reminders + don't penalise rest. */}
-      <div className="mb-5">
-        <TeamBreaksManager teamId={teamId} />
-      </div>
-
-      {error && (
-        <Card className="mb-4 border-destructive/40">
-          <CardContent className="pt-5 text-sm text-destructive">{t.error}: {error}</CardContent>
-        </Card>
-      )}
-      {ok && (
-        <Card className="mb-4 border-emerald-500/30">
-          <CardContent className="pt-5 text-sm text-emerald-600">{ok}</CardContent>
-        </Card>
-      )}
-
-      {/* STEP 1 */}
-      <Card className="mb-4">
-        <CardHeader
-          className={step !== 1 ? "cursor-pointer" : ""}
-          onClick={() => step !== 1 && setStep(1)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">{t.step1}</CardTitle>
-              {step !== 1 && (
-                <CardDescription className="mt-0.5">
-                  {weekStart} → {weekEnd} · {weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : weekType === "THREE_MATCHES" ? t.threeMatches : t.twoMatches}
-                  {isManualWeek && weekType !== "NO_MATCH" ? " · Manual" : ""}
-                </CardDescription>
-              )}
-              {step === 1 && <CardDescription>{t.step1desc}</CardDescription>}
-            </div>
-            {step !== 1 && <span className="text-xs text-emerald-600 font-medium">{t.done}</span>}
-          </div>
-        </CardHeader>
-        {step === 1 && (
-        <CardContent className="grid gap-4">
-          {(!teamId || teamId.trim().length === 0) && (
-            <div className="grid gap-2">
-              <Label>Team ID (uuid)</Label>
-              <Input placeholder="Paste team_id (uuid) here" value={teamId ?? ""} onChange={(e) => setTeamId(e.target.value)} />
-              <p className="text-xs text-muted-foreground">{t.teamIdHint}</p>
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            <Label>{t.weekStart}</Label>
-            <Input
-              type="date"
-              value={weekStart}
-              onChange={(e) => {
-                setWeekStart(isoMondayOfISO(e.target.value));
-                setOk(null);
-                setError(null);
-              }}
-            />
-          </div>
-
-          {/* Season phase */}
-          <div className="grid gap-2">
-            <Label>{t.season}</Label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {SEASON_PHASES.map((phase) => (
-                <button
-                  key={phase.id}
-                  type="button"
-                  disabled={loading || saving || applying}
-                  onClick={() => setSeasonPhase((p) => p === phase.id ? null : phase.id)}
-                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-sm transition-all ${
-                    seasonPhase === phase.id ? phase.activeClass : `${phase.baseClass} hover:opacity-80`
-                  } disabled:opacity-50`}
-                >
-                  <span className="text-base leading-none">{phase.icon}</span>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-xs leading-tight truncate">{phase.label}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug truncate">{isIS ? phase.sublabel : phase.sublabelEN}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>{t.weekType}</Label>
-            <div className="flex gap-2 flex-wrap">
-              <Button type="button" variant={weekType === "NO_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("NO_MATCH")} disabled={loading || saving || applying}>
-                {t.noMatch}
-              </Button>
-              <Button type="button" variant={weekType === "ONE_MATCH" ? "default" : "outline"} onClick={() => applyWeekType("ONE_MATCH")} disabled={loading || saving || applying}>
-                {t.oneMatch}
-              </Button>
-              <Button type="button" variant={weekType === "TWO_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("TWO_MATCHES")} disabled={loading || saving || applying}>
-                {t.twoMatches}
-              </Button>
-              {/* Three-game week — basketball only (football has no three-game
-                  league week; keeping the button off preserves the football UI). */}
-              {isBasketball && (
-                <Button type="button" variant={weekType === "THREE_MATCHES" ? "default" : "outline"} onClick={() => applyWeekType("THREE_MATCHES")} disabled={loading || saving || applying}>
-                  {t.threeMatches}
-                </Button>
-              )}
-            </div>
-            {scheduleNote && (
-              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
-                <span className="font-semibold">{t.fromSchedule}</span> {scheduleNote}
-                <div className="mt-0.5 text-sky-700">{t.fromScheduleHint}</div>
-              </div>
-            )}
-            {/* Basketball game-density shape — the expected load pattern for the
-                chosen game count. Football returns null (MD-day model is
-                authoritative), so this renders for basketball only. Layered read:
-                headline verdict, then the plain "why", then the citation. */}
-            {(() => {
-              const shape = expectedWeekShape(sport, weekType);
-              if (!shape) return null;
-              return (
-                <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900">
-                  <div className="font-semibold">{isIS ? shape.headline.is : shape.headline.en}</div>
-                  <div className="mt-0.5 text-violet-800">{isIS ? shape.detail.is : shape.detail.en}</div>
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-violet-500">{shape.citation}</div>
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Manual override toggle */}
-          <div className="grid gap-2">
-            <Label>Preseason / Manual override</Label>
-            <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
-              <div>
-                <div className="text-sm font-medium">{t.manualTitle}</div>
-                <div className="text-xs text-muted-foreground">{t.manualDesc}</div>
-              </div>
-              <Button
-                type="button"
-                variant={manualOverride ? "default" : "outline"}
-                onClick={() => {
-                  setManualOverride((v) => !v);
-                  setOk(null);
-                  setError(null);
-                }}
-                disabled={loading || saving || applying}
-              >
-                {manualOverride ? "ON" : "OFF"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={loading || saving || applying}>
-              {t.next}
-            </Button>
-          </div>
-        </CardContent>
-        )}
-      </Card>
-
-      {/* STEP 2 */}
-      <Card className="mb-4">
-        <CardHeader
-          className={step !== 2 ? "cursor-pointer" : ""}
-          onClick={() => step !== 2 && setStep(2)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">{t.step2}</CardTitle>
-              {step !== 2 && (
-                <CardDescription className="mt-0.5">
-                  {isManualWeek ? t.manualCtrl : t.autoOrder} · Intensity {intensityTarget}/10
-                </CardDescription>
-              )}
-              {step === 2 && (
-                <CardDescription>
-                  {isManualWeek ? t.step2manual : t.step2auto}
-                </CardDescription>
-              )}
-            </div>
-            {step > 2 && <span className="text-xs text-emerald-600 font-medium">{t.done}</span>}
-          </div>
-        </CardHeader>
-        {step === 2 && (
-        <CardContent className="grid gap-4">
-          {weekType !== "NO_MATCH" && (
-            <div className="grid gap-3">
-              {visibleMatches.map((m, idx) => (
-                <div key={idx} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[140px_1fr_1fr_110px] md:items-center">
-                  <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">{t.match}</Label>
-                    <Input value={m.match_id} onChange={(e) => setMatch(idx, { match_id: e.target.value })} placeholder={`L${idx + 1}`} />
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">{t.date}</Label>
-                    <Input type="date" value={m.date} onChange={(e) => setMatch(idx, { date: e.target.value })} />
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">{t.kickoff}</Label>
-                    <Input value={m.kickoff_time ?? ""} onChange={(e) => setMatch(idx, { kickoff_time: e.target.value })} placeholder="19:15" />
-                  </div>
-
-                  <div className="grid gap-1">
-                    <Label className="text-xs text-muted-foreground">H/A</Label>
-                    <select className="h-10 rounded-md border bg-background px-3 text-sm" value={m.home_away ?? "H"} onChange={(e) => setMatch(idx, { home_away: e.target.value as "H" | "A" })}>
-                      <option value="H">{t.home}</option>
-                      <option value="A">{t.away}</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {isManualWeek && (
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">{t.dailyIntent}</div>
-                <div className="flex gap-2">
-                  {weekHasMatch && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        const anchored = matchAnchoredIntents(weekStart, weekEnd, visibleMatches.map((m) => m.date));
-                        if (anchored) setNoMatchIntents(anchored);
-                      }}
-                      disabled={loading || saving || applying}
-                    >
-                      {t.fillFromMatch}
-                    </Button>
-                  )}
-                  <Button type="button" variant="outline" onClick={() => setNoMatchIntents(getDefaultNoMatchIntents())} disabled={loading || saving || applying}>
-                    {t.reset}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid gap-2 md:grid-cols-7">
-                {Array.from({ length: 7 }).map((_, i) => {
-                  const date = addDays(weekStart, i);
-                  const value = noMatchIntents[i] ?? "OFF";
-                  const onBreak = isDateOnBreak(date);
-                  const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
-
-                  return (
-                    <div key={date} className={`rounded-xl border p-3 ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</div>
-                        {mdLabel && !onBreak && (
-                          <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${mdLabel === "MD" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
-                            {mdLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">{date.slice(5)}</div>
-
-                      {onBreak ? (
-                        // Declared break — locked. Not editable; the break owns
-                        // this day (no training scheduled, reminders paused).
-                        <div className="mt-2 grid gap-1">
-                          <div className="flex h-9 w-full items-center justify-center rounded-md border border-emerald-200 bg-white px-2 text-xs font-medium text-emerald-800">
-                            🌴 {vacationLabel}
-                          </div>
-                          <div className="mt-1.5 flex items-center justify-center">
-                            <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">{vacationBadge}</Badge>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-2 grid gap-1">
-                          <select
-                            className="h-9 w-full rounded-md border bg-background px-2 text-xs"
-                            value={value}
-                            onChange={(e) => {
-                              const v = e.target.value as NoMatchIntent;
-                              setNoMatchIntents((prev) => {
-                                const next = [...prev];
-                                next[i] = v;
-                                return next;
-                              });
-                            }}
-                          >
-                            {NO_MATCH_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-
-                          <div className="mt-1.5 flex items-center justify-center">
-                            <Badge variant={dayBadgeVariant(intentToDayType(value))} className="text-[10px]">
-                              {intentToDayType(value)}
-                            </Badge>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!isManualWeek && weekType !== "NO_MATCH" && (
-            <div className="rounded-xl border p-3 text-sm text-muted-foreground">
-              {t.autoActive}
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="grid gap-3">
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="text-sm font-medium">Intensity target</div>
-                <div className="text-xs text-muted-foreground">{t.intensityHint}</div>
-              </div>
-              <div className="text-4xl font-bold leading-none tabular-nums">{intensityTarget}</div>
-            </div>
-            <input className="w-full" type="range" min={1} max={10} step={1} value={intensityTarget} onChange={(e) => setIntensityTarget(Number(e.target.value))} />
-          </div>
-
-          <div className="flex justify-between gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading || saving || applying}>
-              {t.back}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setStep(3)} disabled={loading || saving || applying}>
-              {t.next}
-            </Button>
-          </div>
-        </CardContent>
-        )}
-      </Card>
-
-      {/* STEP 3 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t.step3}</CardTitle>
-          <CardDescription>{t.step3desc}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-2 md:grid-cols-7">
-            {previewDays.map((d, i) => {
-              const date = addDays(weekStart, i);
-              const onBreak = isDateOnBreak(date);
-              const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
-              return (
-                <div key={d.day_index} title={d.notes ?? ""} className={`rounded-xl border p-3 text-center ${onBreak ? "border-emerald-300 bg-emerald-50" : ""}`}>
-                  <div className="flex items-center justify-center gap-1">
-                    <span className="text-xs font-semibold text-foreground">{weekdaysShort[i]}</span>
-                    {mdLabel && !onBreak && (
-                      <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${mdLabel === "MD" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
-                        {mdLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">{date.slice(5)}</div>
-                  <div className="mt-2">
-                    {onBreak
-                      ? <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">{vacationBadge}</Badge>
-                      : <Badge variant={dayBadgeVariant(d.day_type)} className="text-[10px]">{d.day_type}</Badge>}
-                  </div>
-                  <div className="mt-1.5 text-[11px] font-medium leading-snug text-muted-foreground">
-                    {onBreak ? `🌴 ${vacationLabel}` : (d.focus ?? "")}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Microcycle check — evidence-informed periodization review
-              (Buchheit et al. 2024, 11 Principles of Microcycle Periodization). */}
-          <div className="rounded-xl border p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{t.microTitle}</span>
-              {microcycleChecks.length === 0 ? (
-                <Badge variant="secondary" className="text-[10px]">{t.microOk}</Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px]">{microcycleChecks.length} {t.microNote}</Badge>
-              )}
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t.microDesc}
-            </p>
-
-            {microcycleChecks.length === 0 ? (
-              <p className="mt-2 text-xs text-emerald-600">
-                {t.microNone}
-              </p>
-            ) : (
-              <div className="mt-2 grid gap-2">
-                {microcycleChecks.map((c) => (
-                  <div
-                    key={c.id}
-                    className={`rounded-lg border p-2.5 ${
-                      c.tone === "warn"
-                        ? "border-amber-300 bg-amber-50 text-amber-900"
-                        : "border-sky-300 bg-sky-50 text-sky-900"
-                    }`}
-                  >
-                    <div className="text-xs font-semibold">{c.title}</div>
-                    <p className={`mt-0.5 text-[11px] leading-relaxed ${c.tone === "warn" ? "text-amber-800" : "text-sky-800"}`}>
-                      {c.body}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => void handleSave()} disabled={loading || saving || applying}>
+      {/* Sticky action bar */}
+      <div className="sticky bottom-0 left-0 right-0 z-20 mt-6 -mx-5 border-t border-[#e3e0d5] px-5 py-3 md:-mx-7 md:px-7" style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · MICRODOSING_PLAYBOOK</div>
+          <div className="flex gap-2.5">
+            <button type="button" onClick={() => void handleSave()} disabled={busy}
+              className="rounded-[10px] border border-[#dcd8cc] bg-white px-4.5 py-2 text-[13px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
               {saving ? t.saving : loading ? t.loadingW : t.saveWeek}
-            </Button>
-
-            <Button onClick={() => void handleApplyPlan()} disabled={loading || saving || applying}>
+            </button>
+            <button type="button" onClick={() => void handleApplyPlan()} disabled={busy}
+              className="rounded-[10px] px-5 py-2 text-[13px] font-semibold text-white transition-colors disabled:opacity-50" style={{ background: "#2740e6" }}>
               {applying ? t.applying : t.activate}
-            </Button>
-
-            <div className="ml-auto text-xs text-muted-foreground">
-              {isManualWeek ? t.manualWeek : t.autoWeek} · system_key:{" "}
-              <span className="font-medium text-foreground">MICRODOSING_PLAYBOOK</span>
-            </div>
+            </button>
           </div>
-
-          <div className="flex justify-start">
-            <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={loading || saving || applying}>
-              {t.editSetup}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
