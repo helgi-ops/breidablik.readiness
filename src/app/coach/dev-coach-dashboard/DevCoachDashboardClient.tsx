@@ -8997,6 +8997,28 @@ export default function CoachPage() {
                   toggle. The TV view previously had no visible entry on the
                   dashboard — only a buried sidebar-footer link — so surface it here. */}
               <div className="flex items-center gap-2 mr-1">
+                {/* Week Setup — the weekly upstream input the whole system depends
+                    on. Not a monitoring tab; surfaced here as the primary weekly
+                    action. Smart state: attention (filled cobalt) when this week
+                    has no activated plan for today (teamDayType null), calm outline
+                    once activated. Always one click from Today. */}
+                <Link
+                  href="/coach/week-setup"
+                  className={
+                    teamDayType
+                      ? "mb-px inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#2740e6]/40 bg-white px-3 py-1.5 text-xs font-semibold text-[#2740e6] transition-colors hover:bg-[#2740e6]/5"
+                      : "mb-px inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                  }
+                  title={lang === "IS"
+                    ? (teamDayType ? "Vikuskipulag — leikdagar, ásetningur, frí" : "Þessi vika er ekki uppsett — settu hana upp og sendu leikmönnum")
+                    : (teamDayType ? "Week setup — match days, intent, breaks" : "This week isn't set up — configure it and send to players")}
+                >
+                  {teamDayType ? (
+                    <><span aria-hidden>🗓️</span>{lang === "IS" ? "Vikuskipulag" : "Week setup"}</>
+                  ) : (
+                    <><span className="inline-block h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse" aria-hidden />{lang === "IS" ? "Setja upp þessa viku" : "Set up this week"}<span aria-hidden>→</span></>
+                  )}
+                </Link>
                 <CoachTutorialButton
                   slug="overview"
                   icon="🎬"
