@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Lang } from "@/lib/lang";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 // ── Copy ──────────────────────────────────────────────────────────────────────
 
@@ -738,6 +739,7 @@ export function RtpTab({ coachTeamId, lang }: Props) {
           ))}
         </div>
         <div className="flex-1" />
+        <CoachTutorialButton slug="injury-rtp" />
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}

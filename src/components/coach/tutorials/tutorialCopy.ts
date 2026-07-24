@@ -27,7 +27,8 @@ export type TutorialSlug =
   | "train-like-you-play"
   | "injury-pattern-analysis"
   | "hsr-intelligence"
-  | "return-to-training";
+  | "return-to-training"
+  | "injury-rtp";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -114,6 +115,12 @@ const RETURN_TO_TRAINING_VIDEO =
 // docs/load-guides/MicroPulse-Week-Setup-full-page-explained.pdf.
 const WEEK_SETUP_VIDEO =
   "https://player.vimeo.com/video/1212562893?h=4499ed9ccc&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Injury / RTP tab walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Injury-RTP-full-page-explained.pdf. The tab lives on
+// the Dashboard (RtpTab.tsx, /coach?tab=rtp) — opened via CoachTutorialButton there.
+const INJURY_RTP_VIDEO =
+  "https://player.vimeo.com/video/1212618014?h=5790c4dc6b&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
@@ -1038,6 +1045,74 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "It is a framework for a safe, individualized ramp back — not medical clearance to play, which is the physiotherapist's call. The player sees a simplified version in the app (which week, this week's focus, what unlocks next — no raw numbers), so he's part of the journey without drowning in detail. The point: a safe road back, tailored to the player and the injury, with the riskiest work last and the ceiling set by himself.",
             is: "Hún er rammi fyrir örugga, einstaklingsmiðaða uppbyggingu til baka — ekki læknisfræðileg heimild til að spila, það er ákvörðun sjúkraþjálfarans. Leikmaðurinn sér einfaldaða útgáfu í appinu (hvaða viku, áhersla vikunnar, hvað opnast næst — engar hráar tölur), svo hann sé með í ferðinni án þess að drukkna í smáatriðum. Kjarninn: örugg leið til baka, sniðin að leikmanninum og meiðslinu, með áhættusömustu vinnuna síðast og þakið sett af honum sjálfum.",
+          },
+        ],
+      },
+    ],
+  },
+  "injury-rtp": {
+    title: { en: "How to use the Injury / RTP tab", is: "Hvernig á að nota Meiðsli / RTP flipann" },
+    intro: {
+      en: "This is the injury register and the clinical return-to-play ladder. It's where injuries are logged, and where each injured player is walked through a graduated, criteria-based return: Rest → Light aerobic → Sport-specific → Non-contact drills → Full training → Match play. A player only advances when he meets the stage's criteria — not when a set number of days pass. It's the clinical piece that ties to Return-to-Training (the load ramp) and Injury Pattern Analysis (the look-back audit).",
+      is: "Þetta er meiðslaskráin og klíníski endurkomu-stiginn. Hér eru meiðsli skráð, og hér er hver meiddur leikmaður leiddur í gegnum stigskipta, skilyrða-drifna endurkomu: Rest → Light aerobic → Sport-specific → Non-contact drills → Full training → Match play. Leikmaður fer aðeins upp um þrep þegar hann uppfyllir skilyrði þrepsins — ekki þegar tiltekinn fjöldi daga líður. Þetta er klíníski hluti sem tengist Return-to-Training (álagsuppbyggingunni) og Injury Pattern Analysis (eftirámatinu).",
+    },
+    videoEmbedUrl: INJURY_RTP_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "The tiles give the squad's injury picture. Each player's stage and progress dots show where he is. Open one to see the current stage's criteria — the boxes still to tick before he advances. And remember: criteria, not calendar; the ladder is the safe path, but the physio still clears.",
+            is: "Flísarnar gefa meiðslamynd hópsins. Þrep og framvindupunktar hvers leikmanns sýna hvar hann er. Opnaðu einn til að sjá skilyrði núverandi þreps — reitina sem enn þarf að haka áður en hann fer upp. Og mundu: skilyrði, ekki dagatal; stiginn er örugga leiðin, en sjúkraþjálfarinn hreinsar samt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The register", is: "Meiðslaskráin" },
+        body: [
+          {
+            en: "Four tiles show the squad's picture: how many are injured, in rehabilitation, in RTP training, and how many have been cleared this period. An “Active / All” toggle and a “+ Record injury” button. This is where injuries are logged — the other injury pages are read-only. Each entry shows the player, severity, body part/type, date and current stage.",
+            is: "Fjórar flísar sýna stöðu hópsins: hversu margir eru meiddir, í endurhæfingu, í RTP-þjálfun, og hversu margir hafa verið hreinsaðir á tímabilinu. „Active / All“ rofi og „+ Record injury“ hnappur. Þetta er staðurinn þar sem meiðsli eru skráð — hinar meiðslasíðurnar eru aðeins til aflestrar. Hver færsla sýnir leikmann, alvarleika, líkamshluta/tegund, dagsetningu og núverandi þrep.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The 5-stage RTP ladder", is: "Fimm-þrepa RTP-stiginn" },
+        body: [
+          {
+            en: "The return follows clinically recognized stages: (1) Rest — no activity; (2) Light aerobic — walking, swimming, cycling, no resistance; (3) Sport-specific — running, straight-line movement; (4) Non-contact drills — technical and team drills without contact; (5) Full training — contact, simulated play; and finally Match play — cleared, full participant. Progress dots show where each player sits.",
+            is: "Endurkoman fylgir klínískt viðurkenndum þrepum: (1) Rest — engin hreyfing; (2) Light aerobic — ganga, sund, hjól, engin mótstaða; (3) Sport-specific — hlaup, beinar hreyfingar; (4) Non-contact drills — tækni- og liðsæfingar án snertingar; (5) Full training — snerting, hermileikur; og loks Match play — hreinsaður, fullur þátttakandi. Framvindupunktar sýna hvar hver leikmaður stendur.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Criteria, not calendar — the heart", is: "Skilyrði, ekki dagatal — hjartað" },
+        body: [
+          {
+            en: "A player only advances when he meets the criteria, not when time passes. The criteria are explicit and concrete — e.g. for the non-contact stage: pain-free changes of direction, knee flexor/extensor strength symmetry ≥90% versus the uninjured side, full range of motion without pain, and more. The “Progress to [next stage]” button is only justified once the checklist is ticked.",
+            is: "Leikmaður fer aðeins upp um þrep þegar hann uppfyllir skilyrðin, ekki þegar tími líður. Skilyrðin eru skýr og áþreifanleg — t.d. fyrir non-contact þrepið: sársaukalausar stefnubreytingar, styrkjafnvægi hnébeygja/réttivöðva ≥90% á móti heilbrigðu hlið, fullur hreyfiferill án sársauka, og fleira. „Progress to [næsta þrep]“ hnappurinn er aðeins réttmætur þegar gátlistinn er hakaður.",
+          },
+          {
+            en: "Return isn't just “feels fine”. The stage criteria span four dimensions: physical capacity (strength symmetry, ROM), pain-free loading (no pain on Nordics/squats/posterior chain), psychological readiness (no fear or apprehension during sprinting), and imaging (MRI/ultrasound shows scar healing, reduced edema). All must be met before contact — which is why the ladder is safer than a calendar.",
+            is: "Endurkoma er ekki bara „mér líður vel“. Skilyrði þrepanna spanna fjórar víddir: líkamlega getu (styrkjafnvægi, ROM), sársaukalaust álag (engin verkur við Nordic/hnébeygju/bakkeðju), sálrænan viðbúnað (engin hræðsla við spretti), og myndgreiningu (MRI/ómskoðun sýnir örgróun, minni bjúg). Allt þarf að vera uppfyllt áður en snerting hefst — þess vegna er stiginn öruggari en dagatal.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Status, auto return date, workflow", is: "Staða, sjálfvirk endurkomudagsetning, verkferli" },
+        body: [
+          {
+            en: "A status dropdown (Rehabilitation / RTP Training / Cleared); the return date is recorded automatically when status is set to cleared. The workflow at the foot: start cautious (red/yellow), confirm with objective tests (GPS/CMJ), and choose the minimum effective dose — the smallest intervention that produces progress, not the maximum.",
+            is: "Stöðuval (Rehabilitation / RTP Training / Cleared); endurkomudagsetning er skráð sjálfkrafa þegar staðan er sett á „cleared“. Verkferlið neðst: byrjaðu varlega (rautt/gult), staðfestu með hlutlægum prófum (GPS/CMJ), og veldu minnsta virka skammtinn — minnstu íhlutun sem skilar framförum, ekki hámarks.",
+          },
+        ],
+      },
+      {
+        heading: { en: "How the three injury surfaces fit together", is: "Hvernig þrjár meiðslasíður tengjast" },
+        body: [
+          {
+            en: "Injury / RTP (this tab) = the register + the clinical staging. Return-to-Training = the individualized load ramp (how much to train). Injury Pattern Analysis = the read-only look-back audit (did we warn?). One logs and stages, one prescribes load, one audits — together they cover prevention, rehab and proof. The point: a safe, staged return where each step is earned, not waited out, with the physio as the final call.",
+            is: "Injury / RTP (þessi flipi) = skráin + klíníska stigskiptingin. Return-to-Training = einstaklingsmiðaða álagsuppbyggingin (hvað má æfa). Injury Pattern Analysis = eftirámatið til aflestrar (vöruðum við?). Ein skráir og stigar, ein ávísar álagi, ein endurskoðar — saman ná þær yfir forvarnir, endurhæfingu og sönnun. Kjarninn: örugg, stigskipt endurkoma þar sem hvert þrep er unnið, ekki beðið eftir, með sjúkraþjálfarann sem lokaákvörðun.",
           },
         ],
       },
