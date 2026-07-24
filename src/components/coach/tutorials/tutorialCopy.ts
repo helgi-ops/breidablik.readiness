@@ -110,6 +110,11 @@ const HSR_VIDEO =
 const RETURN_TO_TRAINING_VIDEO =
   "https://player.vimeo.com/video/1212559489?h=69dfd294cc&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Week Setup page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Week-Setup-full-page-explained.pdf.
+const WEEK_SETUP_VIDEO =
+  "https://player.vimeo.com/video/1212562893?h=4499ed9ccc&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
@@ -194,36 +199,72 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   },
 
   "week-setup": {
-    title: { en: "How to use Week setup", is: "Hvernig á að nota Vikuskipulag" },
+    title: { en: "How to use Week Setup", is: "Hvernig á að nota Vikuskipulag" },
     intro: {
-      en: "The one input that needs configuring rather than just entering. It tells the system what normal load is each day — without it, it can't tell a match from a session.",
-      is: "Eina inntakið sem þarf uppsetningu frekar en bara innslátt. Það segir kerfinu hvað er eðlilegt álag hvern dag — án þess getur það ekki aðgreint leik frá æfingu.",
+      en: "This is the upstream page — the weekly configuration that tells the whole system what a normal training day looks like. In three steps you set the week's dates and match count, its intensity, and the day-by-day plan sent to each player. Its most important output is the MD-day tag on each day, because every other page (load, readiness) reads “what's normal today” from it. Five minutes a week that the whole system depends on.",
+      is: "Þetta er uppstreymissíðan — vikuuppsetningin sem segir öllu kerfinu hvað eðlilegur æfingadagur lítur út fyrir. Í þremur skrefum stillir þú dagsetningar vikunnar og fjölda leikja, ákefðina, og dag-fyrir-dag planið sem er sent til hvers leikmanns. Mikilvægasta afurðin er MD-daga merkingin á hvern dag, því allar hinar síðurnar (álag, reiðuskor) lesa „hvað er eðlilegt í dag“ úr henni. Fimm mínútur á viku sem allt kerfið treystir á.",
     },
+    videoEmbedUrl: WEEK_SETUP_VIDEO,
     sections: [
       {
-        heading: { en: "Set the week", is: "Settu upp vikuna" },
+        heading: { en: "Use the page in 30 seconds", is: "Notaðu síðuna á 30 sekúndum" },
         body: [
           {
-            en: "Pick the season phase, whether there are matches this week, and tag each day relative to match day (MD-3, MD-1…). That tagging governs the whole week's load assessment.",
-            is: "Veldu tímabilshluta, hvort leikir eru í vikunni, og merktu hvern dag gagnvart leikdegi (MD-3, MD-1…). Sú merking stýrir öllu álagsmatinu þá vikuna.",
+            en: "Step 1: set the dates and match count. Step 3: review the day-by-day plan (the MD tags and the session types). Read the microcycle suggestions and either follow or ignore them. Click “Activate” to send. And remember: the MD tag is what every other page reads.",
+            is: "Skref 1: settu dagsetningar og fjölda leikja. Skref 3: yfirfarðu dag-fyrir-dag planið (MD-merkin og æfingategundirnar). Lestu microcycle-tillögurnar og annaðhvort fylgdu þeim eða hunsaðu. Smelltu á „Activate“ til að senda. Og mundu: MD-merkið er það sem allar hinar síðurnar lesa.",
           },
         ],
       },
       {
-        heading: { en: "The team-breaks box", is: "Frí-reiturinn" },
+        heading: { en: "The three-step wizard", is: "Þriggja skrefa hjálparinn" },
         body: [
           {
-            en: "Small but important: during a break players get no reminders, missed check-ins don't count against them, and the system doesn't read the break as a collapse in load.",
-            is: "Lítill en mikilvægur: á fríi fá leikmenn engar áminningar, vantandi skráningar teljast ekki gegn þeim, og kerfið les fríið ekki sem hrun í álagi.",
+            en: "Step 1 (Week type): the week's dates, the season (preseason / in-season / playoffs / off-season) and the match count (none / 1 / 2). Step 2 (Setup): intensity and manual control. Step 3 (Review & Activate): the day-by-day plan as players will see it, then “Activate → send to players”. A clear linear flow that ends in activation.",
+            is: "Skref 1 (Week type): dagsetningar vikunnar, tímabil (preseason / in-season / playoffs / off-season) og fjöldi leikja (enginn / 1 / 2). Skref 2 (Setup): ákefð og handvirk stjórn. Skref 3 (Review & Activate): dag-fyrir-dag planið eins og leikmenn sjá það, og svo „Activate → send to players“. Skýrt línulegt flæði sem endar á virkjun.",
           },
         ],
       },
       {
-        heading: { en: "How often", is: "Hversu oft" },
+        heading: { en: "MD-day tagging — the key output", is: "MD-daga merkingin — lykilafurðin" },
         body: [
           {
-            en: "Once a week. It's the only regular setup — everything else is just quick entry (match minutes after a match, injuries when they happen).",
-            is: "Einu sinni í viku. Það er eina reglulega uppsetningin — allt annað er bara fljótur innsláttur (leikmínútur eftir leik, meiðsli þegar þau verða).",
+            en: "Each day gets a tag relative to match day: MD (the game), MD+1, MD+2 … and MD-1 before a match. This is the single most important thing the page produces, because Load Intelligence, readiness and the rest read “what's normal load for this day” from it. Without it, the system can't tell a match from a session.",
+            is: "Hver dagur fær merki gagnvart leikdegi: MD (leikur), MD+1, MD+2 … og MD-1 fyrir leik. Þetta er það mikilvægasta sem síðan framleiðir, því Load Intelligence, reiðuskorið og allt hitt les „hvað er eðlilegt álag þennan dag“ úr merkingunni. Án hennar getur kerfið ekki aðgreint leik frá æfingu.",
+          },
+          {
+            en: "When the week is activated, each player gets the right training day: a session type (GAME, OFF, RECOVERY or TRAIN) and a plain label (FORCE, POLISH/CALM, ACTIVATION and so on). The coach sets the week once; the whole squad gets it. This is what gets sent.",
+            is: "Þegar vikan er virkjuð fær hver leikmaður réttan æfingadag: æfingategund (GAME, OFF, RECOVERY eða TRAIN) og einfaldan merkimiða (FORCE, POLISH/CALM, ACTIVATION o.s.frv.). Þjálfarinn stillir vikuna einu sinni; allur hópurinn fær hana. Þetta er það sem er sent.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Team breaks — humane by design", is: "Frí hópsins — mannúðlegt í eðli sínu" },
+        body: [
+          {
+            en: "During a declared break players get a full rest: no reminders, no missed-check-in flags, and break days don't count against streak or compliance. The system also eases the return afterwards. So it reads a break as a break — not as a collapse in load or a lapse in discipline.",
+            is: "Á skráðu fríi fá leikmenn fullt frí: engar áminningar, engin „vantar skráningu“ flögg, og frídagar teljast ekki gegn streaki eða skráningarhlutfalli. Kerfið mildar líka endurkomuna á eftir. Þannig les það frí sem frí — ekki sem hrun í álagi eða skort á aga.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Season-aware + manual override", is: "Tímabilsvitund + handvirk yfirtaka" },
+        body: [
+          {
+            en: "Choosing the season shifts the week's intent — preparation, competition, playoffs or off-season call for a different shape. A manual override (“allow manual week setup”) lets the coach control day-to-day intent even when there are matches in the week — useful in preseason. Same frame, different intent by season.",
+            is: "Val á tímabili breytir ásetningi vikunnar — undirbúningur, keppni, úrslitakeppni eða undirbúningstímabil kalla á ólíka lögun. Handvirk yfirtaka („allow manual week setup“) leyfir þjálfaranum að stýra ásetningi dag frá degi jafnvel þótt leikir séu í vikunni — gagnlegt á undirbúningstímabili. Sami rammi, ólíkur ásetningur eftir tímabili.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Microcycle review (Buchheit 2024)", is: "Microcycle-yfirferð (Buchheit 2024)" },
+        body: [
+          {
+            en: "Once the week is built, an automatic, research-based review checks the shape and flags points — e.g. “move the rest day to MD+2” (a lower overuse-injury rate, Buchheit 2023, 56 team-seasons), or “place heavy eccentric work early, not late” (prolonged muscle damage / soreness). These are explicitly suggestions, not blocks — the coach decides, with the principle and citation shown.",
+            is: "Þegar vikan er byggð fer sjálfvirk, rannsóknabyggð yfirferð yfir lögunina og bendir á atriði — t.d. „færðu frídaginn á MD+2“ (lægri ofnotkunar-meiðslatíðni, Buchheit 2023, 56 lið-tímabil), eða „settu þunga eccentric-vinnu snemma, ekki seint“ (langvarandi vöðvaskaði / eymsli). Þetta eru beinlínis tillögur, ekki hindranir — þjálfarinn ræður, með reglunni og heimildinni sýndri.",
+          },
+          {
+            en: "Why it matters: this is the input that makes every downstream page fair. It's one of the small set of weekly coach inputs — skip it and the load model can't tell a match from a session and the MD logic breaks. A five-minute weekly setup that gives everything else its context: match days, intent, breaks — and sends each player the right day.",
+            is: "Af hverju hún skiptir máli: þetta er inntakið sem gerir allar niðurstreymissíður sanngjarnar. Það er eitt af litla settinu af vikulegum inntökum þjálfarans — sleppirðu því getur álagslíkanið ekki aðgreint leik frá æfingu og MD-lógíkin brotnar. Fimm mínútna vikuuppsetning sem gefur öllu hinu samhengi: leikdaga, ásetning, frí — og sendir hverjum leikmanni réttan dag.",
           },
         ],
       },
