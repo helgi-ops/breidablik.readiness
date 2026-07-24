@@ -49,7 +49,17 @@ export type Tutorial = {
 // Overview video for the Today tutorial (Vimeo embed). Replaced the earlier
 // Pictory URL, which 404'd. The modal renders it in a 16:9 iframe automatically;
 // the completeness test allows `today` (only) to carry it.
+// Today Command Center page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Today-Command-Center-full-page-explained.pdf.
+// This embed is 4:3 (the deck gave padding-top 75%), so the entry sets
+// videoAspectPaddingTop to fill the frame without letterboxing.
 const TODAY_VIDEO: string | undefined =
+  "https://player.vimeo.com/video/1212666240?h=29c0a1e052&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// The whole-system intro ("How to use MicroPulse — the system looks big, you only
+// need Today", a ~4-min overview; source deck docs/MicroPulse-how-to-use-Pictory.pptx).
+// Kept here awaiting its home in the system — see the `overview` slug when wired.
+export const OVERVIEW_VIDEO =
   "https://player.vimeo.com/video/1212261552?h=0c3eb76e3d&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Decel Intelligence page walkthrough (Vimeo). Content mirrors
@@ -125,80 +135,91 @@ const INJURY_RTP_VIDEO =
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
+    videoAspectPaddingTop: "75%",
     intro: {
-      en: "You only need the Today page. It reads every signal — check-ins, Catapult load, VALD/CMJ tests, injury status — and returns one answer per player: green, amber or red, with a plain-language action. The rest of the system is there for when you want to go deeper, not every day.",
-      is: "Þú þarft bara Today-síðuna. Hún les öll merkin — líðanarskráningar, Catapult-álag, VALD/CMJ-próf, stöðu gagnvart meiðslum — og skilar einu svari á leikmann: grænt, gult eða rautt, með aðgerð á mannamáli. Hitt kerfið er til staðar þegar þú vilt fara dýpra — ekki daglega.",
+      en: "Today is the command center — the one page a coach opens every morning and the only one he needs if all is well. It reads every signal from every other page and returns a single decision per player, built in layers: a five-second verdict on top, the plain “why” and the 2–3 players who need attention without a click, and the full per-player detail, morning briefing and S&C signals behind toggles. This is the page the whole system exists to produce.",
+      is: "Today er stjórnstöðin — eina síðan sem þjálfarinn opnar á hverjum morgni og sú eina sem hann þarf ef allt er í lagi. Hún les öll merkin frá öllum hinum síðunum og skilar einni ákvörðun á leikmann, byggð í lögum: fimm sekúndna niðurstaða efst, einfalt „af hverju“ og þeir 2–3 leikmenn sem þurfa athygli án þess að smella, og full per-leikmann sundurliðun, morgunyfirlit og S&C-merki á bak við flipa. Þetta er síðan sem allt kerfið er til að framleiða.",
     },
     ...(TODAY_VIDEO ? { videoEmbedUrl: TODAY_VIDEO } : {}),
     sections: [
       {
-        heading: { en: "Your morning — three minutes", is: "Morgunninn þinn — þrjár mínútur" },
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
         body: [
           {
-            en: "Open Today and read the top sentence with the confidence beside it. Confidence tells you immediately whether to trust the day or whether too few players have checked in.",
-            is: "Opnaðu Today og lestu efstu setninguna með örygginu við hliðina. Öryggið segir þér strax hvort þú getur treyst deginum eða hvort of fáir hafa skráð líðan.",
-          },
-          {
-            en: "At the bottom the squad splits into ready / modified / recovery. A green squad means carry on as planned — that's all most days need.",
-            is: "Neðst skiptist hópurinn í klár / aðlagað / endurheimt. Grænn hópur þýðir haltu áfram eins og planað var — það er allt sem flestir dagar þurfa.",
-          },
-          {
-            en: "For each amber or red player the Decision Summary shows the action and the reason, with a counterfactual — “one more point of sleep and he'd be green” — so you can judge whether you agree.",
-            is: "Fyrir hvern gulan eða rauðan leikmann sýnir Decision Summary aðgerðina og ástæðuna, með mótdæmi — „hefði svefn verið einum hærri væri hann grænn“ — svo þú getur metið hvort þú ert sammála.",
+            en: "Read the verdict and the confidence — if it's all green, that's all you need. Scan the “Needs attention” names. If a player is flagged, open his drawer for the “why” + the counterfactual. The Decision Summary gives the per-player decision; “Show details” gives the morning briefing and the S&C signals. Everything else is one toggle away.",
+            is: "Lestu niðurstöðuna og öryggið — ef allt er grænt er það allt sem þú þarft. Skoðaðu „Needs attention“ nöfnin. Ef leikmaður er flaggaður, opnaðu spjaldið hans fyrir „af hverju“ + mótdæmið. Decision Summary gefur per-leikmann ákvörðunina; „Show details“ gefur morgunyfirlitið og S&C-merkin. Allt annað er einum flipa undan.",
           },
         ],
       },
       {
-        heading: { en: "The layered read — you choose the depth", is: "Lagskipti lesturinn — þú ræður dýptinni" },
+        heading: { en: "The command-center verdict (the 5-second read)", is: "Stjórnstöðvar-niðurstaðan (5-sek lesturinn)" },
         body: [
           {
-            en: "Every screen is built in three layers so you never read more than you need. The verdict: one colour, one sentence (~5 s). The why: two or three plain facts, visible without a click (~15 s). The details: tables, ACWR, jargon — only behind “Show details”, for the S&C and physio.",
-            is: "Hver skjámynd er byggð í þremur lögum svo þú lesir aldrei meira en þú þarft. Niðurstaðan: einn litur, ein setning (~5 sek). Ástæðan: tvær til þrjár einfaldar staðreyndir, sýnilegar án smells (~15 sek). Smáatriðin: töflur, ACWR, fagorð — bara á bak við „Show details“, fyrir styrktar- og sjúkraþjálfara.",
+            en: "At the top is one sentence (“Rest day — no session for the squad”) with the confidence beside it (e.g. “High confidence · 24/25 checked in”). Four tiles split the squad: READY / MODIFIED / RECOVERY and the outlook for tomorrow. “Auto-lock 30 min before session” freezes the decision so everyone sees the same answer. This is all most days need.",
+            is: "Efst er ein setning („Rest day — no session for the squad“) með örygginu við hliðina (t.d. „High confidence · 24/25 checked in“). Fjórar flísar skipta hópnum: READY / MODIFIED / RECOVERY og útlit á morgun. „Auto-lock 30 mín fyrir æfingu“ frystir ákvörðunina svo allir sjái sama svar. Þetta er allt sem flestir dagar þurfa.",
           },
         ],
       },
       {
-        heading: { en: "Decision Summary", is: "Decision Summary" },
+        heading: { en: "The plain “why” (without a click)", is: "Einfalt „af hverju“ (án smells)" },
         body: [
           {
-            en: "Each card shows the status, the trend since yesterday, and the action in plain language — e.g. “Clear for full session”. The reasoning (counterfactuals, drivers, confidence) is always one click below the decision; you don't have to open it, it's there when you want it.",
-            is: "Hvert kort sýnir stöðuna, þróunina frá gærdeginum, og aðgerðina á mannamáli — t.d. „Clear for full session“. Rökin (mótdæmi, drivers, öryggi) liggja alltaf einum smelli undir ákvörðuninni; þú þarft ekki að opna þau, þau eru þarna þegar þú vilt.",
+            en: "Below the verdict come two or three plain-language facts (“day off — no planned load”, “1 player is volatile — send a quick check-in”). “Needs attention” names the flagged players (alert / watch), so attention goes first where it's needed. This is visible without opening anything — the 10–15 second read.",
+            is: "Undir niðurstöðunni koma tveir til þrír einfaldir punktar á mannamáli („frídagur — ekkert planað álag“, „1 leikmaður er óstöðugur — sendu skjót check-in“). „Needs attention“ nefnir flögguðu leikmennina (alert / watch) svo athyglin fari fyrst þangað sem hún þarf. Þetta sést án þess að opna nokkuð — 10–15 sekúndna lesturinn.",
           },
         ],
       },
       {
-        heading: { en: "Daily Briefing — trust the confidence", is: "Daily Briefing — treystu örygginu" },
+        heading: { en: "The player drawer — the layered read for one", is: "Leikmannaspjaldið — lagskipti lesturinn fyrir einn" },
         body: [
           {
-            en: "Opening “Show details” expands the full morning briefing. The bottom line matters most: it states how many check-ins are missing. The system gives a verdict and in the same breath says how thin the data behind it is — so you know when to trust it and when to look at the pitch yourself.",
-            is: "Þegar þú smellir á „Show details“ opnast fullt morgunyfirlit. Neðsta línan skiptir mestu: hún segir hversu margar líðanarskráningar vantar. Kerfið gefur niðurstöðu en segir um leið hversu þunn gögnin á bak við hana eru — svo þú veist hvenær þú átt að treysta því og hvenær þú átt að horfa sjálfur á völlinn.",
+            en: "Click a player and the full layered read opens for him: the verdict (e.g. “Recovery — lighter session”), the score and change from yesterday, the reason in plain language (“yesterday's load was 65% above usual, PL 1.65×”), the unfamiliar-load chips, the counterfactual (“if readiness had been green not red → yellow”), an AI summary (labelled, 7d/14d), the confidence (signals, baseline maturity), and the S&C drill-down. All five manifesto rules in one panel.",
+            is: "Þegar smellt er á leikmann opnast allt lagskipta lesturinn fyrir hann: niðurstaðan (t.d. „Recovery — lighter session“), skorið og breyting frá gær, ástæðan á mannamáli („álag gærdagsins var 65% yfir venju, PL 1,65×“), unfamiliar-load flísar, mótdæmið („ef reiðuskor hefði verið grænt en ekki rautt → gult“), AI-samantekt (merkt, 7d/14d), öryggið (merki, þroski grunnlínu), og S&C-sundurliðun. Öll fimm reglur handbókarinnar í einu spjaldi.",
           },
         ],
       },
       {
-        heading: { en: "What you keep fed", is: "Hvað þú þarft að halda við" },
+        heading: { en: "Decision Summary (per player)", is: "Decision Summary (per leikmann)" },
         body: [
           {
-            en: "Today reads everything automatically, but only what arrives. Five small inputs keep the day accurate: player check-ins (players, ~15 s before training — your job is the reminder), week setup (once a week), match minutes (after each match), injuries (log when they happen), and RPE. If they lapse, confidence drops and Today becomes more cautious than it needs to be.",
-            is: "Today les allt sjálfkrafa, en aðeins það sem berst. Fimm lítil inntök halda deginum réttum: líðanarskráning (leikmenn, ~15 sek fyrir æfingu — þitt hlutverk er áminningin), vikuskipulag (einu sinni í viku), leikmínútur (eftir hvern leik), meiðsli (skráð þegar þau verða), og RPE. Ef þau falla niður lækkar öryggið og Today verður varkárara en það þyrfti.",
+            en: "Further down sits the Decision Summary: one card per player with the trend from yesterday (“↓ worse than yesterday” or “↑↑ much better”), the decision (session type / OFF / “check-in noted for continuity”), the wellness scores (sleep/soreness/energy/mood) and the load line (distance, body load, high-speed, sprint, accels, braking, muscle load, metabolic). Nothing hidden — a per-player view with the reasoning visible.",
+            is: "Neðar situr Decision Summary: eitt kort á leikmann með þróuninni frá gær („↓ verri en í gær“ eða „↑↑ mun betri“), ákvörðuninni (æfingategund / OFF / „check-in skráð fyrir samfellu“), líðanartölunum (svefn/eymsli/orka/skap) og álagslínunni (vegalengd, body load, háhraði, spretti, hröðun, hemlun, muscle load, metabolic). Ekkert falið — per-leikmann yfirlit með rökunum sýnilegum.",
           },
         ],
       },
       {
-        heading: { en: "When to go deeper", is: "Þegar þú vilt fara dýpra" },
+        heading: { en: "Daily Briefing (the morning view)", is: "Daily Briefing (morgunyfirlitið)" },
         body: [
           {
-            en: "You don't need the other pages daily. Open the relevant “Intelligence” page or tab when Today has flagged something and you want to understand why, or when a board or player asks a question that needs the number itself.",
-            is: "Þú þarft ekki hinar síðurnar daglega. Opnaðu viðeigandi „Intelligence“-síðu eða flipa þegar Today hefur flaggað eitthvað og þú vilt skilja af hverju, eða þegar stjórn eða leikmaður spyr spurningar sem krefst tölunnar sjálfrar.",
+            en: "Behind “Show details” opens an auto-generated morning view: tiles for readiness / planned / load / attention, a “team pulse” (improving or declining vs yesterday, average readiness, fatigue mix), “top attention today” (the flagged players with a plain why + “Ask AI”), and compliance (check-ins, RPE, what's missing). A summary you can send to staff.",
+            is: "Á bak við „Show details“ opnast sjálfgenerað morgunyfirlit: flísar fyrir readiness / planned / load / attention, „team pulse“ (batnar eða versnar vs gær, meðal-reiðuskor, þreytublanda), „top attention today“ (flögguðu leikmennirnir með einföldu „af hverju“ + „Ask AI“), og compliance (check-in, RPE, hvað vantar). Samantekt sem má senda á starfsfólk.",
           },
         ],
       },
       {
-        heading: { en: "Remember", is: "Muna" },
+        heading: { en: "Unfamiliar load & S&C signals", is: "Unfamiliar load & S&C-merki" },
         body: [
           {
-            en: "The system advises, it does not rule. You always have the last word, and if you override a verdict it's logged with a reason. Rules decide, the AI explains — never the other way round.",
-            is: "Kerfið gefur tillögu, ekki fyrirskipun. Þú hefur alltaf síðasta orðið, og ef þú hnekkir niðurstöðu er það skráð með ástæðu. Reglurnar ákveða, gervigreindin útskýrir — aldrei öfugt.",
+            en: "The deepest layer weaves the other pages together: Recovery watch (players still below baseline post-match — the RTP integration, with “escalate”), Spiking alerts (squad load, high-intensity running — with a link to the relevant Load/IMA page), and Unfamiliar load (who's moving differently than usual — a descriptive signal, not an injury prediction, e.g. “28% this week vs his usual 11%”). This is the S&C surface beneath the head-coach surface.",
+            is: "Dýpsta lagið tvinnar saman hinar síðurnar: Recovery watch (leikmenn enn undir grunnlínu eftir leik — RTP-tengingin, með „escalate“), Spiking viðvaranir (hópálag, háákefðarhlaup — með hlekk á viðeigandi Load/IMA-síðu), og Unfamiliar load (hverjir hreyfa sig öðruvísi en venjulega — lýsandi merki, ekki meiðslaspá, t.d. „28% í viku vs venjuleg 11%“). Þetta er S&C-yfirborðið undir aðalþjálfara-yfirborðinu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Everything else feeds Today", is: "Allt hitt nærir Today" },
+        body: [
+          {
+            en: "Today is the aggregator: it surfaces the key signals from Load Intelligence, Decel, IMA, Post-match Recovery, RTP and the rest, so the coach doesn't have to open each one. The deeper pages are one click away when he wants the “why” — but Today carries the decision. That's why the system “looks complex” but is really one page: the others are its depth.",
+            is: "Today er samnefnarinn: hún dregur fram lykilmerkin frá Load Intelligence, Decel, IMA, Post-match Recovery, RTP og hinum, svo þjálfarinn þurfi ekki að opna hverja fyrir sig. Dýpri síðurnar eru einum smelli undan þegar hann vill „af hverju“ — en Today ber ákvörðunina. Þess vegna „lítur kerfið flókið út“ en er í raun ein síða: hinar eru dýptin á bak við hana.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Explainable by design (the five rules on one screen)", is: "Útskýranlegt í hönnun (fimm reglurnar á einum skjá)" },
+        body: [
+          {
+            en: "All five manifesto rules are visible on Today: (1) the layered read (verdict → why → detail), (2) every verdict shows its confidence (check-in coverage), (3) missing is shown as missing (compliance), (4) every flag gets a counterfactual, (5) AI labels itself as AI and cites its signals. The point: one page that answers “what do I do today, per player” — with the reasoning, the confidence and the S&C depth all reachable but never in the way.",
+            is: "Allar fimm reglur handbókarinnar sjást á Today: (1) lagskipti lesturinn (niðurstaða → af hverju → smáatriði), (2) hver niðurstaða sýnir öryggi sitt (check-in þekja), (3) það sem vantar er sýnt sem vantandi (compliance), (4) hvert flagg fær mótdæmi, (5) AI er merkt sem AI og vitnar í merkin sín. Kjarninn: ein síða sem svarar „hvað á ég að gera í dag, á hvern leikmann“ — með rökunum, örygginu og S&C-dýptinni öllum aðgengilegum en aldrei í veginum.",
           },
         ],
       },
