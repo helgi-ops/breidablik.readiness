@@ -31,7 +31,8 @@ export type TutorialSlug =
   | "injury-pattern-analysis"
   | "hsr-intelligence"
   | "return-to-training"
-  | "injury-rtp";
+  | "injury-rtp"
+  | "progressive-overload";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -142,6 +143,13 @@ const SQUAD_VIDEO =
 // Load Intelligence page — opened via CoachTutorialButton in its header.
 const LOAD_RPE_VIDEO =
   "https://player.vimeo.com/video/1212714454?h=06793c9915&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Progressive Overload build-plan walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Progressive-Overload-full-page-explained.pdf.
+// This embed is 4:3 (the deck gave padding-top 75%), so the entry sets
+// videoAspectPaddingTop to fill the frame without letterboxing.
+const PROGRESSIVE_OVERLOAD_VIDEO =
+  "https://player.vimeo.com/video/1212718673?h=d6875c2b0d&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Injury / RTP tab walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Injury-RTP-full-page-explained.pdf. The tab lives on
@@ -1371,6 +1379,80 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Injury / RTP (this tab) = the register + the clinical staging. Return-to-Training = the individualized load ramp (how much to train). Injury Pattern Analysis = the read-only look-back audit (did we warn?). One logs and stages, one prescribes load, one audits — together they cover prevention, rehab and proof. The point: a safe, staged return where each step is earned, not waited out, with the physio as the final call.",
             is: "Injury / RTP (þessi flipi) = skráin + klíníska stigskiptingin. Return-to-Training = einstaklingsmiðaða álagsuppbyggingin (hvað má æfa). Injury Pattern Analysis = eftirámatið til aflestrar (vöruðum við?). Ein skráir og stigar, ein ávísar álagi, ein endurskoðar — saman ná þær yfir forvarnir, endurhæfingu og sönnun. Kjarninn: örugg, stigskipt endurkoma þar sem hvert þrep er unnið, ekki beðið eftir, með sjúkraþjálfarann sem lokaákvörðun.",
+          },
+        ],
+      },
+    ],
+  },
+  "progressive-overload": {
+    title: { en: "How to use Progressive Overload", is: "Hvernig á að nota Progressive Overload" },
+    videoAspectPaddingTop: "75%",
+    intro: {
+      en: "This is the preparation-phase build plan — a safe multi-week ramp for every load KPI, built from the squad's current baseline toward match demand. Three rails keep it safe: volume ramps faster than high-speed/sprint (the hamstring risk), every week is capped so the projected acute:chronic ratio stays ≤ 1.3, and no session is pushed past match load. This is the macro planner (weeks ahead), alongside the day-to-day Pre-Session/Post-Training.",
+      is: "Þetta er undirbúnings-uppbyggingaráætlunin — öruggur fjölvikna rampi fyrir hvern álags-KPI, byggður frá núverandi grunnlínu hópsins að leikkröfu. Þrír öryggisþættir halda honum öruggum: rúmmál rampar hraðar en háhraðahlaup/spretti (aftanlærisáhættan), hver vika er toppuð svo áætlað acute:chronic hlutfall haldist ≤ 1,3, og engin æfing er ýtt fram úr leikálagi. Þetta er macro-planinn (vikur fram í tímann), til hliðar við dag-frá-degi Pre-Session/Post-Training.",
+    },
+    videoEmbedUrl: PROGRESSIVE_OVERLOAD_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict: the safe weekly build rate and who's flagged. The table shows how each KPI ramps toward match (% of match each week). The per-player column says “build faster / progress / hold”. And remember: volume fast, high-speed slow (hamstring); capped at ACWR 1.3 and match demand.",
+            is: "Lestu niðurstöðuna: öruggan vikulegan uppbyggingarhraða og hverjir eru flaggaðir. Taflan sýnir hvernig hver KPI rampar að leik (% af leik hverja viku). Per-leikmann dálkurinn segir „build faster / progress / hold“. Og mundu: rúmmál hratt, háhraði hægt (aftanlæri); toppað við ACWR 1,3 og leikálag.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The verdict", is: "Niðurstaðan" },
+        body: [
+          {
+            en: "One sentence: “The squad can safely train ~8% harder week-on-week; 2 players have room to build faster, 2 should hold steady.” Progressive overload = how much harder training can get each week without overloading. It carries confidence (e.g. 23/25 players, 20 training days) and per-player chips (hold steady / room to build faster).",
+            is: "Ein setning: „Hópurinn getur örugglega æft ~8% harðar viku frá viku; 2 leikmenn hafa rými til að byggja hraðar, 2 ættu að halda stöðugt.“ Progressive overload = hversu miklu harðari æfingar mega verða hverja viku án ofálags. Hún ber öryggi (t.d. 23/25 leikmenn, 20 æfingadagar) og merki per leikmann (hold steady / room to build faster).",
+          },
+        ],
+      },
+      {
+        heading: { en: "A ramp for every KPI toward match demand", is: "Rampi fyrir hvern KPI að leikkröfu" },
+        body: [
+          {
+            en: "The table builds each load KPI week by week from “Now” toward “Match”. Each cell = the recommended per-session per-player target for that week, shown as a % of the squad's match reference (“%m”). The endpoint is match-ready, not arbitrary — so you know exactly when the squad reaches match load.",
+            is: "Taflan byggir hvern álags-KPI viku fyrir viku frá „Now“ að „Match“. Hver reitur = ráðlagt per-session per-player markmið þeirrar viku, sýnt sem hlutfall af leikviðmiði hópsins („%m“). Endapunkturinn er leik-tilbúinn, ekki handahófskenndur — svo þú veist nákvæmlega hvenær hópurinn nær leikálagi.",
+          },
+        ],
+      },
+      {
+        heading: { en: "KPI-specific ramp rates (injury-aware)", is: "Ólíkir ramphraðar per KPI (meiðsla-meðvitað)" },
+        body: [
+          {
+            en: "Not one uniform rate. Volume (distance, Player Load) ramps fastest (+8%/week); high-speed (+5%) and sprint (+4%) ramp slowest with the tightest ceilings — by design, because high-speed running is the hamstring risk (Malone 2017). You build the engine's size faster than its top-end.",
+            is: "Ekki einn samræmdur hraði. Rúmmál (vegalengd, Player Load) rampar hraðast (+8%/viku); háhraðahlaup (+5%) og spretti (+4%) rampa hægast með þrengstu þökin — viljandi, því háhraðahlaup er aftanlærisáhættan (Malone 2017). Þú byggir stærð vélarinnar hraðar en topphraðann hennar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Two safety ceilings", is: "Tvö öryggisþök" },
+        body: [
+          {
+            en: "ACWR cap: every week is trimmed so the projected acute:chronic ratio stays ≤ 1.3 — a week that would spike is capped (Gabbett 2016; ACWR as context, not prediction, Impellizzeri 2020). Match ceiling: no session exceeds match demand; once a KPI reaches match load it holds (e.g. jumps at 97% = “match ceiling”). The build can't run away.",
+            is: "ACWR-þak: hver vika er trimmuð svo áætlað acute:chronic hlutfall haldist ≤ 1,3 — vika sem myndi toppa er toppuð (Gabbett 2016; ACWR sem samhengi, ekki spá, Impellizzeri 2020). Leik-þak: engin æfing fer yfir leikálag; um leið og KPI nær leikálagi heldur það (t.d. stökk á 97% = „match ceiling“). Uppbyggingin getur ekki hlaupið á undan sér.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Per-player, ACWR-aware", is: "Per leikmann, ACWR-meðvitað" },
+        body: [
+          {
+            en: "Each player gets his own build path based on his current ACWR: “build faster” (ACWR < 0.8, under-trained — ramp him up), “progress” (in range), or “hold” (ACWR > 1.3 — kept flat until he comes down, e.g. 347→347). So the same squad ramp is individualized: the under-trained build faster, the spiking hold steady.",
+            is: "Hver leikmaður fær sína eigin uppbyggingarleið eftir núverandi ACWR: „build faster“ (ACWR < 0,8, vanþjálfaður — rampaðu hann upp), „progress“ (innan marka), eða „hold“ (ACWR > 1,3 — haldið flötu þar til hann kemur niður, t.d. 347→347). Þannig er sami hóprampi einstaklingsmiðaður: vanþjálfaðir byggja hraðar, þeir sem toppa halda kyrru.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Where it sits — macro / week / day", is: "Hvar hún situr — macro / vika / dagur" },
+        body: [
+          {
+            en: "Progressive Overload is the macro planner — a multi-week preparation build. Week Setup configures each week; Pre-Session/Post-Training run and review the day. Together: the season build, the week, and the day. This is the “getting fit for the season” planner, best used in the preparation phase — a safe, injury-aware path from “where we are now” to “ready for a match”.",
+            is: "Progressive Overload er macro-planinn — margra vikna undirbúnings-bygging. Week Setup stillir hverja viku; Pre-Session/Post-Training keyra og endurskoða daginn. Saman: tímabils-byggingin, vikan, og dagurinn. Þetta er „að komast í form fyrir tímabilið“-planinn, best notaður á undirbúningstímabili — örugg, meiðsla-meðvituð leið frá „hvar erum við núna“ að „tilbúin fyrir leik“.",
           },
         ],
       },

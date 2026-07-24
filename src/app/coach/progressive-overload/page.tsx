@@ -167,6 +167,7 @@ export default function ProgressiveOverloadPage() {
           <PagePurpose
             en="check training load is rising gradually, not spiking"
             is="athuga hvort álag sé að stíga jafnt, ekki að stökkva"
+            tutorial="progressive-overload"
           />
           <p className="text-sm text-slate-500">
             A preparation-phase ramp for every load KPI: a safe week-by-week build from the squad&apos;s current
