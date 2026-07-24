@@ -10533,6 +10533,11 @@ export default function CoachPage() {
       {dashTab === "load" && isAtLeastPro && (
         <div className="space-y-8">
 
+          {/* How-to for the internal-load / RPE hub */}
+          <div className="flex justify-end">
+            <CoachTutorialButton slug="load-rpe" />
+          </div>
+
           {/* Weekly Load moved to GPS tab */}
 
           {/* ── Player lookup (historical snapshot) ─────────── */}

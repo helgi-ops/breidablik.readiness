@@ -17,6 +17,7 @@ export type TutorialSlug =
   | "overview"
   | "today"
   | "squad"
+  | "load-rpe"
   | "week-setup"
   | "load-intelligence"
   | "quadrant"
@@ -134,6 +135,13 @@ const WEEK_SETUP_VIDEO =
 // the Dashboard (?tab=squad) — opened via CoachTutorialButton in its header.
 const SQUAD_VIDEO =
   "https://player.vimeo.com/video/1212673411?h=82d20a9d63&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Load & RPE tab walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Load-and-RPE-full-page-explained.pdf. This is the
+// internal-load hub tab on the Dashboard (?tab=load), distinct from the external
+// Load Intelligence page — opened via CoachTutorialButton in its header.
+const LOAD_RPE_VIDEO =
+  "https://player.vimeo.com/video/1212714454?h=06793c9915&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Injury / RTP tab walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Injury-RTP-full-page-explained.pdf. The tab lives on
@@ -378,6 +386,78 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Today is the head-coach surface (the verdict); Squad is the S&C surface (the full audit). Same truth, two depths: the head coach gets the answer on Today, the S&C coach gets the whole workbench here, and both can override with a logged reason. One verdict, visible everywhere; the reasoning lives here.",
             is: "Today er head-coach yfirborðið (niðurstaðan); Squad er S&C-yfirborðið (fulla endurskoðunin). Sami sannleikur, tvær dýptir: aðalþjálfarinn fær svarið á Today, styrktarþjálfarinn fær allan vinnubekkinn hér, og báðir geta hnekkt með skráðri ástæðu. Ein niðurstaða, sýnileg alls staðar; rökin liggja hér.",
+          },
+        ],
+      },
+    ],
+  },
+  "load-rpe": {
+    title: { en: "How to use the Load & RPE tab", is: "Hvernig á að nota Load & RPE flipann" },
+    intro: {
+      en: "Where Load Intelligence analyses external (GPS) load, this tab handles the internal side — it's the internal-load hub. It monitors RPE compliance (did everyone submit?), cross-checks the subjective RPE against objective heart-rate load, and computes each player's internal-load ACWR — plus a player historical lookup. It's the operational surface that keeps the internal-load feed honest.",
+      is: "Þar sem Load Intelligence greinir ytra (GPS) álag sér þessi flipi um innra álagið — hann er innra-álags miðstöðin. Hann fylgist með RPE-skráningarhlutfalli (skiluðu allir?), ber huglæga RPE saman við hlutlægt púlsálag, og reiknar innra-álags ACWR hvers leikmanns — auk sögulegrar leikmannafyrirspurnar. Þetta er rekstrar-yfirborðið sem heldur innra-álags fæðunni heiðarlegri.",
+    },
+    videoEmbedUrl: LOAD_RPE_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Start with the compliance (is the RPE feed complete?). Read the HR cross-check line (does heart rate agree with RPE?). Check the ACWR risk counts and who needs attention. And remember: sRPE is the internal backbone; HR corroborates it; ACWR is a reference, not a prediction; and no-data is never zero.",
+            is: "Byrjaðu á skráningarhlutfallinu (er RPE-fæðan heil?). Lestu HR-krosscheck línuna (er púlsinn sammála RPE?). Skoðaðu ACWR-áhættutalningarnar og hverjir þurfa athygli. Og mundu: sRPE er innri burðarásinn; HR staðfestir hann; ACWR er viðmið en ekki spá; og no-data er aldrei núll.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Session-RPE compliance", is: "Session-RPE skráningarhlutfall" },
+        body: [
+          {
+            en: "First comes the operational gate: total submissions, how many are missing, and the compliance % (e.g. 28/28, 100%), with lists of who submitted and who's missing. Because RPE is a coach/player input, this is where you see whether the feed is actually being kept up — it's the backbone of readiness on every tier.",
+            is: "Fyrst kemur rekstrar-hliðið: heildarfjöldi skráninga, hvað vantar, og hlutfall (t.d. 28/28, 100%), með listum yfir þá sem skiluðu og þá sem vantar. Af því RPE er inntak frá þjálfara/leikmanni er þetta staðurinn þar sem þú sérð hvort fæðunni er raunverulega haldið við — hún er undirstaða reiðuskorsins á öllum þrepum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "sRPE = the internal-load number (Foster)", is: "sRPE = innra-álags talan (Foster)" },
+        body: [
+          {
+            en: "Session-RPE (how hard it felt, 0–10) times duration (min) gives the internal load in AU (Foster 2001). It's the cheapest and most robust load measure — no hardware needed — which is why it's the backbone of readiness. Each submission shows the player's load with an intensity label (moderate/high); total daily load, average RPE and yesterday's load sit up top.",
+            is: "Session-RPE (hversu erfitt það var, 0–10) margfaldað með tímalengd (mín) gefur innra álagið í AU (Foster 2001). Þetta er ódýrasti og traustasti álagsmælikvarðinn — enginn vélbúnaður þarf — og þess vegna er hann burðarás reiðuskorsins. Hver skráning sýnir álag leikmannsins með ákefðar-merki (moderate/high); heildar dagsálag, meðal-RPE og gærdagsins álag efst.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The HR cross-check (the clever bit)", is: "Púls-krosscheck (klóka atriðið)" },
+        body: [
+          {
+            en: "HR load (Edwards' summated-heart-rate-zone TRIMP, adapted to Catapult's 8 bands) compared to sRPE. Does the objective heart rate corroborate the subjective RPE? “HR load matches RPE across the squad” is reassurance; a divergence is a flag (someone under- or over-rating the effort). HR is read on the player's own norm, never as an absolute AU comparable to sRPE (Edwards 1993; Buchheit 2024).",
+            is: "Púlsálag (Edwards' summated-heart-rate-zone TRIMP, aðlagað að 8 böndum Catapult) borið saman við sRPE. Staðfestir hlutlægi púlsinn huglæga RPE-ið? „HR load matches RPE across the squad“ er traustvekjandi; frávik er flagg (einhver van- eða ofmetur áreynsluna). HR er lesið á eigin norm leikmannsins, aldrei sem alger AU samanburðarhæfur við sRPE (Edwards 1993; Buchheit 2024).",
+          },
+          {
+            en: "Honest by design: the HR read carries its limits on screen. HR is read only against the player's own norm (band weights, not calibrated %HRmax cuts); %HRmax needs each athlete's HRmax set in OpenField; and only players who wore the belt on skin have HR — the rest are shown as no-data, never zero (the null-vs-zero discipline). It says what it can't measure.",
+            is: "Heiðarleg í eðli sínu: HR-lesturinn ber takmörk sín á skjánum. HR er lesið aðeins gagnvart eigin norm leikmannsins (bandavægi, ekki kvarðaðar %HRmax skurðir); %HRmax krefst þess að HRmax hvers íþróttamanns sé sett í OpenField; og aðeins leikmenn sem báru beltið á húð hafa HR — hinir eru sýndir sem no-data, aldrei núll (null-vs-zero aginn). Hún segir hvað hún getur ekki mælt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Internal-load ACWR (risk overview)", is: "Innra-álags ACWR (áhættuyfirlit)" },
+        body: [
+          {
+            en: "The acute:chronic ratio computed on sRPE (internal load) over 28 days, per player, with a zone (undertrain <0.8 / optimal 0.8–1.3 / caution 1.3–1.5 / high >1.5) and a 4-week sparkline. The counts (e.g. 1 high-risk, 5 caution, 19 optimal) and the named “need attention” list. This is the internal counterpart to the external ACWR elsewhere — and the honest caveat holds: a reference, not a predictor (Impellizzeri 2020).",
+            is: "Acute:chronic hlutfallið reiknað á sRPE (innra álagi) yfir 28 daga, per leikmann, með svæði (undertrain <0,8 / optimal 0,8–1,3 / caution 1,3–1,5 / high >1,5) og 4-vikna sparkline. Talningarnar (t.d. 1 high-risk, 5 caution, 19 optimal) og nafngreinda „need attention“ listann. Þetta er innra hliðstæðan við ytra ACWR annars staðar — og heiðarlegi fyrirvarinn stendur: viðmið, ekki forspá (Impellizzeri 2020).",
+          },
+        ],
+      },
+      {
+        heading: { en: "Internal vs external + player lookup", is: "Innra á móti ytra + leikmannafyrirspurn" },
+        body: [
+          {
+            en: "The tab pairs the internal signals (RPE, HR) with a glimpse of external (yesterday's GPS load: distance, velocity bands, accel/decel). Internal = what it cost the player; external = what was done. Reading them together is the coupling — the same idea as Load Intelligence, from the internal side.",
+            is: "Flipinn parar innri merkin (RPE, HR) við innsýn í ytra (gærdagsins GPS-álag: vegalengd, velocity-bönd, hröðun/hemlun). Innra = hvað það kostaði leikmanninn; ytra = hvað var gert. Að lesa þau saman er samspilið — sama hugmynd og í Load Intelligence, frá innri hliðinni.",
+          },
+          {
+            en: "At the top is a historical lookup tool: pick a player and a date → all their load, wellness, ACWR and risk data for that day. The audit tool — reconstruct any player's state on any past day, for a review or a “what happened” question.",
+            is: "Efst er sögulegt fyrirspurnartól: veldu leikmann og dagsetningu → öll álags-, líðanar-, ACWR- og áhættugögn fyrir þann dag. Endurskoðunartólið — endurgerðu stöðu hvaða leikmanns sem er á hvaða liðnum degi sem er, fyrir starfsmannasamtal eða „hvað gerðist“ spurningu.",
           },
         ],
       },
