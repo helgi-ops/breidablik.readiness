@@ -2411,10 +2411,9 @@ export default function CoachPage() {
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
   const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
-  // Catapult data tier — drives Lite-Mode top-tab gating (mirrors the
-  // sidebar filter in CoachShell/CoachSidebar). On the EXTERNAL_TABS row only
-  // HSR Intel remains, and it's Lite-only, so 'full' hides that row entirely.
-  // Defaults to 'lite' (conservative — show fewer tabs while detecting).
+  // Catapult data tier — drives Lite-Mode gating (mirrors the sidebar filter in
+  // CoachShell/CoachSidebar) for Pro-only in-app tabs and Lite feature gating.
+  // Defaults to 'lite' (conservative — show fewer surfaces while detecting).
   const [catapultDataTier, setCatapultDataTier] = useState<"full" | "lite">("lite");
   // Manual override of the indoor-vs-outdoor verdict pipeline. 'auto' lets
   // the per-player heuristic decide; 'indoor' forces the FMP pipeline (höll
@@ -8943,18 +8942,11 @@ export default function CoachPage() {
         const labels = ct.tabs as Record<string, string>;
         const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
-        // Primary in-app tabs — daily monitoring workflow
+        // Primary in-app tabs — daily monitoring workflow. The tab bar is now
+        // exactly this: the standalone-route pills (Quadrant, Indoor Load, Decel
+        // Intel, HSR Intel, Injury Patterns) were all moved out — they're occasional
+        // "why" deep-dives, not daily workflow, and every one is in the sidebar.
         const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
-        // Standalone-route quick pills next to the in-app tabs. Quadrant, Indoor
-        // Load, Decel Intel and Injury Patterns were removed from here — they're
-        // occasional "why" deep-dives, not daily workflow, and the sidebar already
-        // lists them, so the tab bar stays focused. Only HSR Intelligence remains:
-        // it's the Lite-tier daily hamstring guard. HSR is Lite-only (redundant with
-        // Decel Intel on Full), so on Full this strip is empty and hidden entirely.
-        const EXTERNAL_TABS: Array<{ href: string; label: { EN: string; IS: string } }> =
-          catapultDataTier === "full"
-            ? []
-            : [{ href: "/coach/hsr-intelligence", label: { EN: "HSR Intel.", IS: "HSR Intel." } }];
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar
         // Monitoring section as first-class links. The ?tab=… URLs still
@@ -8989,20 +8981,10 @@ export default function CoachPage() {
                   <TabBtn key={tabId} tabId={tabId} />
                 ))}
 
-                {/* Separator + standalone monitoring routes — only when any remain
-                    (empty on Full, where the sole remaining pill, HSR, is hidden) */}
-                {EXTERNAL_TABS.length > 0 && (
-                  <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
-                )}
-                {EXTERNAL_TABS.map((t) => (
-                  <Link
-                    key={t.href}
-                    href={t.href}
-                    className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors whitespace-nowrap"
-                  >
-                    {lang === "IS" ? t.label.IS : t.label.EN}
-                  </Link>
-                ))}
+                {/* Standalone monitoring routes (Quadrant, Indoor Load, Decel Intel,
+                    HSR Intel, Injury Patterns) used to render here as route-link
+                    pills — moved out to the sidebar to keep the tab bar to the daily
+                    workflow. The ?tab=… deep links below still route through here. */}
 
                 {/* "More" dropdown removed — Volatility / VALD / Strength /
                     Trends / RTP now live as first-class links in the
