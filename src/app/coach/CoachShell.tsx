@@ -16,6 +16,7 @@ import type { CoachTeam } from "@/components/coach/TeamSwitcher";
 import { CoachSidebar } from "./CoachSidebar";
 import { CoachIconRail } from "./CoachIconRail";
 import UsageTracker from "@/components/coach/UsageTracker";
+import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 
@@ -357,6 +358,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <CoachAdoptionBubble />
           <RefreshButton lang={lang === "IS" ? "IS" : "EN"} />
           <InstallPwaButton role="coach" variant="compact" />
         </div>
@@ -397,6 +399,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
               </button>
             )}
             <div className="flex items-center gap-1">
+              <CoachAdoptionBubble />
               <RefreshButton lang={lang === "IS" ? "IS" : "EN"} />
               <InstallPwaButton role="coach" variant="compact" />
             </div>
