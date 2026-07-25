@@ -445,6 +445,38 @@ export default function HeartRateIntelligencePage() {
                               </span>
                             ))}
                           </div>
+
+                          {/* Full per-band detail (S&C layer) — one click away, bpm where reliable. */}
+                          <div className="mt-1">
+                            <ShowDetails label={{ EN: "Show all 8 bands", IS: "Sýna öll 8 bönd" }}>
+                              <div className="flex h-2.5 w-full overflow-hidden rounded">
+                                {present.map((b) => {
+                                  const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
+                                  return (
+                                    <div key={b.band} style={{ width: `${b.pct ?? 0}%`, backgroundColor: tier?.color ?? "#94a3b8" }}
+                                      title={`Band ${b.band}${b.avgBpm ? ` ≈ ${b.avgBpm} bpm` : ""} · ${minsOf(b.timeS ?? 0)}${IS ? "mín" : "m"} (${b.pct ?? 0}%)`} />
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-slate-600 sm:grid-cols-4">
+                                {present.map((b) => {
+                                  const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
+                                  return (
+                                    <span key={b.band} className="inline-flex items-center gap-1 tabular-nums">
+                                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tier?.color ?? "#94a3b8" }} />
+                                      Band {b.band}
+                                      <span className="text-slate-500">{b.pct}%{b.avgBpm ? ` · ~${b.avgBpm}bpm` : ""}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <p className="mt-1 text-[9px] leading-snug text-slate-400">
+                                {IS
+                                  ? "Raðbönd Catapult (mörk í OpenField), lág → há; litur = flokkur bandsins. bpm birt aðeins þar sem áreiðanlegt — óáreiðanlegt á lægstu böndum."
+                                  : "Catapult ordinal bands (boundaries in OpenField), low → high; colour = the band's tier. bpm shown only where reliable — unreliable on the lowest bands."}
+                              </p>
+                            </ShowDetails>
+                          </div>
                         </div>
                       );
                     })()}
