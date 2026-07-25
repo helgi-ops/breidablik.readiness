@@ -83,6 +83,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
+import LoadRpeAnswerStrip from "@/components/coach/LoadRpeAnswerStrip";
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
@@ -10538,19 +10539,12 @@ export default function CoachPage() {
             <CoachTutorialButton slug="load-rpe" />
           </div>
 
-          {/* Weekly Load moved to GPS tab */}
-
-          {/* ── Player lookup (historical snapshot) ─────────── */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Leikmannafyrirspurn</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-            <PlayerHistoricalSnapshotCard teamId={coachTeamId} />
-          </section>
+          {/* Answer-first KPI strip — status at a glance over a shared Í dag/Í gær
+              date, each card anchoring to its detail section below. */}
+          <LoadRpeAnswerStrip teamId={coachTeamId} />
 
           {/* ── Session RPE ───────────────────────────────────── */}
-          <section>
+          <section id="rpe" className="scroll-mt-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Session RPE</span>
               <div className="flex-1 h-px bg-slate-100" />
@@ -10560,13 +10554,13 @@ export default function CoachPage() {
               <DailyInternalLoadCard teamId={coachTeamId} />
             </div>
             {/* Objective HR internal-load cross-check on the subjective sRPE above. */}
-            <div className="mt-4">
+            <div id="hr" className="mt-4 scroll-mt-4">
               <HrLoadCrossCheckCard teamId={coachTeamId} />
             </div>
           </section>
 
           {/* ── ACWR Risk Overview ────────────────────────────── */}
-          <section>
+          <section id="acwr" className="scroll-mt-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Risk Overview</span>
               <div className="flex-1 h-px bg-slate-100" />
@@ -10624,6 +10618,16 @@ export default function CoachPage() {
               )}
             </CardContent>
           </Card>
+          </section>
+
+          {/* ── Player lookup (historical snapshot) — an occasional task, so it
+                lives at the BOTTOM, below the daily answers. ─────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Leikmannafyrirspurn</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+            <PlayerHistoricalSnapshotCard teamId={coachTeamId} />
           </section>
 
           {/* ── Dev diagnostics (collapsible) ─────────────────── */}
