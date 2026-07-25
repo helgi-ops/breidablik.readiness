@@ -37,6 +37,16 @@ const ALIGN_CLASS: Record<LoadAlignment, string> = {
 
 const isFlaggedRead = (r: PlayerHrRead) =>
   r.read.latest?.alignment === "hidden_load" || r.read.latest?.alignment === "low_cardio_response";
+
+/** Honest label for where a player's HRmax (and thus %HRmax) came from. */
+function hrMaxSourceLabel(r: PlayerHrRead): { text: Bi; estimate: boolean } | null {
+  switch (r.hrMaxSource) {
+    case "set": return { text: { en: "coach-set", is: "stillt" }, estimate: false };
+    case "observed": return { text: { en: "observed peak", is: "mælt hámark" }, estimate: false };
+    case "estimated": return { text: { en: "age-estimated", is: "aldurs-áætlað" }, estimate: true };
+    default: return null;
+  }
+}
 const gapStr = (g: number | null | undefined) => (g != null ? `${g >= 0 ? "+" : ""}${g}` : "—");
 
 /**
@@ -303,6 +313,12 @@ export default function HeartRateIntelligencePage() {
                     : `Needs ≥${MIN_MATURE_HR_SESSIONS} belt sessions to trust the baseline, plus HRmax set for calibrated %HRmax. Thin data shows as low confidence, never as a verdict.`}</p>
                 </div>
                 <div>
+                  <div className="font-semibold text-slate-800">{IS ? "HRmax & %HRmax" : "HRmax & %HRmax"}</div>
+                  <p>{IS
+                    ? "%HRmax þarf HRmax leikmannsins. Við notum bestu heimild: stillt gildi þjálfara → mælt hámark úr beltinu → aldurs-áætlun (Tanaka 2001; Gulati 2010 fyrir konur). Aldurs-áætlun er merkt „≈“ og hækkar EKKI vissuna — aðeins raunmæling gerir það. Yfirskrifaðu með mældu gildi hvenær sem er."
+                    : "%HRmax needs the player's HRmax. We use the best available: coach-set → observed belt peak → age estimate (Tanaka 2001; Gulati 2010 for women). An age estimate is marked “≈” and does NOT raise confidence — only real measurement does. Override with a measured value anytime."}</p>
+                </div>
+                <div>
                   <div className="font-semibold text-slate-800">{IS ? "Ákefðarbönd 1–8" : "Intensity bands 1–8"}</div>
                   <p>{IS
                     ? "Catapult raðbönd (mörk stillt í OpenField) — ekki kvörðuð %HRmax svæði. Röð + % er merkingin; bpm birt aðeins þar sem raunhæft."
@@ -350,29 +366,38 @@ export default function HeartRateIntelligencePage() {
                       {" · "}{IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}
                     </div>
 
-                    {/* %HRmax (Catapult or app HRmax) + the per-player HRmax setter */}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                      {r.latestHr?.pctMax != null ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 tabular-nums">
-                          %HRmax {r.latestHr.pctAvg ?? "—"} {IS ? "meðal" : "avg"} · {r.latestHr.pctMax} {IS ? "topp" : "peak"}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-400">{IS ? "settu HRmax fyrir kvarðað %HRmax" : "set HRmax for calibrated %HRmax"}</span>
-                      )}
-                      <span className="inline-flex items-center gap-1 text-slate-500">
-                        <span>HRmax</span>
-                        <input
-                          type="number" inputMode="numeric" placeholder={r.hrMax != null ? String(r.hrMax) : "bpm"}
-                          value={hrMaxDraft[r.playerId] ?? (r.hrMax != null ? String(r.hrMax) : "")}
-                          onChange={(e) => setHrMaxDraft((d) => ({ ...d, [r.playerId]: e.target.value }))}
-                          className="w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px] tabular-nums"
-                        />
-                        <button type="button" onClick={() => void saveHrMax(r.playerId)} disabled={savingId === r.playerId}
-                          className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                          {savingId === r.playerId ? "…" : (IS ? "Vista" : "Save")}
-                        </button>
-                      </span>
-                    </div>
+                    {/* %HRmax + provenance + the per-player HRmax setter (override) */}
+                    {(() => {
+                      const src = hrMaxSourceLabel(r);
+                      return (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                          {r.latestHr?.pctMax != null ? (
+                            <span
+                              className={`rounded-full px-2 py-0.5 tabular-nums ${src?.estimate ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700"}`}
+                              title={IS ? "% af HRmax; heimild HRmax sýnd á eftir" : "% of HRmax; the HRmax source is shown after"}
+                            >
+                              {src?.estimate ? "≈ " : ""}%HRmax {r.latestHr.pctAvg ?? "—"} {IS ? "meðal" : "avg"} · {r.latestHr.pctMax} {IS ? "topp" : "peak"}
+                              {src ? <span className="ml-1 font-normal opacity-70">· HRmax {r.effectiveHrMax} {IS ? src.text.is : src.text.en}</span> : null}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">{IS ? "engin HRmax-heimild enn — settu HRmax hér að neðan" : "no HRmax source yet — set HRmax below"}</span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-slate-500">
+                            <span title={IS ? "Yfirskrifar áætlun með mældu gildi" : "Overrides the estimate with a measured value"}>HRmax</span>
+                            <input
+                              type="number" inputMode="numeric" placeholder={r.effectiveHrMax != null ? String(r.effectiveHrMax) : "bpm"}
+                              value={hrMaxDraft[r.playerId] ?? (r.hrMax != null ? String(r.hrMax) : "")}
+                              onChange={(e) => setHrMaxDraft((d) => ({ ...d, [r.playerId]: e.target.value }))}
+                              className="w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px] tabular-nums"
+                            />
+                            <button type="button" onClick={() => void saveHrMax(r.playerId)} disabled={savingId === r.playerId}
+                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                              {savingId === r.playerId ? "…" : (IS ? "Vista" : "Save")}
+                            </button>
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Personal-norm HR-load trend */}
                     {r.read.history.filter((h) => h.hrLoadIndex != null).length >= 2 && (
@@ -485,12 +510,18 @@ export default function HeartRateIntelligencePage() {
                       ? `þarf ≥${MIN_MATURE_HR_SESSIONS} beltis-lotur fyrir þroskaða grunnlínu OG %HRmax (HRmax stillt) áður en bilið er treyst. Annars lítil vissa.`
                       : `needs ≥${MIN_MATURE_HR_SESSIONS} belt sessions for a mature baseline AND %HRmax (HRmax set) before the gap is trusted. Otherwise low confidence.`}
                   </li>
+                  <li>
+                    <strong>{IS ? "HRmax:" : "HRmax:"}</strong>{" "}
+                    {IS
+                      ? "til að reikna %HRmax notum við bestu heimild í röð — gildi stillt af þjálfara, síðan mælt hámark úr beltinu (hæsta púls í glugganum), síðan aldurs-áætlun (Tanaka 2001 / Gulati 2010 fyrir konur). Aldurs-áætlun er merkt „≈“ og hækkar ekki vissuna; hún er ekki geymd — aðeins mæld gildi eru vistuð."
+                      : "to compute %HRmax we take the best available in order — a coach-set value, then the observed belt peak (highest HR in the window), then an age estimate (Tanaka 2001 / Gulati 2010 for women). An age estimate is marked “≈”, doesn't lift confidence, and isn't stored — only measured values are persisted."}
+                  </li>
                 </ul>
                 <p className="mt-2 border-t border-slate-200 pt-2 text-slate-500">
                   <strong>{IS ? "Heiðarleg takmörk:" : "Honest limits:"}</strong> {IS ? reads[0]?.read.caveat.is : reads[0]?.read.caveat.en}
                 </p>
                 <p className="mt-2 text-slate-400">
-                  <strong>{IS ? "Tilvitnun:" : "Reference:"}</strong> {reads[0]?.read.citation}. Edwards S. (1993). <em>The Heart Rate Monitor Book.</em> · Buchheit M. (2024), HR monitoring in team sport.
+                  <strong>{IS ? "Tilvitnun:" : "Reference:"}</strong> {reads[0]?.read.citation}. Edwards S. (1993). <em>The Heart Rate Monitor Book.</em> · Buchheit M. (2024), HR monitoring in team sport. · {IS ? "HRmax-áætlun" : "HRmax estimate"}: Tanaka 2001 · Gulati 2010.
                 </p>
                 <p className="mt-2 text-slate-400">
                   {IS

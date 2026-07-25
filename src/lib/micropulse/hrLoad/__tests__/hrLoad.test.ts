@@ -4,6 +4,7 @@ import {
   computeHrLoad,
   summatedHrZoneLoad,
   hrZoneDistribution,
+  estimateHrMax,
   DIVERGENCE_GAP,
   MIN_MATURE_HR_SESSIONS,
   type HrLoadRow,
@@ -150,4 +151,17 @@ test("every alignment verdict exists in EN and IS", () => {
     assert.notEqual(s.verdict.en, s.verdict.is);
   }
   assert.ok(read.caveat.en && read.caveat.is && read.caveat.en !== read.caveat.is);
+});
+
+test("estimateHrMax: Tanaka by default, Gulati for women, null for absent/implausible age", () => {
+  // Tanaka 208 − 0.7·age. At 40: 208 − 28 = 180.
+  assert.equal(estimateHrMax(40), 180);
+  assert.equal(estimateHrMax(40, "M"), 180);
+  // Gulati 206 − 0.88·age for women. At 40: 206 − 35.2 = 170.8 → 171.
+  assert.equal(estimateHrMax(40, "F"), 171);
+  // Never fabricate from a missing or nonsensical age.
+  assert.equal(estimateHrMax(null), null);
+  assert.equal(estimateHrMax(undefined), null);
+  assert.equal(estimateHrMax(4), null);
+  assert.equal(estimateHrMax(95), null);
 });

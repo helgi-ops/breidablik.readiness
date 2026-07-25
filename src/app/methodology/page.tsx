@@ -85,6 +85,14 @@ const ENTRIES: Entry[] = [
   },
   {
     tier: "informed",
+    name: { EN: "HRmax estimate (for %HRmax)", IS: "HRmax-áætlun (fyrir %HRmax)" },
+    what: { EN: "When HRmax isn't set and no maximal effort is captured, %HRmax uses an age estimate: Tanaka 208 − 0.7·age (men/mixed) or Gulati 206 − 0.88·age (women). We prefer a coach-set value, then the observed belt peak, and mark an age estimate as approximate (“≈”).", IS: "Þegar HRmax er ekki stillt og ekkert hámarksátak næst notar %HRmax aldurs-áætlun: Tanaka 208 − 0.7·aldur (karlar/blandað) eða Gulati 206 − 0.88·aldur (konur). Við kjósum gildi stillt af þjálfara, síðan mælt hámark úr beltinu, og merkjum aldurs-áætlun sem námunda („≈“)." },
+    basis: { EN: "Tanaka 2001 · Gulati 2010. More accurate than the old Fox 220−age.", IS: "Tanaka 2001 · Gulati 2010. Nákvæmara en gamla Fox 220−aldur." },
+    caveat: { EN: "A population estimate (SEE ≈ 7–11 bpm), never a measured value — so an age-estimated %HRmax does NOT raise confidence and isn't stored; only measured/coach-set HRmax is persisted.", IS: "Lýðfræðileg áætlun (SEE ≈ 7–11 slög/mín), aldrei mæld tala — svo aldurs-áætluð %HRmax hækkar EKKI vissu og er ekki geymd; aðeins mæld/þjálfarasett HRmax er vistuð." },
+    file: "src/lib/micropulse/hrLoad/index.ts",
+  },
+  {
+    tier: "informed",
     name: { EN: "Heavy-lift intensity (≥80% 1RM)", IS: "Þung-lyftu ákefð (≥80% 1RM)" },
     what: { EN: "A set counts as 'heavy' at or above 80% of 1RM.", IS: "Sett telst „þungt“ við 80% af 1RM eða meira." },
     basis: { EN: "Pareja-Blanco 2017 · Schoenfeld 2017.", IS: "Pareja-Blanco 2017 · Schoenfeld 2017." },

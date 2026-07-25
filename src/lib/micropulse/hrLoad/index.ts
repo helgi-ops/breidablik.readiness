@@ -86,6 +86,27 @@ export function bandWeight(bandIndex1Based: number): number {
   return bandIndex1Based;
 }
 
+/** Where an athlete's HRmax came from — provenance for the %HRmax it produces. */
+export type HrMaxSource = "set" | "observed" | "estimated" | "none";
+
+export const HRMAX_CITATION =
+  "Tanaka 2001 (HRmax = 208 − 0.7·age) · Gulati 2010 (women, 206 − 0.88·age)";
+
+/**
+ * Age-predicted HRmax — a labelled FALLBACK, never a measured value.
+ *  - Tanaka 2001 (208 − 0.7·age) is the modern default: more accurate than the old
+ *    Fox 220−age, which overestimates the young and underestimates the old.
+ *  - Gulati 2010 (206 − 0.88·age) fits women better (validated in a large female cohort).
+ * Both are population estimates (SEE ≈ 7–11 bpm), so an observed belt peak — when a
+ * genuine maximal effort was captured — should be preferred over this. Returns null
+ * for an implausible/absent age rather than fabricating a number.
+ */
+export function estimateHrMax(age: number | null | undefined, sex?: "M" | "F" | null): number | null {
+  if (age == null || !Number.isFinite(age) || age < 10 || age > 80) return null;
+  const bpm = sex === "F" ? 206 - 0.88 * age : 208 - 0.7 * age;
+  return Math.round(bpm);
+}
+
 /** One HR band in the time-in-zone distribution (for display, not scoring). */
 export interface HrBand {
   band: number;          // 1..8, higher = higher intensity

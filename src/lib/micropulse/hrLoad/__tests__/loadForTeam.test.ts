@@ -13,12 +13,14 @@ function stubClient(tables: Record<string, Rows>): SupabaseClient {
     select(cols?: string): Builder;
     eq(col: string, val: unknown): Builder;
     gte(col: string, val: unknown): Builder;
+    maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: null }>;
   }
   const make = (rows: Rows): Builder => {
     const b: Builder = {
       select: () => b,
       eq: () => b,
       gte: () => b,
+      maybeSingle: () => Promise.resolve({ data: rows[0] ?? null, error: null as null }),
       then: (onf) => Promise.resolve({ data: rows, error: null as null }).then(onf),
     };
     return b;
@@ -67,13 +69,63 @@ test("effective %HRmax fills from configured hr_max when Catapult's value is abs
   assert.equal(r.read.dataCoverage.hasPctMax, true);
 });
 
-test("no hr_max and no Catapult %HRmax → %HRmax stays null (never fabricated)", async () => {
+// Four belt sessions with a chosen peak HR (or none), Catapult %HRmax absent.
+const beltRowsMax = (playerId: string, maxHr: number | null): Rows =>
+  ["2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23"].map((date) => ({
+    player_id: playerId, date,
+    hr_zone_5_time_s: 600,
+    max_heart_rate: maxHr, avg_heart_rate: maxHr != null ? maxHr - 30 : null,
+    pct_max_heart_rate: null, pct_avg_heart_rate: null,
+  }));
+
+test("no hr_max, no Catapult %HRmax, no observed peak, no age → %HRmax stays null (never fabricated)", async () => {
   const client = stubClient({
-    players: [{ id: "p1", full_name: "Alpha One", position: "MID", hr_max: null }],
-    player_external_load_daily: beltRows("p1"),
+    players: [{ id: "p1", full_name: "Alpha One", position: "MID", hr_max: null, date_of_birth: null }],
+    player_external_load_daily: beltRowsMax("p1", null), // no max_heart_rate → no observed peak
     session_rpe_entries: [],
   });
   const { reads } = await loadHrForTeam(client, "team1");
   assert.equal(reads[0].latestHr?.pctMax, null);
+  assert.equal(reads[0].hrMaxSource, "none");
   assert.equal(reads[0].read.dataCoverage.hasPctMax, false);
+});
+
+test("observed belt peak fills HRmax and lifts the gate when no value is set", async () => {
+  const client = stubClient({
+    players: [{ id: "p1", full_name: "Alpha One", position: "MID", hr_max: null, date_of_birth: "1994-01-01" }],
+    player_external_load_daily: beltRowsMax("p1", 190), // peak 190 > Tanaka(~186)
+    session_rpe_entries: [],
+    teams: [{ gender: "M" }],
+  });
+  const { reads } = await loadHrForTeam(client, "team1");
+  assert.equal(reads[0].hrMaxSource, "observed");
+  assert.equal(reads[0].effectiveHrMax, 190);
+  assert.equal(reads[0].latestHr?.pctMax, 100); // 190 / 190
+  assert.equal(reads[0].read.dataCoverage.hasPctMax, true); // observed peak is real → gate lifts
+});
+
+test("age estimate fills the DISPLAY %HRmax but does NOT lift the calibration gate", async () => {
+  const client = stubClient({
+    players: [{ id: "p1", full_name: "Alpha One", position: "MID", hr_max: null, date_of_birth: "1994-01-01" }],
+    player_external_load_daily: beltRowsMax("p1", 165), // never maxed: 165 < Tanaka(208−0.7·32=186)
+    session_rpe_entries: [],
+    teams: [{ gender: "M" }],
+  });
+  const { reads } = await loadHrForTeam(client, "team1");
+  assert.equal(reads[0].hrMaxSource, "estimated");
+  assert.equal(reads[0].effectiveHrMax, 186); // Tanaka wins over the sub-max observed peak
+  assert.equal(reads[0].latestHr?.pctMax, 89); // 165 / 186 → 88.7 → 89, honest
+  assert.equal(reads[0].read.dataCoverage.hasPctMax, false); // an estimate never counts as calibrated
+});
+
+test("women get the Gulati formula, not Tanaka", async () => {
+  const client = stubClient({
+    players: [{ id: "p1", full_name: "Alpha One", position: "MID", hr_max: null, date_of_birth: "1994-01-01" }],
+    player_external_load_daily: beltRowsMax("p1", 150), // sub-max so the estimate wins
+    session_rpe_entries: [],
+    teams: [{ gender: "F" }],
+  });
+  const { reads } = await loadHrForTeam(client, "team1");
+  assert.equal(reads[0].effectiveHrMax, 178); // Gulati 206 − 0.88·32 = 177.8 → 178 (not Tanaka's 186)
+  assert.equal(reads[0].hrMaxSource, "estimated");
 });
