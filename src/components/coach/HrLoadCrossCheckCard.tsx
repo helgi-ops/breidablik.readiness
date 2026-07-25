@@ -4,23 +4,16 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { computeHrLoad, hrZoneDistribution, type HrLoadRow, type HrLoadRead, type LoadAlignment, type HrBand } from "@/lib/micropulse/hrLoad";
+import { type LoadAlignment } from "@/lib/micropulse/hrLoad";
+import { loadHrForTeam, HR_WINDOW_DAYS, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
 
-const WINDOW_DAYS = 28;
-
-type PlayerRead = { playerId: string; name: string; read: HrLoadRead; dist: HrBand[] };
+const WINDOW_DAYS = HR_WINDOW_DAYS;
 
 // Ordinal band → colour ramp (low intensity → high). Deliberately generic; the
 // honest label is the bpm on hover, not a made-up zone name.
 const BAND_COLOR = [
   "#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#f59e0b", "#f97316", "#ef4444", "#b91c1c",
 ];
-
-function windowStartISO(): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - WINDOW_DAYS);
-  return d.toISOString().slice(0, 10);
-}
 
 const ALIGN_CLASS: Record<LoadAlignment, string> = {
   hidden_load: "text-rose-700",
@@ -34,7 +27,7 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
   const [lang] = useLang();
   const IS = lang === "IS";
   const [loading, setLoading] = useState(true);
-  const [reads, setReads] = useState<PlayerRead[]>([]);
+  const [reads, setReads] = useState<PlayerHrRead[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
 
   useEffect(() => {
@@ -42,78 +35,13 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
     async function run() {
       if (!teamId) { setLoading(false); return; }
       setLoading(true);
-      const start = windowStartISO();
       try {
-        const [playersRes, loadRes, rpeRes] = await Promise.all([
-          supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true),
-          supabase
-            .from("player_external_load_daily")
-            .select("player_id, date, hr_zone_1_time_s, hr_zone_2_time_s, hr_zone_3_time_s, hr_zone_4_time_s, hr_zone_5_time_s, hr_zone_6_time_s, hr_zone_7_time_s, hr_zone_8_time_s, hr_zone_1_avg_bpm, hr_zone_2_avg_bpm, hr_zone_3_avg_bpm, hr_zone_4_avg_bpm, hr_zone_5_avg_bpm, hr_zone_6_avg_bpm, hr_zone_7_avg_bpm, hr_zone_8_avg_bpm, pct_max_heart_rate")
-            .eq("team_id", teamId)
-            .gte("date", start),
-          supabase
-            .from("session_rpe_entries")
-            .select("player_id, session_date, session_load")
-            .eq("team_id", teamId)
-            .gte("session_date", start),
-        ]);
+        // Shared gather — the same loader the Heart Rate Intelligence page uses, so
+        // belt coverage / divergence / distributions can never drift between them.
+        const { reads: r, rosterCount: rc } = await loadHrForTeam(supabase, teamId);
         if (cancelled) return;
-
-        const names = new Map<string, string>();
-        for (const p of (playersRes.data ?? []) as Array<Record<string, unknown>>) {
-          names.set(String(p.id), String(p.full_name ?? "Player"));
-        }
-
-        // player → date → row parts
-        const byPlayerDate = new Map<string, Map<string, HrLoadRow>>();
-        const ensure = (pid: string, date: string): HrLoadRow => {
-          let m = byPlayerDate.get(pid);
-          if (!m) { m = new Map(); byPlayerDate.set(pid, m); }
-          let r = m.get(date);
-          if (!r) { r = { date, srpeLoad: null, hrZonesSec: [], pctMaxHr: null }; m.set(date, r); }
-          return r;
-        };
-
-        // Per player, the most recent HR session's zone times + bpm labels, for the
-        // zone distribution strip in the details.
-        const latestHrByPlayer = new Map<string, { date: string; zonesSec: Array<number | null>; bpm: Array<number | null> }>();
-        const numOf = (v: unknown) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
-        for (const row of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
-          const pid = String(row.player_id ?? "");
-          const date = String(row.date ?? "").slice(0, 10);
-          if (!pid || !date) continue;
-          const zonesSec = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => numOf(row[`hr_zone_${b}_time_s`]));
-          const bpm = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => numOf(row[`hr_zone_${b}_avg_bpm`]));
-          const r = ensure(pid, date);
-          r.hrZonesSec = zonesSec;
-          r.pctMaxHr = numOf(row.pct_max_heart_rate);
-          if (zonesSec.some((v) => v !== null)) {
-            const prev = latestHrByPlayer.get(pid);
-            if (!prev || date > prev.date) latestHrByPlayer.set(pid, { date, zonesSec, bpm });
-          }
-        }
-        // Sum sRPE session_load per player-date (a day can hold multiple sessions).
-        for (const row of (rpeRes.data ?? []) as Array<Record<string, unknown>>) {
-          const pid = String(row.player_id ?? "");
-          const date = String(row.session_date ?? "").slice(0, 10);
-          if (!pid || !date) continue;
-          const load = row.session_load != null && Number.isFinite(Number(row.session_load)) ? Number(row.session_load) : null;
-          if (load == null) continue;
-          const r = ensure(pid, date);
-          r.srpeLoad = (r.srpeLoad ?? 0) + load;
-        }
-
-        const out: PlayerRead[] = [];
-        for (const [pid, m] of byPlayerDate) {
-          const read = computeHrLoad([...m.values()]);
-          if (!read.dataCoverage.hasHr) continue;
-          const latest = latestHrByPlayer.get(pid);
-          const dist = latest ? hrZoneDistribution(latest.zonesSec, latest.bpm) : [];
-          out.push({ playerId: pid, name: names.get(pid) ?? "Player", read, dist });
-        }
-        out.sort((a, b) => a.name.localeCompare(b.name));
-        setReads(out);
-        setRosterCount(names.size);
+        setReads(r);
+        setRosterCount(rc);
       } catch {
         if (!cancelled) setReads([]);
       } finally {

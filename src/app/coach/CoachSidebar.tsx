@@ -74,6 +74,9 @@ export const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/quadrant",           label: { EN: "Quadrant Intelligence",            IS: "Quadrant Intelligence" } },
   { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
   { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
+  // Heart Rate Intelligence — belt HR as an objective cross-check on sRPE. Belt-based,
+  // so on BOTH tiers (not Catapult-tier gated); hidden only for no-hardware teams.
+  { href: "/coach/heart-rate-intelligence", label: { EN: "Heart Rate Intelligence",     IS: "Púls-greining" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
   { href: "/coach/match-movement",     label: { EN: "Match Movement",                   IS: "Hreyfi-samanburður" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
