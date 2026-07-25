@@ -41,6 +41,8 @@ export type VerdictBannerProps = {
   sentence: Txt;
   /** Optional plain-language explainer line under the sentence (no raw jargon). */
   subtitle?: Txt;
+  /** Optional "what to do" — a plain coaching prompt with its reasoning (coach's call). */
+  action?: Txt;
   /** Confidence — never hidden (principle #4). Pass level and/or a note. */
   confidence?: { level?: ConfidenceLevel; note?: Txt } | null;
   /** Named drivers / exceptions — the "why" (principle #1). */
@@ -62,7 +64,7 @@ const CONF_LABEL: Record<ConfidenceLevel, L> = {
   low: { EN: "low", IS: "lítil" },
 };
 
-export default function VerdictBanner({ lang, tone, sentence, subtitle, confidence, drivers, kicker }: VerdictBannerProps) {
+export default function VerdictBanner({ lang, tone, sentence, subtitle, action, confidence, drivers, kicker }: VerdictBannerProps) {
   const IS = lang === "IS";
   const tx = (t?: Txt): string => (t == null ? "" : typeof t === "string" ? t : IS ? t.IS : t.EN);
   const tones = TONE[tone];
@@ -88,6 +90,14 @@ export default function VerdictBanner({ lang, tone, sentence, subtitle, confiden
 
         {/* Optional plain-language explainer */}
         {subtitle != null && <p className="mt-1 text-[13px] leading-snug text-slate-600">{tx(subtitle)}</p>}
+
+        {/* Optional "what to do" — plain coaching prompt with its reasoning */}
+        {action != null && (
+          <div className="mt-2 flex gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-[12px] leading-snug text-slate-700">
+            <span className="shrink-0 font-semibold">{IS ? "Hvað á að gera:" : "What to do:"}</span>
+            <span>{tx(action)}</span>
+          </div>
+        )}
 
         {/* Confidence chip — never hidden */}
         {confidence != null && (confidence.level != null || confidence.note != null) && (

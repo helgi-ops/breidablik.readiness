@@ -130,14 +130,15 @@ function confidenceReason(read: HrLoadRead): Bi {
     : { en: `${n} belt sessions with %HRmax`, is: `${n} beltis-lotur með %HRmax` };
 }
 
-type Verdict = { tone: VerdictTone; sentence: { EN: string; IS: string }; subtitle?: { EN: string; IS: string }; confidence: { level: ConfidenceLevel; note?: { EN: string; IS: string } }; drivers: VerdictDriver[] };
+type Verdict = { tone: VerdictTone; sentence: { EN: string; IS: string }; subtitle?: { EN: string; IS: string }; action?: { EN: string; IS: string }; confidence: { level: ConfidenceLevel; note?: { EN: string; IS: string } }; drivers: VerdictDriver[] };
 
 function computeVerdict(reads: PlayerHrRead[], rosterCount: number): Verdict {
   const beltCount = reads.length;
   if (beltCount === 0) {
     return {
       tone: "neutral",
-      sentence: { EN: "No HR belt data yet — appears once a belt session syncs.", IS: "HR-beltisgögn ekki komin enn — birtast þegar HR-lota samstillist." },
+      sentence: { EN: "No heart-rate belt data yet — this cross-check turns on once a belt session syncs.", IS: "Engin HR-beltisgögn enn — þessi kross-tékk kviknar þegar HR-lota samstillist." },
+      action: { EN: "Have players wear the HR belt on skin during sessions; nothing to act on until then.", IS: "Láttu leikmenn bera HR-beltið á húð í æfingum; ekkert að aðhafast fyrr en þá." },
       confidence: { level: "low" },
       drivers: [],
     };
@@ -151,11 +152,15 @@ function computeVerdict(reads: PlayerHrRead[], rosterCount: number): Verdict {
   if (flagged.length === 0) {
     return {
       tone: "good",
-      sentence: { EN: `Heart rate and effort ratings line up — ${beltCount} of ${rosterCount} wore the belt.`, IS: `Púls og áreynslumat samræmast — ${beltCount} af ${rosterCount} báru belti.` },
+      sentence: { EN: `Effort ratings and heart rate agree across the squad — ${beltCount} of ${rosterCount} wore the belt.`, IS: `Áreynslumat og púls samræmast hjá liðinu — ${beltCount} af ${rosterCount} báru belti.` },
+      action: { EN: "Nothing to act on — you can trust their session ratings this week.", IS: "Ekkert að aðhafast — þú getur treyst áreynslumati þeirra þessa viku." },
       confidence: { level, note },
       drivers: [],
     };
   }
+  // Split the mismatch by type so the team-level meaning is concrete, not just a count.
+  const hiddenN = flagged.filter((r) => r.read.latest?.alignment === "hidden_load").length;
+  const lowN = flagged.filter((r) => r.read.latest?.alignment === "low_cardio_response").length;
   const drivers: VerdictDriver[] = flagged.slice(0, 6).map((r) => {
     const s = r.read.latest;
     const hidden = s?.alignment === "hidden_load";
@@ -171,11 +176,22 @@ function computeVerdict(reads: PlayerHrRead[], rosterCount: number): Verdict {
       },
     };
   });
-  const names = flagged.slice(0, 3).map((r) => r.name.split(" ")[0]).join(", ") + (flagged.length > 3 ? ` +${flagged.length - 3}` : "");
+  // Team-meaning sentence — what it means for the squad, no name list (names are the chips below).
+  const parts = {
+    EN: [hiddenN > 0 ? `${hiddenN} worked harder than they logged` : "", lowN > 0 ? `${lowN} logged more than the heart showed` : ""].filter(Boolean).join(", "),
+    IS: [hiddenN > 0 ? `${hiddenN} unnu meira en þeir skráðu` : "", lowN > 0 ? `${lowN} skráðu meira en hjartað sýndi` : ""].filter(Boolean).join(", "),
+  };
   return {
     tone: "watch",
-    sentence: { EN: `${flagged.length} player${flagged.length > 1 ? "s" : ""} — heart and effort disagree: ${names}. Worth a look.`, IS: `${flagged.length} leikm. — hjarta og áreynsla ósamræmd: ${names}. Vert að skoða.` },
+    sentence: {
+      EN: `Effort ratings and heart rate disagree for ${flagged.length} of ${beltCount} on a belt — ${parts.EN}. Their logged load may be off.`,
+      IS: `Áreynslumat og púls ósamræmd hjá ${flagged.length} af ${beltCount} með belti — ${parts.IS}. Skráð álag þeirra gæti verið skakkt.`,
+    },
     subtitle: { EN: "A cross-check to investigate — not an injury flag.", IS: "Kross-tékk til að skoða — ekki meiðslamerki." },
+    action: {
+      EN: "Before setting their next load, plan around what the heart showed, not just the rating — see each flagged player below.",
+      IS: "Áður en þú stillir næsta álag, skipuleggðu út frá því sem hjartað sýndi, ekki bara matinu — sjá hvern flaggaðan leikmann að neðan.",
+    },
     confidence: { level, note },
     drivers,
   };
@@ -273,6 +289,7 @@ export default function HeartRateIntelligencePage() {
           tone={verdict.tone}
           sentence={verdict.sentence}
           subtitle={verdict.subtitle}
+          action={verdict.action}
           confidence={verdict.confidence}
           drivers={verdict.drivers}
         />
