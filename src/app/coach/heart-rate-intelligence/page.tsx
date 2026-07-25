@@ -21,8 +21,10 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import ShowDetails from "@/components/common/ShowDetails";
 import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { HR_CAVEAT } from "@/lib/methodologyCaveats";
 import { loadHrForTeam, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
-import { type LoadAlignment } from "@/lib/micropulse/hrLoad";
+import { type LoadAlignment, type HrLoadSession, type HrLoadRead, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
 
 // Ordinal band → colour ramp (low intensity → high). Same as the cross-check card.
 const BAND_COLOR = ["#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#f59e0b", "#f97316", "#ef4444", "#b91c1c"];
@@ -36,6 +38,50 @@ const ALIGN_CLASS: Record<LoadAlignment, string> = {
 const isFlaggedRead = (r: PlayerHrRead) =>
   r.read.latest?.alignment === "hidden_load" || r.read.latest?.alignment === "low_cardio_response";
 const gapStr = (g: number | null | undefined) => (g != null ? `${g >= 0 ? "+" : ""}${g}` : "—");
+
+/**
+ * The manifesto's mandatory counterfactual for a flagged player: what would have to
+ * change for this session to read as aligned. Derived straight from the signed gap and
+ * the ±25 divergence line — no invented numbers. `excess` = how far past the line it is.
+ */
+function counterfactual(s: HrLoadSession | null | undefined): Bi | null {
+  if (!s || s.gap == null) return null;
+  const excess = Math.round(Math.abs(s.gap) - DIVERGENCE_GAP);
+  if (excess <= 0) return null;
+  if (s.alignment === "hidden_load") {
+    return {
+      en: `Counterfactual: if his HR load had come in ~${excess} index points lower — or he'd rated the session that much harder — the gap would sit inside ±${DIVERGENCE_GAP} and this would read aligned.`,
+      is: `Gagnstæð sviðsmynd: ef HR-álagið hefði verið ~${excess} vísitölustigum lægra — eða hann metið lotuna sem því erfiðari — færi bilið inn fyrir ±${DIVERGENCE_GAP} og læsist samræmt.`,
+    };
+  }
+  if (s.alignment === "low_cardio_response") {
+    return {
+      en: `Counterfactual: if his effort rating had been ~${excess} index points lower — or his heart had worked that much harder — the gap would sit inside ±${DIVERGENCE_GAP} and this would read aligned.`,
+      is: `Gagnstæð sviðsmynd: ef áreynslumatið hefði verið ~${excess} vísitölustigum lægra — eða hjartað unnið því meira — færi bilið inn fyrir ±${DIVERGENCE_GAP} og læsist samræmt.`,
+    };
+  }
+  return null;
+}
+
+/** Plain-language reason for the confidence level — the real gate, not just a chip. */
+function confidenceReason(read: HrLoadRead): Bi {
+  const n = read.baseline.hrSessions;
+  if (n < MIN_MATURE_HR_SESSIONS) {
+    return {
+      en: `${n} belt session${n === 1 ? "" : "s"} — needs ${MIN_MATURE_HR_SESSIONS} before his HR baseline is trustworthy`,
+      is: `${n} beltis-lot${n === 1 ? "a" : "ur"} — þarf ${MIN_MATURE_HR_SESSIONS} áður en HR-viðmiðun er áreiðanleg`,
+    };
+  }
+  if (!read.dataCoverage.hasPctMax) {
+    return {
+      en: `${n} belt sessions, but HRmax isn't set — intensity is read as ordinal bands only`,
+      is: `${n} beltis-lotur, en HRmax er ekki stillt — ákefð lesin sem raðbönd eingöngu`,
+    };
+  }
+  return read.confidence === "high"
+    ? { en: `${n} belt sessions with %HRmax — mature baseline`, is: `${n} beltis-lotur með %HRmax — þroskuð viðmiðun` }
+    : { en: `${n} belt sessions with %HRmax`, is: `${n} beltis-lotur með %HRmax` };
+}
 
 type Verdict = { tone: VerdictTone; sentence: { EN: string; IS: string }; subtitle?: { EN: string; IS: string }; confidence: { level: ConfidenceLevel; note?: { EN: string; IS: string } }; drivers: VerdictDriver[] };
 
@@ -219,7 +265,52 @@ export default function HeartRateIntelligencePage() {
                 : (IS ? `${flagged.length} með ósamræmi púls vs áreynslu.` : `${flagged.length} with a heart-vs-effort mismatch.`)}</div>
             )}
             {squadShape && <div className="text-slate-500">{IS ? squadShape.IS : squadShape.EN}</div>}
+            <MethodologyLink caveat={HR_CAVEAT} />
           </div>
+
+          {/* "How to read these numbers" — the plain glossary, one click, never in the primary view. */}
+          {beltCount > 0 && (
+            <ShowDetails label={{ EN: "How to read these numbers", IS: "Hvernig á að lesa tölurnar" }}>
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 text-[12px] leading-relaxed text-slate-600 sm:grid-cols-2">
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "HR-vísitala & sRPE-vísitala" : "HR index & sRPE index"}</div>
+                  <p>{IS
+                    ? "Hvor um sig er þessi lota borin saman við MEÐALLOTU leikmannsins sjálfs — 100 = dæmigerð lota fyrir hann. Ekki hægt að bera saman milli leikmanna."
+                    : "Each compares this session to the player's OWN average session — 100 = a typical session for him. Not comparable between players."}</p>
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "Bil (Gap)" : "Gap"}</div>
+                  <p>{IS
+                    ? `HR-vísitala mínus sRPE-vísitala. Jákvætt = hjartað vann meira en hann mat lotuna. Umfram ±${DIVERGENCE_GAP} köllum við ósamræmi; innan þess er venjulegt flökt milli lota.`
+                    : `HR index minus sRPE index. Positive = the heart worked harder than he rated it. Beyond ±${DIVERGENCE_GAP} we call it diverging; within that it's ordinary session-to-session wobble.`}</p>
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "Falið álag" : "Hidden load"}</div>
+                  <p>{IS
+                    ? "Hjartað vann meira en áreynslumatið gaf til kynna — hugsanlega vanmetin lota. Skoða, ekki meiðslamerki."
+                    : "The heart worked harder than the rating suggested — possibly an under-reported session. Investigate, not an injury flag."}</p>
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "Lítið hjarta-drif" : "Low cardiac demand"}</div>
+                  <p>{IS
+                    ? "Mat hátt en hjartað hélst lágt — t.d. styrktaræfing (lítið þolálag) eða ofmetin áreynsla."
+                    : "Rated hard but the heart stayed low — e.g. strength work (little aerobic demand) or an over-reported effort."}</p>
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "Vissa" : "Confidence"}</div>
+                  <p>{IS
+                    ? `Þarf ≥${MIN_MATURE_HR_SESSIONS} beltis-lotur til að treysta grunnlínunni, auk þess að HRmax sé stillt fyrir kvarðaða %HRmax. Þunn gögn birtast sem lítil vissa, aldrei sem dómur.`
+                    : `Needs ≥${MIN_MATURE_HR_SESSIONS} belt sessions to trust the baseline, plus HRmax set for calibrated %HRmax. Thin data shows as low confidence, never as a verdict.`}</p>
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">{IS ? "Ákefðarbönd 1–8" : "Intensity bands 1–8"}</div>
+                  <p>{IS
+                    ? "Catapult raðbönd (mörk stillt í OpenField) — ekki kvörðuð %HRmax svæði. Röð + % er merkingin; bpm birt aðeins þar sem raunhæft."
+                    : "Catapult ordinal bands (boundaries set in OpenField) — not calibrated %HRmax zones. Order + % is the label; bpm shown only where reliable."}</p>
+                </div>
+              </div>
+            </ShowDetails>
+          )}
 
           {beltCount === 0 ? null : (
             <div className="space-y-2">
@@ -236,15 +327,27 @@ export default function HeartRateIntelligencePage() {
                         {r.position && <span className="ml-1 text-[11px] text-slate-400">{r.position}</span>}
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-slate-600">
-                        <span>HR idx <b className="tabular-nums">{s?.hrLoadIndex ?? "—"}</b></span>
-                        <span>sRPE idx <b className="tabular-nums">{s?.srpeIndex ?? "—"}</b></span>
-                        <span>{IS ? "Bil" : "Gap"} <b className="tabular-nums">{gapStr(s?.gap)}</b></span>
+                        <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="tabular-nums">{s?.hrLoadIndex ?? "—"}</b></span>
+                        <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="tabular-nums">{s?.srpeIndex ?? "—"}</b></span>
+                        <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="tabular-nums">{gapStr(s?.gap)}</b></span>
                       </div>
                     </div>
 
                     <div className={`mt-1 text-[12px] ${ALIGN_CLASS[s?.alignment ?? "insufficient"]}`}>
                       {IS ? s?.verdict.is : s?.verdict.en}
-                      {r.read.confidence === "low" && <span className="ml-1 text-[10px] text-slate-400">{IS ? "· lítil vissa" : "· low confidence"}</span>}
+                    </div>
+
+                    {/* Counterfactual — manifesto-mandatory for every flagged player. */}
+                    {flag && counterfactual(s) && (
+                      <div className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</div>
+                    )}
+
+                    {/* Confidence, with the plain reason — the gate, not just a chip. */}
+                    <div className="mt-1 text-[10px] text-slate-400">
+                      <span className={r.read.confidence === "low" ? "text-amber-600" : "text-slate-500"}>
+                        {r.read.confidence === "low" ? (IS ? "Lítil vissa" : "Low confidence") : r.read.confidence === "medium" ? (IS ? "Miðlungs vissa" : "Moderate confidence") : (IS ? "Mikil vissa" : "High confidence")}
+                      </span>
+                      {" · "}{IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}
                     </div>
 
                     {/* %HRmax (Catapult or app HRmax) + the per-player HRmax setter */}
@@ -298,22 +401,101 @@ export default function HeartRateIntelligencePage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Behind the numbers — the raw matched sessions this read is built on. */}
+                    {(() => {
+                      const matched = r.read.history.filter((h) => h.hrLoadIndex != null && h.srpeIndex != null).slice(-8).reverse();
+                      if (matched.length === 0) return null;
+                      return (
+                        <div className="mt-2">
+                          <ShowDetails label={{ EN: "Behind the numbers", IS: "Á bak við tölurnar" }}>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[10px]">
+                                <thead>
+                                  <tr className="text-left text-slate-400">
+                                    <th className="py-0.5 pr-2 font-medium">{IS ? "Dags." : "Date"}</th>
+                                    <th className="py-0.5 pr-2 font-medium" title={IS ? "Edwards summated-HR-zone AU — aðeins persónu-viðmiðun" : "Edwards summated-HR-zone AU — personal-norm only"}>HR AU</th>
+                                    <th className="py-0.5 pr-2 font-medium">HR idx</th>
+                                    <th className="py-0.5 pr-2 font-medium">sRPE idx</th>
+                                    <th className="py-0.5 pr-2 font-medium">{IS ? "Bil" : "Gap"}</th>
+                                    <th className="py-0.5 font-medium">{IS ? "Lestur" : "Read"}</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="tabular-nums text-slate-600">
+                                  {matched.map((h) => (
+                                    <tr key={h.date} className="border-t border-slate-100">
+                                      <td className="py-0.5 pr-2">{h.date.slice(5)}</td>
+                                      <td className="py-0.5 pr-2">{h.hrLoad ?? "—"}</td>
+                                      <td className="py-0.5 pr-2">{h.hrLoadIndex ?? "—"}</td>
+                                      <td className="py-0.5 pr-2">{h.srpeIndex ?? "—"}</td>
+                                      <td className="py-0.5 pr-2">{gapStr(h.gap)}</td>
+                                      <td className={`py-0.5 ${ALIGN_CLASS[h.alignment]}`}>
+                                        {h.alignment === "aligned" ? (IS ? "samræmt" : "aligned")
+                                          : h.alignment === "hidden_load" ? (IS ? "falið álag" : "hidden load")
+                                          : h.alignment === "low_cardio_response" ? (IS ? "lágt drif" : "low demand")
+                                          : "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <p className="mt-1 text-[9px] leading-snug text-slate-400">
+                                {IS
+                                  ? "HR AU er Edwards summated-HR-zone álag — borið saman AÐEINS við eigin meðaltal leikmannsins (vísitölurnar), aldrei sem alger tala vs sRPE."
+                                  : "HR AU is Edwards summated-HR-zone load — compared ONLY to the player's own average (the indices), never as an absolute vs sRPE."}
+                              </p>
+                            </div>
+                          </ShowDetails>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
             </div>
           )}
 
-          {/* Raw sessions + methodology honesty behind a toggle (the S&C surface). */}
+          {/* Structured methodology + honest limits behind a toggle (the S&C surface). */}
           {beltCount > 0 && (
-            <ShowDetails label={{ EN: "Show method & caveats", IS: "Sýna aðferð & fyrirvara" }}>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
-                <p>{IS ? reads[0]?.read.caveat.is : reads[0]?.read.caveat.en}</p>
-                <p className="mt-1 text-slate-400">{reads[0]?.read.citation}</p>
-                <p className="mt-1 text-slate-400">
+            <ShowDetails label={{ EN: "Method & caveats", IS: "Aðferð & fyrirvarar" }}>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-[11px] leading-relaxed text-slate-600">
+                <p className="font-semibold text-slate-900">{IS ? "Aðferð — Edwards 1993, aðlagað" : "Method — Edwards 1993, adapted"}</p>
+                <ul className="mt-2 list-inside list-disc space-y-1">
+                  <li>
+                    <strong>{IS ? "HR-álag:" : "HR load:"}</strong>{" "}
+                    {IS
+                      ? "summated-heart-rate-zone aðferð Edwards — Σ (mínútur í bandi × þyngd bands). Edwards notar 5 svæði (þyngd 1–5); Catapult sendir 8 bönd, svo þyngd = bandaröð (1..8). Aðlagað, ekki bókstafleg endurgerð."
+                      : "Edwards' summated-heart-rate-zone method — Σ (minutes in band × band weight). Edwards uses 5 zones (weights 1–5); Catapult sends 8 bands, so weight = band order (1..8). Adapted, not a literal reproduction."}
+                  </li>
+                  <li>
+                    <strong>{IS ? "Persónu-viðmiðun:" : "Personal-norm:"}</strong>{" "}
+                    {IS
+                      ? "þar sem böndin eru röð (ekki staðfest %HRmax-mörk) er alger AU EKKI sambærileg við sRPE. Allt lesið sem vísitala á eigin grunnlínu leikmanns (100 = meðallota) — eina verjandi samanburðinn."
+                      : "because the bands are ordinal (not confirmed %HRmax cuts) the absolute AU is NOT comparable to sRPE. Everything is read as an index on the player's own baseline (100 = average session) — the only defensible comparison."}
+                  </li>
+                  <li>
+                    <strong>{IS ? `Ósamræmis-bil (±${DIVERGENCE_GAP}):` : `Divergence gap (±${DIVERGENCE_GAP}):`}</strong>{" "}
+                    {IS
+                      ? `bil = HR-vísitala − sRPE-vísitala. Umfram +${DIVERGENCE_GAP} = falið álag; undir −${DIVERGENCE_GAP} = lítið hjarta-drif; þar á milli = samræmt. Fjórðungur af eigin meðaltali — stillanlegt, valið til að merkja ekki venjulegt flökt.`
+                      : `gap = HR index − sRPE index. Above +${DIVERGENCE_GAP} = hidden load; below −${DIVERGENCE_GAP} = low cardiac demand; in between = aligned. A quarter of the player's own average — tunable, chosen to avoid flagging ordinary wobble.`}
+                  </li>
+                  <li>
+                    <strong>{IS ? `Vissa:` : `Confidence:`}</strong>{" "}
+                    {IS
+                      ? `þarf ≥${MIN_MATURE_HR_SESSIONS} beltis-lotur fyrir þroskaða grunnlínu OG %HRmax (HRmax stillt) áður en bilið er treyst. Annars lítil vissa.`
+                      : `needs ≥${MIN_MATURE_HR_SESSIONS} belt sessions for a mature baseline AND %HRmax (HRmax set) before the gap is trusted. Otherwise low confidence.`}
+                  </li>
+                </ul>
+                <p className="mt-2 border-t border-slate-200 pt-2 text-slate-500">
+                  <strong>{IS ? "Heiðarleg takmörk:" : "Honest limits:"}</strong> {IS ? reads[0]?.read.caveat.is : reads[0]?.read.caveat.en}
+                </p>
+                <p className="mt-2 text-slate-400">
+                  <strong>{IS ? "Tilvitnun:" : "Reference:"}</strong> {reads[0]?.read.citation}. Edwards S. (1993). <em>The Heart Rate Monitor Book.</em> · Buchheit M. (2024), HR monitoring in team sport.
+                </p>
+                <p className="mt-2 text-slate-400">
                   {IS
-                    ? "Bönd 1–8 = Catapult ákefðarbönd (mörk stillt í OpenField) — ekki kvörðuð %HRmax svæði; bpm-merki birt aðeins þar sem raunhæft. HR-álag er persónu-viðmiðun, ekki sambærilegt við sRPE í AU. Bil > 25 = ósamræmi."
-                    : "Bands 1–8 = Catapult intensity bands (boundaries set in OpenField) — not calibrated %HRmax zones; bpm labels only where reliable. HR load is personal-norm, not comparable to sRPE in AU. Gap > 25 = diverging."}
+                    ? "Utan þessa (v1): HRex / submaximal þolferill (Buchheit — „Maximizing the submaximal“), sem þarf staðlaða endurtekna submaximal áreynslu sem liðið keyrir ekki enn; og kvörðaður tími-í-%HRmax-svæði (bandamörk Catapult ekki birt). WHOOP hvíldarpúls/HRV er aðskilinn straumur, ekki blandað hér."
+                    : "Out of scope (v1): HRex / submaximal fitness trend (Buchheit — “Maximizing the submaximal”), which needs a standardised repeated submaximal effort the club doesn't run yet; and calibrated time-in-%HRmax-zone (Catapult band boundaries aren't exposed). WHOOP resting-HR/HRV is a separate stream, never mixed in here."}
                 </p>
               </div>
             </ShowDetails>

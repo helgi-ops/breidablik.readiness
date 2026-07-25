@@ -77,6 +77,14 @@ const ENTRIES: Entry[] = [
   },
   {
     tier: "informed",
+    name: { EN: "HR load vs sRPE cross-check", IS: "HR-álag vs sRPE kross-tékk" },
+    what: { EN: "Objective HR load (Edwards' summated-heart-rate-zone method) indexed to the player's own norm and compared to his sRPE. A personal-norm gap beyond ±25 is called diverging: heart harder than the rating (hidden load) or rating higher than the heart (low cardiac demand).", IS: "Hlutlægt HR-álag (summated-heart-rate-zone aðferð Edwards) vísitölusett á eigin viðmiðun leikmanns og borið saman við sRPE. Bil yfir ±25 (á persónulegri viðmiðun) telst ósamræmi: hjarta erfiðara en matið (falið álag) eða mat hærra en hjartað (lítið hjarta-drif)." },
+    basis: { EN: "Edwards 1993 (summated-HR-zone TRIMP) · Buchheit 2024 (HR monitoring).", IS: "Edwards 1993 (summated-HR-zone TRIMP) · Buchheit 2024 (HR-vöktun)." },
+    caveat: { EN: "Edwards' 5 zones are adapted to Catapult's 8 ordinal bands weighted by band order (NOT calibrated %HRmax cuts), so the AU is comparable only against the player's own baseline — never as an absolute vs sRPE. The ±25 gap and band weights are tunable. Belt-only: no belt = no data, never 0.", IS: "5 svæði Edwards eru aðlöguð að 8 raðböndum Catapult með þyngd eftir bandaröð (EKKI kvörðuð %HRmax-mörk), svo AU er aðeins samanburðarhæft við eigin grunnlínu leikmanns — aldrei sem alger tala vs sRPE. ±25 bilið og bandaþyngdir eru stillanleg. Aðeins belti: ekkert belti = engin gögn, aldrei 0." },
+    file: "src/lib/micropulse/hrLoad/index.ts",
+  },
+  {
+    tier: "informed",
     name: { EN: "Heavy-lift intensity (≥80% 1RM)", IS: "Þung-lyftu ákefð (≥80% 1RM)" },
     what: { EN: "A set counts as 'heavy' at or above 80% of 1RM.", IS: "Sett telst „þungt“ við 80% af 1RM eða meira." },
     basis: { EN: "Pareja-Blanco 2017 · Schoenfeld 2017.", IS: "Pareja-Blanco 2017 · Schoenfeld 2017." },
