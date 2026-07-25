@@ -41,6 +41,37 @@ const ALIGN_CLASS: Record<LoadAlignment, string> = {
   insufficient: "text-slate-400",
 };
 
+// Plain, at-a-glance status per alignment: a traffic-light dot + a two-word label.
+// Colours use the design tokens (green/amber/clay). This is the "verdict" a coach reads
+// first; the full sentence below it is the "why".
+const STATUS: Record<LoadAlignment, { label: Bi; dot: string; chip: string }> = {
+  aligned:             { label: { en: "In sync",         is: "Í takt" },          dot: "#1c7a4a", chip: "bg-emerald-50 text-emerald-700" },
+  hidden_load:         { label: { en: "Hidden load",     is: "Falið álag" },      dot: "#a83e28", chip: "bg-rose-50 text-rose-700" },
+  low_cardio_response: { label: { en: "Low heart demand", is: "Lágt hjarta-drif" }, dot: "#de9328", chip: "bg-amber-50 text-amber-700" },
+  insufficient:        { label: { en: "Not enough data", is: "Ekki næg gögn" },   dot: "#94a3b8", chip: "bg-slate-100 text-slate-500" },
+};
+
+/**
+ * Plain "what to do" for a flagged read — a coaching prompt with its reasoning inline
+ * (rules decide, and it's the coach's call). Null when there's nothing to act on.
+ */
+function actionGuidance(alignment: LoadAlignment | undefined): Bi | null {
+  switch (alignment) {
+    case "hidden_load":
+      return {
+        en: "Plan his recovery as if this was a harder session than he logged. If it keeps happening, ease the next day — or check he's rating honestly.",
+        is: "Skipuleggðu endurheimt eins og þetta hafi verið erfiðari lota en hann skráði. Ef það endurtekur sig, léttu næsta dag — eða athugaðu hvort hann meti heiðarlega.",
+      };
+    case "low_cardio_response":
+      return {
+        en: "Usually fine if it was strength or skills work — the heart just wasn't taxed. Only worth a look if it was meant to be a conditioning session.",
+        is: "Yfirleitt í lagi ef þetta var styrktar- eða tækniæfing — hjartað var einfaldlega ekki reynt. Aðeins vert að skoða ef þetta átti að vera þolæfing.",
+      };
+    default:
+      return null;
+  }
+}
+
 const isFlaggedRead = (r: PlayerHrRead) =>
   r.read.latest?.alignment === "hidden_load" || r.read.latest?.alignment === "low_cardio_response";
 
@@ -342,34 +373,50 @@ export default function HeartRateIntelligencePage() {
                 const present = r.dist.filter((b) => (b.timeS ?? 0) > 0);
                 return (
                   <div key={r.playerId} className={`rounded-lg border p-3 ${flag ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"}`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-slate-900">{r.name}</span>
-                        {r.position && <span className="ml-1 text-[11px] text-slate-400">{r.position}</span>}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-slate-600">
-                        <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="tabular-nums">{s?.hrLoadIndex ?? "—"}</b></span>
-                        <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="tabular-nums">{s?.srpeIndex ?? "—"}</b></span>
-                        <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="tabular-nums">{gapStr(s?.gap)}</b></span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const align = s?.alignment ?? "insufficient";
+                      const status = STATUS[align];
+                      const action = actionGuidance(align);
+                      return (
+                        <>
+                          {/* Glance: traffic-light dot + name + two-word status */}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: status.dot }} aria-hidden />
+                              <span className="text-sm font-medium text-slate-900">{r.name}</span>
+                              {r.position && <span className="text-[11px] text-slate-400">{r.position}</span>}
+                            </div>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.chip}`}>{IS ? status.label.is : status.label.en}</span>
+                          </div>
 
-                    <div className={`mt-1 text-[12px] ${ALIGN_CLASS[s?.alignment ?? "insufficient"]}`}>
-                      {IS ? s?.verdict.is : s?.verdict.en}
-                    </div>
+                          {/* The plain story — the "why", prominent, no jargon */}
+                          <p className="mt-1.5 text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
 
-                    {/* Counterfactual — manifesto-mandatory for every flagged player. */}
-                    {flag && counterfactual(s) && (
-                      <div className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</div>
-                    )}
+                          {/* Counterfactual — manifesto-mandatory for every flagged player */}
+                          {flag && counterfactual(s) && (
+                            <p className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</p>
+                          )}
 
-                    {/* Confidence, with the plain reason — the gate, not just a chip. */}
-                    <div className="mt-1 text-[10px] text-slate-400">
-                      <span className={r.read.confidence === "low" ? "text-amber-600" : "text-slate-500"}>
-                        {r.read.confidence === "low" ? (IS ? "Lítil vissa" : "Low confidence") : r.read.confidence === "medium" ? (IS ? "Miðlungs vissa" : "Moderate confidence") : (IS ? "Mikil vissa" : "High confidence")}
-                      </span>
-                      {" · "}{IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}
-                    </div>
+                          {/* What to do — a coaching prompt with its reasoning, coach's call */}
+                          {action && (
+                            <div className="mt-1.5 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
+                              <span className="font-semibold text-slate-700">{IS ? "Hvað á að gera:" : "What to do:"}</span>
+                              <span>{IS ? action.is : action.en}</span>
+                            </div>
+                          )}
+
+                          {/* Numbers — demoted to a quiet line; full detail in "Behind the numbers" */}
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
+                            <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="font-semibold tabular-nums text-slate-500">{s?.hrLoadIndex ?? "—"}</b></span>
+                            <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="font-semibold tabular-nums text-slate-500">{s?.srpeIndex ?? "—"}</b></span>
+                            <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="font-semibold tabular-nums text-slate-500">{gapStr(s?.gap)}</b></span>
+                            <span className={r.read.confidence === "low" ? "text-amber-600" : ""} title={IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}>
+                              · {r.read.confidence === "low" ? (IS ? "lítil vissa" : "low confidence") : r.read.confidence === "medium" ? (IS ? "miðlungs vissa" : "moderate confidence") : (IS ? "mikil vissa" : "high confidence")}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {/* %HRmax + provenance + the per-player HRmax setter (override) */}
                     {(() => {
