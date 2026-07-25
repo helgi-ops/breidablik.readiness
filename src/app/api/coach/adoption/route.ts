@@ -16,9 +16,14 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { classifyAdoption, type AdoptionInput } from "@/lib/micropulse/adoption/coachAdoption";
+import { classifyAdoption, type AdoptionInput, type Bi } from "@/lib/micropulse/adoption/coachAdoption";
+import { computeCohortTieIn } from "@/lib/micropulse/adoption/outcomeTieIn";
 
 const WINDOW_DAYS = 28;
+
+// A club counts as "opens Today most days" when a coach opened /coach on at least
+// this share of the window's days — the usage behaviour the tie-in correlates.
+const TODAY_ACTIVE_SHARE = 0.5;
 
 // Deeper "why" surfaces — opening any one counts as breadth of use.
 const DEEP_SURFACES = new Set<string>([
@@ -71,6 +76,68 @@ async function complianceShare(
     if (error || !data || data.length === 0) return null;
     const submitted = data.filter((r) => (r as { checkin_status?: string }).checkin_status === "submitted").length;
     return submitted / data.length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The cohort outcome tie-in, computed from real data across all clubs: split teams
+ * by whether a coach opens Today on most days, compare the two groups' mean squad
+ * check-in share. The pure `computeCohortTieIn` gate omits it when a group is too
+ * small or the two barely differ — so this returns null far more often than not,
+ * and never a fabricated claim.
+ */
+async function cohortTieIn(sb: ReturnType<typeof getSupabase>, now: Date): Promise<Bi | null> {
+  try {
+    const windowStart = new Date(now);
+    windowStart.setDate(now.getDate() - WINDOW_DAYS);
+
+    // Per team: distinct days a coach opened Today.
+    const { data: ev } = await sb
+      .from("usage_events")
+      .select("team_id, occurred_at")
+      .eq("event_type", "page_view")
+      .eq("path", "/coach")
+      .eq("role", "COACH")
+      .gte("occurred_at", windowStart.toISOString());
+    const openDays = new Map<string, Set<string>>();
+    for (const r of (ev ?? []) as Array<{ team_id: string | null; occurred_at: string }>) {
+      if (!r.team_id) continue;
+      if (!openDays.has(r.team_id)) openDays.set(r.team_id, new Set());
+      openDays.get(r.team_id)!.add(r.occurred_at.slice(0, 10));
+    }
+
+    // Per team: squad check-in share over the window.
+    const { data: comp } = await sb
+      .from("v_player_submission_compliance")
+      .select("team_id, checkin_status")
+      .gte("day", isoDay(windowStart));
+    const agg = new Map<string, { sub: number; tot: number }>();
+    for (const r of (comp ?? []) as Array<{ team_id: string | null; checkin_status?: string }>) {
+      if (!r.team_id) continue;
+      const a = agg.get(r.team_id) ?? { sub: 0, tot: 0 };
+      a.tot += 1;
+      if (r.checkin_status === "submitted") a.sub += 1;
+      agg.set(r.team_id, a);
+    }
+
+    let activeTeams = 0, inactiveTeams = 0, activeSum = 0, inactiveSum = 0;
+    for (const [team, a] of agg) {
+      if (a.tot === 0) continue;
+      const compliance = a.sub / a.tot;
+      const opened = openDays.get(team)?.size ?? 0;
+      if (opened / WINDOW_DAYS >= TODAY_ACTIVE_SHARE) { activeTeams += 1; activeSum += compliance; }
+      else { inactiveTeams += 1; inactiveSum += compliance; }
+    }
+    if (activeTeams === 0 || inactiveTeams === 0) return null;
+
+    return computeCohortTieIn({
+      activeTeams,
+      inactiveTeams,
+      activeMeanCompliance: activeSum / activeTeams,
+      inactiveMeanCompliance: inactiveSum / inactiveTeams,
+    });
   } catch {
     return null;
   }
@@ -157,5 +224,21 @@ export async function GET(req: NextRequest) {
   };
 
   const verdict = classifyAdoption(input);
+
+  // Attach the REAL cohort tie-in only to the nudges it supports (dormant /
+  // compliance) and only when the cohort actually supports a claim — otherwise it
+  // stays null. Computed lazily so quiet/other-nudge coaches skip the cohort queries.
+  const key = verdict.topNudge?.key;
+  if (verdict.topNudge && (key === "dormant" || key === "compliance_drop")) {
+    const tie = await cohortTieIn(sb, now);
+    if (tie) {
+      return NextResponse.json({
+        ok: true,
+        verdict: { ...verdict, topNudge: { ...verdict.topNudge, outcomeTieIn: tie } },
+        signals: input,
+      });
+    }
+  }
+
   return NextResponse.json({ ok: true, verdict, signals: input });
 }
