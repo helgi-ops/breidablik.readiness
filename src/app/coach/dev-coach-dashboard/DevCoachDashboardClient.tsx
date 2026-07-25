@@ -10568,8 +10568,18 @@ export default function CoachPage() {
             <InternalAcwrCard teamId={coachTeamId} />
           </section>
 
-          {/* ── 7/28d Load Metrics ───────────────────────────── */}
           {/* ── External Load (GPS) ───────────────────────────── */}
+          {ctxYesterdayLoaded && !ctxDist && !ctxHsr && !ctxVelB5 ? (
+            /* Empty state — the whole card collapses to a single dashed line so a
+               GPS-less day doesn't take a full card of "no data". */
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-[#ddd9cf] px-4 py-3" style={{ background: "rgba(255,255,255,0.6)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[#5a584f]">{lang === "IS" ? "Ytra álag · GPS í gær" : "External load · GPS yesterday"}</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#f0eee7", color: "#908d83" }}>OFF</span>
+              </div>
+              <span className="text-xs text-[#908d83]">{lang === "IS" ? "Engin Catapult-gögn fyrir gærdaginn — birtist þegar lota samstillist." : "No Catapult data for yesterday — appears when a session syncs."}</span>
+            </div>
+          ) : (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">External Load · GPS</span>
@@ -10595,8 +10605,6 @@ export default function CoachPage() {
             <CardContent>
               {!ctxYesterdayLoaded ? (
                 <div className="text-sm text-slate-400">Loading GPS data…</div>
-              ) : !ctxDist && !ctxHsr && !ctxVelB5 ? (
-                <div className="text-sm text-slate-400">No Catapult data found for yesterday.</div>
               ) : (
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-3 text-sm">
                   {[
@@ -10619,6 +10627,7 @@ export default function CoachPage() {
             </CardContent>
           </Card>
           </section>
+          )}
 
           {/* ── Player lookup (historical snapshot) — an occasional task, so it
                 lives at the BOTTOM, below the daily answers. ─────────────── */}
