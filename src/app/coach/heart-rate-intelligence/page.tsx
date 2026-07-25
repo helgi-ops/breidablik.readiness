@@ -26,8 +26,14 @@ import { HR_CAVEAT } from "@/lib/methodologyCaveats";
 import { loadHrForTeam, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
 import { type LoadAlignment, type HrLoadSession, type HrLoadRead, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
 
-// Ordinal band → colour ramp (low intensity → high). Same as the cross-check card.
-const BAND_COLOR = ["#c7d2fe", "#a5b4fc", "#818cf8", "#6366f1", "#f59e0b", "#f97316", "#ef4444", "#b91c1c"];
+// The 8 ordinal Catapult bands grouped into three plain, coach-readable intensity
+// tiers on a familiar cool→hot heat ramp (blue = easy … red = hard). "High = bands
+// 6–8" matches the squad-shape line and the glossary. Ordinal only — never a %HRmax zone.
+const INTENSITY_TIERS: { key: string; bands: number[]; color: string; label: Bi }[] = [
+  { key: "low", bands: [1, 2, 3], color: "#60a5fa", label: { en: "Low", is: "Lágt" } },
+  { key: "mod", bands: [4, 5], color: "#f59e0b", label: { en: "Moderate", is: "Miðlungs" } },
+  { key: "high", bands: [6, 7, 8], color: "#ef4444", label: { en: "High", is: "Hátt" } },
+];
 const ALIGN_CLASS: Record<LoadAlignment, string> = {
   hidden_load: "text-rose-700",
   low_cardio_response: "text-amber-700",
@@ -319,10 +325,10 @@ export default function HeartRateIntelligencePage() {
                     : "%HRmax needs the player's HRmax. We use the best available: coach-set → observed belt peak → age estimate (Tanaka 2001; Gulati 2010 for women). An age estimate is marked “≈” and does NOT raise confidence — only real measurement does. Override with a measured value anytime."}</p>
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-800">{IS ? "Ákefðarbönd 1–8" : "Intensity bands 1–8"}</div>
+                  <div className="font-semibold text-slate-800">{IS ? "Hve erfið var lotan (lág/miðlungs/há)" : "How hard was the session (low/moderate/high)"}</div>
                   <p>{IS
-                    ? "Catapult raðbönd (mörk stillt í OpenField) — ekki kvörðuð %HRmax svæði. Röð + % er merkingin; bpm birt aðeins þar sem raunhæft."
-                    : "Catapult ordinal bands (boundaries set in OpenField) — not calibrated %HRmax zones. Order + % is the label; bpm shown only where reliable."}</p>
+                    ? "Catapult sendir 8 raðbönd (mörk stillt í OpenField, ekki kvörðuð %HRmax svæði). Við hópum þau í þrennt — lágt (1–3), miðlungs (4–5), hátt (6–8) — og sýnum mínútur + % í hverjum. Blátt = rólegt, rautt = erfitt. Aðeins röð, ekki púls-svæði."
+                    : "Catapult sends 8 ordinal bands (boundaries set in OpenField, not calibrated %HRmax zones). We group them into three — low (1–3), moderate (4–5), high (6–8) — and show minutes + % in each. Blue = easy, red = hard. Order only, not HR zones."}</p>
                 </div>
               </div>
             </ShowDetails>
@@ -334,7 +340,6 @@ export default function HeartRateIntelligencePage() {
                 const s = r.read.latest;
                 const flag = isFlaggedRead(r);
                 const present = r.dist.filter((b) => (b.timeS ?? 0) > 0);
-                const labelled = present.filter((b) => (b.timeS ?? 0) >= 15);
                 return (
                   <div key={r.playerId} className={`rounded-lg border p-3 ${flag ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -407,25 +412,42 @@ export default function HeartRateIntelligencePage() {
                       </div>
                     )}
 
-                    {/* 8-band intensity distribution (latest session) */}
-                    {present.length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-[9px] uppercase tracking-wide text-slate-400">{IS ? "Ákefðardreifing (nýjasta lota)" : "Intensity distribution (latest session)"}</div>
-                        <div className="mt-0.5 flex h-2.5 w-full overflow-hidden rounded">
-                          {present.map((b) => (
-                            <div key={b.band} style={{ width: `${b.pct ?? 0}%`, backgroundColor: BAND_COLOR[b.band - 1] }}
-                              title={`Band ${b.band}${b.avgBpm ? ` ≈ ${b.avgBpm} bpm` : ""} · ${Math.round((b.timeS ?? 0) / 60)}m (${b.pct ?? 0}%)`} />
-                          ))}
+                    {/* How hard was the session — plain Low/Moderate/High split, latest belt session */}
+                    {present.length > 0 && (() => {
+                      const tiers = INTENSITY_TIERS.map((t) => ({ ...t, timeS: t.bands.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) }));
+                      const totalS = tiers.reduce((a, t) => a + t.timeS, 0);
+                      if (totalS <= 0) return null;
+                      const shown = tiers.filter((t) => t.timeS > 0);
+                      const pctOf = (sec: number) => Math.round((sec / totalS) * 100);
+                      const minsOf = (sec: number) => (sec < 30 ? "<1" : String(Math.round(sec / 60)));
+                      return (
+                        <div className="mt-2">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <div className="text-[11px] font-medium text-slate-700">{IS ? "Hve erfið var lotan" : "How hard was the session"}</div>
+                            <div className="text-[9px] text-slate-400">{IS ? "nýjasta lota" : "latest session"} · {Math.round(totalS / 60)} {IS ? "mín á belti" : "min on belt"}</div>
+                          </div>
+                          <div className="mt-1 flex h-4 w-full overflow-hidden rounded"
+                            title={IS ? "Hlutfallsleg ákefð, lág → há (Catapult raðbönd, hópuð)" : "Relative intensity, low → high (Catapult ordinal bands, grouped)"}>
+                            {shown.map((t) => (
+                              <div key={t.key} style={{ width: `${pctOf(t.timeS)}%`, backgroundColor: t.color }}
+                                className="flex items-center justify-center"
+                                title={`${IS ? t.label.is : t.label.en} · ${minsOf(t.timeS)} ${IS ? "mín" : "min"} (${pctOf(t.timeS)}%)`}>
+                                {pctOf(t.timeS) >= 12 ? <span className="text-[9px] font-semibold tabular-nums text-white/95">{pctOf(t.timeS)}%</span> : null}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+                            {shown.map((t) => (
+                              <span key={t.key} className="inline-flex items-center gap-1">
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
+                                {IS ? t.label.is : t.label.en}
+                                <span className="tabular-nums text-slate-500">{minsOf(t.timeS)}{IS ? "m" : "m"} · {pctOf(t.timeS)}%</span>
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {labelled.map((b) => (
-                            <span key={b.band} className="rounded px-1 py-px text-[9px] tabular-nums text-slate-600" style={{ backgroundColor: `${BAND_COLOR[b.band - 1]}33` }}>
-                              B{b.band} · {b.pct}%{b.avgBpm ? <span className="text-slate-400"> ~{b.avgBpm}bpm</span> : null}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Behind the numbers — the raw matched sessions this read is built on. */}
                     {(() => {
