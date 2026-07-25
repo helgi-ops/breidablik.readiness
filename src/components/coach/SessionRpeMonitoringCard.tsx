@@ -2,12 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import {
-  formatLoadBandClass,
-  formatLoadBandLabel,
-  formatSessionTypeLabel,
-  formatWeekSetupDayLabel,
-} from "@/lib/session-rpe/formatters";
+import { useLang } from "@/lib/lang";
+import { formatWeekSetupDayLabel } from "@/lib/session-rpe/formatters";
 
 type SessionRpeSummary = {
   totalExpectedPlayers: number;
@@ -82,10 +78,13 @@ function dateMinusDays(dateKey: string, days: number) {
 
 export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: string | null; date?: string }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
+  const [lang] = useLang();
+  const IS = lang === "IS";
 
   const [dateKey, setDateKey] = useState(todayISO());
   // When the tab supplies a shared date, follow it (and hide our own picker).
   useEffect(() => { if (date && date !== dateKey) setDateKey(date); }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [reminderState, setReminderState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<SummaryResponse | null>(null);
@@ -223,24 +222,56 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
   }, [teamId]);
 
   const submittedCount = data?.summary.totalSubmissions ?? 0;
-  const totalPlayers = data?.summary.totalExpectedPlayers ?? 0;
-  const missingCount = data?.summary.missingSubmissions ?? 0;
-  const compliancePercent = totalPlayers > 0 ? Math.round((submittedCount / totalPlayers) * 100) : 0;
 
   const weekSetupDay = data?.weekSetupDay ?? null;
   const weekDayLabel = weekSetupDay ? formatWeekSetupDayLabel(weekSetupDay.day_type) : null;
   const isMatchDay = String(weekSetupDay?.day_type ?? "").trim().toUpperCase() === "GAME";
 
+  // ── Redesign helpers ──────────────────────────────────────────────────────
+  // Session load → three display bands (Light / Moderate / Hard) for the header
+  // distribution bar and the per-row left stripe.
+  const bandColor = (b: string | null | undefined): string => {
+    const u = String(b ?? "").toUpperCase();
+    if (u === "HIGH" || u === "VERY_HIGH") return "#cb8420"; // Hard
+    if (u === "MODERATE") return "#60a5fa";                  // Moderate
+    return "#7dd3fc";                                        // Light
+  };
+  const bandCounts = (() => {
+    let light = 0, mod = 0, hard = 0;
+    for (const e of data?.entries ?? []) {
+      const u = String(e.load_band ?? "").toUpperCase();
+      if (u === "HIGH" || u === "VERY_HIGH") hard += 1;
+      else if (u === "MODERATE") mod += 1;
+      else light += 1;
+    }
+    return { light, mod, hard, total: (data?.entries?.length ?? 0) || 1 };
+  })();
+  // Submitted rows, heaviest first — the coach reads the biggest loads first.
+  const sortedEntries = [...(data?.entries ?? [])].sort((a, b) => (b.session_load ?? 0) - (a.session_load ?? 0));
+
+  const sendReminder = async () => {
+    if (!teamId || reminderState === "sending") return;
+    setReminderState("sending");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/notifications/manual-rpe-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ teamId, date: dateKey }),
+      });
+      setReminderState(res.ok ? "sent" : "error");
+    } catch { setReminderState("error"); }
+  };
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Session RPE</div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">Session RPE Monitoring</div>
-          <div className="mt-1 text-xs text-slate-500">
+          <div className="text-sm font-semibold text-[#292824]">Session RPE</div>
+          <div className="mt-0.5 text-xs text-[#a9a69c]">
             {loading
               ? "—"
-              : `${submittedCount} / ${totalPlayers} submitted · ${missingCount} missing · Compliance ${compliancePercent}%`}
+              : `${submittedCount} ${IS ? "skil" : "in"} · ${IS ? "meðal-RPE" : "avg RPE"} ${data?.summary.avgRpe ?? "—"} · ${IS ? "heildarálag" : "total load"} ${(data?.summary.totalDailyLoad ?? 0).toLocaleString("is-IS")}`}
           </div>
           {!loading && weekDayLabel ? (
             <div
@@ -256,6 +287,12 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
               {weekSetupDay?.focus ? <span className="opacity-70">· {weekSetupDay.focus}</span> : null}
             </div>
           ) : null}
+        </div>
+
+        <div className="flex h-2 w-[120px] shrink-0 overflow-hidden rounded-full" title={IS ? "Létt / miðlungs / hart álag" : "Light / moderate / hard load"}>
+          {[{ n: bandCounts.light, c: "#7dd3fc" }, { n: bandCounts.mod, c: "#60a5fa" }, { n: bandCounts.hard, c: "#cb8420" }].map((b, i) => (
+            <div key={i} style={{ width: `${(b.n / bandCounts.total) * 100}%`, background: b.c }} />
+          ))}
         </div>
 
         {!date && (
@@ -304,107 +341,79 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
         )}
       </div>
 
-      <div className="mt-2.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Total submissions</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums leading-none">{loading ? "—" : submittedCount}</div>
-        </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-amber-700">Missing submissions</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums leading-none text-amber-800">{loading ? "—" : missingCount}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Avg RPE</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums leading-none">{loading ? "—" : data?.summary.avgRpe ?? "—"}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Total daily load</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums leading-none">{loading ? "—" : data?.summary.totalDailyLoad ?? 0}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500">Yesterday total load</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums leading-none">{loading ? "—" : data?.summary.yesterdayTotalDailyLoad ?? 0}</div>
-        </div>
-      </div>
-
       {error ? <div className="mt-2 text-xs text-rose-700">{error}</div> : null}
 
       {!loading && !error ? (
-        <div className="mt-2.5 grid items-stretch gap-2.5 xl:grid-cols-2">
-          <div className="h-full rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-slate-700">Submitted players</div>
-              <div className="text-[11px] text-slate-500 tabular-nums">{data?.entries?.length ?? 0} entries</div>
+        <>
+          {/* Missing — a tinted strip with a one-click reminder + name chips. */}
+          {data?.missingPlayers?.length ? (
+            <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: "rgba(251,247,233,0.4)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold" style={{ color: "#8a5718" }}>
+                  {data.missingPlayers.length} {IS ? "hafa ekki skilað" : "haven't submitted"}
+                </span>
+                <button type="button" onClick={sendReminder} disabled={reminderState === "sending" || reminderState === "sent"}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border bg-white px-2.5 text-[11px] font-semibold disabled:opacity-60"
+                  style={{ borderColor: "#eddfb4", color: "#8a5718" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></svg>
+                  {reminderState === "sent" ? (IS ? "Sent ✓" : "Sent ✓")
+                    : reminderState === "sending" ? (IS ? "Sendi…" : "Sending…")
+                    : reminderState === "error" ? (IS ? "Villa" : "Error")
+                    : (IS ? "Senda áminningu á alla" : "Remind everyone")}
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {data.missingPlayers.map((p) => (
+                  <span key={p.player_id} className="rounded-full border bg-white px-2 py-0.5 text-[11px] font-medium" style={{ borderColor: "#eddfb4", color: "#6e6c64" }}>
+                    {p.player_name}
+                  </span>
+                ))}
+              </div>
             </div>
+          ) : null}
 
-            <div className="mt-2 max-h-[220px] overflow-y-auto pr-1">
-              {!data?.entries?.length ? (
-                <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-2 text-center text-xs text-slate-500">
-                  No Session RPE submissions for this date.
+          {/* Submitted — a band-striped table, heaviest first; click a row to edit. */}
+          <div className="mt-3">
+            {!sortedEntries.length ? (
+              <div className="flex min-h-[100px] items-center justify-center rounded-lg border border-dashed border-[#ddd9cf] px-2 text-center text-xs text-[#908d83]">
+                {IS ? "Engar RPE-skráningar fyrir þennan dag." : "No Session RPE submissions for this date."}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-[1fr_90px_44px_70px] gap-2 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#a9a69c" }}>
+                  <span>{IS ? "Leikmaður" : "Player"}</span>
+                  <span>{IS ? "Æfing" : "Session"}</span>
+                  <span className="text-right">RPE</span>
+                  <span className="text-right">{IS ? "Álag" : "Load"}</span>
                 </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {data.entries.map((row) => (
-                    <div key={row.id} className="flex items-center justify-between rounded-lg border px-2.5 py-2 text-xs">
-                      <div className="min-w-0 pr-2">
-                        <div className="truncate font-medium text-slate-800">{row.player_name}</div>
-                        <div className="truncate text-[11px] text-slate-500">
-                          {formatSessionTypeLabel(row.effective_session_type)}
-                          {row.effective_session_type !== row.session_type ? (
-                            <span className="text-indigo-600"> (Week setup)</span>
-                          ) : null}
-                          {" "}· {row.duration_minutes} min ·{" "}
-                          {new Date(row.submitted_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-[11px] text-slate-600">RPE {row.rpe}</div>
-                        <div className="mt-0.5 inline-flex items-center gap-1">
-                          <span className="font-semibold tabular-nums text-slate-900">{row.session_load}</span>
-                          <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${formatLoadBandClass(row.load_band)}`}>
-                            {formatLoadBandLabel(row.load_band)}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(row)}
-                          className="mt-1 inline-flex h-6 items-center rounded-md border border-slate-300 bg-white px-2 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                          title="Breyta dagsetningu / session type"
-                        >
-                          Breyta
-                        </button>
-                      </div>
-                    </div>
+                <div className="max-h-[250px] overflow-y-auto">
+                  {sortedEntries.map((row) => (
+                    <button key={row.id} type="button" onClick={() => openEdit(row)}
+                      title={IS ? "Smelltu til að breyta" : "Click to edit"}
+                      className="grid w-full grid-cols-[1fr_90px_44px_70px] items-center gap-2 border-b border-[#f0eee7] px-2 py-1.5 text-left text-xs transition-colors hover:bg-[#faf9f5]"
+                      style={{ borderLeft: `3px solid ${bandColor(row.load_band)}` }}>
+                      <span className="truncate font-medium text-[#292824]">
+                        {row.player_name}
+                        {row.effective_session_type !== row.session_type ? <span className="ml-1 text-[10px]" style={{ color: "#4338ca" }}>({IS ? "vika" : "week"})</span> : null}
+                      </span>
+                      <span className="truncate text-[11px] text-[#908d83]">
+                        {row.duration_minutes} {IS ? "mín" : "min"} · {new Date(row.submitted_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <span className="text-right tabular-nums text-[#5a584f]">{row.rpe}</span>
+                      <span className="text-right font-semibold tabular-nums text-[#292824]">{row.session_load}</span>
+                    </button>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className="h-full rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-slate-700">Missing players</div>
-              <div className="text-[11px] text-slate-500 tabular-nums">{data?.missingPlayers?.length ?? 0} missing</div>
-            </div>
-
-            <div className="mt-2 max-h-[220px] overflow-y-auto space-y-1.5 pr-1">
-              {!data?.missingPlayers?.length ? (
-                <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-2 text-center text-xs text-slate-500">
-                  No missing submissions for this date.
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-2 text-[10px] text-[#908d83]">
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#7dd3fc" }} />{IS ? "Létt" : "Light"}</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#60a5fa" }} />{IS ? "Miðlungs" : "Moderate"}</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#cb8420" }} />{IS ? "Hart" : "Hard"}</span>
+                  <span className="ml-auto italic">{IS ? "Smelltu á röð til að breyta" : "Click a row to edit"}</span>
                 </div>
-              ) : (
-                data.missingPlayers.map((p) => (
-                  <div key={p.player_id} className="flex items-center justify-between rounded-md border border-amber-200/70 bg-amber-50/30 px-2 py-1.5 text-xs">
-                    <span className="truncate pr-2 font-medium text-slate-800">{p.player_name}</span>
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                      MISSING
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+              </>
+            )}
           </div>
-        </div>
+        </>
       ) : null}
 
       {editing ? (

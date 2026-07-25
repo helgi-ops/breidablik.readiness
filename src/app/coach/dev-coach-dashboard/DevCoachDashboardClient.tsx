@@ -85,7 +85,6 @@ import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import LoadRpeAnswerStrip from "@/components/coach/LoadRpeAnswerStrip";
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
-import DailyInternalLoadCard from "@/components/coach/DailyInternalLoadCard";
 import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import LoadMetricsCard from "@/components/coach/LoadMetricsCard";
@@ -10555,10 +10554,9 @@ export default function CoachPage() {
               <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Session RPE</span>
               <div className="flex-1 h-px bg-slate-100" />
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SessionRpeMonitoringCard teamId={coachTeamId} date={loadDate} />
-              <DailyInternalLoadCard teamId={coachTeamId} date={loadDate} />
-            </div>
+            {/* Daily Internal Load's total/mean/max now live in the answer strip's
+                KPI card; the Session RPE card carries the full submitted table. */}
+            <SessionRpeMonitoringCard teamId={coachTeamId} date={loadDate} />
             {/* Objective HR internal-load cross-check on the subjective sRPE above. */}
             <div id="hr" className="mt-4 scroll-mt-4">
               <HrLoadCrossCheckCard teamId={coachTeamId} />
