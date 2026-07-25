@@ -2406,6 +2406,12 @@ export default function CoachPage() {
   const loadTodayRunning = useRef(false);
   const [coachRole, setCoachRole] = useState<string>("coach");
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+  // One shared date for the Load & RPE tab — the answer strip owns the control and
+  // drives the Session RPE + Daily Internal Load detail cards (local today default).
+  const [loadDate, setLoadDate] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
   // Declared team break covering today (drives the "On break" command-center
   // state). Null = not on a break today.
   const [breakToday, setBreakToday] = useState<{ label: string | null; day: number; total: number } | null>(null);
@@ -10541,7 +10547,7 @@ export default function CoachPage() {
 
           {/* Answer-first KPI strip — status at a glance over a shared Í dag/Í gær
               date, each card anchoring to its detail section below. */}
-          <LoadRpeAnswerStrip teamId={coachTeamId} />
+          <LoadRpeAnswerStrip teamId={coachTeamId} date={loadDate} onDate={setLoadDate} />
 
           {/* ── Session RPE ───────────────────────────────────── */}
           <section id="rpe" className="scroll-mt-4">
@@ -10550,8 +10556,8 @@ export default function CoachPage() {
               <div className="flex-1 h-px bg-slate-100" />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              <SessionRpeMonitoringCard teamId={coachTeamId} />
-              <DailyInternalLoadCard teamId={coachTeamId} />
+              <SessionRpeMonitoringCard teamId={coachTeamId} date={loadDate} />
+              <DailyInternalLoadCard teamId={coachTeamId} date={loadDate} />
             </div>
             {/* Objective HR internal-load cross-check on the subjective sRPE above. */}
             <div id="hr" className="mt-4 scroll-mt-4">

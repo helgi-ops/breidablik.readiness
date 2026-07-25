@@ -19,9 +19,11 @@ function todayISO() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function DailyInternalLoadCard({ teamId }: { teamId?: string | null }) {
+export default function DailyInternalLoadCard({ teamId, date }: { teamId?: string | null; date?: string }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [dateKey, setDateKey] = useState(todayISO());
+  // Follow the tab's shared date when supplied (and hide our own picker).
+  useEffect(() => { if (date && date !== dateKey) setDateKey(date); }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<DailyInternalLoadResponse | null>(null);
@@ -92,6 +94,7 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Session RPE</div>
           <div className="mt-1 text-sm font-semibold text-slate-900">Daily Internal Load</div>
         </div>
+        {!date && (
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
@@ -112,6 +115,7 @@ export default function DailyInternalLoadCard({ teamId }: { teamId?: string | nu
             {loading ? "Loading..." : "Refresh"}
           </button>
         </div>
+        )}
       </div>
 
       {verdict ? (

@@ -33,13 +33,17 @@ type AcwrPlayer = { full_name?: string; acwr?: number | null; zone?: string };
 
 const num = (v: unknown): number | null => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
 
-export default function LoadRpeAnswerStrip({ teamId }: { teamId?: string | null }) {
+export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: string | null; date?: string; onDate?: (d: string) => void }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [lang] = useLang();
   const IS = lang === "IS";
 
   const today = useMemo(() => isoDay(new Date()), []);
-  const [dateKey, setDateKey] = useState(today);
+  // Controlled by the tab (so this one date drives the detail cards too); falls back
+  // to its own state if mounted standalone.
+  const [ownDate, setOwnDate] = useState(today);
+  const dateKey = date ?? ownDate;
+  const setDateKey = (d: string) => { setOwnDate(d); onDate?.(d); };
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [entries, setEntries] = useState<SummaryEntry[]>([]);

@@ -80,10 +80,12 @@ function dateMinusDays(dateKey: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string | null }) {
+export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: string | null; date?: string }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
   const [dateKey, setDateKey] = useState(todayISO());
+  // When the tab supplies a shared date, follow it (and hide our own picker).
+  useEffect(() => { if (date && date !== dateKey) setDateKey(date); }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<SummaryResponse | null>(null);
@@ -256,6 +258,7 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
           ) : null}
         </div>
 
+        {!date && (
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -298,6 +301,7 @@ export default function SessionRpeMonitoringCard({ teamId }: { teamId?: string |
             {loading ? "Loading..." : "Refresh"}
           </button>
         </div>
+        )}
       </div>
 
       <div className="mt-2.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
