@@ -32,7 +32,8 @@ export type TutorialSlug =
   | "hsr-intelligence"
   | "return-to-training"
   | "injury-rtp"
-  | "progressive-overload";
+  | "progressive-overload"
+  | "custom-programmes";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -150,6 +151,12 @@ const LOAD_RPE_VIDEO =
 // videoAspectPaddingTop to fill the frame without letterboxing.
 const PROGRESSIVE_OVERLOAD_VIDEO =
   "https://player.vimeo.com/video/1212718673?h=d6875c2b0d&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Custom Programmes (strength microdose builder) walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Custom-Programmes-full-page-explained.pdf. Page is
+// /coach/custom-templates (no PagePurpose there — opened via CoachTutorialButton).
+const CUSTOM_PROGRAMMES_VIDEO =
+  "https://player.vimeo.com/video/1212921107?h=a0797157bc&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Injury / RTP tab walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Injury-RTP-full-page-explained.pdf. The tab lives on
@@ -1453,6 +1460,78 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Progressive Overload is the macro planner — a multi-week preparation build. Week Setup configures each week; Pre-Session/Post-Training run and review the day. Together: the season build, the week, and the day. This is the “getting fit for the season” planner, best used in the preparation phase — a safe, injury-aware path from “where we are now” to “ready for a match”.",
             is: "Progressive Overload er macro-planinn — margra vikna undirbúnings-bygging. Week Setup stillir hverja viku; Pre-Session/Post-Training keyra og endurskoða daginn. Saman: tímabils-byggingin, vikan, og dagurinn. Þetta er „að komast í form fyrir tímabilið“-planinn, best notaður á undirbúningstímabili — örugg, meiðsla-meðvituð leið frá „hvar erum við núna“ að „tilbúin fyrir leik“.",
+          },
+        ],
+      },
+    ],
+  },
+  "custom-programmes": {
+    title: { en: "How to use Custom Programmes", is: "Hvernig á að nota Sérsniðin prógramm" },
+    intro: {
+      en: "Custom Programmes is the strength-programme builder. The core idea: you build one version — GREEN (the full ready-day session), and the system auto-generates the YELLOW (reduced) and RED (recovery/ISO) versions. A four-step wizard, three flexible ways to build the session, and a live Program Auditor that checks movement-pattern balance as you go. This is where the readiness colour becomes an actual strength session.",
+      is: "Custom Programmes er styrktar-prógrammasmiðurinn. Kjarnahugmyndin: þú byggir eina útgáfu — GREEN (fulla dags-æfinguna), og kerfið býr til YELLOW (minnkaða) og RED (endurheimtar/ISO) útgáfurnar sjálfkrafa. Fjögurra skrefa hjálpari, þrjár sveigjanlegar leiðir til að byggja æfinguna, og lifandi Program Auditor sem gætir að hreyfimynstra-jafnvægi á meðan þú byggir. Þetta er þar sem reiðuskorslitirnir verða að raunverulegri styrktar-æfingu.",
+    },
+    videoEmbedUrl: CUSTOM_PROGRAMMES_VIDEO,
+    sections: [
+      {
+        heading: { en: "Use the page in 30 seconds", is: "Notaðu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Build GREEN (describe it, upload a file, or pick a structure). Watch the auditor for balance gaps and fix them. The YELLOW and RED are generated for you — review them. Save. And remember: you define the ready-day session; the system handles the modified and recovery days.",
+            is: "Byggðu GREEN (lýstu, hladdu upp eða veldu uppbyggingu). Fylgstu með auditornum fyrir jafnvægis-eyður og lagaðu þær. YELLOW og RED eru búin til fyrir þig — yfirfarðu þau. Vistaðu. Og mundu: þú skilgreinir dags-æfinguna; kerfið sér um aðlöguðu og endurheimtar-dagana.",
+          },
+        ],
+      },
+      {
+        heading: { en: "You build GREEN; the system builds YELLOW and RED", is: "Þú byggir GREEN; kerfið byggir YELLOW og RED" },
+        body: [
+          {
+            en: "The central idea: the coach defines the full session once (GREEN, the ready-day version), and the system auto-derives YELLOW (a reduced dose — 1–2 fewer sets, same structure) and RED (warm-up + an ISO circuit + light core — no lifts, no jumps). So a player's readiness colour maps to a session variant without the coach building three.",
+            is: "Miðlæga hugmyndin: þjálfarinn skilgreinir fullu æfinguna einu sinni (GREEN, dags-útgáfuna), og kerfið afleiðir sjálfkrafa YELLOW (minnkaður skammtur — 1–2 færri sett, sama uppbygging) og RED (upphitun + ISO-hringur + létt core — engar lyftur, engin hopp). Þannig kortleggst reiðuskorslitur leikmanns á æfingaútgáfu án þess að þjálfarinn byggi þrjár.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The wizard + three ways to build GREEN", is: "Hjálparinn + þrjár leiðir til að byggja GREEN" },
+        body: [
+          {
+            en: "Four steps: Name & sport (team + season) → Choose MD-days → Build GREEN → Review & save. It's season-aware (preseason building, in-season maintenance, playoffs peak, off-season recovery) and MD-day-specific (GENERIC, MD-4 … MD+2), so a programme fits where it sits in the week and the season.",
+            is: "Fjögur skref: Name & sport (lið + tímabil) → Choose MD-days → Build GREEN → Review & save. Tímabils-vitund (preseason bygging, in-season viðhald, playoffs toppur, off-season endurheimt) og MD-dags-sértækt (GENERIC, MD-4 … MD+2), svo prógramm passar við hvar það situr í vikunni og tímabilinu.",
+          },
+          {
+            en: "Three ways to build GREEN: describe it in words (the AI builds the blocks from your description), upload a file (Word/Excel/PDF/text → parsed into blocks), or choose a proven structure (French contrast, García-Ramos, Tufano clusters, Oliver…). Then edit blocks and lines directly (warm-up, main block, sets, rounds, rest). Flexible input for any working style.",
+            is: "Þrjár leiðir til að byggja GREEN: lýstu því í máli (gervigreindin byggir blokkirnar úr lýsingunni), hladdu upp skrá (Word/Excel/PDF/texti → greint í blokkir), eða veldu sannreynda uppbyggingu (French contrast, García-Ramos, Tufano cluster, Oliver…). Svo breytir þú blokkum og línum beint (warm-up, main block, sett, umferðir, hvíld). Sveigjanlegt inntak fyrir alla vinnustíla.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The Program Auditor (the guardrail)", is: "Program Auditor (öryggisnetið)" },
+        body: [
+          {
+            en: "As you build, a live auditor checks the session: movement-pattern balance (squat/hinge/push/pull/core/carry), push:pull and knee:hip ratios, single-leg %. It flags gaps with a fix — “no hinge work → add a hinge exercise”, “no anti-rotation core → add one”. It stops you shipping a lopsided programme.",
+            is: "Á meðan þú byggir athugar lifandi auditor æfinguna: hreyfimynstra-jafnvægi (squat/hinge/push/pull/core/carry), push:pull og knee:hip hlutföll, single-leg %. Hann flaggar eyður með lagfæringu — „engin hinge-vinna → bættu við hinge-æfingu“, „ekkert anti-rotation core → bættu við einni“. Hann kemur í veg fyrir að þú sendir ójafnvægt prógramm.",
+          },
+        ],
+      },
+      {
+        heading: { en: "How YELLOW and RED are derived", is: "Hvernig YELLOW og RED eru afleidd" },
+        body: [
+          {
+            en: "YELLOW = the reduced dose: same structure, 1–2 fewer sets — enough to maintain without adding fatigue on a modified day. RED = the recovery session: warm-up, an ISO circuit (hamstring, adductor/Copenhagen, calf, breathing) and light anti-rotation core — no lifts, no jumps. Evidence-based substitution so a red day still does something useful for the tissue.",
+            is: "YELLOW = minnkaður skammtur: sama uppbygging, 1–2 færri sett — nóg til að viðhalda án þess að bæta við þreytu á aðlöguðum degi. RED = endurheimtaræfingin: upphitun, ISO-hringur (aftanlæri, nári/Copenhagen, kálfi, öndun) og létt anti-rotation core — engar lyftur, engin hopp. Ritrýnd útskipting svo rauður dagur geri samt eitthvað gagnlegt fyrir vefinn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Individual (player) programmes + where it sits", is: "Einstaklings-prógrömm + hvar hún situr" },
+        body: [
+          {
+            en: "You can also make an override for a specific player — e.g. injury or return-to-play — that deviates from the team baseline on the MD-days you choose, within a period. The team plan stays the baseline; the individual template only diverges where it needs to. So a player in rehab gets his own version without breaking the team build.",
+            is: "Þú getur líka gert yfirtöku fyrir tiltekinn leikmann — t.d. meiðsli eða endurkomu — sem víkur frá liðsgrunninum á þeim MD-dögum sem þú velur, innan tímabils. Liðsplanið helst grunnurinn; einstaklings-sniðmátið víkur aðeins þar sem það þarf. Svo leikmaður í endurhæfingu fær sína útgáfu án þess að rjúfa liðsuppbygginguna.",
+          },
+          {
+            en: "Where it sits: Today and Squad say green/yellow/red per player; this page defines what green/yellow/red means as an actual strength session. It's the library the daily microdose engine draws from (Rønnestad) — so the readiness verdict turns into a concrete, balanced, readiness-matched session automatically.",
+            is: "Hvar hún situr: Today og Squad segja grænt/gult/rautt á hvern leikmann; þessi síða skilgreinir hvað grænt/gult/rautt þýðir sem raunveruleg styrktar-æfing. Hún er safnið sem daglega microdose-vélin sækir í (Rønnestad) — svo reiðuskorsniðurstaðan verður að áþreifanlegri, jafnvægðri, reiðuskors-samstilltri æfingu sjálfkrafa.",
           },
         ],
       },

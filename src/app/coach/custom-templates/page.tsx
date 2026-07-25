@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import ProgramAuditCard from "@/components/trainer/ProgramAuditCard";
 import { auditLines } from "@/lib/client/programAudit";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 // ─── Workout structures ───────────────────────────────────────────────────────
 
@@ -2732,7 +2733,9 @@ export default function CustomTemplatesPage() {
             Build your own microdose programme. You define the green version — the system handles yellow and red.
           </p>
         </div>
-        {!showBuilder && (
+        <div className="flex items-center gap-2">
+          <CoachTutorialButton slug="custom-programmes" />
+          {!showBuilder && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button onClick={() => { setBuilderMode("team"); setShowBuilder(true); setStep(1); }}>
               + Create new programme
@@ -2756,7 +2759,8 @@ export default function CustomTemplatesPage() {
               + Player programme
             </Button>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Success message */}
