@@ -250,6 +250,17 @@ function KpiTile({
 
 // ── Spark Card ────────────────────────────────────────────────────────────────
 
+/** Recent-half vs earlier-half average of a metric's window — a trend, not one day. */
+function halfTrend(values: (number | null)[]): { earlierAvg: number; recentAvg: number; delta: number; n: number } | null {
+  const vals = values.filter((v): v is number => v != null);
+  if (vals.length < 4) return null;
+  const half = Math.floor(vals.length / 2);
+  const mean = (a: number[]) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
+  const earlierAvg = mean(vals.slice(0, half));
+  const recentAvg = mean(vals.slice(half));
+  return { earlierAvg, recentAvg, delta: recentAvg - earlierAvg, n: vals.length };
+}
+
 function SparkCard({
   title,
   sub,
@@ -259,6 +270,9 @@ function SparkCard({
   color,
   current,
   currentLabel,
+  lang,
+  fmt = (n: number) => String(Math.round(n)),
+  betterWhen = "neutral",
 }: {
   title: string;
   sub: string;
@@ -268,28 +282,65 @@ function SparkCard({
   color: string;
   current: string | null;
   currentLabel?: string;
+  lang: Lang;
+  fmt?: (n: number) => string;
+  betterWhen?: "high" | "neutral";
 }) {
+  const [open, setOpen] = useState(false);
+  const IS = lang === "IS";
+  const tr = halfTrend(values);
+  const dir: "up" | "down" | "flat" | null = tr
+    ? (Math.abs(tr.delta) < Math.max(0.5, 0.05 * Math.abs(tr.recentAvg)) ? "flat" : tr.delta > 0 ? "up" : "down")
+    : null;
+  // Direction colour: for "high-is-better" metrics up=good/down=concern; neutral metrics stay grey.
+  const dirColor = dir == null || betterWhen === "neutral" || dir === "flat"
+    ? "#64748b"
+    : dir === "up" ? "#2b8a54" : "#b34a30";
+  const dirWord = dir === "up" ? (IS ? "Hækkandi" : "Rising") : dir === "down" ? (IS ? "Lækkandi" : "Falling") : (IS ? "Stöðugt" : "Stable");
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-5 pt-4 pb-3">
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            {title}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>
-        </div>
-        {current != null && (
-          <div className="text-right">
-            <div className="text-xl font-bold tabular-nums" style={{ color }}>
-              {current}
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left">
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
+              {title}<span className="text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
             </div>
-            {currentLabel && (
-              <div className="text-[10px] text-slate-400">{currentLabel}</div>
-            )}
+            <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>
           </div>
-        )}
-      </div>
-      <Sparkline values={values} min={min} max={max} color={color} fillColor={color} />
+          {current != null && (
+            <div className="text-right">
+              <div className="text-xl font-bold tabular-nums" style={{ color }}>
+                {current}
+              </div>
+              {currentLabel && (
+                <div className="text-[10px] text-slate-400">{currentLabel}</div>
+              )}
+            </div>
+          )}
+        </div>
+        <Sparkline values={values} min={min} max={max} color={color} fillColor={color} />
+      </button>
+      {open && (
+        <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2 text-[11px] leading-snug text-slate-600">
+          {tr ? (
+            <>
+              <span className="font-semibold" style={{ color: dirColor }}>{dirWord}</span>
+              {" — "}
+              {IS
+                ? `nýlegt meðaltal ${fmt(tr.recentAvg)} vs fyrri helmingur ${fmt(tr.earlierAvg)} (Δ ${tr.delta >= 0 ? "+" : ""}${fmt(tr.delta)}).`
+                : `recent avg ${fmt(tr.recentAvg)} vs earlier half ${fmt(tr.earlierAvg)} (Δ ${tr.delta >= 0 ? "+" : ""}${fmt(tr.delta)}).`}
+              <div className="mt-1 text-[9px] text-slate-400">
+                {IS
+                  ? `Nýlegur helmingur borinn við fyrri helming gluggans (${tr.n} gögn) — þróun, ekki einn dagur.`
+                  : `Recent half vs the earlier half of the window (${tr.n} data points) — a trend, not a single day.`}
+              </div>
+            </>
+          ) : (
+            <span className="text-slate-400">{IS ? "Ekki næg gögn til að meta þróun." : "Not enough data to call a trend."}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -735,6 +786,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
               color="#6366f1"
               current={latestRead != null ? String(latestRead) : null}
               currentLabel="síðast"
+              lang={lang}
+              betterWhen="high"
+              fmt={(n) => n.toFixed(1)}
             />
             <SparkCard
               title={ct.sparkSten}
@@ -745,6 +799,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
               color={stenColor(latestSten)}
               current={latestSten != null ? String(latestSten) : null}
               currentLabel="síðast"
+              lang={lang}
+              betterWhen="high"
+              fmt={(n) => n.toFixed(1)}
             />
             <SparkCard
               title={isBasketball ? ct.playerLoad : ct.totalDist}
@@ -761,6 +818,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
                   : null
               }
               currentLabel="síðast"
+              lang={lang}
+              betterWhen="neutral"
+              fmt={(n) => (isBasketball ? n.toFixed(1) : Math.round(n).toLocaleString())}
             />
           </div>
 
