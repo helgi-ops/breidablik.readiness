@@ -80,6 +80,60 @@ function ZoneScaleBar({ acwr }: { acwr: number | null }) {
   );
 }
 
+// Per-player drill-down: the maths, a counterfactual back to optimal, the 4-week
+// ramp, and coverage. Everything derived from the row's own numbers — nothing invented.
+function AcwrPlayerDetail({ p, IS }: { p: PlayerAcwr; IS: boolean }) {
+  const fmt = (n: number) => Math.round(n).toLocaleString("is-IS");
+  const targetAcute = p.chronic28 * 1.3;           // acute that lands ACWR at the 1.3 ceiling
+  const reduceBy = p.acute7 - targetAcute;         // AU to shed from the 7-day load
+  const overPct = p.acwr != null ? Math.round((p.acwr - 1) * 100) : null;
+  const maxW = Math.max(1, ...p.weekLoads);
+  return (
+    <div className="mt-2 space-y-2.5 rounded-lg border border-[#e8e4d9] bg-white/70 p-2.5 text-[11px] leading-snug text-[#5a584f]">
+      {/* The maths */}
+      <div>
+        <span className="font-semibold text-[#292824]">{IS ? "Útreikningur" : "The maths"}: </span>
+        {IS ? "bráða" : "acute"} (7d) {fmt(p.acute7)} ÷ {IS ? "langvarandi" : "chronic"} (28d) {fmt(p.chronic28)} = <b>{p.acwr?.toFixed(2) ?? "—"}</b>
+        {overPct != null && overPct > 0 && (
+          <span className="text-[#908d83]"> · {overPct}% {IS ? "yfir eigin 4-vikna meðaltali" : "above his own 4-week average"}</span>
+        )}
+      </div>
+
+      {/* Counterfactual — what brings him back to the optimal band */}
+      {reduceBy > 0 && (
+        <div>
+          <span className="font-semibold text-[#292824]">{IS ? "Til að ná optimal" : "To reach optimal"}: </span>
+          {IS
+            ? `lækkaðu 7-daga álag um ~${fmt(reduceBy)} AU (í ≤${fmt(targetAcute)}) → ACWR 1.30. Eða byggðu langvarandi grunn hægar upp.`
+            : `bring his 7-day load down ~${fmt(reduceBy)} AU (to ≤${fmt(targetAcute)}) → ACWR 1.30. Or build the chronic base up more slowly.`}
+        </div>
+      )}
+
+      {/* 4-week ramp */}
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-[#908d83]">{IS ? "Vikuálag (4 vikur)" : "Weekly load (4 weeks)"}</div>
+        <div className="flex h-10 items-end gap-1.5">
+          {p.weekLoads.map((w, i) => (
+            <div key={i} className="flex flex-1 flex-col items-center gap-0.5">
+              <span className="text-[8px] tabular-nums text-[#908d83]">{fmt(w)}</span>
+              <div className="w-full rounded-t" style={{ height: `${Math.max(3, (w / maxW) * 28)}px`, background: i === 3 ? "#4338ca" : "#c9c4b4" }} title={`${fmt(w)} AU`} />
+              <span className="text-[8px] text-[#c9c4b4]">{i === 3 ? (IS ? "nú" : "now") : `−${3 - i}v`}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Coverage + honest caveat */}
+      <div className="border-t border-[#f0eee7] pt-1.5 text-[10px] text-[#908d83]">
+        {p.sessionCount28} {IS ? "lotur á 28 dögum" : "sessions in 28 days"}
+        {p.sessionCount28 < 4 && <span className="text-[#a4691c]"> · {IS ? "þunn saga, lestu með fyrirvara" : "thin history, read with caution"}</span>}
+        {" · "}
+        {IS ? "ACWR er álagsbreyting, ekki meiðsla-spá (Impellizzeri 2020)." : "ACWR is a workload change, not an injury prediction (Impellizzeri 2020)."}
+      </div>
+    </div>
+  );
+}
+
 export default function InternalAcwrCard({ teamId }: { teamId?: string | null }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [lang] = useLang();
@@ -87,6 +141,7 @@ export default function InternalAcwrCard({ teamId }: { teamId?: string | null })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<AcwrResponse | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -161,21 +216,29 @@ export default function InternalAcwrCard({ teamId }: { teamId?: string | null })
                 <div className="space-y-2">
                   {riskPlayers.map((p) => {
                     const high = p.zone === "high_risk";
+                    const open = expandedId === p.player_id;
                     return (
                       <div key={p.player_id} className="rounded-[10px] border px-3 py-2.5"
                         style={high ? { background: "#f9efec", borderColor: "#f3e2dc" } : { background: "rgba(251,247,233,0.6)", borderColor: "#eddfb4" }}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[13px] font-semibold text-[#292824]">{p.full_name}</span>
-                          <span className="flex items-center gap-1.5 text-[13px] font-bold" style={{ color: high ? "#8f3d29" : "#a4691c" }}>
-                            <span className="h-2 w-2 rounded-full" style={{ background: high ? "#b34a30" : "#cb8420" }} />
-                            {p.acwr != null ? p.acwr.toFixed(2) : "—"}
-                          </span>
-                        </div>
-                        <ZoneScaleBar acwr={p.acwr} />
-                        <div className="mt-1.5 flex items-center justify-between gap-2">
-                          <span className="text-[11px] leading-snug" style={{ color: high ? "#8f3d29" : "#a4691c" }}>{recommendation(p)}</span>
-                          <span className="whitespace-nowrap text-[11px] text-[#908d83]">{IS ? "bráða" : "acute"} {p.acute7 > 0 ? p.acute7.toLocaleString("is-IS") : "—"}</span>
-                        </div>
+                        <button type="button" onClick={() => setExpandedId(open ? null : p.player_id)}
+                          className="w-full text-left" aria-expanded={open}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13px] font-semibold text-[#292824]">{p.full_name}</span>
+                            <span className="flex items-center gap-1.5 text-[13px] font-bold" style={{ color: high ? "#8f3d29" : "#a4691c" }}>
+                              <span className="h-2 w-2 rounded-full" style={{ background: high ? "#b34a30" : "#cb8420" }} />
+                              {p.acwr != null ? p.acwr.toFixed(2) : "—"}
+                            </span>
+                          </div>
+                          <ZoneScaleBar acwr={p.acwr} />
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <span className="text-[11px] leading-snug" style={{ color: high ? "#8f3d29" : "#a4691c" }}>{recommendation(p)}</span>
+                            <span className="whitespace-nowrap text-[11px] text-[#908d83]">{IS ? "bráða" : "acute"} {p.acute7 > 0 ? p.acute7.toLocaleString("is-IS") : "—"}</span>
+                          </div>
+                          <div className="mt-1 text-[10px] font-medium" style={{ color: "#4338ca" }}>
+                            {open ? (IS ? "Fela útreikning ▴" : "Hide the maths ▴") : (IS ? "Sjá útreikning ▾" : "Show the maths ▾")}
+                          </div>
+                        </button>
+                        {open && <AcwrPlayerDetail p={p} IS={IS} />}
                       </div>
                     );
                   })}
